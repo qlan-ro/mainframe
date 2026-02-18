@@ -1,0 +1,63 @@
+{
+  "name": "mainframe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-native development environment for orchestrating agents",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qlan-ro/mainframe.git"
+  },
+  "homepage": "https://github.com/qlan-ro/mainframe#readme",
+  "bugs": {
+    "url": "https://github.com/qlan-ro/mainframe/issues"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @mainframe/core run dev & sleep 2 && pnpm --filter @mainframe/desktop run dev",
+    "dev:core": "pnpm --filter @mainframe/core run dev",
+    "dev:desktop": "pnpm --filter @mainframe/desktop run dev",
+    "build": "pnpm -r run build",
+    "build:types": "pnpm --filter @mainframe/types run build",
+    "build:core": "pnpm --filter @mainframe/core run build",
+    "build:desktop": "pnpm --filter @mainframe/desktop run build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "clean": "pnpm -r run clean",
+    "package": "pnpm build && pnpm --filter @mainframe/desktop run package",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.8.1",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.55.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "electron",
+      "esbuild"
+    ],
+    "overrides": {
+      "tar": ">=7.5.7"
+    }
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

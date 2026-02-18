@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+out/
+.next/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# SQLite
+*.db
+*.db-wal
+*.db-shm
+
+# Electron
+release/
+
+# Conductor
+.context/
+/logs/
+
+# Mainframe worktrees
+.mainframe/
+
+
+# Internal documents (not for public repo)
+SECURITY_AUDIT.md
+docs/plans/
+docs/ideas/
+docs/designs/
+docs/adapters/
+C4-Documentation/
+.run/
+packages/core/logs/

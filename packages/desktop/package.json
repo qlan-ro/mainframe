@@ -1,0 +1,97 @@
+{
+  "name": "@mainframe/desktop",
+  "version": "0.1.0",
+  "description": "Mainframe desktop app — Electron/React frontend for orchestrating AI agents",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qlan-ro/mainframe.git",
+    "directory": "packages/desktop"
+  },
+  "author": "Mainframe Contributors",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "clean": "rm -rf out dist",
+    "start": "electron-vite preview",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "electron-builder"
+  },
+  "dependencies": {
+    "@assistant-ui/react": "^0.12.10",
+    "@assistant-ui/react-markdown": "^0.12.3",
+    "@mainframe/core": "workspace:*",
+    "@mainframe/types": "workspace:*",
+    "@monaco-editor/react": "^4.7.0",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "@radix-ui/react-tooltip": "^1.0.7",
+    "@tailwindcss/vite": "^4.1.18",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "diff": "^8.0.3",
+    "lucide-react": "^0.564.0",
+    "monaco-editor": "^0.55.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
+    "react-resizable-panels": "^4.6.4",
+    "remark-gfm": "^4.0.1",
+    "shiki": "^3.22.0",
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "electron": "^40.4.1",
+    "electron-builder": "^26.7.0",
+    "electron-vite": "^5.0.0",
+    "jsdom": "^28.0.0",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.3.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  },
+  "build": {
+    "appId": "com.qlan-ro.mainframe",
+    "productName": "Mainframe",
+    "icon": "resources/icon",
+    "files": [
+      "out/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "qlan-ro",
+      "repo": "mainframe"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    }
+  }
+}

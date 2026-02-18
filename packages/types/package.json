@@ -1,0 +1,30 @@
+{
+  "name": "@mainframe/types",
+  "version": "0.1.0",
+  "description": "Shared TypeScript types for Mainframe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qlan-ro/mainframe.git",
+    "directory": "packages/types"
+  },
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "dev": "tsc --watch",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

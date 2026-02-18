@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Dark background circle -->
+  <circle cx="512" cy="512" r="512" fill="#1c1c1e"/>
+  <!-- Bold M -->
+  <text
+    x="512"
+    y="512"
+    text-anchor="middle"
+    dominant-baseline="central"
+    font-family="system-ui, -apple-system, 'Helvetica Neue', sans-serif"
+    font-size="560"
+    font-weight="700"
+    fill="#f07c39"
+  >M</text>
+</svg>
