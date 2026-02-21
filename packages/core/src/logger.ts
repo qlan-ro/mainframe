@@ -3,19 +3,25 @@ import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const LOG_DIR = join(homedir(), '.mainframe', 'logs');
 const RETENTION_DAYS = 7;
 
+// Computed lazily so vi.mock('node:os') in tests can intercept homedir()
+// without triggering a TDZ error from module-level evaluation.
+let _logDir: string | undefined;
+function logDir(): string {
+  return (_logDir ??= join(homedir(), '.mainframe', 'logs'));
+}
+
 function ensureLogDir(): void {
-  mkdirSync(LOG_DIR, { recursive: true });
+  mkdirSync(logDir(), { recursive: true });
 }
 
 function purgeOldLogs(): void {
   const cutoffMs = Date.now() - RETENTION_DAYS * 86_400_000;
   try {
-    for (const file of readdirSync(LOG_DIR)) {
+    for (const file of readdirSync(logDir())) {
       if (!file.startsWith('daemon.')) continue;
-      const full = join(LOG_DIR, file);
+      const full = join(logDir(), file);
       try {
         if (statSync(full).mtimeMs < cutoffMs) unlinkSync(full);
       } catch {
@@ -31,7 +37,7 @@ function dailyDestination(): pino.DestinationStream {
   const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   // minLength: 0 disables sonic-boom buffering so every write reaches the file
   // immediately — critical for crash debugging in packaged/bundled deployments.
-  return pino.destination({ dest: join(LOG_DIR, `daemon.${date}.log`), append: true, minLength: 0 });
+  return pino.destination({ dest: join(logDir(), `daemon.${date}.log`), append: true, minLength: 0 });
 }
 
 const VALID_LEVELS = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal']);
