@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { createWriteStream, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -28,9 +28,11 @@ function purgeOldLogs(prefix: string): void {
   }
 }
 
-function dailyStream(prefix: string): NodeJS.WritableStream {
+function dailyDestination(prefix: string): pino.DestinationStream {
   const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  return createWriteStream(join(LOG_DIR, `${prefix}.${date}.log`), { flags: 'a' });
+  // minLength: 0 disables sonic-boom buffering so every write reaches the file
+  // immediately — critical for crash debugging in packaged/bundled deployments.
+  return pino.destination({ dest: join(LOG_DIR, `${prefix}.${date}.log`), append: true, minLength: 0 });
 }
 
 ensureLogDir();
@@ -46,17 +48,14 @@ const logLevel: pino.Level = VALID_PINO_LEVELS.has(rawLevel) ? (rawLevel as pino
 // pino v10 reads customLevels from the multistream object during construction and
 // enables useOnlyCustomLevels, which rejects built-in level names like 'debug'.
 // Setting level post-construction bypasses that check.
-const mainStreams: pino.StreamEntry[] = [{ stream: dailyStream('main'), level: logLevel }];
+const mainStreams: pino.StreamEntry[] = [{ stream: dailyDestination('main'), level: logLevel }];
 if (isDev) mainStreams.push({ stream: process.stdout, level: logLevel });
 
-const rendererStreams: pino.StreamEntry[] = [{ stream: dailyStream('renderer'), level: logLevel }];
+const rendererStreams: pino.StreamEntry[] = [{ stream: dailyDestination('renderer'), level: logLevel }];
 if (isDev) rendererStreams.push({ stream: process.stdout, level: logLevel });
 
-const baseLogger = pino(pino.multistream(mainStreams));
-baseLogger.level = logLevel;
-
-const baseRendererLogger = pino(pino.multistream(rendererStreams));
-baseRendererLogger.level = logLevel;
+const baseLogger = pino({ level: logLevel }, pino.multistream(mainStreams));
+const baseRendererLogger = pino({ level: logLevel }, pino.multistream(rendererStreams));
 
 baseLogger.info({ logLevel, raw: process.env.LOG_LEVEL ?? '(unset)' }, 'logger initialized');
 
