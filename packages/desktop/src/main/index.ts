@@ -30,6 +30,17 @@ app.on('second-instance', () => {
 let mainWindow: BrowserWindow | null = null;
 let daemon: UtilityProcess | null = null;
 
+// Electron apps launch with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin).
+// Prepend common user-level locations so the daemon can find CLI tools like `claude`
+// that are installed outside the system PATH (e.g. ~/.local/bin from the Claude CLI installer).
+function buildDaemonPath(): string {
+  const base = process.env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin';
+  const extra = [`${homedir()}/.local/bin`, '/usr/local/bin', '/opt/homebrew/bin', '/opt/homebrew/sbin'];
+  const seen = new Set(base.split(':'));
+  const additions = extra.filter((p) => !seen.has(p));
+  return additions.length ? `${additions.join(':')}:${base}` : base;
+}
+
 function startDaemon(): void {
   if (process.env.NODE_ENV === 'development') {
     log.info('development mode: daemon assumed external');
@@ -42,7 +53,7 @@ function startDaemon(): void {
   log.info({ path: daemonPath }, 'daemon starting');
   daemon = utilityProcess.fork(daemonPath, [], {
     stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'production' },
+    env: { ...process.env, NODE_ENV: 'production', PATH: buildDaemonPath() },
   });
 
   daemon.on('exit', (code) => {

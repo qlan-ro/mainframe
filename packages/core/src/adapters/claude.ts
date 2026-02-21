@@ -144,7 +144,10 @@ export class ClaudeAdapter extends BaseAdapter {
 
     child.stdout?.on('data', (chunk) => handleStdout(processId, chunk, this.processes, this));
     child.stderr?.on('data', (chunk) => handleStderr(processId, chunk, this));
-    child.on('error', (error) => this.emit('error', processId, error));
+    child.on('error', (error) => {
+      log.error({ processId, err: error }, 'claude process error');
+      this.emit('error', processId, error);
+    });
     child.on('close', (code) => {
       this.processes.delete(processId);
       this.emit('exit', processId, code);
