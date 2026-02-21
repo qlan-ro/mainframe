@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { ClipboardList, ShieldOff, FileEdit, Shield, ChevronDown } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { PermissionRequest } from '@mainframe/types';
+import type { PermissionRequest, PermissionUpdate } from '@mainframe/types';
 import { Button } from '../ui/button';
 import { useChatsStore } from '../../store/chats';
 import { useMainframeRuntime } from './assistant-ui/MainframeRuntimeProvider';
@@ -12,7 +12,7 @@ interface PlanApprovalCardProps {
   request: PermissionRequest;
   onRespond: (
     behavior: 'allow' | 'deny',
-    alwaysAllow?: string[],
+    alwaysAllow?: PermissionUpdate[],
     overrideInput?: Record<string, unknown>,
     message?: string,
     executionMode?: string,

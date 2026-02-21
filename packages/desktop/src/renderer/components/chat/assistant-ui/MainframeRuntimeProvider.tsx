@@ -14,7 +14,7 @@ import { archiveChat } from '../../../lib/api';
 import { useChatsStore } from '../../../store/chats';
 import { useProjectsStore } from '../../../store/projects';
 import { useTabsStore } from '../../../store/tabs';
-import type { PermissionRequest } from '@mainframe/types';
+import type { PermissionRequest, PermissionUpdate } from '@mainframe/types';
 import { AllToolUIs } from './parts/tool-ui-registry';
 
 interface MainframeRuntimeProviderProps {
@@ -33,7 +33,7 @@ interface MainframeRuntimeContextValue {
   pendingPermission: PermissionRequest | undefined;
   respondToPermission: (
     behavior: 'allow' | 'deny',
-    alwaysAllow?: string[],
+    alwaysAllow?: PermissionUpdate[],
     overrideInput?: Record<string, unknown>,
     message?: string,
     executionMode?: string,

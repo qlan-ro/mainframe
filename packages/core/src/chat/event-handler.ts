@@ -7,6 +7,9 @@ import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
 import { trackFileActivity } from './context-tracker.js';
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('event-handler');
 
 export interface ChatLookup {
   getActiveChat(chatId: string): ActiveChat | undefined;
@@ -41,8 +44,18 @@ export class EventHandler {
     claude.on('message', (processId, content, metadata?: MessageMetadata) => {
       const chatId = this.lookup.getChatIdForProcess(processId);
       if (!chatId) return;
+      log.debug({ chatId, blockCount: content.length }, 'assistant message received');
       if (trackFileActivity(chatId, content, this.db, undefined)) {
         this.emitEvent({ type: 'context.updated', chatId });
+      }
+      const hasEnterPlanMode = content.some((b) => b.type === 'tool_use' && b.name === 'EnterPlanMode');
+      if (hasEnterPlanMode) {
+        const active = this.lookup.getActiveChat(chatId);
+        if (active && active.chat.permissionMode !== 'plan') {
+          this.db.chats.update(chatId, { permissionMode: 'plan' });
+          active.chat.permissionMode = 'plan';
+          this.emitEvent({ type: 'chat.updated', chat: active.chat });
+        }
       }
       const msgMeta: Record<string, unknown> | undefined = metadata
         ? { model: metadata.model, usage: metadata.usage }
@@ -66,7 +79,9 @@ export class EventHandler {
       const active = this.lookup.getActiveChat(chatId);
       const mode = active?.chat.permissionMode;
 
-      if (mode === 'yolo' && active?.process) {
+      // Interactive tools require real user input even in yolo mode.
+      const requiresUserInput = request.toolName === 'AskUserQuestion' || request.toolName === 'ExitPlanMode';
+      if (mode === 'yolo' && active?.process && !requiresUserInput) {
         claude.respondToPermission(active.process, {
           requestId: request.requestId,
           toolUseId: request.toolUseId,
@@ -78,7 +93,16 @@ export class EventHandler {
 
       const isFirst = this.permissions.enqueue(chatId, request);
       if (isFirst) {
+        log.info(
+          { chatId, requestId: request.requestId, toolName: request.toolName },
+          'permission.requested emitted to clients',
+        );
         this.emitEvent({ type: 'permission.requested', chatId, request });
+      } else {
+        log.info(
+          { chatId, requestId: request.requestId, toolName: request.toolName },
+          'permission queued (another already pending)',
+        );
       }
     });
 
@@ -132,6 +156,7 @@ export class EventHandler {
     claude.on('exit', (processId, _code) => {
       const chatId = this.lookup.getChatIdForProcess(processId);
       if (!chatId) return;
+      log.debug({ processId, chatId }, 'process exited');
       const active = this.lookup.getActiveChat(chatId);
       if (active) {
         active.process = null;

@@ -35,7 +35,9 @@ async function handleGitStatus(ctx: RouteContext, req: Request, res: Response): 
       });
     res.json({ files });
   } catch (err) {
-    logger.warn({ err, basePath }, 'Failed to get git status');
+    if ((err as { code?: unknown }).code !== 128) {
+      logger.warn({ err, basePath }, 'Failed to get git status');
+    }
     res.json({ files: [], error: 'Not a git repository' });
   }
 }
@@ -52,7 +54,9 @@ async function handleGitBranch(ctx: RouteContext, req: Request, res: Response): 
     const branch = (await execGit(['rev-parse', '--abbrev-ref', 'HEAD'], basePath)).trim();
     res.json({ branch });
   } catch (err) {
-    logger.warn({ err, basePath }, 'Failed to get git branch');
+    if ((err as { code?: unknown }).code !== 128) {
+      logger.warn({ err, basePath }, 'Failed to get git branch');
+    }
     res.json({ branch: null });
   }
 }
@@ -94,7 +98,9 @@ async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promi
       }
       res.json({ diff, original, modified, source: 'git' });
     } catch (err) {
-      logger.warn({ err, basePath, file }, 'Failed to compute git diff');
+      if ((err as { code?: unknown }).code !== 128) {
+        logger.warn({ err, basePath, file }, 'Failed to compute git diff');
+      }
       res.json({ diff: '', original: '', modified: '', source: 'git' });
     }
   } else if (source === 'session') {

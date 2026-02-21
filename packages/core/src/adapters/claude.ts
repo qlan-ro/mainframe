@@ -19,6 +19,9 @@ import type {
 import { BaseAdapter } from './base.js';
 import type { ClaudeProcess } from './claude-types.js';
 import { handleStdout, handleStderr } from './claude-events.js';
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('claude-adapter');
 import {
   loadHistory as loadHistoryFromDisk,
   extractPlanFilePaths as extractPlans,
@@ -128,10 +131,23 @@ export class ClaudeAdapter extends BaseAdapter {
     };
 
     this.processes.set(processId, adapterProcess);
+    log.debug(
+      {
+        processId,
+        projectPath: options.projectPath,
+        resume: !!options.chatId,
+        model: options.model ?? 'default',
+        permissionMode: options.permissionMode ?? 'default',
+      },
+      'claude process spawned',
+    );
 
     child.stdout?.on('data', (chunk) => handleStdout(processId, chunk, this.processes, this));
     child.stderr?.on('data', (chunk) => handleStderr(processId, chunk, this));
-    child.on('error', (error) => this.emit('error', processId, error));
+    child.on('error', (error) => {
+      log.error({ processId, err: error }, 'claude process error');
+      this.emit('error', processId, error);
+    });
     child.on('close', (code) => {
       this.processes.delete(processId);
       this.emit('exit', processId, code);
@@ -143,6 +159,7 @@ export class ClaudeAdapter extends BaseAdapter {
   async kill(process: AdapterProcess): Promise<void> {
     const cp = this.processes.get(process.id);
     if (cp) {
+      log.debug({ processId: process.id }, 'claude process killed');
       cp.child.kill('SIGTERM');
       this.processes.delete(process.id);
     }
@@ -278,8 +295,22 @@ export class ClaudeAdapter extends BaseAdapter {
 
     const stdin = cp.child.stdin;
     if (!stdin || stdin.destroyed) {
+      log.error(
+        { processId: process.id, requestId: response.requestId, toolName: response.toolName },
+        'respondToPermission: stdin unavailable, response dropped',
+      );
       return;
     }
+    log.info(
+      {
+        processId: process.id,
+        requestId: response.requestId,
+        toolName: response.toolName,
+        behavior: response.behavior,
+        payload: json,
+      },
+      'writing permission response to stdin',
+    );
     stdin.write(json + '\n');
   }
 

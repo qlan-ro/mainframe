@@ -1,4 +1,7 @@
 import { fetchJson, API_BASE } from './http';
+import { createLogger } from '../logger';
+
+const log = createLogger('api');
 
 export async function getAttachment(
   chatId: string,
@@ -34,6 +37,7 @@ export async function uploadAttachments(
     originalPath?: string;
   }[]
 > {
+  log.info('uploadAttachments', { chatId, count: attachments.length });
   const res = await fetch(`${API_BASE}/api/chats/${chatId}/attachments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

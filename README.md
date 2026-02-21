@@ -17,8 +17,6 @@
   <img src="docs/screenshot.png" alt="Mainframe screenshot" width="860">
 </p>
 
-> **Note:** Screenshot coming soon. Run the app locally to see it in action.
-
 ---
 
 ## What is Mainframe?

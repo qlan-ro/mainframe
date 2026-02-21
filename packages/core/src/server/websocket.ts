@@ -3,6 +3,9 @@ import type { Server } from 'node:http';
 import type { ChatManager } from '../chat/index.js';
 import type { ClientEvent, DaemonEvent } from '@mainframe/types';
 import { ClientEventSchema } from './ws-schemas.js';
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('ws');
 
 interface ClientConnection {
   ws: WebSocket;
@@ -32,11 +35,13 @@ export class WebSocketManager {
           const raw = JSON.parse(data.toString());
           const parsed = ClientEventSchema.safeParse(raw);
           if (!parsed.success) {
+            log.warn({ issues: parsed.error.issues }, 'ws message validation failed');
             this.sendError(ws, `Invalid message: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
             return;
           }
           await this.handleClientEvent(client, parsed.data as ClientEvent);
         } catch (err) {
+          log.error({ err }, 'ws message handler error');
           const message = err instanceof SyntaxError ? 'Invalid JSON' : 'Internal error';
           this.sendError(ws, message);
         }
@@ -93,7 +98,20 @@ export class WebSocketManager {
       }
 
       case 'permission.respond': {
+        log.info(
+          {
+            chatId: event.chatId,
+            requestId: event.response.requestId,
+            toolName: event.response.toolName,
+            behavior: event.response.behavior,
+          },
+          'permission.respond received from client',
+        );
         await this.chats.respondToPermission(event.chatId, event.response);
+        log.info(
+          { chatId: event.chatId, requestId: event.response.requestId },
+          'permission.respond delivered to adapter',
+        );
         break;
       }
 
@@ -121,6 +139,7 @@ export class WebSocketManager {
 
   private broadcastEvent(event: DaemonEvent): void {
     const chatId = 'chatId' in event ? event.chatId : undefined;
+    log.debug({ type: event.type, chatId }, 'broadcasting event');
     const payload = JSON.stringify(event);
 
     for (const client of this.clients.values()) {

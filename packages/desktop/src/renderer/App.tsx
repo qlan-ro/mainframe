@@ -6,6 +6,7 @@ import { RightPanel } from './components/panels/RightPanel';
 import { CenterPanel } from './components/center/CenterPanel';
 import { SearchPalette } from './components/SearchPalette';
 import { SettingsModal } from './components/SettingsModal';
+import { TutorialOverlay } from './components/TutorialOverlay';
 import { useDaemon } from './hooks/useDaemon';
 import { useProjectsStore, useSettingsStore } from './store';
 import { daemonClient } from './lib/client';
@@ -45,6 +46,7 @@ export default function App(): React.ReactElement {
       <Layout leftPanel={<LeftPanel />} centerPanel={<CenterPanel />} rightPanel={<RightPanel />} />
       <SearchPalette />
       <SettingsModal />
+      <TutorialOverlay />
     </ErrorBoundary>
   );
 }

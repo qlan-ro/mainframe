@@ -11,6 +11,7 @@ import type {
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
+import { createChildLogger } from '../logger.js';
 import { MessageCache } from './message-cache.js';
 import { PermissionManager } from './permission-manager.js';
 import { deriveTitleFromMessage } from './title-generator.js';
@@ -22,6 +23,8 @@ import { ChatConfigManager } from './config-manager.js';
 import { ChatLifecycleManager } from './lifecycle-manager.js';
 import { EventHandler, type ChatLookup } from './event-handler.js';
 import type { ActiveChat } from './types.js';
+
+const logger = createChildLogger('chat-manager');
 
 export class ChatManager extends EventEmitter implements ChatLookup {
   private activeChats = new Map<string, ActiveChat>();
@@ -156,6 +159,7 @@ export class ChatManager extends EventEmitter implements ChatLookup {
 
     const active = this.activeChats.get(chatId);
     if (!active?.process) throw new Error(`Chat ${chatId} not running`);
+    logger.info({ chatId }, 'user message sent');
 
     const adapter = this.adapters.get(active.chat.adapterId);
     if (!adapter) throw new Error(`Adapter not found`);
@@ -208,6 +212,7 @@ export class ChatManager extends EventEmitter implements ChatLookup {
   }
 
   async respondToPermission(chatId: string, response: PermissionResponse): Promise<void> {
+    logger.info({ chatId, behavior: response.behavior, toolName: response.toolName }, 'permission answered');
     return this.permissionHandler.respondToPermission(chatId, response);
   }
 
@@ -217,6 +222,29 @@ export class ChatManager extends EventEmitter implements ChatLookup {
 
   async endChat(chatId: string): Promise<void> {
     return this.lifecycle.endChat(chatId);
+  }
+
+  async removeProject(projectId: string): Promise<void> {
+    logger.info({ projectId }, 'project removed');
+    const chats = this.db.chats.list(projectId);
+    for (const chat of chats) {
+      const active = this.activeChats.get(chat.id);
+      if (active?.process) {
+        const adapter = this.adapters.get(active.chat.adapterId);
+        if (adapter) {
+          try {
+            await adapter.kill(active.process);
+          } catch (err) {
+            logger.warn({ err, chatId: chat.id }, 'failed to kill process on project removal');
+          }
+        }
+        this.processToChat.delete(active.process.id);
+      }
+      this.activeChats.delete(chat.id);
+      this.messages.delete(chat.id);
+      this.permissions.clear(chat.id);
+    }
+    this.db.projects.removeWithChats(projectId);
   }
 
   getChat(chatId: string): Chat | null {

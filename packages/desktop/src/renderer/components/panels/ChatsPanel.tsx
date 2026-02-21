@@ -77,6 +77,7 @@ export function ChatsPanel(): React.ReactElement {
       <div className="h-11 px-[10px] flex items-center justify-between">
         <div className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Sessions</div>
         <button
+          data-tutorial="step-2"
           onClick={() => createChat('claude')}
           disabled={!activeProjectId}
           className="w-7 h-7 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"

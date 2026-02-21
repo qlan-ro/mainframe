@@ -5,6 +5,9 @@ import type { PermissionManager } from './permission-manager.js';
 import type { PlanModeHandler } from './plan-mode-handler.js';
 import type { MessageCache } from './message-cache.js';
 import type { ActiveChat } from './types.js';
+import { createChildLogger } from '../logger.js';
+
+const log = createChildLogger('permission-handler');
 
 export interface PermissionHandlerDeps {
   permissions: PermissionManager;
@@ -27,8 +30,17 @@ export class ChatPermissionHandler {
     const active = this.deps.getActiveChat(chatId);
 
     if (!active?.process) {
+      log.warn(
+        { chatId, requestId: response.requestId, toolName: response.toolName, behavior: response.behavior },
+        'respondToPermission: no active process, will start fresh',
+      );
       return this.handleNoProcessPermission(chatId, response, active);
     }
+
+    log.info(
+      { chatId, requestId: response.requestId, toolName: response.toolName, behavior: response.behavior },
+      'respondToPermission: forwarding to adapter',
+    );
 
     if (response.message) {
       const message = this.deps.messages.createTransientMessage(chatId, 'user', [

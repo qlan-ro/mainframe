@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { ShieldAlert, Terminal, ChevronRight } from 'lucide-react';
-import type { PermissionRequest } from '@mainframe/types';
+import type { PermissionRequest, PermissionUpdate } from '@mainframe/types';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
 
 interface PermissionCardProps {
   request: PermissionRequest;
-  onRespond: (behavior: 'allow' | 'deny', alwaysAllow?: string[], overrideInput?: Record<string, unknown>) => void;
+  onRespond: (
+    behavior: 'allow' | 'deny',
+    alwaysAllow?: PermissionUpdate[],
+    overrideInput?: Record<string, unknown>,
+  ) => void;
 }
 
 export function PermissionCard({ request, onRespond }: PermissionCardProps): React.ReactElement {

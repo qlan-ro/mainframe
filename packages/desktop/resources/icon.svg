@@ -1,15 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- Dark background circle -->
-  <circle cx="512" cy="512" r="512" fill="#1c1c1e"/>
-  <!-- Bold M -->
-  <text
-    x="512"
-    y="512"
-    text-anchor="middle"
-    dominant-baseline="central"
-    font-family="system-ui, -apple-system, 'Helvetica Neue', sans-serif"
-    font-size="560"
-    font-weight="700"
-    fill="#f07c39"
-  >M</text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="a" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" style="fill: #1c1c1e;"/>
+  <polygon points="584.19 311.57 512.27 585.01 439.54 311.57 318.41 311.57 318.41 712.43 393.6 712.43 393.6 396.88 472.9 712.43 550.83 712.43 630.4 396.88 630.4 712.43 705.59 712.43 705.59 311.57 584.19 311.57" style="fill: #f07c39;"/>
 </svg>

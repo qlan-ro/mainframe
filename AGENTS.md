@@ -122,6 +122,10 @@ These rules exist because every one was violated before and required cleanup. Fo
 - **Lazy-load heavy components.** Large editors and visualizations must use `React.lazy()` with `Suspense`.
 - **Cascade deletes.** When deleting parent entities (projects, chats), delete child records in a transaction.
 
+### Git
+- **Never commit to `main`.** Always work on a feature or fix branch. Run `git branch --show-current` before any commit or reset to confirm you are not on `main`.
+- **Check branch before destructive git ops.** Before `reset`, `rebase`, or `push --force`, verify the current branch with `git status` or `git branch`.
+
 ### Hygiene
 - **No `@ts-ignore`.** Use `@ts-expect-error` with a reason comment.
 - **Remove unused deps and dead code.** Don't leave commented-out code, unused exports, or orphaned files.

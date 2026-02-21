@@ -34,7 +34,7 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: 'mainframe-theme',
-      onRehydrate: () => (state) => {
+      onRehydrateStorage: () => (state) => {
         if (state) applyThemeClass(state.themeId);
       },
     },

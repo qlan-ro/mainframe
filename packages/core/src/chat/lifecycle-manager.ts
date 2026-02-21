@@ -48,6 +48,7 @@ export class ChatLifecycleManager {
     planExecutionMode?: string,
   ): Promise<Chat> {
     const chat = this.deps.db.chats.create(projectId, adapterId, model, permissionMode);
+    log.info({ chatId: chat.id, projectId, adapterId }, 'chat created');
     this.deps.activeChats.set(chat.id, { chat, process: null });
     if (planExecutionMode && permissionMode === 'plan') {
       this.deps.permissions.setPlanExecutionMode(chat.id, planExecutionMode as Chat['permissionMode']);
@@ -163,6 +164,7 @@ export class ChatLifecycleManager {
     this.deps.permissions.clear(chatId);
     await this.deps.attachmentStore?.deleteChat(chatId);
     this.deps.db.chats.update(chatId, { status: 'archived' });
+    log.info({ chatId }, 'chat archived');
     this.deps.emitEvent({ type: 'chat.ended', chatId });
   }
 
@@ -278,6 +280,7 @@ export class ChatLifecycleManager {
       model: chat.model,
       permissionMode: chat.permissionMode,
     });
+    log.info({ chatId }, 'chat process started');
 
     const postSpawn = this.deps.activeChats.get(chatId);
     if (!postSpawn) throw new Error(`Chat ${chatId} disappeared during spawn`);

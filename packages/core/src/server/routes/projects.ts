@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { validate, CreateProjectBody } from './schemas.js';
+import { createChildLogger } from '../../logger.js';
+
+const logger = createChildLogger('projects-route');
 
 export function projectRoutes(ctx: RouteContext): Router {
   const router = Router();
@@ -36,12 +39,19 @@ export function projectRoutes(ctx: RouteContext): Router {
     }
 
     const project = ctx.db.projects.create(path, name);
+    logger.info({ projectId: project.id, path }, 'project added');
     res.json({ success: true, data: project });
   });
 
-  router.delete('/api/projects/:id', (req: Request, res: Response) => {
-    ctx.db.projects.removeWithChats(param(req, 'id'));
-    res.json({ success: true });
+  router.delete('/api/projects/:id', async (req: Request, res: Response) => {
+    try {
+      await ctx.chats.removeProject(param(req, 'id'));
+      logger.info({ projectId: param(req, 'id') }, 'project deleted');
+      res.json({ success: true });
+    } catch (err: unknown) {
+      logger.error({ err }, 'failed to remove project');
+      res.status(500).json({ success: false, error: 'Failed to remove project' });
+    }
   });
 
   return router;

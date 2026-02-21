@@ -5,3 +5,4 @@ export { useSearchStore } from './search';
 export { useSkillsStore } from './skills';
 export { useSettingsStore } from './settings';
 export { useAdaptersStore } from './adapters';
+export { useTutorialStore } from './tutorial';

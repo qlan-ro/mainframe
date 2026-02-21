@@ -15,7 +15,10 @@ import { useTabsStore } from '../store/tabs';
 import { useSkillsStore } from '../store/skills';
 import { useSettingsStore } from '../store/settings';
 import { useAdaptersStore } from '../store/adapters';
-import type { DaemonEvent } from '@mainframe/types';
+import type { DaemonEvent, PermissionUpdate } from '@mainframe/types';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger('daemon');
 
 export function useDaemon(): void {
   const { setProjects, setLoading, setError } = useProjectsStore();
@@ -37,41 +40,56 @@ export function useDaemon(): void {
     (event: DaemonEvent) => {
       switch (event.type) {
         case 'chat.created':
+          log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title });
           addChat(event.chat);
           setActiveChat(event.chat.id);
           useTabsStore.getState().openChatTab(event.chat.id, event.chat.title);
           break;
         case 'chat.updated':
+          log.debug('event:chat.updated', { chatId: event.chat.id });
           updateChat(event.chat);
           if (event.chat.title) {
             useTabsStore.getState().updateTabLabel(`chat:${event.chat.id}`, event.chat.title);
           }
           break;
         case 'chat.ended':
+          log.info('event:chat.ended', { chatId: event.chatId });
           removeChat(event.chatId);
           removeProcess(event.chatId);
           break;
         case 'message.added':
+          log.debug('event:message.added', { chatId: event.chatId, type: event.message.type });
           addMessage(event.chatId, event.message);
           break;
         case 'messages.cleared':
+          log.info('event:messages.cleared', { chatId: event.chatId });
           useChatsStore.getState().setMessages(event.chatId, []);
           break;
         case 'permission.requested':
+          log.info('event:permission.requested', {
+            chatId: event.chatId,
+            requestId: event.request.requestId,
+            toolName: event.request.toolName,
+          });
           addPendingPermission(event.chatId, event.request);
           break;
         case 'context.updated':
+          log.debug('event:context.updated', { chatId: event.chatId });
           break;
         case 'process.started':
+          log.info('event:process.started', { chatId: event.chatId, processId: event.process.id });
           setProcess(event.chatId, event.process);
           break;
         case 'process.ready':
+          log.info('event:process.ready', { processId: event.processId, claudeSessionId: event.claudeSessionId });
           updateProcessStatus(event.processId, 'ready');
           break;
         case 'process.stopped':
+          log.info('event:process.stopped', { processId: event.processId });
           updateProcessStatus(event.processId, 'stopped');
           break;
         case 'error':
+          log.error('daemon error event', { error: event.error });
           setError(event.error);
           break;
       }
@@ -103,7 +121,7 @@ export function useDaemon(): void {
           const adapters = await getAdapters();
           setAdapters(adapters);
         } catch (err) {
-          console.warn('[useDaemon] adapter fetch failed:', err);
+          log.warn('adapter fetch failed', { err: String(err) });
         }
         try {
           const providerSettings = await getProviderSettings();
@@ -205,6 +223,7 @@ export function useChat(chatId: string | null) {
   const { messages, pendingPermissions } = useChatsStore();
   const chatMessages = chatId ? messages.get(chatId) || [] : [];
   const pendingPermission = chatId ? pendingPermissions.get(chatId) : undefined;
+  const verifyPermissionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!chatId) return;
@@ -222,7 +241,7 @@ export function useChat(chatId: string | null) {
             useChatsStore.getState().setMessages(chatId, msgs);
           }
         })
-        .catch((err) => console.warn('[useChat] message fetch failed:', err));
+        .catch((err) => log.warn('message fetch failed', { err: String(err) }));
     }
 
     // Restore pending permission from daemon (survives desktop reloads)
@@ -233,7 +252,7 @@ export function useChat(chatId: string | null) {
             useChatsStore.getState().addPendingPermission(chatId, permission);
           }
         })
-        .catch((err) => console.warn('[useChat] permission fetch failed:', err));
+        .catch((err) => log.warn('permission fetch failed', { err: String(err) }));
     }
 
     // On daemon reconnect, reload messages from daemon.
@@ -250,20 +269,21 @@ export function useChat(chatId: string | null) {
                 useChatsStore.getState().setMessages(chatId, msgs);
               }
             })
-            .catch((err) => console.warn('[useChat] reconnect message fetch failed:', err));
+            .catch((err) => log.warn('reconnect message fetch failed', { err: String(err) }));
           getPendingPermission(chatId)
             .then((permission) => {
               if (permission) {
                 useChatsStore.getState().addPendingPermission(chatId, permission);
               }
             })
-            .catch((err) => console.warn('[useChat] reconnect permission fetch failed:', err));
+            .catch((err) => log.warn('reconnect permission fetch failed', { err: String(err) }));
         }, 500);
       }
     });
 
     return () => {
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (verifyPermissionTimerRef.current) clearTimeout(verifyPermissionTimerRef.current);
       daemonClient.unsubscribe(chatId);
       unsubConnection();
     };
@@ -295,7 +315,7 @@ export function useChat(chatId: string | null) {
   const respondToPermission = useCallback(
     (
       behavior: 'allow' | 'deny',
-      alwaysAllow?: string[],
+      alwaysAllow?: PermissionUpdate[],
       overrideInput?: Record<string, unknown>,
       message?: string,
       executionMode?: string,
@@ -314,6 +334,23 @@ export function useChat(chatId: string | null) {
         clearContext,
       });
       useChatsStore.getState().removePendingPermission(chatId);
+
+      // Verify the respond was received. If the daemon still has the permission pending
+      // after 3s (WS message lost, Zod failure, etc.) restore the popup so the user can retry.
+      const capturedChatId = chatId;
+      const capturedRequestId = pendingPermission.requestId;
+      if (verifyPermissionTimerRef.current) clearTimeout(verifyPermissionTimerRef.current);
+      verifyPermissionTimerRef.current = setTimeout(() => {
+        verifyPermissionTimerRef.current = null;
+        getPendingPermission(capturedChatId)
+          .then((pending) => {
+            if (pending && pending.requestId === capturedRequestId) {
+              log.warn('permission respond appears lost — restoring popup for retry');
+              useChatsStore.getState().addPendingPermission(capturedChatId, pending);
+            }
+          })
+          .catch((err) => log.warn('permission verify check failed', { err: String(err) }));
+      }, 3000);
     },
     [chatId, pendingPermission],
   );

@@ -28,6 +28,8 @@ pnpm-debug.log*
 
 # Testing
 coverage/
+test-results/
+**/playwright/.cache/
 
 # SQLite
 *.db
@@ -44,13 +46,3 @@ release/
 # Mainframe worktrees
 .mainframe/
 
-
-# Internal documents (not for public repo)
-SECURITY_AUDIT.md
-docs/plans/
-docs/ideas/
-docs/designs/
-docs/adapters/
-C4-Documentation/
-.run/
-packages/core/logs/
