@@ -1,6 +1,8 @@
 import type { ClientEvent, DaemonEvent, PermissionResponse } from '@mainframe/types';
+import { createLogger } from './logger';
 
 const WS_URL = 'ws://127.0.0.1:31415';
+const log = createLogger('client');
 
 class DaemonClient {
   private ws: WebSocket | null = null;
@@ -38,7 +40,7 @@ class DaemonClient {
     this.ws = new WebSocket(WS_URL);
 
     this.ws.onopen = () => {
-      console.log('[daemon] connected');
+      log.info('connected');
       this.reconnectAttempts = 0;
       this.flushPendingMessages();
       this.notifyConnectionListeners();
@@ -49,14 +51,14 @@ class DaemonClient {
         const data = JSON.parse(event.data) as DaemonEvent;
         this.eventHandlers.forEach((handler) => handler(data));
       } catch (error) {
-        console.error('[daemon] failed to parse event:', error);
+        log.error('failed to parse event', { err: String(error) });
       }
     };
 
     this.ws.onclose = () => {
       this.notifyConnectionListeners();
       if (this.intentionalClose) return;
-      console.log('[daemon] disconnected');
+      log.info('disconnected');
       this.attemptReconnect();
     };
 
@@ -67,7 +69,7 @@ class DaemonClient {
 
   private attemptReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('[daemon] max reconnect attempts reached');
+      log.error('max reconnect attempts reached');
       return;
     }
 
@@ -102,6 +104,9 @@ class DaemonClient {
       this.ws.send(JSON.stringify(event));
     } else if (this.ws?.readyState === WebSocket.CONNECTING) {
       this.pendingMessages.push(event);
+    } else {
+      const state = this.ws ? ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][this.ws.readyState] : 'NO_SOCKET';
+      log.warn('WS not ready, dropping message', { state, type: event.type });
     }
   }
 
@@ -115,6 +120,7 @@ class DaemonClient {
   // WebSocket commands
   createChat(projectId: string, adapterId: string, model?: string): void {
     this.send({ type: 'chat.create', projectId, adapterId, model });
+    log.info('createChat', { projectId, adapterId, model });
   }
 
   updateChatConfig(
@@ -124,34 +130,47 @@ class DaemonClient {
     permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo',
   ): void {
     this.send({ type: 'chat.updateConfig', chatId, adapterId, model, permissionMode });
+    log.info('updateChatConfig', { chatId, adapterId, model, permissionMode });
   }
 
   resumeChat(chatId: string): void {
     this.send({ type: 'chat.resume', chatId });
+    log.debug('resumeChat', { chatId });
   }
 
   endChat(chatId: string): void {
     this.send({ type: 'chat.end', chatId });
+    log.info('endChat', { chatId });
   }
 
   interruptChat(chatId: string): void {
     this.send({ type: 'chat.interrupt', chatId });
+    log.info('interruptChat', { chatId });
   }
 
   sendMessage(chatId: string, content: string, attachmentIds?: string[]): void {
     this.send({ type: 'message.send', chatId, content, attachmentIds });
+    log.info('sendMessage', { chatId, attachmentCount: attachmentIds?.length ?? 0 });
   }
 
   respondToPermission(chatId: string, response: PermissionResponse): void {
     this.send({ type: 'permission.respond', chatId, response });
+    log.info('respondToPermission', {
+      chatId,
+      requestId: response.requestId,
+      toolName: response.toolName,
+      behavior: response.behavior,
+    });
   }
 
   enableWorktree(chatId: string): void {
     this.send({ type: 'chat.enableWorktree', chatId });
+    log.info('enableWorktree', { chatId });
   }
 
   disableWorktree(chatId: string): void {
     this.send({ type: 'chat.disableWorktree', chatId });
+    log.info('disableWorktree', { chatId });
   }
 
   subscribe(chatId: string): void {

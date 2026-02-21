@@ -69,7 +69,7 @@ async function handleSearchFiles(ctx: RouteContext, req: Request, res: Response)
   }
 
   const q = ((req.query.q as string) || '').toLowerCase();
-  if (q.length < 2) {
+  if (q.length < 1) {
     res.json([]);
     return;
   }

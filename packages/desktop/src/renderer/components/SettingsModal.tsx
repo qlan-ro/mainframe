@@ -8,6 +8,7 @@ import { SidebarTab } from './settings/SidebarTab';
 import { ProviderSection } from './settings/ProviderSection';
 import { GeneralSection } from './settings/GeneralSection';
 import { SIDEBAR_TABS, PROVIDER_COLORS, PROVIDER_BORDER_COLORS } from './settings/constants';
+import { AboutSection } from './settings/AboutSection';
 
 function ProvidersContent() {
   const selectedProvider = useSettingsStore((s) => s.selectedProvider);
@@ -41,7 +42,7 @@ function TabContent() {
     case 'keybindings':
       return <PlaceholderContent label="Keybindings" />;
     case 'about':
-      return <PlaceholderContent label="About" />;
+      return <AboutSection />;
   }
 }
 
@@ -145,9 +146,6 @@ export function SettingsModal(): React.ReactElement | null {
                     })}
                 </React.Fragment>
               ))}
-            </div>
-            <div className="px-3 py-2">
-              <span className="text-mf-status text-mf-text-secondary">v0.1.0</span>
             </div>
           </div>
 

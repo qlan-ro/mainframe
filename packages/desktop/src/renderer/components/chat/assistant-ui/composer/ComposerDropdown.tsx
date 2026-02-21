@@ -8,6 +8,7 @@ export function ComposerDropdown({
   disabled = false,
   icon,
   className,
+  'data-tutorial': dataTutorial,
 }: {
   items: { id: string; label: string }[];
   value: string;
@@ -15,6 +16,7 @@ export function ComposerDropdown({
   disabled?: boolean;
   icon?: React.ReactNode;
   className?: string;
+  'data-tutorial'?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -31,7 +33,7 @@ export function ComposerDropdown({
   const selected = items.find((i) => i.id === value);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={ref} data-tutorial={dataTutorial}>
       <button
         type="button"
         disabled={disabled}

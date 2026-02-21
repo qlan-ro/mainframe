@@ -49,7 +49,7 @@ const PermissionRespond = z.object({
     toolName: z.string().optional(),
     behavior: z.enum(['allow', 'deny']),
     updatedInput: z.record(z.string(), z.unknown()).optional(),
-    updatedPermissions: z.array(z.string()).optional(),
+    updatedPermissions: z.array(z.unknown()).optional(),
     message: z.string().optional(),
     executionMode: z.enum(['default', 'acceptEdits', 'yolo']).optional(),
     clearContext: z.boolean().optional(),

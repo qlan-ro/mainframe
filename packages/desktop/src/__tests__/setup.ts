@@ -29,3 +29,7 @@ Object.defineProperty(globalThis, 'localStorage', {
   writable: true,
   configurable: true,
 });
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+import '@testing-library/jest-dom';

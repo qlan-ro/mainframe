@@ -34,12 +34,38 @@ export interface AdapterProcess {
 
 export type PermissionBehavior = 'allow' | 'deny';
 
+export type PermissionDestination = 'userSettings' | 'projectSettings' | 'localSettings' | 'session' | 'cliArg';
+
+/** A permission rule update to save for future tool uses. Matches the CLI's PermissionUpdate type. */
+export type PermissionUpdate =
+  | {
+      type: 'addRules';
+      rules: { toolName: string; ruleContent?: string }[];
+      behavior: 'allow' | 'deny' | 'ask';
+      destination: PermissionDestination;
+    }
+  | {
+      type: 'replaceRules';
+      rules: { toolName: string; ruleContent?: string }[];
+      behavior: 'allow' | 'deny' | 'ask';
+      destination: PermissionDestination;
+    }
+  | {
+      type: 'removeRules';
+      rules: { toolName: string; ruleContent?: string }[];
+      behavior: 'allow' | 'deny' | 'ask';
+      destination: PermissionDestination;
+    }
+  | { type: 'setMode'; mode: PermissionMode; destination: PermissionDestination }
+  | { type: 'addDirectories'; directories: string[]; destination: PermissionDestination }
+  | { type: 'removeDirectories'; directories: string[]; destination: PermissionDestination };
+
 export interface PermissionRequest {
   requestId: string;
   toolName: string;
   toolUseId: string;
   input: Record<string, unknown>;
-  suggestions: string[];
+  suggestions: PermissionUpdate[];
   decisionReason?: string;
 }
 
@@ -49,7 +75,7 @@ export interface PermissionResponse {
   toolName?: string;
   behavior: PermissionBehavior;
   updatedInput?: Record<string, unknown>;
-  updatedPermissions?: string[];
+  updatedPermissions?: PermissionUpdate[];
   message?: string;
   executionMode?: 'default' | 'acceptEdits' | 'yolo';
   clearContext?: boolean;

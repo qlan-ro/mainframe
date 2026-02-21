@@ -14,17 +14,18 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "electron-vite build && node scripts/bundle-daemon.mjs",
     "clean": "rm -rf out dist",
     "start": "electron-vite preview",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:playwright": "playwright test -c playwright-ct.config.ts",
     "package": "electron-builder"
   },
   "dependencies": {
-    "@assistant-ui/react": "^0.12.10",
-    "@assistant-ui/react-markdown": "^0.12.3",
+    "@assistant-ui/react": "^0.12.11",
+    "@assistant-ui/react-markdown": "^0.12.4",
     "@mainframe/core": "workspace:*",
     "@mainframe/types": "workspace:*",
     "@monaco-editor/react": "^4.7.0",
@@ -36,23 +37,28 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "diff": "^8.0.3",
-    "lucide-react": "^0.574.0",
+    "lucide-react": "^0.575.0",
     "monaco-editor": "^0.55.1",
+    "pino": "^10.3.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.6.4",
     "remark-gfm": "^4.0.1",
     "shiki": "^3.22.0",
-    "tailwind-merge": "^3.4.1",
+    "tailwind-merge": "^3.5.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@types/node": "^25.2.3",
+    "@playwright/experimental-ct-react": "^1.58.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.3.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
-    "electron": "^40.4.1",
+    "electron": "^40.6.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "jsdom": "^28.1.0",
@@ -67,8 +73,31 @@
     "icon": "resources/icon",
     "files": [
       "out/**/*",
-      "resources/**/*",
+      "resources/icon*",
+      "resources/favicon.png",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/daemon.cjs",
+        "to": "daemon.cjs"
+      },
+      {
+        "from": "../../node_modules/better-sqlite3",
+        "to": "node_modules/better-sqlite3",
+        "filter": [
+          "**/*",
+          "!**/*.md"
+        ]
+      },
+      {
+        "from": "../../node_modules/bindings",
+        "to": "node_modules/bindings"
+      },
+      {
+        "from": "../../node_modules/file-uri-to-path",
+        "to": "node_modules/file-uri-to-path"
+      }
     ],
     "publish": {
       "provider": "github",

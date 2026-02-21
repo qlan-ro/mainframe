@@ -1,5 +1,8 @@
 import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput } from '@mainframe/types';
 import { fetchJson, postJson, putJson, deleteRequest, API_BASE } from './http';
+import { createLogger } from '../logger';
+
+const log = createLogger('api');
 
 export async function getSkills(adapterId: string, projectPath: string): Promise<Skill[]> {
   const json = await fetchJson<{ success: boolean; data: Skill[] }>(
@@ -16,6 +19,7 @@ export async function getAgents(adapterId: string, projectPath: string): Promise
 }
 
 export async function createSkill(adapterId: string, data: { projectPath: string } & CreateSkillInput): Promise<Skill> {
+  log.info('createSkill', { adapterId, projectPath: data.projectPath });
   const json = await postJson<{ data: Skill }>(`${API_BASE}/api/adapters/${adapterId}/skills`, data);
   return json.data;
 }
@@ -26,6 +30,7 @@ export async function updateSkill(
   projectPath: string,
   content: string,
 ): Promise<Skill> {
+  log.info('updateSkill', { adapterId, skillId, projectPath });
   const json = await putJson<{ data: Skill }>(
     `${API_BASE}/api/adapters/${adapterId}/skills/${encodeURIComponent(skillId)}`,
     { projectPath, content },
@@ -34,6 +39,7 @@ export async function updateSkill(
 }
 
 export async function deleteSkill(adapterId: string, skillId: string, projectPath: string): Promise<void> {
+  log.info('deleteSkill', { adapterId, skillId, projectPath });
   await deleteRequest(
     `${API_BASE}/api/adapters/${adapterId}/skills/${encodeURIComponent(skillId)}?projectPath=${encodeURIComponent(projectPath)}`,
   );
@@ -43,6 +49,7 @@ export async function createAgent(
   adapterId: string,
   data: { projectPath: string } & CreateAgentInput,
 ): Promise<AgentConfig> {
+  log.info('createAgent', { adapterId, projectPath: data.projectPath });
   const json = await postJson<{ data: AgentConfig }>(`${API_BASE}/api/adapters/${adapterId}/agents`, data);
   return json.data;
 }
@@ -53,6 +60,7 @@ export async function updateAgent(
   projectPath: string,
   content: string,
 ): Promise<AgentConfig> {
+  log.info('updateAgent', { adapterId, agentId, projectPath });
   const json = await putJson<{ data: AgentConfig }>(
     `${API_BASE}/api/adapters/${adapterId}/agents/${encodeURIComponent(agentId)}`,
     { projectPath, content },
@@ -61,6 +69,7 @@ export async function updateAgent(
 }
 
 export async function deleteAgent(adapterId: string, agentId: string, projectPath: string): Promise<void> {
+  log.info('deleteAgent', { adapterId, agentId, projectPath });
   await deleteRequest(
     `${API_BASE}/api/adapters/${adapterId}/agents/${encodeURIComponent(agentId)}?projectPath=${encodeURIComponent(projectPath)}`,
   );

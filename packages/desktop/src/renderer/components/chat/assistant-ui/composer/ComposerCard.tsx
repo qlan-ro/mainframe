@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect } from 'react';
-import { ArrowUp, Square, AtSign, Paperclip, Shield, GitBranch, X } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ArrowUp, Square, Paperclip, Shield, GitBranch, X } from 'lucide-react';
 import { ComposerPrimitive, useThread, useComposerRuntime } from '@assistant-ui/react';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useChatsStore } from '../../../../store/chats';
@@ -8,8 +8,7 @@ import { useAdaptersStore } from '../../../../store/adapters';
 import { getAdapterOptions, getModelOptions } from '../../../../lib/adapters';
 import { daemonClient } from '../../../../lib/client';
 import { focusComposerInput } from '../../../../lib/focus';
-import { SlashCommandMenu } from '../../SlashCommandMenu';
-import { AtMentionMenu } from '../../AtMentionMenu';
+import { ContextPickerMenu } from '../../ContextPickerMenu';
 import { ComposerDropdown } from './ComposerDropdown';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
@@ -20,6 +19,47 @@ const PERMISSION_MODES = [
   { id: 'acceptEdits', label: 'Auto-Edits' },
   { id: 'yolo', label: 'Unattended' },
 ];
+
+// Two overlapping circles: back circle = /, front circle = @
+function ContextPickerIcon() {
+  const bg = 'var(--color-mf-panel-bg)';
+  return (
+    <svg viewBox="0 0 17 13" width="17" height="13" aria-hidden="true">
+      {/* Back circle (/) */}
+      <circle cx="5" cy="6.5" r="5" fill="currentColor" opacity="0.38" />
+      {/* Front circle (@) */}
+      <circle cx="11.5" cy="6.5" r="5" fill="currentColor" />
+      {/* / as diagonal line */}
+      <line
+        x1="3"
+        y1="9"
+        x2="7"
+        y2="4"
+        style={{ stroke: bg, strokeWidth: 1.5, strokeLinecap: 'round' } as React.CSSProperties}
+      />
+      {/* @ — Lucide AtSign paths scaled to 7×7, centered on right circle */}
+      <svg
+        x="8"
+        y="3"
+        width="7"
+        height="7"
+        viewBox="0 0 24 24"
+        style={
+          {
+            fill: 'none',
+            stroke: bg,
+            strokeWidth: 2.4,
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+          } as React.CSSProperties
+        }
+      >
+        <circle cx="12" cy="12" r="4" />
+        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
+      </svg>
+    </svg>
+  );
+}
 
 function StopButton() {
   const thread = useThread();
@@ -42,6 +82,7 @@ export function ComposerCard() {
   const messages = useChatsStore((s) => s.messages.get(chatId));
   const hasMessages = (messages?.length ?? 0) > 0;
   const composerRuntime = useComposerRuntime();
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -95,31 +136,24 @@ export function ComposerCard() {
   );
 
   return (
-    <ComposerPrimitive.Root className="relative border border-mf-border rounded-mf-card bg-transparent">
-      <SlashCommandMenu />
-      <AtMentionMenu />
+    <ComposerPrimitive.Root
+      data-tutorial="step-3"
+      className="relative border border-mf-border rounded-mf-card bg-transparent"
+    >
+      <ContextPickerMenu forceOpen={pickerOpen} onClose={() => setPickerOpen(false)} />
       <div className="flex items-center gap-1 px-2 pt-2">
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
-            try {
-              const current = composerRuntime.getState()?.text ?? '';
-              if (/(?:^|\s)@\S*$/.test(current)) {
-                focusComposerInput();
-                return;
-              }
-              const suffix = current.length === 0 || current.endsWith(' ') ? '@' : ' @';
-              composerRuntime.setText(current + suffix);
-              focusComposerInput();
-            } catch (error) {
-              console.warn('[composer-card] failed to insert mention prefix:', error);
-            }
+            setPickerOpen((p) => !p);
+            focusComposerInput();
           }}
           className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
-          title="Mention files"
-          aria-label="Mention files"
+          title="Open context picker (agents, files, skills)"
+          aria-label="Open context picker"
         >
-          <AtSign size={14} />
+          <ContextPickerIcon />
         </button>
         <ComposerPrimitive.AddAttachment
           className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
@@ -159,7 +193,7 @@ export function ComposerCard() {
           rows={2}
           autoFocus
           spellCheck={false}
-          placeholder="Use / for commands, @ to search files... (Enter to send)"
+          placeholder="Type @ to search files, / for skills… (Enter to send)"
           className="w-full bg-transparent border-none px-3 py-2 font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
@@ -167,6 +201,7 @@ export function ComposerCard() {
       <div className="flex items-center justify-between px-2 pb-2">
         <div className="flex items-center gap-1">
           <ComposerDropdown
+            data-tutorial="step-4"
             items={adapterOptions}
             value={currentAdapter}
             onChange={handleAdapterChange}

@@ -1,8 +1,11 @@
-import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, dialog, utilityProcess, Menu } from 'electron';
+import type { UtilityProcess } from 'electron';
 import { join, resolve } from 'path';
 import { readFile } from 'fs/promises';
 import { homedir } from 'os';
-import { spawn, ChildProcess } from 'child_process';
+import { createMainLogger, logFromRenderer } from './logger.js';
+
+const log = createMainLogger('main');
 
 const APP_AUTHOR = 'Mainframe Contributors';
 
@@ -12,24 +15,57 @@ if (process.env.NODE_ENV === 'development') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
 
+// Enforce single instance. If the lock is not acquired, another instance is
+// already running — quit immediately and let it handle the activation.
+const instanceLock = app.requestSingleInstanceLock();
+if (!instanceLock) {
+  app.quit();
+}
+
+app.on('second-instance', () => {
+  if (mainWindow?.isMinimized()) mainWindow.restore();
+  mainWindow?.focus();
+});
+
 let mainWindow: BrowserWindow | null = null;
-let daemon: ChildProcess | null = null;
+let daemon: UtilityProcess | null = null;
 
 function startDaemon(): void {
   if (process.env.NODE_ENV === 'development') {
-    console.log('Development mode: assuming daemon is running');
+    log.info('development mode: daemon assumed external');
     return;
   }
 
-  const daemonPath = join(__dirname, '../../core/dist/index.js');
-  daemon = spawn('node', [daemonPath], {
+  // daemon.cjs is a self-contained esbuild bundle placed in extraResources (outside asar).
+  // better-sqlite3 is also in extraResources/node_modules so require() resolves it correctly.
+  const daemonPath = join(process.resourcesPath, 'daemon.cjs');
+  log.info({ path: daemonPath }, 'daemon starting');
+  daemon = utilityProcess.fork(daemonPath, [], {
     stdio: 'inherit',
-    detached: false,
+    env: { ...process.env, NODE_ENV: 'production' },
   });
 
-  daemon.on('error', (error) => {
-    console.error('Daemon error:', error);
+  daemon.on('exit', (code) => {
+    log.error({ code }, 'daemon exited');
   });
+}
+
+function setProductionMenu(): void {
+  const menu = Menu.getApplicationMenu();
+  if (!menu) {
+    log.warn('setProductionMenu: no application menu found');
+    return;
+  }
+
+  const newItems = menu.items.map((topItem) => {
+    if (topItem.label !== 'View' || !topItem.submenu) return topItem;
+    return {
+      label: 'View',
+      submenu: topItem.submenu.items.filter((sub) => sub.role !== 'toggledevtools'),
+    };
+  });
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(newItems));
 }
 
 function setupIPC(): void {
@@ -60,16 +96,20 @@ function setupIPC(): void {
 
     const isAllowed = allowedPrefixes.some((prefix) => normalizedPath.startsWith(prefix));
     if (!isAllowed) {
-      console.error('[ipc] Blocked file read outside allowed dirs:', normalizedPath);
+      log.warn({ path: normalizedPath }, 'ipc blocked file read outside allowed paths');
       return null;
     }
 
     try {
       return await readFile(filePath, 'utf-8');
     } catch (error) {
-      console.warn('[ipc] readFile failed:', error);
+      log.warn({ err: error }, 'ipc readFile failed');
       return null;
     }
+  });
+
+  ipcMain.on('log', (_event, level: string, module: string, message: string, data?: unknown) => {
+    logFromRenderer(level, module, message, data);
   });
 }
 
@@ -93,9 +133,6 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show();
-    if (process.env.NODE_ENV === 'development') {
-      mainWindow?.webContents.openDevTools({ mode: 'detach' });
-    }
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -103,16 +140,30 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  if (process.env.NODE_ENV !== 'development') {
+    mainWindow.webContents.on('devtools-opened', () => {
+      mainWindow?.webContents.closeDevTools();
+    });
+  }
+
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
+
+  log.info('window created');
 }
 
 app.whenReady().then(() => {
+  log.info({ version: app.getVersion() }, 'app ready');
   setupIPC();
   startDaemon();
+
+  if (process.env.NODE_ENV !== 'development') {
+    setProductionMenu();
+  }
+
   createWindow();
 
   app.on('activate', () => {

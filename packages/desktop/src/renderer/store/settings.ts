@@ -12,7 +12,7 @@ interface SettingsState {
   general: GeneralConfig;
   loading: boolean;
 
-  open: (defaultProvider?: string) => void;
+  open: (defaultProvider?: string, tab?: SettingsTab) => void;
   close: () => void;
   setActiveTab: (tab: SettingsTab) => void;
   setSelectedProvider: (id: string | null) => void;
@@ -30,10 +30,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   general: { ...GENERAL_DEFAULTS },
   loading: false,
 
-  open: (defaultProvider?: string) =>
+  open: (defaultProvider?: string, tab?: SettingsTab) =>
     set({
       isOpen: true,
-      activeTab: defaultProvider ? 'providers' : 'general',
+      activeTab: tab ?? (defaultProvider ? 'providers' : 'general'),
       selectedProvider: defaultProvider ?? null,
     }),
   close: () => set({ isOpen: false }),

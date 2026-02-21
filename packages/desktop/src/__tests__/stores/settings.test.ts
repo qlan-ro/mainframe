@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { ProviderConfig } from '@mainframe/types';
+import { GENERAL_DEFAULTS } from '@mainframe/types';
 import { useSettingsStore } from '../../renderer/store/settings.js';
 import type { SettingsTab } from '../../renderer/store/settings.js';
 
@@ -9,6 +10,7 @@ function resetStore(): void {
     activeTab: 'general',
     selectedProvider: null,
     providers: {},
+    general: { ...GENERAL_DEFAULTS },
     loading: false,
   });
 }
@@ -55,6 +57,19 @@ describe('useSettingsStore', () => {
     it('switches to providers tab when a default provider is given', () => {
       useSettingsStore.getState().open('claude');
       expect(useSettingsStore.getState().activeTab).toBe('providers');
+      expect(useSettingsStore.getState().selectedProvider).toBe('claude');
+    });
+
+    it('opens directly to a given tab', () => {
+      useSettingsStore.getState().open(undefined, 'about');
+      expect(useSettingsStore.getState().isOpen).toBe(true);
+      expect(useSettingsStore.getState().activeTab).toBe('about');
+      expect(useSettingsStore.getState().selectedProvider).toBeNull();
+    });
+
+    it('tab param takes precedence over defaultProvider', () => {
+      useSettingsStore.getState().open('claude', 'about');
+      expect(useSettingsStore.getState().activeTab).toBe('about');
       expect(useSettingsStore.getState().selectedProvider).toBe('claude');
     });
   });

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { PermissionRequest, MessageContent, DiffHunk } from '@mainframe/types';
+import type { PermissionRequest, PermissionUpdate, MessageContent, DiffHunk } from '@mainframe/types';
 import type { ClaudeProcess, ClaudeEventEmitter } from './claude-types.js';
 import { deriveModifiedFile } from './claude-history.js';
 import { createChildLogger } from '../logger.js';
@@ -21,6 +21,7 @@ export function handleStdout(
 
   for (const line of lines) {
     if (!line.trim()) continue;
+    log.trace({ processId, line }, 'adapter stdout');
     try {
       const event = JSON.parse(line.trim());
       handleEvent(processId, event, processes, emitter);
@@ -152,7 +153,7 @@ function handleControlRequestEvent(
       toolName: request.tool_name as string,
       toolUseId: request.tool_use_id as string,
       input: request.input as Record<string, unknown>,
-      suggestions: (request.permission_suggestions as string[]) || [],
+      suggestions: (request.permission_suggestions as PermissionUpdate[]) || [],
       decisionReason: request.decision_reason as string | undefined,
     };
     emitter.emit('permission', processId, permRequest);
@@ -201,6 +202,8 @@ function handleEvent(
 ): void {
   const cp = processes.get(processId);
   if (!cp) return;
+
+  log.debug({ processId, type: event.type }, 'adapter event');
 
   switch (event.type) {
     case 'system':

@@ -32,6 +32,8 @@ export class PermissionManager {
 
   clear(chatId: string): void {
     this.pendingPermissions.delete(chatId);
+    this.planExecutionModes.delete(chatId);
+    this.interruptedChats.delete(chatId);
   }
 
   enqueue(chatId: string, request: PermissionRequest): boolean {

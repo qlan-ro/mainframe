@@ -132,15 +132,31 @@ describe('projectRoutes', () => {
   });
 
   describe('DELETE /api/projects/:id', () => {
-    it('removes project and associated chats', () => {
+    it('calls chatManager.removeProject', async () => {
+      (ctx.chats as any).removeProject = vi.fn().mockResolvedValue(undefined);
+
       const router = projectRoutes(ctx);
       const handler = extractHandler(router, 'delete', '/api/projects/:id');
       const res = mockRes();
 
-      handler({ params: { id: 'p1' }, query: {} }, res, vi.fn());
+      await handler({ params: { id: 'p1' }, query: {} }, res, vi.fn());
 
-      expect(ctx.db.projects.removeWithChats).toHaveBeenCalledWith('p1');
+      expect((ctx.chats as any).removeProject).toHaveBeenCalledWith('p1');
+      expect(ctx.db.projects.removeWithChats).not.toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('returns 500 when removeProject rejects', async () => {
+      (ctx.chats as any).removeProject = vi.fn().mockRejectedValue(new Error('kill failed'));
+
+      const router = projectRoutes(ctx);
+      const handler = extractHandler(router, 'delete', '/api/projects/:id');
+      const res = mockRes();
+
+      await handler({ params: { id: 'p1' }, query: {} }, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Failed to remove project' });
     });
   });
 });
