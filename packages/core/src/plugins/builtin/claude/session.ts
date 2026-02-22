@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { EventEmitter } from 'node:events';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
@@ -54,7 +53,7 @@ export interface ClaudeSessionState {
   pid: number;
 }
 
-export class ClaudeSession extends EventEmitter implements AdapterSession {
+export class ClaudeSession implements AdapterSession {
   readonly id: string;
   readonly adapterId = 'claude';
   readonly projectPath: string;
@@ -63,12 +62,13 @@ export class ClaudeSession extends EventEmitter implements AdapterSession {
   readonly state: ClaudeSessionState;
 
   private readonly resumeSessionId: string | undefined;
+  private readonly onExit: (() => void) | undefined;
 
-  constructor(options: SessionOptions) {
-    super();
+  constructor(options: SessionOptions, onExit?: () => void) {
     this.id = nanoid();
     this.projectPath = options.projectPath;
     this.resumeSessionId = options.chatId;
+    this.onExit = onExit;
     this.state = {
       chatId: options.chatId ?? '',
       buffer: '',
@@ -171,6 +171,7 @@ export class ClaudeSession extends EventEmitter implements AdapterSession {
     child.on('close', (code: number | null) => {
       this.state.child = null;
       activeSink.onExit(code);
+      this.onExit?.();
     });
 
     return this.getProcessInfo()!;

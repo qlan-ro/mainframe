@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process';
-import { EventEmitter } from 'node:events';
 import type {
   Adapter,
   AdapterModel,
@@ -78,10 +77,8 @@ export class ClaudeAdapter implements Adapter {
   }
 
   createSession(options: SessionOptions): AdapterSession {
-    const session = new ClaudeSession(options);
+    const session = new ClaudeSession(options, () => this.sessions.delete(session));
     this.sessions.add(session);
-    // ClaudeSession extends EventEmitter internally; cast is safe for cleanup tracking.
-    (session as unknown as EventEmitter).once('exit', () => this.sessions.delete(session));
     return session;
   }
 
