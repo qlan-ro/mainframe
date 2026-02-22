@@ -1,6 +1,6 @@
 {
   "name": "@mainframe/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mainframe desktop app — Electron/React frontend for orchestrating AI agents",
   "license": "MIT",
   "repository": {
