@@ -6,9 +6,32 @@ import {
   type ToolGroupItem,
   type TaskProgressItem,
   type PartEntry,
+  type ToolCategories,
   groupToolCallParts,
   groupTaskChildren,
 } from '@mainframe/core/messages';
+
+const CLAUDE_CATEGORIES: ToolCategories = {
+  explore: new Set(['Read', 'Glob', 'Grep']),
+  hidden: new Set([
+    'TaskList',
+    'TaskGet',
+    'TaskOutput',
+    'TaskStop',
+    'TodoWrite',
+    'Skill',
+    'EnterPlanMode',
+    'AskUserQuestion',
+  ]),
+  progress: new Set(['TaskCreate', 'TaskUpdate']),
+  subagent: new Set(['Task']),
+};
+
+/** Returns tool categories for a given adapterId, defaulting to Claude's categories. */
+export function getToolCategoriesForAdapter(adapterId: string | undefined): ToolCategories {
+  if (!adapterId || adapterId === 'claude') return CLAUDE_CATEGORIES;
+  return { explore: new Set(), hidden: new Set(), progress: new Set(), subagent: new Set() };
+}
 
 // Mutable version of the content array element type (ThreadMessageLike['content'] is readonly)
 type ContentPart = Exclude<ThreadMessageLike['content'], string>[number];
@@ -100,8 +123,9 @@ export function convertMessage(message: GroupedMessage): ThreadMessageLike {
         }
       }
 
-      const afterGrouping = groupToolCallParts(parts as PartEntry[]);
-      const grouped = groupTaskChildren(afterGrouping) as ThreadMessageLike['content'];
+      const categories = getToolCategoriesForAdapter(message.metadata?.adapterId as string | undefined);
+      const afterGrouping = groupToolCallParts(parts as PartEntry[], categories);
+      const grouped = groupTaskChildren(afterGrouping, categories) as ThreadMessageLike['content'];
 
       return {
         role: 'assistant',
