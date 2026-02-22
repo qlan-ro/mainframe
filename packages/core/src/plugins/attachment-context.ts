@@ -12,7 +12,7 @@ interface AttachmentRecord {
 }
 
 export function createPluginAttachmentContext(baseDir: string): PluginAttachmentContext {
-  const entityDir = (id: string) => join(baseDir, id);
+  const entityDir = (id: string) => join(baseDir, basename(id));
 
   function sanitize(name: string): string {
     const f = basename(name)
