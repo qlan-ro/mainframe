@@ -5,54 +5,13 @@ import { WebSocketManager } from '../server/websocket.js';
 import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import { BaseSession } from '../adapters/base-session.js';
-import type {
-  AdapterProcess,
-  ControlResponse,
-  AdapterSession,
-  SessionOptions,
-  SessionSpawnOptions,
-  DaemonEvent,
-  ControlRequest,
-} from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { ControlResponse, AdapterSession, SessionOptions, DaemonEvent, ControlRequest } from '@mainframe/types';
 
-class MockSession extends BaseSession {
-  readonly id = 'proc-1';
-  readonly adapterId: string;
-  readonly projectPath: string;
-  private _isSpawned = false;
-
+class MockSession extends MockBaseSession {
   constructor(private adapter: MockAdapter) {
-    super();
-    this.adapterId = adapter.id;
-    this.projectPath = '/tmp';
-  }
-
-  get isSpawned(): boolean {
-    return this._isSpawned;
-  }
-
-  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
-    this._isSpawned = true;
-    return {
-      id: this.id,
-      adapterId: this.adapterId,
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: this.projectPath,
-    };
-  }
-
-  async kill(): Promise<void> {
-    this._isSpawned = false;
-  }
-
-  getProcessInfo(): AdapterProcess | null {
-    return this._isSpawned
-      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
-      : null;
+    super('proc-1', adapter.id, '/tmp');
   }
 
   override async respondToPermission(r: ControlResponse): Promise<void> {
@@ -60,26 +19,15 @@ class MockSession extends BaseSession {
   }
 }
 
-class MockAdapter extends BaseAdapter {
-  id = 'claude';
-  name = 'Mock';
+class MockAdapter extends MockBaseAdapter {
+  override id = 'claude';
+  override name = 'Mock';
   respondToPermissionSpy = vi.fn();
   currentSession: MockSession | null = null;
-
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
 
   override createSession(_options: SessionOptions): AdapterSession {
     this.currentSession = new MockSession(this);
     return this.currentSession;
-  }
-
-  override async loadHistory() {
-    return [];
   }
 }
 
@@ -207,8 +155,7 @@ describe('permission flow', () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'default');
 
-    adapter.currentSession!.emit(
-      'permission',
+    adapter.currentSession!.simulatePermission(
       makePermissionRequest('AskUserQuestion', {
         input: {
           questions: [{ question: 'Which approach?', header: 'Approach', options: [], multiSelect: false }],
@@ -225,7 +172,7 @@ describe('permission flow', () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'yolo');
 
-    adapter.currentSession!.emit('permission', makePermissionRequest('Bash'));
+    adapter.currentSession!.simulatePermission(makePermissionRequest('Bash'));
     await sleep(50);
 
     expect(events).toHaveLength(0);
@@ -236,8 +183,7 @@ describe('permission flow', () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'yolo');
 
-    adapter.currentSession!.emit(
-      'permission',
+    adapter.currentSession!.simulatePermission(
       makePermissionRequest('AskUserQuestion', {
         input: { questions: [] },
       }),
@@ -252,8 +198,7 @@ describe('permission flow', () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'yolo');
 
-    adapter.currentSession!.emit(
-      'permission',
+    adapter.currentSession!.simulatePermission(
       makePermissionRequest('ExitPlanMode', {
         input: { plan: 'Step 1: ...' },
       }),
@@ -269,8 +214,7 @@ describe('permission flow', () => {
     await setupAndResume(adapter, 'default');
 
     // Queue a permission so the adapter has a pending request
-    adapter.currentSession!.emit(
-      'permission',
+    adapter.currentSession!.simulatePermission(
       makePermissionRequest('Bash', { requestId: 'req-42', toolUseId: 'tu-42' }),
     );
     await sleep(50);
@@ -313,15 +257,13 @@ describe('permission flow', () => {
     });
 
     // Emit first permission
-    adapter.currentSession!.emit(
-      'permission',
+    adapter.currentSession!.simulatePermission(
       makePermissionRequest('Bash', { requestId: 'req-1', toolUseId: 'tu-1', input: { command: 'ls' } }),
     );
     await sleep(50);
 
     // Emit second permission — should be queued, NOT emitted yet
-    adapter.currentSession!.emit(
-      'permission',
+    adapter.currentSession!.simulatePermission(
       makePermissionRequest('Write', {
         requestId: 'req-2',
         toolUseId: 'tu-2',

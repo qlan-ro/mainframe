@@ -1,58 +1,36 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import { BaseSession } from '../adapters/base-session.js';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
 import type {
   Chat,
   ChatMessage,
-  AdapterProcess,
   ControlResponse,
   AdapterSession,
   SessionOptions,
   SessionSpawnOptions,
+  AdapterProcess,
 } from '@mainframe/types';
 
 // ── Minimal mock session & adapter ──────────────────────────────────
 
-class MockSession extends BaseSession {
-  readonly id = 'proc-1';
-  readonly adapterId: string;
-  readonly projectPath: string;
-  private _isSpawned = false;
-
-  constructor(private adapter: MockAdapter) {
-    super();
-    this.adapterId = adapter.id;
-    this.projectPath = '/tmp';
+class MockSession extends MockBaseSession {
+  constructor(private adapter: MockAdapterImpl) {
+    super('proc-1', adapter.id, '/tmp');
   }
 
-  get isSpawned(): boolean {
-    return this._isSpawned;
-  }
-
-  async spawn(options?: SessionSpawnOptions): Promise<AdapterProcess> {
-    this._isSpawned = true;
+  override async spawn(
+    options?: SessionSpawnOptions,
+    sink?: Parameters<MockBaseSession['spawn']>[1],
+  ): Promise<AdapterProcess> {
     this.adapter.lastSpawnOptions = options ?? null;
-    return {
-      id: this.id,
-      adapterId: this.adapterId,
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: this.projectPath,
-    };
+    return super.spawn(options, sink);
   }
 
-  async kill(): Promise<void> {
-    this._isSpawned = false;
+  override async kill(): Promise<void> {
+    await super.kill();
     this.adapter.killCount++;
-  }
-
-  getProcessInfo(): AdapterProcess | null {
-    return this._isSpawned
-      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
-      : null;
   }
 
   override async loadHistory(): Promise<ChatMessage[]> {
@@ -68,22 +46,15 @@ class MockSession extends BaseSession {
   }
 }
 
-class MockAdapter extends BaseAdapter {
-  id = 'mock';
-  name = 'Mock';
+class MockAdapterImpl extends MockBaseAdapter {
+  override id = 'mock';
+  override name = 'Mock';
   historyToReturn: ChatMessage[] = [];
   lastSpawnOptions: SessionSpawnOptions | null = null;
   permissionResponses: ControlResponse[] = [];
   sentMessages: string[] = [];
   killCount = 0;
   currentSession: MockSession | null = null;
-
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
 
   override createSession(_options: SessionOptions): AdapterSession {
     this.currentSession = new MockSession(this);
@@ -149,7 +120,7 @@ function toolResult(toolUseId: string, content: string, isError = false) {
 // ── Tests ───────────────────────────────────────────────────────────
 
 describe('restorePendingPermission (via getMessages + hasPendingPermission)', () => {
-  let adapter: MockAdapter;
+  let adapter: MockAdapterImpl;
   let registry: AdapterRegistry;
   let manager: ChatManager;
 
@@ -170,7 +141,7 @@ describe('restorePendingPermission (via getMessages + hasPendingPermission)', ()
 
   beforeEach(() => {
     msgCounter = 0;
-    adapter = new MockAdapter();
+    adapter = new MockAdapterImpl();
     registry = new AdapterRegistry();
     registry.register(adapter);
   });
@@ -311,7 +282,7 @@ describe('restorePendingPermission (via getMessages + hasPendingPermission)', ()
 // ── respondToPermission: ExitPlanMode escalation before spawn ──────
 
 describe('respondToPermission with no process (daemon restart scenario)', () => {
-  let adapter: MockAdapter;
+  let adapter: MockAdapterImpl;
   let registry: AdapterRegistry;
   let manager: ChatManager;
   let db: ReturnType<typeof createMockDb>;
@@ -320,7 +291,7 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
 
   beforeEach(() => {
     msgCounter = 0;
-    adapter = new MockAdapter();
+    adapter = new MockAdapterImpl();
     registry = new AdapterRegistry();
     registry.register(adapter);
   });
@@ -468,7 +439,7 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
 });
 
 describe('respondToPermission clearContext ExitPlanMode', () => {
-  let adapter: MockAdapter;
+  let adapter: MockAdapterImpl;
   let registry: AdapterRegistry;
   let manager: ChatManager;
   let db: ReturnType<typeof createMockDb>;
@@ -477,7 +448,7 @@ describe('respondToPermission clearContext ExitPlanMode', () => {
 
   beforeEach(() => {
     msgCounter = 0;
-    adapter = new MockAdapter();
+    adapter = new MockAdapterImpl();
     registry = new AdapterRegistry();
     registry.register(adapter);
   });

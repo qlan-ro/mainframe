@@ -4,7 +4,7 @@ import { Writable } from 'node:stream';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { ClaudeAdapter } from '../plugins/builtin/claude/adapter.js';
-import { BaseSession } from '../adapters/base-session.js';
+import { MockBaseSession } from './helpers/mock-session.js';
 import type {
   Chat,
   AdapterProcess,
@@ -177,52 +177,31 @@ function createMockDb(chat?: Partial<Chat>) {
  * A mock session that captures setPermissionMode/setModel writes into `written`
  * and delegates spawn/kill counts to callbacks.
  */
-class MockClaudeSession extends BaseSession {
-  readonly id: string;
-  readonly adapterId = 'claude';
-  readonly projectPath: string;
+class MockClaudeSession extends MockBaseSession {
   readonly written: string[] = [];
-  private _isSpawned = false;
 
   constructor(
     options: SessionOptions,
     private callbacks: { onSpawn: () => void; onKill: () => void },
   ) {
-    super();
-    this.id = `mock-${Math.random().toString(36).slice(2)}`;
-    this.projectPath = options.projectPath;
+    super(`mock-${Math.random().toString(36).slice(2)}`, 'claude', options.projectPath);
   }
 
-  get isSpawned(): boolean {
-    return this._isSpawned;
-  }
-
-  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
-    this._isSpawned = true;
+  override async spawn(
+    options?: SessionSpawnOptions,
+    sink?: Parameters<MockBaseSession['spawn']>[1],
+  ): Promise<AdapterProcess> {
     this.callbacks.onSpawn();
-    return {
-      id: 'proc-1',
-      adapterId: 'claude',
-      chatId: '',
-      pid: 99999,
-      status: 'ready',
-      projectPath: this.projectPath,
-    };
+    return super.spawn(options, sink);
   }
 
-  async kill(): Promise<void> {
-    this._isSpawned = false;
+  override async kill(): Promise<void> {
+    await super.kill();
     this.callbacks.onKill();
   }
 
-  getProcessInfo(): AdapterProcess | null {
-    return this._isSpawned
-      ? { id: 'proc-1', adapterId: 'claude', chatId: '', pid: 99999, status: 'ready', projectPath: this.projectPath }
-      : null;
-  }
-
   override async setPermissionMode(mode: string): Promise<void> {
-    if (!this._isSpawned) throw new Error(`Session ${this.id} not spawned`);
+    if (!this.isSpawned) throw new Error(`Session ${this.id} not spawned`);
     const cliMode = mode === 'yolo' ? 'bypassPermissions' : mode;
     const payload = {
       type: 'control_request',
@@ -233,7 +212,7 @@ class MockClaudeSession extends BaseSession {
   }
 
   override async setModel(model: string): Promise<void> {
-    if (!this._isSpawned) throw new Error(`Session ${this.id} not spawned`);
+    if (!this.isSpawned) throw new Error(`Session ${this.id} not spawned`);
     const payload = {
       type: 'control_request',
       request_id: crypto.randomUUID(),

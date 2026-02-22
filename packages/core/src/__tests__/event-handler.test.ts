@@ -1,19 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { EventEmitter } from 'node:events';
 import { EventHandler } from '../chat/event-handler.js';
 import { MessageCache } from '../chat/message-cache.js';
 import { PermissionManager } from '../chat/permission-manager.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import type { AdapterSession } from '@mainframe/types';
+import type { SessionSink } from '@mainframe/types';
 
-function createMockSession(): AdapterSession & EventEmitter {
-  const session = new EventEmitter() as EventEmitter & AdapterSession;
-  (session as any).id = 'session-1';
-  (session as any).adapterId = 'claude';
-  (session as any).projectPath = '/tmp';
-  (session as any).isSpawned = true;
-  (session as any).respondToPermission = vi.fn().mockResolvedValue(undefined);
-  return session;
+function createRespondToPermission() {
+  return vi.fn().mockResolvedValue(undefined);
 }
 
 describe('EventHandler token accumulation', () => {
@@ -51,15 +44,12 @@ describe('EventHandler token accumulation', () => {
       session: null,
     });
 
-    const session = createMockSession();
     const handler = new EventHandler(db, messages, permissions, (id) => activeChats.get(id), emitEvent);
-    handler.attachSession(chatId, session);
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
 
-    session.emit('result', {
-      cost: 0.01,
-      tokensInput: 200,
-      tokensOutput: 80,
-      durationMs: 1000,
+    sink.onResult({
+      total_cost_usd: 0.01,
+      usage: { input_tokens: 200, output_tokens: 80 },
     });
 
     const chat = activeChats.get(chatId)!.chat;
@@ -67,11 +57,9 @@ describe('EventHandler token accumulation', () => {
     expect(chat.totalTokensOutput).toBe(130); // 50 + 80
     expect(chat.totalCost).toBeCloseTo(0.01);
 
-    session.emit('result', {
-      cost: 0.02,
-      tokensInput: 150,
-      tokensOutput: 60,
-      durationMs: 800,
+    sink.onResult({
+      total_cost_usd: 0.02,
+      usage: { input_tokens: 150, output_tokens: 60 },
     });
 
     expect(chat.totalTokensInput).toBe(450); // 300 + 150
@@ -113,14 +101,13 @@ describe('EventHandler adapterId stamping', () => {
         totalTokensOutput: 0,
         processState: 'working',
       },
-      session: null,
+      session: { id: 'session-1', adapterId: 'claude' },
     });
 
-    const session = createMockSession();
     const handler = new EventHandler(db, messages, permissions, (id) => activeChats.get(id), emitEvent);
-    handler.attachSession(chatId, session);
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
 
-    session.emit('message', [{ type: 'text', text: 'hello' }]);
+    sink.onMessage([{ type: 'text', text: 'hello' }]);
 
     const emitted = emitEvent.mock.calls.find(([e]: [any]) => e.type === 'message.added');
     expect(emitted).toBeDefined();
@@ -156,12 +143,11 @@ describe('EventHandler skill_file announcement', () => {
   });
 
   it('emits a system announcement for slash-command skill flows', () => {
-    const session = createMockSession();
     const handler = new EventHandler(db, msgCache, permissions, (id) => activeChats.get(id), emitEvent);
-    handler.attachSession(chatId, session);
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
 
     // No preceding tool_result in cache → slash-command flow
-    session.emit('skill_file', '/home/user/.claude/skills/brainstorming/SKILL.md');
+    sink.onSkillFile({ path: '/home/user/.claude/skills/brainstorming/SKILL.md', displayName: 'brainstorming' });
 
     const systemEvents = emitEvent.mock.calls.filter(
       (call) => call[0].type === 'message.added' && call[0].message?.type === 'system',
@@ -173,9 +159,8 @@ describe('EventHandler skill_file announcement', () => {
   });
 
   it('does not emit an announcement for autonomous Skill-tool flows', () => {
-    const session = createMockSession();
     const handler = new EventHandler(db, msgCache, permissions, (id) => activeChats.get(id), emitEvent);
-    handler.attachSession(chatId, session);
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
 
     // Seed cache with a tool_result message starting with "Launching skill:"
     const toolResultMsg = msgCache.createTransientMessage(chatId, 'tool_result', [
@@ -183,7 +168,7 @@ describe('EventHandler skill_file announcement', () => {
     ]);
     msgCache.append(chatId, toolResultMsg);
 
-    session.emit('skill_file', '/home/user/.claude/skills/brainstorming/SKILL.md');
+    sink.onSkillFile({ path: '/home/user/.claude/skills/brainstorming/SKILL.md', displayName: 'brainstorming' });
 
     const systemEvents = emitEvent.mock.calls.filter(
       (call) => call[0].type === 'message.added' && call[0].message?.type === 'system',
@@ -193,11 +178,13 @@ describe('EventHandler skill_file announcement', () => {
   });
 
   it('derives display name from parent directory when file is SKILL.md', () => {
-    const session = createMockSession();
     const handler = new EventHandler(db, msgCache, permissions, (id) => activeChats.get(id), emitEvent);
-    handler.attachSession(chatId, session);
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
 
-    session.emit('skill_file', '/home/user/.claude/plugins/my-plugin/skills/my-skill/SKILL.md');
+    sink.onSkillFile({
+      path: '/home/user/.claude/plugins/my-plugin/skills/my-skill/SKILL.md',
+      displayName: 'my-skill',
+    });
 
     const systemEvents = emitEvent.mock.calls.filter(
       (call) => call[0].type === 'message.added' && call[0].message?.type === 'system',

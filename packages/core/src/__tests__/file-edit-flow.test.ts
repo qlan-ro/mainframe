@@ -5,74 +5,24 @@ import { WebSocketManager } from '../server/websocket.js';
 import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import { BaseSession } from '../adapters/base-session.js';
-import type {
-  AdapterProcess,
-  AdapterSession,
-  SessionOptions,
-  SessionSpawnOptions,
-  DaemonEvent,
-} from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
 
-class MockSession extends BaseSession {
-  readonly id = 'proc-1';
-  readonly adapterId: string;
-  readonly projectPath: string;
-  private _isSpawned = false;
-
+class MockSession extends MockBaseSession {
   constructor(private adapter: MockAdapter) {
-    super();
-    this.adapterId = adapter.id;
-    this.projectPath = '/tmp';
-  }
-
-  get isSpawned(): boolean {
-    return this._isSpawned;
-  }
-
-  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
-    this._isSpawned = true;
-    return {
-      id: this.id,
-      adapterId: this.adapterId,
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: this.projectPath,
-    };
-  }
-
-  async kill(): Promise<void> {
-    this._isSpawned = false;
-  }
-
-  getProcessInfo(): AdapterProcess | null {
-    return this._isSpawned
-      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
-      : null;
+    super('proc-1', adapter.id, '/tmp');
   }
 }
 
-class MockAdapter extends BaseAdapter {
-  id = 'claude';
-  name = 'Mock';
+class MockAdapter extends MockBaseAdapter {
+  override id = 'claude';
+  override name = 'Mock';
   currentSession: MockSession | null = null;
-
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
 
   override createSession(_options: SessionOptions): AdapterSession {
     this.currentSession = new MockSession(this);
     return this.currentSession;
-  }
-
-  override async loadHistory() {
-    return [];
   }
 }
 
@@ -186,7 +136,7 @@ describe('file-edit flow', () => {
     });
 
     // Emit message with Write tool_use using relative path
-    adapter.currentSession!.emit('message', [
+    adapter.currentSession!.simulateMessage([
       {
         type: 'tool_use',
         id: 'tu-1',

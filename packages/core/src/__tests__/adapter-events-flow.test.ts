@@ -5,54 +5,13 @@ import { WebSocketManager } from '../server/websocket.js';
 import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import { BaseSession } from '../adapters/base-session.js';
-import type {
-  AdapterProcess,
-  ControlResponse,
-  AdapterSession,
-  SessionOptions,
-  SessionSpawnOptions,
-  DaemonEvent,
-} from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { ControlResponse, AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
 
-class MockSession extends BaseSession {
-  readonly id = 'proc-1';
-  readonly adapterId: string;
-  readonly projectPath: string;
-  private _isSpawned = false;
-
+class MockSession extends MockBaseSession {
   constructor(private adapter: MockAdapter) {
-    super();
-    this.adapterId = adapter.id;
-    this.projectPath = '/tmp';
-  }
-
-  get isSpawned(): boolean {
-    return this._isSpawned;
-  }
-
-  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
-    this._isSpawned = true;
-    return {
-      id: this.id,
-      adapterId: this.adapterId,
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: this.projectPath,
-    };
-  }
-
-  async kill(): Promise<void> {
-    this._isSpawned = false;
-    this.adapter.killSpy();
-  }
-
-  getProcessInfo(): AdapterProcess | null {
-    return this._isSpawned
-      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
-      : null;
+    super('proc-1', adapter.id, '/tmp');
   }
 
   override async sendMessage(msg: string): Promise<void> {
@@ -64,31 +23,24 @@ class MockSession extends BaseSession {
   override async interrupt(): Promise<void> {
     this.adapter.interruptSpy();
   }
+  override async kill(): Promise<void> {
+    await super.kill();
+    this.adapter.killSpy();
+  }
 }
 
-class MockAdapter extends BaseAdapter {
-  id = 'claude';
-  name = 'Mock';
+class MockAdapter extends MockBaseAdapter {
+  override id = 'claude';
+  override name = 'Mock';
   respondToPermissionSpy = vi.fn();
   sendMessageSpy = vi.fn();
   killSpy = vi.fn();
   interruptSpy = vi.fn();
   currentSession: MockSession | null = null;
 
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
-
   override createSession(_options: SessionOptions): AdapterSession {
     this.currentSession = new MockSession(this);
     return this.currentSession;
-  }
-
-  override async loadHistory() {
-    return [];
   }
 }
 
@@ -205,7 +157,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.currentSession!.emit('init', 'session-xyz');
+    adapter.currentSession!.simulateInit('session-xyz');
     await sleep(50);
 
     const e = events.find((e) => e.type === 'process.ready');
@@ -218,7 +170,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.currentSession!.emit('tool_result', [
+    adapter.currentSession!.simulateToolResult([
       { type: 'tool_result', toolUseId: 'tu-1', content: 'wrote file successfully' },
     ]);
     await sleep(50);
@@ -233,7 +185,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.currentSession!.emit('compact');
+    adapter.currentSession!.simulateCompact();
     await sleep(50);
 
     const e = events.find((e) => e.type === 'message.added');
@@ -254,7 +206,7 @@ describe('adapter events flow', () => {
     const events: DaemonEvent[] = [];
     ws.on('message', (data) => events.push(JSON.parse(data.toString()) as DaemonEvent));
 
-    adapter.currentSession!.emit('plan_file', '/tmp/test/plan.md');
+    adapter.currentSession!.simulatePlanFile('/tmp/test/plan.md');
     await sleep(50);
 
     expect(db.chats.addPlanFile).toHaveBeenCalledWith('test-chat', '/tmp/test/plan.md');
@@ -273,7 +225,7 @@ describe('adapter events flow', () => {
     const events: DaemonEvent[] = [];
     ws.on('message', (data) => events.push(JSON.parse(data.toString()) as DaemonEvent));
 
-    adapter.currentSession!.emit('plan_file', '/tmp/test/plan.md');
+    adapter.currentSession!.simulatePlanFile('/tmp/test/plan.md');
     await sleep(50);
 
     expect(events.some((e) => e.type === 'context.updated')).toBe(false);
@@ -283,7 +235,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.currentSession!.emit('error', new Error('something broke'));
+    adapter.currentSession!.simulateError(new Error('something broke'));
     await sleep(50);
 
     const e = events.find((e) => e.type === 'error');
@@ -295,13 +247,9 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.currentSession!.emit('result', {
-      cost: 0,
-      tokensInput: 10,
-      tokensOutput: 5,
+    adapter.currentSession!.simulateResult({
       subtype: 'error_during_execution',
-      isError: true,
-      durationMs: 100,
+      is_error: true,
     });
     await sleep(50);
 
@@ -316,12 +264,9 @@ describe('adapter events flow', () => {
     ws!.send(JSON.stringify({ type: 'chat.interrupt', chatId: 'test-chat' }));
     await sleep(50);
 
-    adapter.currentSession!.emit('result', {
-      cost: 0,
-      tokensInput: 10,
-      tokensOutput: 5,
+    adapter.currentSession!.simulateResult({
       subtype: 'error_during_execution',
-      isError: true,
+      is_error: true,
     });
     await sleep(50);
 

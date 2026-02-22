@@ -5,56 +5,15 @@ import { WebSocketManager } from '../server/websocket.js';
 import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import { BaseSession } from '../adapters/base-session.js';
-import type {
-  ChatMessage,
-  MessageContent,
-  AdapterProcess,
-  AdapterSession,
-  SessionOptions,
-  SessionSpawnOptions,
-  DaemonEvent,
-} from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { ChatMessage, MessageContent, AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
 
 // ── Mock Session ─────────────────────────────────────────────────────
 
-class MockSession extends BaseSession {
-  readonly id = 'proc-1';
-  readonly adapterId: string;
-  readonly projectPath: string;
-  private _isSpawned = false;
-
+class MockSession extends MockBaseSession {
   constructor(private adapter: MockAdapter) {
-    super();
-    this.adapterId = adapter.id;
-    this.projectPath = '/tmp';
-  }
-
-  get isSpawned(): boolean {
-    return this._isSpawned;
-  }
-
-  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
-    this._isSpawned = true;
-    return {
-      id: this.id,
-      adapterId: this.adapterId,
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: this.projectPath,
-    };
-  }
-
-  async kill(): Promise<void> {
-    this._isSpawned = false;
-  }
-
-  getProcessInfo(): AdapterProcess | null {
-    return this._isSpawned
-      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
-      : null;
+    super('proc-1', adapter.id, '/tmp');
   }
 
   /** loadHistory delegates to the adapter's persistent store. */
@@ -65,30 +24,23 @@ class MockSession extends BaseSession {
 
 // ── Mock Adapter ─────────────────────────────────────────────────────
 
-class MockAdapter extends BaseAdapter {
-  id = 'claude';
-  name = 'Mock';
+class MockAdapter extends MockBaseAdapter {
+  override id = 'claude';
+  override name = 'Mock';
   emittedMessages: ChatMessage[] = [];
   currentSession: MockSession | null = null;
-
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
 
   override createSession(_options: SessionOptions): AdapterSession {
     this.currentSession = new MockSession(this);
     return this.currentSession;
   }
 
-  /** Emit a message through the session event system AND record it for loadHistory. */
+  /** Emit a message through the session sink AND record it for loadHistory. */
   emitTestMessage(_processId: string, index: number): void {
     const content: MessageContent[] = [{ type: 'text', text: `Message ${index}` }];
 
-    // Emit on the running session (if any)
-    this.currentSession?.emit('message', content);
+    // Simulate on the running session (if any)
+    this.currentSession?.simulateMessage(content);
 
     // Also record in the "persistent store" so loadHistory returns it after restart
     this.emittedMessages.push({

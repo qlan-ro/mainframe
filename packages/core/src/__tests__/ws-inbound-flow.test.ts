@@ -5,54 +5,13 @@ import { WebSocketManager } from '../server/websocket.js';
 import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import { BaseSession } from '../adapters/base-session.js';
-import type {
-  AdapterProcess,
-  ControlResponse,
-  AdapterSession,
-  SessionOptions,
-  SessionSpawnOptions,
-  DaemonEvent,
-} from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { ControlResponse, AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
 
-class MockSession extends BaseSession {
-  readonly id = 'proc-1';
-  readonly adapterId: string;
-  readonly projectPath: string;
-  private _isSpawned = false;
-
+class MockSession extends MockBaseSession {
   constructor(private adapter: MockAdapter) {
-    super();
-    this.adapterId = adapter.id;
-    this.projectPath = '/tmp';
-  }
-
-  get isSpawned(): boolean {
-    return this._isSpawned;
-  }
-
-  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
-    this._isSpawned = true;
-    return {
-      id: this.id,
-      adapterId: this.adapterId,
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: this.projectPath,
-    };
-  }
-
-  async kill(): Promise<void> {
-    this._isSpawned = false;
-    this.adapter.killSpy();
-  }
-
-  getProcessInfo(): AdapterProcess | null {
-    return this._isSpawned
-      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
-      : null;
+    super('proc-1', adapter.id, '/tmp');
   }
 
   override async sendMessage(msg: string): Promise<void> {
@@ -64,31 +23,24 @@ class MockSession extends BaseSession {
   override async interrupt(): Promise<void> {
     this.adapter.interruptSpy();
   }
+  override async kill(): Promise<void> {
+    await super.kill();
+    this.adapter.killSpy();
+  }
 }
 
-class MockAdapter extends BaseAdapter {
-  id = 'claude';
-  name = 'Mock';
+class MockAdapter extends MockBaseAdapter {
+  override id = 'claude';
+  override name = 'Mock';
   respondToPermissionSpy = vi.fn();
   sendMessageSpy = vi.fn();
   killSpy = vi.fn();
   interruptSpy = vi.fn();
   currentSession: MockSession | null = null;
 
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
-
   override createSession(_options: SessionOptions): AdapterSession {
     this.currentSession = new MockSession(this);
     return this.currentSession;
-  }
-
-  override async loadHistory() {
-    return [];
   }
 }
 
@@ -241,7 +193,7 @@ describe('WS inbound flows', () => {
 
     // After end, events for this chat should NOT reach the client (unsubscribed)
     const countBefore = events.length;
-    adapter.currentSession!.emit('result', { cost: 0, tokensInput: 0, tokensOutput: 0 });
+    adapter.currentSession!.simulateResult({ subtype: 'success' });
     await sleep(50);
 
     // No new events should arrive for this chat (subscription cleared)
@@ -252,7 +204,7 @@ describe('WS inbound flows', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.currentSession!.emit('message', [
+    adapter.currentSession!.simulateMessage([
       { type: 'tool_use', id: 'tu-plan', name: 'EnterPlanMode', input: { plan: 'Step 1...' } },
     ]);
     await sleep(50);

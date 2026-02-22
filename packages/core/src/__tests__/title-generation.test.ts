@@ -1,55 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import { BaseSession } from '../adapters/base-session.js';
-import type {
-  ChatMessage,
-  AdapterProcess,
-  SessionOptions,
-  SessionSpawnOptions,
-  AdapterSession,
-  DaemonEvent,
-} from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { ChatMessage, AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
 
 // ── Mock adapter & DB (infrastructure, not what we're testing) ──────
 
-class MockSession extends BaseSession {
-  readonly id = 'proc-1';
-  readonly adapterId: string;
-  readonly projectPath: string;
-  private _isSpawned = false;
-
+class MockSession extends MockBaseSession {
   constructor(adapterId: string, projectPath: string) {
-    super();
-    this.adapterId = adapterId;
-    this.projectPath = projectPath;
-  }
-
-  get isSpawned(): boolean {
-    return this._isSpawned;
-  }
-
-  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
-    this._isSpawned = true;
-    return {
-      id: this.id,
-      adapterId: this.adapterId,
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: this.projectPath,
-    };
-  }
-
-  async kill(): Promise<void> {
-    this._isSpawned = false;
-  }
-
-  getProcessInfo(): AdapterProcess | null {
-    return this._isSpawned
-      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
-      : null;
+    super('proc-1', adapterId, projectPath);
   }
 
   override async loadHistory(): Promise<ChatMessage[]> {
@@ -57,17 +17,10 @@ class MockSession extends BaseSession {
   }
 }
 
-class MockAdapter extends BaseAdapter {
-  id = 'mock';
-  name = 'Mock';
+class MockAdapter extends MockBaseAdapter {
+  override id = 'mock';
+  override name = 'Mock';
   currentSession: MockSession | null = null;
-
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
 
   override createSession(options: SessionOptions): AdapterSession {
     this.currentSession = new MockSession(this.id, options.projectPath);
