@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import type {
+  Adapter,
   AdapterModel,
   AdapterSession,
   SessionOptions,
@@ -9,7 +11,6 @@ import type {
   CreateSkillInput,
   CreateAgentInput,
 } from '@mainframe/types';
-import { BaseAdapter } from '../../../adapters/base.js';
 import { ClaudeSession } from './session.js';
 import * as skills from './skills.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
@@ -22,7 +23,7 @@ const CLAUDE_MODELS: AdapterModel[] = [
   { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
 ];
 
-export class ClaudeAdapter extends BaseAdapter {
+export class ClaudeAdapter implements Adapter {
   id = 'claude';
   name = 'Claude CLI';
 
@@ -54,11 +55,11 @@ export class ClaudeAdapter extends BaseAdapter {
     });
   }
 
-  override async listModels(): Promise<AdapterModel[]> {
+  async listModels(): Promise<AdapterModel[]> {
     return CLAUDE_MODELS;
   }
 
-  override getToolCategories(): ToolCategories {
+  getToolCategories(): ToolCategories {
     return {
       explore: new Set(['Read', 'Glob', 'Grep']),
       hidden: new Set([
@@ -76,10 +77,11 @@ export class ClaudeAdapter extends BaseAdapter {
     };
   }
 
-  override createSession(options: SessionOptions): AdapterSession {
+  createSession(options: SessionOptions): AdapterSession {
     const session = new ClaudeSession(options);
     this.sessions.add(session);
-    session.on('exit', () => this.sessions.delete(session));
+    // ClaudeSession extends EventEmitter internally; cast is safe for cleanup tracking.
+    (session as unknown as EventEmitter).once('exit', () => this.sessions.delete(session));
     return session;
   }
 
@@ -88,42 +90,42 @@ export class ClaudeAdapter extends BaseAdapter {
     return session.loadHistory();
   }
 
-  override killAll(): void {
+  killAll(): void {
     for (const session of this.sessions) {
       session.kill().catch(() => {});
     }
     this.sessions.clear();
   }
 
-  override async listSkills(projectPath: string): Promise<Skill[]> {
+  async listSkills(projectPath: string): Promise<Skill[]> {
     return skills.listSkills(projectPath);
   }
 
-  override async createSkill(projectPath: string, input: CreateSkillInput): Promise<Skill> {
+  async createSkill(projectPath: string, input: CreateSkillInput): Promise<Skill> {
     return skills.createSkill(projectPath, input);
   }
 
-  override async updateSkill(skillId: string, projectPath: string, content: string): Promise<Skill> {
+  async updateSkill(skillId: string, projectPath: string, content: string): Promise<Skill> {
     return skills.updateSkill(skillId, projectPath, content);
   }
 
-  override async deleteSkill(skillId: string, projectPath: string): Promise<void> {
+  async deleteSkill(skillId: string, projectPath: string): Promise<void> {
     return skills.deleteSkill(skillId, projectPath);
   }
 
-  override async listAgents(projectPath: string): Promise<AgentConfig[]> {
+  async listAgents(projectPath: string): Promise<AgentConfig[]> {
     return skills.listAgents(projectPath);
   }
 
-  override async createAgent(projectPath: string, input: CreateAgentInput): Promise<AgentConfig> {
+  async createAgent(projectPath: string, input: CreateAgentInput): Promise<AgentConfig> {
     return skills.createAgent(projectPath, input);
   }
 
-  override async updateAgent(agentId: string, projectPath: string, content: string): Promise<AgentConfig> {
+  async updateAgent(agentId: string, projectPath: string, content: string): Promise<AgentConfig> {
     return skills.updateAgent(agentId, projectPath, content);
   }
 
-  override async deleteAgent(agentId: string, projectPath: string): Promise<void> {
+  async deleteAgent(agentId: string, projectPath: string): Promise<void> {
     return skills.deleteAgent(agentId, projectPath);
   }
 }

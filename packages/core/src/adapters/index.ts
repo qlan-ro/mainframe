@@ -39,6 +39,3 @@ export class AdapterRegistry {
     return infos;
   }
 }
-
-export { BaseAdapter } from './base.js';
-export { BaseSession } from './base-session.js';
