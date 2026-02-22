@@ -1,5 +1,11 @@
 import { EventEmitter } from 'node:events';
-import type { PluginEventBus, PublicDaemonEventName, PublicDaemonEvent } from '@mainframe/types';
+import type {
+  PluginEventBus,
+  PublicDaemonEventName,
+  PublicDaemonEvent,
+  ChatEventName,
+  ChatEvent,
+} from '@mainframe/types';
 
 export const PUBLIC_DAEMON_EVENT_PREFIX = 'plugin:public:';
 
@@ -18,6 +24,10 @@ export function createPluginEventBus(pluginId: string, daemonBus: EventEmitter):
     onDaemonEvent(event: PublicDaemonEventName, handler: (e: PublicDaemonEvent) => void): void {
       // Only subscribes to the namespaced public channel — never to raw daemon events
       daemonBus.on(`${PUBLIC_DAEMON_EVENT_PREFIX}${event}`, handler);
+    },
+
+    onChatEvent<E extends ChatEventName>(event: E, handler: (e: Extract<ChatEvent, { type: E }>) => void): void {
+      internalEmitter.on(`${pluginId}:chat:${event}`, handler as (...args: unknown[]) => void);
     },
   };
 }

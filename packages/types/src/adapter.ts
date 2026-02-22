@@ -1,61 +1,34 @@
 import type { PermissionMode } from './settings.js';
 
+export interface MessageMetadata {
+  model?: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+}
+
+export interface SessionResult {
+  total_cost_usd?: number;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+  subtype?: string;
+  result?: string;
+  is_error?: boolean;
+}
+
 export interface SessionOptions {
   projectPath: string;
   chatId?: string; // Claude session ID for resume
 }
 
 export interface SessionSpawnOptions {
-  model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
-}
-
-export interface AdapterSession {
-  readonly id: string;
-  readonly adapterId: string;
-  readonly projectPath: string;
-  readonly isSpawned: boolean;
-
-  spawn(options?: SessionSpawnOptions): Promise<AdapterProcess>;
-  kill(): Promise<void>;
-  getProcessInfo(): AdapterProcess | null;
-
-  sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
-  respondToPermission(response: ControlResponse): Promise<void>;
-  interrupt(): Promise<void>;
-  setModel(model: string): Promise<void>;
-  setPermissionMode(mode: string): Promise<void>;
-  sendCommand(command: string, args?: string): Promise<void>;
-
-  getContextFiles(): { global: import('./context.js').ContextFile[]; project: import('./context.js').ContextFile[] };
-  loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
-  extractPlanFiles(): Promise<string[]>;
-  extractSkillFiles(): Promise<import('./context.js').SkillFileEntry[]>;
-
-  on(event: string, listener: (...args: any[]) => void): this;
-  off(event: string, listener: (...args: any[]) => void): this;
-  removeAllListeners(event?: string): this;
-  emit(event: string, ...args: any[]): boolean;
-}
-
-export interface AdapterInfo {
-  id: string;
-  name: string;
-  description: string;
-  installed: boolean;
-  version?: string;
-  models: AdapterModel[];
-}
-
-export interface AdapterModel {
-  id: string;
-  label: string;
-  contextWindow?: number;
-}
-
-export interface SpawnOptions {
-  projectPath: string;
-  chatId?: string;
   model?: string;
   permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
 }
@@ -117,6 +90,64 @@ export interface ControlResponse {
   message?: string;
   executionMode?: 'default' | 'acceptEdits' | 'yolo';
   clearContext?: boolean;
+}
+
+export interface SessionSink {
+  onInit(claudeSessionId: string): void;
+  onMessage(content: import('./chat.js').MessageContent[], metadata?: MessageMetadata): void;
+  onToolResult(content: import('./chat.js').MessageContent[]): void;
+  onPermission(request: ControlRequest): void;
+  onResult(data: SessionResult): void;
+  onExit(code: number | null): void;
+  onError(error: Error): void;
+  onCompact(): void;
+  onPlanFile(filePath: string): void;
+  onSkillFile(entry: import('./context.js').SkillFileEntry): void;
+}
+
+export interface AdapterSession {
+  readonly id: string;
+  readonly adapterId: string;
+  readonly projectPath: string;
+  readonly isSpawned: boolean;
+
+  spawn(options?: SessionSpawnOptions, sink?: SessionSink): Promise<AdapterProcess>;
+  kill(): Promise<void>;
+  getProcessInfo(): AdapterProcess | null;
+
+  sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
+  respondToPermission(response: ControlResponse): Promise<void>;
+  interrupt(): Promise<void>;
+  setModel(model: string): Promise<void>;
+  setPermissionMode(mode: string): Promise<void>;
+  sendCommand(command: string, args?: string): Promise<void>;
+
+  getContextFiles(): { global: import('./context.js').ContextFile[]; project: import('./context.js').ContextFile[] };
+  loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
+  extractPlanFiles(): Promise<string[]>;
+  extractSkillFiles(): Promise<import('./context.js').SkillFileEntry[]>;
+}
+
+export interface AdapterInfo {
+  id: string;
+  name: string;
+  description: string;
+  installed: boolean;
+  version?: string;
+  models: AdapterModel[];
+}
+
+export interface AdapterModel {
+  id: string;
+  label: string;
+  contextWindow?: number;
+}
+
+export interface SpawnOptions {
+  projectPath: string;
+  chatId?: string;
+  model?: string;
+  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
 }
 
 export interface Adapter {

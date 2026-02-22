@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { Router } from 'express';
+import type { ChatMessage } from './chat.js';
 
 export type PluginCapability =
   | 'storage'
@@ -53,6 +54,15 @@ export interface PluginPanelSpec {
   position: PluginPanelPosition;
   entryPoint: string; // Absolute path to ESM UI bundle
 }
+
+// ─── Chat events (require 'chat:read' capability) ────────────────────────────
+export type ChatEventName = 'message.added' | 'message.streaming' | 'tool.called' | 'tool.result';
+
+export type ChatEvent =
+  | { type: 'message.added'; chatId: string; message: ChatMessage }
+  | { type: 'message.streaming'; chatId: string; messageId: string; delta: string }
+  | { type: 'tool.called'; chatId: string; toolName: string; args: unknown }
+  | { type: 'tool.result'; chatId: string; toolUseId: string; content: unknown };
 
 // ─── Service APIs exposed to plugins ─────────────────────────────────────────
 export interface ChatSummary {
@@ -110,6 +120,7 @@ export interface PluginEventBus {
   emit(event: string, payload: unknown): void;
   on(event: string, handler: (payload: unknown) => void): void;
   onDaemonEvent(event: PublicDaemonEventName, handler: (event: PublicDaemonEvent) => void): void;
+  onChatEvent<E extends ChatEventName>(event: E, handler: (e: Extract<ChatEvent, { type: E }>) => void): void;
 }
 
 export interface PluginUIContext {

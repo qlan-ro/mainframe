@@ -9,6 +9,8 @@ export type {
   PluginManifest,
   PublicDaemonEventName,
   PublicDaemonEvent,
+  ChatEventName,
+  ChatEvent,
   PluginPanelSpec,
   PluginPanelPosition,
   ChatSummary,
