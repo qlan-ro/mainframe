@@ -14,7 +14,9 @@ import type {
   AgentConfig,
   CreateSkillInput,
   CreateAgentInput,
+  SkillFileEntry,
 } from '@mainframe/types';
+import type { ToolCategories } from '../messages/tool-categorization.js';
 
 export interface MessageMetadata {
   model?: string;
@@ -71,11 +73,23 @@ export abstract class BaseAdapter extends EventEmitter implements Adapter {
   ): Promise<void>;
   abstract respondToPermission(process: AdapterProcess, response: PermissionResponse): Promise<void>;
 
+  getToolCategories(): ToolCategories {
+    return { explore: new Set(), hidden: new Set(), progress: new Set(), subagent: new Set() };
+  }
+
   getContextFiles(_projectPath: string): { global: ContextFile[]; project: ContextFile[] } {
     return { global: [], project: [] };
   }
 
   async loadHistory(_sessionId: string, _projectPath: string): Promise<ChatMessage[]> {
+    return [];
+  }
+
+  async extractPlanFiles(_sessionId: string, _projectPath: string): Promise<string[]> {
+    return [];
+  }
+
+  async extractSkillFiles(_sessionId: string, _projectPath: string): Promise<SkillFileEntry[]> {
     return [];
   }
 

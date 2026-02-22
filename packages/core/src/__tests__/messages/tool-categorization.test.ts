@@ -1,162 +1,174 @@
 import { describe, it, expect } from 'vitest';
 import {
-  EXPLORE_TOOLS,
-  HIDDEN_TOOLS,
-  TASK_PROGRESS_TOOLS,
+  type ToolCategories,
   isExploreTool,
   isHiddenTool,
   isTaskProgressTool,
+  isSubagentTool,
 } from '../../messages/tool-categorization.js';
 
-describe('tool-categorization', () => {
-  describe('EXPLORE_TOOLS set', () => {
-    it('contains Read, Glob, Grep', () => {
-      expect(EXPLORE_TOOLS.has('Read')).toBe(true);
-      expect(EXPLORE_TOOLS.has('Glob')).toBe(true);
-      expect(EXPLORE_TOOLS.has('Grep')).toBe(true);
-    });
+const CLAUDE_CATEGORIES: ToolCategories = {
+  explore: new Set(['Read', 'Glob', 'Grep']),
+  hidden: new Set([
+    'TaskList',
+    'TaskGet',
+    'TaskOutput',
+    'TaskStop',
+    'TodoWrite',
+    'Skill',
+    'EnterPlanMode',
+    'AskUserQuestion',
+  ]),
+  progress: new Set(['TaskCreate', 'TaskUpdate']),
+  subagent: new Set(['Task']),
+};
 
-    it('has exactly 3 entries', () => {
-      expect(EXPLORE_TOOLS.size).toBe(3);
-    });
+describe('isExploreTool', () => {
+  it('returns true for Read', () => {
+    expect(isExploreTool('Read', CLAUDE_CATEGORIES)).toBe(true);
   });
 
-  describe('HIDDEN_TOOLS set', () => {
-    it('contains all expected hidden tools', () => {
-      for (const name of [
-        'TaskList',
-        'TaskGet',
-        'TaskOutput',
-        'TaskStop',
-        'TodoWrite',
-        'Skill',
-        'EnterPlanMode',
-        'AskUserQuestion',
-      ]) {
-        expect(HIDDEN_TOOLS.has(name)).toBe(true);
-      }
-    });
-
-    it('has exactly 8 entries', () => {
-      expect(HIDDEN_TOOLS.size).toBe(8);
-    });
+  it('returns true for Glob', () => {
+    expect(isExploreTool('Glob', CLAUDE_CATEGORIES)).toBe(true);
   });
 
-  describe('TASK_PROGRESS_TOOLS set', () => {
-    it('contains TaskCreate and TaskUpdate', () => {
-      expect(TASK_PROGRESS_TOOLS.has('TaskCreate')).toBe(true);
-      expect(TASK_PROGRESS_TOOLS.has('TaskUpdate')).toBe(true);
-    });
-
-    it('has exactly 2 entries', () => {
-      expect(TASK_PROGRESS_TOOLS.size).toBe(2);
-    });
+  it('returns true for Grep', () => {
+    expect(isExploreTool('Grep', CLAUDE_CATEGORIES)).toBe(true);
   });
 
-  describe('isExploreTool', () => {
-    it('returns true for Read', () => {
-      expect(isExploreTool('Read')).toBe(true);
-    });
-
-    it('returns true for Glob', () => {
-      expect(isExploreTool('Glob')).toBe(true);
-    });
-
-    it('returns true for Grep', () => {
-      expect(isExploreTool('Grep')).toBe(true);
-    });
-
-    it('returns false for Bash', () => {
-      expect(isExploreTool('Bash')).toBe(false);
-    });
-
-    it('returns false for Edit', () => {
-      expect(isExploreTool('Edit')).toBe(false);
-    });
-
-    it('returns false for TaskCreate (not an explore tool)', () => {
-      expect(isExploreTool('TaskCreate')).toBe(false);
-    });
-
-    it('returns false for empty string', () => {
-      expect(isExploreTool('')).toBe(false);
-    });
-
-    it('is case-sensitive', () => {
-      expect(isExploreTool('read')).toBe(false);
-      expect(isExploreTool('GLOB')).toBe(false);
-    });
+  it('returns false for Bash', () => {
+    expect(isExploreTool('Bash', CLAUDE_CATEGORIES)).toBe(false);
   });
 
-  describe('isHiddenTool', () => {
-    it('returns true for TodoWrite', () => {
-      expect(isHiddenTool('TodoWrite')).toBe(true);
-    });
-
-    it('returns true for Skill', () => {
-      expect(isHiddenTool('Skill')).toBe(true);
-    });
-
-    it('returns true for TaskList', () => {
-      expect(isHiddenTool('TaskList')).toBe(true);
-    });
-
-    it('returns true for TaskGet', () => {
-      expect(isHiddenTool('TaskGet')).toBe(true);
-    });
-
-    it('returns true for TaskOutput', () => {
-      expect(isHiddenTool('TaskOutput')).toBe(true);
-    });
-
-    it('returns true for TaskStop', () => {
-      expect(isHiddenTool('TaskStop')).toBe(true);
-    });
-
-    it('returns true for EnterPlanMode', () => {
-      expect(isHiddenTool('EnterPlanMode')).toBe(true);
-    });
-
-    it('returns true for AskUserQuestion', () => {
-      expect(isHiddenTool('AskUserQuestion')).toBe(true);
-    });
-
-    it('returns false for Bash', () => {
-      expect(isHiddenTool('Bash')).toBe(false);
-    });
-
-    it('returns false for Read (explore tool, not hidden)', () => {
-      expect(isHiddenTool('Read')).toBe(false);
-    });
-
-    it('returns false for TaskCreate (task progress, not hidden)', () => {
-      expect(isHiddenTool('TaskCreate')).toBe(false);
-    });
-
-    it('returns false for empty string', () => {
-      expect(isHiddenTool('')).toBe(false);
-    });
+  it('returns false for Edit', () => {
+    expect(isExploreTool('Edit', CLAUDE_CATEGORIES)).toBe(false);
   });
 
-  describe('isTaskProgressTool', () => {
-    it('returns true for TaskCreate', () => {
-      expect(isTaskProgressTool('TaskCreate')).toBe(true);
-    });
+  it('returns false for TaskCreate (not an explore tool)', () => {
+    expect(isExploreTool('TaskCreate', CLAUDE_CATEGORIES)).toBe(false);
+  });
 
-    it('returns true for TaskUpdate', () => {
-      expect(isTaskProgressTool('TaskUpdate')).toBe(true);
-    });
+  it('returns false for empty string', () => {
+    expect(isExploreTool('', CLAUDE_CATEGORIES)).toBe(false);
+  });
 
-    it('returns false for TaskList (hidden, not task progress)', () => {
-      expect(isTaskProgressTool('TaskList')).toBe(false);
-    });
+  it('is case-sensitive', () => {
+    expect(isExploreTool('read', CLAUDE_CATEGORIES)).toBe(false);
+    expect(isExploreTool('GLOB', CLAUDE_CATEGORIES)).toBe(false);
+  });
+});
 
-    it('returns false for Read', () => {
-      expect(isTaskProgressTool('Read')).toBe(false);
-    });
+describe('isHiddenTool', () => {
+  it('returns true for TodoWrite', () => {
+    expect(isHiddenTool('TodoWrite', CLAUDE_CATEGORIES)).toBe(true);
+  });
 
-    it('returns false for empty string', () => {
-      expect(isTaskProgressTool('')).toBe(false);
-    });
+  it('returns true for Skill', () => {
+    expect(isHiddenTool('Skill', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns true for TaskList', () => {
+    expect(isHiddenTool('TaskList', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns true for TaskGet', () => {
+    expect(isHiddenTool('TaskGet', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns true for TaskOutput', () => {
+    expect(isHiddenTool('TaskOutput', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns true for TaskStop', () => {
+    expect(isHiddenTool('TaskStop', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns true for EnterPlanMode', () => {
+    expect(isHiddenTool('EnterPlanMode', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns true for AskUserQuestion', () => {
+    expect(isHiddenTool('AskUserQuestion', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns false for Bash', () => {
+    expect(isHiddenTool('Bash', CLAUDE_CATEGORIES)).toBe(false);
+  });
+
+  it('returns false for Read (explore tool, not hidden)', () => {
+    expect(isHiddenTool('Read', CLAUDE_CATEGORIES)).toBe(false);
+  });
+
+  it('returns false for TaskCreate (task progress, not hidden)', () => {
+    expect(isHiddenTool('TaskCreate', CLAUDE_CATEGORIES)).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(isHiddenTool('', CLAUDE_CATEGORIES)).toBe(false);
+  });
+});
+
+describe('isTaskProgressTool', () => {
+  it('returns true for TaskCreate', () => {
+    expect(isTaskProgressTool('TaskCreate', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns true for TaskUpdate', () => {
+    expect(isTaskProgressTool('TaskUpdate', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns false for TaskList (hidden, not task progress)', () => {
+    expect(isTaskProgressTool('TaskList', CLAUDE_CATEGORIES)).toBe(false);
+  });
+
+  it('returns false for Read', () => {
+    expect(isTaskProgressTool('Read', CLAUDE_CATEGORIES)).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(isTaskProgressTool('', CLAUDE_CATEGORIES)).toBe(false);
+  });
+});
+
+describe('isSubagentTool', () => {
+  it('returns true for Task', () => {
+    expect(isSubagentTool('Task', CLAUDE_CATEGORIES)).toBe(true);
+  });
+
+  it('returns false for Bash', () => {
+    expect(isSubagentTool('Bash', CLAUDE_CATEGORIES)).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(isSubagentTool('', CLAUDE_CATEGORIES)).toBe(false);
+  });
+});
+
+describe('parameterized categorization', () => {
+  const categories: ToolCategories = {
+    explore: new Set(['Read', 'Glob', 'Grep']),
+    hidden: new Set(['TaskList', 'Skill']),
+    progress: new Set(['TaskCreate']),
+    subagent: new Set(['Task']),
+  };
+
+  it('isExploreTool checks against provided categories', () => {
+    expect(isExploreTool('Read', categories)).toBe(true);
+    expect(isExploreTool('Bash', categories)).toBe(false);
+  });
+
+  it('isHiddenTool checks against provided categories', () => {
+    expect(isHiddenTool('TaskList', categories)).toBe(true);
+    expect(isHiddenTool('Read', categories)).toBe(false);
+  });
+
+  it('isTaskProgressTool checks against provided categories', () => {
+    expect(isTaskProgressTool('TaskCreate', categories)).toBe(true);
+    expect(isTaskProgressTool('Bash', categories)).toBe(false);
+  });
+
+  it('isSubagentTool checks against provided categories', () => {
+    expect(isSubagentTool('Task', categories)).toBe(true);
+    expect(isSubagentTool('Bash', categories)).toBe(false);
   });
 });
