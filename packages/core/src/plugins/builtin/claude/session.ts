@@ -1,19 +1,21 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type { ChildProcess } from 'node:child_process';
 import type {
   AdapterProcess,
+  AdapterSession,
   SessionSpawnOptions,
   SessionOptions,
+  SessionSink,
   ControlResponse,
   ChatMessage,
   ContextFile,
   SkillFileEntry,
 } from '@mainframe/types';
-import { BaseSession } from '../../../adapters/base-session.js';
 import { handleStdout, handleStderr } from './events.js';
 import { createChildLogger } from '../../../logger.js';
 import {
@@ -24,6 +26,19 @@ import {
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 
 const log = createChildLogger('claude-session');
+
+const nullSink: SessionSink = {
+  onInit: () => {},
+  onMessage: () => {},
+  onToolResult: () => {},
+  onPermission: () => {},
+  onResult: () => {},
+  onExit: () => {},
+  onError: () => {},
+  onCompact: () => {},
+  onPlanFile: () => {},
+  onSkillFile: () => {},
+};
 
 export interface ClaudeSessionState {
   chatId: string;
@@ -39,7 +54,7 @@ export interface ClaudeSessionState {
   pid: number;
 }
 
-export class ClaudeSession extends BaseSession {
+export class ClaudeSession extends EventEmitter implements AdapterSession {
   readonly id: string;
   readonly adapterId = 'claude';
   readonly projectPath: string;
@@ -79,7 +94,7 @@ export class ClaudeSession extends BaseSession {
     };
   }
 
-  override getToolCategories(): ToolCategories {
+  getToolCategories(): ToolCategories {
     return {
       explore: new Set(['Read', 'Glob', 'Grep']),
       hidden: new Set([
@@ -97,7 +112,9 @@ export class ClaudeSession extends BaseSession {
     };
   }
 
-  async spawn(options: SessionSpawnOptions = {}): Promise<AdapterProcess> {
+  async spawn(options: SessionSpawnOptions = {}, sink?: SessionSink): Promise<AdapterProcess> {
+    const activeSink = sink ?? nullSink;
+
     const args = [
       '--output-format',
       'stream-json',
@@ -145,15 +162,15 @@ export class ClaudeSession extends BaseSession {
       'claude session spawned',
     );
 
-    child.stdout?.on('data', (chunk) => handleStdout(this, chunk));
-    child.stderr?.on('data', (chunk) => handleStderr(this, chunk));
-    child.on('error', (error) => {
+    child.stdout?.on('data', (chunk) => handleStdout(this, chunk, activeSink));
+    child.stderr?.on('data', (chunk) => handleStderr(this, chunk, activeSink));
+    child.on('error', (error: Error) => {
       log.error({ sessionId: this.id, err: error }, 'claude process error');
-      this.emit('error', error);
+      activeSink.onError(error);
     });
-    child.on('close', (code) => {
+    child.on('close', (code: number | null) => {
       this.state.child = null;
-      this.emit('exit', code);
+      activeSink.onExit(code);
     });
 
     return this.getProcessInfo()!;
@@ -168,7 +185,7 @@ export class ClaudeSession extends BaseSession {
     }
   }
 
-  override async interrupt(): Promise<void> {
+  async interrupt(): Promise<void> {
     const child = this.state.child;
     if (!child) return;
     const payload = {
@@ -179,7 +196,7 @@ export class ClaudeSession extends BaseSession {
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
-  override async setPermissionMode(mode: string): Promise<void> {
+  async setPermissionMode(mode: string): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const cliMode = mode === 'yolo' ? 'bypassPermissions' : mode;
@@ -191,7 +208,7 @@ export class ClaudeSession extends BaseSession {
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
-  override async setModel(model: string): Promise<void> {
+  async setModel(model: string): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const payload = {
@@ -202,7 +219,7 @@ export class ClaudeSession extends BaseSession {
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
-  override async sendCommand(command: string, args = ''): Promise<void> {
+  async sendCommand(command: string, args = ''): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const text = `<command-name>/${command}</command-name>\n<command-message>${command}</command-message>\n<command-args>${args}</command-args>`;
@@ -215,7 +232,7 @@ export class ClaudeSession extends BaseSession {
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
-  override async sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void> {
+  async sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const content: Record<string, unknown>[] = [];
@@ -236,7 +253,7 @@ export class ClaudeSession extends BaseSession {
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
-  override async respondToPermission(response: ControlResponse): Promise<void> {
+  async respondToPermission(response: ControlResponse): Promise<void> {
     const innerResponse: Record<string, unknown> = {
       behavior: response.behavior,
       toolUseID: response.toolUseId,
@@ -293,7 +310,7 @@ export class ClaudeSession extends BaseSession {
     stdin.write(json + '\n');
   }
 
-  override getContextFiles(): { global: ContextFile[]; project: ContextFile[] } {
+  getContextFiles(): { global: ContextFile[]; project: ContextFile[] } {
     const globalDir = path.join(homedir(), '.claude');
     const global: ContextFile[] = [];
     for (const name of ['CLAUDE.md', 'AGENTS.md']) {
@@ -320,17 +337,17 @@ export class ClaudeSession extends BaseSession {
     return { global, project };
   }
 
-  override async loadHistory(): Promise<ChatMessage[]> {
+  async loadHistory(): Promise<ChatMessage[]> {
     if (!this.resumeSessionId) return [];
     return loadHistoryFromDisk(this.resumeSessionId, this.projectPath);
   }
 
-  override async extractPlanFiles(): Promise<string[]> {
+  async extractPlanFiles(): Promise<string[]> {
     if (!this.resumeSessionId) return [];
     return extractPlans(this.resumeSessionId, this.projectPath);
   }
 
-  override async extractSkillFiles(): Promise<SkillFileEntry[]> {
+  async extractSkillFiles(): Promise<SkillFileEntry[]> {
     if (!this.resumeSessionId) return [];
     return extractSkills(this.resumeSessionId, this.projectPath);
   }

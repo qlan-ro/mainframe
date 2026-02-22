@@ -1,12 +1,12 @@
 import path from 'node:path';
-import type { ControlRequest, ControlUpdate, MessageContent } from '@mainframe/types';
+import type { ControlRequest, ControlUpdate, MessageContent, SessionSink } from '@mainframe/types';
 import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('claude-events');
 
-export function handleStdout(session: ClaudeSession, chunk: Buffer): void {
+export function handleStdout(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
   session.state.buffer += chunk.toString();
   const lines = session.state.buffer.split('\n');
   session.state.buffer = lines.pop() || '';
@@ -16,7 +16,7 @@ export function handleStdout(session: ClaudeSession, chunk: Buffer): void {
     log.trace({ sessionId: session.id, line }, 'adapter stdout');
     try {
       const event = JSON.parse(line.trim());
-      handleEvent(session, event);
+      handleEvent(session, event, sink);
     } catch {
       // Not JSON, skip
     }
@@ -32,24 +32,24 @@ const INFORMATIONAL_PATTERNS = [
   /^Cloning into/,
 ];
 
-export function handleStderr(session: ClaudeSession, chunk: Buffer): void {
+export function handleStderr(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
   const message = chunk.toString().trim();
   if (!message) return;
   if (INFORMATIONAL_PATTERNS.some((p) => p.test(message))) return;
-  session.emit('error', new Error(message));
+  sink.onError(new Error(message));
 }
 
-function handleSystemEvent(session: ClaudeSession, event: Record<string, unknown>): void {
+function handleSystemEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   if (event.subtype === 'init') {
     session.state.chatId = event.session_id as string;
     session.state.status = 'ready';
-    session.emit('init', event.session_id as string, event.model as string, event.tools as string[]);
+    sink.onInit(event.session_id as string);
   } else if (event.subtype === 'compact_boundary') {
-    session.emit('compact');
+    sink.onCompact();
   }
 }
 
-function handleAssistantEvent(session: ClaudeSession, event: Record<string, unknown>): void {
+function handleAssistantEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   const message = event.message as {
     model?: string;
     content: MessageContent[];
@@ -64,14 +64,14 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
     session.state.lastAssistantUsage = message.usage;
   }
   if (message?.content) {
-    session.emit('message', message.content, {
+    sink.onMessage(message.content, {
       model: message.model,
       usage: message.usage,
     });
   }
 }
 
-function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>): void {
+function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   // Live stream handles ONLY tool_result blocks from user events.
   // Text/image blocks in user entries are intentionally ignored here because:
   //   - User-typed text: already created as a ChatMessage by chat-manager.sendMessage()
@@ -88,7 +88,7 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>)
   const toolResultContent: MessageContent[] = buildToolResultBlocks(message as Record<string, unknown>, tur);
 
   if (toolResultContent.length > 0) {
-    session.emit('tool_result', toolResultContent);
+    sink.onToolResult(toolResultContent);
   }
 
   for (const block of message.content) {
@@ -96,13 +96,14 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>)
       const text = typeof block.content === 'string' ? block.content : '';
       const planMatch = text.match(/Your plan has been saved to: (\/\S+\.md)/);
       if (planMatch?.[1]) {
-        session.emit('plan_file', planMatch[1].trim());
+        sink.onPlanFile(planMatch[1].trim());
       }
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';
       const skillMatch = text.match(/^Base directory for this skill: (.+)/m);
       if (skillMatch?.[1]) {
-        session.emit('skill_file', path.join(skillMatch[1].trim(), 'SKILL.md'));
+        const skillPath = path.join(skillMatch[1].trim(), 'SKILL.md');
+        sink.onSkillFile({ path: skillPath, displayName: skillMatch[1].trim() });
       }
     }
   }
@@ -110,12 +111,13 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>)
   if (typeof rawContent === 'string') {
     const skillMatch = rawContent.match(/^Base directory for this skill: (.+)/m);
     if (skillMatch?.[1]) {
-      session.emit('skill_file', path.join(skillMatch[1].trim(), 'SKILL.md'));
+      const skillPath = path.join(skillMatch[1].trim(), 'SKILL.md');
+      sink.onSkillFile({ path: skillPath, displayName: skillMatch[1].trim() });
     }
   }
 }
 
-function handleControlRequestEvent(session: ClaudeSession, event: Record<string, unknown>): void {
+function handleControlRequestEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   const request = event.request as Record<string, unknown>;
   if (request?.subtype === 'can_use_tool') {
     const permRequest: ControlRequest = {
@@ -126,13 +128,13 @@ function handleControlRequestEvent(session: ClaudeSession, event: Record<string,
       suggestions: (request.permission_suggestions as ControlUpdate[]) || [],
       decisionReason: request.decision_reason as string | undefined,
     };
-    session.emit('permission', permRequest);
+    sink.onPermission(permRequest);
   } else {
     log.warn({ subtype: request?.subtype }, 'Unhandled control_request subtype');
   }
 }
 
-function handleResultEvent(session: ClaudeSession, event: Record<string, unknown>): void {
+function handleResultEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   const lastUsage = session.state.lastAssistantUsage;
   const usage =
     lastUsage ??
@@ -149,29 +151,34 @@ function handleResultEvent(session: ClaudeSession, event: Record<string, unknown
   const tokensOutput = usage?.output_tokens || 0;
   session.state.lastAssistantUsage = undefined;
 
-  session.emit('result', {
-    cost: (event.total_cost_usd as number) || 0,
-    tokensInput,
-    tokensOutput,
+  sink.onResult({
+    total_cost_usd: (event.total_cost_usd as number) || 0,
+    usage: usage
+      ? {
+          input_tokens: tokensInput,
+          output_tokens: tokensOutput,
+          cache_creation_input_tokens: usage.cache_creation_input_tokens,
+          cache_read_input_tokens: usage.cache_read_input_tokens,
+        }
+      : undefined,
     subtype: event.subtype as string | undefined,
-    isError: event.is_error as boolean | undefined,
-    durationMs: event.duration_ms as number | undefined,
+    is_error: event.is_error as boolean | undefined,
   });
 }
 
-function handleEvent(session: ClaudeSession, event: Record<string, unknown>): void {
+function handleEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   log.debug({ sessionId: session.id, type: event.type }, 'adapter event');
 
   switch (event.type) {
     case 'system':
-      return handleSystemEvent(session, event);
+      return handleSystemEvent(session, event, sink);
     case 'assistant':
-      return handleAssistantEvent(session, event);
+      return handleAssistantEvent(session, event, sink);
     case 'user':
-      return handleUserEvent(session, event);
+      return handleUserEvent(session, event, sink);
     case 'control_request':
-      return handleControlRequestEvent(session, event);
+      return handleControlRequestEvent(session, event, sink);
     case 'result':
-      return handleResultEvent(session, event);
+      return handleResultEvent(session, event, sink);
   }
 }
