@@ -83,6 +83,17 @@ describe('buildPluginContext capability gating', () => {
     expect(callbacks).toContain(fn);
   });
 
+  it('throws on attachments access when storage not declared', () => {
+    const ctx = buildPluginContext(makeDeps({ manifest: { ...baseManifest, capabilities: [] } }));
+    expect(() => ctx.attachments.list('id')).toThrow(/storage/);
+  });
+
+  it('provides attachments when storage capability is declared', () => {
+    const ctx = buildPluginContext(makeDeps({ manifest: { ...baseManifest, capabilities: ['storage'] } }));
+    expect(typeof ctx.attachments.save).toBe('function');
+    expect(typeof ctx.attachments.list).toBe('function');
+  });
+
   it('always exposes router and config', () => {
     const ctx = buildPluginContext(makeDeps());
     expect(ctx.router).toBeDefined();

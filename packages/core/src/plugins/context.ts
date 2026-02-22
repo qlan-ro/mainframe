@@ -1,5 +1,6 @@
 import type { PluginContext, PluginManifest, DaemonEvent } from '@mainframe/types';
 import { createPluginDatabaseContext } from './db-context.js';
+import { createPluginAttachmentContext } from './attachment-context.js';
 import { createPluginEventBus } from './event-bus.js';
 import { createPluginConfig } from './config-context.js';
 import { createPluginUIContext } from './ui-context.js';
@@ -34,6 +35,15 @@ export function buildPluginContext(deps: PluginContextDeps): PluginContext {
   const dbContext = has('storage')
     ? createPluginDatabaseContext(`${pluginDir}/data.db`)
     : new Proxy({} as ReturnType<typeof createPluginDatabaseContext>, {
+        get:
+          () =>
+          (..._args: unknown[]) =>
+            capabilityGuard('storage'),
+      });
+
+  const attachmentContext = has('storage')
+    ? createPluginAttachmentContext(`${pluginDir}/attachments`)
+    : new Proxy({} as ReturnType<typeof createPluginAttachmentContext>, {
         get:
           () =>
           (..._args: unknown[]) =>
@@ -81,6 +91,7 @@ export function buildPluginContext(deps: PluginContextDeps): PluginContext {
     router: deps.router,
     config,
     db: dbContext,
+    attachments: attachmentContext,
     events: eventBus,
     ui: uiContext,
     services: { chats: chatService, projects: projectService },
