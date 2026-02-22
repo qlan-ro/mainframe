@@ -9,12 +9,12 @@ import { BaseAdapter } from '../adapters/base.js';
 import { BaseSession } from '../adapters/base-session.js';
 import type {
   AdapterProcess,
-  PermissionResponse,
+  ControlResponse,
   AdapterSession,
   SessionOptions,
   SessionSpawnOptions,
   DaemonEvent,
-  PermissionRequest,
+  ControlRequest,
 } from '@mainframe/types';
 
 class MockSession extends BaseSession {
@@ -55,7 +55,7 @@ class MockSession extends BaseSession {
       : null;
   }
 
-  override async respondToPermission(r: PermissionResponse): Promise<void> {
+  override async respondToPermission(r: ControlResponse): Promise<void> {
     this.adapter.respondToPermissionSpy(r);
   }
 }
@@ -168,7 +168,7 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function makePermissionRequest(toolName: string, overrides?: Partial<PermissionRequest>): PermissionRequest {
+function makePermissionRequest(toolName: string, overrides?: Partial<ControlRequest>): ControlRequest {
   return {
     requestId: 'req-1',
     toolName,

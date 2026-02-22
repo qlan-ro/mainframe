@@ -16,7 +16,7 @@ import { useSkillsStore } from '../store/skills';
 import { useSettingsStore } from '../store/settings';
 import { useAdaptersStore } from '../store/adapters';
 import { usePluginsStore } from '../store/plugins';
-import type { DaemonEvent, PermissionUpdate } from '@mainframe/types';
+import type { DaemonEvent, ControlUpdate } from '@mainframe/types';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('daemon');
@@ -322,7 +322,7 @@ export function useChat(chatId: string | null) {
   const respondToPermission = useCallback(
     (
       behavior: 'allow' | 'deny',
-      alwaysAllow?: PermissionUpdate[],
+      alwaysAllow?: ControlUpdate[],
       overrideInput?: Record<string, unknown>,
       message?: string,
       executionMode?: string,

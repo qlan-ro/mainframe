@@ -2,8 +2,8 @@ import { EventEmitter } from 'node:events';
 import type {
   Chat,
   ChatMessage,
-  PermissionRequest,
-  PermissionResponse,
+  ControlRequest,
+  ControlResponse,
   DaemonEvent,
   AdapterSession,
   SessionMention,
@@ -200,7 +200,7 @@ export class ChatManager extends EventEmitter {
     await postStart.session.sendMessage(outgoingContent, images.length > 0 ? images : undefined);
   }
 
-  async respondToPermission(chatId: string, response: PermissionResponse): Promise<void> {
+  async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
     logger.info({ chatId, behavior: response.behavior, toolName: response.toolName }, 'permission answered');
     return this.permissionHandler.respondToPermission(chatId, response);
   }
@@ -311,7 +311,7 @@ export class ChatManager extends EventEmitter {
     );
   }
 
-  async getPendingPermission(chatId: string): Promise<PermissionRequest | null> {
+  async getPendingPermission(chatId: string): Promise<ControlRequest | null> {
     return this.permissionHandler.getPendingPermission(chatId);
   }
 

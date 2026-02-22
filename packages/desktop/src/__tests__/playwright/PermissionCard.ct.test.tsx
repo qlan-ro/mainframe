@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/experimental-ct-react';
 import React from 'react';
 import { PermissionCard } from '../../renderer/components/chat/PermissionCard.js';
-import type { PermissionRequest } from '@mainframe/types';
+import type { ControlRequest } from '@mainframe/types';
 
-const request: PermissionRequest = {
+const request: ControlRequest = {
   requestId: 'req-1',
   toolName: 'Bash',
   toolUseId: 'tu-1',

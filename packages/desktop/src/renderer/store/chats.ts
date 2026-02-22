@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Chat, ChatMessage, PermissionRequest, AdapterProcess } from '@mainframe/types';
+import type { Chat, ChatMessage, ControlRequest, AdapterProcess } from '@mainframe/types';
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 
@@ -7,7 +7,7 @@ interface ChatsState {
   chats: Chat[];
   activeChatId: string | null;
   messages: Map<string, ChatMessage[]>;
-  pendingPermissions: Map<string, PermissionRequest>;
+  pendingPermissions: Map<string, ControlRequest>;
   processes: Map<string, AdapterProcess>;
 
   setChats: (chats: Chat[]) => void;
@@ -17,7 +17,7 @@ interface ChatsState {
   removeChat: (id: string) => void;
   addMessage: (chatId: string, message: ChatMessage) => void;
   setMessages: (chatId: string, messages: ChatMessage[]) => void;
-  addPendingPermission: (chatId: string, request: PermissionRequest) => void;
+  addPendingPermission: (chatId: string, request: ControlRequest) => void;
   removePendingPermission: (chatId: string) => void;
   setProcess: (chatId: string, process: AdapterProcess) => void;
   updateProcessStatus: (processId: string, status: AdapterProcess['status']) => void;

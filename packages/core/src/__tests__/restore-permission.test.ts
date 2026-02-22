@@ -7,7 +7,7 @@ import type {
   Chat,
   ChatMessage,
   AdapterProcess,
-  PermissionResponse,
+  ControlResponse,
   AdapterSession,
   SessionOptions,
   SessionSpawnOptions,
@@ -59,7 +59,7 @@ class MockSession extends BaseSession {
     return this.adapter.historyToReturn;
   }
 
-  override async respondToPermission(response: PermissionResponse): Promise<void> {
+  override async respondToPermission(response: ControlResponse): Promise<void> {
     this.adapter.permissionResponses.push(response);
   }
 
@@ -73,7 +73,7 @@ class MockAdapter extends BaseAdapter {
   name = 'Mock';
   historyToReturn: ChatMessage[] = [];
   lastSpawnOptions: SessionSpawnOptions | null = null;
-  permissionResponses: PermissionResponse[] = [];
+  permissionResponses: ControlResponse[] = [];
   sentMessages: string[] = [];
   killCount = 0;
   currentSession: MockSession | null = null;

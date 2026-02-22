@@ -21,7 +21,7 @@ export interface AdapterSession {
   getProcessInfo(): AdapterProcess | null;
 
   sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
-  respondToPermission(response: PermissionResponse): Promise<void>;
+  respondToPermission(response: ControlResponse): Promise<void>;
   interrupt(): Promise<void>;
   setModel(model: string): Promise<void>;
   setPermissionMode(mode: string): Promise<void>;
@@ -70,50 +70,50 @@ export interface AdapterProcess {
   model?: string;
 }
 
-export type PermissionBehavior = 'allow' | 'deny';
+export type ControlBehavior = 'allow' | 'deny';
 
-export type PermissionDestination = 'userSettings' | 'projectSettings' | 'localSettings' | 'session' | 'cliArg';
+export type ControlDestination = 'userSettings' | 'projectSettings' | 'localSettings' | 'session' | 'cliArg';
 
 /** A permission rule update to save for future tool uses. Matches the CLI's PermissionUpdate type. */
-export type PermissionUpdate =
+export type ControlUpdate =
   | {
       type: 'addRules';
       rules: { toolName: string; ruleContent?: string }[];
       behavior: 'allow' | 'deny' | 'ask';
-      destination: PermissionDestination;
+      destination: ControlDestination;
     }
   | {
       type: 'replaceRules';
       rules: { toolName: string; ruleContent?: string }[];
       behavior: 'allow' | 'deny' | 'ask';
-      destination: PermissionDestination;
+      destination: ControlDestination;
     }
   | {
       type: 'removeRules';
       rules: { toolName: string; ruleContent?: string }[];
       behavior: 'allow' | 'deny' | 'ask';
-      destination: PermissionDestination;
+      destination: ControlDestination;
     }
-  | { type: 'setMode'; mode: PermissionMode; destination: PermissionDestination }
-  | { type: 'addDirectories'; directories: string[]; destination: PermissionDestination }
-  | { type: 'removeDirectories'; directories: string[]; destination: PermissionDestination };
+  | { type: 'setMode'; mode: PermissionMode; destination: ControlDestination }
+  | { type: 'addDirectories'; directories: string[]; destination: ControlDestination }
+  | { type: 'removeDirectories'; directories: string[]; destination: ControlDestination };
 
-export interface PermissionRequest {
+export interface ControlRequest {
   requestId: string;
   toolName: string;
   toolUseId: string;
   input: Record<string, unknown>;
-  suggestions: PermissionUpdate[];
+  suggestions: ControlUpdate[];
   decisionReason?: string;
 }
 
-export interface PermissionResponse {
+export interface ControlResponse {
   requestId: string;
   toolUseId: string;
   toolName?: string;
-  behavior: PermissionBehavior;
+  behavior: ControlBehavior;
   updatedInput?: Record<string, unknown>;
-  updatedPermissions?: PermissionUpdate[];
+  updatedPermissions?: ControlUpdate[];
   message?: string;
   executionMode?: 'default' | 'acceptEdits' | 'yolo';
   clearContext?: boolean;
@@ -138,7 +138,7 @@ export interface Adapter {
   setModel?(process: AdapterProcess, model: string): Promise<void>;
   sendCommand?(process: AdapterProcess, command: string, args?: string): Promise<void>;
   sendMessage?(process: AdapterProcess, message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
-  respondToPermission?(process: AdapterProcess, response: PermissionResponse): Promise<void>;
+  respondToPermission?(process: AdapterProcess, response: ControlResponse): Promise<void>;
   loadHistory?(sessionId: string, projectPath: string): Promise<import('./chat.js').ChatMessage[]>;
   extractPlanFiles?(sessionId: string, projectPath: string): Promise<string[]>;
   extractSkillFiles?(sessionId: string, projectPath: string): Promise<import('./context.js').SkillFileEntry[]>;

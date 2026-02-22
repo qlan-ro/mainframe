@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { PermissionRequest, PermissionUpdate, MessageContent } from '@mainframe/types';
+import type { ControlRequest, ControlUpdate, MessageContent } from '@mainframe/types';
 import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
 import { createChildLogger } from '../../../logger.js';
@@ -118,12 +118,12 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>)
 function handleControlRequestEvent(session: ClaudeSession, event: Record<string, unknown>): void {
   const request = event.request as Record<string, unknown>;
   if (request?.subtype === 'can_use_tool') {
-    const permRequest: PermissionRequest = {
+    const permRequest: ControlRequest = {
       requestId: event.request_id as string,
       toolName: request.tool_name as string,
       toolUseId: request.tool_use_id as string,
       input: request.input as Record<string, unknown>,
-      suggestions: (request.permission_suggestions as PermissionUpdate[]) || [],
+      suggestions: (request.permission_suggestions as ControlUpdate[]) || [],
       decisionReason: request.decision_reason as string | undefined,
     };
     session.emit('permission', permRequest);

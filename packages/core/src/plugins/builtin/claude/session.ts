@@ -8,7 +8,7 @@ import type {
   AdapterProcess,
   SessionSpawnOptions,
   SessionOptions,
-  PermissionResponse,
+  ControlResponse,
   ChatMessage,
   ContextFile,
   SkillFileEntry,
@@ -236,7 +236,7 @@ export class ClaudeSession extends BaseSession {
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
-  override async respondToPermission(response: PermissionResponse): Promise<void> {
+  override async respondToPermission(response: ControlResponse): Promise<void> {
     const innerResponse: Record<string, unknown> = {
       behavior: response.behavior,
       toolUseID: response.toolUseId,

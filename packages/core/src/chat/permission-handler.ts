@@ -1,4 +1,4 @@
-import type { Chat, ChatMessage, PermissionRequest, PermissionResponse, DaemonEvent } from '@mainframe/types';
+import type { Chat, ChatMessage, ControlRequest, ControlResponse, DaemonEvent } from '@mainframe/types';
 import type { DatabaseManager } from '../db/index.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { PlanModeHandler } from './plan-mode-handler.js';
@@ -23,7 +23,7 @@ export interface PermissionHandlerDeps {
 export class ChatPermissionHandler {
   constructor(private deps: PermissionHandlerDeps) {}
 
-  async respondToPermission(chatId: string, response: PermissionResponse): Promise<void> {
+  async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
 
     if (!active?.session?.isSpawned) {
@@ -54,7 +54,7 @@ export class ChatPermissionHandler {
     return this.handleNormalPermission(chatId, active, response);
   }
 
-  async getPendingPermission(chatId: string): Promise<PermissionRequest | null> {
+  async getPendingPermission(chatId: string): Promise<ControlRequest | null> {
     const chat = this.deps.getChat(chatId);
     if (chat?.permissionMode === 'yolo') return null;
 
@@ -74,7 +74,7 @@ export class ChatPermissionHandler {
 
   private async handleNoSessionPermission(
     chatId: string,
-    response: PermissionResponse,
+    response: ControlResponse,
     active: ActiveChat | undefined,
   ): Promise<void> {
     this.deps.permissions.clear(chatId);
@@ -97,16 +97,12 @@ export class ChatPermissionHandler {
   private async handleClearContextPermission(
     chatId: string,
     active: ActiveChat,
-    response: PermissionResponse,
+    response: ControlResponse,
   ): Promise<void> {
     await this.deps.planMode.handleClearContext(chatId, active, response);
   }
 
-  private async handleNormalPermission(
-    chatId: string,
-    active: ActiveChat,
-    response: PermissionResponse,
-  ): Promise<void> {
+  private async handleNormalPermission(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
     if (!active.session) throw new Error(`No session for chat ${chatId}`);
 
     await active.session.respondToPermission(response);

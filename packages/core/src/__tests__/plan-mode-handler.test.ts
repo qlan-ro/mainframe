@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PlanModeHandler, type PlanModeContext } from '../chat/plan-mode-handler.js';
-import type { Chat, PermissionResponse } from '@mainframe/types';
+import type { Chat, ControlResponse } from '@mainframe/types';
 import type { ActiveChat } from '../chat/types.js';
 
 function makeChat(overrides: Partial<Chat> = {}): Chat {
@@ -65,7 +65,7 @@ function makeContext(hasActiveSession = true): PlanModeContext & {
   };
 }
 
-function makeResponse(overrides?: Partial<PermissionResponse>): PermissionResponse {
+function makeResponse(overrides?: Partial<ControlResponse>): ControlResponse {
   return {
     requestId: 'req-1',
     toolUseId: 'tu-1',

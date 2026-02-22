@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PermissionManager } from '../chat/permission-manager.js';
-import type { PermissionRequest } from '@mainframe/types';
+import type { ControlRequest } from '@mainframe/types';
 
-function makeRequest(overrides: Partial<PermissionRequest> = {}): PermissionRequest {
+function makeRequest(overrides: Partial<ControlRequest> = {}): ControlRequest {
   return {
     requestId: 'req-1',
     toolName: 'Bash',

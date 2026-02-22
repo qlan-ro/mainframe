@@ -14,7 +14,7 @@ import { archiveChat } from '../../../lib/api';
 import { useChatsStore } from '../../../store/chats';
 import { useProjectsStore } from '../../../store/projects';
 import { useTabsStore } from '../../../store/tabs';
-import type { PermissionRequest, PermissionUpdate } from '@mainframe/types';
+import type { ControlRequest, ControlUpdate } from '@mainframe/types';
 import { AllToolUIs } from './parts/tool-ui-registry';
 
 interface MainframeRuntimeProviderProps {
@@ -30,10 +30,10 @@ const FILE_SIZE_LIMIT_MB = 5;
 
 interface MainframeRuntimeContextValue {
   chatId: string;
-  pendingPermission: PermissionRequest | undefined;
+  pendingPermission: ControlRequest | undefined;
   respondToPermission: (
     behavior: 'allow' | 'deny',
-    alwaysAllow?: PermissionUpdate[],
+    alwaysAllow?: ControlUpdate[],
     overrideInput?: Record<string, unknown>,
     message?: string,
     executionMode?: string,

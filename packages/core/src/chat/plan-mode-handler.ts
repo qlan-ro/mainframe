@@ -1,4 +1,4 @@
-import type { Chat, PermissionResponse, DaemonEvent } from '@mainframe/types';
+import type { Chat, ControlResponse, DaemonEvent } from '@mainframe/types';
 import type { DatabaseManager } from '../db/index.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { MessageCache } from './message-cache.js';
@@ -18,7 +18,7 @@ export interface PlanModeContext {
 export class PlanModeHandler {
   constructor(private ctx: PlanModeContext) {}
 
-  async handleNoProcess(chatId: string, active: ActiveChat, response: PermissionResponse): Promise<void> {
+  async handleNoProcess(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
     const targetMode = (response.executionMode ?? this.ctx.permissions.getPlanExecutionMode(chatId)) as
       | Chat['permissionMode']
       | undefined;
@@ -31,7 +31,7 @@ export class PlanModeHandler {
     }
   }
 
-  async handleClearContext(chatId: string, active: ActiveChat, response: PermissionResponse): Promise<void> {
+  async handleClearContext(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
     const plan = (response.updatedInput as Record<string, unknown> | undefined)?.plan as string | undefined;
     const recoveredPlanPath = extractLatestPlanFileFromMessages(this.ctx.messages.get(chatId) ?? []);
     if (recoveredPlanPath && this.ctx.db.chats.addPlanFile(chatId, recoveredPlanPath)) {
@@ -74,7 +74,7 @@ export class PlanModeHandler {
     }
   }
 
-  async handleEscalation(chatId: string, active: ActiveChat, response: PermissionResponse): Promise<void> {
+  async handleEscalation(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
     const targetMode = (response.executionMode ?? this.ctx.permissions.getPlanExecutionMode(chatId)) as
       | Chat['permissionMode']
       | undefined;

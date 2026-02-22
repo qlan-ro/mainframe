@@ -3,7 +3,7 @@ import type {
   AdapterSession,
   AdapterProcess,
   SessionSpawnOptions,
-  PermissionResponse,
+  ControlResponse,
   ChatMessage,
   ContextFile,
   SkillFileEntry,
@@ -32,7 +32,7 @@ export abstract class BaseSession extends EventEmitter implements AdapterSession
   abstract getProcessInfo(): AdapterProcess | null;
 
   async sendMessage(_message: string, _images?: { mediaType: string; data: string }[]): Promise<void> {}
-  async respondToPermission(_response: PermissionResponse): Promise<void> {}
+  async respondToPermission(_response: ControlResponse): Promise<void> {}
   async interrupt(): Promise<void> {}
   async setModel(_model: string): Promise<void> {}
   async setPermissionMode(_mode: string): Promise<void> {}

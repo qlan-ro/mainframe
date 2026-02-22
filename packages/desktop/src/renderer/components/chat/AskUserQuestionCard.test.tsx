@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { PermissionRequest } from '@mainframe/types';
+import type { ControlRequest } from '@mainframe/types';
 import { AskUserQuestionCard } from './AskUserQuestionCard.js';
 
-function createSingleRequest(): PermissionRequest {
+function createSingleRequest(): ControlRequest {
   return {
     requestId: 'req-1',
     toolName: 'AskUserQuestion',
@@ -26,7 +26,7 @@ function createSingleRequest(): PermissionRequest {
   };
 }
 
-function createMultiRequest(): PermissionRequest {
+function createMultiRequest(): ControlRequest {
   return {
     requestId: 'req-2',
     toolName: 'AskUserQuestion',

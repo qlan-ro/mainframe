@@ -9,7 +9,7 @@ import { BaseAdapter } from '../adapters/base.js';
 import { BaseSession } from '../adapters/base-session.js';
 import type {
   AdapterProcess,
-  PermissionResponse,
+  ControlResponse,
   AdapterSession,
   SessionOptions,
   SessionSpawnOptions,
@@ -58,7 +58,7 @@ class MockSession extends BaseSession {
   override async sendMessage(msg: string): Promise<void> {
     this.adapter.sendMessageSpy(msg);
   }
-  override async respondToPermission(r: PermissionResponse): Promise<void> {
+  override async respondToPermission(r: ControlResponse): Promise<void> {
     this.adapter.respondToPermissionSpy(r);
   }
   override async interrupt(): Promise<void> {

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Check } from 'lucide-react';
-import type { PermissionRequest, PermissionUpdate } from '@mainframe/types';
+import type { ControlRequest, ControlUpdate } from '@mainframe/types';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
 
@@ -12,10 +12,10 @@ interface Question {
 }
 
 interface AskUserQuestionCardProps {
-  request: PermissionRequest;
+  request: ControlRequest;
   onRespond: (
     behavior: 'allow' | 'deny',
-    alwaysAllow?: PermissionUpdate[],
+    alwaysAllow?: ControlUpdate[],
     overrideInput?: Record<string, unknown>,
   ) => void;
 }
