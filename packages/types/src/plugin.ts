@@ -144,6 +144,24 @@ export interface PluginConfig {
   getAll(): Record<string, unknown>;
 }
 
+export interface PluginAttachmentMeta {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface PluginAttachmentContext {
+  save(
+    entityId: string,
+    file: { filename: string; mimeType: string; data: string; sizeBytes: number },
+  ): Promise<PluginAttachmentMeta>;
+  get(entityId: string, id: string): Promise<{ data: string; meta: PluginAttachmentMeta } | null>;
+  list(entityId: string): Promise<PluginAttachmentMeta[]>;
+  delete(entityId: string, id: string): Promise<void>;
+}
+
 export interface PluginContext {
   readonly manifest: PluginManifest;
   readonly logger: Logger;
@@ -159,6 +177,7 @@ export interface PluginContext {
 
   // Requires 'storage'
   readonly db: PluginDatabaseContext;
+  readonly attachments: PluginAttachmentContext;
 
   // Requires 'daemon:public-events'
   readonly events: PluginEventBus;
