@@ -1,4 +1,4 @@
-import type { Chat, DaemonEvent } from '@mainframe/types';
+import type { Chat, DaemonEvent, AdapterSession } from '@mainframe/types';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';
@@ -17,17 +17,17 @@ export interface LifecycleManagerDeps {
   adapters: AdapterRegistry;
   attachmentStore?: AttachmentStore;
   activeChats: Map<string, ActiveChat>;
-  processToChat: Map<string, string>;
   messages: MessageCache;
   permissions: PermissionManager;
   emitEvent: (event: DaemonEvent) => void;
+  attachSession: (chatId: string, session: AdapterSession) => void;
 }
 
 export class ChatLifecycleManager {
   private loadingChats = new Map<string, Promise<void>>();
   private startingChats = new Map<string, Promise<void>>();
 
-  constructor(private deps: LifecycleManagerDeps) {} // TODO rename deps to chatLifeCycleManager
+  constructor(private deps: LifecycleManagerDeps) {}
 
   /** Expose startingChats for ConfigManager's inflight check */
   getStartingChats(): Map<string, Promise<void>> {
@@ -48,7 +48,7 @@ export class ChatLifecycleManager {
   ): Promise<Chat> {
     const chat = this.deps.db.chats.create(projectId, adapterId, model, permissionMode);
     log.info({ chatId: chat.id, projectId, adapterId }, 'chat created');
-    this.deps.activeChats.set(chat.id, { chat, process: null });
+    this.deps.activeChats.set(chat.id, { chat, session: null });
     if (planExecutionMode && permissionMode === 'plan') {
       this.deps.permissions.setPlanExecutionMode(chat.id, planExecutionMode as Chat['permissionMode']);
     }
@@ -115,8 +115,8 @@ export class ChatLifecycleManager {
 
   async startChat(chatId: string): Promise<void> {
     const active = this.deps.activeChats.get(chatId);
-    if (active?.process) {
-      this.deps.emitEvent({ type: 'process.started', chatId, process: active.process });
+    if (active?.session?.isSpawned) {
+      this.deps.emitEvent({ type: 'process.started', chatId, process: active.session.getProcessInfo()! });
       return;
     }
 
@@ -134,22 +134,18 @@ export class ChatLifecycleManager {
 
   async interruptChat(chatId: string): Promise<void> {
     const active = this.deps.activeChats.get(chatId);
-    if (!active?.process) return;
-
-    const adapter = this.deps.adapters.get(active.chat.adapterId);
-    if (!adapter) return;
+    if (!active?.session?.isSpawned) return;
 
     this.deps.permissions.clear(chatId);
     this.deps.permissions.markInterrupted(chatId);
-    await adapter.interrupt?.(active.process);
+    await active.session.interrupt();
   }
 
   async archiveChat(chatId: string): Promise<void> {
     const active = this.deps.activeChats.get(chatId);
-    if (active?.process) {
-      const adapter = this.deps.adapters.get(active.chat.adapterId);
-      if (adapter) await adapter.kill(active.process);
-      this.deps.processToChat.delete(active.process.id);
+    if (active?.session) {
+      await active.session.kill();
+      active.session.removeAllListeners();
     }
 
     const chat = active?.chat ?? this.deps.db.chats.get(chatId);
@@ -171,10 +167,9 @@ export class ChatLifecycleManager {
     const active = this.deps.activeChats.get(chatId);
     if (!active) return;
 
-    if (active.process) {
-      const adapter = this.deps.adapters.get(active.chat.adapterId);
-      if (adapter) await adapter.kill(active.process);
-      this.deps.processToChat.delete(active.process.id);
+    if (active.session) {
+      await active.session.kill();
+      active.session.removeAllListeners();
     }
 
     this.deps.db.chats.update(chatId, { status: 'ended' });
@@ -207,7 +202,7 @@ export class ChatLifecycleManager {
   private async doLoadChat(chatId: string): Promise<void> {
     const chat = this.deps.db.chats.get(chatId);
     if (!chat) throw new Error(`Chat ${chatId} not found`);
-    this.deps.activeChats.set(chatId, { chat, process: null });
+    this.deps.activeChats.set(chatId, { chat, session: null });
 
     const adapter = this.deps.adapters.get(chat.adapterId);
     if (!adapter) return;
@@ -217,9 +212,13 @@ export class ChatLifecycleManager {
 
     const effectivePath = chat.worktreePath ?? project.path;
 
-    if (chat.claudeSessionId && adapter.loadHistory) {
+    if (chat.claudeSessionId) {
+      const session = adapter.createSession({ projectPath: effectivePath, chatId: chat.claudeSessionId });
+      const active = this.deps.activeChats.get(chatId)!;
+      active.session = session;
+
       try {
-        const history = await adapter.loadHistory(chat.claudeSessionId, effectivePath);
+        const history = await session.loadHistory();
         if (history.length > 0) {
           this.deps.messages.set(chatId, history);
           this.deps.permissions.restorePendingPermission(chatId, history);
@@ -238,17 +237,12 @@ export class ChatLifecycleManager {
         }
       }
 
-      if (chat.claudeSessionId) {
-        try {
-          const [planPaths, skillPaths] = await Promise.all([
-            adapter.extractPlanFiles?.(chat.claudeSessionId, effectivePath) ?? Promise.resolve([]),
-            adapter.extractSkillFiles?.(chat.claudeSessionId, effectivePath) ?? Promise.resolve([]),
-          ]);
-          for (const p of planPaths) this.deps.db.chats.addPlanFile(chatId, p);
-          for (const p of skillPaths) this.deps.db.chats.addSkillFile(chatId, p);
-        } catch {
-          /* best-effort */
-        }
+      try {
+        const [planPaths, skillPaths] = await Promise.all([session.extractPlanFiles(), session.extractSkillFiles()]);
+        for (const p of planPaths) this.deps.db.chats.addPlanFile(chatId, p);
+        for (const p of skillPaths) this.deps.db.chats.addSkillFile(chatId, p);
+      } catch {
+        /* best-effort */
       }
     }
   }
@@ -257,33 +251,38 @@ export class ChatLifecycleManager {
     await this.loadChat(chatId);
 
     const active = this.deps.activeChats.get(chatId);
-    if (active?.process) {
-      this.deps.emitEvent({ type: 'process.started', chatId, process: active.process });
+    if (!active) throw new Error(`Chat ${chatId} not found after load`);
+
+    if (active.session?.isSpawned) {
+      this.deps.emitEvent({ type: 'process.started', chatId, process: active.session.getProcessInfo()! });
       return;
     }
 
-    const preSpawn = this.deps.activeChats.get(chatId);
-    if (!preSpawn) throw new Error(`Chat ${chatId} not found after load`);
-
-    const { chat } = preSpawn;
+    const { chat } = active;
     const adapter = this.deps.adapters.get(chat.adapterId);
     if (!adapter) throw new Error(`Adapter ${chat.adapterId} not found`);
 
     const project = this.deps.db.projects.get(chat.projectId);
     if (!project) throw new Error(`Project ${chat.projectId} not found`);
 
-    const process = await adapter.spawn({
+    // Remove listeners from old session to prevent event leaks, then create a fresh one.
+    if (active.session) {
+      active.session.removeAllListeners();
+    }
+    const session = adapter.createSession({
       projectPath: chat.worktreePath ?? project.path,
       chatId: chat.claudeSessionId,
+    });
+    active.session = session;
+
+    // Attach event handlers BEFORE spawn so no events are missed.
+    this.deps.attachSession(chatId, session);
+
+    const processInfo = await session.spawn({
       model: chat.model,
       permissionMode: chat.permissionMode,
     });
-    log.info({ chatId }, 'chat process started');
-
-    const postSpawn = this.deps.activeChats.get(chatId);
-    if (!postSpawn) throw new Error(`Chat ${chatId} disappeared during spawn`);
-    postSpawn.process = process;
-    this.deps.processToChat.set(process.id, chatId);
-    this.deps.emitEvent({ type: 'process.started', chatId, process });
+    log.info({ chatId }, 'chat session started');
+    this.deps.emitEvent({ type: 'process.started', chatId, process: processInfo });
   }
 }

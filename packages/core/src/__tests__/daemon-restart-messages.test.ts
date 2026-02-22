@@ -6,21 +6,70 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
+import { BaseSession } from '../adapters/base-session.js';
 import type {
   ChatMessage,
   MessageContent,
   AdapterProcess,
-  PermissionResponse,
-  SpawnOptions,
+  AdapterSession,
+  SessionOptions,
+  SessionSpawnOptions,
   DaemonEvent,
 } from '@mainframe/types';
 
-// ── Mock Adapter ────────────────────────────────────────────────────
+// ── Mock Session ─────────────────────────────────────────────────────
+
+class MockSession extends BaseSession {
+  readonly id = 'proc-1';
+  readonly adapterId: string;
+  readonly projectPath: string;
+  private _isSpawned = false;
+
+  constructor(private adapter: MockAdapter) {
+    super();
+    this.adapterId = adapter.id;
+    this.projectPath = '/tmp';
+  }
+
+  get isSpawned(): boolean {
+    return this._isSpawned;
+  }
+
+  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
+    this._isSpawned = true;
+    return {
+      id: this.id,
+      adapterId: this.adapterId,
+      chatId: '',
+      pid: 0,
+      status: 'ready',
+      projectPath: this.projectPath,
+    };
+  }
+
+  async kill(): Promise<void> {
+    this._isSpawned = false;
+  }
+
+  getProcessInfo(): AdapterProcess | null {
+    return this._isSpawned
+      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
+      : null;
+  }
+
+  /** loadHistory delegates to the adapter's persistent store. */
+  override async loadHistory(): Promise<ChatMessage[]> {
+    return this.adapter.emittedMessages;
+  }
+}
+
+// ── Mock Adapter ─────────────────────────────────────────────────────
 
 class MockAdapter extends BaseAdapter {
   id = 'claude';
   name = 'Mock';
   emittedMessages: ChatMessage[] = [];
+  currentSession: MockSession | null = null;
 
   async isInstalled() {
     return true;
@@ -28,29 +77,18 @@ class MockAdapter extends BaseAdapter {
   async getVersion() {
     return '1.0';
   }
-  async spawn(_options: SpawnOptions): Promise<AdapterProcess> {
-    return {
-      id: 'proc-1',
-      adapterId: 'claude',
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: '/tmp',
-      model: 'test',
-    };
-  }
-  async kill() {}
-  async sendMessage() {}
-  async respondToPermission(_process: AdapterProcess, _response: PermissionResponse) {}
 
-  override async loadHistory(): Promise<ChatMessage[]> {
-    return this.emittedMessages;
+  override createSession(_options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this);
+    return this.currentSession;
   }
 
-  /** Emit a message through the adapter event system AND record it for loadHistory. */
-  emitTestMessage(processId: string, index: number): void {
+  /** Emit a message through the session event system AND record it for loadHistory. */
+  emitTestMessage(_processId: string, index: number): void {
     const content: MessageContent[] = [{ type: 'text', text: `Message ${index}` }];
-    this.emit('message', processId, content);
+
+    // Emit on the running session (if any)
+    this.currentSession?.emit('message', content);
 
     // Also record in the "persistent store" so loadHistory returns it after restart
     this.emittedMessages.push({
@@ -118,7 +156,6 @@ function createMockDb() {
 function createServerStack(adapter: MockAdapter) {
   const db = createMockDb();
   const registry = new AdapterRegistry();
-  // Replace the default Claude adapter with our mock
   (registry as any).adapters = new Map();
   registry.register(adapter);
 
@@ -141,7 +178,6 @@ function startServer(server: Server, port = 0): Promise<number> {
 
 function stopServer(server: Server): Promise<void> {
   return new Promise((resolve, reject) => {
-    // Force-close all active connections so server.close() doesn't hang
     server.closeAllConnections();
     server.close((err) => (err ? reject(err) : resolve()));
   });
@@ -152,16 +188,6 @@ function connectWs(port: number): Promise<WebSocket> {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`);
     ws.on('open', () => resolve(ws));
     ws.on('error', reject);
-  });
-}
-
-function waitForDisconnect(ws: WebSocket): Promise<void> {
-  return new Promise((resolve) => {
-    if (ws.readyState === WebSocket.CLOSED) {
-      resolve();
-      return;
-    }
-    ws.on('close', () => resolve());
   });
 }
 
@@ -188,7 +214,6 @@ describe('message resilience across daemon restart', () => {
 
   it('client recovers all 10 messages after daemon restart', async () => {
     const adapter = new MockAdapter();
-    const processId = 'proc-1';
 
     // ── Server 1: initial daemon ──────────────────────────────────
     const stack1 = createServerStack(adapter);
@@ -209,7 +234,7 @@ describe('message resilience across daemon restart', () => {
 
     // Emit first 5 messages (100ms intervals — fast for tests)
     for (let i = 1; i <= 5; i++) {
-      adapter.emitTestMessage(processId, i);
+      adapter.emitTestMessage('proc-1', i);
       await sleep(20);
     }
 

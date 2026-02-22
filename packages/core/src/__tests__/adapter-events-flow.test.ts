@@ -6,7 +6,65 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import { BaseSession } from '../adapters/base-session.js';
+import type {
+  AdapterProcess,
+  PermissionResponse,
+  AdapterSession,
+  SessionOptions,
+  SessionSpawnOptions,
+  DaemonEvent,
+} from '@mainframe/types';
+
+class MockSession extends BaseSession {
+  readonly id = 'proc-1';
+  readonly adapterId: string;
+  readonly projectPath: string;
+  private _isSpawned = false;
+
+  constructor(private adapter: MockAdapter) {
+    super();
+    this.adapterId = adapter.id;
+    this.projectPath = '/tmp';
+  }
+
+  get isSpawned(): boolean {
+    return this._isSpawned;
+  }
+
+  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
+    this._isSpawned = true;
+    return {
+      id: this.id,
+      adapterId: this.adapterId,
+      chatId: '',
+      pid: 0,
+      status: 'ready',
+      projectPath: this.projectPath,
+    };
+  }
+
+  async kill(): Promise<void> {
+    this._isSpawned = false;
+    this.adapter.killSpy();
+  }
+
+  getProcessInfo(): AdapterProcess | null {
+    return this._isSpawned
+      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
+      : null;
+  }
+
+  override async sendMessage(msg: string): Promise<void> {
+    this.adapter.sendMessageSpy(msg);
+  }
+  override async respondToPermission(r: PermissionResponse): Promise<void> {
+    this.adapter.respondToPermissionSpy(r);
+  }
+  override async interrupt(): Promise<void> {
+    this.adapter.interruptSpy();
+  }
+}
 
 class MockAdapter extends BaseAdapter {
   id = 'claude';
@@ -15,6 +73,7 @@ class MockAdapter extends BaseAdapter {
   sendMessageSpy = vi.fn();
   killSpy = vi.fn();
   interruptSpy = vi.fn();
+  currentSession: MockSession | null = null;
 
   async isInstalled() {
     return true;
@@ -22,29 +81,12 @@ class MockAdapter extends BaseAdapter {
   async getVersion() {
     return '1.0';
   }
-  async spawn(_opts: SpawnOptions): Promise<AdapterProcess> {
-    return {
-      id: 'proc-1',
-      adapterId: 'claude',
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: '/tmp',
-      model: 'test',
-    };
+
+  override createSession(_options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this);
+    return this.currentSession;
   }
-  async kill(_p: AdapterProcess) {
-    this.killSpy();
-  }
-  async interrupt(_p: AdapterProcess) {
-    this.interruptSpy();
-  }
-  async sendMessage(_p: AdapterProcess, msg: string) {
-    this.sendMessageSpy(msg);
-  }
-  async respondToPermission(_p: AdapterProcess, r: PermissionResponse) {
-    this.respondToPermissionSpy(r);
-  }
+
   override async loadHistory() {
     return [];
   }
@@ -163,7 +205,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('init', 'proc-1', 'session-xyz', 'claude-opus-4-5', ['Bash']);
+    adapter.currentSession!.emit('init', 'session-xyz');
     await sleep(50);
 
     const e = events.find((e) => e.type === 'process.ready');
@@ -176,7 +218,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('tool_result', 'proc-1', [
+    adapter.currentSession!.emit('tool_result', [
       { type: 'tool_result', toolUseId: 'tu-1', content: 'wrote file successfully' },
     ]);
     await sleep(50);
@@ -191,7 +233,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('compact', 'proc-1');
+    adapter.currentSession!.emit('compact');
     await sleep(50);
 
     const e = events.find((e) => e.type === 'message.added');
@@ -212,7 +254,7 @@ describe('adapter events flow', () => {
     const events: DaemonEvent[] = [];
     ws.on('message', (data) => events.push(JSON.parse(data.toString()) as DaemonEvent));
 
-    adapter.emit('plan_file', 'proc-1', '/tmp/test/plan.md');
+    adapter.currentSession!.emit('plan_file', '/tmp/test/plan.md');
     await sleep(50);
 
     expect(db.chats.addPlanFile).toHaveBeenCalledWith('test-chat', '/tmp/test/plan.md');
@@ -231,7 +273,7 @@ describe('adapter events flow', () => {
     const events: DaemonEvent[] = [];
     ws.on('message', (data) => events.push(JSON.parse(data.toString()) as DaemonEvent));
 
-    adapter.emit('plan_file', 'proc-1', '/tmp/test/plan.md');
+    adapter.currentSession!.emit('plan_file', '/tmp/test/plan.md');
     await sleep(50);
 
     expect(events.some((e) => e.type === 'context.updated')).toBe(false);
@@ -241,7 +283,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('error', 'proc-1', new Error('something broke'));
+    adapter.currentSession!.emit('error', new Error('something broke'));
     await sleep(50);
 
     const e = events.find((e) => e.type === 'error');
@@ -253,7 +295,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('result', 'proc-1', {
+    adapter.currentSession!.emit('result', {
       cost: 0,
       tokensInput: 10,
       tokensOutput: 5,
@@ -274,7 +316,7 @@ describe('adapter events flow', () => {
     ws!.send(JSON.stringify({ type: 'chat.interrupt', chatId: 'test-chat' }));
     await sleep(50);
 
-    adapter.emit('result', 'proc-1', {
+    adapter.currentSession!.emit('result', {
       cost: 0,
       tokensInput: 10,
       tokensOutput: 5,

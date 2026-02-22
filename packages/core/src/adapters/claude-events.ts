@@ -1,30 +1,22 @@
 import path from 'node:path';
 import type { PermissionRequest, PermissionUpdate, MessageContent } from '@mainframe/types';
-import type { ClaudeProcess, ClaudeEventEmitter } from './claude-types.js';
+import type { ClaudeSession } from './claude-session.js';
 import { buildToolResultBlocks } from './claude-history.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('claude-events');
 
-export function handleStdout(
-  processId: string,
-  chunk: Buffer,
-  processes: Map<string, ClaudeProcess>,
-  emitter: ClaudeEventEmitter,
-): void {
-  const cp = processes.get(processId);
-  if (!cp) return;
-
-  cp.buffer += chunk.toString();
-  const lines = cp.buffer.split('\n');
-  cp.buffer = lines.pop() || '';
+export function handleStdout(session: ClaudeSession, chunk: Buffer): void {
+  session.state.buffer += chunk.toString();
+  const lines = session.state.buffer.split('\n');
+  session.state.buffer = lines.pop() || '';
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    log.trace({ processId, line }, 'adapter stdout');
+    log.trace({ sessionId: session.id, line }, 'adapter stdout');
     try {
       const event = JSON.parse(line.trim());
-      handleEvent(processId, event, processes, emitter);
+      handleEvent(session, event);
     } catch {
       // Not JSON, skip
     }
@@ -40,34 +32,24 @@ const INFORMATIONAL_PATTERNS = [
   /^Cloning into/,
 ];
 
-export function handleStderr(processId: string, chunk: Buffer, emitter: ClaudeEventEmitter): void {
+export function handleStderr(session: ClaudeSession, chunk: Buffer): void {
   const message = chunk.toString().trim();
   if (!message) return;
   if (INFORMATIONAL_PATTERNS.some((p) => p.test(message))) return;
-  emitter.emit('error', processId, new Error(message));
+  session.emit('error', new Error(message));
 }
 
-function handleSystemEvent(
-  processId: string,
-  event: Record<string, unknown>,
-  cp: ClaudeProcess,
-  emitter: ClaudeEventEmitter,
-): void {
+function handleSystemEvent(session: ClaudeSession, event: Record<string, unknown>): void {
   if (event.subtype === 'init') {
-    cp.chatId = event.session_id as string;
-    cp.status = 'ready';
-    emitter.emit('init', processId, event.session_id as string, event.model as string, event.tools as string[]);
+    session.state.chatId = event.session_id as string;
+    session.state.status = 'ready';
+    session.emit('init', event.session_id as string, event.model as string, event.tools as string[]);
   } else if (event.subtype === 'compact_boundary') {
-    emitter.emit('compact', processId);
+    session.emit('compact');
   }
 }
 
-function handleAssistantEvent(
-  processId: string,
-  event: Record<string, unknown>,
-  cp: ClaudeProcess,
-  emitter: ClaudeEventEmitter,
-): void {
+function handleAssistantEvent(session: ClaudeSession, event: Record<string, unknown>): void {
   const message = event.message as {
     model?: string;
     content: MessageContent[];
@@ -79,17 +61,17 @@ function handleAssistantEvent(
     };
   };
   if (message?.usage) {
-    cp.lastAssistantUsage = message.usage;
+    session.state.lastAssistantUsage = message.usage;
   }
   if (message?.content) {
-    emitter.emit('message', processId, message.content, {
+    session.emit('message', message.content, {
       model: message.model,
       usage: message.usage,
     });
   }
 }
 
-function handleUserEvent(processId: string, event: Record<string, unknown>, emitter: ClaudeEventEmitter): void {
+function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>): void {
   // Live stream handles ONLY tool_result blocks from user events.
   // Text/image blocks in user entries are intentionally ignored here because:
   //   - User-typed text: already created as a ChatMessage by chat-manager.sendMessage()
@@ -106,7 +88,7 @@ function handleUserEvent(processId: string, event: Record<string, unknown>, emit
   const toolResultContent: MessageContent[] = buildToolResultBlocks(message as Record<string, unknown>, tur);
 
   if (toolResultContent.length > 0) {
-    emitter.emit('tool_result', processId, toolResultContent);
+    session.emit('tool_result', toolResultContent);
   }
 
   for (const block of message.content) {
@@ -114,13 +96,13 @@ function handleUserEvent(processId: string, event: Record<string, unknown>, emit
       const text = typeof block.content === 'string' ? block.content : '';
       const planMatch = text.match(/Your plan has been saved to: (\/\S+\.md)/);
       if (planMatch?.[1]) {
-        emitter.emit('plan_file', processId, planMatch[1].trim());
+        session.emit('plan_file', planMatch[1].trim());
       }
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';
       const skillMatch = text.match(/^Base directory for this skill: (.+)/m);
       if (skillMatch?.[1]) {
-        emitter.emit('skill_file', processId, path.join(skillMatch[1].trim(), 'SKILL.md'));
+        session.emit('skill_file', path.join(skillMatch[1].trim(), 'SKILL.md'));
       }
     }
   }
@@ -128,16 +110,12 @@ function handleUserEvent(processId: string, event: Record<string, unknown>, emit
   if (typeof rawContent === 'string') {
     const skillMatch = rawContent.match(/^Base directory for this skill: (.+)/m);
     if (skillMatch?.[1]) {
-      emitter.emit('skill_file', processId, path.join(skillMatch[1].trim(), 'SKILL.md'));
+      session.emit('skill_file', path.join(skillMatch[1].trim(), 'SKILL.md'));
     }
   }
 }
 
-function handleControlRequestEvent(
-  processId: string,
-  event: Record<string, unknown>,
-  emitter: ClaudeEventEmitter,
-): void {
+function handleControlRequestEvent(session: ClaudeSession, event: Record<string, unknown>): void {
   const request = event.request as Record<string, unknown>;
   if (request?.subtype === 'can_use_tool') {
     const permRequest: PermissionRequest = {
@@ -148,19 +126,14 @@ function handleControlRequestEvent(
       suggestions: (request.permission_suggestions as PermissionUpdate[]) || [],
       decisionReason: request.decision_reason as string | undefined,
     };
-    emitter.emit('permission', processId, permRequest);
+    session.emit('permission', permRequest);
   } else {
     log.warn({ subtype: request?.subtype }, 'Unhandled control_request subtype');
   }
 }
 
-function handleResultEvent(
-  processId: string,
-  event: Record<string, unknown>,
-  cp: ClaudeProcess,
-  emitter: ClaudeEventEmitter,
-): void {
-  const lastUsage = cp.lastAssistantUsage;
+function handleResultEvent(session: ClaudeSession, event: Record<string, unknown>): void {
+  const lastUsage = session.state.lastAssistantUsage;
   const usage =
     lastUsage ??
     (event.usage as
@@ -174,9 +147,9 @@ function handleResultEvent(
   const tokensInput =
     (usage?.input_tokens || 0) + (usage?.cache_creation_input_tokens || 0) + (usage?.cache_read_input_tokens || 0);
   const tokensOutput = usage?.output_tokens || 0;
-  cp.lastAssistantUsage = undefined;
+  session.state.lastAssistantUsage = undefined;
 
-  emitter.emit('result', processId, {
+  session.emit('result', {
     cost: (event.total_cost_usd as number) || 0,
     tokensInput,
     tokensOutput,
@@ -186,27 +159,19 @@ function handleResultEvent(
   });
 }
 
-function handleEvent(
-  processId: string,
-  event: Record<string, unknown>,
-  processes: Map<string, ClaudeProcess>,
-  emitter: ClaudeEventEmitter,
-): void {
-  const cp = processes.get(processId);
-  if (!cp) return;
-
-  log.debug({ processId, type: event.type }, 'adapter event');
+function handleEvent(session: ClaudeSession, event: Record<string, unknown>): void {
+  log.debug({ sessionId: session.id, type: event.type }, 'adapter event');
 
   switch (event.type) {
     case 'system':
-      return handleSystemEvent(processId, event, cp, emitter);
+      return handleSystemEvent(session, event);
     case 'assistant':
-      return handleAssistantEvent(processId, event, cp, emitter);
+      return handleAssistantEvent(session, event);
     case 'user':
-      return handleUserEvent(processId, event, emitter);
+      return handleUserEvent(session, event);
     case 'control_request':
-      return handleControlRequestEvent(processId, event, emitter);
+      return handleControlRequestEvent(session, event);
     case 'result':
-      return handleResultEvent(processId, event, cp, emitter);
+      return handleResultEvent(session, event);
   }
 }

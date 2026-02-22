@@ -6,11 +6,58 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import { BaseSession } from '../adapters/base-session.js';
+import type {
+  AdapterProcess,
+  AdapterSession,
+  SessionOptions,
+  SessionSpawnOptions,
+  DaemonEvent,
+} from '@mainframe/types';
+
+class MockSession extends BaseSession {
+  readonly id = 'proc-1';
+  readonly adapterId: string;
+  readonly projectPath: string;
+  private _isSpawned = false;
+
+  constructor(private adapter: MockAdapter) {
+    super();
+    this.adapterId = adapter.id;
+    this.projectPath = '/tmp';
+  }
+
+  get isSpawned(): boolean {
+    return this._isSpawned;
+  }
+
+  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
+    this._isSpawned = true;
+    return {
+      id: this.id,
+      adapterId: this.adapterId,
+      chatId: '',
+      pid: 0,
+      status: 'ready',
+      projectPath: this.projectPath,
+    };
+  }
+
+  async kill(): Promise<void> {
+    this._isSpawned = false;
+  }
+
+  getProcessInfo(): AdapterProcess | null {
+    return this._isSpawned
+      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
+      : null;
+  }
+}
 
 class MockAdapter extends BaseAdapter {
   id = 'claude';
   name = 'Mock';
+  currentSession: MockSession | null = null;
 
   async isInstalled() {
     return true;
@@ -18,20 +65,12 @@ class MockAdapter extends BaseAdapter {
   async getVersion() {
     return '1.0';
   }
-  async spawn(_opts: SpawnOptions): Promise<AdapterProcess> {
-    return {
-      id: 'proc-1',
-      adapterId: 'claude',
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: '/tmp',
-      model: 'test',
-    };
+
+  override createSession(_options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this);
+    return this.currentSession;
   }
-  async kill() {}
-  async sendMessage() {}
-  async respondToPermission(_p: AdapterProcess, _r: PermissionResponse) {}
+
   override async loadHistory() {
     return [];
   }
@@ -150,8 +189,8 @@ describe('send-message flow', () => {
     });
 
     // Simulate adapter responding with an assistant message
-    adapter.emit('message', 'proc-1', [{ type: 'text', text: 'Hello from assistant!' }]);
-    adapter.emit('result', 'proc-1', {
+    adapter.currentSession!.emit('message', [{ type: 'text', text: 'Hello from assistant!' }]);
+    adapter.currentSession!.emit('result', {
       subtype: 'success',
       cost: 0.001,
       tokensInput: 100,

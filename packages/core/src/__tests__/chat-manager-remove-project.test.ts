@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EventEmitter } from 'node:events';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import { ChatManager } from '../chat/chat-manager.js';
@@ -28,12 +27,8 @@ function makeDb(chats: { id: string }[] = []) {
   } as unknown as DatabaseManager;
 }
 
-function makeAdapters(kill?: ReturnType<typeof vi.fn>): AdapterRegistry {
-  // EventHandler.setup() calls adapters.get('claude').on(...) — return an
-  // EventEmitter-compatible stub so construction doesn't throw.
-  const stub = new EventEmitter() as EventEmitter & { kill?: typeof kill };
-  if (kill) stub.kill = kill;
-  const get = vi.fn().mockReturnValue(kill ? stub : undefined);
+function makeAdapters(): AdapterRegistry {
+  const get = vi.fn().mockReturnValue(undefined);
   return { get, list: vi.fn(), all: vi.fn().mockReturnValue([]) } as unknown as AdapterRegistry;
 }
 
@@ -49,23 +44,26 @@ describe('ChatManager.removeProject', () => {
 
   it('kills active process before deleting', async () => {
     const db = makeDb([{ id: 'chat-1' }]);
-    const kill = vi.fn().mockResolvedValue(undefined);
-    const adapters = makeAdapters(kill);
+    const adapters = makeAdapters();
 
     const manager = new ChatManager(db, adapters);
 
-    // Inject a fake active chat with a running process
-    const fakeProcess = { id: 'proc-1' } as any;
+    // Inject a fake active chat with a running session
+    const killSpy = vi.fn().mockResolvedValue(undefined);
+    const removeAllListenersSpy = vi.fn();
+    const fakeSession = {
+      isSpawned: true,
+      kill: killSpy,
+      removeAllListeners: removeAllListenersSpy,
+    } as any;
     (manager as any).activeChats.set('chat-1', {
       chat: { id: 'chat-1', adapterId: 'claude', projectId: 'proj-1' },
-      process: fakeProcess,
+      session: fakeSession,
     });
-    (manager as any).processToChat.set('proc-1', 'chat-1');
 
     await manager.removeProject('proj-1');
 
-    expect(kill).toHaveBeenCalledWith(fakeProcess);
-    expect((manager as any).processToChat.has('proc-1')).toBe(false);
+    expect(killSpy).toHaveBeenCalled();
     expect((manager as any).activeChats.has('chat-1')).toBe(false);
     expect(db.projects.removeWithChats).toHaveBeenCalledWith('proj-1');
   });

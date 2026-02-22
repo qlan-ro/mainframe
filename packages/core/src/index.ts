@@ -2,7 +2,7 @@
 import { join } from 'node:path';
 import { getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
-import { AdapterRegistry, ClaudeAdapter } from './adapters/index.js';
+import { AdapterRegistry } from './adapters/index.js';
 import { ChatManager } from './chat/index.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
@@ -25,14 +25,9 @@ async function main(): Promise<void> {
 
   logger.info('Daemon ready');
 
-  const killAdapters = () => {
-    const claude = adapters.get('claude') as ClaudeAdapter | undefined;
-    claude?.killAll();
-  };
-
   const shutdown = async () => {
     logger.info('Shutting down...');
-    killAdapters();
+    adapters.killAll();
     await server.stop();
     db.close();
     process.exit(0);
@@ -42,7 +37,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', shutdown);
   process.on('uncaughtException', (err) => {
     logger.fatal({ err }, 'Uncaught exception');
-    killAdapters();
+    adapters.killAll();
     process.exit(1);
   });
 }

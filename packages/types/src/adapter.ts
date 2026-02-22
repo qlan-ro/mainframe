@@ -1,5 +1,43 @@
 import type { PermissionMode } from './settings.js';
 
+export interface SessionOptions {
+  projectPath: string;
+  chatId?: string; // Claude session ID for resume
+}
+
+export interface SessionSpawnOptions {
+  model?: string;
+  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
+}
+
+export interface AdapterSession {
+  readonly id: string;
+  readonly adapterId: string;
+  readonly projectPath: string;
+  readonly isSpawned: boolean;
+
+  spawn(options?: SessionSpawnOptions): Promise<AdapterProcess>;
+  kill(): Promise<void>;
+  getProcessInfo(): AdapterProcess | null;
+
+  sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
+  respondToPermission(response: PermissionResponse): Promise<void>;
+  interrupt(): Promise<void>;
+  setModel(model: string): Promise<void>;
+  setPermissionMode(mode: string): Promise<void>;
+  sendCommand(command: string, args?: string): Promise<void>;
+
+  getContextFiles(): { global: import('./context.js').ContextFile[]; project: import('./context.js').ContextFile[] };
+  loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
+  extractPlanFiles(): Promise<string[]>;
+  extractSkillFiles(): Promise<import('./context.js').SkillFileEntry[]>;
+
+  on(event: string, listener: (...args: any[]) => void): this;
+  off(event: string, listener: (...args: any[]) => void): this;
+  removeAllListeners(event?: string): this;
+  emit(event: string, ...args: any[]): boolean;
+}
+
 export interface AdapterInfo {
   id: string;
   name: string;
@@ -88,14 +126,19 @@ export interface Adapter {
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
   listModels(): Promise<AdapterModel[]>;
-  spawn(options: SpawnOptions): Promise<AdapterProcess>;
-  kill(process: AdapterProcess): Promise<void>;
+
+  createSession(options: SessionOptions): AdapterSession;
+  killAll(): void;
+
+  // Deprecated: kept temporarily during migration; use AdapterSession methods instead.
+  spawn?(options: SpawnOptions): Promise<AdapterProcess>;
+  kill?(process: AdapterProcess): Promise<void>;
   interrupt?(process: AdapterProcess): Promise<void>;
   setPermissionMode?(process: AdapterProcess, mode: PermissionMode): Promise<void>;
   setModel?(process: AdapterProcess, model: string): Promise<void>;
   sendCommand?(process: AdapterProcess, command: string, args?: string): Promise<void>;
-  sendMessage(process: AdapterProcess, message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
-  respondToPermission(process: AdapterProcess, response: PermissionResponse): Promise<void>;
+  sendMessage?(process: AdapterProcess, message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
+  respondToPermission?(process: AdapterProcess, response: PermissionResponse): Promise<void>;
   loadHistory?(sessionId: string, projectPath: string): Promise<import('./chat.js').ChatMessage[]>;
   extractPlanFiles?(sessionId: string, projectPath: string): Promise<string[]>;
   extractSkillFiles?(sessionId: string, projectPath: string): Promise<import('./context.js').SkillFileEntry[]>;

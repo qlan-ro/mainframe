@@ -4,11 +4,19 @@ import { Writable } from 'node:stream';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { ClaudeAdapter } from '../adapters/claude.js';
-import type { Chat, AdapterProcess, SpawnOptions } from '@mainframe/types';
+import { BaseSession } from '../adapters/base-session.js';
+import type {
+  Chat,
+  AdapterProcess,
+  AdapterSession,
+  SessionOptions,
+  SessionSpawnOptions,
+  ChatMessage,
+} from '@mainframe/types';
 
-// ── Helpers: capture stdin writes from ClaudeAdapter ────────────────
+// ── Helpers: capture stdin writes from ClaudeSession ────────────────
 
-function createMockChildProcess(chatId: string) {
+function createMockChildProcess(_chatId: string) {
   const written: string[] = [];
   const stdin = new Writable({
     write(chunk, _encoding, callback) {
@@ -24,53 +32,40 @@ function createMockChildProcess(chatId: string) {
     killed: false,
     kill: vi.fn(),
   });
-  return { child, written, chatId };
+  return { child, written };
 }
 
-function injectMockProcess(adapter: ClaudeAdapter, processId: string, chatId: string) {
+/**
+ * Creates a ClaudeSession via adapter.createSession() and injects a mock
+ * child process so that setPermissionMode / setModel can write to stdin.
+ */
+function injectMockChild(adapter: ClaudeAdapter, chatId: string) {
   const mock = createMockChildProcess(chatId);
-  // Access private map — acceptable in tests
-  (adapter as any).processes.set(processId, {
-    id: processId,
-    adapterId: 'claude',
-    chatId,
-    pid: mock.child.pid,
-    status: 'ready',
-    projectPath: '/tmp',
-    model: 'test',
-    child: mock.child,
-    buffer: '',
-  });
-  return mock;
+  const session = adapter.createSession({ projectPath: '/tmp', chatId }) as any;
+  // Inject mock child — state.child being non-null makes isSpawned true
+  session.state.child = mock.child;
+  session.state.pid = mock.child.pid;
+  session.state.status = 'ready';
+  return { session, written: mock.written };
 }
 
 // ── ClaudeAdapter: setPermissionMode & setModel ─────────────────────
 
 describe('ClaudeAdapter control requests', () => {
   let adapter: ClaudeAdapter;
-  const processId = 'proc-1';
   const chatId = 'session-abc';
-  const process: AdapterProcess = {
-    id: processId,
-    adapterId: 'claude',
-    chatId,
-    pid: 12345,
-    status: 'ready',
-    projectPath: '/tmp',
-    model: 'test',
-  };
 
   beforeEach(() => {
     adapter = new ClaudeAdapter();
   });
 
   it('setPermissionMode sends correct control_request payload', async () => {
-    const mock = injectMockProcess(adapter, processId, chatId);
+    const { session, written } = injectMockChild(adapter, chatId);
 
-    await adapter.setPermissionMode(process, 'default');
+    await session.setPermissionMode('default');
 
-    expect(mock.written).toHaveLength(1);
-    const payload = JSON.parse(mock.written[0].trim());
+    expect(written).toHaveLength(1);
+    const payload = JSON.parse(written[0]!.trim());
     expect(payload.type).toBe('control_request');
     expect(payload.request_id).toBeTruthy();
     expect(payload.request).toEqual({
@@ -80,11 +75,11 @@ describe('ClaudeAdapter control requests', () => {
   });
 
   it('setPermissionMode maps yolo to bypassPermissions', async () => {
-    const mock = injectMockProcess(adapter, processId, chatId);
+    const { session, written } = injectMockChild(adapter, chatId);
 
-    await adapter.setPermissionMode(process, 'yolo');
+    await session.setPermissionMode('yolo');
 
-    const payload = JSON.parse(mock.written[0].trim());
+    const payload = JSON.parse(written[0]!.trim());
     expect(payload.request.mode).toBe('bypassPermissions');
   });
 
@@ -92,25 +87,22 @@ describe('ClaudeAdapter control requests', () => {
     const modes = ['default', 'plan', 'acceptEdits'];
 
     for (const mode of modes) {
-      const mock = injectMockProcess(adapter, processId, chatId);
+      const { session, written } = injectMockChild(adapter, chatId);
 
-      await adapter.setPermissionMode(process, mode);
+      await session.setPermissionMode(mode);
 
-      const payload = JSON.parse(mock.written[0].trim());
+      const payload = JSON.parse(written[0]!.trim());
       expect(payload.request.mode).toBe(mode);
-
-      // Clean up for next iteration
-      (adapter as any).processes.delete(processId);
     }
   });
 
   it('setModel sends correct control_request payload', async () => {
-    const mock = injectMockProcess(adapter, processId, chatId);
+    const { session, written } = injectMockChild(adapter, chatId);
 
-    await adapter.setModel(process, 'claude-sonnet-4-5-20250929');
+    await session.setModel('claude-sonnet-4-5-20250929');
 
-    expect(mock.written).toHaveLength(1);
-    const payload = JSON.parse(mock.written[0].trim());
+    expect(written).toHaveLength(1);
+    const payload = JSON.parse(written[0]!.trim());
     expect(payload.type).toBe('control_request');
     expect(payload.request_id).toBeTruthy();
     expect(payload.request).toEqual({
@@ -119,27 +111,25 @@ describe('ClaudeAdapter control requests', () => {
     });
   });
 
-  it('setPermissionMode throws for unknown process', async () => {
-    await expect(adapter.setPermissionMode({ ...process, id: 'nonexistent' }, 'default')).rejects.toThrow(
-      'Process nonexistent not found',
-    );
+  it('setPermissionMode throws when session not spawned', async () => {
+    const session = adapter.createSession({ projectPath: '/tmp', chatId }) as any;
+    await expect(session.setPermissionMode('default')).rejects.toThrow('not spawned');
   });
 
-  it('setModel throws for unknown process', async () => {
-    await expect(adapter.setModel({ ...process, id: 'nonexistent' }, 'claude-opus-4-6')).rejects.toThrow(
-      'Process nonexistent not found',
-    );
+  it('setModel throws when session not spawned', async () => {
+    const session = adapter.createSession({ projectPath: '/tmp', chatId }) as any;
+    await expect(session.setModel('claude-opus-4-6')).rejects.toThrow('not spawned');
   });
 
   it('each control_request has a unique request_id', async () => {
-    const mock = injectMockProcess(adapter, processId, chatId);
+    const { session, written } = injectMockChild(adapter, chatId);
 
-    await adapter.setPermissionMode(process, 'default');
-    await adapter.setModel(process, 'claude-opus-4-6');
+    await session.setPermissionMode('default');
+    await session.setModel('claude-opus-4-6');
 
-    expect(mock.written).toHaveLength(2);
-    const id1 = JSON.parse(mock.written[0].trim()).request_id;
-    const id2 = JSON.parse(mock.written[1].trim()).request_id;
+    expect(written).toHaveLength(2);
+    const id1 = JSON.parse(written[0]!.trim()).request_id;
+    const id2 = JSON.parse(written[1]!.trim()).request_id;
     expect(id1).not.toBe(id2);
   });
 });
@@ -183,16 +173,91 @@ function createMockDb(chat?: Partial<Chat>) {
   };
 }
 
+/**
+ * A mock session that captures setPermissionMode/setModel writes into `written`
+ * and delegates spawn/kill counts to callbacks.
+ */
+class MockClaudeSession extends BaseSession {
+  readonly id: string;
+  readonly adapterId = 'claude';
+  readonly projectPath: string;
+  readonly written: string[] = [];
+  private _isSpawned = false;
+
+  constructor(
+    options: SessionOptions,
+    private callbacks: { onSpawn: () => void; onKill: () => void },
+  ) {
+    super();
+    this.id = `mock-${Math.random().toString(36).slice(2)}`;
+    this.projectPath = options.projectPath;
+  }
+
+  get isSpawned(): boolean {
+    return this._isSpawned;
+  }
+
+  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
+    this._isSpawned = true;
+    this.callbacks.onSpawn();
+    return {
+      id: 'proc-1',
+      adapterId: 'claude',
+      chatId: '',
+      pid: 99999,
+      status: 'ready',
+      projectPath: this.projectPath,
+    };
+  }
+
+  async kill(): Promise<void> {
+    this._isSpawned = false;
+    this.callbacks.onKill();
+  }
+
+  getProcessInfo(): AdapterProcess | null {
+    return this._isSpawned
+      ? { id: 'proc-1', adapterId: 'claude', chatId: '', pid: 99999, status: 'ready', projectPath: this.projectPath }
+      : null;
+  }
+
+  override async setPermissionMode(mode: string): Promise<void> {
+    if (!this._isSpawned) throw new Error(`Session ${this.id} not spawned`);
+    const cliMode = mode === 'yolo' ? 'bypassPermissions' : mode;
+    const payload = {
+      type: 'control_request',
+      request_id: crypto.randomUUID(),
+      request: { subtype: 'set_permission_mode', mode: cliMode },
+    };
+    this.written.push(JSON.stringify(payload) + '\n');
+  }
+
+  override async setModel(model: string): Promise<void> {
+    if (!this._isSpawned) throw new Error(`Session ${this.id} not spawned`);
+    const payload = {
+      type: 'control_request',
+      request_id: crypto.randomUUID(),
+      request: { subtype: 'set_model', model },
+    };
+    this.written.push(JSON.stringify(payload) + '\n');
+  }
+
+  override async sendMessage(): Promise<void> {}
+  override async loadHistory(): Promise<ChatMessage[]> {
+    return [];
+  }
+}
+
 describe('ChatManager.updateChatConfig — in-flight control requests', () => {
   let manager: ChatManager;
   let registry: AdapterRegistry;
   let claude: ClaudeAdapter;
   let db: ReturnType<typeof createMockDb>;
-  let killSpy: ReturnType<typeof vi.fn<(process: AdapterProcess) => Promise<void>>>;
+  let killSpy: ReturnType<typeof vi.fn>;
   let spawnCount: number;
+  let currentMockSession: MockClaudeSession | null;
 
   const chatId = 'test-chat';
-  const processId = 'proc-1';
   const sessionId = 'session-abc';
 
   beforeEach(async () => {
@@ -200,45 +265,32 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
     registry = new AdapterRegistry();
     claude = registry.get('claude') as ClaudeAdapter;
 
-    // Track kills and spawns
     killSpy = vi.fn();
     spawnCount = 0;
+    currentMockSession = null;
 
-    claude.spawn = async (options: SpawnOptions) => {
-      spawnCount++;
-      // Return a mock process instead of spawning real CLI
-      return {
-        id: processId,
-        adapterId: 'claude',
-        chatId: sessionId,
-        pid: 99999,
-        status: 'ready',
-        projectPath: options.projectPath,
-        model: options.model,
-      };
+    // Override createSession to return our mock session
+    claude.createSession = (options: SessionOptions): AdapterSession => {
+      const session = new MockClaudeSession(options, {
+        onSpawn: () => spawnCount++,
+        onKill: killSpy,
+      });
+      currentMockSession = session;
+      return session;
     };
-    claude.kill = killSpy;
 
     manager = new ChatManager(db as any, registry);
 
-    // Create and start the chat so it has a running process
     await manager.createChat('proj-1', 'claude', 'claude-opus-4-6', 'default');
     await manager.startChat(chatId);
     spawnCount = 0; // reset after initial spawn
-
-    // Inject a mock child process so setPermissionMode/setModel can write to stdin
-    injectMockProcess(claude, processId, sessionId);
   });
 
   it('permission mode change uses control_request, no kill or restart', async () => {
     await manager.updateChatConfig(chatId, undefined, undefined, 'yolo');
 
-    // Should NOT have killed the process
     expect(killSpy).not.toHaveBeenCalled();
-    // Should NOT have spawned a new process
     expect(spawnCount).toBe(0);
-
-    // Verify DB was updated
     expect(db.chats.update).toHaveBeenCalledWith(chatId, { permissionMode: 'yolo' });
   });
 
@@ -262,18 +314,10 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
   });
 
   it('yolo mode is mapped to bypassPermissions by the adapter', async () => {
-    const mock = (claude as any).processes.get(processId);
-    const written: string[] = [];
-    const originalWrite = mock.child.stdin.write.bind(mock.child.stdin);
-    mock.child.stdin.write = (chunk: any, ...args: any[]) => {
-      written.push(chunk.toString());
-      return originalWrite(chunk, ...args);
-    };
-
     await manager.updateChatConfig(chatId, undefined, undefined, 'yolo');
 
-    // ChatManager passes 'yolo' to the adapter; the adapter maps it to 'bypassPermissions'
-    const permPayload = written.find((w) => {
+    // currentMockSession.written has the payload written by setPermissionMode
+    const permPayload = currentMockSession!.written.find((w) => {
       try {
         const p = JSON.parse(w.trim());
         return p.request?.subtype === 'set_permission_mode';
@@ -304,7 +348,6 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
 
     expect(killSpy).not.toHaveBeenCalled();
     expect(spawnCount).toBe(0);
-    // update should not be called since nothing changed
     expect(db.chats.update).not.toHaveBeenCalledWith(chatId, expect.anything());
   });
 });

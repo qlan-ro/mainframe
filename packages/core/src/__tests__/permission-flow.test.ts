@@ -6,18 +6,65 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
+import { BaseSession } from '../adapters/base-session.js';
 import type {
   AdapterProcess,
   PermissionResponse,
-  SpawnOptions,
+  AdapterSession,
+  SessionOptions,
+  SessionSpawnOptions,
   DaemonEvent,
   PermissionRequest,
 } from '@mainframe/types';
+
+class MockSession extends BaseSession {
+  readonly id = 'proc-1';
+  readonly adapterId: string;
+  readonly projectPath: string;
+  private _isSpawned = false;
+
+  constructor(private adapter: MockAdapter) {
+    super();
+    this.adapterId = adapter.id;
+    this.projectPath = '/tmp';
+  }
+
+  get isSpawned(): boolean {
+    return this._isSpawned;
+  }
+
+  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
+    this._isSpawned = true;
+    return {
+      id: this.id,
+      adapterId: this.adapterId,
+      chatId: '',
+      pid: 0,
+      status: 'ready',
+      projectPath: this.projectPath,
+    };
+  }
+
+  async kill(): Promise<void> {
+    this._isSpawned = false;
+  }
+
+  getProcessInfo(): AdapterProcess | null {
+    return this._isSpawned
+      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
+      : null;
+  }
+
+  override async respondToPermission(r: PermissionResponse): Promise<void> {
+    this.adapter.respondToPermissionSpy(r);
+  }
+}
 
 class MockAdapter extends BaseAdapter {
   id = 'claude';
   name = 'Mock';
   respondToPermissionSpy = vi.fn();
+  currentSession: MockSession | null = null;
 
   async isInstalled() {
     return true;
@@ -25,22 +72,12 @@ class MockAdapter extends BaseAdapter {
   async getVersion() {
     return '1.0';
   }
-  async spawn(_opts: SpawnOptions): Promise<AdapterProcess> {
-    return {
-      id: 'proc-1',
-      adapterId: 'claude',
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: '/tmp',
-      model: 'test',
-    };
+
+  override createSession(_options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this);
+    return this.currentSession;
   }
-  async kill() {}
-  async sendMessage() {}
-  async respondToPermission(_p: AdapterProcess, r: PermissionResponse) {
-    this.respondToPermissionSpy(r);
-  }
+
   override async loadHistory() {
     return [];
   }
@@ -170,9 +207,8 @@ describe('permission flow', () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'default');
 
-    adapter.emit(
+    adapter.currentSession!.emit(
       'permission',
-      'proc-1',
       makePermissionRequest('AskUserQuestion', {
         input: {
           questions: [{ question: 'Which approach?', header: 'Approach', options: [], multiSelect: false }],
@@ -189,7 +225,7 @@ describe('permission flow', () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'yolo');
 
-    adapter.emit('permission', 'proc-1', makePermissionRequest('Bash'));
+    adapter.currentSession!.emit('permission', makePermissionRequest('Bash'));
     await sleep(50);
 
     expect(events).toHaveLength(0);
@@ -200,9 +236,8 @@ describe('permission flow', () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'yolo');
 
-    adapter.emit(
+    adapter.currentSession!.emit(
       'permission',
-      'proc-1',
       makePermissionRequest('AskUserQuestion', {
         input: { questions: [] },
       }),
@@ -217,9 +252,8 @@ describe('permission flow', () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'yolo');
 
-    adapter.emit(
+    adapter.currentSession!.emit(
       'permission',
-      'proc-1',
       makePermissionRequest('ExitPlanMode', {
         input: { plan: 'Step 1: ...' },
       }),
@@ -235,7 +269,10 @@ describe('permission flow', () => {
     await setupAndResume(adapter, 'default');
 
     // Queue a permission so the adapter has a pending request
-    adapter.emit('permission', 'proc-1', makePermissionRequest('Bash', { requestId: 'req-42', toolUseId: 'tu-42' }));
+    adapter.currentSession!.emit(
+      'permission',
+      makePermissionRequest('Bash', { requestId: 'req-42', toolUseId: 'tu-42' }),
+    );
     await sleep(50);
 
     // Client responds via WS
@@ -276,17 +313,15 @@ describe('permission flow', () => {
     });
 
     // Emit first permission
-    adapter.emit(
+    adapter.currentSession!.emit(
       'permission',
-      'proc-1',
       makePermissionRequest('Bash', { requestId: 'req-1', toolUseId: 'tu-1', input: { command: 'ls' } }),
     );
     await sleep(50);
 
     // Emit second permission — should be queued, NOT emitted yet
-    adapter.emit(
+    adapter.currentSession!.emit(
       'permission',
-      'proc-1',
       makePermissionRequest('Write', {
         requestId: 'req-2',
         toolUseId: 'tu-2',

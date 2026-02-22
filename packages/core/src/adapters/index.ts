@@ -20,6 +20,12 @@ export class AdapterRegistry {
     return [...this.adapters.values()];
   }
 
+  killAll(): void {
+    for (const adapter of this.adapters.values()) {
+      adapter.killAll();
+    }
+  }
+
   async list(): Promise<AdapterInfo[]> {
     const infos: AdapterInfo[] = [];
     for (const adapter of this.adapters.values()) {
@@ -41,3 +47,5 @@ export class AdapterRegistry {
 
 export { ClaudeAdapter } from './claude.js';
 export { BaseAdapter } from './base.js';
+export { BaseSession } from './base-session.js';
+export { ClaudeSession } from './claude-session.js';

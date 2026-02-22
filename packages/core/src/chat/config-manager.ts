@@ -8,7 +8,6 @@ import type { ActiveChat } from './types.js';
 export interface ConfigManagerDeps {
   adapters: AdapterRegistry;
   db: DatabaseManager;
-  processToChat: Map<string, string>;
   startingChats: Map<string, Promise<void>>;
   getActiveChat: (chatId: string) => ActiveChat | undefined;
   startChat: (chatId: string) => Promise<void>;
@@ -36,12 +35,9 @@ export class ChatConfigManager {
     const modeChanged = permissionMode !== undefined && permissionMode !== active.chat.permissionMode;
     if (!adapterChanged && !modelChanged && !modeChanged) return;
 
-    if (active.process && !adapterChanged) {
-      const adapter = this.deps.adapters.get(active.chat.adapterId);
-      if (adapter) {
-        if (modelChanged) await adapter.setModel?.(active.process, model!);
-        if (modeChanged) await adapter.setPermissionMode?.(active.process, permissionMode!);
-      }
+    if (active.session?.isSpawned && !adapterChanged) {
+      if (modelChanged) await active.session.setModel(model!);
+      if (modeChanged) await active.session.setPermissionMode(permissionMode!);
       const updates: Partial<Chat> = {};
       if (modelChanged) {
         updates.model = model;
@@ -65,11 +61,10 @@ export class ChatConfigManager {
       }
     }
 
-    if (active.process) {
-      const adapter = this.deps.adapters.get(active.chat.adapterId);
-      if (adapter) await adapter.kill(active.process);
-      this.deps.processToChat.delete(active.process.id);
-      active.process = null;
+    if (active.session?.isSpawned) {
+      await active.session.kill();
+      active.session.removeAllListeners();
+      active.session = null;
     }
 
     const updates: Partial<Chat> = {};
@@ -97,11 +92,10 @@ export class ChatConfigManager {
     if (active.chat.claudeSessionId) throw new Error('Cannot enable worktree after session has started');
     if (active.chat.worktreePath) return;
 
-    if (active.process) {
-      const adapter = this.deps.adapters.get(active.chat.adapterId);
-      if (adapter) await adapter.kill(active.process);
-      this.deps.processToChat.delete(active.process.id);
-      active.process = null;
+    if (active.session?.isSpawned) {
+      await active.session.kill();
+      active.session.removeAllListeners();
+      active.session = null;
     }
 
     const project = this.deps.db.projects.get(active.chat.projectId);
@@ -120,11 +114,10 @@ export class ChatConfigManager {
     if (!active?.chat.worktreePath) return;
     if (active.chat.claudeSessionId) throw new Error('Cannot disable worktree after session has started');
 
-    if (active.process) {
-      const adapter = this.deps.adapters.get(active.chat.adapterId);
-      if (adapter) await adapter.kill(active.process);
-      this.deps.processToChat.delete(active.process.id);
-      active.process = null;
+    if (active.session?.isSpawned) {
+      await active.session.kill();
+      active.session.removeAllListeners();
+      active.session = null;
     }
 
     const project = this.deps.db.projects.get(active.chat.projectId);

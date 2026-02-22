@@ -2,13 +2,65 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
-import type { ChatMessage, AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import { BaseSession } from '../adapters/base-session.js';
+import type {
+  ChatMessage,
+  AdapterProcess,
+  SessionOptions,
+  SessionSpawnOptions,
+  AdapterSession,
+  DaemonEvent,
+} from '@mainframe/types';
 
 // ── Mock adapter & DB (infrastructure, not what we're testing) ──────
+
+class MockSession extends BaseSession {
+  readonly id = 'proc-1';
+  readonly adapterId: string;
+  readonly projectPath: string;
+  private _isSpawned = false;
+
+  constructor(adapterId: string, projectPath: string) {
+    super();
+    this.adapterId = adapterId;
+    this.projectPath = projectPath;
+  }
+
+  get isSpawned(): boolean {
+    return this._isSpawned;
+  }
+
+  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
+    this._isSpawned = true;
+    return {
+      id: this.id,
+      adapterId: this.adapterId,
+      chatId: '',
+      pid: 0,
+      status: 'ready',
+      projectPath: this.projectPath,
+    };
+  }
+
+  async kill(): Promise<void> {
+    this._isSpawned = false;
+  }
+
+  getProcessInfo(): AdapterProcess | null {
+    return this._isSpawned
+      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
+      : null;
+  }
+
+  override async loadHistory(): Promise<ChatMessage[]> {
+    return [];
+  }
+}
 
 class MockAdapter extends BaseAdapter {
   id = 'mock';
   name = 'Mock';
+  currentSession: MockSession | null = null;
 
   async isInstalled() {
     return true;
@@ -16,14 +68,10 @@ class MockAdapter extends BaseAdapter {
   async getVersion() {
     return '1.0';
   }
-  async spawn(_options: SpawnOptions): Promise<AdapterProcess> {
-    return { id: 'proc-1', adapterId: 'mock', chatId: '', pid: 0, status: 'ready', projectPath: '/tmp', model: 'test' };
-  }
-  async kill() {}
-  async sendMessage() {}
-  async respondToPermission(_process: AdapterProcess, _response: PermissionResponse) {}
-  override async loadHistory(): Promise<ChatMessage[]> {
-    return [];
+
+  override createSession(options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this.id, options.projectPath);
+    return this.currentSession;
   }
 }
 

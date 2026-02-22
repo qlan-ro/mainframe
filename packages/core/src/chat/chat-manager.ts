@@ -5,6 +5,7 @@ import type {
   PermissionRequest,
   PermissionResponse,
   DaemonEvent,
+  AdapterSession,
   SessionMention,
   SessionContext,
 } from '@mainframe/types';
@@ -21,20 +22,20 @@ import { PlanModeHandler } from './plan-mode-handler.js';
 import { ChatPermissionHandler } from './permission-handler.js';
 import { ChatConfigManager } from './config-manager.js';
 import { ChatLifecycleManager } from './lifecycle-manager.js';
-import { EventHandler, type ChatLookup } from './event-handler.js';
+import { EventHandler } from './event-handler.js';
 import type { ActiveChat } from './types.js';
 
 const logger = createChildLogger('chat-manager');
 
-export class ChatManager extends EventEmitter implements ChatLookup {
+export class ChatManager extends EventEmitter {
   private activeChats = new Map<string, ActiveChat>();
-  private processToChat = new Map<string, string>();
   private messages = new MessageCache();
   private permissions: PermissionManager;
   private planMode: PlanModeHandler;
   private permissionHandler: ChatPermissionHandler;
   private configManager: ChatConfigManager;
   private lifecycle: ChatLifecycleManager;
+  private eventHandler: EventHandler;
 
   constructor(
     private db: DatabaseManager,
@@ -43,11 +44,17 @@ export class ChatManager extends EventEmitter implements ChatLookup {
   ) {
     super();
     this.permissions = new PermissionManager(db, adapters);
+    this.eventHandler = new EventHandler(
+      this.db,
+      this.messages,
+      this.permissions,
+      (chatId) => this.activeChats.get(chatId),
+      (e) => this.emitEvent(e),
+    );
     this.planMode = new PlanModeHandler({
       permissions: this.permissions,
       messages: this.messages,
       db: this.db,
-      adapters: this.adapters,
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       emitEvent: (event) => this.emitEvent(event),
       startChat: (chatId) => this.lifecycle.startChat(chatId),
@@ -58,18 +65,16 @@ export class ChatManager extends EventEmitter implements ChatLookup {
       adapters: this.adapters,
       attachmentStore: this.attachmentStore,
       activeChats: this.activeChats,
-      processToChat: this.processToChat,
       messages: this.messages,
       permissions: this.permissions,
       emitEvent: (event) => this.emitEvent(event),
+      attachSession: (chatId, session) => this.eventHandler.attachSession(chatId, session),
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,
       planMode: this.planMode,
       messages: this.messages,
-      adapters: this.adapters,
       db: this.db,
-      processToChat: this.processToChat,
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       startChat: (chatId) => this.lifecycle.startChat(chatId),
       emitEvent: (event) => this.emitEvent(event),
@@ -79,25 +84,11 @@ export class ChatManager extends EventEmitter implements ChatLookup {
     this.configManager = new ChatConfigManager({
       adapters: this.adapters,
       db: this.db,
-      processToChat: this.processToChat,
       startingChats: this.lifecycle.getStartingChats(),
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       startChat: (chatId) => this.lifecycle.startChat(chatId),
       emitEvent: (event) => this.emitEvent(event),
     });
-    new EventHandler(this, this.db, this.adapters, this.messages, this.permissions, (e) => this.emitEvent(e)).setup();
-  }
-
-  getActiveChat(chatId: string): ActiveChat | undefined {
-    return this.activeChats.get(chatId);
-  }
-
-  getChatIdForProcess(processId: string): string | undefined {
-    return this.processToChat.get(processId);
-  }
-
-  deleteProcessMapping(processId: string): void {
-    this.processToChat.delete(processId);
   }
 
   async createChat(
@@ -153,16 +144,14 @@ export class ChatManager extends EventEmitter implements ChatLookup {
   }
 
   async sendMessage(chatId: string, content: string, attachmentIds?: string[]): Promise<void> {
-    if (!this.activeChats.get(chatId)?.process) {
+    const active = this.activeChats.get(chatId);
+    if (!active?.session?.isSpawned) {
       await this.lifecycle.startChat(chatId);
     }
 
-    const active = this.activeChats.get(chatId);
-    if (!active?.process) throw new Error(`Chat ${chatId} not running`);
+    const postStart = this.activeChats.get(chatId);
+    if (!postStart?.session?.isSpawned) throw new Error(`Chat ${chatId} not running`);
     logger.info({ chatId }, 'user message sent');
-
-    const adapter = this.adapters.get(active.chat.adapterId);
-    if (!adapter) throw new Error(`Adapter not found`);
 
     const empty: AttachmentResult = { images: [], messageContent: [], textPrefix: [], attachmentPreviews: [] };
     const { images, messageContent, textPrefix, attachmentPreviews } =
@@ -175,7 +164,7 @@ export class ChatManager extends EventEmitter implements ChatLookup {
     const outgoingContent =
       textPrefix.length > 0 ? (content ? `${textPrefix.join('\n')}\n\n${content}` : textPrefix.join('\n')) : content;
 
-    const isQueued = active.chat.processState === 'working';
+    const isQueued = postStart.chat.processState === 'working';
     const transientMetadata: Record<string, unknown> = {};
     if (isQueued) transientMetadata.queued = true;
     if (attachmentPreviews.length > 0) transientMetadata.attachments = attachmentPreviews;
@@ -195,20 +184,20 @@ export class ChatManager extends EventEmitter implements ChatLookup {
       this.emitEvent({ type: 'context.updated', chatId });
     }
 
-    if (!active.chat.title) {
+    if (!postStart.chat.title) {
       const title = deriveTitleFromMessage(content);
-      active.chat.title = title;
+      postStart.chat.title = title;
       this.db.chats.update(chatId, { title });
-      this.emitEvent({ type: 'chat.updated', chat: active.chat });
+      this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
 
       this.lifecycle.doGenerateTitle(chatId, content).catch(() => {});
     }
 
-    active.chat.processState = 'working';
+    postStart.chat.processState = 'working';
     this.db.chats.update(chatId, { processState: 'working' });
-    this.emitEvent({ type: 'chat.updated', chat: active.chat });
+    this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
 
-    await adapter.sendMessage(active.process, outgoingContent, images.length > 0 ? images : undefined);
+    await postStart.session.sendMessage(outgoingContent, images.length > 0 ? images : undefined);
   }
 
   async respondToPermission(chatId: string, response: PermissionResponse): Promise<void> {
@@ -229,16 +218,13 @@ export class ChatManager extends EventEmitter implements ChatLookup {
     const chats = this.db.chats.list(projectId);
     for (const chat of chats) {
       const active = this.activeChats.get(chat.id);
-      if (active?.process) {
-        const adapter = this.adapters.get(active.chat.adapterId);
-        if (adapter) {
-          try {
-            await adapter.kill(active.process);
-          } catch (err) {
-            logger.warn({ err, chatId: chat.id }, 'failed to kill process on project removal');
-          }
+      if (active?.session) {
+        try {
+          await active.session.kill();
+        } catch (err) {
+          logger.warn({ err, chatId: chat.id }, 'failed to kill session on project removal');
         }
-        this.processToChat.delete(active.process.id);
+        active.session.removeAllListeners();
       }
       this.activeChats.delete(chat.id);
       this.messages.delete(chat.id);
@@ -278,13 +264,17 @@ export class ChatManager extends EventEmitter implements ChatLookup {
     if (!chat?.claudeSessionId) return [];
 
     const adapter = this.adapters.get(chat.adapterId);
-    if (!adapter?.loadHistory) return [];
+    if (!adapter) return [];
 
     const project = this.db.projects.get(chat.projectId);
     if (!project) return [];
 
     try {
-      const history = await adapter.loadHistory(chat.claudeSessionId, chat.worktreePath ?? project.path);
+      const session = adapter.createSession({
+        projectPath: chat.worktreePath ?? project.path,
+        chatId: chat.claudeSessionId,
+      });
+      const history = await session.loadHistory();
       if (history.length > 0) {
         this.messages.set(chatId, history);
         this.permissions.restorePendingPermission(chatId, history);
@@ -298,7 +288,7 @@ export class ChatManager extends EventEmitter implements ChatLookup {
 
   isChatRunning(chatId: string): boolean {
     const active = this.activeChats.get(chatId);
-    return active?.process != null;
+    return active?.session?.isSpawned === true;
   }
 
   addMention(chatId: string, mention: SessionMention): void {
@@ -308,7 +298,17 @@ export class ChatManager extends EventEmitter implements ChatLookup {
 
   async getSessionContext(chatId: string, projectPath: string): Promise<SessionContext> {
     const chat = this.getChat(chatId);
-    return getSessionContext(chatId, projectPath, this.db, this.adapters, this.attachmentStore, chat?.adapterId);
+    const active = this.activeChats.get(chatId);
+    const session = active?.session ?? undefined;
+    return getSessionContext(
+      chatId,
+      projectPath,
+      this.db,
+      this.adapters,
+      session,
+      this.attachmentStore,
+      chat?.adapterId,
+    );
   }
 
   async getPendingPermission(chatId: string): Promise<PermissionRequest | null> {

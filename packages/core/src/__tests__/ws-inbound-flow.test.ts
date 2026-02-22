@@ -6,7 +6,65 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import { BaseSession } from '../adapters/base-session.js';
+import type {
+  AdapterProcess,
+  PermissionResponse,
+  AdapterSession,
+  SessionOptions,
+  SessionSpawnOptions,
+  DaemonEvent,
+} from '@mainframe/types';
+
+class MockSession extends BaseSession {
+  readonly id = 'proc-1';
+  readonly adapterId: string;
+  readonly projectPath: string;
+  private _isSpawned = false;
+
+  constructor(private adapter: MockAdapter) {
+    super();
+    this.adapterId = adapter.id;
+    this.projectPath = '/tmp';
+  }
+
+  get isSpawned(): boolean {
+    return this._isSpawned;
+  }
+
+  async spawn(_options?: SessionSpawnOptions): Promise<AdapterProcess> {
+    this._isSpawned = true;
+    return {
+      id: this.id,
+      adapterId: this.adapterId,
+      chatId: '',
+      pid: 0,
+      status: 'ready',
+      projectPath: this.projectPath,
+    };
+  }
+
+  async kill(): Promise<void> {
+    this._isSpawned = false;
+    this.adapter.killSpy();
+  }
+
+  getProcessInfo(): AdapterProcess | null {
+    return this._isSpawned
+      ? { id: this.id, adapterId: this.adapterId, chatId: '', pid: 0, status: 'ready', projectPath: this.projectPath }
+      : null;
+  }
+
+  override async sendMessage(msg: string): Promise<void> {
+    this.adapter.sendMessageSpy(msg);
+  }
+  override async respondToPermission(r: PermissionResponse): Promise<void> {
+    this.adapter.respondToPermissionSpy(r);
+  }
+  override async interrupt(): Promise<void> {
+    this.adapter.interruptSpy();
+  }
+}
 
 class MockAdapter extends BaseAdapter {
   id = 'claude';
@@ -15,6 +73,7 @@ class MockAdapter extends BaseAdapter {
   sendMessageSpy = vi.fn();
   killSpy = vi.fn();
   interruptSpy = vi.fn();
+  currentSession: MockSession | null = null;
 
   async isInstalled() {
     return true;
@@ -22,29 +81,12 @@ class MockAdapter extends BaseAdapter {
   async getVersion() {
     return '1.0';
   }
-  async spawn(_opts: SpawnOptions): Promise<AdapterProcess> {
-    return {
-      id: 'proc-1',
-      adapterId: 'claude',
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: '/tmp',
-      model: 'test',
-    };
+
+  override createSession(_options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this);
+    return this.currentSession;
   }
-  async kill(_p: AdapterProcess) {
-    this.killSpy();
-  }
-  async interrupt(_p: AdapterProcess) {
-    this.interruptSpy();
-  }
-  async sendMessage(_p: AdapterProcess, msg: string) {
-    this.sendMessageSpy(msg);
-  }
-  async respondToPermission(_p: AdapterProcess, r: PermissionResponse) {
-    this.respondToPermissionSpy(r);
-  }
+
   override async loadHistory() {
     return [];
   }
@@ -199,7 +241,7 @@ describe('WS inbound flows', () => {
 
     // After end, events for this chat should NOT reach the client (unsubscribed)
     const countBefore = events.length;
-    adapter.emit('result', 'proc-1', { cost: 0, tokensInput: 0, tokensOutput: 0 });
+    adapter.currentSession!.emit('result', { cost: 0, tokensInput: 0, tokensOutput: 0 });
     await sleep(50);
 
     // No new events should arrive for this chat (subscription cleared)
@@ -210,7 +252,7 @@ describe('WS inbound flows', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('message', 'proc-1', [
+    adapter.currentSession!.emit('message', [
       { type: 'tool_use', id: 'tu-plan', name: 'EnterPlanMode', input: { plan: 'Step 1...' } },
     ]);
     await sleep(50);
