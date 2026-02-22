@@ -78,7 +78,7 @@ export function buildPluginContext(deps: PluginContextDeps): PluginContext {
     (key, value) => deps.db.settings.set('plugin', key, JSON.stringify(value)),
   );
 
-  const chatService = buildChatService(manifest, deps.db);
+  const chatService = buildChatService(manifest, deps.db, deps.emitEvent);
   const projectService = buildProjectService(deps.db);
 
   const adaptersApi = has('adapters')

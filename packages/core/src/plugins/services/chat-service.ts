@@ -1,7 +1,11 @@
-import type { ChatServiceAPI, ChatSummary, PluginManifest } from '@mainframe/types';
+import type { ChatServiceAPI, ChatSummary, PluginManifest, DaemonEvent } from '@mainframe/types';
 import type { DatabaseManager } from '../../db/index.js';
 
-export function buildChatService(manifest: PluginManifest, db: DatabaseManager): ChatServiceAPI {
+export function buildChatService(
+  manifest: PluginManifest,
+  db: DatabaseManager,
+  emitEvent: (event: DaemonEvent) => void,
+): ChatServiceAPI {
   const has = (cap: string) => manifest.capabilities.includes(cap as never);
 
   return {
@@ -35,6 +39,16 @@ export function buildChatService(manifest: PluginManifest, db: DatabaseManager):
           async getMessages() {
             // Message history lives in adapter session — not available via DB alone
             return [];
+          },
+        }
+      : {}),
+
+    ...(has('chat:create')
+      ? {
+          async createChat({ projectId, adapterId, model }) {
+            const chat = db.chats.create(projectId, adapterId ?? 'claude', model);
+            emitEvent({ type: 'chat.created', chat });
+            return { chatId: chat.id };
           },
         }
       : {}),
