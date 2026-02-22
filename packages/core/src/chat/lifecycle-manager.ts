@@ -1,6 +1,5 @@
 import type { Chat, DaemonEvent } from '@mainframe/types';
 import type { AdapterRegistry } from '../adapters/index.js';
-import { ClaudeAdapter } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';
 import { removeWorktree } from '../workspace/index.js';
@@ -239,14 +238,13 @@ export class ChatLifecycleManager {
         }
       }
 
-      if (adapter instanceof ClaudeAdapter) {
-        // TODO This is wrong, anything outside adapters package should not know of "Claude"
+      if (chat.claudeSessionId) {
         try {
           const [planPaths, skillPaths] = await Promise.all([
-            adapter.extractPlanFilePaths(chat.claudeSessionId, effectivePath), // TODO also, this rereads all jsonl, we already do it for reading messages
-            adapter.extractSkillFilePaths(chat.claudeSessionId, effectivePath),
+            adapter.extractPlanFiles?.(chat.claudeSessionId, effectivePath) ?? Promise.resolve([]),
+            adapter.extractSkillFiles?.(chat.claudeSessionId, effectivePath) ?? Promise.resolve([]),
           ]);
-          for (const p of planPaths) this.deps.db.chats.addPlanFile(chatId, p); // TODO why do we add to the DB ? I believe this could live in-mem just like the permissions or messages
+          for (const p of planPaths) this.deps.db.chats.addPlanFile(chatId, p);
           for (const p of skillPaths) this.deps.db.chats.addSkillFile(chatId, p);
         } catch {
           /* best-effort */

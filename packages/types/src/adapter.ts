@@ -97,6 +97,8 @@ export interface Adapter {
   sendMessage(process: AdapterProcess, message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
   respondToPermission(process: AdapterProcess, response: PermissionResponse): Promise<void>;
   loadHistory?(sessionId: string, projectPath: string): Promise<import('./chat.js').ChatMessage[]>;
+  extractPlanFiles?(sessionId: string, projectPath: string): Promise<string[]>;
+  extractSkillFiles?(sessionId: string, projectPath: string): Promise<import('./context.js').SkillFileEntry[]>;
 
   getContextFiles?(projectPath: string): {
     global: import('./context.js').ContextFile[];
