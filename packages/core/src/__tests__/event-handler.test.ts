@@ -85,6 +85,57 @@ describe('EventHandler token accumulation', () => {
   });
 });
 
+describe('EventHandler adapterId stamping', () => {
+  let lookup: ReturnType<typeof createMockLookup>;
+  let db: any;
+  let adapters: AdapterRegistry;
+  let messages: MessageCache;
+  let permissions: PermissionManager;
+  let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
+  let claude: ClaudeAdapter;
+
+  beforeEach(() => {
+    lookup = createMockLookup();
+    db = {
+      chats: { update: vi.fn(), get: vi.fn(), addSkillFile: vi.fn().mockReturnValue(false) },
+      projects: { get: vi.fn() },
+      settings: { get: vi.fn() },
+    };
+    claude = new ClaudeAdapter();
+    adapters = new AdapterRegistry();
+    (adapters as any).adapters = new Map([['claude', claude]]);
+    messages = new MessageCache();
+    permissions = new PermissionManager(db, adapters);
+    emitEvent = vi.fn();
+
+    new EventHandler(lookup, db, adapters, messages, permissions, emitEvent).setup();
+  });
+
+  it('stamps adapterId on emitted assistant messages', () => {
+    const processId = 'proc-1';
+    const chatId = 'chat-1';
+    lookup.activeChats.set(chatId, {
+      chat: {
+        id: chatId,
+        adapterId: 'claude',
+        totalCost: 0,
+        totalTokensInput: 0,
+        totalTokensOutput: 0,
+        processState: 'working',
+      },
+      process: { id: processId },
+    });
+    const processToChat = new Map([['proc-1', 'chat-1']]);
+    (lookup as any).getChatIdForProcess = (pid: string) => processToChat.get(pid);
+
+    claude.emit('message', processId, [{ type: 'text', text: 'hello' }]);
+
+    const emitted = emitEvent.mock.calls.find(([e]: [any]) => e.type === 'message.added');
+    expect(emitted).toBeDefined();
+    expect(emitted![0].message.metadata?.adapterId).toBe('claude');
+  });
+});
+
 describe('EventHandler skill_file announcement', () => {
   let lookup: ReturnType<typeof createMockLookup>;
   let db: any;

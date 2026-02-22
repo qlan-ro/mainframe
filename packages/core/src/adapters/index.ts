@@ -16,6 +16,10 @@ export class AdapterRegistry {
     return this.adapters.get(id);
   }
 
+  all(): Adapter[] {
+    return [...this.adapters.values()];
+  }
+
   async list(): Promise<AdapterInfo[]> {
     const infos: AdapterInfo[] = [];
     for (const adapter of this.adapters.values()) {

@@ -34,7 +34,7 @@ function makeAdapters(kill?: ReturnType<typeof vi.fn>): AdapterRegistry {
   const stub = new EventEmitter() as EventEmitter & { kill?: typeof kill };
   if (kill) stub.kill = kill;
   const get = vi.fn().mockReturnValue(kill ? stub : undefined);
-  return { get, list: vi.fn() } as unknown as AdapterRegistry;
+  return { get, list: vi.fn(), all: vi.fn().mockReturnValue([]) } as unknown as AdapterRegistry;
 }
 
 describe('ChatManager.removeProject', () => {

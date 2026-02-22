@@ -10,7 +10,7 @@ describe('ChatManager.isChatRunning', () => {
       projects: { get: vi.fn() },
       settings: { get: vi.fn() },
     } as any;
-    const mockAdapters = { get: vi.fn() } as any;
+    const mockAdapters = { get: vi.fn(), all: vi.fn().mockReturnValue([]) } as any;
     manager = new ChatManager(mockDb, mockAdapters);
   });
 
