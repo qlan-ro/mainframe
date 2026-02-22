@@ -63,7 +63,6 @@ export class ChatConfigManager {
 
     if (active.session?.isSpawned) {
       await active.session.kill();
-      active.session.removeAllListeners();
       active.session = null;
     }
 
@@ -94,7 +93,6 @@ export class ChatConfigManager {
 
     if (active.session?.isSpawned) {
       await active.session.kill();
-      active.session.removeAllListeners();
       active.session = null;
     }
 
@@ -116,7 +114,6 @@ export class ChatConfigManager {
 
     if (active.session?.isSpawned) {
       await active.session.kill();
-      active.session.removeAllListeners();
       active.session = null;
     }
 

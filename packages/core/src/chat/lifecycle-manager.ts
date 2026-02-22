@@ -1,4 +1,4 @@
-import type { Chat, DaemonEvent, AdapterSession } from '@mainframe/types';
+import type { Chat, DaemonEvent, SessionSink, ControlResponse } from '@mainframe/types';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';
@@ -20,7 +20,7 @@ export interface LifecycleManagerDeps {
   messages: MessageCache;
   permissions: PermissionManager;
   emitEvent: (event: DaemonEvent) => void;
-  attachSession: (chatId: string, session: AdapterSession) => void;
+  buildSink: (chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>) => SessionSink;
 }
 
 export class ChatLifecycleManager {
@@ -145,7 +145,6 @@ export class ChatLifecycleManager {
     const active = this.deps.activeChats.get(chatId);
     if (active?.session) {
       await active.session.kill();
-      active.session.removeAllListeners();
     }
 
     const chat = active?.chat ?? this.deps.db.chats.get(chatId);
@@ -169,7 +168,6 @@ export class ChatLifecycleManager {
 
     if (active.session) {
       await active.session.kill();
-      active.session.removeAllListeners();
     }
 
     this.deps.db.chats.update(chatId, { status: 'ended' });
@@ -265,23 +263,15 @@ export class ChatLifecycleManager {
     const project = this.deps.db.projects.get(chat.projectId);
     if (!project) throw new Error(`Project ${chat.projectId} not found`);
 
-    // Remove listeners from old session to prevent event leaks, then create a fresh one.
-    if (active.session) {
-      active.session.removeAllListeners();
-    }
     const session = adapter.createSession({
       projectPath: chat.worktreePath ?? project.path,
       chatId: chat.claudeSessionId,
     });
     active.session = session;
 
-    // Attach event handlers BEFORE spawn so no events are missed.
-    this.deps.attachSession(chatId, session);
+    const sink = this.deps.buildSink(chatId, (response) => session.respondToPermission(response));
 
-    const processInfo = await session.spawn({
-      model: chat.model,
-      permissionMode: chat.permissionMode,
-    });
+    const processInfo = await session.spawn({ model: chat.model, permissionMode: chat.permissionMode }, sink);
     log.info({ chatId }, 'chat session started');
     this.deps.emitEvent({ type: 'process.started', chatId, process: processInfo });
   }

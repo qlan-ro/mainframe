@@ -5,7 +5,6 @@ import type {
   ControlRequest,
   ControlResponse,
   DaemonEvent,
-  AdapterSession,
   SessionMention,
   SessionContext,
 } from '@mainframe/types';
@@ -68,7 +67,7 @@ export class ChatManager extends EventEmitter {
       messages: this.messages,
       permissions: this.permissions,
       emitEvent: (event) => this.emitEvent(event),
-      attachSession: (chatId, session) => this.eventHandler.attachSession(chatId, session),
+      buildSink: (chatId, respondToPermission) => this.eventHandler.buildSink(chatId, respondToPermission),
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,
@@ -224,7 +223,6 @@ export class ChatManager extends EventEmitter {
         } catch (err) {
           logger.warn({ err, chatId: chat.id }, 'failed to kill session on project removal');
         }
-        active.session.removeAllListeners();
       }
       this.activeChats.delete(chat.id);
       this.messages.delete(chat.id);

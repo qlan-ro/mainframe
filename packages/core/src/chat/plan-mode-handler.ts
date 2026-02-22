@@ -55,7 +55,6 @@ export class PlanModeHandler {
       this.ctx.permissions.shift(chatId);
 
       await active.session.kill();
-      active.session.removeAllListeners();
       active.session = null;
     }
 
