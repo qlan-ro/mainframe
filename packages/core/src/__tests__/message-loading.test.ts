@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { buildToolResultBlocks } from '../adapters/claude-history.js';
 
 // Stable base directory — vi.mock is hoisted so we can't use beforeEach vars.
 const TEST_BASE = join(tmpdir(), 'mainframe-loadhistory-test');
@@ -114,6 +115,57 @@ function writeJsonl(sessionId: string, lines: string[]) {
   writeFileSync(filePath, lines.join('\n') + '\n');
   return filePath;
 }
+
+// ── buildToolResultBlocks tests ─────────────────────────────────────
+
+describe('buildToolResultBlocks', () => {
+  it('extracts tool_result blocks from array message content', () => {
+    const message = {
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'tu_123',
+          content: 'file written successfully',
+          is_error: false,
+        },
+      ],
+    };
+    const blocks = buildToolResultBlocks(message, undefined);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({
+      type: 'tool_result',
+      toolUseId: 'tu_123',
+      content: 'file written successfully',
+      isError: false,
+    });
+  });
+
+  it('attaches structuredPatch and file contents from toolUseResult', () => {
+    const message = {
+      content: [{ type: 'tool_result', tool_use_id: 'tu_456', content: 'ok' }],
+    };
+    const tur = {
+      structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: ['+line'] }],
+      originalFile: 'old content',
+      content: 'new content',
+      type: 'update',
+    };
+    const blocks = buildToolResultBlocks(message, tur as Record<string, unknown>);
+    expect(blocks[0]).toHaveProperty('structuredPatch');
+    expect(blocks[0]).toHaveProperty('originalFile', 'old content');
+    expect(blocks[0]).toHaveProperty('modifiedFile', 'new content');
+  });
+
+  it('returns empty array when message has no tool_result blocks', () => {
+    const message = { content: [{ type: 'text', text: 'hello' }] };
+    expect(buildToolResultBlocks(message, undefined)).toHaveLength(0);
+  });
+
+  it('returns empty array for non-array content', () => {
+    const message = { content: 'plain string content' };
+    expect(buildToolResultBlocks(message as Record<string, unknown>, undefined)).toHaveLength(0);
+  });
+});
 
 // ── Tests ───────────────────────────────────────────────────────────
 

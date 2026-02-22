@@ -1,7 +1,7 @@
 import path from 'node:path';
-import type { PermissionRequest, PermissionUpdate, MessageContent, DiffHunk } from '@mainframe/types';
+import type { PermissionRequest, PermissionUpdate, MessageContent } from '@mainframe/types';
 import type { ClaudeProcess, ClaudeEventEmitter } from './claude-types.js';
-import { deriveModifiedFile } from './claude-history.js';
+import { buildToolResultBlocks } from './claude-history.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('claude-events');
@@ -90,28 +90,20 @@ function handleAssistantEvent(
 }
 
 function handleUserEvent(processId: string, event: Record<string, unknown>, emitter: ClaudeEventEmitter): void {
+  // Live stream handles ONLY tool_result blocks from user events.
+  // Text/image blocks in user entries are intentionally ignored here because:
+  //   - User-typed text: already created as a ChatMessage by chat-manager.sendMessage()
+  //   - Image blocks: not surfaced in live mode (no UX for them)
+  // History loading (convertUserEntry) reconstructs these from JSONL since it
+  // has no sendMessage() counterpart. See docs/plans/2026-02-17-unified-event-pipeline.md.
+  // TODO(task-support): handle <task-notification> string content as TaskGroupCard
   const message = event.message as { content: Array<Record<string, unknown>> } | undefined;
   if (!message?.content) return;
 
   const tur = event.toolUseResult as Record<string, unknown> | undefined;
-  const sp = tur?.structuredPatch as DiffHunk[] | undefined;
-  const originalFile = tur?.originalFile as string | undefined;
-  const modifiedFile = deriveModifiedFile(tur, originalFile);
 
-  const toolResultContent: MessageContent[] = [];
-  for (const block of message.content) {
-    if (block.type === 'tool_result') {
-      toolResultContent.push({
-        type: 'tool_result',
-        toolUseId: (block.tool_use_id as string) || '',
-        content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? ''),
-        isError: !!block.is_error,
-        ...(sp?.length ? { structuredPatch: sp } : {}),
-        ...(originalFile != null ? { originalFile } : {}),
-        ...(modifiedFile != null ? { modifiedFile } : {}),
-      });
-    }
-  }
+  // Use shared builder — same logic as convertUserEntry in claude-history.ts
+  const toolResultContent: MessageContent[] = buildToolResultBlocks(message as Record<string, unknown>, tur);
 
   if (toolResultContent.length > 0) {
     emitter.emit('tool_result', processId, toolResultContent);
