@@ -45,4 +45,5 @@ release/
 
 # Mainframe worktrees
 .mainframe/
+.worktrees/
 
