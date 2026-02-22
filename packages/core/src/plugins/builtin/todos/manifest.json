@@ -1,0 +1,8 @@
+{
+  "id": "todos",
+  "name": "TODO Kanban",
+  "version": "1.0.0",
+  "description": "GitHub-style kanban board for tracking tasks",
+  "author": "Mainframe Team",
+  "capabilities": ["storage", "chat:create"]
+}
