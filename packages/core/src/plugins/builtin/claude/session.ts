@@ -13,15 +13,15 @@ import type {
   ContextFile,
   SkillFileEntry,
 } from '@mainframe/types';
-import { BaseSession } from './base-session.js';
-import { handleStdout, handleStderr } from './claude-events.js';
-import { createChildLogger } from '../logger.js';
+import { BaseSession } from '../../../adapters/base-session.js';
+import { handleStdout, handleStderr } from './events.js';
+import { createChildLogger } from '../../../logger.js';
 import {
   loadHistory as loadHistoryFromDisk,
   extractPlanFilePaths as extractPlans,
   extractSkillFilePaths as extractSkills,
-} from './claude-history.js';
-import type { ToolCategories } from '../messages/tool-categorization.js';
+} from './history.js';
+import type { ToolCategories } from '../../../messages/tool-categorization.js';
 
 const log = createChildLogger('claude-session');
 

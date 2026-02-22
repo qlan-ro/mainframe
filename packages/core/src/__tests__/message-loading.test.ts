@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildToolResultBlocks } from '../adapters/claude-history.js';
+import { buildToolResultBlocks } from '../plugins/builtin/claude/history.js';
 
 // Stable base directory — vi.mock is hoisted so we can't use beforeEach vars.
 const TEST_BASE = join(tmpdir(), 'mainframe-loadhistory-test');
@@ -13,7 +13,7 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 // Import after mock so the adapter picks up our homedir
-import { ClaudeAdapter } from '../adapters/claude.js';
+import { ClaudeAdapter } from '../plugins/builtin/claude/adapter.js';
 
 // ── JSONL fixture builder ──────────────────────────────────────────
 

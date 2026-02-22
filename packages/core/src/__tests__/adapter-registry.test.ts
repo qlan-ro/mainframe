@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Adapter, AdapterModel } from '@mainframe/types';
-import { AdapterRegistry, ClaudeAdapter } from '../adapters/index.js';
+import { AdapterRegistry } from '../adapters/index.js';
+import { ClaudeAdapter } from '../plugins/builtin/claude/adapter.js';
 
 function createMockAdapter(models: AdapterModel[]): Adapter {
   return {

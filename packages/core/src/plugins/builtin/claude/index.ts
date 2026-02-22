@@ -1,5 +1,5 @@
 import type { PluginContext } from '@mainframe/types';
-import { ClaudeAdapter } from '../../../adapters/claude.js';
+import { ClaudeAdapter } from './adapter.js';
 
 export function activate(ctx: PluginContext): void {
   const adapter = new ClaudeAdapter();

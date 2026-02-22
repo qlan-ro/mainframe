@@ -9,10 +9,10 @@ import type {
   CreateSkillInput,
   CreateAgentInput,
 } from '@mainframe/types';
-import { BaseAdapter } from './base.js';
-import { ClaudeSession } from './claude-session.js';
-import * as skills from './claude-skills.js';
-import type { ToolCategories } from '../messages/tool-categorization.js';
+import { BaseAdapter } from '../../../adapters/base.js';
+import { ClaudeSession } from './session.js';
+import * as skills from './skills.js';
+import type { ToolCategories } from '../../../messages/tool-categorization.js';
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const CLAUDE_MODELS: AdapterModel[] = [

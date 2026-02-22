@@ -1,8 +1,8 @@
 import path from 'node:path';
 import type { PermissionRequest, PermissionUpdate, MessageContent } from '@mainframe/types';
-import type { ClaudeSession } from './claude-session.js';
-import { buildToolResultBlocks } from './claude-history.js';
-import { createChildLogger } from '../logger.js';
+import type { ClaudeSession } from './session.js';
+import { buildToolResultBlocks } from './history.js';
+import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('claude-events');
 

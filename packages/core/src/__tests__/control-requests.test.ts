@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { Writable } from 'node:stream';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { ClaudeAdapter } from '../adapters/claude.js';
+import { ClaudeAdapter } from '../plugins/builtin/claude/adapter.js';
 import { BaseSession } from '../adapters/base-session.js';
 import type {
   Chat,
@@ -263,6 +263,7 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
   beforeEach(async () => {
     db = createMockDb({ claudeSessionId: sessionId });
     registry = new AdapterRegistry();
+    registry.register(new ClaudeAdapter());
     claude = registry.get('claude') as ClaudeAdapter;
 
     killSpy = vi.fn();

@@ -10,8 +10,8 @@ import {
   listAgents,
   createAgent,
   deleteAgent,
-} from '../adapters/claude-skills.js';
-import { parseFrontmatter } from '../adapters/frontmatter.js';
+} from '../plugins/builtin/claude/skills.js';
+import { parseFrontmatter } from '../plugins/builtin/claude/frontmatter.js';
 
 let projectPath: string;
 

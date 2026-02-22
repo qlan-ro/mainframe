@@ -1,12 +1,7 @@
 import type { Adapter, AdapterInfo } from '@mainframe/types';
-import { ClaudeAdapter } from './claude.js';
 
 export class AdapterRegistry {
   private adapters = new Map<string, Adapter>();
-
-  constructor() {
-    this.register(new ClaudeAdapter());
-  }
 
   register(adapter: Adapter): void {
     this.adapters.set(adapter.id, adapter);
@@ -45,7 +40,5 @@ export class AdapterRegistry {
   }
 }
 
-export { ClaudeAdapter } from './claude.js';
 export { BaseAdapter } from './base.js';
 export { BaseSession } from './base-session.js';
-export { ClaudeSession } from './claude-session.js';

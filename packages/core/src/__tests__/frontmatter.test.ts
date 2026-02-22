@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseFrontmatter, buildFrontmatter } from '../adapters/frontmatter.js';
+import { parseFrontmatter, buildFrontmatter } from '../plugins/builtin/claude/frontmatter.js';
 
 describe('parseFrontmatter', () => {
   it('returns empty attributes and full content when no frontmatter', () => {

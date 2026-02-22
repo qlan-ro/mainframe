@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleStdout, handleStderr } from '../adapters/claude-events.js';
-import { ClaudeSession } from '../adapters/claude-session.js';
+import { handleStdout, handleStderr } from '../plugins/builtin/claude/events.js';
+import { ClaudeSession } from '../plugins/builtin/claude/session.js';
 
 function createSession() {
   return new ClaudeSession({ projectPath: '/tmp', chatId: '' });
