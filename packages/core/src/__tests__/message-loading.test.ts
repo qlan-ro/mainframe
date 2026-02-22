@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildToolResultBlocks } from '../plugins/builtin/claude/history.js';
+import { buildToolResultBlocks, loadHistory } from '../plugins/builtin/claude/history.js';
 
 // Stable base directory — vi.mock is hoisted so we can't use beforeEach vars.
 const TEST_BASE = join(tmpdir(), 'mainframe-loadhistory-test');
@@ -11,9 +11,6 @@ vi.mock('node:os', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:os')>();
   return { ...original, homedir: () => TEST_BASE };
 });
-
-// Import after mock so the adapter picks up our homedir
-import { ClaudeAdapter } from '../plugins/builtin/claude/adapter.js';
 
 // ── JSONL fixture builder ──────────────────────────────────────────
 
@@ -169,11 +166,8 @@ describe('buildToolResultBlocks', () => {
 
 // ── Tests ───────────────────────────────────────────────────────────
 
-describe('ClaudeAdapter.loadHistory', () => {
-  let adapter: ClaudeAdapter;
-
+describe('loadHistory', () => {
   beforeEach(() => {
-    adapter = new ClaudeAdapter();
     mkdirSync(PROJECT_DIR, { recursive: true });
   });
 
@@ -184,7 +178,7 @@ describe('ClaudeAdapter.loadHistory', () => {
   it('loads a simple user + assistant conversation', async () => {
     writeJsonl(SESSION_ID, [userTextEntry('Hello, world!'), assistantTextEntry('Hi there! How can I help?')]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(2);
     expect(messages[0].type).toBe('user');
@@ -202,7 +196,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Response'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(2);
     expect(messages[0].type).toBe('user');
@@ -218,7 +212,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Done! I wrote the file.'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(4);
 
@@ -255,7 +249,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       resultEntry('error_during_execution'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(3);
     expect(messages[2].type).toBe('error');
@@ -272,7 +266,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       resultEntry('error_during_execution', false),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(2);
     expect(messages[0].type).toBe('user');
@@ -282,7 +276,7 @@ describe('ClaudeAdapter.loadHistory', () => {
   it('skips normal result entries (non-error)', async () => {
     writeJsonl(SESSION_ID, [userTextEntry('Hello'), assistantTextEntry('Done'), resultEntry()]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
     expect(messages).toHaveLength(2);
   });
 
@@ -317,7 +311,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('The plan has been created and saved.'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     // 3 non-message entries skipped → 9 messages
     expect(messages).toHaveLength(9);
@@ -353,7 +347,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Here is your commit message...'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     // The command marker (first user message) is filtered; skill expansion content + assistant remain
     expect(messages).toHaveLength(2);
@@ -371,7 +365,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('I am using the brainstorming skill to help you.'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     // isMeta=true entry is skipped; 4 real messages remain
     expect(messages).toHaveLength(4);
@@ -393,7 +387,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Using the brainstorming skill to design the website restructure properly.'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     // isMeta entry is gone → 5 messages, no spurious user message splitting the assistant turns
     expect(messages).toHaveLength(5);
@@ -424,7 +418,7 @@ describe('ClaudeAdapter.loadHistory', () => {
     ];
     writeJsonl(continuationId, contLines);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(4);
     expect(messages[0].content[0]).toMatchObject({ text: 'First message' });
@@ -433,7 +427,7 @@ describe('ClaudeAdapter.loadHistory', () => {
   });
 
   it('returns empty array for non-existent session', async () => {
-    const messages = await adapter.loadHistory('nonexistent-session', PROJECT_PATH);
+    const messages = await loadHistory('nonexistent-session', PROJECT_PATH);
     expect(messages).toEqual([]);
   });
 
@@ -445,7 +439,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('After bad line'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(2);
     expect(messages[0].type).toBe('user');
@@ -467,7 +461,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       }),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(2);
     expect(messages[1].type).toBe('assistant');
@@ -491,7 +485,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('I see a screenshot.'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(2);
     expect(messages[0].content).toHaveLength(2);
@@ -514,7 +508,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Continuing...'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(2);
     // The "[Request interrupted" text should be stripped, leaving only tool_result
@@ -529,7 +523,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Response'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     // Empty array content → 0 content blocks → entry skipped
     expect(messages).toHaveLength(1);
@@ -552,7 +546,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Tasks are done.'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     // task-notification string entry is skipped; 3 real messages remain
     expect(messages).toHaveLength(3);
@@ -574,7 +568,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Continuing from summary.'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(4);
     expect(messages[2].type).toBe('system');
@@ -598,7 +592,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Continuing from where we left off.'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     // compaction entry is skipped; 3 real messages remain
     expect(messages).toHaveLength(3);
@@ -620,7 +614,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Response'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(2);
     expect(messages[0].content[0]).toMatchObject({ text: 'Hello' });
@@ -633,7 +627,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('Response'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     // Empty string content → text block with empty string → not filtered
     expect(messages).toHaveLength(2);
@@ -650,7 +644,7 @@ describe('ClaudeAdapter.loadHistory', () => {
       assistantTextEntry('The command failed.'),
     ]);
 
-    const messages = await adapter.loadHistory(SESSION_ID, PROJECT_PATH);
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
     expect(messages).toHaveLength(4);
     expect(messages[2].content[0]).toMatchObject({
