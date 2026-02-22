@@ -4,7 +4,6 @@ import type {
   AdapterModel,
   AdapterSession,
   SessionOptions,
-  ChatMessage,
   Skill,
   AgentConfig,
   CreateSkillInput,
@@ -80,11 +79,6 @@ export class ClaudeAdapter implements Adapter {
     const session = new ClaudeSession(options, () => this.sessions.delete(session));
     this.sessions.add(session);
     return session;
-  }
-
-  async loadHistory(sessionId: string, projectPath: string): Promise<ChatMessage[]> {
-    const session = this.createSession({ projectPath, chatId: sessionId });
-    return session.loadHistory();
   }
 
   killAll(): void {

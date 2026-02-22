@@ -143,13 +143,6 @@ export interface AdapterModel {
   contextWindow?: number;
 }
 
-export interface SpawnOptions {
-  projectPath: string;
-  chatId?: string;
-  model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
-}
-
 export interface Adapter {
   id: string;
   name: string;
@@ -160,19 +153,6 @@ export interface Adapter {
 
   createSession(options: SessionOptions): AdapterSession;
   killAll(): void;
-
-  // Deprecated: kept temporarily during migration; use AdapterSession methods instead.
-  spawn?(options: SpawnOptions): Promise<AdapterProcess>;
-  kill?(process: AdapterProcess): Promise<void>;
-  interrupt?(process: AdapterProcess): Promise<void>;
-  setPermissionMode?(process: AdapterProcess, mode: PermissionMode): Promise<void>;
-  setModel?(process: AdapterProcess, model: string): Promise<void>;
-  sendCommand?(process: AdapterProcess, command: string, args?: string): Promise<void>;
-  sendMessage?(process: AdapterProcess, message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
-  respondToPermission?(process: AdapterProcess, response: ControlResponse): Promise<void>;
-  loadHistory?(sessionId: string, projectPath: string): Promise<import('./chat.js').ChatMessage[]>;
-  extractPlanFiles?(sessionId: string, projectPath: string): Promise<string[]>;
-  extractSkillFiles?(sessionId: string, projectPath: string): Promise<import('./context.js').SkillFileEntry[]>;
 
   getContextFiles?(projectPath: string): {
     global: import('./context.js').ContextFile[];
