@@ -15,7 +15,6 @@ interface ClientConnection {
 export class WebSocketManager {
   private wss: WebSocketServer;
   private clients = new Map<WebSocket, ClientConnection>();
-  private eventListener: ((event: DaemonEvent) => void) | null = null;
 
   constructor(
     server: Server,
@@ -51,9 +50,6 @@ export class WebSocketManager {
         this.clients.delete(ws);
       });
     });
-
-    this.eventListener = (event: DaemonEvent) => this.broadcastEvent(event);
-    this.chats.on('event', this.eventListener);
   }
 
   private async handleClientEvent(client: ClientConnection, event: ClientEvent): Promise<void> {
@@ -137,7 +133,7 @@ export class WebSocketManager {
     }
   }
 
-  private broadcastEvent(event: DaemonEvent): void {
+  broadcastEvent(event: DaemonEvent): void {
     const chatId = 'chatId' in event ? event.chatId : undefined;
     log.debug({ type: event.type, chatId }, 'broadcasting event');
     const payload = JSON.stringify(event);
@@ -152,10 +148,6 @@ export class WebSocketManager {
   }
 
   close(): void {
-    if (this.eventListener) {
-      this.chats.off('event', this.eventListener);
-      this.eventListener = null;
-    }
     for (const client of this.clients.values()) {
       if (client.ws.readyState === WebSocket.OPEN) {
         client.ws.close(1001, 'Server shutting down');

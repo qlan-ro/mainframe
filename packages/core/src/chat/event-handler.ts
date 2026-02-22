@@ -47,12 +47,12 @@ function buildSessionSink(
   respondToPermission: (response: ControlResponse) => Promise<void>,
 ): SessionSink {
   return {
-    onInit(claudeSessionId: string) {
+    onInit(sessionId: string) {
       const active = getActiveChat(chatId);
       if (!active) return;
-      db.chats.update(chatId, { claudeSessionId });
-      active.chat.claudeSessionId = claudeSessionId;
-      emitEvent({ type: 'process.ready', processId: active.session?.id ?? '', claudeSessionId });
+      db.chats.update(chatId, { claudeSessionId: sessionId });
+      active.chat.claudeSessionId = sessionId;
+      emitEvent({ type: 'process.ready', processId: active.session?.id ?? '', claudeSessionId: sessionId });
     },
 
     onMessage(content: any[], metadata?: MessageMetadata) {

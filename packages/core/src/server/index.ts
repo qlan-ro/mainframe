@@ -7,6 +7,7 @@ import type { ChatManager } from '../chat/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { PluginManager } from '../plugins/manager.js';
+import type { DaemonEvent } from '@mainframe/types';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('server');
@@ -14,6 +15,7 @@ const log = createChildLogger('server');
 export interface ServerManager {
   start(port: number): Promise<void>;
   stop(): Promise<void>;
+  broadcastEvent(event: DaemonEvent): void;
 }
 
 export function createServerManager(
@@ -47,6 +49,10 @@ export function createServerManager(
           else resolve();
         });
       });
+    },
+
+    broadcastEvent(event: DaemonEvent): void {
+      _wsManager?.broadcastEvent(event);
     },
   };
 }

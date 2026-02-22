@@ -85,10 +85,11 @@ function createStack(adapter: MockAdapter, permissionMode = 'default') {
   const registry = new AdapterRegistry();
   (registry as any).adapters = new Map();
   registry.register(adapter);
-  const chats = new ChatManager(db as any, registry);
+  const wsRef: { current: WebSocketManager | null } = { current: null };
+  const chats = new ChatManager(db as any, registry, undefined, (event) => wsRef.current?.broadcastEvent(event));
   const app = createHttpServer(db as any, chats, registry);
   const httpServer = createServer(app);
-  new WebSocketManager(httpServer, chats);
+  wsRef.current = new WebSocketManager(httpServer, chats);
   return { httpServer, chats, db };
 }
 

@@ -93,7 +93,7 @@ export interface ControlResponse {
 }
 
 export interface SessionSink {
-  onInit(claudeSessionId: string): void;
+  onInit(sessionId: string): void;
   onMessage(content: import('./chat.js').MessageContent[], metadata?: MessageMetadata): void;
   onToolResult(content: import('./chat.js').MessageContent[]): void;
   onPermission(request: ControlRequest): void;

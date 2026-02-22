@@ -73,10 +73,9 @@ function titleUpdates(db: ReturnType<typeof createMockDb>): string[] {
     .map(([_id, data]: [string, { title: string }]) => data.title);
 }
 
-function collectEvents(manager: ChatManager): DaemonEvent[] {
+function makeEventCollector(): { events: DaemonEvent[]; onEvent: (e: DaemonEvent) => void } {
   const events: DaemonEvent[] = [];
-  manager.on('event', (e: DaemonEvent) => events.push(e));
-  return events;
+  return { events, onEvent: (e) => events.push(e) };
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
@@ -96,8 +95,8 @@ describe.skipIf(!!process.env.CI)('generateTitle (integration — real claude -p
 
   it('generates a concise LLM title that replaces the truncated one', async () => {
     const db = createMockDb();
-    const manager = new ChatManager(db as any, registry);
-    const events = collectEvents(manager);
+    const { events, onEvent } = makeEventCollector();
+    const manager = new ChatManager(db as any, registry, undefined, onEvent);
 
     await manager.sendMessage(
       chatId,

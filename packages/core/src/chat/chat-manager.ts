@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events';
 import type {
   Chat,
   ChatMessage,
@@ -26,7 +25,7 @@ import type { ActiveChat } from './types.js';
 
 const logger = createChildLogger('chat-manager');
 
-export class ChatManager extends EventEmitter {
+export class ChatManager {
   private activeChats = new Map<string, ActiveChat>();
   private messages = new MessageCache();
   private permissions: PermissionManager;
@@ -40,8 +39,8 @@ export class ChatManager extends EventEmitter {
     private db: DatabaseManager,
     private adapters: AdapterRegistry,
     private attachmentStore?: AttachmentStore,
+    private onEvent: (event: DaemonEvent) => void = () => {},
   ) {
-    super();
     this.permissions = new PermissionManager(db, adapters);
     this.eventHandler = new EventHandler(
       this.db,
@@ -328,6 +327,6 @@ export class ChatManager extends EventEmitter {
       chat.displayStatus = hasPending ? 'waiting' : chat.processState === 'working' ? 'working' : 'idle';
       chat.isRunning = chat.processState === 'working' && !hasPending;
     }
-    this.emit('event', event);
+    this.onEvent(event);
   }
 }

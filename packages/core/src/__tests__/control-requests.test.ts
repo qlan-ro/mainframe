@@ -235,6 +235,7 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
   let killSpy: ReturnType<typeof vi.fn>;
   let spawnCount: number;
   let currentMockSession: MockClaudeSession | null;
+  let capturedEvents: any[];
 
   const chatId = 'test-chat';
   const sessionId = 'session-abc';
@@ -248,6 +249,7 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
     killSpy = vi.fn();
     spawnCount = 0;
     currentMockSession = null;
+    capturedEvents = [];
 
     // Override createSession to return our mock session
     claude.createSession = (options: SessionOptions): AdapterSession => {
@@ -259,7 +261,7 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
       return session;
     };
 
-    manager = new ChatManager(db as any, registry);
+    manager = new ChatManager(db as any, registry, undefined, (e) => capturedEvents.push(e));
 
     await manager.createChat('proj-1', 'claude', 'claude-opus-4-6', 'default');
     await manager.startChat(chatId);
@@ -312,12 +314,9 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
   });
 
   it('emits chat.updated event on in-flight config change', async () => {
-    const events: any[] = [];
-    manager.on('event', (e) => events.push(e));
-
     await manager.updateChatConfig(chatId, undefined, 'claude-sonnet-4-5-20250929', 'plan');
 
-    const chatUpdated = events.find((e) => e.type === 'chat.updated');
+    const chatUpdated = capturedEvents.find((e) => e.type === 'chat.updated');
     expect(chatUpdated).toBeTruthy();
     expect(chatUpdated.chat.model).toBe('claude-sonnet-4-5-20250929');
     expect(chatUpdated.chat.permissionMode).toBe('plan');

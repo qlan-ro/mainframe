@@ -84,8 +84,8 @@ export class MockBaseSession implements AdapterSession {
 
   // ── Test simulation helpers ───────────────────────────────────────────────
 
-  simulateInit(claudeSessionId: string): void {
-    this.sink?.onInit(claudeSessionId);
+  simulateInit(sessionId: string): void {
+    this.sink?.onInit(sessionId);
   }
 
   simulateMessage(content: MessageContent[], metadata?: MessageMetadata): void {

@@ -24,11 +24,15 @@ async function main(): Promise<void> {
   const db = new DatabaseManager();
   const adapters = new AdapterRegistry();
   const attachmentStore = new AttachmentStore(join(getDataDir(), 'attachments'));
-  const chats = new ChatManager(db, adapters, attachmentStore);
+
+  // Late-bound broadcast: set after server starts. Events emitted before
+  // server.start() (plugin loading) are safely dropped — no WS clients yet.
+  let broadcastEvent: (event: DaemonEvent) => void = () => {};
+  const chats = new ChatManager(db, adapters, attachmentStore, (event) => broadcastEvent(event));
 
   // PluginManager owns its own Express Router; no circular dep on the Express app
   const daemonBus = new EventEmitter();
-  const emitEvent = (event: DaemonEvent) => chats.emit('event', event);
+  const emitEvent = (event: DaemonEvent) => broadcastEvent(event);
 
   const pluginManager = new PluginManager({
     pluginsDirs: [join(homedir(), '.mainframe', 'plugins')],
@@ -47,6 +51,7 @@ async function main(): Promise<void> {
   const server = createServerManager(db, chats, adapters, attachmentStore, pluginManager);
 
   await server.start(config.port);
+  broadcastEvent = (event) => server.broadcastEvent(event);
 
   logger.info('Daemon ready');
 
