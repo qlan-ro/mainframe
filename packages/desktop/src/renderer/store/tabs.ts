@@ -3,6 +3,7 @@ import { useProjectsStore } from './projects';
 import { useUIStore } from './ui';
 
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
+export type TodosTab = { type: 'todos'; id: 'todos'; label: 'Tasks' };
 
 export type FileView =
   | { type: 'editor'; filePath: string; label: string }
@@ -20,7 +21,7 @@ export type FileView =
   | { type: 'skill-editor'; skillId: string; adapterId: string; label: string };
 
 // Keep CenterTab as union so existing imports still resolve
-export type CenterTab = ChatTab;
+export type CenterTab = ChatTab | TodosTab;
 
 interface ProjectTabSnapshot {
   tabs: CenterTab[];
@@ -48,6 +49,7 @@ interface TabsState {
   openDiffTab: (filePath: string, source: 'git' | 'session', chatId?: string, oldPath?: string) => void;
   openInlineDiffTab: (filePath: string, original: string, modified: string, startLine?: number) => void;
   openSkillEditorTab: (skillId: string, adapterId: string, label: string) => void;
+  openTodosTab: () => void;
   setSidebarWidth: (w: number) => void;
   closeFileView: () => void;
   toggleFileViewCollapsed: () => void;
@@ -65,7 +67,7 @@ interface LegacySnapshot {
 }
 
 function migrateSnapshot(raw: LegacySnapshot): ProjectTabSnapshot {
-  const tabs = (raw.tabs ?? []).filter((t) => t.type === 'chat') as CenterTab[];
+  const tabs = (raw.tabs ?? []).filter((t) => t.type === 'chat' || t.type === 'todos') as CenterTab[];
   return {
     tabs,
     activePrimaryTabId: raw.activePrimaryTabId ?? null,
@@ -169,6 +171,10 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   openSkillEditorTab: (skillId, adapterId, label) => {
     expandRightPanel();
     set({ fileView: { type: 'skill-editor', skillId, adapterId, label }, fileViewCollapsed: false });
+  },
+
+  openTodosTab: () => {
+    get().openTab({ type: 'todos', id: 'todos', label: 'Tasks' });
   },
 
   setSidebarWidth: (w) => set({ sidebarWidth: w }),
