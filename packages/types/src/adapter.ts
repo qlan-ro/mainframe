@@ -74,7 +74,7 @@ export type ControlBehavior = 'allow' | 'deny';
 
 export type ControlDestination = 'userSettings' | 'projectSettings' | 'localSettings' | 'session' | 'cliArg';
 
-/** A permission rule update to save for future tool uses. Matches the CLI's PermissionUpdate type. */
+/** A control rule update to save for future tool uses. */
 export type ControlUpdate =
   | {
       type: 'addRules';
