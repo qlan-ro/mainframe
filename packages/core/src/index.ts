@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
@@ -11,6 +12,8 @@ import { createServerManager } from './server/index.js';
 import { PluginManager } from './plugins/manager.js';
 import claudeManifest from './plugins/builtin/claude/manifest.json' with { type: 'json' };
 import { activate as activateClaude } from './plugins/builtin/claude/index.js';
+import todosManifest from './plugins/builtin/todos/manifest.json' with { type: 'json' };
+import { activate as activateTodos } from './plugins/builtin/todos/index.js';
 import { logger } from './logger.js';
 import type { DaemonEvent, PluginManifest } from '@mainframe/types';
 
@@ -44,6 +47,10 @@ async function main(): Promise<void> {
 
   // Load builtin plugins first (always trusted, no consent dialog)
   await pluginManager.loadBuiltin(claudeManifest as PluginManifest, activateClaude);
+
+  const todosPluginDir = join(getDataDir(), 'plugins', 'todos');
+  mkdirSync(todosPluginDir, { recursive: true });
+  await pluginManager.loadBuiltin(todosManifest as PluginManifest, activateTodos, { pluginDir: todosPluginDir });
 
   // Load user-installed plugins from ~/.mainframe/plugins/
   await pluginManager.loadAll();
