@@ -15,6 +15,7 @@ import { useTabsStore } from '../store/tabs';
 import { useSkillsStore } from '../store/skills';
 import { useSettingsStore } from '../store/settings';
 import { useAdaptersStore } from '../store/adapters';
+import { usePluginsStore } from '../store/plugins';
 import type { DaemonEvent, PermissionUpdate } from '@mainframe/types';
 import { createLogger } from '../lib/logger';
 
@@ -87,6 +88,12 @@ export function useDaemon(): void {
         case 'process.stopped':
           log.info('event:process.stopped', { processId: event.processId });
           updateProcessStatus(event.processId, 'stopped');
+          break;
+        case 'plugin.panel.registered':
+          usePluginsStore.getState().addPanel(event);
+          break;
+        case 'plugin.panel.unregistered':
+          usePluginsStore.getState().removePanel(event.pluginId, event.panelId);
           break;
         case 'error':
           log.error('daemon error event', { error: event.error });

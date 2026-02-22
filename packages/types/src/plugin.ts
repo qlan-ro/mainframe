@@ -1,0 +1,156 @@
+import type { Logger } from 'pino';
+import type { Router } from 'express';
+
+export type PluginCapability =
+  | 'storage'
+  | 'ui:panels'
+  | 'ui:notifications'
+  | 'daemon:public-events'
+  | 'chat:read'
+  | 'chat:read:content'
+  | 'chat:create'
+  | 'adapters'
+  | 'process:exec'
+  | 'http:outbound';
+
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  author?: string;
+  license?: string;
+  capabilities: PluginCapability[];
+  /** Adapter plugins only */
+  adapter?: {
+    binaryName: string;
+    displayName: string;
+  };
+}
+
+// ─── Public daemon events (never contain message content) ────────────────────
+export type PublicDaemonEventName =
+  | 'chat.started'
+  | 'chat.completed'
+  | 'chat.error'
+  | 'project.added'
+  | 'project.removed';
+
+export type PublicDaemonEvent =
+  | { type: 'chat.started'; chatId: string; projectId: string; adapterId: string }
+  | { type: 'chat.completed'; chatId: string; projectId: string; cost: number; durationMs: number }
+  | { type: 'chat.error'; chatId: string; projectId: string; errorMessage: string }
+  | { type: 'project.added'; projectId: string; path: string }
+  | { type: 'project.removed'; projectId: string };
+
+// ─── Plugin panel registration ────────────────────────────────────────────────
+export type PluginPanelPosition = 'sidebar-primary' | 'sidebar-secondary' | 'bottom';
+
+export interface PluginPanelSpec {
+  id: string;
+  label: string;
+  icon?: string; // Lucide icon name
+  position: PluginPanelPosition;
+  entryPoint: string; // Absolute path to ESM UI bundle
+}
+
+// ─── Service APIs exposed to plugins ─────────────────────────────────────────
+export interface ChatSummary {
+  id: string;
+  title: string | null;
+  projectId: string;
+  adapterId: string;
+  createdAt: string;
+  totalCost: number;
+}
+
+export interface ChatServiceAPI {
+  listChats(projectId: string): Promise<ChatSummary[]>;
+  getChatById(chatId: string): Promise<ChatSummary | null>;
+  // Only when 'chat:read:content' is declared:
+  getMessages?: (chatId: string) => Promise<import('./chat.js').ChatMessage[]>;
+  // Only when 'chat:create' is declared:
+  createChat?: (options: {
+    projectId: string;
+    adapterId?: string;
+    model?: string;
+    initialMessage?: string;
+  }) => Promise<{ chatId: string }>;
+}
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  path: string;
+}
+
+export interface ProjectServiceAPI {
+  listProjects(): Promise<ProjectSummary[]>;
+  getProjectById(id: string): Promise<ProjectSummary | null>;
+}
+
+export interface AdapterRegistrationAPI {
+  register(adapter: import('./adapter.js').Adapter): void;
+}
+
+// ─── PluginContext ────────────────────────────────────────────────────────────
+export interface PluginDatabaseStatement<T> {
+  run(...params: unknown[]): void;
+  get(...params: unknown[]): T | undefined;
+  all(...params: unknown[]): T[];
+}
+
+export interface PluginDatabaseContext {
+  runMigration(sql: string): void;
+  prepare<T = Record<string, unknown>>(sql: string): PluginDatabaseStatement<T>;
+  transaction<T>(fn: () => T): T;
+}
+
+export interface PluginEventBus {
+  emit(event: string, payload: unknown): void;
+  on(event: string, handler: (payload: unknown) => void): void;
+  onDaemonEvent(event: PublicDaemonEventName, handler: (event: PublicDaemonEvent) => void): void;
+}
+
+export interface PluginUIContext {
+  addPanel(spec: PluginPanelSpec): void;
+  removePanel(panelId: string): void;
+  notify(options: { title: string; body: string; level?: 'info' | 'warning' | 'error' }): void;
+}
+
+export interface PluginConfig {
+  get(key: string): unknown;
+  set(key: string, value: unknown): void;
+  getAll(): Record<string, unknown>;
+}
+
+export interface PluginContext {
+  readonly manifest: PluginManifest;
+  readonly logger: Logger;
+  onUnload(fn: () => void): void;
+
+  // Always available
+  readonly router: Router;
+  readonly config: PluginConfig;
+  readonly services: {
+    chats: ChatServiceAPI;
+    projects: ProjectServiceAPI;
+  };
+
+  // Requires 'storage'
+  readonly db: PluginDatabaseContext;
+
+  // Requires 'daemon:public-events'
+  readonly events: PluginEventBus;
+
+  // Requires 'ui:panels' or 'ui:notifications'
+  readonly ui: PluginUIContext;
+
+  // Requires 'adapters'
+  readonly adapters?: AdapterRegistrationAPI;
+}
+
+// ─── Plugin entry point contract ─────────────────────────────────────────────
+export interface PluginModule {
+  activate(ctx: PluginContext): void | Promise<void>;
+}

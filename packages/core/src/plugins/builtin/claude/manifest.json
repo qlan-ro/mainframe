@@ -1,0 +1,11 @@
+{
+  "id": "claude",
+  "name": "Claude CLI",
+  "version": "1.0.0",
+  "description": "Claude CLI adapter — built-in",
+  "capabilities": ["adapters", "process:exec"],
+  "adapter": {
+    "binaryName": "claude",
+    "displayName": "Claude CLI"
+  }
+}

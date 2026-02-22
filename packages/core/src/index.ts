@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { EventEmitter } from 'node:events';
 import { getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
 import { AdapterRegistry } from './adapters/index.js';
 import { ChatManager } from './chat/index.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
+import { PluginManager } from './plugins/manager.js';
+import claudeManifest from './plugins/builtin/claude/manifest.json' with { type: 'json' };
+import { activate as activateClaude } from './plugins/builtin/claude/index.js';
 import { logger } from './logger.js';
+import type { DaemonEvent, PluginManifest } from '@mainframe/types';
 
 async function main(): Promise<void> {
   const config = getConfig();
@@ -19,7 +25,26 @@ async function main(): Promise<void> {
   const adapters = new AdapterRegistry();
   const attachmentStore = new AttachmentStore(join(getDataDir(), 'attachments'));
   const chats = new ChatManager(db, adapters, attachmentStore);
-  const server = createServerManager(db, chats, adapters, attachmentStore);
+
+  // PluginManager owns its own Express Router; no circular dep on the Express app
+  const daemonBus = new EventEmitter();
+  const emitEvent = (event: DaemonEvent) => chats.emit('event', event);
+
+  const pluginManager = new PluginManager({
+    pluginsDirs: [join(homedir(), '.mainframe', 'plugins')],
+    daemonBus,
+    db,
+    adapters,
+    emitEvent,
+  });
+
+  // Load builtin plugins first (always trusted, no consent dialog)
+  await pluginManager.loadBuiltin(claudeManifest as PluginManifest, activateClaude);
+
+  // Load user-installed plugins from ~/.mainframe/plugins/
+  await pluginManager.loadAll();
+
+  const server = createServerManager(db, chats, adapters, attachmentStore, pluginManager);
 
   await server.start(config.port);
 
@@ -27,6 +52,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     logger.info('Shutting down...');
+    await pluginManager.unloadAll();
     adapters.killAll();
     await server.stop();
     db.close();

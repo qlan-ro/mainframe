@@ -20,6 +20,8 @@ await build({
   external: ['better-sqlite3', '*.node'],
   outfile,
   logLevel: 'info',
+  // import.meta.url is guarded with ?? fallback in manager.ts; suppress the cosmetic warning
+  logOverride: { 'empty-import-meta': 'silent' },
 });
 
 console.log('Daemon bundled →', outfile);

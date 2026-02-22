@@ -13,7 +13,18 @@ export type DaemonEvent =
   | { type: 'messages.cleared'; chatId: string }
   | { type: 'permission.requested'; chatId: string; request: PermissionRequest }
   | { type: 'context.updated'; chatId: string }
-  | { type: 'error'; chatId?: string; error: string };
+  | { type: 'error'; chatId?: string; error: string }
+  | {
+      type: 'plugin.panel.registered';
+      pluginId: string;
+      panelId: string;
+      label: string;
+      icon?: string;
+      position: string;
+      entryPoint: string;
+    }
+  | { type: 'plugin.panel.unregistered'; pluginId: string; panelId: string }
+  | { type: 'plugin.notification'; pluginId: string; title: string; body: string; level?: string };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }
