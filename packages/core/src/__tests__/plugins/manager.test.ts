@@ -4,13 +4,22 @@ import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
-import { pino } from 'pino';
 
-// Silence logger in tests
-vi.mock('../../logger.js', () => ({
-  createChildLogger: () => pino({ level: 'silent' }),
-  logger: pino({ level: 'silent' }),
-}));
+// Silence logger in tests — avoid top-level import references in vi.mock factories (TDZ issue)
+vi.mock('../../logger.js', () => {
+  const noop = () => {};
+  const silent = {
+    level: 'silent',
+    info: noop,
+    warn: noop,
+    error: noop,
+    debug: noop,
+    trace: noop,
+    fatal: noop,
+    child: () => silent,
+  };
+  return { createChildLogger: () => silent, logger: silent };
+});
 
 function makeDeps(pluginsDirs: string[]) {
   return {
