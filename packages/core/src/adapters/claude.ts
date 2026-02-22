@@ -17,6 +17,7 @@ import type {
   AdapterModel,
 } from '@mainframe/types';
 import { BaseAdapter } from './base.js';
+import type { ToolCategories } from '../messages/tool-categorization.js';
 import type { ClaudeProcess } from './claude-types.js';
 import { handleStdout, handleStderr } from './claude-events.js';
 import { createChildLogger } from '../logger.js';
@@ -42,6 +43,24 @@ export class ClaudeAdapter extends BaseAdapter {
   name = 'Claude CLI';
 
   private processes = new Map<string, ClaudeProcess>();
+
+  override getToolCategories(): ToolCategories {
+    return {
+      explore: new Set(['Read', 'Glob', 'Grep']),
+      hidden: new Set([
+        'TaskList',
+        'TaskGet',
+        'TaskOutput',
+        'TaskStop',
+        'TodoWrite',
+        'Skill',
+        'EnterPlanMode',
+        'AskUserQuestion',
+      ]),
+      progress: new Set(['TaskCreate', 'TaskUpdate']),
+      subagent: new Set(['Task']),
+    };
+  }
 
   private getProcessFromCacheOrThrow(processId: string): ClaudeProcess {
     const cp = this.processes.get(processId);
@@ -345,13 +364,11 @@ export class ClaudeAdapter extends BaseAdapter {
     return loadHistoryFromDisk(sessionId, projectPath);
   }
 
-  // TODO rename to extractSessionPlanFilePaths
-  async extractPlanFilePaths(sessionId: string, projectPath: string): Promise<string[]> {
+  override async extractPlanFiles(sessionId: string, projectPath: string): Promise<string[]> {
     return extractPlans(sessionId, projectPath);
   }
 
-  // TODO rename to extractSessionSkillFilePaths
-  async extractSkillFilePaths(sessionId: string, projectPath: string): Promise<SkillFileEntry[]> {
+  override async extractSkillFiles(sessionId: string, projectPath: string): Promise<SkillFileEntry[]> {
     return extractSkills(sessionId, projectPath);
   }
 

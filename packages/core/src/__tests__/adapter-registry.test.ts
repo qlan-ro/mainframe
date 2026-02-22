@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Adapter, AdapterModel } from '@mainframe/types';
-import { AdapterRegistry } from '../adapters/index.js';
+import { AdapterRegistry, ClaudeAdapter } from '../adapters/index.js';
 
 function createMockAdapter(models: AdapterModel[]): Adapter {
   return {
@@ -15,6 +15,18 @@ function createMockAdapter(models: AdapterModel[]): Adapter {
     respondToPermission: vi.fn(),
   } as unknown as Adapter;
 }
+
+describe('ClaudeAdapter.getToolCategories', () => {
+  it('returns Claude-specific tool categories', () => {
+    const adapter = new ClaudeAdapter();
+    const cats = adapter.getToolCategories();
+    expect(cats.explore).toEqual(new Set(['Read', 'Glob', 'Grep']));
+    expect(cats.hidden).toContain('TaskList');
+    expect(cats.hidden).toContain('Skill');
+    expect(cats.progress).toEqual(new Set(['TaskCreate', 'TaskUpdate']));
+    expect(cats.subagent).toEqual(new Set(['Task']));
+  });
+});
 
 describe('AdapterRegistry', () => {
   it('includes adapter models in list output', async () => {
