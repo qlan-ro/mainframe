@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
+import { createTestChat } from '../fixtures/chat.js';
 import { sendMessage, waitForAIIdle, waitForPlanCard } from '../helpers/wait.js';
 
 test.describe('§7 Plan approval', () => {
@@ -10,7 +11,7 @@ test.describe('§7 Plan approval', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await fixture.page.keyboard.press('Meta+n');
+    await createTestChat(fixture.page, project.projectId, 'plan');
   });
   test.afterAll(async () => {
     await cleanupProject(project);
@@ -18,23 +19,25 @@ test.describe('§7 Plan approval', () => {
   });
 
   test('PlanApprovalCard appears and plan can be approved', async () => {
-    await sendMessage(fixture.page, 'Enter plan mode and create a 2-step plan to add a greet function to utils.ts');
+    await sendMessage(fixture.page, 'Add a greet function to utils.ts');
     await waitForPlanCard(fixture.page, 90_000);
     await expect(fixture.page.locator('[data-testid="plan-approval-card"]')).toBeVisible();
     await fixture.page
       .locator('[data-testid="plan-approval-card"]')
-      .getByRole('button', { name: /approve/i })
+      .getByRole('button', { name: /approve plan/i })
       .click();
     await waitForAIIdle(fixture.page, 120_000);
   });
 
   test('plan revision feedback is sent back to AI', async () => {
-    await fixture.page.keyboard.press('Meta+n');
-    await sendMessage(fixture.page, 'Enter plan mode and plan adding a multiply function');
+    await createTestChat(fixture.page, project.projectId, 'plan');
+    await sendMessage(fixture.page, 'Add a multiply function to utils.ts');
     await waitForPlanCard(fixture.page, 90_000);
     const card = fixture.page.locator('[data-testid="plan-approval-card"]');
-    await card.getByRole('textbox').fill('Please also add a divide function');
     await card.getByRole('button', { name: /revise/i }).click();
+    await card.getByRole('textbox').waitFor({ timeout: 5_000 });
+    await card.getByRole('textbox').fill('Please also add a divide function');
+    await card.getByRole('button', { name: /send feedback/i }).click();
     await waitForPlanCard(fixture.page, 90_000);
     await expect(fixture.page.locator('[data-testid="plan-approval-card"]')).toBeVisible();
   });
