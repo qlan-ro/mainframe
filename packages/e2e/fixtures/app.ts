@@ -2,7 +2,7 @@ import { _electron as electron } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { spawn } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, openSync, closeSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -47,10 +47,14 @@ export async function launchApp(): Promise<AppFixture> {
   // Start daemon as a plain Node.js process.
   // This avoids the native module ABI mismatch that occurs when daemon.cjs runs
   // inside Electron's utility process (Electron has its own Node.js runtime).
+  // Redirect daemon output to a file — keeps test output readable.
+  // Inspect testDataDir/daemon.log if a test fails and you need daemon logs.
+  const daemonLogFd = openSync(path.join(testDataDir, 'daemon.log'), 'w');
   const daemon = spawn('node', [DAEMON_ENTRY], {
     env: { ...process.env, MAINFRAME_DATA_DIR: testDataDir, PORT: DAEMON_PORT },
-    stdio: 'inherit',
+    stdio: ['ignore', daemonLogFd, daemonLogFd],
   });
+  closeSync(daemonLogFd); // parent no longer needs the fd; child keeps it open
 
   // Wait until the daemon's HTTP server is accepting connections
   await waitForDaemon();
