@@ -5,7 +5,8 @@ test.describe('§1 Launch & connection', () => {
   test('app launches and shows connection indicator', async () => {
     const fixture = await launchApp();
     try {
-      await expect(fixture.page.locator('[data-testid="connection-status"]')).toBeVisible();
+      // Verify the status bar shows "Connected" (WebSocket to daemon is open)
+      await expect(fixture.page.locator('[data-testid="connection-status"]')).toContainText('Connected');
     } finally {
       await closeApp(fixture);
     }
