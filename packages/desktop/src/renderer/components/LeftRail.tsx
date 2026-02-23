@@ -18,7 +18,9 @@ function RailButton({ active, onClick, title, children }: RailButtonProps): Reac
       title={title}
       className={cn(
         'w-8 h-8 flex items-center justify-center rounded-mf-card transition-colors',
-        active ? 'bg-mf-accent text-white' : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
+        active
+          ? 'bg-mf-hover text-mf-text-primary'
+          : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
       )}
     >
       {children}
@@ -40,9 +42,9 @@ export function LeftRail(): React.ReactElement {
   };
 
   return (
-    <div className="w-12 bg-mf-app-bg flex flex-col py-3 px-[6px]">
+    <div className="w-11 bg-mf-app-bg flex flex-col py-2">
       {/* Activity icons */}
-      <div className="flex-1 flex flex-col items-center gap-3 overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center gap-2 overflow-y-auto">
         {/* Default: Sessions / AI workspace */}
         <RailButton active={activeLeftPanelId === null} onClick={handleSessionsClick} title="Sessions">
           <MessageSquare size={16} />
@@ -66,7 +68,7 @@ export function LeftRail(): React.ReactElement {
       </div>
 
       {/* Bottom actions */}
-      <div className="flex flex-col items-center gap-3 pt-3">
+      <div className="flex flex-col items-center gap-2 pt-2">
         <RailButton onClick={() => useSettingsStore.getState().open()} title="Settings">
           <Settings size={16} />
         </RailButton>
