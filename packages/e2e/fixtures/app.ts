@@ -55,6 +55,14 @@ export async function launchApp(): Promise<AppFixture> {
   // Wait until the daemon's HTTP server is accepting connections
   await waitForDaemon();
 
+  // Set Haiku as the default model — tests run fast and cheap.
+  // Tests that exercise model-switching override this per-chat via chat.updateConfig.
+  await fetch(`${DAEMON_BASE}/api/settings/providers/claude`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ defaultModel: 'claude-haiku-4-5-20251001' }),
+  });
+
   // Launch Electron in development mode so it skips its own daemon startup.
   // Both the renderer and the daemon share MAINFRAME_DATA_DIR for a consistent view.
   const app = await electron.launch({
