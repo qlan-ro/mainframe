@@ -1,18 +1,5 @@
 import { create } from 'zustand';
-import type { PluginUIContribution, UIZone } from '@mainframe/types';
-
-// Shape expected by useDaemon for plugin.panel.registered events
-interface AddPanelPayload {
-  pluginId: string;
-  zone: UIZone;
-  label: string;
-  icon?: string;
-}
-
-interface PluginsState {
-  addPanel(event: AddPanelPayload): void;
-  removePanel(pluginId: string, panelId?: string): void;
-}
+import type { PluginUIContribution } from '@mainframe/types';
 
 interface PluginLayoutState {
   contributions: PluginUIContribution[];
@@ -54,22 +41,4 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
   setActiveLeftPanel: (pluginId) => set({ activeLeftPanelId: pluginId, activeFullviewId: null }),
 
   setActiveRightPanel: (pluginId) => set({ activeRightPanelId: pluginId }),
-}));
-
-// usePluginsStore is a thin facade used by useDaemon to handle
-// plugin.panel.registered / plugin.panel.unregistered WS events.
-// It delegates to usePluginLayoutStore so a single store owns all state.
-export const usePluginsStore = create<PluginsState>(() => ({
-  addPanel: (event) => {
-    usePluginLayoutStore.getState().registerContribution({
-      pluginId: event.pluginId,
-      zone: event.zone,
-      label: event.label,
-      icon: event.icon,
-    });
-  },
-
-  removePanel: (pluginId) => {
-    usePluginLayoutStore.getState().unregisterContribution(pluginId);
-  },
 }));

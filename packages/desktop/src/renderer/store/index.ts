@@ -6,4 +6,4 @@ export { useSkillsStore } from './skills';
 export { useSettingsStore } from './settings';
 export { useAdaptersStore } from './adapters';
 export { useTutorialStore } from './tutorial';
-export { usePluginsStore } from './plugins';
+export { usePluginLayoutStore } from './plugins';
