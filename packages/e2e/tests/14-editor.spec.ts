@@ -9,9 +9,12 @@ test.describe('§14 Editor & line comments', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await fixture.page.keyboard.press('Meta+n');
-    await fixture.page.getByRole('tab', { name: /files/i }).click();
-    await fixture.page.getByText('index.ts').click();
+    // No chat needed — just open index.ts via the Files tab
+    const panel = fixture.page.locator('[data-testid="right-panel"]');
+    await panel.getByRole('tab', { name: /files/i }).click();
+    await panel.getByText('index.ts', { exact: true }).first().click();
+    // Wait for Monaco to mount before tests start
+    await fixture.page.locator('.monaco-editor').first().waitFor({ timeout: 15_000 });
   });
   test.afterAll(async () => {
     await cleanupProject(project);
@@ -19,8 +22,8 @@ test.describe('§14 Editor & line comments', () => {
   });
 
   test('Monaco editor renders with syntax highlighting for .ts file', async () => {
-    await expect(fixture.page.locator('.monaco-editor')).toBeVisible();
-    await expect(fixture.page.locator('.mtk')).toBeVisible();
+    await expect(fixture.page.locator('.monaco-editor').first()).toBeVisible({ timeout: 15_000 });
+    await expect(fixture.page.locator('.mtk').first()).toBeVisible({ timeout: 15_000 });
   });
 
   test('Cmd+Click on a line opens the line comment popover', async () => {

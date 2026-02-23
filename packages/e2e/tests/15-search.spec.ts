@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
+import { createTestChat } from '../fixtures/chat.js';
 
 test.describe('§15 Search palette', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
@@ -9,7 +10,8 @@ test.describe('§15 Search palette', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await fixture.page.keyboard.press('Meta+n');
+    // Need an active chat so the project context (for file search) is set
+    await createTestChat(fixture.page, project.projectId, 'default');
   });
   test.afterAll(async () => {
     await cleanupProject(project);
@@ -36,6 +38,6 @@ test.describe('§15 Search palette', () => {
     await fixture.page.keyboard.type('utils');
     await fixture.page.keyboard.press('ArrowDown');
     await fixture.page.keyboard.press('Enter');
-    await expect(fixture.page.locator('.monaco-editor')).toBeVisible();
+    await expect(fixture.page.locator('.monaco-editor').first()).toBeVisible({ timeout: 15_000 });
   });
 });

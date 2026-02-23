@@ -231,6 +231,9 @@ export function SearchPalette(): React.ReactElement | null {
   return (
     <div className="fixed inset-0 z-50 flex justify-center" style={{ paddingTop: '20%' }} onClick={close}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search"
         className="w-[480px] max-w-[90%] h-fit max-h-[60vh] bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
