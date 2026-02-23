@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
+import { createTestChat } from '../fixtures/chat.js';
 import { chat } from '../helpers/wait.js';
 
 test.describe('§5 Messaging & AI responses', () => {
@@ -10,7 +11,7 @@ test.describe('§5 Messaging & AI responses', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await fixture.page.keyboard.press('Meta+n');
+    await createTestChat(fixture.page, project.projectId, 'acceptEdits');
   });
   test.afterAll(async () => {
     await cleanupProject(project);
