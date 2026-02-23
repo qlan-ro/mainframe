@@ -65,4 +65,18 @@ describe('validateManifest', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejects manifest with ui.zone but without ui:panels capability', () => {
+    const result = validateManifest({
+      id: 'test',
+      name: 'Test',
+      version: '1.0.0',
+      capabilities: [],
+      ui: { zone: 'fullview', label: 'Test' },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/ui:panels/);
+    }
+  });
 });

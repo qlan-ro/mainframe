@@ -44,6 +44,13 @@ const ManifestSchema = z
         message: 'adapter field is required when "adapters" capability is declared',
       });
     }
+    if (data.ui?.zone && !data.capabilities.includes('ui:panels')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Manifest declares ui.zone but is missing the "ui:panels" capability',
+        path: ['capabilities'],
+      });
+    }
   });
 
 export function validateManifest(
