@@ -1,31 +1,21 @@
-import path from 'node:path';
-import type { PluginUIContext, PluginPanelSpec } from '@mainframe/types';
-import type { DaemonEvent } from '@mainframe/types';
+import type { PluginUIContext, UIZone, DaemonEvent } from '@mainframe/types';
 
-export function createPluginUIContext(
-  pluginId: string,
-  pluginDir: string,
-  emitEvent: (event: DaemonEvent) => void,
-): PluginUIContext {
+export function createPluginUIContext(pluginId: string, emitEvent: (event: DaemonEvent) => void): PluginUIContext {
   return {
-    addPanel(spec: PluginPanelSpec): void {
-      const absoluteEntryPoint = path.resolve(pluginDir, spec.entryPoint);
+    addPanel({ zone, label, icon }: { zone: UIZone; label: string; icon?: string }): void {
       emitEvent({
         type: 'plugin.panel.registered',
         pluginId,
-        panelId: spec.id,
-        label: spec.label,
-        icon: spec.icon,
-        position: spec.position,
-        entryPoint: absoluteEntryPoint,
+        zone,
+        label,
+        icon,
       });
     },
 
-    removePanel(panelId: string): void {
+    removePanel(): void {
       emitEvent({
         type: 'plugin.panel.unregistered',
         pluginId,
-        panelId,
       });
     },
 

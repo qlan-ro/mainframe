@@ -51,7 +51,7 @@ export function buildPluginContext(deps: PluginContextDeps): PluginContext {
 
   const uiContext =
     has('ui:panels') || has('ui:notifications')
-      ? createPluginUIContext(manifest.id, pluginDir, deps.emitEvent)
+      ? createPluginUIContext(manifest.id, deps.emitEvent)
       : new Proxy({} as ReturnType<typeof createPluginUIContext>, {
           get:
             () =>
