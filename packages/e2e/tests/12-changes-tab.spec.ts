@@ -21,18 +21,21 @@ test.describe('§12–13 Changes tab & diff viewer', () => {
   });
 
   test('Session mode shows AI-modified files', async () => {
-    await fixture.page.getByRole('tab', { name: /changes/i }).click();
-    await fixture.page.getByRole('button', { name: /session/i }).click();
-    await expect(fixture.page.getByText('index.ts')).toBeVisible();
+    const panel = fixture.page.locator('[data-testid="right-panel"]');
+    await panel.getByRole('tab', { name: /changes/i }).click();
+    await panel.getByRole('button', { name: /session/i }).click();
+    await expect(panel.getByText('index.ts', { exact: true }).first()).toBeVisible();
   });
 
   test('Branch mode shows git-tracked changes', async () => {
-    await fixture.page.getByRole('button', { name: /branch/i }).click();
-    await expect(fixture.page.getByText('index.ts')).toBeVisible();
+    const panel = fixture.page.locator('[data-testid="right-panel"]');
+    await panel.getByRole('button', { name: /branch/i }).click();
+    await expect(panel.getByText('index.ts', { exact: true }).first()).toBeVisible();
   });
 
   test('clicking a changed file opens the diff viewer', async () => {
-    await fixture.page.getByText('index.ts').click();
-    await expect(fixture.page.locator('.monaco-diff-editor')).toBeVisible();
+    const panel = fixture.page.locator('[data-testid="right-panel"]');
+    await panel.getByText('index.ts', { exact: true }).first().click();
+    await expect(fixture.page.locator('.monaco-diff-editor').first()).toBeVisible({ timeout: 15_000 });
   });
 });
