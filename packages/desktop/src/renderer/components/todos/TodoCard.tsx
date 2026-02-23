@@ -37,7 +37,13 @@ export function TodoCard({ todo, onMove, onEdit, onDelete, onStartSession }: Pro
   const canMoveRight = colIdx < COLUMN_ORDER.length - 1;
 
   return (
-    <div className="bg-mf-app-bg rounded-mf-input p-3 space-y-2 border border-mf-border group">
+    <div
+      data-testid="todo-card"
+      draggable
+      onDragStart={(e) => e.dataTransfer.setData('todo-id', todo.id)}
+      onClick={() => onEdit(todo)}
+      className="bg-mf-app-bg rounded-mf-input p-3 space-y-2 border border-mf-border group cursor-pointer"
+    >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <span
@@ -72,7 +78,10 @@ export function TodoCard({ todo, onMove, onEdit, onDelete, onStartSession }: Pro
         <div className="flex items-center gap-1">
           {canMoveLeft && (
             <button
-              onClick={() => onMove(todo.id, COLUMN_ORDER[colIdx - 1]!)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onMove(todo.id, COLUMN_ORDER[colIdx - 1]!);
+              }}
               className="p-1 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
               title="Move left"
               aria-label="Move to previous column"
@@ -82,7 +91,10 @@ export function TodoCard({ todo, onMove, onEdit, onDelete, onStartSession }: Pro
           )}
           {canMoveRight && (
             <button
-              onClick={() => onMove(todo.id, COLUMN_ORDER[colIdx + 1]!)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onMove(todo.id, COLUMN_ORDER[colIdx + 1]!);
+              }}
               className="p-1 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
               title="Move right"
               aria-label="Move to next column"
@@ -94,7 +106,10 @@ export function TodoCard({ todo, onMove, onEdit, onDelete, onStartSession }: Pro
         <div className="flex items-center gap-1">
           {todo.status === 'in_progress' && (
             <button
-              onClick={() => onStartSession(todo)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onStartSession(todo);
+              }}
               className="flex items-center gap-1 px-2 py-1 rounded text-mf-small text-mf-accent hover:bg-mf-accent/10 transition-colors"
               title="Start in session"
               aria-label="Start in new session"
@@ -104,7 +119,10 @@ export function TodoCard({ todo, onMove, onEdit, onDelete, onStartSession }: Pro
             </button>
           )}
           <button
-            onClick={() => onEdit(todo)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(todo);
+            }}
             className="p-1 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors opacity-0 group-hover:opacity-100"
             title="Edit"
             aria-label="Edit task"
@@ -112,7 +130,10 @@ export function TodoCard({ todo, onMove, onEdit, onDelete, onStartSession }: Pro
             <Edit size={12} />
           </button>
           <button
-            onClick={() => onDelete(todo.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(todo.id);
+            }}
             className="p-1 rounded text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors opacity-0 group-hover:opacity-100"
             title="Delete"
             aria-label="Delete task"

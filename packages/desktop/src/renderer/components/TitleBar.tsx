@@ -243,6 +243,7 @@ export function TitleBar({
           {fullviewContributions.map((c) => (
             <button
               key={c.pluginId}
+              data-testid={`${c.pluginId}-panel-icon`}
               onClick={() => handleFullviewClick(c.pluginId)}
               title={c.label}
               className={cn(

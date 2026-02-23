@@ -141,6 +141,12 @@ export function TodosPanel(): React.ReactElement {
             <div
               key={status}
               className="flex-1 flex flex-col border-r border-mf-border last:border-r-0 overflow-hidden"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData('todo-id');
+                if (id) void handleMove(id, status);
+              }}
             >
               <div className="px-3 py-2 text-mf-small font-medium text-mf-text-secondary flex items-center gap-1.5 shrink-0">
                 <span>{label}</span>
@@ -175,6 +181,7 @@ export function TodosPanel(): React.ReactElement {
             setEditingTodo(null);
           }}
           onSave={editingTodo ? handleUpdate : handleCreate}
+          onStartSession={handleStartSession}
         />
       )}
     </div>

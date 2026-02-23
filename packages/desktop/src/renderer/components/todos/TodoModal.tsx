@@ -20,6 +20,7 @@ interface Props {
   todo?: Todo | null;
   onClose: () => void;
   onSave: (data: CreateTodoInput) => void;
+  onStartSession?: (todo: Todo) => void;
 }
 
 const input = cn(
@@ -27,7 +28,7 @@ const input = cn(
   'text-mf-small text-mf-text-primary focus:outline-none focus:border-mf-accent',
 );
 
-export function TodoModal({ todo, onClose, onSave }: Props): React.ReactElement {
+export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): React.ReactElement {
   const [title, setTitle] = useState(todo?.title ?? '');
   const [body, setBody] = useState(todo?.body ?? '');
   const [status, setStatus] = useState<TodoStatus>(todo?.status ?? 'open');
@@ -69,6 +70,9 @@ export function TodoModal({ todo, onClose, onSave }: Props): React.ReactElement 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={todo ? 'Edit Task' : 'New Task'}
         className="bg-mf-panel-bg rounded-mf-panel border border-mf-border w-full max-w-lg mx-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -85,8 +89,11 @@ export function TodoModal({ todo, onClose, onSave }: Props): React.ReactElement 
 
         <form onSubmit={handleSubmit} className="p-4 space-y-3 max-h-[80vh] overflow-y-auto">
           <div className="flex flex-col gap-1">
-            <label className="text-mf-small text-mf-text-secondary">Title *</label>
+            <label htmlFor="todo-title" className="text-mf-small text-mf-text-secondary">
+              Title *
+            </label>
             <input
+              id="todo-title"
               className={input}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -183,6 +190,18 @@ export function TodoModal({ todo, onClose, onSave }: Props): React.ReactElement 
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
+            {todo && todo.status === 'in_progress' && onStartSession && (
+              <button
+                type="button"
+                onClick={() => {
+                  onStartSession(todo);
+                  onClose();
+                }}
+                className="mr-auto px-3 py-1.5 rounded-mf-input text-mf-small text-mf-accent hover:bg-mf-accent/10 transition-colors"
+              >
+                Start Session
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -195,7 +214,7 @@ export function TodoModal({ todo, onClose, onSave }: Props): React.ReactElement 
               disabled={!title.trim()}
               className="px-3 py-1.5 rounded-mf-input text-mf-small bg-mf-accent text-white disabled:opacity-40 hover:bg-mf-accent/90 transition-colors"
             >
-              {todo ? 'Save Changes' : 'Create Task'}
+              {todo ? 'Save Changes' : 'Save Task'}
             </button>
           </div>
         </form>
