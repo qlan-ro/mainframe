@@ -45,3 +45,5 @@ export {
 } from './settings-api';
 
 export { getAttachment, uploadAttachments } from './attachments-api';
+
+export { getPlugins } from './plugins-api';
