@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, realpathSync } from 'fs';
 import { execSync } from 'child_process';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -17,8 +17,9 @@ const DEFAULT_CLAUDE_MD =
   '# E2E Test Project\n\nThis is an automated test environment. Do not use plan mode. Do not call EnterPlanMode. Execute all tool calls directly without planning first.\n';
 
 export async function createTestProject(page: Page, options?: { claudeMd?: string }): Promise<ProjectFixture> {
-  // Create temp directory
-  const projectPath = mkdtempSync(path.join(tmpdir(), 'mf-e2e-'));
+  // Create temp directory and resolve symlinks (macOS /var → /private/var) so
+  // Claude's absolute file paths match what's stored in the DB.
+  const projectPath = realpathSync(mkdtempSync(path.join(tmpdir(), 'mf-e2e-')));
 
   // Init git repo with an initial commit so git status works
   execSync('git init && git commit --allow-empty -m "init"', {

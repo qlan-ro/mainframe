@@ -19,10 +19,10 @@ test.describe('§10–11 Context & Files tabs', () => {
     await closeApp(fixture);
   });
 
-  test('modified file appears in Context tab after AI edits it', async () => {
+  test('modified file appears in Changes tab after AI edits it', async () => {
     await chat(fixture.page, 'Edit index.ts and add a comment at the top', 90_000);
     const panel = fixture.page.locator('[data-testid="right-panel"]');
-    await panel.getByRole('tab', { name: /context/i }).click();
+    await panel.getByRole('tab', { name: /changes/i }).click();
     await expect(panel.getByText('index.ts', { exact: true }).first()).toBeVisible();
   });
 
