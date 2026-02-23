@@ -79,36 +79,40 @@ export function MonacoEditor({
         decorationsRef.current?.set([]);
       });
 
+      const openCommentAtLine = (lineNumber: number) => {
+        const model = editor.getModel();
+        const lineContent = model?.getLineContent(lineNumber) ?? '';
+
+        closeInlineComment();
+
+        // Get line position before adding the zone
+        const pos = editor.getScrolledVisiblePosition({ lineNumber, column: 1 });
+        if (!pos) return;
+
+        // Empty ViewZone just for spacing (pushes lines down)
+        const domNode = document.createElement('div');
+        editor.changeViewZones((accessor) => {
+          zoneIdRef.current = accessor.addZone({
+            afterLineNumber: lineNumber,
+            heightInPx: 120,
+            domNode,
+          });
+        });
+
+        setInlineComment({ line: lineNumber, lineContent, top: pos.top + pos.height });
+      };
+
       editor.onMouseDown((e) => {
+        const lineNumber = e.target.position?.lineNumber;
+        if (!lineNumber) return;
+
+        // Glyph margin click (hover icon)
         if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-          const lineNumber = e.target.position?.lineNumber;
-          if (lineNumber) {
-            const model = editor.getModel();
-            const lineContent = model?.getLineContent(lineNumber) ?? '';
-
-            closeInlineComment();
-
-            // Get line position before adding the zone
-            const pos = editor.getScrolledVisiblePosition({ lineNumber, column: 1 });
-            if (!pos) return;
-
-            // Empty ViewZone just for spacing (pushes lines down)
-            const domNode = document.createElement('div');
-            editor.changeViewZones((accessor) => {
-              zoneIdRef.current = accessor.addZone({
-                afterLineNumber: lineNumber,
-                heightInPx: 120,
-                domNode,
-              });
-            });
-
-            // Show the interactive overlay at the zone position
-            setInlineComment({
-              line: lineNumber,
-              lineContent,
-              top: pos.top + pos.height,
-            });
-          }
+          openCommentAtLine(lineNumber);
+        }
+        // Cmd+Click on line content
+        if (e.target.type === monaco.editor.MouseTargetType.CONTENT_TEXT && e.event.metaKey) {
+          openCommentAtLine(lineNumber);
         }
       });
 
@@ -149,7 +153,11 @@ export function MonacoEditor({
         }}
       />
       {inlineComment && (
-        <div className="absolute left-0 right-0 z-50 px-14" style={{ top: inlineComment.top }}>
+        <div
+          data-testid="line-comment-popover"
+          className="absolute left-0 right-0 z-50 px-14"
+          style={{ top: inlineComment.top }}
+        >
           <InlineCommentWidget
             line={inlineComment.line}
             lineContent={inlineComment.lineContent}

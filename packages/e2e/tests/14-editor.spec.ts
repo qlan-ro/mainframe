@@ -23,7 +23,7 @@ test.describe('§14 Editor & line comments', () => {
 
   test('Monaco editor renders with syntax highlighting for .ts file', async () => {
     await expect(fixture.page.locator('.monaco-editor').first()).toBeVisible({ timeout: 15_000 });
-    await expect(fixture.page.locator('.mtk').first()).toBeVisible({ timeout: 15_000 });
+    await expect(fixture.page.locator('[class*="mtk"]').first()).toBeVisible({ timeout: 15_000 });
   });
 
   test('Cmd+Click on a line opens the line comment popover', async () => {
