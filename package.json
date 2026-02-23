@@ -24,6 +24,7 @@
     "format:check": "prettier --check .",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test",
+    "test:e2e": "pnpm --filter @mainframe/e2e test",
     "clean": "pnpm -r run clean",
     "package": "pnpm build && pnpm --filter @mainframe/desktop run package",
     "version": "pnpm -r version --no-git-tag-version $npm_new_version && git add -A",
