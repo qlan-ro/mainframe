@@ -1,19 +1,8 @@
 import React from 'react';
-import { PanelRight, SquareCheck, MessageSquare, type LucideProps } from 'lucide-react';
+import { PanelRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { usePluginLayoutStore } from '../store';
-
-// Curated map of Lucide icon names plugins may declare.
-// Add entries as new plugins are introduced.
-const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
-  'square-check': SquareCheck,
-  'message-square': MessageSquare,
-};
-
-function PluginIcon({ name, size = 16 }: { name: string; size?: number }): React.ReactElement | null {
-  const Icon = ICON_MAP[name];
-  return Icon ? <Icon size={size} /> : null;
-}
+import { PluginIcon } from './plugins/PluginIcon';
 
 interface RailButtonProps {
   active?: boolean;

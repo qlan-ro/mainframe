@@ -1,20 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Plus, Check, X, SquareCheck, type LucideProps } from 'lucide-react';
+import { Search, Plus, Check, X } from 'lucide-react';
 import type { Layout } from 'react-resizable-panels';
 import { useProjectsStore, useChatsStore, useSearchStore, usePluginLayoutStore } from '../store';
 import { useTabsStore } from '../store/tabs';
 import { createProject, removeProject } from '../lib/api';
 import { cn } from '../lib/utils';
-
-// Curated map of Lucide icon names plugins may declare for fullview zone.
-const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
-  'square-check': SquareCheck,
-};
-
-function PluginIcon({ name, size = 16 }: { name: string; size?: number }): React.ReactElement | null {
-  const Icon = ICON_MAP[name];
-  return Icon ? <Icon size={size} /> : null;
-}
+import { PluginIcon } from './plugins/PluginIcon';
 
 type PanelId = 'left' | 'right' | 'bottom';
 
