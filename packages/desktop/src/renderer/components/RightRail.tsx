@@ -17,7 +17,7 @@ function RailButton({ active, onClick, title, children }: RailButtonProps): Reac
       onClick={onClick}
       title={title}
       className={cn(
-        'w-8 h-8 flex items-center justify-center rounded-mf-card transition-colors',
+        'w-full h-8 flex items-center justify-center transition-colors',
         active
           ? 'bg-mf-panel-bg text-mf-text-primary'
           : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
@@ -44,7 +44,7 @@ export function RightRail(): React.ReactElement {
   return (
     <div className="w-11 bg-mf-app-bg flex flex-col py-2">
       {/* Activity icons */}
-      <div className="flex-1 flex flex-col items-center gap-2 overflow-y-auto">
+      <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
         {/* Default: Context panel */}
         <RailButton active={activeRightPanelId === null} onClick={handleContextClick} title="Context">
           <PanelRight size={16} />
