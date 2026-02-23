@@ -57,7 +57,7 @@ export function Layout({ leftPanel, centerPanel, rightPanel }: LayoutProps): Rea
       <div className="flex-1 flex overflow-hidden gap-0">
         <LeftRail />
 
-        <div className="flex-1 flex overflow-hidden p-mf-gap pt-0">
+        <div className="flex-1 flex overflow-hidden pb-mf-gap">
           {activeFullviewId ? (
             <div className="flex-1 bg-mf-panel-bg rounded-mf-panel overflow-hidden">
               <PluginView pluginId={activeFullviewId} />
