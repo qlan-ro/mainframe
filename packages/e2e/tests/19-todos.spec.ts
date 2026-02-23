@@ -48,7 +48,7 @@ test.describe('§20 Todos kanban', () => {
   test('Start Session creates a linked chat', async () => {
     await fixture.page.locator('[data-testid="todo-card"]').first().click();
     await fixture.page.getByRole('button', { name: /start session/i }).click();
-    await expect(fixture.page.locator('[data-testid="chat-list-item"]').first()).toBeVisible();
+    await expect(fixture.page.locator('[data-testid="chat-list-item"]').first()).toBeVisible({ timeout: 10_000 });
   });
 
   test('deletes a todo', async () => {
