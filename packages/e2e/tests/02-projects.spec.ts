@@ -26,7 +26,10 @@ test.describe('§2 Project management', () => {
     const p2 = await createTestProject(fixture.page);
     try {
       await fixture.page.locator('[data-testid="project-selector"]').click();
-      await fixture.page.getByText(p2.projectPath.split('/').pop()!).click();
+      await fixture.page
+        .locator('[data-testid="project-dropdown"]')
+        .getByText(p2.projectPath.split('/').pop()!, { exact: true })
+        .click();
       await expect(fixture.page.locator('[data-testid="project-selector"]')).toContainText(
         p2.projectPath.split('/').pop()!,
       );

@@ -33,12 +33,32 @@ export async function createTestProject(page: Page): Promise<ProjectFixture> {
     data: { path: projectPath },
   });
   if (!res.ok()) throw new Error(`Failed to register project: ${await res.text()}`);
-  const project = (await res.json()) as { id: string };
+  const { data: projectData } = (await res.json()) as { data: { id: string } };
 
-  // Wait for the project to appear in the title bar
-  await page.locator(`[data-testid="project-selector"]`).waitFor({ timeout: 5_000 });
+  // The server has no project.added WebSocket broadcast, so the renderer's store
+  // doesn't know about the new project until loadData() re-runs.
+  // Reloading triggers loadData() which re-fetches all projects from the API.
+  await page.reload();
+  await page.waitForLoadState('domcontentloaded');
+  await page
+    .locator('[data-testid="connection-status"]')
+    .getByText('Connected', { exact: true })
+    .waitFor({ timeout: 15_000 });
 
-  return { projectPath, projectId: project.id };
+  // Open the project dropdown and activate the newly registered project.
+  // Scope the click to the dropdown container to avoid strict-mode violations
+  // when the same project name appears in both the selector button and the list.
+  const projectName = path.basename(projectPath);
+  await page.locator('[data-testid="project-selector"]').click();
+  await page.locator('[data-testid="project-dropdown"]').getByText(projectName, { exact: true }).click();
+
+  // Confirm the selector now shows this project as active
+  await page
+    .locator('[data-testid="project-selector"]')
+    .getByText(projectName, { exact: true })
+    .waitFor({ timeout: 5_000 });
+
+  return { projectPath, projectId: projectData.id };
 }
 
 export async function cleanupProject({ projectPath }: ProjectFixture): Promise<void> {
