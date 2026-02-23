@@ -14,6 +14,20 @@ export type PluginCapability =
   | 'process:exec'
   | 'http:outbound';
 
+export type UIZone =
+  | 'fullview' // replaces Left + Center + Right; trigger in TitleBar
+  | 'left-panel' // replaces entire LeftPanel; trigger icon in Left Rail
+  | 'right-panel' // replaces entire RightPanel; trigger icon in Right Rail
+  | 'left-tab' // tab appended to LeftPanel tab strip
+  | 'right-tab'; // tab appended to RightPanel tab strip
+
+export interface PluginUIContribution {
+  pluginId: string;
+  zone: UIZone;
+  label: string;
+  icon?: string;
+}
+
 export interface PluginManifest {
   id: string;
   name: string;
@@ -22,6 +36,12 @@ export interface PluginManifest {
   author?: string;
   license?: string;
   capabilities: PluginCapability[];
+  /** UI contribution — required when plugin adds a panel or fullview */
+  ui?: {
+    zone: UIZone;
+    label: string; // tooltip for rail icons; tab text for tab zones
+    icon?: string; // Lucide icon name; required for fullview/left-panel/right-panel
+  };
   /** Adapter plugins only */
   adapter?: {
     binaryName: string;
@@ -43,17 +63,6 @@ export type PublicDaemonEvent =
   | { type: 'chat.error'; chatId: string; projectId: string; errorMessage: string }
   | { type: 'project.added'; projectId: string; path: string }
   | { type: 'project.removed'; projectId: string };
-
-// ─── Plugin panel registration ────────────────────────────────────────────────
-export type PluginPanelPosition = 'sidebar-primary' | 'sidebar-secondary' | 'bottom';
-
-export interface PluginPanelSpec {
-  id: string;
-  label: string;
-  icon?: string; // Lucide icon name
-  position: PluginPanelPosition;
-  entryPoint: string; // Absolute path to ESM UI bundle
-}
 
 // ─── Chat events (require 'chat:read' capability) ────────────────────────────
 export type ChatEventName = 'message.added' | 'message.streaming' | 'tool.called' | 'tool.result';
@@ -124,8 +133,8 @@ export interface PluginEventBus {
 }
 
 export interface PluginUIContext {
-  addPanel(spec: PluginPanelSpec): void;
-  removePanel(panelId: string): void;
+  addPanel(opts: { zone: UIZone; label: string; icon?: string }): void;
+  removePanel(): void;
   notify(options: { title: string; body: string; level?: 'info' | 'warning' | 'error' }): void;
 }
 

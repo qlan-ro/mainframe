@@ -1,6 +1,7 @@
 import type { Chat, ChatMessage } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
 import type { PermissionMode } from './settings.js';
+import type { UIZone } from './plugin.js';
 
 export type DaemonEvent =
   | { type: 'chat.created'; chat: Chat }
@@ -17,13 +18,11 @@ export type DaemonEvent =
   | {
       type: 'plugin.panel.registered';
       pluginId: string;
-      panelId: string;
+      zone: UIZone;
       label: string;
       icon?: string;
-      position: string;
-      entryPoint: string;
     }
-  | { type: 'plugin.panel.unregistered'; pluginId: string; panelId: string }
+  | { type: 'plugin.panel.unregistered'; pluginId: string }
   | { type: 'plugin.notification'; pluginId: string; title: string; body: string; level?: string };
 
 export type ClientEvent =
