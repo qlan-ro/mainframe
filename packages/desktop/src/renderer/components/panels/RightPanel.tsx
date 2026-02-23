@@ -7,6 +7,8 @@ import { ChangesTab } from './ChangesTab';
 import { FileViewHeader } from './FileViewHeader';
 import { FileViewContent } from './FileViewContent';
 import { useTabsStore } from '../../store/tabs';
+import { usePluginLayoutStore } from '../../store';
+import { PluginView } from '../plugins/PluginView';
 
 type SidebarTab = 'context' | 'files' | 'changes';
 
@@ -14,6 +16,9 @@ const MIN_SIDEBAR_PX = 240;
 const MAX_SIDEBAR_PX = 420;
 
 export function RightPanel(): React.ReactElement {
+  const activeRightPanelId = usePluginLayoutStore((s) => s.activeRightPanelId);
+  const rightTabContributions = usePluginLayoutStore((s) => s.contributions.filter((c) => c.zone === 'right-tab'));
+
   const fileView = useTabsStore((s) => s.fileView);
   const fileViewCollapsed = useTabsStore((s) => s.fileViewCollapsed);
   const toggleFileViewCollapsed = useTabsStore((s) => s.toggleFileViewCollapsed);
@@ -56,6 +61,14 @@ export function RightPanel(): React.ReactElement {
   const onPointerUp = useCallback(() => {
     dragging.current = false;
   }, []);
+
+  if (activeRightPanelId) {
+    return (
+      <div className="h-full">
+        <PluginView pluginId={activeRightPanelId} />
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className="h-full flex overflow-hidden">
@@ -103,6 +116,11 @@ export function RightPanel(): React.ReactElement {
             <TabsTrigger value="changes" className="text-mf-small">
               Changes
             </TabsTrigger>
+            {rightTabContributions.map((c) => (
+              <TabsTrigger key={c.pluginId} value={`plugin:${c.pluginId}`} className="text-mf-small">
+                {c.label}
+              </TabsTrigger>
+            ))}
             {toggleMode && (
               <>
                 <div className="flex-1" />
@@ -129,6 +147,12 @@ export function RightPanel(): React.ReactElement {
           <TabsContent value="changes" className="flex-1 overflow-hidden mt-0">
             <ChangesTab />
           </TabsContent>
+
+          {rightTabContributions.map((c) => (
+            <TabsContent key={c.pluginId} value={`plugin:${c.pluginId}`} className="flex-1 overflow-hidden mt-0">
+              <PluginView pluginId={c.pluginId} />
+            </TabsContent>
+          ))}
         </Tabs>
       </div>
     </div>
