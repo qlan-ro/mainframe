@@ -40,5 +40,5 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
 
   setActiveLeftPanel: (pluginId) => set({ activeLeftPanelId: pluginId, activeFullviewId: null }),
 
-  setActiveRightPanel: (pluginId) => set({ activeRightPanelId: pluginId }),
+  setActiveRightPanel: (pluginId) => set({ activeRightPanelId: pluginId, activeFullviewId: null }),
 }));

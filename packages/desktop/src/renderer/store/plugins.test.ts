@@ -60,6 +60,13 @@ describe('activateFullview / deactivateFullview', () => {
     expect(usePluginLayoutStore.getState().activeFullviewId).toBeNull();
     expect(usePluginLayoutStore.getState().activeLeftPanelId).toBe('myPlugin');
   });
+
+  it('deactivates fullview when right panel is activated', () => {
+    usePluginLayoutStore.getState().activateFullview('todos');
+    usePluginLayoutStore.getState().setActiveRightPanel('right-plugin');
+    expect(usePluginLayoutStore.getState().activeFullviewId).toBeNull();
+    expect(usePluginLayoutStore.getState().activeRightPanelId).toBe('right-plugin');
+  });
 });
 
 describe('setActiveLeftPanel / setActiveRightPanel', () => {
