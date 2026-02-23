@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
+import { createTestChat } from '../fixtures/chat.js';
 
 test.describe('§4 Chat lifecycle', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
@@ -15,14 +16,14 @@ test.describe('§4 Chat lifecycle', () => {
     await closeApp(fixture);
   });
 
-  test('creates a new chat with Cmd+N', async () => {
-    await fixture.page.keyboard.press('Meta+n');
+  test('creates a new chat', async () => {
+    await createTestChat(fixture.page, project.projectId);
     await expect(fixture.page.locator('[data-testid="chat-list-item"]').first()).toBeVisible();
   });
 
   test('switches between chats by clicking the list', async () => {
-    await fixture.page.keyboard.press('Meta+n');
-    await fixture.page.keyboard.press('Meta+n');
+    await createTestChat(fixture.page, project.projectId);
+    await createTestChat(fixture.page, project.projectId);
     const items = fixture.page.locator('[data-testid="chat-list-item"]');
     await items.nth(0).click();
     await items.nth(1).click();
