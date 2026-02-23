@@ -10,6 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Path to the built Electron main entry point
 const APP_MAIN = path.resolve(__dirname, '../../../packages/desktop/out/main/index.js');
 
+// Pre-built daemon bundle — present after `pnpm --filter @mainframe/desktop build`
+const DAEMON_CJS = path.resolve(__dirname, '../../../packages/desktop/resources/daemon.cjs');
+
 export interface AppFixture {
   app: ElectronApplication;
   page: Page;
@@ -25,6 +28,9 @@ export async function launchApp(): Promise<AppFixture> {
     env: {
       ...process.env,
       MAINFRAME_DATA_DIR: testDataDir,
+      // Point directly to the built daemon bundle so the app doesn't rely on
+      // process.resourcesPath, which only resolves correctly in packaged builds.
+      MAINFRAME_DAEMON_PATH: DAEMON_CJS,
     },
   });
   const page = await app.firstWindow();
