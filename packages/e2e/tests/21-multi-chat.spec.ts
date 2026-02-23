@@ -30,13 +30,13 @@ test.describe('§21 Multiple simultaneous chats', () => {
 
     // Switch to Chat A (older, index 1) and verify its response
     await chats.nth(1).click();
-    await expect(fixture.page.getByText('CHAT_A_RESPONSE')).toBeVisible({ timeout: 5_000 });
+    await expect(fixture.page.getByText('CHAT_A_RESPONSE', { exact: true })).toBeVisible({ timeout: 5_000 });
 
     // Switch to Chat B (more recent, index 0) and verify its response
     await chats.nth(0).click();
-    await expect(fixture.page.getByText('CHAT_B_RESPONSE')).toBeVisible({ timeout: 5_000 });
+    await expect(fixture.page.getByText('CHAT_B_RESPONSE', { exact: true })).toBeVisible({ timeout: 5_000 });
 
     // Cross-contamination check: Chat A's response must not appear in Chat B's view
-    await expect(fixture.page.getByText('CHAT_A_RESPONSE')).toHaveCount(0);
+    await expect(fixture.page.getByText('CHAT_A_RESPONSE', { exact: true })).toHaveCount(0);
   });
 });

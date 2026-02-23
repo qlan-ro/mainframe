@@ -39,7 +39,7 @@ test.describe('§22 App restart & state persistence', () => {
     try {
       await expect(page2.locator('[data-testid="chat-list-item"]').first()).toBeVisible();
       await page2.locator('[data-testid="chat-list-item"]').first().click();
-      await expect(page2.getByText('PERSISTENCE_CHECK')).toBeVisible();
+      await expect(page2.getByText('PERSISTENCE_CHECK', { exact: true })).toBeVisible();
     } finally {
       await app2.close();
       fixture.daemon.kill();
