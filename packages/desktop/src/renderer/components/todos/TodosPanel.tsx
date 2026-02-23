@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react';
 import { todosApi, type Todo, type TodoStatus, type CreateTodoInput } from '../../lib/api/todos-api';
 import { TodoCard } from './TodoCard';
 import { TodoModal } from './TodoModal';
-import { useProjectsStore } from '../../store';
+import { useProjectsStore, usePluginLayoutStore } from '../../store';
 import { useSkillsStore } from '../../store/skills';
 import { daemonClient } from '../../lib/client';
 
@@ -88,6 +88,8 @@ export function TodosPanel(): React.ReactElement {
         const { chatId, initialMessage } = await todosApi.startSession(todo.id, activeProjectId);
         // Pre-fill the composer using the existing pendingInvocation mechanism
         useSkillsStore.getState().setPendingInvocation(initialMessage);
+        // Close the todos fullview so the sessions panel becomes visible
+        usePluginLayoutStore.getState().activateFullview('todos');
         // chat.created WS event will open the tab automatically
         daemonClient.subscribe(chatId);
       } catch (err) {
