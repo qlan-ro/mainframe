@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
+import { createTestChat } from '../fixtures/chat.js';
 import { sendMessage, waitForAIIdle, waitForAskQuestionCard } from '../helpers/wait.js';
 
 test.describe('§8 AskUserQuestion', () => {
@@ -10,7 +11,8 @@ test.describe('§8 AskUserQuestion', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await fixture.page.keyboard.press('Meta+n');
+    // Yolo mode so Claude can call AskUserQuestion immediately (no plan/permission interrupts)
+    await createTestChat(fixture.page, project.projectId, 'yolo');
   });
   test.afterAll(async () => {
     await cleanupProject(project);
