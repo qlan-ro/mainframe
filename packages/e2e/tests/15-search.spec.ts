@@ -36,6 +36,8 @@ test.describe('§15 Search palette', () => {
   test('Enter on a file result opens it in the editor', async () => {
     await fixture.page.keyboard.press('Meta+f');
     await fixture.page.keyboard.type('utils');
+    // Wait for file results to appear (300ms debounce + network)
+    await expect(fixture.page.getByText('utils.ts')).toBeVisible({ timeout: 5_000 });
     await fixture.page.keyboard.press('ArrowDown');
     await fixture.page.keyboard.press('Enter');
     await expect(fixture.page.locator('.monaco-editor').first()).toBeVisible({ timeout: 15_000 });
