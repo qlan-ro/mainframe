@@ -1,10 +1,12 @@
 import React, { useLayoutEffect, useState } from 'react';
 import { Panel, Group, Separator, usePanelRef, type Layout } from 'react-resizable-panels';
-import { useUIStore } from '../store';
+import { usePluginLayoutStore, useUIStore } from '../store';
 import { useTabsStore } from '../store/tabs';
 import { TitleBar } from './TitleBar';
-import { ProjectRail } from './ProjectRail';
+import { LeftRail } from './LeftRail';
+import { RightRail } from './RightRail';
 import { StatusBar } from './StatusBar';
+import { PluginView } from './plugins/PluginView';
 
 interface LayoutProps {
   leftPanel: React.ReactNode;
@@ -22,6 +24,7 @@ export function Layout({ leftPanel, centerPanel, rightPanel }: LayoutProps): Rea
   const { panelCollapsed } = useUIStore();
   const [panelSizes, setPanelSizes] = useState<Layout>({});
   const rightPanelRef = usePanelRef();
+  const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
 
   const fileView = useTabsStore((s) => s.fileView);
   const fileViewCollapsed = useTabsStore((s) => s.fileViewCollapsed);
@@ -52,36 +55,44 @@ export function Layout({ leftPanel, centerPanel, rightPanel }: LayoutProps): Rea
       <TitleBar panelSizes={panelSizes} panelCollapsed={panelCollapsed} />
 
       <div className="flex-1 flex overflow-hidden gap-0">
-        <ProjectRail />
+        <LeftRail />
 
         <div className="flex-1 flex overflow-hidden p-mf-gap pt-0">
-          <Group orientation="horizontal" onLayoutChange={setPanelSizes}>
-            {/* Left Sidebar */}
-            {!panelCollapsed.left && (
-              <>
-                <Panel id="left" defaultSize="20%" minSize="15%" maxSize="35%">
-                  <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{leftPanel}</div>
-                </Panel>
-                <ResizeHandle />
-              </>
-            )}
+          {activeFullviewId ? (
+            <div className="flex-1 bg-mf-panel-bg rounded-mf-panel overflow-hidden">
+              <PluginView pluginId={activeFullviewId} />
+            </div>
+          ) : (
+            <Group orientation="horizontal" onLayoutChange={setPanelSizes}>
+              {/* Left Sidebar */}
+              {!panelCollapsed.left && (
+                <>
+                  <Panel id="left" defaultSize="20%" minSize="15%" maxSize="35%">
+                    <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{leftPanel}</div>
+                  </Panel>
+                  <ResizeHandle />
+                </>
+              )}
 
-            {/* Center Panel */}
-            <Panel id="center">
-              <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>
-            </Panel>
+              {/* Center Panel */}
+              <Panel id="center">
+                <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>
+              </Panel>
 
-            {/* Right Panel */}
-            {!panelCollapsed.right && (
-              <>
-                <ResizeHandle />
-                <Panel id="right" panelRef={rightPanelRef} defaultSize="24%" minSize="10%" maxSize="70%">
-                  <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{rightPanel}</div>
-                </Panel>
-              </>
-            )}
-          </Group>
+              {/* Right Panel */}
+              {!panelCollapsed.right && (
+                <>
+                  <ResizeHandle />
+                  <Panel id="right" panelRef={rightPanelRef} defaultSize="24%" minSize="10%" maxSize="70%">
+                    <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{rightPanel}</div>
+                  </Panel>
+                </>
+              )}
+            </Group>
+          )}
         </div>
+
+        <RightRail />
       </div>
 
       <StatusBar />
