@@ -17,7 +17,7 @@ function RailButton({ active, onClick, title, children }: RailButtonProps): Reac
       onClick={onClick}
       title={title}
       className={cn(
-        'w-full h-8 flex items-center justify-center transition-colors',
+        'w-8 h-8 mx-auto flex items-center justify-center rounded-mf-card transition-colors',
         active
           ? 'bg-mf-panel-bg text-mf-text-primary'
           : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
