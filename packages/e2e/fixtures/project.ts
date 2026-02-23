@@ -4,7 +4,9 @@ import { tmpdir } from 'os';
 import path from 'path';
 import type { Page } from '@playwright/test';
 
-const DAEMON_BASE = `http://localhost:${process.env['PORT'] ?? '31415'}`;
+// Use 127.0.0.1 explicitly — localhost resolves to ::1 (IPv6) first on macOS/Node 17+,
+// but the daemon binds to 127.0.0.1 (IPv4) only.
+const DAEMON_BASE = `http://127.0.0.1:${process.env['PORT'] ?? '31415'}`;
 
 export interface ProjectFixture {
   projectPath: string;
