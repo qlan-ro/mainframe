@@ -5,7 +5,7 @@ describe('PluginUIContext', () => {
   it('calls emit on addPanel', () => {
     const emitEvent = vi.fn();
     const ui = createPluginUIContext('my-plugin', emitEvent);
-    ui.addPanel({ zone: 'sidebar-left', label: 'My Panel' });
+    ui.addPanel({ zone: 'left-panel', label: 'My Panel' });
     expect(emitEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'plugin.panel.registered', pluginId: 'my-plugin' }),
     );
@@ -14,11 +14,11 @@ describe('PluginUIContext', () => {
   it('emits correct zone and label on addPanel', () => {
     const emitEvent = vi.fn();
     const ui = createPluginUIContext('my-plugin', emitEvent);
-    ui.addPanel({ zone: 'sidebar-right', label: 'My Panel', icon: 'star' });
+    ui.addPanel({ zone: 'right-panel', label: 'My Panel', icon: 'star' });
     expect(emitEvent).toHaveBeenCalledWith({
       type: 'plugin.panel.registered',
       pluginId: 'my-plugin',
-      zone: 'sidebar-right',
+      zone: 'right-panel',
       label: 'My Panel',
       icon: 'star',
     });

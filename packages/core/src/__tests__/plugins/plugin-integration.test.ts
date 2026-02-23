@@ -150,7 +150,7 @@ describe('Plugin System — integration', () => {
       module.exports = {
         activate(ctx) {
           ctx.ui.addPanel({
-            zone: 'sidebar-left',
+            zone: 'left-panel',
             label: 'My Panel',
           });
         }
@@ -165,7 +165,7 @@ describe('Plugin System — integration', () => {
       expect.objectContaining({
         type: 'plugin.panel.registered',
         pluginId: 'ui-plugin',
-        zone: 'sidebar-left',
+        zone: 'left-panel',
         label: 'My Panel',
       }),
     );
