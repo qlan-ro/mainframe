@@ -260,8 +260,7 @@ export function activate(ctx: PluginContext): void {
   registerTodoRoutes(ctx);
   registerSessionRoute(ctx);
   registerAttachmentRoutes(ctx);
+  ctx.ui.addPanel({ zone: 'fullview', label: 'Tasks', icon: 'square-check' });
+  ctx.onUnload(() => ctx.ui.removePanel());
   ctx.logger.info('TODO Kanban plugin activated');
-  ctx.onUnload(() => {
-    ctx.logger.info('TODO Kanban plugin unloaded');
-  });
 }

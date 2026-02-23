@@ -15,7 +15,7 @@ const todosManifest: PluginManifest = {
   id: 'todos',
   name: 'TODO Kanban',
   version: '1.0.0',
-  capabilities: ['storage', 'chat:create'],
+  capabilities: ['storage', 'chat:create', 'ui:panels'],
 };
 
 let tmpDir: string;

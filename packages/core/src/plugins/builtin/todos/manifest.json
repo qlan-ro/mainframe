@@ -4,5 +4,10 @@
   "version": "1.0.0",
   "description": "GitHub-style kanban board for tracking tasks",
   "author": "Mainframe Team",
-  "capabilities": ["storage", "chat:create"]
+  "capabilities": ["storage", "chat:create", "ui:panels"],
+  "ui": {
+    "zone": "fullview",
+    "label": "Tasks",
+    "icon": "square-check"
+  }
 }
