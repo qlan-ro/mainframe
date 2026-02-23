@@ -1,15 +1,14 @@
 import { test, expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
-import { sendMessage, waitForAIIdle, waitForPermissionCard, waitForAskQuestionCard } from '../helpers/wait.js';
-
-async function setPermissionMode(page: Page, mode: 'interactive' | 'acceptEdits' | 'yolo') {
-  await page.keyboard.press('Meta+,');
-  await page.getByRole('tab', { name: /providers/i }).click();
-  await page.getByRole('combobox', { name: /permission mode/i }).selectOption(mode);
-  await page.keyboard.press('Escape');
-}
+import { createTestChat } from '../fixtures/chat.js';
+import {
+  sendMessage,
+  waitForAIIdle,
+  waitForPermissionCard,
+  waitForPermissionCardHandlingPlan,
+  waitForAskQuestionCard,
+} from '../helpers/wait.js';
 
 test.describe('§6 Permission system — Interactive', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
@@ -18,8 +17,7 @@ test.describe('§6 Permission system — Interactive', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await setPermissionMode(fixture.page, 'interactive');
-    await fixture.page.keyboard.press('Meta+n');
+    await createTestChat(fixture.page, project.projectId, 'default');
   });
   test.afterAll(async () => {
     await cleanupProject(project);
@@ -28,7 +26,8 @@ test.describe('§6 Permission system — Interactive', () => {
 
   test('shows PermissionCard for a file creation request', async () => {
     await sendMessage(fixture.page, 'Create a file at /tmp/mf-e2e-test.txt with content "hello"');
-    await waitForPermissionCard(fixture.page);
+    // Claude may enter plan mode before executing — approve it to reach the file-write permission card
+    await waitForPermissionCardHandlingPlan(fixture.page);
     await expect(fixture.page.locator('[data-testid="permission-card"]')).toBeVisible();
   });
 
@@ -40,7 +39,7 @@ test.describe('§6 Permission system — Interactive', () => {
 
   test('Allow Once permits the tool but next request prompts again', async () => {
     await sendMessage(fixture.page, 'Create /tmp/mf-e2e-test.txt again');
-    await waitForPermissionCard(fixture.page);
+    await waitForPermissionCardHandlingPlan(fixture.page);
     await fixture.page
       .locator('[data-testid="permission-card"]')
       .getByRole('button', { name: /allow once/i })
@@ -48,7 +47,7 @@ test.describe('§6 Permission system — Interactive', () => {
     await waitForAIIdle(fixture.page);
 
     await sendMessage(fixture.page, 'Create /tmp/mf-e2e-test.txt one more time');
-    await waitForPermissionCard(fixture.page, 20_000);
+    await waitForPermissionCardHandlingPlan(fixture.page);
     await expect(fixture.page.locator('[data-testid="permission-card"]')).toBeVisible();
 
     await fixture.page.locator('[data-testid="permission-card"]').getByRole('button', { name: /deny/i }).click();
@@ -63,8 +62,7 @@ test.describe('§6 Permission system — Auto-Edits', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await setPermissionMode(fixture.page, 'acceptEdits');
-    await fixture.page.keyboard.press('Meta+n');
+    await createTestChat(fixture.page, project.projectId, 'acceptEdits');
   });
   test.afterAll(async () => {
     await cleanupProject(project);
@@ -85,8 +83,7 @@ test.describe('§6 Permission system — Yolo', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await setPermissionMode(fixture.page, 'yolo');
-    await fixture.page.keyboard.press('Meta+n');
+    await createTestChat(fixture.page, project.projectId, 'yolo');
   });
   test.afterAll(async () => {
     await cleanupProject(project);

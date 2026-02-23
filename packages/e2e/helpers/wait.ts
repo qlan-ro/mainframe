@@ -35,6 +35,20 @@ export async function waitForPermissionCard(page: Page, timeout = 15_000): Promi
   await page.locator('[data-testid="permission-card"]').waitFor({ timeout });
 }
 
+/**
+ * Waits for a permission card, approving any plan card that appears first.
+ * Claude may enter plan mode before executing tool calls in interactive mode.
+ */
+export async function waitForPermissionCardHandlingPlan(page: Page, timeout = 45_000): Promise<void> {
+  const planCard = page.locator('[data-testid="plan-approval-card"]');
+  const permCard = page.locator('[data-testid="permission-card"]');
+  await planCard.or(permCard).waitFor({ timeout });
+  if (await planCard.isVisible()) {
+    await planCard.getByRole('button', { name: /approve plan/i }).click();
+    await permCard.waitFor({ timeout });
+  }
+}
+
 export async function waitForPlanCard(page: Page, timeout = 30_000): Promise<void> {
   await page.locator('[data-testid="plan-approval-card"]').waitFor({ timeout });
 }

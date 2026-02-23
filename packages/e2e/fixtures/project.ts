@@ -24,7 +24,10 @@ export async function createTestProject(page: Page): Promise<ProjectFixture> {
   });
 
   // Seed files the AI can work with
-  writeFileSync(path.join(projectPath, 'CLAUDE.md'), '# E2E Test Project\n');
+  writeFileSync(
+    path.join(projectPath, 'CLAUDE.md'),
+    '# E2E Test Project\n\nThis is an automated test environment. Do not use plan mode. Do not call EnterPlanMode. Execute all tool calls directly without planning first.\n',
+  );
   writeFileSync(path.join(projectPath, 'index.ts'), 'export const greeting = "hello";\n');
   writeFileSync(path.join(projectPath, 'utils.ts'), 'export function add(a: number, b: number) { return a + b; }\n');
 

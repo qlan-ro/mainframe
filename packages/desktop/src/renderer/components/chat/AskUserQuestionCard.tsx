@@ -94,6 +94,8 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
               {activeQuestion.options.map((opt) => (
                 <button
                   key={opt.label}
+                  role={activeQuestion.multiSelect ? 'checkbox' : 'radio'}
+                  aria-checked={activeSelection.has(opt.label)}
                   onClick={() => toggleOption(currentQuestionIndex, opt.label, Boolean(activeQuestion.multiSelect))}
                   className={cn(
                     'w-full flex items-start gap-3 text-left group rounded-mf-card border px-3 py-2 transition-colors',
@@ -122,6 +124,8 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
                 </button>
               ))}
               <button
+                role={activeQuestion.multiSelect ? 'checkbox' : 'radio'}
+                aria-checked={activeSelection.has('__other__')}
                 onClick={() => toggleOption(currentQuestionIndex, '__other__', Boolean(activeQuestion.multiSelect))}
                 className={cn(
                   'w-full flex items-start gap-3 text-left group rounded-mf-card border px-3 py-2 transition-colors',
