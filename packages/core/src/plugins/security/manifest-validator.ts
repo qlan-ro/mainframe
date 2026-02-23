@@ -23,6 +23,13 @@ const ManifestSchema = z
     author: z.string().optional(),
     license: z.string().optional(),
     capabilities: z.array(z.enum(VALID_CAPABILITIES)),
+    ui: z
+      .object({
+        zone: z.enum(['fullview', 'left-panel', 'right-panel', 'left-tab', 'right-tab']),
+        label: z.string(),
+        icon: z.string().optional(),
+      })
+      .optional(),
     adapter: z
       .object({
         binaryName: z.string().min(1),

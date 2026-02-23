@@ -25,10 +25,10 @@ function makeDeps(pluginsDirs: string[], emitEvent = vi.fn()) {
       chats: { list: vi.fn().mockReturnValue([]), get: vi.fn().mockReturnValue(null) },
       projects: { list: vi.fn().mockReturnValue([]), get: vi.fn().mockReturnValue(null) },
       settings: { get: vi.fn().mockReturnValue(null), set: vi.fn() },
-    } as unknown as Parameters<typeof PluginManager>[0]['db'],
+    } as unknown as ConstructorParameters<typeof PluginManager>[0]['db'],
     adapters: { register: vi.fn() } as never,
     emitEvent,
-  } as Parameters<typeof PluginManager>[0];
+  } as ConstructorParameters<typeof PluginManager>[0];
 }
 
 function makePluginDir(pluginsDir: string, id: string, capabilities: string[], indexJs: string) {

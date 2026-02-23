@@ -43,4 +43,26 @@ describe('validateManifest', () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it('accepts valid ui field with a UIZone', () => {
+    const result = validateManifest({
+      id: 'todos',
+      name: 'Todos',
+      version: '1.0.0',
+      capabilities: ['ui:panels'],
+      ui: { zone: 'left-panel', label: 'Todos', icon: 'CheckSquare' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects ui field with an invalid zone', () => {
+    const result = validateManifest({
+      id: 'todos',
+      name: 'Todos',
+      version: '1.0.0',
+      capabilities: ['ui:panels'],
+      ui: { zone: 'sidebar-primary', label: 'Todos' },
+    });
+    expect(result.success).toBe(false);
+  });
 });

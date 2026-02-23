@@ -32,7 +32,7 @@ function makeDeps(pluginsDirs: string[]) {
     } as unknown as Parameters<(typeof PluginManager.prototype)['getAll']>[never],
     adapters: { register: vi.fn() } as never,
     emitEvent: vi.fn(),
-  } as Parameters<typeof PluginManager>[0];
+  } as ConstructorParameters<typeof PluginManager>[0];
 }
 
 describe('PluginManager', () => {
