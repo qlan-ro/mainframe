@@ -3,7 +3,6 @@ import { useTabsStore } from '../../store/tabs';
 import { useProjectsStore, useChatsStore } from '../../store';
 import { useProject } from '../../hooks/useDaemon';
 import { ChatContainer } from '../chat/ChatContainer';
-import { TodosPanel } from '../todos/TodosPanel';
 import { cn } from '../../lib/utils';
 
 function ChatTabDot({ chatId }: { chatId: string }): React.ReactElement {
@@ -95,8 +94,6 @@ export function CenterPanel(): React.ReactElement {
               </div>
             </div>
           </div>
-        ) : activePrimaryTab.type === 'todos' ? (
-          <TodosPanel />
         ) : (
           <ChatContainer chatId={activePrimaryTab.chatId} />
         )}
