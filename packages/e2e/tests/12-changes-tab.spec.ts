@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
+import { createTestChat } from '../fixtures/chat.js';
 import { chat } from '../helpers/wait.js';
 
 test.describe('§12–13 Changes tab & diff viewer', () => {
@@ -10,7 +11,8 @@ test.describe('§12–13 Changes tab & diff viewer', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await fixture.page.keyboard.press('Meta+n');
+    // Use acceptEdits so Claude edits files directly without entering plan mode
+    await createTestChat(fixture.page, project.projectId, 'acceptEdits');
     await chat(fixture.page, 'Edit index.ts and add a comment "// changed by AI" on line 1', 90_000);
   });
   test.afterAll(async () => {

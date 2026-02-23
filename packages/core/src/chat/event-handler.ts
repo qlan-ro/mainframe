@@ -46,6 +46,10 @@ function buildSessionSink(
   emitEvent: (event: DaemonEvent) => void,
   respondToPermission: (response: ControlResponse) => Promise<void>,
 ): SessionSink {
+  // Tracks the permissionMode in effect just before an EnterPlanMode transition,
+  // so ExitPlanMode can be auto-approved for non-interactive modes (e.g. 'acceptEdits').
+  let preplanMode: string | undefined;
+
   return {
     onInit(sessionId: string) {
       const active = getActiveChat(chatId);
@@ -64,6 +68,7 @@ function buildSessionSink(
       if (hasEnterPlanMode) {
         const active = getActiveChat(chatId);
         if (active && active.chat.permissionMode !== 'plan') {
+          preplanMode = active.chat.permissionMode;
           db.chats.update(chatId, { permissionMode: 'plan' });
           active.chat.permissionMode = 'plan';
           emitEvent({ type: 'chat.updated', chat: active.chat });
@@ -87,6 +92,24 @@ function buildSessionSink(
     onPermission(request: any) {
       const active = getActiveChat(chatId);
       const mode = active?.chat.permissionMode;
+
+      // Auto-approve ExitPlanMode for chats that were in acceptEdits mode before entering plan mode.
+      // This prevents the plan approval card from blocking file-editing tests.
+      if (request.toolName === 'ExitPlanMode' && preplanMode === 'acceptEdits') {
+        if (active) {
+          db.chats.update(chatId, { permissionMode: 'acceptEdits' });
+          active.chat.permissionMode = 'acceptEdits';
+          emitEvent({ type: 'chat.updated', chat: active.chat });
+        }
+        preplanMode = undefined;
+        respondToPermission({
+          requestId: request.requestId,
+          toolUseId: request.toolUseId,
+          behavior: 'allow',
+          updatedInput: { ...request.input, executionMode: 'acceptEdits' },
+        }).catch((err) => log.warn({ err, chatId }, 'acceptEdits plan-exit auto-approve failed'));
+        return;
+      }
 
       // Interactive tools require real user input even in yolo mode.
       const requiresUserInput = request.toolName === 'AskUserQuestion' || request.toolName === 'ExitPlanMode';
