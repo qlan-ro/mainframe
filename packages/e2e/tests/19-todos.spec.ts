@@ -52,6 +52,9 @@ test.describe('§20 Todos kanban', () => {
   });
 
   test('deletes a todo', async () => {
+    // Re-open todos panel (test 5 closed it when starting a session)
+    await fixture.page.locator('[data-testid="todos-panel-icon"]').click();
+    await expect(fixture.page.locator('[data-testid="todos-panel"]')).toBeVisible();
     const before = await fixture.page.locator('[data-testid="todo-card"]').count();
     const card = fixture.page.locator('[data-testid="todo-card"]').first();
     await card.hover();
