@@ -27,7 +27,7 @@ function RailButton({ active, onClick, title, children }: RailButtonProps): Reac
 }
 
 export function RightRail(): React.ReactElement {
-  const contributions = usePluginLayoutStore((s) => s.contributions.filter((c) => c.zone === 'right-panel'));
+  const contributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'right-panel');
   const activeRightPanelId = usePluginLayoutStore((s) => s.activeRightPanelId);
 
   const handleContextClick = (): void => {

@@ -17,7 +17,7 @@ const MAX_SIDEBAR_PX = 420;
 
 export function RightPanel(): React.ReactElement {
   const activeRightPanelId = usePluginLayoutStore((s) => s.activeRightPanelId);
-  const rightTabContributions = usePluginLayoutStore((s) => s.contributions.filter((c) => c.zone === 'right-tab'));
+  const rightTabContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'right-tab');
 
   const fileView = useTabsStore((s) => s.fileView);
   const fileViewCollapsed = useTabsStore((s) => s.fileViewCollapsed);

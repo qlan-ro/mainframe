@@ -95,7 +95,7 @@ export function TitleBar({
   }, []);
 
   // Fullview plugin icons (right side of title bar)
-  const fullviewContributions = usePluginLayoutStore((s) => s.contributions.filter((c) => c.zone === 'fullview'));
+  const fullviewContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'fullview');
   const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
 
   const handleFullviewClick = (pluginId: string): void => {

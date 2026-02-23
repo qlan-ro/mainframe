@@ -8,7 +8,7 @@ import { PluginView } from '../plugins/PluginView';
 
 export function LeftPanel(): React.ReactElement {
   const activeLeftPanelId = usePluginLayoutStore((s) => s.activeLeftPanelId);
-  const leftTabContributions = usePluginLayoutStore((s) => s.contributions.filter((c) => c.zone === 'left-tab'));
+  const leftTabContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'left-tab');
 
   // Full-panel plugin mode — return early
   if (activeLeftPanelId) {

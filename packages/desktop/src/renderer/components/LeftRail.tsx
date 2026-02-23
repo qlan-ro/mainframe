@@ -27,7 +27,7 @@ function RailButton({ active, onClick, title, children }: RailButtonProps): Reac
 }
 
 export function LeftRail(): React.ReactElement {
-  const contributions = usePluginLayoutStore((s) => s.contributions.filter((c) => c.zone === 'left-panel'));
+  const contributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'left-panel');
   const activeLeftPanelId = usePluginLayoutStore((s) => s.activeLeftPanelId);
 
   const handleSessionsClick = (): void => {
