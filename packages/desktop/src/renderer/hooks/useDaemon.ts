@@ -15,6 +15,7 @@ import { useTabsStore } from '../store/tabs';
 import { useSkillsStore } from '../store/skills';
 import { useSettingsStore } from '../store/settings';
 import { useAdaptersStore } from '../store/adapters';
+import { usePluginLayoutStore } from '../store';
 import type { DaemonEvent, ControlUpdate } from '@mainframe/types';
 import { createLogger } from '../lib/logger';
 
@@ -91,6 +92,19 @@ export function useDaemon(): void {
         case 'error':
           log.error('daemon error event', { error: event.error });
           setError(event.error);
+          break;
+        case 'plugin.panel.registered':
+          log.info('event:plugin.panel.registered', { pluginId: event.pluginId, zone: event.zone });
+          usePluginLayoutStore.getState().registerContribution({
+            pluginId: event.pluginId,
+            zone: event.zone,
+            label: event.label,
+            icon: event.icon,
+          });
+          break;
+        case 'plugin.panel.unregistered':
+          log.info('event:plugin.panel.unregistered', { pluginId: event.pluginId });
+          usePluginLayoutStore.getState().unregisterContribution(event.pluginId);
           break;
       }
     },
