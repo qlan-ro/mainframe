@@ -19,7 +19,7 @@ test.describe('§5 Messaging & AI responses', () => {
 
   test('sends a message and receives a response', async () => {
     await chat(fixture.page, 'What is 2 + 2? Reply with just the number.');
-    await expect(fixture.page.getByText('4')).toBeVisible();
+    await expect(fixture.page.getByText('4', { exact: true }).first()).toBeVisible();
   });
 
   test('turn footer shows token count after response', async () => {
