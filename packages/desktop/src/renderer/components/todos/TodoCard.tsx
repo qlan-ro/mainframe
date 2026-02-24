@@ -37,8 +37,10 @@ export function TodoCard({ todo, onEdit, onDelete, onStartSession }: Props): Rea
       onClick={() => onEdit(todo)}
       className="bg-mf-app-bg rounded-mf-input p-3 space-y-1.5 border border-mf-border group cursor-pointer"
     >
-      {/* Row 1: type badge + #number + title */}
+      {/* Row 1: #number + title + type badge */}
       <div className="flex items-center gap-1.5 min-w-0">
+        <span className="shrink-0 font-mono text-mf-status text-mf-text-secondary">#{todo.number}</span>
+        <span className="flex-1 text-mf-small text-mf-text-primary leading-snug truncate">{todo.title}</span>
         <span
           className={cn(
             'shrink-0 text-mf-status font-medium px-1.5 py-0.5 rounded capitalize',
@@ -47,8 +49,6 @@ export function TodoCard({ todo, onEdit, onDelete, onStartSession }: Props): Rea
         >
           {todo.type.replace('_', ' ')}
         </span>
-        <span className="shrink-0 font-mono text-mf-status text-mf-text-secondary">#{todo.number}</span>
-        <span className="text-mf-small text-mf-text-primary leading-snug truncate">{todo.title}</span>
       </div>
 
       {/* Row 2: priority pill */}
