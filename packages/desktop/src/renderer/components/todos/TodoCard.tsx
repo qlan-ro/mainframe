@@ -1,7 +1,7 @@
 import React from 'react';
 import { Play, Edit, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { Todo, TodoStatus } from '../../lib/api/todos-api';
+import type { Todo } from '../../lib/api/todos-api';
 
 const TYPE_COLORS: Record<string, string> = {
   bug: 'bg-red-500/15 text-red-400',
@@ -23,13 +23,12 @@ const PRIORITY_PILL: Record<string, string> = {
 
 interface Props {
   todo: Todo;
-  onMove: (id: string, status: TodoStatus) => void;
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
   onStartSession: (todo: Todo) => void;
 }
 
-export function TodoCard({ todo, onMove: _onMove, onEdit, onDelete, onStartSession }: Props): React.ReactElement {
+export function TodoCard({ todo, onEdit, onDelete, onStartSession }: Props): React.ReactElement {
   return (
     <div
       data-testid="todo-card"

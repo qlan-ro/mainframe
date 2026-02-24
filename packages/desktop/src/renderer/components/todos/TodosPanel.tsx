@@ -199,7 +199,6 @@ export function TodosPanel(): React.ReactElement {
                   <TodoCard
                     key={todo.id}
                     todo={todo}
-                    onMove={handleMove}
                     onEdit={(t) => {
                       setEditingTodo(t);
                       setModalOpen(true);
