@@ -22,9 +22,14 @@ export function TodosPanel(): React.ReactElement {
   const activeProjectId = useProjectsStore((s) => s.activeProjectId);
 
   const loadTodos = useCallback(async () => {
+    if (!activeProjectId) {
+      setTodos([]);
+      setLoading(false);
+      return;
+    }
     try {
       setError(null);
-      const list = await todosApi.list();
+      const list = await todosApi.list(activeProjectId);
       setTodos(list);
     } catch (err) {
       setError('Failed to load tasks. Is the daemon running?');
@@ -32,21 +37,44 @@ export function TodosPanel(): React.ReactElement {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeProjectId]);
 
   useEffect(() => {
+    setLoading(true);
     void loadTodos();
   }, [loadTodos]);
 
-  const handleCreate = useCallback(async (data: CreateTodoInput) => {
-    try {
-      const todo = await todosApi.create(data);
-      setTodos((prev) => [...prev, todo]);
-      setModalOpen(false);
-    } catch (err) {
-      console.warn('[todos] create failed:', err);
-    }
-  }, []);
+  const handleCreate = useCallback(
+    async (data: CreateTodoInput) => {
+      if (!activeProjectId) return;
+      try {
+        const todo = await todosApi.create({ ...data, projectId: activeProjectId });
+        setTodos((prev) => [...prev, todo]);
+        setModalOpen(false);
+      } catch (err) {
+        console.warn('[todos] create failed:', err);
+      }
+    },
+    [activeProjectId],
+  );
+
+  const handleCreateAndStart = useCallback(
+    async (data: CreateTodoInput) => {
+      if (!activeProjectId) return;
+      try {
+        const todo = await todosApi.create({ ...data, projectId: activeProjectId, status: 'in_progress' });
+        setTodos((prev) => [...prev, todo]);
+        setModalOpen(false);
+        const { chatId, initialMessage } = await todosApi.startSession(todo.id, activeProjectId);
+        useSkillsStore.getState().setPendingInvocation(initialMessage);
+        usePluginLayoutStore.getState().activateFullview('todos');
+        daemonClient.subscribe(chatId);
+      } catch (err) {
+        console.warn('[todos] create-and-start failed:', err);
+      }
+    },
+    [activeProjectId],
+  );
 
   const handleUpdate = useCallback(
     async (data: CreateTodoInput) => {
@@ -85,6 +113,10 @@ export function TodosPanel(): React.ReactElement {
     async (todo: Todo) => {
       if (!activeProjectId) return;
       try {
+        if (todo.status === 'open') {
+          const moved = await todosApi.move(todo.id, 'in_progress');
+          setTodos((prev) => prev.map((t) => (t.id === moved.id ? moved : t)));
+        }
         const { chatId, initialMessage } = await todosApi.startSession(todo.id, activeProjectId);
         // Pre-fill the composer using the existing pendingInvocation mechanism
         useSkillsStore.getState().setPendingInvocation(initialMessage);
@@ -98,6 +130,14 @@ export function TodosPanel(): React.ReactElement {
     },
     [activeProjectId],
   );
+
+  if (!activeProjectId) {
+    return (
+      <div className="h-full flex items-center justify-center text-mf-text-secondary text-mf-small">
+        Select a project to view its tasks.
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -136,13 +176,13 @@ export function TodosPanel(): React.ReactElement {
       </div>
 
       {/* Columns */}
-      <div className="flex-1 flex gap-0 overflow-hidden">
+      <div className="flex-1 flex gap-px overflow-hidden">
         {COLUMNS.map(({ status, label }) => {
           const colTodos = todos.filter((t) => t.status === status);
           return (
             <div
               key={status}
-              className="flex-1 flex flex-col border-r border-mf-border last:border-r-0 overflow-hidden"
+              className="flex-1 flex flex-col overflow-hidden"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
@@ -184,6 +224,7 @@ export function TodosPanel(): React.ReactElement {
           }}
           onSave={editingTodo ? handleUpdate : handleCreate}
           onStartSession={handleStartSession}
+          onSaveAndStartSession={editingTodo ? undefined : handleCreateAndStart}
         />
       )}
     </div>
