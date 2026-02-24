@@ -33,8 +33,8 @@ test.describe('§7 Plan approval', () => {
       .locator('[data-testid="plan-approval-card"]')
       .getByRole('button', { name: /approve plan/i })
       .click();
-    // After plan approval, Claude executes tool calls and shows a permission card for edits.
-    await waitForPermissionCard(fixture.page, 15_000);
+    // After plan approval, Claude makes a new API call to execute — give it 30 s.
+    await waitForPermissionCard(fixture.page, 30_000);
     await fixture.page
       .locator('[data-testid="permission-card"]')
       .getByRole('button', { name: /always allow/i })

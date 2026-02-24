@@ -35,7 +35,11 @@ test.describe('§15 Search palette', () => {
 
   test('Enter on a file result opens it in the editor', async () => {
     await fixture.page.keyboard.press('Meta+f');
-    await fixture.page.keyboard.type('utils');
+    // Wait for the search input to be ready before typing — without this the
+    // initial characters are lost while the dialog's focus useEffect fires.
+    const searchInput = fixture.page.getByRole('dialog').getByRole('textbox');
+    await searchInput.waitFor({ state: 'visible' });
+    await searchInput.fill('utils');
     // Wait for file results to appear (300ms debounce + network)
     await expect(fixture.page.getByText('utils.ts')).toBeVisible({ timeout: 5_000 });
     await fixture.page.keyboard.press('ArrowDown');
