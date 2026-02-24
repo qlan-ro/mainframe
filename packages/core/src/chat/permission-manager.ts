@@ -1,16 +1,9 @@
-import type {
-  Chat,
-  ChatMessage,
-  PermissionRequest,
-  PermissionResponse,
-  DaemonEvent,
-  AdapterProcess,
-} from '@mainframe/types';
+import type { Chat, ChatMessage, ControlRequest, DaemonEvent, AdapterProcess } from '@mainframe/types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 
 export class PermissionManager {
-  private pendingPermissions = new Map<string, PermissionRequest[]>();
+  private pendingPermissions = new Map<string, ControlRequest[]>();
   private planExecutionModes = new Map<string, Chat['permissionMode']>();
   private interruptedChats = new Set<string>();
 
@@ -19,7 +12,7 @@ export class PermissionManager {
     private adapters: AdapterRegistry,
   ) {}
 
-  getPending(chatId: string): PermissionRequest | null {
+  getPending(chatId: string): ControlRequest | null {
     const chat = this.db.chats.get(chatId);
     if (chat?.permissionMode === 'yolo') return null;
     return this.pendingPermissions.get(chatId)?.[0] ?? null;
@@ -36,14 +29,14 @@ export class PermissionManager {
     this.interruptedChats.delete(chatId);
   }
 
-  enqueue(chatId: string, request: PermissionRequest): boolean {
+  enqueue(chatId: string, request: ControlRequest): boolean {
     const queue = this.pendingPermissions.get(chatId) || [];
     queue.push(request);
     this.pendingPermissions.set(chatId, queue);
     return queue.length === 1;
   }
 
-  shift(chatId: string): PermissionRequest | undefined {
+  shift(chatId: string): ControlRequest | undefined {
     const queue = this.pendingPermissions.get(chatId) || [];
     queue.shift();
     if (queue.length === 0) {

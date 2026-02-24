@@ -1,4 +1,4 @@
-import type { ClientEvent, DaemonEvent, PermissionResponse } from '@mainframe/types';
+import type { ClientEvent, DaemonEvent, ControlResponse } from '@mainframe/types';
 import { createLogger } from './logger';
 
 const WS_URL = 'ws://127.0.0.1:31415';
@@ -153,7 +153,7 @@ class DaemonClient {
     log.info('sendMessage', { chatId, attachmentCount: attachmentIds?.length ?? 0 });
   }
 
-  respondToPermission(chatId: string, response: PermissionResponse): void {
+  respondToPermission(chatId: string, response: ControlResponse): void {
     this.send({ type: 'permission.respond', chatId, response });
     log.info('respondToPermission', {
       chatId,

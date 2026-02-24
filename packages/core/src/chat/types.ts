@@ -1,6 +1,6 @@
-import type { Chat, AdapterProcess } from '@mainframe/types';
+import type { Chat, AdapterSession } from '@mainframe/types';
 
 export interface ActiveChat {
   chat: Chat;
-  process: AdapterProcess | null;
+  session: AdapterSession | null;
 }

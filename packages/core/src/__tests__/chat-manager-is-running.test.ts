@@ -10,7 +10,7 @@ describe('ChatManager.isChatRunning', () => {
       projects: { get: vi.fn() },
       settings: { get: vi.fn() },
     } as any;
-    const mockAdapters = { get: vi.fn() } as any;
+    const mockAdapters = { get: vi.fn(), all: vi.fn().mockReturnValue([]) } as any;
     manager = new ChatManager(mockDb, mockAdapters);
   });
 
@@ -18,15 +18,15 @@ describe('ChatManager.isChatRunning', () => {
     expect(manager.isChatRunning('nonexistent')).toBe(false);
   });
 
-  it('returns false for chat with null process', () => {
-    (manager as any).activeChats.set('test-1', { chat: {} as any, process: null });
+  it('returns false for chat with null session', () => {
+    (manager as any).activeChats.set('test-1', { chat: {} as any, session: null });
     expect(manager.isChatRunning('test-1')).toBe(false);
   });
 
   it('returns true for chat with active process', () => {
     (manager as any).activeChats.set('test-2', {
       chat: {} as any,
-      process: { id: 'proc-1', adapterId: 'claude' },
+      session: { isSpawned: true },
     });
     expect(manager.isChatRunning('test-2')).toBe(true);
   });

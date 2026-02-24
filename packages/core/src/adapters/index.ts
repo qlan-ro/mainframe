@@ -1,12 +1,7 @@
 import type { Adapter, AdapterInfo } from '@mainframe/types';
-import { ClaudeAdapter } from './claude.js';
 
 export class AdapterRegistry {
   private adapters = new Map<string, Adapter>();
-
-  constructor() {
-    this.register(new ClaudeAdapter());
-  }
 
   register(adapter: Adapter): void {
     this.adapters.set(adapter.id, adapter);
@@ -14,6 +9,16 @@ export class AdapterRegistry {
 
   get(id: string): Adapter | undefined {
     return this.adapters.get(id);
+  }
+
+  all(): Adapter[] {
+    return [...this.adapters.values()];
+  }
+
+  killAll(): void {
+    for (const adapter of this.adapters.values()) {
+      adapter.killAll();
+    }
   }
 
   async list(): Promise<AdapterInfo[]> {
@@ -34,6 +39,3 @@ export class AdapterRegistry {
     return infos;
   }
 }
-
-export { ClaudeAdapter } from './claude.js';
-export { BaseAdapter } from './base.js';

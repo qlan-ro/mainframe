@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PlanModeHandler, type PlanModeContext } from '../chat/plan-mode-handler.js';
-import type { Chat, PermissionResponse } from '@mainframe/types';
+import type { Chat, ControlResponse } from '@mainframe/types';
 import type { ActiveChat } from '../chat/types.js';
 
 function makeChat(overrides: Partial<Chat> = {}): Chat {
@@ -20,31 +20,26 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
   };
 }
 
-function makeProcess() {
+function makeSession(active = true) {
+  if (!active) return null;
   return {
-    id: 'proc-1',
-    adapterId: 'claude',
-    chatId: 'chat-1',
-    pid: 0,
-    status: 'ready' as const,
-    projectPath: '/tmp',
-    model: 'test',
+    isSpawned: true,
+    respondToPermission: vi.fn().mockResolvedValue(undefined),
+    kill: vi.fn().mockResolvedValue(undefined),
+    removeAllListeners: vi.fn(),
+    setPermissionMode: vi.fn().mockResolvedValue(undefined),
   };
 }
 
-function makeContext(activeProcess = true): PlanModeContext & {
+function makeContext(hasActiveSession = true): PlanModeContext & {
   emitEvent: ReturnType<typeof vi.fn>;
   startChat: ReturnType<typeof vi.fn>;
   sendMessage: ReturnType<typeof vi.fn>;
-  adapter: { respondToPermission: ReturnType<typeof vi.fn>; kill: ReturnType<typeof vi.fn> };
+  session: ReturnType<typeof makeSession>;
 } {
   const chat = makeChat();
-  const process = activeProcess ? makeProcess() : null;
-  const adapter = {
-    respondToPermission: vi.fn().mockResolvedValue(undefined),
-    kill: vi.fn().mockResolvedValue(undefined),
-  };
-  const activeChat: ActiveChat = { chat, process };
+  const session = makeSession(hasActiveSession);
+  const activeChat: ActiveChat = { chat, session: session as any };
 
   return {
     permissions: {
@@ -62,18 +57,15 @@ function makeContext(activeProcess = true): PlanModeContext & {
     db: {
       chats: { update: vi.fn(), addPlanFile: vi.fn().mockReturnValue(false) },
     } as any,
-    adapters: {
-      get: vi.fn().mockReturnValue(adapter),
-    } as any,
     getActiveChat: vi.fn().mockReturnValue(activeChat),
     emitEvent: vi.fn(),
     startChat: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
-    adapter,
+    session,
   };
 }
 
-function makeResponse(overrides?: Partial<PermissionResponse>): PermissionResponse {
+function makeResponse(overrides?: Partial<ControlResponse>): ControlResponse {
   return {
     requestId: 'req-1',
     toolUseId: 'tu-1',
@@ -109,14 +101,14 @@ describe('PlanModeHandler', () => {
   });
 
   describe('handleClearContext', () => {
-    it('kills process, resets session, clears messages, starts new chat', async () => {
+    it('kills session, resets session, clears messages, starts new chat', async () => {
       const ctx = makeContext(true);
       const handler = new PlanModeHandler(ctx);
       const active = ctx.getActiveChat('chat-1')!;
 
       await handler.handleClearContext('chat-1', active, makeResponse());
 
-      expect(ctx.adapter.kill).toHaveBeenCalled();
+      expect(ctx.session!.kill).toHaveBeenCalled();
       expect(ctx.db.chats.update).toHaveBeenCalledWith(
         'chat-1',
         expect.objectContaining({ claudeSessionId: undefined }),
@@ -143,7 +135,7 @@ describe('PlanModeHandler', () => {
       expect(ctx.sendMessage).toHaveBeenCalledWith('chat-1', expect.stringContaining('Step 1: do the thing.'));
     });
 
-    it('works without an active process (process=null)', async () => {
+    it('works without an active session (session=null)', async () => {
       const ctx = makeContext(false);
       const handler = new PlanModeHandler(ctx);
       const active = ctx.getActiveChat('chat-1')!;
@@ -154,21 +146,16 @@ describe('PlanModeHandler', () => {
   });
 
   describe('handleEscalation', () => {
-    it('updates permissionMode and calls setPermissionMode on adapter', async () => {
-      const mockProcess = makeProcess();
-      const ctx = makeContext();
-      const active = ctx.getActiveChat('chat-1')!;
-      active.process = mockProcess;
-      ctx.adapters.get = vi.fn().mockReturnValue({
-        setPermissionMode: vi.fn().mockResolvedValue(undefined),
-        ...ctx.adapter,
-      });
-
+    it('updates permissionMode and calls setPermissionMode on session', async () => {
+      const ctx = makeContext(true);
       const handler = new PlanModeHandler(ctx);
+      const active = ctx.getActiveChat('chat-1')!;
+
       await handler.handleEscalation('chat-1', active, makeResponse({ executionMode: 'yolo' }));
 
       expect(ctx.db.chats.update).toHaveBeenCalledWith('chat-1', expect.objectContaining({ permissionMode: 'yolo' }));
       expect(ctx.emitEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.updated' }));
+      expect(ctx.session!.setPermissionMode).toHaveBeenCalledWith('yolo');
     });
   });
 });

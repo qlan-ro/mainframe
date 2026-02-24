@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { EventEmitter } from 'node:events';
 import { getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
-import { AdapterRegistry, ClaudeAdapter } from './adapters/index.js';
+import { AdapterRegistry } from './adapters/index.js';
 import { ChatManager } from './chat/index.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
+import { PluginManager } from './plugins/manager.js';
+import claudeManifest from './plugins/builtin/claude/manifest.json' with { type: 'json' };
+import { activate as activateClaude } from './plugins/builtin/claude/index.js';
 import { logger } from './logger.js';
+import type { DaemonEvent, PluginManifest } from '@mainframe/types';
 
 async function main(): Promise<void> {
   const config = getConfig();
@@ -18,21 +24,41 @@ async function main(): Promise<void> {
   const db = new DatabaseManager();
   const adapters = new AdapterRegistry();
   const attachmentStore = new AttachmentStore(join(getDataDir(), 'attachments'));
-  const chats = new ChatManager(db, adapters, attachmentStore);
-  const server = createServerManager(db, chats, adapters, attachmentStore);
+
+  // Late-bound broadcast: set after server starts. Events emitted before
+  // server.start() (plugin loading) are safely dropped — no WS clients yet.
+  let broadcastEvent: (event: DaemonEvent) => void = () => {};
+  const chats = new ChatManager(db, adapters, attachmentStore, (event) => broadcastEvent(event));
+
+  // PluginManager owns its own Express Router; no circular dep on the Express app
+  const daemonBus = new EventEmitter();
+  const emitEvent = (event: DaemonEvent) => broadcastEvent(event);
+
+  const pluginManager = new PluginManager({
+    pluginsDirs: [join(homedir(), '.mainframe', 'plugins')],
+    daemonBus,
+    db,
+    adapters,
+    emitEvent,
+  });
+
+  // Load builtin plugins first (always trusted, no consent dialog)
+  await pluginManager.loadBuiltin(claudeManifest as PluginManifest, activateClaude);
+
+  // Load user-installed plugins from ~/.mainframe/plugins/
+  await pluginManager.loadAll();
+
+  const server = createServerManager(db, chats, adapters, attachmentStore, pluginManager);
 
   await server.start(config.port);
+  broadcastEvent = (event) => server.broadcastEvent(event);
 
   logger.info('Daemon ready');
 
-  const killAdapters = () => {
-    const claude = adapters.get('claude') as ClaudeAdapter | undefined;
-    claude?.killAll();
-  };
-
   const shutdown = async () => {
     logger.info('Shutting down...');
-    killAdapters();
+    await pluginManager.unloadAll();
+    adapters.killAll();
     await server.stop();
     db.close();
     process.exit(0);
@@ -42,7 +68,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', shutdown);
   process.on('uncaughtException', (err) => {
     logger.fatal({ err }, 'Uncaught exception');
-    killAdapters();
+    adapters.killAll();
     process.exit(1);
   });
 }

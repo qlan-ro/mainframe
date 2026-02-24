@@ -1,5 +1,4 @@
-import type { Chat, ChatMessage, PermissionRequest, PermissionResponse, DaemonEvent } from '@mainframe/types';
-import type { AdapterRegistry } from '../adapters/index.js';
+import type { Chat, ChatMessage, ControlRequest, ControlResponse, DaemonEvent } from '@mainframe/types';
 import type { DatabaseManager } from '../db/index.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { PlanModeHandler } from './plan-mode-handler.js';
@@ -13,9 +12,7 @@ export interface PermissionHandlerDeps {
   permissions: PermissionManager;
   planMode: PlanModeHandler;
   messages: MessageCache;
-  adapters: AdapterRegistry;
   db: DatabaseManager;
-  processToChat: Map<string, string>;
   getActiveChat: (chatId: string) => ActiveChat | undefined;
   startChat: (chatId: string) => Promise<void>;
   emitEvent: (event: DaemonEvent) => void;
@@ -26,20 +23,20 @@ export interface PermissionHandlerDeps {
 export class ChatPermissionHandler {
   constructor(private deps: PermissionHandlerDeps) {}
 
-  async respondToPermission(chatId: string, response: PermissionResponse): Promise<void> {
+  async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
 
-    if (!active?.process) {
+    if (!active?.session?.isSpawned) {
       log.warn(
         { chatId, requestId: response.requestId, toolName: response.toolName, behavior: response.behavior },
-        'respondToPermission: no active process, will start fresh',
+        'respondToPermission: no active session, will start fresh',
       );
-      return this.handleNoProcessPermission(chatId, response, active);
+      return this.handleNoSessionPermission(chatId, response, active);
     }
 
     log.info(
       { chatId, requestId: response.requestId, toolName: response.toolName, behavior: response.behavior },
-      'respondToPermission: forwarding to adapter',
+      'respondToPermission: forwarding to session',
     );
 
     if (response.message) {
@@ -57,7 +54,7 @@ export class ChatPermissionHandler {
     return this.handleNormalPermission(chatId, active, response);
   }
 
-  async getPendingPermission(chatId: string): Promise<PermissionRequest | null> {
+  async getPendingPermission(chatId: string): Promise<ControlRequest | null> {
     const chat = this.deps.getChat(chatId);
     if (chat?.permissionMode === 'yolo') return null;
 
@@ -75,9 +72,9 @@ export class ChatPermissionHandler {
     this.deps.permissions.clear(chatId);
   }
 
-  private async handleNoProcessPermission(
+  private async handleNoSessionPermission(
     chatId: string,
-    response: PermissionResponse,
+    response: ControlResponse,
     active: ActiveChat | undefined,
   ): Promise<void> {
     this.deps.permissions.clear(chatId);
@@ -89,37 +86,26 @@ export class ChatPermissionHandler {
     await this.deps.startChat(chatId);
 
     const started = this.deps.getActiveChat(chatId);
-    if (started?.process) {
+    if (started?.session?.isSpawned) {
       started.chat.processState = 'working';
       this.deps.db.chats.update(chatId, { processState: 'working' });
       this.deps.emitEvent({ type: 'chat.updated', chat: started.chat });
-
-      const adapter = this.deps.adapters.get(started.chat.adapterId);
-      if (adapter) {
-        await adapter.respondToPermission(started.process, response);
-      }
+      await started.session.respondToPermission(response);
     }
   }
 
   private async handleClearContextPermission(
     chatId: string,
     active: ActiveChat,
-    response: PermissionResponse,
+    response: ControlResponse,
   ): Promise<void> {
-    const processId = active.process!.id;
     await this.deps.planMode.handleClearContext(chatId, active, response);
-    this.deps.processToChat.delete(processId);
   }
 
-  private async handleNormalPermission(
-    chatId: string,
-    active: ActiveChat,
-    response: PermissionResponse,
-  ): Promise<void> {
-    const adapter = this.deps.adapters.get(active.chat.adapterId);
-    if (!adapter) throw new Error(`Adapter not found`);
+  private async handleNormalPermission(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
+    if (!active.session) throw new Error(`No session for chat ${chatId}`);
 
-    await adapter.respondToPermission(active.process!, response);
+    await active.session.respondToPermission(response);
 
     const nextRequest = this.deps.permissions.shift(chatId);
     if (nextRequest) {

@@ -1,4 +1,4 @@
-import type { PermissionRequest, SessionContext } from '@mainframe/types';
+import type { ControlRequest, SessionContext } from '@mainframe/types';
 import { fetchJson, postJson, API_BASE } from './http';
 
 export async function getFileTree(
@@ -63,8 +63,8 @@ export async function getDiff(
   return fetchJson(`${API_BASE}/api/projects/${projectId}/diff?${params}`);
 }
 
-export async function getPendingPermission(chatId: string): Promise<PermissionRequest | null> {
-  const json = await fetchJson<{ success: boolean; data: PermissionRequest | null }>(
+export async function getPendingPermission(chatId: string): Promise<ControlRequest | null> {
+  const json = await fetchJson<{ success: boolean; data: ControlRequest | null }>(
     `${API_BASE}/api/chats/${chatId}/pending-permission`,
   );
   return json.data;

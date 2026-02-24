@@ -5,35 +5,24 @@ import { WebSocketManager } from '../server/websocket.js';
 import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
 
-class MockAdapter extends BaseAdapter {
-  id = 'claude';
-  name = 'Mock';
+class MockSession extends MockBaseSession {
+  constructor(private adapter: MockAdapter) {
+    super('proc-1', adapter.id, '/tmp');
+  }
+}
 
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
-  async spawn(): Promise<AdapterProcess> {
-    return {
-      id: 'proc-1',
-      adapterId: 'claude',
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: '/tmp',
-      model: 'test',
-    };
-  }
-  async kill() {}
-  async sendMessage() {}
-  async respondToPermission(_p: AdapterProcess, _r: PermissionResponse) {}
-  override async loadHistory() {
-    return [];
+class MockAdapter extends MockBaseAdapter {
+  override id = 'claude';
+  override name = 'Mock';
+  currentSession: MockSession | null = null;
+
+  override createSession(_options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this);
+    return this.currentSession;
   }
 }
 
@@ -130,10 +119,11 @@ describe('file-edit flow', () => {
     const registry = new AdapterRegistry();
     (registry as any).adapters = new Map();
     registry.register(adapter);
-    const chats = new ChatManager(db as any, registry);
+    const wsRef: { current: WebSocketManager | null } = { current: null };
+    const chats = new ChatManager(db as any, registry, undefined, (event) => wsRef.current?.broadcastEvent(event));
     const app = createHttpServer(db as any, chats, registry);
     server = createServer(app);
-    new WebSocketManager(server, chats);
+    wsRef.current = new WebSocketManager(server, chats);
     const port = await startServer(server);
 
     ws = await connectWs(port);
@@ -147,7 +137,7 @@ describe('file-edit flow', () => {
     });
 
     // Emit message with Write tool_use using relative path
-    adapter.emit('message', 'proc-1', [
+    adapter.currentSession!.simulateMessage([
       {
         type: 'tool_use',
         id: 'tu-1',

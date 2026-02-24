@@ -1,4 +1,10 @@
-import { isExploreTool, isHiddenTool, isTaskProgressTool } from './tool-categorization.js';
+import {
+  type ToolCategories,
+  isExploreTool,
+  isHiddenTool,
+  isTaskProgressTool,
+  isSubagentTool,
+} from './tool-categorization.js';
 
 export interface ToolGroupItem {
   toolName: string;
@@ -30,8 +36,9 @@ export type PartEntry =
 /**
  * Post-processes parts to group consecutive explore tools, suppress hidden tools,
  * and accumulate task progress tools into a single _TaskProgress entry.
+ * Categories are adapter-declared — pass the adapter's ToolCategories instance.
  */
-export function groupToolCallParts(parts: PartEntry[]): PartEntry[] {
+export function groupToolCallParts(parts: PartEntry[], categories: ToolCategories): PartEntry[] {
   const result: PartEntry[] = [];
   const taskItems: TaskProgressItem[] = [];
   let taskInsertIndex = -1;
@@ -47,13 +54,13 @@ export function groupToolCallParts(parts: PartEntry[]): PartEntry[] {
     }
 
     // Skip hidden tools
-    if (isHiddenTool(part.toolName)) {
+    if (isHiddenTool(part.toolName, categories)) {
       i++;
       continue;
     }
 
     // Collect task progress tools for accumulated display
-    if (isTaskProgressTool(part.toolName)) {
+    if (isTaskProgressTool(part.toolName, categories)) {
       if (taskInsertIndex === -1) taskInsertIndex = result.length;
       taskItems.push({
         toolCallId: part.toolCallId,
@@ -67,15 +74,15 @@ export function groupToolCallParts(parts: PartEntry[]): PartEntry[] {
     }
 
     // Collect consecutive explore tools into a group
-    if (isExploreTool(part.toolName)) {
+    if (isExploreTool(part.toolName, categories)) {
       const group: PartEntry[] = [part];
       let j = i + 1;
       while (j < parts.length) {
         const next = parts[j]!;
         if (next.type !== 'tool-call') break;
-        if (isExploreTool(next.toolName)) {
+        if (isExploreTool(next.toolName, categories)) {
           group.push(next);
-        } else if (!isHiddenTool(next.toolName) && !isTaskProgressTool(next.toolName)) {
+        } else if (!isHiddenTool(next.toolName, categories) && !isTaskProgressTool(next.toolName, categories)) {
           break;
         }
         // hidden and task tools within the run are skipped/collected separately
@@ -128,24 +135,25 @@ export function groupToolCallParts(parts: PartEntry[]): PartEntry[] {
 }
 
 /**
- * Wraps a Task tool call together with all subsequent tool calls (until the next
- * text block or another Task) into a single _TaskGroup virtual entry so they
+ * Wraps a subagent tool call together with all subsequent tool calls (until the next
+ * text block or another subagent call) into a single _TaskGroup virtual entry so they
  * render nested under the subagent header.
+ * Categories are adapter-declared — pass the adapter's ToolCategories instance.
  */
-export function groupTaskChildren(parts: PartEntry[]): PartEntry[] {
+export function groupTaskChildren(parts: PartEntry[], categories: ToolCategories): PartEntry[] {
   const result: PartEntry[] = [];
   let i = 0;
 
   while (i < parts.length) {
     const part = parts[i]!;
 
-    if (part.type === 'tool-call' && part.toolName === 'Task') {
+    if (part.type === 'tool-call' && isSubagentTool(part.toolName, categories)) {
       const children: PartEntry[] = [];
       let j = i + 1;
       while (j < parts.length) {
         const next = parts[j]!;
         if (next.type === 'text') break;
-        if (next.type === 'tool-call' && next.toolName === 'Task') break;
+        if (next.type === 'tool-call' && isSubagentTool(next.toolName, categories)) break;
         children.push(next);
         j++;
       }

@@ -1,10 +1,9 @@
 export {
-  EXPLORE_TOOLS,
-  HIDDEN_TOOLS,
-  TASK_PROGRESS_TOOLS,
+  type ToolCategories,
   isExploreTool,
   isHiddenTool,
   isTaskProgressTool,
+  isSubagentTool,
 } from './tool-categorization.js';
 
 export {

@@ -5,35 +5,24 @@ import { WebSocketManager } from '../server/websocket.js';
 import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
 
-class MockAdapter extends BaseAdapter {
-  id = 'claude';
-  name = 'Mock';
+class MockSession extends MockBaseSession {
+  constructor(private adapter: MockAdapter) {
+    super('proc-1', adapter.id, '/tmp');
+  }
+}
 
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
-  async spawn(_opts: SpawnOptions): Promise<AdapterProcess> {
-    return {
-      id: 'proc-1',
-      adapterId: 'claude',
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: '/tmp',
-      model: 'test',
-    };
-  }
-  async kill() {}
-  async sendMessage() {}
-  async respondToPermission(_p: AdapterProcess, _r: PermissionResponse) {}
-  override async loadHistory() {
-    return [];
+class MockAdapter extends MockBaseAdapter {
+  override id = 'claude';
+  override name = 'Mock';
+  currentSession: MockSession | null = null;
+
+  override createSession(_options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this);
+    return this.currentSession;
   }
 }
 
@@ -88,10 +77,11 @@ function createStack(adapter: MockAdapter) {
   const registry = new AdapterRegistry();
   (registry as any).adapters = new Map();
   registry.register(adapter);
-  const chats = new ChatManager(db as any, registry);
+  const wsRef: { current: WebSocketManager | null } = { current: null };
+  const chats = new ChatManager(db as any, registry, undefined, (event) => wsRef.current?.broadcastEvent(event));
   const app = createHttpServer(db as any, chats, registry);
   const httpServer = createServer(app);
-  new WebSocketManager(httpServer, chats);
+  wsRef.current = new WebSocketManager(httpServer, chats);
   return { httpServer, chats, db };
 }
 
@@ -150,14 +140,11 @@ describe('send-message flow', () => {
     });
 
     // Simulate adapter responding with an assistant message
-    adapter.emit('message', 'proc-1', [{ type: 'text', text: 'Hello from assistant!' }]);
-    adapter.emit('result', 'proc-1', {
+    adapter.currentSession!.simulateMessage([{ type: 'text', text: 'Hello from assistant!' }]);
+    adapter.currentSession!.simulateResult({
       subtype: 'success',
-      cost: 0.001,
-      tokensInput: 100,
-      tokensOutput: 50,
-      session_id: 'session-1',
-      durationMs: 1000,
+      total_cost_usd: 0.001,
+      result: 'session-1',
     });
     await sleep(100);
 

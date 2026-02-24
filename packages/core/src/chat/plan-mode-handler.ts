@@ -1,6 +1,5 @@
-import type { Chat, PermissionResponse, DaemonEvent } from '@mainframe/types';
+import type { Chat, ControlResponse, DaemonEvent } from '@mainframe/types';
 import type { DatabaseManager } from '../db/index.js';
-import type { AdapterRegistry } from '../adapters/index.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { MessageCache } from './message-cache.js';
 import type { ActiveChat } from './types.js';
@@ -10,7 +9,6 @@ export interface PlanModeContext {
   permissions: PermissionManager;
   messages: MessageCache;
   db: DatabaseManager;
-  adapters: AdapterRegistry;
   getActiveChat(chatId: string): ActiveChat | undefined;
   emitEvent(event: DaemonEvent): void;
   startChat(chatId: string): Promise<void>;
@@ -20,7 +18,7 @@ export interface PlanModeContext {
 export class PlanModeHandler {
   constructor(private ctx: PlanModeContext) {}
 
-  async handleNoProcess(chatId: string, active: ActiveChat, response: PermissionResponse): Promise<void> {
+  async handleNoProcess(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
     const targetMode = (response.executionMode ?? this.ctx.permissions.getPlanExecutionMode(chatId)) as
       | Chat['permissionMode']
       | undefined;
@@ -33,7 +31,7 @@ export class PlanModeHandler {
     }
   }
 
-  async handleClearContext(chatId: string, active: ActiveChat, response: PermissionResponse): Promise<void> {
+  async handleClearContext(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
     const plan = (response.updatedInput as Record<string, unknown> | undefined)?.plan as string | undefined;
     const recoveredPlanPath = extractLatestPlanFileFromMessages(this.ctx.messages.get(chatId) ?? []);
     if (recoveredPlanPath && this.ctx.db.chats.addPlanFile(chatId, recoveredPlanPath)) {
@@ -45,12 +43,10 @@ export class PlanModeHandler {
     this.ctx.permissions.deletePlanExecutionMode(chatId);
     const newMode = targetMode || 'default';
 
-    const adapter = this.ctx.adapters.get(active.chat.adapterId);
-
-    if (!active.process) {
+    if (!active.session?.isSpawned) {
       this.ctx.permissions.shift(chatId);
     } else {
-      await adapter?.respondToPermission(active.process, {
+      await active.session.respondToPermission({
         ...response,
         behavior: 'deny',
         message: 'User chose to clear context and start a new session.',
@@ -58,8 +54,8 @@ export class PlanModeHandler {
 
       this.ctx.permissions.shift(chatId);
 
-      await adapter?.kill(active.process);
-      active.process = null;
+      await active.session.kill();
+      active.session = null;
     }
 
     active.chat.claudeSessionId = undefined;
@@ -77,7 +73,7 @@ export class PlanModeHandler {
     }
   }
 
-  async handleEscalation(chatId: string, active: ActiveChat, response: PermissionResponse): Promise<void> {
+  async handleEscalation(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
     const targetMode = (response.executionMode ?? this.ctx.permissions.getPlanExecutionMode(chatId)) as
       | Chat['permissionMode']
       | undefined;
@@ -88,9 +84,8 @@ export class PlanModeHandler {
       this.ctx.db.chats.update(chatId, { permissionMode: newMode });
       this.ctx.emitEvent({ type: 'chat.updated', chat: active.chat });
 
-      if (active.process) {
-        const modeAdapter = this.ctx.adapters.get(active.chat.adapterId);
-        await modeAdapter?.setPermissionMode?.(active.process, newMode);
+      if (active.session?.isSpawned) {
+        await active.session.setPermissionMode(newMode);
       }
     }
   }

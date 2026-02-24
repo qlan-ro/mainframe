@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { PermissionRequest } from '@mainframe/types';
+import type { ControlRequest } from '@mainframe/types';
 import { PermissionCard } from '../../renderer/components/chat/PermissionCard.js';
 
-function createRequest(overrides?: Partial<PermissionRequest>): PermissionRequest {
+function createRequest(overrides?: Partial<ControlRequest>): ControlRequest {
   return {
     requestId: 'req-1',
     toolName: 'Bash',

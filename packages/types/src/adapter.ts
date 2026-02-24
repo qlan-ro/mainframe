@@ -1,5 +1,133 @@
 import type { PermissionMode } from './settings.js';
 
+export interface MessageMetadata {
+  model?: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+}
+
+export interface SessionResult {
+  total_cost_usd?: number;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+  subtype?: string;
+  result?: string;
+  is_error?: boolean;
+}
+
+export interface SessionOptions {
+  projectPath: string;
+  chatId?: string; // Claude session ID for resume
+}
+
+export interface SessionSpawnOptions {
+  model?: string;
+  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
+}
+
+export interface AdapterProcess {
+  id: string;
+  adapterId: string;
+  chatId: string;
+  pid: number;
+  status: 'starting' | 'ready' | 'running' | 'stopped' | 'error';
+  projectPath: string;
+  model?: string;
+}
+
+export type ControlBehavior = 'allow' | 'deny';
+
+export type ControlDestination = 'userSettings' | 'projectSettings' | 'localSettings' | 'session' | 'cliArg';
+
+/** A control rule update to save for future tool uses. */
+export type ControlUpdate =
+  | {
+      type: 'addRules';
+      rules: { toolName: string; ruleContent?: string }[];
+      behavior: 'allow' | 'deny' | 'ask';
+      destination: ControlDestination;
+    }
+  | {
+      type: 'replaceRules';
+      rules: { toolName: string; ruleContent?: string }[];
+      behavior: 'allow' | 'deny' | 'ask';
+      destination: ControlDestination;
+    }
+  | {
+      type: 'removeRules';
+      rules: { toolName: string; ruleContent?: string }[];
+      behavior: 'allow' | 'deny' | 'ask';
+      destination: ControlDestination;
+    }
+  | { type: 'setMode'; mode: PermissionMode; destination: ControlDestination }
+  | { type: 'addDirectories'; directories: string[]; destination: ControlDestination }
+  | { type: 'removeDirectories'; directories: string[]; destination: ControlDestination };
+
+export interface ControlRequest {
+  requestId: string;
+  toolName: string;
+  toolUseId: string;
+  input: Record<string, unknown>;
+  suggestions: ControlUpdate[];
+  decisionReason?: string;
+}
+
+export interface ControlResponse {
+  requestId: string;
+  toolUseId: string;
+  toolName?: string;
+  behavior: ControlBehavior;
+  updatedInput?: Record<string, unknown>;
+  updatedPermissions?: ControlUpdate[];
+  message?: string;
+  executionMode?: 'default' | 'acceptEdits' | 'yolo';
+  clearContext?: boolean;
+}
+
+export interface SessionSink {
+  onInit(sessionId: string): void;
+  onMessage(content: import('./chat.js').MessageContent[], metadata?: MessageMetadata): void;
+  onToolResult(content: import('./chat.js').MessageContent[]): void;
+  onPermission(request: ControlRequest): void;
+  onResult(data: SessionResult): void;
+  onExit(code: number | null): void;
+  onError(error: Error): void;
+  onCompact(): void;
+  onPlanFile(filePath: string): void;
+  onSkillFile(entry: import('./context.js').SkillFileEntry): void;
+}
+
+export interface AdapterSession {
+  readonly id: string;
+  readonly adapterId: string;
+  readonly projectPath: string;
+  readonly isSpawned: boolean;
+
+  spawn(options?: SessionSpawnOptions, sink?: SessionSink): Promise<AdapterProcess>;
+  kill(): Promise<void>;
+  getProcessInfo(): AdapterProcess | null;
+
+  sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
+  respondToPermission(response: ControlResponse): Promise<void>;
+  interrupt(): Promise<void>;
+  setModel(model: string): Promise<void>;
+  setPermissionMode(mode: string): Promise<void>;
+  sendCommand(command: string, args?: string): Promise<void>;
+
+  getContextFiles(): { global: import('./context.js').ContextFile[]; project: import('./context.js').ContextFile[] };
+  loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
+  extractPlanFiles(): Promise<string[]>;
+  extractSkillFiles(): Promise<import('./context.js').SkillFileEntry[]>;
+}
+
 export interface AdapterInfo {
   id: string;
   name: string;
@@ -15,72 +143,6 @@ export interface AdapterModel {
   contextWindow?: number;
 }
 
-export interface SpawnOptions {
-  projectPath: string;
-  chatId?: string;
-  model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
-}
-
-export interface AdapterProcess {
-  id: string;
-  adapterId: string;
-  chatId: string;
-  pid: number;
-  status: 'starting' | 'ready' | 'running' | 'stopped' | 'error';
-  projectPath: string;
-  model?: string;
-}
-
-export type PermissionBehavior = 'allow' | 'deny';
-
-export type PermissionDestination = 'userSettings' | 'projectSettings' | 'localSettings' | 'session' | 'cliArg';
-
-/** A permission rule update to save for future tool uses. Matches the CLI's PermissionUpdate type. */
-export type PermissionUpdate =
-  | {
-      type: 'addRules';
-      rules: { toolName: string; ruleContent?: string }[];
-      behavior: 'allow' | 'deny' | 'ask';
-      destination: PermissionDestination;
-    }
-  | {
-      type: 'replaceRules';
-      rules: { toolName: string; ruleContent?: string }[];
-      behavior: 'allow' | 'deny' | 'ask';
-      destination: PermissionDestination;
-    }
-  | {
-      type: 'removeRules';
-      rules: { toolName: string; ruleContent?: string }[];
-      behavior: 'allow' | 'deny' | 'ask';
-      destination: PermissionDestination;
-    }
-  | { type: 'setMode'; mode: PermissionMode; destination: PermissionDestination }
-  | { type: 'addDirectories'; directories: string[]; destination: PermissionDestination }
-  | { type: 'removeDirectories'; directories: string[]; destination: PermissionDestination };
-
-export interface PermissionRequest {
-  requestId: string;
-  toolName: string;
-  toolUseId: string;
-  input: Record<string, unknown>;
-  suggestions: PermissionUpdate[];
-  decisionReason?: string;
-}
-
-export interface PermissionResponse {
-  requestId: string;
-  toolUseId: string;
-  toolName?: string;
-  behavior: PermissionBehavior;
-  updatedInput?: Record<string, unknown>;
-  updatedPermissions?: PermissionUpdate[];
-  message?: string;
-  executionMode?: 'default' | 'acceptEdits' | 'yolo';
-  clearContext?: boolean;
-}
-
 export interface Adapter {
   id: string;
   name: string;
@@ -88,15 +150,9 @@ export interface Adapter {
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
   listModels(): Promise<AdapterModel[]>;
-  spawn(options: SpawnOptions): Promise<AdapterProcess>;
-  kill(process: AdapterProcess): Promise<void>;
-  interrupt?(process: AdapterProcess): Promise<void>;
-  setPermissionMode?(process: AdapterProcess, mode: PermissionMode): Promise<void>;
-  setModel?(process: AdapterProcess, model: string): Promise<void>;
-  sendCommand?(process: AdapterProcess, command: string, args?: string): Promise<void>;
-  sendMessage(process: AdapterProcess, message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
-  respondToPermission(process: AdapterProcess, response: PermissionResponse): Promise<void>;
-  loadHistory?(sessionId: string, projectPath: string): Promise<import('./chat.js').ChatMessage[]>;
+
+  createSession(options: SessionOptions): AdapterSession;
+  killAll(): void;
 
   getContextFiles?(projectPath: string): {
     global: import('./context.js').ContextFile[];

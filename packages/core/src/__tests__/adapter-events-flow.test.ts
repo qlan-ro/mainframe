@@ -5,48 +5,42 @@ import { WebSocketManager } from '../server/websocket.js';
 import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { ControlResponse, AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
 
-class MockAdapter extends BaseAdapter {
-  id = 'claude';
-  name = 'Mock';
+class MockSession extends MockBaseSession {
+  constructor(private adapter: MockAdapter) {
+    super('proc-1', adapter.id, '/tmp');
+  }
+
+  override async sendMessage(msg: string): Promise<void> {
+    this.adapter.sendMessageSpy(msg);
+  }
+  override async respondToPermission(r: ControlResponse): Promise<void> {
+    this.adapter.respondToPermissionSpy(r);
+  }
+  override async interrupt(): Promise<void> {
+    this.adapter.interruptSpy();
+  }
+  override async kill(): Promise<void> {
+    await super.kill();
+    this.adapter.killSpy();
+  }
+}
+
+class MockAdapter extends MockBaseAdapter {
+  override id = 'claude';
+  override name = 'Mock';
   respondToPermissionSpy = vi.fn();
   sendMessageSpy = vi.fn();
   killSpy = vi.fn();
   interruptSpy = vi.fn();
+  currentSession: MockSession | null = null;
 
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
-  async spawn(_opts: SpawnOptions): Promise<AdapterProcess> {
-    return {
-      id: 'proc-1',
-      adapterId: 'claude',
-      chatId: '',
-      pid: 0,
-      status: 'ready',
-      projectPath: '/tmp',
-      model: 'test',
-    };
-  }
-  async kill(_p: AdapterProcess) {
-    this.killSpy();
-  }
-  async interrupt(_p: AdapterProcess) {
-    this.interruptSpy();
-  }
-  async sendMessage(_p: AdapterProcess, msg: string) {
-    this.sendMessageSpy(msg);
-  }
-  async respondToPermission(_p: AdapterProcess, r: PermissionResponse) {
-    this.respondToPermissionSpy(r);
-  }
-  override async loadHistory() {
-    return [];
+  override createSession(_options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this);
+    return this.currentSession;
   }
 }
 
@@ -104,10 +98,11 @@ function createStack(adapter: MockAdapter, permissionMode = 'default') {
   const registry = new AdapterRegistry();
   (registry as any).adapters = new Map();
   registry.register(adapter);
-  const chats = new ChatManager(db as any, registry);
+  const wsRef: { current: WebSocketManager | null } = { current: null };
+  const chats = new ChatManager(db as any, registry, undefined, (event) => wsRef.current?.broadcastEvent(event));
   const app = createHttpServer(db as any, chats, registry);
   const httpServer = createServer(app);
-  new WebSocketManager(httpServer, chats);
+  wsRef.current = new WebSocketManager(httpServer, chats);
   return { httpServer, chats, db };
 }
 
@@ -163,7 +158,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('init', 'proc-1', 'session-xyz', 'claude-opus-4-5', ['Bash']);
+    adapter.currentSession!.simulateInit('session-xyz');
     await sleep(50);
 
     const e = events.find((e) => e.type === 'process.ready');
@@ -176,7 +171,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('tool_result', 'proc-1', [
+    adapter.currentSession!.simulateToolResult([
       { type: 'tool_result', toolUseId: 'tu-1', content: 'wrote file successfully' },
     ]);
     await sleep(50);
@@ -191,7 +186,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('compact', 'proc-1');
+    adapter.currentSession!.simulateCompact();
     await sleep(50);
 
     const e = events.find((e) => e.type === 'message.added');
@@ -212,7 +207,7 @@ describe('adapter events flow', () => {
     const events: DaemonEvent[] = [];
     ws.on('message', (data) => events.push(JSON.parse(data.toString()) as DaemonEvent));
 
-    adapter.emit('plan_file', 'proc-1', '/tmp/test/plan.md');
+    adapter.currentSession!.simulatePlanFile('/tmp/test/plan.md');
     await sleep(50);
 
     expect(db.chats.addPlanFile).toHaveBeenCalledWith('test-chat', '/tmp/test/plan.md');
@@ -231,7 +226,7 @@ describe('adapter events flow', () => {
     const events: DaemonEvent[] = [];
     ws.on('message', (data) => events.push(JSON.parse(data.toString()) as DaemonEvent));
 
-    adapter.emit('plan_file', 'proc-1', '/tmp/test/plan.md');
+    adapter.currentSession!.simulatePlanFile('/tmp/test/plan.md');
     await sleep(50);
 
     expect(events.some((e) => e.type === 'context.updated')).toBe(false);
@@ -241,7 +236,7 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('error', 'proc-1', new Error('something broke'));
+    adapter.currentSession!.simulateError(new Error('something broke'));
     await sleep(50);
 
     const e = events.find((e) => e.type === 'error');
@@ -253,13 +248,9 @@ describe('adapter events flow', () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    adapter.emit('result', 'proc-1', {
-      cost: 0,
-      tokensInput: 10,
-      tokensOutput: 5,
+    adapter.currentSession!.simulateResult({
       subtype: 'error_during_execution',
-      isError: true,
-      durationMs: 100,
+      is_error: true,
     });
     await sleep(50);
 
@@ -274,12 +265,9 @@ describe('adapter events flow', () => {
     ws!.send(JSON.stringify({ type: 'chat.interrupt', chatId: 'test-chat' }));
     await sleep(50);
 
-    adapter.emit('result', 'proc-1', {
-      cost: 0,
-      tokensInput: 10,
-      tokensOutput: 5,
+    adapter.currentSession!.simulateResult({
       subtype: 'error_during_execution',
-      isError: true,
+      is_error: true,
     });
     await sleep(50);
 

@@ -34,6 +34,33 @@ function extractSkillPathFromText(content: Array<Record<string, unknown>>): stri
   return null;
 }
 
+export function buildToolResultBlocks(
+  message: Record<string, unknown>,
+  tur: Record<string, unknown> | undefined,
+): MessageContent[] {
+  const rawContent = message.content;
+  if (!Array.isArray(rawContent)) return [];
+
+  const sp = tur?.structuredPatch as DiffHunk[] | undefined;
+  const originalFile = tur?.originalFile as string | undefined;
+  const modifiedFile = deriveModifiedFile(tur, originalFile);
+
+  const blocks: MessageContent[] = [];
+  for (const block of rawContent) {
+    if (block.type !== 'tool_result') continue;
+    blocks.push({
+      type: 'tool_result',
+      toolUseId: (block.tool_use_id as string) || '',
+      content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? ''),
+      isError: !!block.is_error,
+      ...(sp?.length ? { structuredPatch: sp } : {}),
+      ...(originalFile != null ? { originalFile } : {}),
+      ...(modifiedFile != null ? { modifiedFile } : {}),
+    });
+  }
+  return blocks;
+}
+
 function convertUserEntry(
   entry: Record<string, unknown>,
   message: Record<string, unknown>,
@@ -44,27 +71,24 @@ function convertUserEntry(
   const toolUseResult = entry.toolUseResult as Record<string, unknown> | undefined;
 
   if (typeof rawContent === 'string') {
-    // TODO(task-support): render task-notification deliveries as proper TaskGroupCard entries
-    // instead of filtering them. These carry the completed task summary and should be
-    // shown as part of the task UI once task support is implemented.
+    // String rawContent: user-typed text stored by Claude CLI when message.content
+    // is not an array. History must render it; live stream doesn't re-emit it
+    // (sendMessage() already created that ChatMessage).
+    // Known internal strings are filtered below — add new patterns here if they
+    // appear in JSONL but should never render in UI.
+    // TODO(task-support): render <task-notification> content once task UI is ready
     if (rawContent.startsWith('<task-notification>')) return null;
     contentBlocks.push({ type: 'text', text: rawContent });
   } else if (Array.isArray(rawContent)) {
+    // Tool results — use shared builder (same logic as live stream)
+    const toolResults = buildToolResultBlocks(message, toolUseResult);
+    contentBlocks.push(...toolResults);
+
+    // Text and image blocks are intentionally only in history:
+    // live stream doesn't re-emit them because sendMessage() already created
+    // the user ChatMessage and tool results come via a separate tool_result entry.
     for (const block of rawContent) {
-      if (block.type === 'tool_result') {
-        const sp = toolUseResult?.structuredPatch as DiffHunk[] | undefined;
-        const originalFile = toolUseResult?.originalFile as string | undefined;
-        const modifiedFile = deriveModifiedFile(toolUseResult, originalFile);
-        contentBlocks.push({
-          type: 'tool_result',
-          toolUseId: block.tool_use_id || '',
-          content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? ''),
-          isError: !!block.is_error,
-          ...(sp?.length ? { structuredPatch: sp } : {}),
-          ...(originalFile != null ? { originalFile } : {}),
-          ...(modifiedFile != null ? { modifiedFile } : {}),
-        });
-      } else if (block.type === 'text') {
+      if (block.type === 'text') {
         const text = block.text || '';
         if (!text.startsWith('[Request interrupted')) {
           contentBlocks.push({ type: 'text', text });

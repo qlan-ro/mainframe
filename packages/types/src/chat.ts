@@ -64,5 +64,7 @@ export type MessageContent =
       originalFile?: string;
       modifiedFile?: string;
     }
-  | { type: 'permission_request'; request: import('./adapter.js').PermissionRequest }
+  | { type: 'permission_request'; request: import('./adapter.js').ControlRequest }
   | { type: 'error'; message: string };
+
+export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;

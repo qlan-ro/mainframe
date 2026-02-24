@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { relative, isAbsolute } from 'node:path';
-import type { MessageContent, SessionMention, SessionContext, ChatMessage } from '@mainframe/types';
+import type { MessageContent, SessionMention, SessionContext, ChatMessage, AdapterSession } from '@mainframe/types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
@@ -61,17 +61,23 @@ export async function getSessionContext(
   projectPath: string,
   db: DatabaseManager,
   adapters: AdapterRegistry,
+  session: AdapterSession | undefined,
   attachmentStore: AttachmentStore | undefined,
   adapterId: string | undefined,
 ): Promise<SessionContext> {
-  const adapter = adapterId ? adapters.get(adapterId) : undefined;
-
   let globalFiles: SessionContext['globalFiles'] = [];
   let projectFiles: SessionContext['projectFiles'] = [];
-  if (adapter?.getContextFiles) {
-    const files = adapter.getContextFiles(projectPath);
+  if (session) {
+    const files = session.getContextFiles();
     globalFiles = files.global;
     projectFiles = files.project;
+  } else {
+    const adapter = adapterId ? adapters.get(adapterId) : undefined;
+    if (adapter?.getContextFiles) {
+      const files = adapter.getContextFiles(projectPath);
+      globalFiles = files.global;
+      projectFiles = files.project;
+    }
   }
 
   const toRelative = (p: string) => (isAbsolute(p) ? relative(projectPath, p) : p);

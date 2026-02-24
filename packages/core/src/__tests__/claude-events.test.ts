@@ -1,86 +1,94 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleStdout, handleStderr } from '../adapters/claude-events.js';
-import type { ClaudeProcess } from '../adapters/claude-types.js';
+import { handleStdout, handleStderr } from '../plugins/builtin/claude/events.js';
+import { ClaudeSession } from '../plugins/builtin/claude/session.js';
+import type { SessionSink } from '@mainframe/types';
 
-function createMockEmitter() {
-  return { emit: vi.fn().mockReturnValue(true) };
+function createSession() {
+  return new ClaudeSession({ projectPath: '/tmp', chatId: '' });
 }
 
-function createProcess(overrides: Partial<ClaudeProcess> = {}): ClaudeProcess {
+function createSink(): SessionSink {
   return {
-    id: 'p1',
-    adapterId: 'claude',
-    chatId: '',
-    pid: 1234,
-    status: 'ready',
-    projectPath: '/tmp',
-    model: 'test',
-    child: {} as any,
-    buffer: '',
-    ...overrides,
+    onInit: vi.fn(),
+    onMessage: vi.fn(),
+    onToolResult: vi.fn(),
+    onPermission: vi.fn(),
+    onResult: vi.fn(),
+    onExit: vi.fn(),
+    onError: vi.fn(),
+    onCompact: vi.fn(),
+    onPlanFile: vi.fn(),
+    onSkillFile: vi.fn(),
   };
 }
 
 describe('handleStdout', () => {
   it('parses complete JSON lines', () => {
-    const emitter = createMockEmitter();
-    const processes = new Map([['p1', createProcess()]]);
+    const session = createSession();
+    const sink = createSink();
 
     const event = JSON.stringify({ type: 'system', subtype: 'init', session_id: 's1', model: 'claude', tools: [] });
-    handleStdout('p1', Buffer.from(event + '\n'), processes, emitter as any);
+    handleStdout(session, Buffer.from(event + '\n'), sink);
 
-    expect(emitter.emit).toHaveBeenCalledWith('init', 'p1', 's1', 'claude', []);
+    expect(sink.onInit).toHaveBeenCalledWith('s1');
   });
 
   it('handles partial chunks by buffering', () => {
-    const emitter = createMockEmitter();
-    const cp = createProcess();
-    const processes = new Map([['p1', cp]]);
+    const session = createSession();
+    const sink = createSink();
 
     const event = JSON.stringify({ type: 'system', subtype: 'init', session_id: 's1', model: 'claude', tools: [] });
     const half1 = event.slice(0, 20);
     const half2 = event.slice(20) + '\n';
 
-    handleStdout('p1', Buffer.from(half1), processes, emitter as any);
-    expect(emitter.emit).not.toHaveBeenCalled();
+    handleStdout(session, Buffer.from(half1), sink);
+    expect(sink.onInit).not.toHaveBeenCalled();
 
-    handleStdout('p1', Buffer.from(half2), processes, emitter as any);
-    expect(emitter.emit).toHaveBeenCalledWith('init', 'p1', 's1', 'claude', []);
+    handleStdout(session, Buffer.from(half2), sink);
+    expect(sink.onInit).toHaveBeenCalledWith('s1');
   });
 
   it('skips non-JSON lines', () => {
-    const emitter = createMockEmitter();
-    const processes = new Map([['p1', createProcess()]]);
+    const session = createSession();
+    const sink = createSink();
 
-    handleStdout('p1', Buffer.from('not json at all\n'), processes, emitter as any);
-    expect(emitter.emit).not.toHaveBeenCalled();
+    handleStdout(session, Buffer.from('not json at all\n'), sink);
+    expect(sink.onInit).not.toHaveBeenCalled();
+    expect(sink.onMessage).not.toHaveBeenCalled();
   });
 
   it('skips empty lines', () => {
-    const emitter = createMockEmitter();
-    const processes = new Map([['p1', createProcess()]]);
+    const session = createSession();
+    const sink = createSink();
 
-    handleStdout('p1', Buffer.from('\n\n\n'), processes, emitter as any);
-    expect(emitter.emit).not.toHaveBeenCalled();
+    handleStdout(session, Buffer.from('\n\n\n'), sink);
+    expect(sink.onInit).not.toHaveBeenCalled();
+    expect(sink.onMessage).not.toHaveBeenCalled();
   });
 });
 
 describe('handleStderr', () => {
   it('emits error for non-informational messages', () => {
-    const emitter = createMockEmitter();
-    handleStderr('p1', Buffer.from('Something went wrong\n'), emitter as any);
-    expect(emitter.emit).toHaveBeenCalledWith('error', 'p1', expect.any(Error));
+    const session = createSession();
+    const sink = createSink();
+
+    handleStderr(session, Buffer.from('Something went wrong\n'), sink);
+    expect(sink.onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
   it('filters informational patterns', () => {
-    const emitter = createMockEmitter();
-    handleStderr('p1', Buffer.from('Warning: some deprecation\n'), emitter as any);
-    expect(emitter.emit).not.toHaveBeenCalled();
+    const session = createSession();
+    const sink = createSink();
+
+    handleStderr(session, Buffer.from('Warning: some deprecation\n'), sink);
+    expect(sink.onError).not.toHaveBeenCalled();
   });
 
   it('ignores empty stderr', () => {
-    const emitter = createMockEmitter();
-    handleStderr('p1', Buffer.from('   \n'), emitter as any);
-    expect(emitter.emit).not.toHaveBeenCalled();
+    const session = createSession();
+    const sink = createSink();
+
+    handleStderr(session, Buffer.from('   \n'), sink);
+    expect(sink.onError).not.toHaveBeenCalled();
   });
 });

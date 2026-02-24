@@ -1,29 +1,30 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import type { ChatMessage, AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type { ChatMessage, AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
 
 // ── Mock adapter & DB (infrastructure, not what we're testing) ──────
 
-class MockAdapter extends BaseAdapter {
-  id = 'mock';
-  name = 'Mock';
+class MockSession extends MockBaseSession {
+  constructor(adapterId: string, projectPath: string) {
+    super('proc-1', adapterId, projectPath);
+  }
 
-  async isInstalled() {
-    return true;
-  }
-  async getVersion() {
-    return '1.0';
-  }
-  async spawn(_options: SpawnOptions): Promise<AdapterProcess> {
-    return { id: 'proc-1', adapterId: 'mock', chatId: '', pid: 0, status: 'ready', projectPath: '/tmp', model: 'test' };
-  }
-  async kill() {}
-  async sendMessage() {}
-  async respondToPermission(_process: AdapterProcess, _response: PermissionResponse) {}
   override async loadHistory(): Promise<ChatMessage[]> {
     return [];
+  }
+}
+
+class MockAdapter extends MockBaseAdapter {
+  override id = 'mock';
+  override name = 'Mock';
+  currentSession: MockSession | null = null;
+
+  override createSession(options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this.id, options.projectPath);
+    return this.currentSession;
   }
 }
 
@@ -72,10 +73,9 @@ function titleUpdates(db: ReturnType<typeof createMockDb>): string[] {
     .map(([_id, data]: [string, { title: string }]) => data.title);
 }
 
-function collectEvents(manager: ChatManager): DaemonEvent[] {
+function makeEventCollector(): { events: DaemonEvent[]; onEvent: (e: DaemonEvent) => void } {
   const events: DaemonEvent[] = [];
-  manager.on('event', (e: DaemonEvent) => events.push(e));
-  return events;
+  return { events, onEvent: (e) => events.push(e) };
 }
 
 // ── Tests ────────────────────────────────────────────────────────────
@@ -95,8 +95,8 @@ describe.skipIf(!!process.env.CI)('generateTitle (integration — real claude -p
 
   it('generates a concise LLM title that replaces the truncated one', async () => {
     const db = createMockDb();
-    const manager = new ChatManager(db as any, registry);
-    const events = collectEvents(manager);
+    const { events, onEvent } = makeEventCollector();
+    const manager = new ChatManager(db as any, registry, undefined, onEvent);
 
     await manager.sendMessage(
       chatId,

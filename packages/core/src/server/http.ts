@@ -18,12 +18,14 @@ import {
   adapterRoutes,
   settingRoutes,
 } from './routes/index.js';
+import type { PluginManager } from '../plugins/manager.js';
 
 export function createHttpServer(
   db: DatabaseManager,
   chats: ChatManager,
   adapters: AdapterRegistry,
   attachmentStore?: AttachmentStore,
+  pluginManager?: PluginManager,
 ): Express {
   const app = express();
 
@@ -67,6 +69,11 @@ export function createHttpServer(
   app.use(skillRoutes(ctx));
   app.use(agentRoutes(ctx));
   app.use(settingRoutes(ctx));
+
+  // Plugin routes — the PluginManager owns a parent router with listing + per-plugin sub-routers
+  if (pluginManager) {
+    app.use('/api/plugins', pluginManager.router);
+  }
 
   // Error middleware — must be after all routes
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -1,30 +1,64 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import { BaseAdapter } from '../adapters/base.js';
-import type { Chat, ChatMessage, AdapterProcess, PermissionResponse, SpawnOptions } from '@mainframe/types';
+import { MockBaseAdapter } from './helpers/mock-adapter.js';
+import { MockBaseSession } from './helpers/mock-session.js';
+import type {
+  Chat,
+  ChatMessage,
+  ControlResponse,
+  AdapterSession,
+  SessionOptions,
+  SessionSpawnOptions,
+  AdapterProcess,
+} from '@mainframe/types';
 
-// ── Minimal mock adapter ────────────────────────────────────────────
+// ── Minimal mock session & adapter ──────────────────────────────────
 
-class MockAdapter extends BaseAdapter {
-  id = 'mock';
-  name = 'Mock';
-  historyToReturn: ChatMessage[] = [];
+class MockSession extends MockBaseSession {
+  constructor(private adapter: MockAdapterImpl) {
+    super('proc-1', adapter.id, '/tmp');
+  }
 
-  async isInstalled() {
-    return true;
+  override async spawn(
+    options?: SessionSpawnOptions,
+    sink?: Parameters<MockBaseSession['spawn']>[1],
+  ): Promise<AdapterProcess> {
+    this.adapter.lastSpawnOptions = options ?? null;
+    return super.spawn(options, sink);
   }
-  async getVersion() {
-    return '1.0';
+
+  override async kill(): Promise<void> {
+    await super.kill();
+    this.adapter.killCount++;
   }
-  async spawn(_options: SpawnOptions): Promise<AdapterProcess> {
-    return { id: 'proc-1', adapterId: 'mock', chatId: '', pid: 0, status: 'ready', projectPath: '/tmp', model: 'test' };
-  }
-  async kill() {}
-  async sendMessage() {}
-  async respondToPermission(_process: AdapterProcess, _response: PermissionResponse) {}
+
   override async loadHistory(): Promise<ChatMessage[]> {
-    return this.historyToReturn;
+    return this.adapter.historyToReturn;
+  }
+
+  override async respondToPermission(response: ControlResponse): Promise<void> {
+    this.adapter.permissionResponses.push(response);
+  }
+
+  override async sendMessage(msg: string): Promise<void> {
+    this.adapter.sentMessages.push(msg);
+  }
+}
+
+class MockAdapterImpl extends MockBaseAdapter {
+  override id = 'mock';
+  override name = 'Mock';
+  historyToReturn: ChatMessage[] = [];
+  lastSpawnOptions: SessionSpawnOptions | null = null;
+  permissionResponses: ControlResponse[] = [];
+  sentMessages: string[] = [];
+  killCount = 0;
+  currentSession: MockSession | null = null;
+
+  override createSession(_options: SessionOptions): AdapterSession {
+    this.currentSession = new MockSession(this);
+    return this.currentSession;
   }
 }
 
@@ -86,7 +120,7 @@ function toolResult(toolUseId: string, content: string, isError = false) {
 // ── Tests ───────────────────────────────────────────────────────────
 
 describe('restorePendingPermission (via getMessages + hasPendingPermission)', () => {
-  let adapter: MockAdapter;
+  let adapter: MockAdapterImpl;
   let registry: AdapterRegistry;
   let manager: ChatManager;
 
@@ -107,7 +141,7 @@ describe('restorePendingPermission (via getMessages + hasPendingPermission)', ()
 
   beforeEach(() => {
     msgCounter = 0;
-    adapter = new MockAdapter();
+    adapter = new MockAdapterImpl();
     registry = new AdapterRegistry();
     registry.register(adapter);
   });
@@ -248,30 +282,16 @@ describe('restorePendingPermission (via getMessages + hasPendingPermission)', ()
 // ── respondToPermission: ExitPlanMode escalation before spawn ──────
 
 describe('respondToPermission with no process (daemon restart scenario)', () => {
-  let adapter: MockAdapter;
+  let adapter: MockAdapterImpl;
   let registry: AdapterRegistry;
   let manager: ChatManager;
   let db: ReturnType<typeof createMockDb>;
-  let spawnOptions: SpawnOptions | null;
-  let permissionResponses: PermissionResponse[];
 
   const testProject = { id: 'proj-1', name: 'Test', path: '/tmp/test' };
 
   beforeEach(() => {
     msgCounter = 0;
-    spawnOptions = null;
-    permissionResponses = [];
-    adapter = new MockAdapter();
-    // Capture spawn options to verify the permission mode passed to the CLI
-    const originalSpawn = adapter.spawn.bind(adapter);
-    adapter.spawn = async (options: SpawnOptions) => {
-      spawnOptions = options;
-      return originalSpawn(options);
-    };
-    // Capture permission responses sent to the adapter after spawn
-    adapter.respondToPermission = async (_process: AdapterProcess, response: PermissionResponse) => {
-      permissionResponses.push(response);
-    };
+    adapter = new MockAdapterImpl();
     registry = new AdapterRegistry();
     registry.register(adapter);
   });
@@ -321,13 +341,13 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
     expect(db.chats.update).toHaveBeenCalledWith(chatId, expect.objectContaining({ permissionMode: 'acceptEdits' }));
 
     // The CLI should be spawned with the escalated mode
-    expect(spawnOptions).not.toBeNull();
-    expect(spawnOptions!.permissionMode).toBe('acceptEdits');
+    expect(adapter.lastSpawnOptions).not.toBeNull();
+    expect(adapter.lastSpawnOptions!.permissionMode).toBe('acceptEdits');
 
     // The permission response should be sent directly to the adapter
-    expect(permissionResponses).toHaveLength(1);
-    expect(permissionResponses[0].behavior).toBe('allow');
-    expect(permissionResponses[0].toolName).toBe('ExitPlanMode');
+    expect(adapter.permissionResponses).toHaveLength(1);
+    expect(adapter.permissionResponses[0]!.behavior).toBe('allow');
+    expect(adapter.permissionResponses[0]!.toolName).toBe('ExitPlanMode');
   });
 
   it('escalates to default when no executionMode specified', async () => {
@@ -342,8 +362,8 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
       // No executionMode
     });
 
-    expect(spawnOptions).not.toBeNull();
-    expect(spawnOptions!.permissionMode).toBe('default');
+    expect(adapter.lastSpawnOptions).not.toBeNull();
+    expect(adapter.lastSpawnOptions!.permissionMode).toBe('default');
   });
 
   it('does NOT escalate when denying ExitPlanMode', async () => {
@@ -358,8 +378,8 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
     });
 
     // Mode should stay as 'plan'
-    expect(spawnOptions).not.toBeNull();
-    expect(spawnOptions!.permissionMode).toBe('plan');
+    expect(adapter.lastSpawnOptions).not.toBeNull();
+    expect(adapter.lastSpawnOptions!.permissionMode).toBe('plan');
   });
 
   it('does NOT escalate for non-ExitPlanMode approvals', async () => {
@@ -391,13 +411,13 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
     });
 
     // Mode should stay as 'plan'
-    expect(spawnOptions).not.toBeNull();
-    expect(spawnOptions!.permissionMode).toBe('plan');
+    expect(adapter.lastSpawnOptions).not.toBeNull();
+    expect(adapter.lastSpawnOptions!.permissionMode).toBe('plan');
 
     // The permission response should still be sent directly to the adapter
-    expect(permissionResponses).toHaveLength(1);
-    expect(permissionResponses[0].behavior).toBe('allow');
-    expect(permissionResponses[0].toolName).toBe('Write');
+    expect(adapter.permissionResponses).toHaveLength(1);
+    expect(adapter.permissionResponses[0]!.behavior).toBe('allow');
+    expect(adapter.permissionResponses[0]!.toolName).toBe('Write');
   });
 
   it('clears pending permission after responding', async () => {
@@ -419,7 +439,7 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
 });
 
 describe('respondToPermission clearContext ExitPlanMode', () => {
-  let adapter: MockAdapter;
+  let adapter: MockAdapterImpl;
   let registry: AdapterRegistry;
   let manager: ChatManager;
   let db: ReturnType<typeof createMockDb>;
@@ -428,7 +448,7 @@ describe('respondToPermission clearContext ExitPlanMode', () => {
 
   beforeEach(() => {
     msgCounter = 0;
-    adapter = new MockAdapter();
+    adapter = new MockAdapterImpl();
     registry = new AdapterRegistry();
     registry.register(adapter);
   });
@@ -456,10 +476,6 @@ describe('respondToPermission clearContext ExitPlanMode', () => {
   }
 
   it('persists recovered plan file from history when approving ExitPlanMode with clearContext', async () => {
-    const respondSpy = vi.spyOn(adapter, 'respondToPermission');
-    const killSpy = vi.spyOn(adapter, 'kill');
-    const sendSpy = vi.spyOn(adapter, 'sendMessage');
-
     await setupWithRunningProcess([
       userText('Generate a plan'),
       toolResult('toolu_plan', 'Your plan has been saved to: /tmp/test/plan.md'),
@@ -475,17 +491,16 @@ describe('respondToPermission clearContext ExitPlanMode', () => {
       updatedInput: { plan: '# Plan\n1. Do it' },
     });
 
+    // respondToPermission(deny) was called on the running session
     expect(db.chats.addPlanFile).toHaveBeenCalledWith(chatId, '/tmp/test/plan.md');
-    expect(respondSpy).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ behavior: 'deny', toolName: 'ExitPlanMode' }),
-    );
-    expect(killSpy).toHaveBeenCalled();
-    expect(sendSpy).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.stringContaining('Implement the following plan:'),
-      undefined,
-    );
+    expect(adapter.permissionResponses).toHaveLength(1);
+    expect(adapter.permissionResponses[0]!.behavior).toBe('deny');
+    expect(adapter.permissionResponses[0]!.toolName).toBe('ExitPlanMode');
+    // kill was called on the running session
+    expect(adapter.killCount).toBeGreaterThanOrEqual(1);
+    // sendMessage was called on the NEW session created after kill+restart
+    expect(adapter.sentMessages).toHaveLength(1);
+    expect(adapter.sentMessages[0]).toContain('Implement the following plan:');
   });
 
   it('does not persist a plan file when history does not contain a recoverable path', async () => {

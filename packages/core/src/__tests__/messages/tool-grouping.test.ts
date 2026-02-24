@@ -6,6 +6,32 @@ import {
   type ToolGroupItem,
   type TaskProgressItem,
 } from '../../messages/tool-grouping.js';
+import type { ToolCategories } from '../../messages/tool-categorization.js';
+
+/* ── fixtures ────────────────────────────────────────────────────── */
+
+const CLAUDE_CATEGORIES: ToolCategories = {
+  explore: new Set(['Read', 'Glob', 'Grep']),
+  hidden: new Set([
+    'TaskList',
+    'TaskGet',
+    'TaskOutput',
+    'TaskStop',
+    'TodoWrite',
+    'Skill',
+    'EnterPlanMode',
+    'AskUserQuestion',
+  ]),
+  progress: new Set(['TaskCreate', 'TaskUpdate']),
+  subagent: new Set(['Task']),
+};
+
+const EMPTY_CATEGORIES: ToolCategories = {
+  explore: new Set(),
+  hidden: new Set(),
+  progress: new Set(),
+  subagent: new Set(),
+};
 
 /* ── helpers ─────────────────────────────────────────────────────── */
 
@@ -28,30 +54,30 @@ function text(t: string): PartEntry {
 
 describe('groupToolCallParts', () => {
   it('returns empty array for empty input', () => {
-    expect(groupToolCallParts([])).toEqual([]);
+    expect(groupToolCallParts([], CLAUDE_CATEGORIES)).toEqual([]);
   });
 
   it('passes through a single non-tool text entry', () => {
     const parts = [text('hello')];
-    expect(groupToolCallParts(parts)).toEqual([text('hello')]);
+    expect(groupToolCallParts(parts, CLAUDE_CATEGORIES)).toEqual([text('hello')]);
   });
 
   it('passes through a single non-explore, non-hidden, non-task tool call', () => {
     const part = tc('Bash', 'b1', 'done');
-    const result = groupToolCallParts([part]);
+    const result = groupToolCallParts([part], CLAUDE_CATEGORIES);
     expect(result).toEqual([part]);
   });
 
   it('passes through a single explore tool without grouping', () => {
     const part = tc('Read', 'r1', 'file content');
-    const result = groupToolCallParts([part]);
+    const result = groupToolCallParts([part], CLAUDE_CATEGORIES);
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual(part);
   });
 
   it('groups 2+ consecutive explore tools into a _ToolGroup', () => {
     const parts = [tc('Read', 'r1'), tc('Grep', 'g1'), tc('Glob', 'gl1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(1);
     const group = result[0]!;
@@ -70,14 +96,14 @@ describe('groupToolCallParts', () => {
 
   it('does not group a single explore tool (needs >= 2)', () => {
     const parts = [tc('Read', 'r1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
     expect(result).toHaveLength(1);
     expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('Read');
   });
 
   it('removes hidden tools from output', () => {
     const parts = [tc('TodoWrite', 'h1'), tc('Bash', 'b1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
     expect(result).toHaveLength(1);
     expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('Bash');
   });
@@ -94,13 +120,13 @@ describe('groupToolCallParts', () => {
       'AskUserQuestion',
     ];
     const parts = hiddenNames.map((name) => tc(name));
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
     expect(result).toEqual([]);
   });
 
   it('accumulates task progress tools into a single _TaskProgress entry', () => {
     const parts = [tc('TaskCreate', 'tc1'), tc('TaskUpdate', 'tu1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(1);
     const entry = result[0]!;
@@ -117,7 +143,7 @@ describe('groupToolCallParts', () => {
 
   it('places _TaskProgress at the position of the first task tool', () => {
     const parts = [tc('Bash', 'b1'), tc('TaskCreate', 'tc1'), tc('Edit', 'e1'), tc('TaskUpdate', 'tu1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
     // Bash at index 0, _TaskProgress at index 1, Edit at index 2
     expect(result).toHaveLength(3);
@@ -129,7 +155,7 @@ describe('groupToolCallParts', () => {
   it('skips hidden tools interspersed between explore tools when grouping', () => {
     // Read, TodoWrite (hidden), Grep should still group Read+Grep
     const parts = [tc('Read', 'r1'), tc('TodoWrite', 'h1'), tc('Grep', 'g1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(1);
     const group = result[0]!;
@@ -147,7 +173,7 @@ describe('groupToolCallParts', () => {
     // inner loop does not add it to the outer taskItems collector, the task tool
     // is effectively consumed (lost). The explore tools still group together.
     const parts = [tc('Read', 'r1'), tc('TaskCreate', 'tc1'), tc('Glob', 'gl1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
     // Read+Glob are grouped; TaskCreate is consumed by the inner explore loop
     const toolGroup = result.find(
@@ -162,7 +188,7 @@ describe('groupToolCallParts', () => {
 
   it('breaks explore group on a non-explore, non-hidden, non-task tool', () => {
     const parts = [tc('Read', 'r1'), tc('Bash', 'b1'), tc('Grep', 'g1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
     // Read alone (no group), Bash, Grep alone (no group)
     expect(result).toHaveLength(3);
@@ -173,7 +199,7 @@ describe('groupToolCallParts', () => {
 
   it('breaks explore group on a text entry', () => {
     const parts = [tc('Read', 'r1'), text('thinking...'), tc('Grep', 'g1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(3);
     expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('Read');
@@ -191,7 +217,7 @@ describe('groupToolCallParts', () => {
       tc('Bash', 'b1'),
       text('done'),
     ];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
     const names = result.map((p) =>
       p.type === 'text' ? `text:${p.text}` : `tool:${(p as PartEntry & { type: 'tool-call' }).toolName}`,
@@ -205,7 +231,7 @@ describe('groupToolCallParts', () => {
 
   it('produces _TaskProgress when task tools are NOT inside an explore run', () => {
     const parts = [tc('TaskCreate', 'tc1'), tc('Bash', 'b1'), tc('TaskUpdate', 'tu1')];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
     const names = result.map((p) =>
       p.type === 'text' ? `text:${p.text}` : `tool:${(p as PartEntry & { type: 'tool-call' }).toolName}`,
@@ -219,7 +245,7 @@ describe('groupToolCallParts', () => {
       { type: 'tool-call' as const, toolCallId: 'r1', toolName: 'Read', args: { file: '/a.ts' }, result: 'content A' },
       { type: 'tool-call' as const, toolCallId: 'g1', toolName: 'Grep', args: { pattern: 'foo' }, result: 'match' },
     ];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
     const items = (result[0] as PartEntry & { type: 'tool-call' }).args.items as ToolGroupItem[];
     expect(items[0]!.args).toEqual({ file: '/a.ts' });
     expect(items[0]!.result).toBe('content A');
@@ -232,10 +258,25 @@ describe('groupToolCallParts', () => {
       { type: 'tool-call' as const, toolCallId: 'r1', toolName: 'Read', args: {}, result: 'err', isError: true },
       { type: 'tool-call' as const, toolCallId: 'g1', toolName: 'Glob', args: {}, result: 'ok', isError: false },
     ];
-    const result = groupToolCallParts(parts);
+    const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
     const items = (result[0] as PartEntry & { type: 'tool-call' }).args.items as ToolGroupItem[];
     expect(items[0]!.isError).toBe(true);
     expect(items[1]!.isError).toBe(false);
+  });
+});
+
+describe('with empty categories (no grouping)', () => {
+  it('passes all tool calls through ungrouped', () => {
+    const parts = [tc('Read', 'r1'), tc('Grep', 'g1'), tc('TodoWrite', 'h1')];
+    const result = groupToolCallParts(parts, EMPTY_CATEGORIES);
+    expect(result).toHaveLength(3);
+  });
+
+  it('does not create _TaskGroup entries', () => {
+    const parts = [tc('Task', 't1'), tc('Bash', 'b1')];
+    const result = groupTaskChildren(parts, EMPTY_CATEGORIES);
+    expect(result).toHaveLength(2);
+    expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('Task');
   });
 });
 
@@ -243,18 +284,18 @@ describe('groupToolCallParts', () => {
 
 describe('groupTaskChildren', () => {
   it('returns empty array for empty input', () => {
-    expect(groupTaskChildren([])).toEqual([]);
+    expect(groupTaskChildren([], CLAUDE_CATEGORIES)).toEqual([]);
   });
 
   it('passes through parts with no Task tool call', () => {
     const parts = [text('hello'), tc('Bash', 'b1'), text('done')];
-    const result = groupTaskChildren(parts);
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
     expect(result).toEqual(parts);
   });
 
   it('wraps a Task + subsequent tool calls into a _TaskGroup', () => {
     const parts = [tc('Task', 't1', undefined), tc('Bash', 'b1', 'output'), tc('Read', 'r1', 'file')];
-    const result = groupTaskChildren(parts);
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(1);
     const group = result[0]!;
@@ -273,14 +314,14 @@ describe('groupTaskChildren', () => {
       { type: 'tool-call' as const, toolCallId: 't1', toolName: 'Task', args: { description: 'do stuff' } },
       tc('Bash', 'b1'),
     ];
-    const result = groupTaskChildren(parts);
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
     const group = result[0] as PartEntry & { type: 'tool-call' };
     expect(group.args.taskArgs).toEqual({ description: 'do stuff' });
   });
 
   it('stops grouping at a text entry', () => {
     const parts = [tc('Task', 't1'), tc('Bash', 'b1'), text('middle'), tc('Edit', 'e1')];
-    const result = groupTaskChildren(parts);
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     // _TaskGroup(Task+Bash), text, Edit
     expect(result).toHaveLength(3);
@@ -295,7 +336,7 @@ describe('groupTaskChildren', () => {
 
   it('stops grouping at another Task tool call', () => {
     const parts = [tc('Task', 't1'), tc('Bash', 'b1'), tc('Task', 't2'), tc('Read', 'r1')];
-    const result = groupTaskChildren(parts);
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(2);
     expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('_TaskGroup');
@@ -314,7 +355,7 @@ describe('groupTaskChildren', () => {
 
   it('leaves a Task with no children as a plain Task entry', () => {
     const parts = [tc('Task', 't1'), text('after')];
-    const result = groupTaskChildren(parts);
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(2);
     expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('Task');
@@ -323,7 +364,7 @@ describe('groupTaskChildren', () => {
 
   it('leaves a trailing Task with no children as a plain Task entry', () => {
     const parts = [text('before'), tc('Task', 't1')];
-    const result = groupTaskChildren(parts);
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(2);
     expect(result[0]).toEqual(text('before'));
@@ -335,7 +376,7 @@ describe('groupTaskChildren', () => {
       { type: 'tool-call' as const, toolCallId: 't1', toolName: 'Task', args: {}, result: 'task done', isError: false },
       tc('Bash', 'b1'),
     ];
-    const result = groupTaskChildren(parts);
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
     const group = result[0] as PartEntry & { type: 'tool-call' };
     expect(group.result).toBe('task done');
     expect(group.isError).toBe(false);
