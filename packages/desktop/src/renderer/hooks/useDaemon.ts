@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { daemonClient } from '../lib/client';
-import { getProjects, getAdapters, getProviderSettings, getChats } from '../lib/api';
+import { getProjects, getAdapters, getProviderSettings, getChats, getPlugins } from '../lib/api';
 import { useProjectsStore } from '../store/projects';
 import { useChatsStore } from '../store/chats';
 import { useTabsStore } from '../store/tabs';
@@ -87,19 +87,6 @@ export function useDaemon(): void {
           log.error('daemon error event', { error: event.error });
           setError(event.error);
           break;
-        case 'plugin.panel.registered':
-          log.info('event:plugin.panel.registered', { pluginId: event.pluginId, zone: event.zone });
-          usePluginLayoutStore.getState().registerContribution({
-            pluginId: event.pluginId,
-            zone: event.zone,
-            label: event.label,
-            icon: event.icon,
-          });
-          break;
-        case 'plugin.panel.unregistered':
-          log.info('event:plugin.panel.unregistered', { pluginId: event.pluginId });
-          usePluginLayoutStore.getState().unregisterContribution(event.pluginId);
-          break;
       }
     },
     [
@@ -136,6 +123,17 @@ export function useDaemon(): void {
           loadProviders(providerSettings);
         } catch {
           // Keep booting even if provider settings fetch fails.
+        }
+        try {
+          const plugins = await getPlugins();
+          const store = usePluginLayoutStore.getState();
+          for (const plugin of plugins) {
+            if (plugin.panel) {
+              store.registerContribution({ pluginId: plugin.id, ...plugin.panel });
+            }
+          }
+        } catch (err) {
+          log.warn('plugin fetch failed', { err: String(err) });
         }
         const lastId = localStorage.getItem('mf:activeProjectId');
         if (lastId && projects.some((p) => p.id === lastId)) {

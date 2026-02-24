@@ -95,7 +95,7 @@
     --mf-accent: var(--mf-accent-claude);
 
     /* Borders */
-    --mf-border: oklch(0.552 0.014 286);
+    --mf-border: oklch(0.38 0.008 264);
     --mf-scrollbar-hover: oklch(0.552 0.014 286);
 
     /* Chat Error */

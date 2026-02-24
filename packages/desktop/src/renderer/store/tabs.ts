@@ -19,7 +19,6 @@ export type FileView =
     }
   | { type: 'skill-editor'; skillId: string; adapterId: string; label: string };
 
-// Keep CenterTab as union so existing imports still resolve
 export type CenterTab = ChatTab;
 
 interface ProjectTabSnapshot {
@@ -65,6 +64,8 @@ interface LegacySnapshot {
 }
 
 function migrateSnapshot(raw: LegacySnapshot): ProjectTabSnapshot {
+  // 'todos' was a first-class tab type before the plugin UI zone system; it is now a
+  // plugin view and must not be restored as a tab.
   const tabs = (raw.tabs ?? []).filter((t) => t.type === 'chat') as CenterTab[];
   return {
     tabs,

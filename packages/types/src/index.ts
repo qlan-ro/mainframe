@@ -18,6 +18,8 @@ export type {
   ProjectSummary,
   ProjectServiceAPI,
   AdapterRegistrationAPI,
+  PluginAttachmentMeta,
+  PluginAttachmentContext,
   PluginDatabaseContext,
   PluginDatabaseStatement,
   PluginEventBus,

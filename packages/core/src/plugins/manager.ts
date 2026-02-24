@@ -26,11 +26,14 @@ export interface PluginManagerDeps {
   emitEvent: (event: DaemonEvent) => void;
 }
 
+type PanelRegisteredEvent = Extract<DaemonEvent, { type: 'plugin.panel.registered' }>;
+
 export class PluginManager {
   /** Parent router mounted at /api/plugins by the HTTP server. */
   readonly router: Router;
 
   private loaded = new Map<string, LoadedPlugin>();
+  private panelEvents = new Map<string, PanelRegisteredEvent>();
   // In CJS bundles (esbuild daemon), import.meta.url becomes undefined — cast to handle both.
   // Absolute plugin paths don't rely on the base URL for resolution.
   private _require = createRequire((import.meta.url as string | undefined) ?? `file://${process.cwd()}/index.js`);
@@ -42,12 +45,16 @@ export class PluginManager {
 
   private setupListingRoutes(): void {
     this.router.get('/', (_req, res) => {
-      const plugins = this.getAll().map((p) => ({
-        id: p.id,
-        name: p.ctx.manifest.name,
-        version: p.ctx.manifest.version,
-        capabilities: p.ctx.manifest.capabilities,
-      }));
+      const plugins = this.getAll().map((p) => {
+        const panel = this.panelEvents.get(p.id);
+        return {
+          id: p.id,
+          name: p.ctx.manifest.name,
+          version: p.ctx.manifest.version,
+          capabilities: p.ctx.manifest.capabilities,
+          panel: panel ? { zone: panel.zone, label: panel.label, icon: panel.icon } : undefined,
+        };
+      });
       res.json({ plugins });
     });
 
@@ -67,11 +74,31 @@ export class PluginManager {
     });
   }
 
+  private trackingEmitEvent(pluginId: string, emit: (event: DaemonEvent) => void): (event: DaemonEvent) => void {
+    return (event: DaemonEvent) => {
+      if (event.type === 'plugin.panel.registered') {
+        this.panelEvents.set(pluginId, event as PanelRegisteredEvent);
+      } else if (event.type === 'plugin.panel.unregistered') {
+        this.panelEvents.delete(pluginId);
+      }
+      emit(event);
+    };
+  }
+
+  /** Returns panel registration events for all currently loaded plugins that called addPanel(). */
+  getRegisteredPanelEvents(): PanelRegisteredEvent[] {
+    return [...this.panelEvents.values()];
+  }
+
   /**
    * Load a builtin plugin directly from TypeScript (bypasses file-system manifest reading).
    * Builtins are always trusted and skip the consent flow.
    */
-  async loadBuiltin(manifest: PluginManifest, activate: (ctx: PluginContext) => void | Promise<void>): Promise<void> {
+  async loadBuiltin(
+    manifest: PluginManifest,
+    activate: (ctx: PluginContext) => void | Promise<void>,
+    options?: { pluginDir?: string },
+  ): Promise<void> {
     if (this.loaded.has(manifest.id)) return;
 
     const unloadCallbacks: (() => void)[] = [];
@@ -80,13 +107,13 @@ export class PluginManager {
 
     const ctx = buildPluginContext({
       manifest,
-      pluginDir: '',
+      pluginDir: options?.pluginDir ?? '',
       router: pluginRouter,
       logger: createChildLogger(`plugin:${manifest.id}`),
       daemonBus: this.deps.daemonBus,
       db: this.deps.db,
       adapters: this.deps.adapters,
-      emitEvent: this.deps.emitEvent,
+      emitEvent: this.trackingEmitEvent(manifest.id, this.deps.emitEvent),
       onUnloadCallbacks: unloadCallbacks,
     });
 
@@ -137,7 +164,7 @@ export class PluginManager {
       daemonBus: this.deps.daemonBus,
       db: this.deps.db,
       adapters: this.deps.adapters,
-      emitEvent: this.deps.emitEvent,
+      emitEvent: this.trackingEmitEvent(manifest.id, this.deps.emitEvent),
       onUnloadCallbacks: unloadCallbacks,
     });
 
@@ -165,6 +192,7 @@ export class PluginManager {
       }
     }
     this.loaded.clear();
+    this.panelEvents.clear();
   }
 
   getPlugin(id: string): LoadedPlugin | undefined {
