@@ -23,7 +23,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "pnpm -r run lint",
-    "test": "pnpm -r run test",
+    "test": "pnpm -r --filter=!@mainframe/e2e run test",
     "test:e2e": "pnpm --filter @mainframe/e2e test",
     "clean": "pnpm -r run clean",
     "package": "pnpm build && pnpm --filter @mainframe/desktop run package",
