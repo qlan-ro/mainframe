@@ -8,7 +8,7 @@ test.describe('§22 App restart & state persistence', () => {
   test('chat list and thread survive a full app restart', async () => {
     const fixture = await launchApp();
     const project = await createTestProject(fixture.page);
-    await createTestChat(fixture.page, project.projectId, 'default');
+    await createTestChat(fixture.page, project.projectId, 'yolo');
     await chat(fixture.page, 'Reply only: PERSISTENCE_CHECK', 60_000);
 
     // Save the data dir path before closing so the second launch uses the same DB

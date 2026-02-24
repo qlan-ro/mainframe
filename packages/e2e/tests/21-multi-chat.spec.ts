@@ -19,11 +19,11 @@ test.describe('§21 Multiple simultaneous chats', () => {
 
   test('two chats complete independently without cross-contamination', async () => {
     // Create Chat A and wait for the response
-    await createTestChat(fixture.page, project.projectId, 'default');
+    await createTestChat(fixture.page, project.projectId, 'yolo');
     await chat(fixture.page, 'Reply only: CHAT_A_RESPONSE', 90_000);
 
     // Create Chat B (becomes index 0; Chat A moves to index 1) and wait for response
-    await createTestChat(fixture.page, project.projectId, 'default');
+    await createTestChat(fixture.page, project.projectId, 'yolo');
     await chat(fixture.page, 'Reply only: CHAT_B_RESPONSE', 90_000);
 
     const chats = fixture.page.locator('[data-testid="chat-list-item"]');
