@@ -16,6 +16,8 @@ export type TodoPriority = 'low' | 'medium' | 'high' | 'critical';
 
 export interface Todo {
   id: string;
+  number: number;
+  project_id: string;
   title: string;
   body: string;
   status: TodoStatus;
@@ -30,6 +32,7 @@ export interface Todo {
 }
 
 export interface CreateTodoInput {
+  projectId?: string;
   title: string;
   body?: string;
   status?: TodoStatus;
@@ -61,7 +64,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const todosApi = {
-  list: () => api<{ todos: Todo[] }>('/todos').then((r) => r.todos),
+  list: (projectId: string) =>
+    api<{ todos: Todo[] }>(`/todos?projectId=${encodeURIComponent(projectId)}`).then((r) => r.todos),
 
   create: (input: CreateTodoInput) =>
     api<{ todo: Todo }>('/todos', { method: 'POST', body: JSON.stringify(input) }).then((r) => r.todo),

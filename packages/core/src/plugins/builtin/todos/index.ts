@@ -4,6 +4,8 @@ import { z } from 'zod';
 
 interface TodoRow {
   id: string;
+  number: number;
+  project_id: string;
   title: string;
   body: string;
   status: string;
@@ -25,6 +27,8 @@ interface Todo extends Omit<TodoRow, 'labels' | 'assignees'> {
 const MIGRATION = `
 CREATE TABLE IF NOT EXISTS todos (
   id TEXT PRIMARY KEY,
+  number INTEGER NOT NULL DEFAULT 0,
+  project_id TEXT NOT NULL DEFAULT '',
   title TEXT NOT NULL,
   body TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'open',
@@ -45,6 +49,7 @@ const parseTodo = (r: TodoRow): Todo => ({
 });
 
 const TodoSchema = z.object({
+  projectId: z.string().min(1),
   title: z.string().min(1),
   body: z.string().default(''),
   status: z.enum(['open', 'in_progress', 'done']).default('open'),
@@ -63,7 +68,7 @@ function buildInitialMessage(todo: Todo): string {
   const lines = [
     `I'm working on this task from the kanban board:`,
     ``,
-    `**${todo.title}**`,
+    `**#${todo.number} ${todo.title}**`,
     `Type: ${cap(todo.type)} | Priority: ${cap(todo.priority)} | Labels: ${labels}`,
   ];
   if (todo.milestone) lines.push(`Milestone: ${todo.milestone}`);
@@ -74,8 +79,15 @@ function buildInitialMessage(todo: Todo): string {
 function registerTodoRoutes(ctx: PluginContext): void {
   const r = ctx.router;
 
-  r.get('/todos', (_req, res) => {
-    const rows = ctx.db.prepare<TodoRow>('SELECT * FROM todos ORDER BY status, order_index, created_at').all();
+  r.get('/todos', (req, res) => {
+    const projectId = req.query['projectId'] as string | undefined;
+    if (!projectId) {
+      res.status(400).json({ error: 'projectId required' });
+      return;
+    }
+    const rows = ctx.db
+      .prepare<TodoRow>('SELECT * FROM todos WHERE project_id = ? ORDER BY status, order_index, created_at')
+      .all(projectId);
     res.json({ todos: rows.map(parseTodo) });
   });
 
@@ -90,11 +102,15 @@ function registerTodoRoutes(ctx: PluginContext): void {
     const id = nanoid();
     ctx.db
       .prepare(
-        `INSERT INTO todos (id,title,body,status,type,priority,labels,assignees,milestone,order_index,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO todos (id,number,project_id,title,body,status,type,priority,labels,assignees,milestone,order_index,created_at,updated_at)
+         VALUES (?,
+           (SELECT COALESCE(MAX(number), 0) + 1 FROM todos WHERE project_id = ?),
+           ?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         id,
+        d.projectId,
+        d.projectId,
         d.title,
         d.body,
         d.status,
@@ -257,6 +273,19 @@ function registerAttachmentRoutes(ctx: PluginContext): void {
 
 export function activate(ctx: PluginContext): void {
   ctx.db.runMigration(MIGRATION);
+  // Add columns to existing DBs that predate these migrations.
+  const cols = ctx.db.prepare<{ name: string }>('PRAGMA table_info(todos)').all();
+  const colNames = new Set(cols.map((c) => c.name));
+  if (!colNames.has('number')) {
+    ctx.db.runMigration('ALTER TABLE todos ADD COLUMN number INTEGER NOT NULL DEFAULT 0');
+    const rows = ctx.db.prepare<{ id: string }>('SELECT id FROM todos ORDER BY created_at').all();
+    rows.forEach((row, i) => {
+      ctx.db.prepare('UPDATE todos SET number = ? WHERE id = ?').run(i + 1, row.id);
+    });
+  }
+  if (!colNames.has('project_id')) {
+    ctx.db.runMigration("ALTER TABLE todos ADD COLUMN project_id TEXT NOT NULL DEFAULT ''");
+  }
   registerTodoRoutes(ctx);
   registerSessionRoute(ctx);
   registerAttachmentRoutes(ctx);

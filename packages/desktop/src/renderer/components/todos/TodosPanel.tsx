@@ -157,7 +157,7 @@ export function TodosPanel(): React.ReactElement {
   }
 
   return (
-    <div className="h-full flex flex-col gap-px overflow-hidden bg-mf-app-bg">
+    <div data-testid="todos-panel" className="h-full flex flex-col gap-px overflow-hidden bg-mf-app-bg">
       {/* Header */}
       <div className="h-11 px-4 flex items-center justify-between shrink-0 bg-mf-panel-bg">
         <span className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Tasks</span>
@@ -182,6 +182,7 @@ export function TodosPanel(): React.ReactElement {
           return (
             <div
               key={status}
+              data-testid={`todo-column-${status}`}
               className="flex-1 flex flex-col overflow-hidden bg-mf-panel-bg"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
