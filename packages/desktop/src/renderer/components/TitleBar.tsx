@@ -9,6 +9,7 @@ import { useTabsStore } from '../store/tabs';
 import { createProject, removeProject } from '../lib/api';
 import { cn } from '../lib/utils';
 import { PluginIcon } from './plugins/PluginIcon';
+import { DirectoryPickerModal } from './DirectoryPickerModal';
 
 type PanelId = 'left' | 'right' | 'bottom';
 
@@ -33,6 +34,7 @@ export function TitleBar({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [hoveringId, setHoveringId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [dirPickerOpen, setDirPickerOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -54,19 +56,24 @@ export function TitleBar({
     };
   }, [dropdownOpen]);
 
-  const handleAddProject = useCallback(async () => {
-    try {
-      const path = await window.mainframe.openDirectoryDialog();
-      if (!path) return;
+  const handleAddProject = useCallback(() => {
+    setDropdownOpen(false);
+    setDirPickerOpen(true);
+  }, []);
 
-      const project = await createProject(path);
-      addProject(project);
-      setActiveProject(project.id);
-      setDropdownOpen(false);
-    } catch (error) {
-      log.warn('failed to add project', { err: String(error) });
-    }
-  }, [addProject, setActiveProject]);
+  const handleDirSelected = useCallback(
+    async (selectedPath: string) => {
+      setDirPickerOpen(false);
+      try {
+        const project = await createProject(selectedPath);
+        addProject(project);
+        setActiveProject(project.id);
+      } catch (error) {
+        log.warn('failed to add project', { err: String(error) });
+      }
+    },
+    [addProject, setActiveProject],
+  );
 
   const handleConfirmDelete = useCallback(
     async (id: string) => {
@@ -269,6 +276,11 @@ export function TitleBar({
           ))}
         </div>
       )}
+      <DirectoryPickerModal
+        open={dirPickerOpen}
+        onSelect={(p) => void handleDirSelected(p)}
+        onCancel={() => setDirPickerOpen(false)}
+      />
     </div>
   );
 }
