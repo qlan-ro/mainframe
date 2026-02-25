@@ -31,10 +31,12 @@ export function SearchPalette(): React.ReactElement | null {
   const queryRef = useRef(query);
   queryRef.current = query;
 
-  // Focus input when opening
+  // Focus input when opening.
+  // Direct call (no rAF) — rAF adds an extra frame of delay that causes
+  // keyboard.type() in tests (and fast typists) to miss the first characters.
   useEffect(() => {
     if (isOpen) {
-      requestAnimationFrame(() => inputRef.current?.focus());
+      inputRef.current?.focus();
     }
   }, [isOpen]);
 
@@ -231,6 +233,9 @@ export function SearchPalette(): React.ReactElement | null {
   return (
     <div className="fixed inset-0 z-50 flex justify-center" style={{ paddingTop: '20%' }} onClick={close}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search"
         className="w-[480px] max-w-[90%] h-fit max-h-[60vh] bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}

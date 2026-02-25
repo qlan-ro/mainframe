@@ -144,6 +144,9 @@ export class ClaudeSession implements AdapterSession {
         ...process.env,
         FORCE_COLOR: '0',
         NO_COLOR: '1',
+        // Unset CLAUDECODE so the child Claude CLI doesn't refuse to start
+        // when the daemon itself runs inside a Claude Code session.
+        CLAUDECODE: undefined,
       },
     });
 

@@ -108,6 +108,7 @@ export function TitleBar({
       <div className="flex items-center pl-[84px] pr-4 z-10 app-no-drag" ref={dropdownRef}>
         <div className="relative">
           <button
+            data-testid="project-selector"
             onClick={() => setDropdownOpen((o) => !o)}
             className={cn(
               'flex items-center gap-2 px-1.5 py-1 rounded-mf-card transition-colors',
@@ -127,7 +128,10 @@ export function TitleBar({
           </button>
 
           {dropdownOpen && (
-            <div className="absolute top-full left-0 mt-1 w-56 bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-lg overflow-hidden z-50">
+            <div
+              data-testid="project-dropdown"
+              className="absolute top-full left-0 mt-1 w-56 bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-lg overflow-hidden z-50"
+            >
               {projects.map((project) => {
                 const isHovering = hoveringId === project.id;
                 const isConfirming = confirmingDeleteId === project.id;

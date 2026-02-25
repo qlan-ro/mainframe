@@ -75,7 +75,10 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
   const cardTitle = activeQuestion?.header || questions[0]?.header || 'Question';
 
   return (
-    <div className="border border-mf-accent/30 bg-mf-app-bg rounded-mf-card overflow-hidden">
+    <div
+      data-testid="ask-question-card"
+      className="border border-mf-accent/30 bg-mf-app-bg rounded-mf-card overflow-hidden"
+    >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-mf-accent/10">
         <span className="text-mf-body font-semibold text-mf-text-primary">{cardTitle}</span>
@@ -94,6 +97,8 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
               {activeQuestion.options.map((opt) => (
                 <button
                   key={opt.label}
+                  role={activeQuestion.multiSelect ? 'checkbox' : 'radio'}
+                  aria-checked={activeSelection.has(opt.label)}
                   onClick={() => toggleOption(currentQuestionIndex, opt.label, Boolean(activeQuestion.multiSelect))}
                   className={cn(
                     'w-full flex items-start gap-3 text-left group rounded-mf-card border px-3 py-2 transition-colors',
@@ -122,6 +127,8 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
                 </button>
               ))}
               <button
+                role={activeQuestion.multiSelect ? 'checkbox' : 'radio'}
+                aria-checked={activeSelection.has('__other__')}
                 onClick={() => toggleOption(currentQuestionIndex, '__other__', Boolean(activeQuestion.multiSelect))}
                 className={cn(
                   'w-full flex items-start gap-3 text-left group rounded-mf-card border px-3 py-2 transition-colors',

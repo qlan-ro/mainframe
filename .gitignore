@@ -47,3 +47,4 @@ release/
 .mainframe/
 .worktrees/
 
+/packages/e2e/playwright-report/

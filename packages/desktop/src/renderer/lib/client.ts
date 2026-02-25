@@ -118,9 +118,14 @@ class DaemonClient {
   }
 
   // WebSocket commands
-  createChat(projectId: string, adapterId: string, model?: string): void {
-    this.send({ type: 'chat.create', projectId, adapterId, model });
-    log.info('createChat', { projectId, adapterId, model });
+  createChat(
+    projectId: string,
+    adapterId: string,
+    model?: string,
+    permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo',
+  ): void {
+    this.send({ type: 'chat.create', projectId, adapterId, model, permissionMode });
+    log.info('createChat', { projectId, adapterId, model, permissionMode });
   }
 
   updateChatConfig(
@@ -183,3 +188,6 @@ class DaemonClient {
 }
 
 export const daemonClient = new DaemonClient();
+
+// Expose for E2E test introspection (harmless: renderer runs inside Electron, not on the public web)
+(window as Window & { __daemonClient?: DaemonClient }).__daemonClient = daemonClient;

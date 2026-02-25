@@ -102,6 +102,7 @@ export function RightPanel(): React.ReactElement {
 
       {/* Sidebar — always mounted */}
       <div
+        data-testid="right-panel"
         className="flex flex-col min-w-0 shrink-0"
         style={showFileView ? { width: `${sidebarWidth}px` } : { width: '100%' }}
       >

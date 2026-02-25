@@ -21,6 +21,7 @@ interface Props {
   onClose: () => void;
   onSave: (data: CreateTodoInput) => void;
   onStartSession?: (todo: Todo) => void;
+  onSaveAndStartSession?: (data: CreateTodoInput) => void;
 }
 
 const input = cn(

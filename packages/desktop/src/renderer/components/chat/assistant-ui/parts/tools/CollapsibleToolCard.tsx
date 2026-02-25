@@ -32,7 +32,7 @@ export function CollapsibleToolCard({
   const isPrimary = variant === 'primary';
 
   return (
-    <div className={wrapperClassName ?? 'overflow-hidden'}>
+    <div data-testid="tool-card" className={wrapperClassName ?? 'overflow-hidden'}>
       <button
         onClick={() => !disabled && setOpen((v) => !v)}
         className={cn(
