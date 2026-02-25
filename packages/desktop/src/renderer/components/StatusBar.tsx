@@ -5,6 +5,7 @@ import { createLogger } from '../lib/logger';
 const log = createLogger('renderer:statusbar');
 import { useChatsStore } from '../store';
 import { useProjectsStore } from '../store/projects';
+import { useUIStore } from '../store/ui';
 import { useConnectionState } from '../hooks/useConnectionState';
 import { getGitBranch } from '../lib/api';
 import { cn } from '../lib/utils';
@@ -16,6 +17,7 @@ export function StatusBar(): React.ReactElement {
   const activeProjectId = useProjectsStore((s) => s.activeProjectId);
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
+  const togglePanel = useUIStore((s) => s.togglePanel);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -47,7 +49,7 @@ export function StatusBar(): React.ReactElement {
   }
 
   return (
-    <div className="h-6 bg-mf-app-bg px-[10px] flex items-center text-mf-body">
+    <div className="h-6 bg-mf-app-bg px-[10px] flex items-center justify-between text-mf-body">
       <div className="flex items-center gap-4">
         {/* Connection status */}
         <div data-testid="connection-status" className="flex items-center gap-[6px] text-mf-text-secondary">
@@ -71,6 +73,16 @@ export function StatusBar(): React.ReactElement {
             <span>{counts.idle} Idle</span>
           </div>
         )}
+      </div>
+
+      {/* Right side actions */}
+      <div className="flex items-center">
+        <button
+          onClick={() => togglePanel('bottom')}
+          className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-2 py-0.5 rounded"
+        >
+          Preview
+        </button>
       </div>
     </div>
   );

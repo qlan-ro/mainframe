@@ -7,6 +7,7 @@ import { LeftRail } from './LeftRail';
 import { RightRail } from './RightRail';
 import { StatusBar } from './StatusBar';
 import { PluginView } from './plugins/PluginView';
+import { BottomPanel } from './sandbox/BottomPanel';
 
 interface LayoutProps {
   leftPanel: React.ReactNode;
@@ -95,6 +96,7 @@ export function Layout({ leftPanel, centerPanel, rightPanel }: LayoutProps): Rea
         <RightRail />
       </div>
 
+      <BottomPanel />
       <StatusBar />
     </div>
   );
