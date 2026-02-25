@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Save } from 'lucide-react';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:skills');
 import { useSkillsStore, useProjectsStore } from '../../store';
 import { Button } from '../ui/button';
 
@@ -28,7 +31,7 @@ export function SkillEditorTab({ skillId, adapterId }: { skillId: string; adapte
       await updateSkill(adapterId, skillId, activeProject.path, content);
       setDirty(false);
     } catch (err) {
-      console.error('[skill-editor] save failed:', err);
+      log.error('save failed', { err: String(err) });
     } finally {
       setSaving(false);
     }

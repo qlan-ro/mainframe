@@ -7,7 +7,7 @@ import {
   type CompleteAttachment,
 } from '@assistant-ui/react';
 import type { AttachmentAdapter, ExternalStoreThreadListAdapter } from '@assistant-ui/react';
-import { useChat } from '../../../hooks/useDaemon';
+import { useChatSession } from '../../../hooks/useChatSession';
 import { groupMessages, convertMessage } from './convert-message';
 import { daemonClient } from '../../../lib/client';
 import { archiveChat } from '../../../lib/api';
@@ -77,7 +77,7 @@ function formatComposerError(error: unknown): string {
 }
 
 export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeProviderProps) {
-  const { messages: rawMessages, pendingPermission, sendMessage, respondToPermission } = useChat(chatId);
+  const { messages: rawMessages, pendingPermission, sendMessage, respondToPermission } = useChatSession(chatId);
   const groupedMessages = useMemo(() => groupMessages(rawMessages), [rawMessages]);
 
   const [composerError, setComposerError] = useState<string | null>(null);

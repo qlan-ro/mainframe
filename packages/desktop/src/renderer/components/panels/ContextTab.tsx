@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Globe, FolderOpen, MessageSquare } from 'lucide-react';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:panels');
 import { useChatsStore } from '../../store';
 import { daemonClient } from '../../lib/client';
 import { getSessionContext } from '../../lib/api';
@@ -17,7 +20,7 @@ export function ContextTab(): React.ReactElement {
     if (!activeChatId) return;
     getSessionContext(activeChatId)
       .then(setContext)
-      .catch((err) => console.warn('[context] fetch context failed:', err));
+      .catch((err) => log.warn('fetch context failed', { err: String(err) }));
   }, [activeChatId]);
 
   useEffect(() => {

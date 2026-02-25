@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:settings');
 
 type AppInfo = Awaited<ReturnType<typeof window.mainframe.getAppInfo>>;
 
@@ -9,7 +12,7 @@ export function AboutSection(): React.ReactElement {
     window.mainframe
       .getAppInfo()
       .then(setInfo)
-      .catch((err: unknown) => console.warn('[about] failed to load app info:', err));
+      .catch((err: unknown) => log.warn('failed to load app info', { err: String(err) }));
   }, []);
 
   return (

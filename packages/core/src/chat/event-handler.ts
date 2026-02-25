@@ -13,7 +13,7 @@ import type { ActiveChat } from './types.js';
 import { trackFileActivity } from './context-tracker.js';
 import { createChildLogger } from '../logger.js';
 
-const log = createChildLogger('event-handler');
+const log = createChildLogger('chat:events');
 
 export class EventHandler {
   constructor(

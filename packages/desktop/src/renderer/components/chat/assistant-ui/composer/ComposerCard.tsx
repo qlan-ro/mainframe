@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowUp, Square, Paperclip, Shield, GitBranch, X } from 'lucide-react';
+import { createLogger } from '../../../../lib/logger';
+
+const log = createLogger('renderer:composer');
 import { ComposerPrimitive, useThread, useComposerRuntime } from '@assistant-ui/react';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useChatsStore } from '../../../../store/chats';
@@ -97,7 +100,7 @@ export function ComposerCard() {
         composerRuntime.setText(pendingInvocation);
         focusComposerInput();
       } catch (err) {
-        console.warn('[ComposerCard] failed to set pending invocation:', err);
+        log.warn('failed to set pending invocation', { err: String(err) });
       }
       useSkillsStore.getState().setPendingInvocation(null);
     }

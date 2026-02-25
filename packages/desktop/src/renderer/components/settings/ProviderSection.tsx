@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:settings');
 import { useSettingsStore } from '../../store/settings';
 import { useAdaptersStore } from '../../store/adapters';
 import { getConfigConflicts, updateProviderSettings } from '../../lib/api';
@@ -20,7 +23,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
   useEffect(() => {
     getConfigConflicts(adapterId)
       .then(setConflicts)
-      .catch((err) => console.warn('[settings] fetch config conflicts failed:', err));
+      .catch((err) => log.warn('fetch config conflicts failed', { err: String(err) }));
   }, [adapterId]);
 
   const update = useCallback(
@@ -28,7 +31,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
       const next = { ...config, ...partial };
       setProviderConfig(adapterId, next);
       updateProviderSettings(adapterId, partial).catch((err) =>
-        console.warn('[settings] update provider settings failed:', err),
+        log.warn('update provider settings failed', { err: String(err) }),
       );
     },
     [adapterId, config, setProviderConfig],

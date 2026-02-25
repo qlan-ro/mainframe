@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTabsStore } from '../../store/tabs';
 import { useProjectsStore, useChatsStore } from '../../store';
-import { useProject } from '../../hooks/useDaemon';
+import { useProject } from '../../hooks/useAppInit';
 import { ChatContainer } from '../chat/ChatContainer';
 import { cn } from '../../lib/utils';
 

@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput } from '@mainframe/types';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger('renderer:store');
 import {
   getSkills,
   getAgents,
@@ -44,7 +47,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       const skills = await getSkills(adapterId, projectPath);
       set({ skills });
     } catch (err) {
-      console.error('[skills] fetch failed:', err);
+      log.error('fetch skills failed', { err: String(err) });
     } finally {
       set({ loading: false });
     }
@@ -56,7 +59,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       const agents = await getAgents(adapterId, projectPath);
       set({ agents });
     } catch (err) {
-      console.error('[agents] fetch failed:', err);
+      log.error('fetch agents failed', { err: String(err) });
     } finally {
       set({ loading: false });
     }

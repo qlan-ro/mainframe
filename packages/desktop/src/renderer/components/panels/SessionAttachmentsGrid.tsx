@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FileText } from 'lucide-react';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:panels');
 import type { SessionAttachment } from '@mainframe/types';
 import { getAttachment } from '../../lib/api';
 import { ImageLightbox } from '../chat/ImageLightbox';
@@ -29,7 +32,7 @@ export function SessionAttachmentsGrid({ chatId, attachments }: SessionAttachmen
         .then((data) => {
           setLoaded((prev) => new Map(prev).set(attachment.id, data));
         })
-        .catch((err) => console.warn('[attachments] load attachment failed:', err));
+        .catch((err) => log.warn('load attachment failed', { err: String(err) }));
     }
   }, [chatId, attachments, loaded]);
 

@@ -1,6 +1,9 @@
 import { daemonClient } from './client';
 import { useChatsStore } from '../store/chats';
 import { useProjectsStore } from '../store/projects';
+import { createLogger } from './logger';
+
+const log = createLogger('renderer:chat');
 
 /**
  * Send a comment message to the best available chat.
@@ -20,7 +23,7 @@ export function sendCommentMessage(formatted: string, explicitChatId?: string): 
 
   const timeout = setTimeout(() => {
     unsub();
-    console.warn('[sendCommentMessage] timed out waiting for chat.created');
+    log.warn('timed out waiting for chat.created');
   }, 5000);
 
   const unsub = useChatsStore.subscribe((state, prev) => {

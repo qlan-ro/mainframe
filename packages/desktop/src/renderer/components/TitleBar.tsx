@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Search, Plus, Check, X } from 'lucide-react';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger('renderer:titlebar');
 import type { Layout } from 'react-resizable-panels';
 import { useProjectsStore, useChatsStore, useSearchStore, usePluginLayoutStore } from '../store';
 import { useTabsStore } from '../store/tabs';
@@ -61,7 +64,7 @@ export function TitleBar({
       setActiveProject(project.id);
       setDropdownOpen(false);
     } catch (error) {
-      console.warn('[title-bar] failed to add project:', error);
+      log.warn('failed to add project', { err: String(error) });
     }
   }, [addProject, setActiveProject]);
 
@@ -81,7 +84,7 @@ export function TitleBar({
         setConfirmingDeleteId(null);
         setHoveringId(null);
       } catch (error) {
-        console.warn('[title-bar] failed to remove project:', error);
+        log.warn('failed to remove project', { err: String(error) });
         // Leave confirmingDeleteId set so the user can retry or cancel manually
       }
     },

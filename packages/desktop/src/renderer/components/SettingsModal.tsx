@@ -1,5 +1,8 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger('renderer:settings');
 import { useSettingsStore } from '../store/settings';
 import { getProviderSettings, getGeneralSettings } from '../lib/api';
 import { getAdapterOptions } from '../lib/adapters';
@@ -59,7 +62,7 @@ export function SettingsModal(): React.ReactElement | null {
     if (!isOpen) return;
     setLoading(true);
     Promise.all([getProviderSettings().then(loadProviders), getGeneralSettings().then(loadGeneral)])
-      .catch(console.error)
+      .catch((err) => log.error('load settings failed', { err: String(err) }))
       .finally(() => setLoading(false));
   }, [isOpen, loadProviders, loadGeneral, setLoading, selectedProvider, setSelectedProvider]);
 

@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import { File, Bot, Zap, FolderOpen, Globe, Puzzle } from 'lucide-react';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:chat');
 import { useComposerRuntime } from '@assistant-ui/react';
 import { focusComposerInput } from '../../lib/focus';
 import { useSkillsStore, useProjectsStore, useChatsStore } from '../../store';
@@ -110,7 +113,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
       searchFiles(activeProjectId, query, 30, activeChatId ?? undefined)
         .then((r) => setFileResults(r.filter((f) => f.type === 'file').map((f) => ({ name: f.name, path: f.path }))))
         .catch((err) => {
-          console.warn('[context-picker] file search failed:', err);
+          log.warn('file search failed', { err: String(err) });
           setFileResults([]);
         });
     }, SEARCH_DEBOUNCE_MS);
@@ -177,10 +180,10 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
             kind: item.type === 'agent' ? 'agent' : 'file',
             name: item.name,
             path: item.type === 'file' ? item.path : undefined,
-          }).catch((err) => console.warn('[context-picker] add mention failed:', err));
+          }).catch((err) => log.warn('add mention failed', { err: String(err) }));
         }
       } catch (err) {
-        console.warn('[ContextPickerMenu] selection failed:', err);
+        log.warn('selection failed', { err: String(err) });
       }
       onClose();
     },

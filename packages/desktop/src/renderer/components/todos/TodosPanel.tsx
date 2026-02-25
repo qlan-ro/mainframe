@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:todos');
 import { todosApi, type Todo, type TodoStatus, type CreateTodoInput } from '../../lib/api/todos-api';
 import { TodoCard } from './TodoCard';
 import { TodoModal } from './TodoModal';
@@ -33,7 +36,7 @@ export function TodosPanel(): React.ReactElement {
       setTodos(list);
     } catch (err) {
       setError('Failed to load tasks. Is the daemon running?');
-      console.warn('[todos] load failed:', err);
+      log.warn('load failed', { err: String(err) });
     } finally {
       setLoading(false);
     }
@@ -52,7 +55,7 @@ export function TodosPanel(): React.ReactElement {
         setTodos((prev) => [...prev, todo]);
         setModalOpen(false);
       } catch (err) {
-        console.warn('[todos] create failed:', err);
+        log.warn('create failed', { err: String(err) });
       }
     },
     [activeProjectId],
@@ -70,7 +73,7 @@ export function TodosPanel(): React.ReactElement {
         usePluginLayoutStore.getState().activateFullview('todos');
         daemonClient.subscribe(chatId);
       } catch (err) {
-        console.warn('[todos] create-and-start failed:', err);
+        log.warn('create-and-start failed', { err: String(err) });
       }
     },
     [activeProjectId],
@@ -85,7 +88,7 @@ export function TodosPanel(): React.ReactElement {
         setEditingTodo(null);
         setModalOpen(false);
       } catch (err) {
-        console.warn('[todos] update failed:', err);
+        log.warn('update failed', { err: String(err) });
       }
     },
     [editingTodo],
@@ -96,7 +99,7 @@ export function TodosPanel(): React.ReactElement {
       const updated = await todosApi.move(id, status);
       setTodos((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     } catch (err) {
-      console.warn('[todos] move failed:', err);
+      log.warn('move failed', { err: String(err) });
     }
   }, []);
 
@@ -105,7 +108,7 @@ export function TodosPanel(): React.ReactElement {
       await todosApi.remove(id);
       setTodos((prev) => prev.filter((t) => t.id !== id));
     } catch (err) {
-      console.warn('[todos] delete failed:', err);
+      log.warn('delete failed', { err: String(err) });
     }
   }, []);
 
@@ -125,7 +128,7 @@ export function TodosPanel(): React.ReactElement {
         // chat.created WS event will open the tab automatically
         daemonClient.subscribe(chatId);
       } catch (err) {
-        console.warn('[todos] start-session failed:', err);
+        log.warn('start-session failed', { err: String(err) });
       }
     },
     [activeProjectId],
