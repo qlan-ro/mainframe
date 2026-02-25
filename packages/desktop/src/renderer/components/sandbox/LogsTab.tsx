@@ -38,12 +38,20 @@ export function LogsTab(): React.ReactElement {
 
   const handleStart = async (config: LaunchConfiguration) => {
     if (!activeProject) return;
-    await startLaunchConfig(activeProject.id, config);
+    try {
+      await startLaunchConfig(activeProject.id, config);
+    } catch (err) {
+      console.warn('[sandbox] failed to start process', err);
+    }
   };
 
   const handleStop = async (name: string) => {
     if (!activeProject) return;
-    await stopLaunchConfig(activeProject.id, name);
+    try {
+      await stopLaunchConfig(activeProject.id, name);
+    } catch (err) {
+      console.warn('[sandbox] failed to stop process', err);
+    }
   };
 
   const handleStartAll = () => {
@@ -144,7 +152,7 @@ export function LogsTab(): React.ReactElement {
           <span className="text-mf-text-secondary">No output yet.</span>
         ) : (
           filteredLogs.map((l, i) => (
-            <div key={i} className={l.stream === 'stderr' ? 'text-red-400' : ''}>
+            <div key={`${i}-${l.name}-${l.stream}`} className={l.stream === 'stderr' ? 'text-red-400' : ''}>
               {l.data}
             </div>
           ))

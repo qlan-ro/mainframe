@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import type { LaunchConfig } from '@mainframe/types';
 import { useSandboxStore } from '../../store/sandbox';
 import { useProjectsStore } from '../../store/projects';
 
@@ -64,10 +65,6 @@ const INSPECT_SCRIPT = `
 interface ElementPickResult {
   selector: string;
   rect: { x: number; y: number; width: number; height: number };
-}
-
-interface LaunchConfig {
-  configurations: Array<{ port: number | null; url: string | null; preview?: boolean }>;
 }
 
 export function PreviewTab(): React.ReactElement {

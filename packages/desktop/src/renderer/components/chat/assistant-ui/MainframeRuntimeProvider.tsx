@@ -198,10 +198,11 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
         });
       }
 
-      // Collect pending captures from sandbox store and clear them before sending.
+      // Collect pending captures from sandbox store; clear only after sendMessage succeeds.
       const { captures, clearCaptures } = useSandboxStore.getState();
+      const captureCount = captures.length;
       let capturePreamble = '';
-      if (captures.length > 0) {
+      if (captureCount > 0) {
         for (const c of captures) {
           const base64 = c.imageDataUrl.split(',')[1] ?? '';
           attachmentItems.push({
@@ -214,7 +215,6 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
         }
         const labels = captures.map((c) => (c.type === 'element' ? `element \`${c.selector ?? ''}\`` : 'screenshot'));
         capturePreamble = `[Preview captures: ${labels.join(', ')}]\n\n`;
-        clearCaptures();
       }
 
       const userText = textPart?.type === 'text' ? textPart.text.replace(IMAGE_COORDINATE_NOTE_RE, '').trim() : '';
@@ -230,9 +230,11 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
 
       try {
         setComposerError(null);
-        await sendMessage(userText, uploadAttachments.length > 0 ? uploadAttachments : undefined, metadata);
+        await sendMessage(finalText, attachmentItems.length > 0 ? attachmentItems : undefined, metadata);
+        if (captureCount > 0) clearCaptures();
       } catch (error) {
         setComposerError(formatComposerError(error));
+        throw error;
       }
     },
     [sendMessage, pendingPermission, setComposerError, commands],

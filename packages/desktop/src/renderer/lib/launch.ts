@@ -9,15 +9,20 @@ export async function fetchLaunchStatuses(projectId: string): Promise<Record<str
 }
 
 export async function startLaunchConfig(projectId: string, configuration: LaunchConfiguration): Promise<void> {
-  await fetch(`${API_BASE}/api/projects/${projectId}/launch/${encodeURIComponent(configuration.name)}/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ configuration }),
-  });
+  const res = await fetch(
+    `${API_BASE}/api/projects/${projectId}/launch/${encodeURIComponent(configuration.name)}/start`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ configuration }),
+    },
+  );
+  if (!res.ok) throw new Error(`Failed to start ${configuration.name}: ${res.status}`);
 }
 
 export async function stopLaunchConfig(projectId: string, name: string): Promise<void> {
-  await fetch(`${API_BASE}/api/projects/${projectId}/launch/${encodeURIComponent(name)}/stop`, {
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/launch/${encodeURIComponent(name)}/stop`, {
     method: 'POST',
   });
+  if (!res.ok) throw new Error(`Failed to stop ${name}: ${res.status}`);
 }
