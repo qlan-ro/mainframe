@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Core Daemon",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@mainframe/core", "run", "dev"],
+      "port": 31415
+    },
+    {
+      "name": "Desktop App",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@mainframe/desktop", "run", "dev:web"],
+      "port": 5173
+    },
+    {
+      "name": "Types Watch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@mainframe/types", "run", "dev"],
+      "port": null
+    }
+  ]
+}
