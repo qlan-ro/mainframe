@@ -75,17 +75,24 @@ export function PreviewTab(): React.ReactElement {
   const launchConfig = useLaunchConfig();
   const configs = launchConfig?.configurations ?? [];
 
-  // Derive preview URL from config
-  const previewUrl = (() => {
-    const preview = configs.find((c) => c.preview);
-    if (!preview) return 'about:blank';
-    return preview.url ?? (preview.port ? `http://localhost:${preview.port}` : 'about:blank');
-  })();
+  // Derive preview config and URL from launch config
+  const previewConfig = configs.find((c) => c.preview);
+  const previewUrl = previewConfig
+    ? (previewConfig.url ?? (previewConfig.port ? `http://localhost:${previewConfig.port}` : 'about:blank'))
+    : 'about:blank';
 
-  // Sync url state when previewUrl changes
+  // Watch the preview process status
+  const previewStatus = useSandboxStore((s) =>
+    previewConfig ? (s.processStatuses[previewConfig.name] ?? 'stopped') : 'stopped',
+  );
+
+  // Keep address bar in sync with config URL
   useEffect(() => {
     if (previewUrl !== 'about:blank') setUrl(previewUrl);
   }, [previewUrl]);
+
+  // Only navigate the webview once the process is running
+  const webviewSrc = previewStatus === 'running' ? previewUrl : 'about:blank';
 
   const [logExpanded, setLogExpanded] = useState(false);
   const [selectedProcess, setSelectedProcess] = useState<string | null>(null);
@@ -205,14 +212,26 @@ export function PreviewTab(): React.ReactElement {
       </div>
 
       {/* Webview or fallback */}
-      <div className="flex-1 overflow-hidden min-h-0">
+      <div className="flex-1 overflow-hidden min-h-0 relative">
         {isElectron ? (
           // @ts-expect-error — webview is an Electron-specific HTML element not present in React's type definitions
-          <webview ref={webviewRef} src={url} className="w-full h-full" />
+          <webview ref={webviewRef} src={webviewSrc} className="w-full h-full" />
         ) : (
           <div className="flex items-center justify-center h-full text-mf-text-secondary text-sm">
             Preview panel requires Electron. Use <code className="mx-1">pnpm dev:desktop</code> instead of{' '}
             <code className="mx-1">dev:web</code>.
+          </div>
+        )}
+        {/* Status overlay — shown when process is not yet running */}
+        {isElectron && previewStatus !== 'running' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-mf-app-bg text-mf-text-secondary text-sm">
+            {previewStatus === 'starting' && <span>Starting…</span>}
+            {previewStatus === 'failed' && <span className="text-red-400">Process failed to start</span>}
+            {previewStatus === 'stopped' && (
+              <span>
+                Start processes with <strong>▷ Preview</strong> to see your app here
+              </span>
+            )}
           </div>
         )}
       </div>
