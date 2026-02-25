@@ -9,5 +9,6 @@ export { agentRoutes } from './agents.js';
 export { adapterRoutes } from './adapters.js';
 export { settingRoutes } from './settings.js';
 export { commandRoutes } from './commands.js';
+export { launchRoutes } from './launch.js';
 export { asyncHandler } from './async-handler.js';
 export type { RouteContext } from './types.js';

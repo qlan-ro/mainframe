@@ -10,6 +10,7 @@ import { ChatManager } from './chat/index.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
 import { PluginManager } from './plugins/manager.js';
+import { LaunchRegistry } from './launch/index.js';
 import claudeManifest from './plugins/builtin/claude/manifest.json' with { type: 'json' };
 import { activate as activateClaude } from './plugins/builtin/claude/index.js';
 import todosManifest from './plugins/builtin/todos/manifest.json' with { type: 'json' };
@@ -32,6 +33,7 @@ async function main(): Promise<void> {
   // server.start() (plugin loading) are safely dropped — no WS clients yet.
   let broadcastEvent: (event: DaemonEvent) => void = () => {};
   const chats = new ChatManager(db, adapters, attachmentStore, (event) => broadcastEvent(event));
+  const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event));
 
   // PluginManager owns its own Express Router; no circular dep on the Express app
   const daemonBus = new EventEmitter();
@@ -55,7 +57,7 @@ async function main(): Promise<void> {
   // Load user-installed plugins from ~/.mainframe/plugins/
   await pluginManager.loadAll();
 
-  const server = createServerManager(db, chats, adapters, attachmentStore, pluginManager);
+  const server = createServerManager(db, chats, adapters, attachmentStore, pluginManager, launchRegistry);
 
   await server.start(config.port);
   broadcastEvent = (event) => server.broadcastEvent(event);
@@ -66,6 +68,7 @@ async function main(): Promise<void> {
     logger.info('Shutting down...');
     await pluginManager.unloadAll();
     adapters.killAll();
+    launchRegistry.stopAll();
     await server.stop();
     db.close();
     process.exit(0);

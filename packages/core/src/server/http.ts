@@ -3,6 +3,7 @@ import type { DatabaseManager } from '../db/index.js';
 import type { ChatManager } from '../chat/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
+import type { LaunchRegistry } from '../launch/index.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('http');
@@ -18,6 +19,7 @@ import {
   adapterRoutes,
   settingRoutes,
   commandRoutes,
+  launchRoutes,
 } from './routes/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 
@@ -27,6 +29,7 @@ export function createHttpServer(
   adapters: AdapterRegistry,
   attachmentStore?: AttachmentStore,
   pluginManager?: PluginManager,
+  launchRegistry?: LaunchRegistry,
 ): Express {
   const app = express();
 
@@ -58,7 +61,7 @@ export function createHttpServer(
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  const ctx = { db, chats, adapters, attachmentStore };
+  const ctx = { db, chats, adapters, attachmentStore, launchRegistry };
 
   app.use(projectRoutes(ctx));
   app.use(chatRoutes(ctx));
@@ -71,6 +74,7 @@ export function createHttpServer(
   app.use(skillRoutes(ctx));
   app.use(agentRoutes(ctx));
   app.use(settingRoutes(ctx));
+  app.use(launchRoutes(ctx));
 
   // Plugin routes — the PluginManager owns a parent router with listing + per-plugin sub-routers
   if (pluginManager) {
