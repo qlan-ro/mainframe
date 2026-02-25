@@ -11,16 +11,13 @@ import { getAdapterLabel } from '../../lib/adapters';
 import { useAdaptersStore } from '../../store/adapters';
 
 function SessionStatusDot({ status }: { status: SessionStatus }) {
-  if (status === 'waiting') {
-    return <div className="w-2 h-2 rounded-full shrink-0 bg-mf-accent animate-pulse motion-reduce:animate-none" />;
-  }
+  const isWorking = status === 'working' || status === 'waiting';
   return (
     <div
+      data-testid={isWorking ? 'chat-status-working' : 'chat-status-idle'}
       className={cn(
         'w-2 h-2 rounded-full shrink-0',
-        status === 'working'
-          ? 'bg-mf-accent animate-pulse motion-reduce:animate-none'
-          : 'bg-mf-text-secondary opacity-40',
+        isWorking ? 'bg-mf-accent animate-pulse motion-reduce:animate-none' : 'bg-mf-text-secondary opacity-40',
       )}
     />
   );
@@ -99,6 +96,7 @@ export function ChatsPanel(): React.ReactElement {
             {chats.map((chat) => (
               <div
                 key={chat.id}
+                data-testid="chat-list-item"
                 className={cn(
                   'group w-full rounded-mf-input transition-colors flex items-center gap-2',
                   activeChatId === chat.id ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',

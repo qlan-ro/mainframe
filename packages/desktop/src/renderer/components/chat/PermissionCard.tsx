@@ -17,7 +17,10 @@ export function PermissionCard({ request, onRespond }: PermissionCardProps): Rea
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   return (
-    <div className="border border-mf-accent/30 bg-mf-app-bg rounded-mf-card overflow-hidden">
+    <div
+      data-testid="permission-card"
+      className="border border-mf-accent/30 bg-mf-app-bg rounded-mf-card overflow-hidden"
+    >
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-2.5 bg-mf-accent/10">
         <ShieldAlert size={16} className="text-mf-accent" />

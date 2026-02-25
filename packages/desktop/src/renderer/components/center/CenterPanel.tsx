@@ -95,7 +95,7 @@ export function CenterPanel(): React.ReactElement {
             </div>
           </div>
         ) : (
-          <ChatContainer chatId={activePrimaryTab.chatId} />
+          <ChatContainer key={activePrimaryTab.chatId} chatId={activePrimaryTab.chatId} />
         )}
       </div>
     </div>

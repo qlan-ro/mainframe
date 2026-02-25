@@ -9,7 +9,7 @@ export interface MainframeConfig {
 
 const DEFAULT_CONFIG: MainframeConfig = {
   port: 31415,
-  dataDir: join(homedir(), '.mainframe'),
+  dataDir: process.env['MAINFRAME_DATA_DIR'] ?? join(homedir(), '.mainframe'),
 };
 
 export function getDataDir(): string {

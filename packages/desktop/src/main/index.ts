@@ -47,9 +47,9 @@ function startDaemon(): void {
     return;
   }
 
-  // daemon.cjs is a self-contained esbuild bundle placed in extraResources (outside asar).
-  // better-sqlite3 is also in extraResources/node_modules so require() resolves it correctly.
-  const daemonPath = join(process.resourcesPath, 'daemon.cjs');
+  // MAINFRAME_DAEMON_PATH lets test/dev environments point to a pre-built daemon.cjs directly,
+  // bypassing process.resourcesPath which only works in packaged (electron-builder) builds.
+  const daemonPath = process.env['MAINFRAME_DAEMON_PATH'] ?? join(process.resourcesPath, 'daemon.cjs');
   log.info({ path: daemonPath }, 'daemon starting');
   daemon = utilityProcess.fork(daemonPath, [], {
     stdio: 'inherit',

@@ -47,7 +47,7 @@ export function StatusBar(): React.ReactElement {
     <div className="h-6 bg-mf-app-bg px-[10px] flex items-center text-mf-body">
       <div className="flex items-center gap-4">
         {/* Connection status */}
-        <div className="flex items-center gap-[6px] text-mf-text-secondary">
+        <div data-testid="connection-status" className="flex items-center gap-[6px] text-mf-text-secondary">
           <div className={cn('w-[6px] h-[6px] rounded-full', connected ? 'bg-mf-success' : 'bg-mf-destructive')} />
           <span>{connected ? 'Connected' : 'Disconnected'}</span>
         </div>
