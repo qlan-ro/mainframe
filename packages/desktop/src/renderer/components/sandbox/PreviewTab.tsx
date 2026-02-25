@@ -94,6 +94,39 @@ export function PreviewTab(): React.ReactElement {
   // Only navigate the webview once the process is running
   const webviewSrc = previewStatus === 'running' ? previewUrl : 'about:blank';
 
+  // Track whether the webview has successfully loaded (separate from process status)
+  const [webviewReady, setWebviewReady] = useState(false);
+
+  // Reset ready state when process stops/restarts
+  useEffect(() => {
+    if (previewStatus !== 'running') setWebviewReady(false);
+  }, [previewStatus]);
+
+  // Attach webview event listeners for load success and retry on connection refused
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wv = webviewRef.current as any;
+    if (!wv || previewStatus !== 'running') return;
+
+    const handleFinishLoad = () => setWebviewReady(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleFailLoad = (e: any) => {
+      // ERR_CONNECTION_REFUSED (-102) — server not ready yet, retry after 2s
+      if (e.errorCode === -102) {
+        setTimeout(() => {
+          wv.loadURL(previewUrl);
+        }, 2000);
+      }
+    };
+
+    wv.addEventListener('did-finish-load', handleFinishLoad);
+    wv.addEventListener('did-fail-load', handleFailLoad);
+    return () => {
+      wv.removeEventListener('did-finish-load', handleFinishLoad);
+      wv.removeEventListener('did-fail-load', handleFailLoad);
+    };
+  }, [previewStatus, previewUrl]);
+
   const [logExpanded, setLogExpanded] = useState(false);
   const [selectedProcess, setSelectedProcess] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -222,10 +255,10 @@ export function PreviewTab(): React.ReactElement {
             <code className="mx-1">dev:web</code>.
           </div>
         )}
-        {/* Status overlay — shown when process is not yet running */}
-        {isElectron && previewStatus !== 'running' && (
+        {/* Status overlay — shown until webview successfully loads */}
+        {isElectron && !webviewReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-mf-app-bg text-mf-text-secondary text-sm">
-            {previewStatus === 'starting' && <span>Starting…</span>}
+            {(previewStatus === 'starting' || previewStatus === 'running') && <span>Starting…</span>}
             {previewStatus === 'failed' && <span className="text-red-400">Process failed to start</span>}
             {previewStatus === 'stopped' && (
               <span>
