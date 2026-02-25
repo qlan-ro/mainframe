@@ -4,6 +4,9 @@ import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
 import { validate } from './schemas.js';
+import { createChildLogger } from '../../logger.js';
+
+const logger = createChildLogger('routes:launch');
 
 const StartBody = z.object({
   configuration: z.object({
@@ -46,13 +49,23 @@ export function launchRoutes(ctx: RouteContext): Router {
         res.status(400).json({ success: false, error: parsed.error });
         return;
       }
+      if (param(req, 'name') !== parsed.data.configuration.name) {
+        res.status(400).json({ success: false, error: 'Route name does not match configuration name' });
+        return;
+      }
       const manager = ctx.launchRegistry?.getOrCreate(project.id, project.path);
       if (!manager) {
         res.status(500).json({ success: false, error: 'LaunchRegistry not available' });
         return;
       }
-      await manager.start(parsed.data.configuration);
-      res.json({ success: true });
+      try {
+        await manager.start(parsed.data.configuration);
+        logger.info({ projectId: project.id, name: parsed.data.configuration.name }, 'process started');
+        res.json({ success: true });
+      } catch (err) {
+        logger.error({ err, projectId: project.id, name: parsed.data.configuration.name }, 'Failed to start process');
+        res.status(500).json({ success: false, error: 'Failed to start process' });
+      }
     }),
   );
 
@@ -67,6 +80,7 @@ export function launchRoutes(ctx: RouteContext): Router {
       const name = param(req, 'name');
       const manager = ctx.launchRegistry?.getOrCreate(project.id, project.path);
       manager?.stop(name);
+      logger.info({ projectId: project.id, name }, 'process stopped');
       res.json({ success: true });
     }),
   );

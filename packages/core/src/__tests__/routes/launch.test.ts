@@ -72,6 +72,16 @@ describe('launchRoutes', () => {
     expect(res.json).toHaveBeenCalledWith({ success: true });
   });
 
+  it('POST start returns 400 when route name does not match configuration name', async () => {
+    const config = { name: 'server', runtimeExecutable: 'node', runtimeArgs: [], port: 3000, url: null };
+    const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/start');
+    const req: any = { params: { id: 'proj-1', name: 'different-name' }, body: { configuration: config } };
+    const res = mockRes();
+    await handler(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+
   it('POST stop calls manager.stop', async () => {
     const mockStop = vi.fn();
     (ctx.launchRegistry!.getOrCreate as any).mockReturnValue({ stop: mockStop });
