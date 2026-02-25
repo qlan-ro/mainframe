@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { readdir, stat, readFile, realpath } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import type { RouteContext } from './types.js';
 import { getEffectivePath, param } from './types.js';
 import { resolveAndValidatePath } from './path-utils.js';
@@ -210,9 +211,39 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
   }
 }
 
+/** GET /api/filesystem/browse?path=~ */
+async function handleBrowseFilesystem(_ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const homeDir = homedir();
+  const requestedPath = (req.query.path as string) || homeDir;
+
+  const normalized = path.resolve(requestedPath);
+  const normalizedHome = path.resolve(homeDir);
+  if (!normalized.startsWith(normalizedHome + path.sep) && normalized !== normalizedHome) {
+    res.status(403).json({ error: 'Path outside home directory' });
+    return;
+  }
+
+  try {
+    const dirents = await readdir(normalized, { withFileTypes: true });
+    const entries = dirents
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !IGNORED_DIRS.has(e.name))
+      .map((e) => ({ name: e.name, path: path.join(normalized, e.name) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({ path: normalized, entries });
+  } catch (err) {
+    logger.warn({ err, path: requestedPath }, 'Failed to browse directory');
+    res.status(404).json({ error: 'Directory not found' });
+  }
+}
+
 export function fileRoutes(ctx: RouteContext): Router {
   const router = Router();
 
+  router.get(
+    '/api/filesystem/browse',
+    asyncHandler((req, res) => handleBrowseFilesystem(ctx, req, res)),
+  );
   router.get(
     '/api/projects/:id/tree',
     asyncHandler((req, res) => handleTree(ctx, req, res)),
