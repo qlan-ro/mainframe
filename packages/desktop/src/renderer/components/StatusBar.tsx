@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GitBranch } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
@@ -9,6 +9,10 @@ import { useUIStore } from '../store/ui';
 import { useConnectionState } from '../hooks/useConnectionState';
 import { getGitBranch } from '../lib/api';
 import { cn } from '../lib/utils';
+import { LaunchPopover } from './sandbox/LaunchPopover';
+import { useLaunchConfig } from '../hooks/useLaunchConfig';
+import { useSandboxStore } from '../store/sandbox';
+import { startLaunchConfig, stopLaunchConfig } from '../lib/launch';
 
 const GIT_POLL_INTERVAL = 15_000;
 
@@ -48,6 +52,42 @@ export function StatusBar(): React.ReactElement {
     counts[chat.displayStatus ?? 'idle']++;
   }
 
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const launchConfig = useLaunchConfig();
+  const processStatuses = useSandboxStore((s) => s.processStatuses);
+  const panelCollapsed = useUIStore((s) => s.panelCollapsed);
+
+  const aggregateIcon = (() => {
+    const statuses = (launchConfig?.configurations ?? []).map((c) => processStatuses[c.name] ?? 'stopped');
+    if (statuses.some((s) => s === 'starting')) return '⟳';
+    if (statuses.some((s) => s === 'running')) return '■';
+    return '▷';
+  })();
+
+  const previewConfig = launchConfig?.configurations.find((c) => c.preview) ?? null;
+
+  const handlePreviewClick = useCallback(async () => {
+    // Read activeProjectId directly from store to avoid adding it as a dep
+    const projectId = useProjectsStore.getState().activeProjectId;
+    if (!projectId || !previewConfig) {
+      togglePanel('bottom');
+      return;
+    }
+    const status = processStatuses[previewConfig.name] ?? 'stopped';
+    try {
+      if (status === 'running' || status === 'starting') {
+        await stopLaunchConfig(projectId, previewConfig.name);
+      } else {
+        await startLaunchConfig(projectId, previewConfig);
+        if (panelCollapsed.bottom) togglePanel('bottom');
+      }
+    } catch (err) {
+      console.warn('[sandbox] preview toggle failed', err);
+    }
+  }, [previewConfig, processStatuses, panelCollapsed, togglePanel]);
+
+  const handleClosePopover = useCallback(() => setPopoverOpen(false), []);
+
   return (
     <div className="h-6 bg-mf-app-bg px-[10px] flex items-center justify-between text-mf-body">
       <div className="flex items-center gap-4">
@@ -77,12 +117,23 @@ export function StatusBar(): React.ReactElement {
 
       {/* Right side actions */}
       <div className="flex items-center">
-        <button
-          onClick={() => togglePanel('bottom')}
-          className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-2 py-0.5 rounded"
-        >
-          Preview
-        </button>
+        <div className="relative flex items-center">
+          <button
+            onClick={() => void handlePreviewClick()}
+            className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-2 py-0.5 rounded-l border-r border-mf-divider"
+            title="Start/stop preview"
+          >
+            {aggregateIcon} Preview
+          </button>
+          <button
+            onClick={() => setPopoverOpen((o) => !o)}
+            className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-1.5 py-0.5 rounded-r"
+            title="Launch configurations"
+          >
+            ∨
+          </button>
+          {popoverOpen && <LaunchPopover onClose={handleClosePopover} />}
+        </div>
       </div>
     </div>
   );
