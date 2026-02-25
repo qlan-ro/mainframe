@@ -15,6 +15,7 @@ import { ContextPickerMenu } from '../../ContextPickerMenu';
 import { ComposerDropdown } from './ComposerDropdown';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
+import { useSandboxStore } from '../../../../store/sandbox';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
@@ -86,6 +87,8 @@ export function ComposerCard() {
   const hasMessages = (messages?.length ?? 0) > 0;
   const composerRuntime = useComposerRuntime();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const captures = useSandboxStore((s) => s.captures);
+  const removeCapture = useSandboxStore((s) => s.removeCapture);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -175,6 +178,26 @@ export function ComposerCard() {
           }}
         />
       </div>
+      {captures.length > 0 && (
+        <div className="flex flex-wrap gap-1 px-3 pt-2">
+          {captures.map((c) => (
+            <div
+              key={c.id}
+              className="flex items-center gap-1 bg-mf-hover rounded px-2 py-0.5 text-xs text-mf-text-primary"
+            >
+              {c.type === 'screenshot' ? '📷 screenshot' : `⊕ ${c.selector ?? 'element'}`}
+              <button
+                type="button"
+                onClick={() => removeCapture(c.id)}
+                className="ml-1 text-mf-text-secondary hover:text-red-400"
+                aria-label="Remove capture"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       {composerError && (
         <div className="mx-3 mt-2 rounded-md bg-mf-chat-error/15 px-3 py-2 text-mf-small text-mf-chat-error-subtle flex items-center justify-between gap-2 shadow-chat-error-inset">
           <span>{composerError}</span>

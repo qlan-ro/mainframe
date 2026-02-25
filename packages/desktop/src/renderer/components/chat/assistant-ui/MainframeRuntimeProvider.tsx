@@ -17,6 +17,7 @@ import { useTabsStore } from '../../../store/tabs';
 import type { ControlRequest, ControlUpdate } from '@mainframe/types';
 import { AllToolUIs } from './parts/tool-ui-registry';
 import { useSkillsStore } from '../../../store/skills';
+import { useSandboxStore } from '../../../store/sandbox';
 
 interface MainframeRuntimeProviderProps {
   chatId: string;
@@ -141,7 +142,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
       if (pendingPermission) return;
 
       const textPart = message.content.find((p) => p.type === 'text');
-      const uploadAttachments: {
+      const attachmentItems: {
         name: string;
         mediaType: string;
         sizeBytes: number;
@@ -171,7 +172,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
           const mediaType = match[1] || att.contentType || 'application/octet-stream';
           const data = match[2] || '';
           const file = att.file as (File & { path?: string }) | undefined;
-          uploadAttachments.push({
+          attachmentItems.push({
             name: att.name,
             mediaType,
             sizeBytes: file?.size ?? Math.floor((data.length * 3) / 4),
@@ -188,7 +189,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
         const dataUrl = (part as { type: 'image'; image: string }).image;
         const match = dataUrl.match(DATA_URL_RE);
         if (!match) continue;
-        uploadAttachments.push({
+        attachmentItems.push({
           name: 'pasted-image.png',
           mediaType: match[1] || 'image/png',
           sizeBytes: Math.floor((match[2]!.length * 3) / 4),
@@ -197,9 +198,29 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
         });
       }
 
-      const userText = textPart?.type === 'text' ? textPart.text.replace(IMAGE_COORDINATE_NOTE_RE, '').trim() : '';
+      // Collect pending captures from sandbox store and clear them before sending.
+      const { captures, clearCaptures } = useSandboxStore.getState();
+      let capturePreamble = '';
+      if (captures.length > 0) {
+        for (const c of captures) {
+          const base64 = c.imageDataUrl.split(',')[1] ?? '';
+          attachmentItems.push({
+            name: c.type === 'element' ? `element-${c.selector ?? 'capture'}.png` : 'screenshot.png',
+            mediaType: 'image/png',
+            sizeBytes: Math.floor((base64.length * 3) / 4),
+            kind: 'image',
+            data: base64,
+          });
+        }
+        const labels = captures.map((c) => (c.type === 'element' ? `element \`${c.selector ?? ''}\`` : 'screenshot'));
+        capturePreamble = `[Preview captures: ${labels.join(', ')}]\n\n`;
+        clearCaptures();
+      }
 
-      if (!userText && uploadAttachments.length === 0) return;
+      const userText = textPart?.type === 'text' ? textPart.text.replace(IMAGE_COORDINATE_NOTE_RE, '').trim() : '';
+      const finalText = capturePreamble + userText;
+
+      if (!finalText.trim() && attachmentItems.length === 0) return;
 
       const commandMatch = userText.match(/^\/(\S+)/);
       const matchedCommand = commandMatch ? commands.find((c) => c.name === commandMatch[1]) : undefined;
