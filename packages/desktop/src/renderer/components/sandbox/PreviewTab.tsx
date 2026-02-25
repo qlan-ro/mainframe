@@ -1,7 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import type { LaunchConfig } from '@mainframe/types';
 import { useSandboxStore } from '../../store/sandbox';
-import { useProjectsStore } from '../../store/projects';
+import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 
 // CSS selector generator — injected into the webview page
 const GET_SELECTOR_FN = `
@@ -71,28 +70,40 @@ export function PreviewTab(): React.ReactElement {
   const webviewRef = useRef<HTMLElement>(null);
   const [url, setUrl] = useState('about:blank');
   const [inspecting, setInspecting] = useState(false);
-  const { addCapture } = useSandboxStore();
-  const activeProject = useProjectsStore((s) =>
-    s.activeProjectId ? (s.projects.find((p) => p.id === s.activeProjectId) ?? null) : null,
-  );
+  const { addCapture, logsOutput, clearLogsForProcess } = useSandboxStore();
 
-  // Load preview URL from launch config when project changes
+  const launchConfig = useLaunchConfig();
+  const configs = launchConfig?.configurations ?? [];
+
+  // Derive preview URL from config
+  const previewUrl = (() => {
+    const preview = configs.find((c) => c.preview);
+    if (!preview) return 'about:blank';
+    return preview.url ?? (preview.port ? `http://localhost:${preview.port}` : 'about:blank');
+  })();
+
+  // Sync url state when previewUrl changes
   useEffect(() => {
-    if (!activeProject) return;
-    void window.mainframe
-      .readFile(`${activeProject.path}/.mainframe/launch.json`)
-      .then((content) => {
-        if (!content) return;
-        const config = JSON.parse(content) as LaunchConfig;
-        const preview = config.configurations.find((c) => c.preview);
-        if (!preview) return;
-        const previewUrl = preview.url ?? (preview.port ? `http://localhost:${preview.port}` : null);
-        if (previewUrl) setUrl(previewUrl);
-      })
-      .catch(() => {
-        /* no launch.json — expected */
-      });
-  }, [activeProject?.id]);
+    if (previewUrl !== 'about:blank') setUrl(previewUrl);
+  }, [previewUrl]);
+
+  const [logExpanded, setLogExpanded] = useState(false);
+  const [selectedProcess, setSelectedProcess] = useState<string | null>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+
+  // Auto-select first process when configs load
+  useEffect(() => {
+    if (configs.length > 0 && !selectedProcess) {
+      setSelectedProcess(configs[0]!.name);
+    }
+  }, [configs, selectedProcess]);
+
+  // Auto-scroll logs
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logsOutput]);
+
+  const filteredLogs = selectedProcess ? logsOutput.filter((l) => l.name === selectedProcess) : logsOutput;
 
   const handleFullScreenshot = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -194,7 +205,7 @@ export function PreviewTab(): React.ReactElement {
       </div>
 
       {/* Webview or fallback */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden min-h-0">
         {isElectron ? (
           // @ts-expect-error — webview is an Electron-specific HTML element not present in React's type definitions
           <webview ref={webviewRef} src={url} className="w-full h-full" />
@@ -202,6 +213,62 @@ export function PreviewTab(): React.ReactElement {
           <div className="flex items-center justify-center h-full text-mf-text-secondary text-sm">
             Preview panel requires Electron. Use <code className="mx-1">pnpm dev:desktop</code> instead of{' '}
             <code className="mx-1">dev:web</code>.
+          </div>
+        )}
+      </div>
+
+      {/* Log strip */}
+      <div className="border-t border-mf-divider shrink-0 bg-mf-app-bg">
+        {/* Header */}
+        <div className="flex items-center justify-between px-2 h-7">
+          <select
+            value={selectedProcess ?? ''}
+            onChange={(e) => setSelectedProcess(e.target.value || null)}
+            className="text-xs bg-transparent text-mf-text-secondary border-none outline-none cursor-pointer max-w-[160px]"
+          >
+            {configs.length === 0 && <option value="">No processes</option>}
+            {configs.map((c) => (
+              <option key={c.name} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setLogExpanded((v) => !v)}
+              className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-1"
+              title={logExpanded ? 'Collapse logs' : 'Expand logs'}
+            >
+              {logExpanded ? '∨' : '∧'}
+            </button>
+            <button
+              onClick={() => {
+                if (selectedProcess) clearLogsForProcess(selectedProcess);
+              }}
+              disabled={!selectedProcess}
+              className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-1 disabled:opacity-40"
+              title="Clear logs"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+        {/* Log output */}
+        {logExpanded && (
+          <div
+            ref={logRef}
+            style={{ height: 150 }}
+            className="overflow-y-auto px-2 pb-2 font-mono text-xs text-mf-text-secondary"
+          >
+            {filteredLogs.length === 0 ? (
+              <span>No output yet.</span>
+            ) : (
+              filteredLogs.map((l, i) => (
+                <div key={`${i}-${l.name}-${l.stream}`} className={l.stream === 'stderr' ? 'text-red-400' : ''}>
+                  {l.data}
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
