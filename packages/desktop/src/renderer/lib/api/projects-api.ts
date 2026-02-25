@@ -10,10 +10,20 @@ export async function getProjects(): Promise<Project[]> {
   return json.data;
 }
 
-export async function createProject(path: string): Promise<Project> {
+export async function createProject(path: string): Promise<{ project: Project; alreadyExists: boolean }> {
   log.info('createProject', { path });
-  const json = await postJson<{ data: Project }>(`${API_BASE}/api/projects`, { path });
-  return json.data;
+  const res = await fetch(`${API_BASE}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  if (res.status === 409) {
+    const json = await res.json();
+    return { project: json.data as Project, alreadyExists: true };
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  return { project: json.data as Project, alreadyExists: false };
 }
 
 export async function removeProject(id: string): Promise<void> {

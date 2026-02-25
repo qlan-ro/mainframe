@@ -23,6 +23,7 @@ export {
   getSessionContext,
   getSessionFile,
   addMention,
+  browseFilesystem,
 } from './files-api';
 
 export {

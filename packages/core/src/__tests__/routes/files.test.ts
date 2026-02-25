@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileRoutes } from '../../server/routes/files.js';
 import type { RouteContext } from '../../server/routes/types.js';
+
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return { ...actual, homedir: vi.fn(() => actual.homedir()) };
+});
 
 const flushPromises = () => new Promise<void>((r) => setTimeout(r, 50));
 
@@ -127,6 +132,84 @@ describe('GET /api/projects/:id/search/files', () => {
 
     const results = res.json.mock.calls[0][0] as Array<{ name: string }>;
     expect(results.some((r) => r.name === 'main.ts')).toBe(true);
+  });
+});
+
+describe('GET /api/filesystem/browse', () => {
+  afterEach(() => {
+    vi.mocked(homedir).mockReset();
+  });
+
+  it('returns subdirectories of the given path', async () => {
+    await mkdir(join(projectDir, 'alpha'));
+    await mkdir(join(projectDir, 'beta'));
+    await writeFile(join(projectDir, 'file.txt'), 'hello');
+
+    vi.mocked(homedir).mockReturnValue(projectDir);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/filesystem/browse');
+    const res = mockRes();
+
+    handler({ query: { path: projectDir } } as any, res, vi.fn());
+    await flushPromises();
+
+    expect(res.json).toHaveBeenCalledWith({
+      path: projectDir,
+      entries: [
+        { name: 'alpha', path: expect.stringContaining('alpha') },
+        { name: 'beta', path: expect.stringContaining('beta') },
+      ],
+    });
+  });
+
+  it('hides dotfiles and ignored dirs', async () => {
+    await mkdir(join(projectDir, '.hidden'));
+    await mkdir(join(projectDir, 'node_modules'));
+    await mkdir(join(projectDir, 'visible'));
+
+    vi.mocked(homedir).mockReturnValue(projectDir);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/filesystem/browse');
+    const res = mockRes();
+
+    handler({ query: { path: projectDir } } as any, res, vi.fn());
+    await flushPromises();
+
+    const result = res.json.mock.calls[0][0];
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].name).toBe('visible');
+  });
+
+  it('returns 404 for non-existent directory', async () => {
+    vi.mocked(homedir).mockReturnValue(projectDir);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/filesystem/browse');
+    const res = mockRes();
+
+    handler({ query: { path: join(projectDir, 'nonexistent') } } as any, res, vi.fn());
+    await flushPromises();
+
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('rejects paths outside home directory', async () => {
+    vi.mocked(homedir).mockReturnValue(projectDir);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/filesystem/browse');
+    const res = mockRes();
+
+    handler({ query: { path: '/etc' } } as any, res, vi.fn());
+    await flushPromises();
+
+    expect(res.status).toHaveBeenCalledWith(403);
   });
 });
 

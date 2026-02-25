@@ -27,7 +27,11 @@ export const useProjectsStore = create<ProjectsState>((set) => ({
     else localStorage.removeItem('mf:activeProjectId');
     set({ activeProjectId: id });
   },
-  addProject: (project) => set((state) => ({ projects: [...state.projects, project] })),
+  addProject: (project) =>
+    set((state) => {
+      if (state.projects.some((p) => p.id === project.id)) return state;
+      return { projects: [...state.projects, project] };
+    }),
   removeProject: (id) =>
     set((state) => ({
       projects: state.projects.filter((p) => p.id !== id),

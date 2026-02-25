@@ -89,3 +89,13 @@ export async function addMention(
 ): Promise<void> {
   await postJson(`${API_BASE}/api/chats/${chatId}/mentions`, mention);
 }
+
+export interface BrowseEntry {
+  name: string;
+  path: string;
+}
+
+export async function browseFilesystem(dirPath?: string): Promise<{ path: string; entries: BrowseEntry[] }> {
+  const params = dirPath ? `?path=${encodeURIComponent(dirPath)}` : '';
+  return fetchJson(`${API_BASE}/api/filesystem/browse${params}`);
+}
