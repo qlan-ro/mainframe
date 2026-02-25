@@ -7,3 +7,5 @@ export { useSettingsStore } from './settings';
 export { useAdaptersStore } from './adapters';
 export { useTutorialStore } from './tutorial';
 export { usePluginLayoutStore } from './plugins';
+export { useSandboxStore } from './sandbox';
+export type { Capture } from './sandbox';
