@@ -23,6 +23,7 @@ interface SandboxState {
   setProcessStatus: (name: string, status: ProcessStatus[string]) => void;
   appendLog: (name: string, data: string, stream: 'stdout' | 'stderr') => void;
   clearLogs: () => void;
+  clearLogsForProcess: (name: string) => void;
 }
 
 export const useSandboxStore = create<SandboxState>()((set) => ({
@@ -46,4 +47,6 @@ export const useSandboxStore = create<SandboxState>()((set) => ({
     })),
 
   clearLogs: () => set({ logsOutput: [] }),
+
+  clearLogsForProcess: (name) => set((state) => ({ logsOutput: state.logsOutput.filter((l) => l.name !== name) })),
 }));
