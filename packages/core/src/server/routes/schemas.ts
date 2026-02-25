@@ -44,6 +44,11 @@ export const UpdateGeneralSettingsBody = z.object({
     .optional(),
 });
 
+// Filesystem browsing
+export const BrowseFilesystemQuery = z.object({
+  path: z.string().optional(),
+});
+
 // Skills
 const scopeEnum = z.enum(['project', 'global']);
 
