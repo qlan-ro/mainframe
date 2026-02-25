@@ -5,6 +5,7 @@ export * from './skill.js';
 export * from './context.js';
 export * from './settings.js';
 export * from './command.js';
+export * from './launch.js';
 export type {
   PluginCapability,
   PluginManifest,
