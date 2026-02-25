@@ -6,7 +6,7 @@ import type { MessageCache } from './message-cache.js';
 import type { ActiveChat } from './types.js';
 import { createChildLogger } from '../logger.js';
 
-const log = createChildLogger('permission-handler');
+const log = createChildLogger('chat:permissions');
 
 export interface PermissionHandlerDeps {
   permissions: PermissionManager;

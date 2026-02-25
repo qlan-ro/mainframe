@@ -1,5 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { GENERAL_DEFAULTS } from '@mainframe/types';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:settings');
 import { useThemeStore, THEMES } from '../../store/theme';
 import { useSettingsStore } from '../../store/settings';
 import { updateGeneralSettings } from '../../lib/api';
@@ -27,7 +30,7 @@ export function GeneralSection(): React.ReactElement {
       await updateGeneralSettings({ worktreeDir });
       loadGeneral({ ...general, worktreeDir });
     } catch (err) {
-      console.warn('[GeneralSection] save failed', err);
+      log.warn('save failed', { err: String(err) });
     } finally {
       setSaving(false);
     }

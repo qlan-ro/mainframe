@@ -8,104 +8,21 @@ import { useSkillsStore } from '../store/skills';
 import { useSettingsStore } from '../store/settings';
 import { useAdaptersStore } from '../store/adapters';
 import { usePluginLayoutStore } from '../store';
-import type { DaemonEvent } from '@mainframe/types';
+import { routeEvent } from '../lib/ws-event-router';
 import { createLogger } from '../lib/logger';
 
-export { useChat } from './useChat.js';
+export { useChatSession } from './useChatSession.js';
 
-const log = createLogger('daemon');
+const log = createLogger('renderer:init');
 
-export function useDaemon(): void {
+export function useAppInit(): void {
   const { setProjects, setLoading, setError } = useProjectsStore();
   const loadProviders = useSettingsStore((s) => s.loadProviders);
   const setAdapters = useAdaptersStore((s) => s.setAdapters);
-  const {
-    addChat,
-    updateChat,
-    removeChat,
-    setActiveChat,
-    addMessage,
-    addPendingPermission,
-    setProcess,
-    updateProcessStatus,
-    removeProcess,
-  } = useChatsStore();
-
-  const handleEvent = useCallback(
-    (event: DaemonEvent) => {
-      switch (event.type) {
-        case 'chat.created':
-          log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title });
-          addChat(event.chat);
-          setActiveChat(event.chat.id);
-          useTabsStore.getState().openChatTab(event.chat.id, event.chat.title);
-          break;
-        case 'chat.updated':
-          log.debug('event:chat.updated', { chatId: event.chat.id });
-          updateChat(event.chat);
-          if (event.chat.title) {
-            useTabsStore.getState().updateTabLabel(`chat:${event.chat.id}`, event.chat.title);
-          }
-          break;
-        case 'chat.ended':
-          log.info('event:chat.ended', { chatId: event.chatId });
-          removeChat(event.chatId);
-          removeProcess(event.chatId);
-          break;
-        case 'message.added':
-          log.debug('event:message.added', { chatId: event.chatId, type: event.message.type });
-          addMessage(event.chatId, event.message);
-          break;
-        case 'messages.cleared':
-          log.info('event:messages.cleared', { chatId: event.chatId });
-          useChatsStore.getState().setMessages(event.chatId, []);
-          break;
-        case 'permission.requested':
-          log.info('event:permission.requested', {
-            chatId: event.chatId,
-            requestId: event.request.requestId,
-            toolName: event.request.toolName,
-          });
-          addPendingPermission(event.chatId, event.request);
-          break;
-        case 'context.updated':
-          log.debug('event:context.updated', { chatId: event.chatId });
-          break;
-        case 'process.started':
-          log.info('event:process.started', { chatId: event.chatId, processId: event.process.id });
-          setProcess(event.chatId, event.process);
-          break;
-        case 'process.ready':
-          log.info('event:process.ready', { processId: event.processId, claudeSessionId: event.claudeSessionId });
-          updateProcessStatus(event.processId, 'ready');
-          break;
-        case 'process.stopped':
-          log.info('event:process.stopped', { processId: event.processId });
-          updateProcessStatus(event.processId, 'stopped');
-          break;
-        case 'error':
-          log.error('daemon error event', { error: event.error });
-          setError(event.error);
-          break;
-      }
-    },
-    [
-      addChat,
-      updateChat,
-      removeChat,
-      setActiveChat,
-      addMessage,
-      addPendingPermission,
-      setProcess,
-      updateProcessStatus,
-      removeProcess,
-      setError,
-    ],
-  );
 
   useEffect(() => {
     daemonClient.connect();
-    const unsubscribe = daemonClient.onEvent(handleEvent);
+    const unsubscribe = daemonClient.onEvent(routeEvent);
 
     const loadData = async () => {
       setLoading(true);
@@ -158,7 +75,7 @@ export function useDaemon(): void {
       unsubConnection();
       daemonClient.disconnect();
     };
-  }, [handleEvent, setProjects, setLoading, setError, loadProviders, setAdapters]);
+  }, [setProjects, setLoading, setError, loadProviders, setAdapters]);
 }
 
 export function useProject(projectId: string | null) {

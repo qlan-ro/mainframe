@@ -23,7 +23,7 @@ import { ChatLifecycleManager } from './lifecycle-manager.js';
 import { EventHandler } from './event-handler.js';
 import type { ActiveChat } from './types.js';
 
-const logger = createChildLogger('chat-manager');
+const logger = createChildLogger('chat:manager');
 
 export class ChatManager {
   private activeChats = new Map<string, ActiveChat>();

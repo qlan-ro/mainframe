@@ -24,7 +24,7 @@ import {
 } from './history.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 
-const log = createChildLogger('claude-session');
+const log = createChildLogger('claude:session');
 
 const nullSink: SessionSink = {
   onInit: () => {},

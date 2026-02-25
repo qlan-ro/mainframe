@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GitBranch } from 'lucide-react';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger('renderer:statusbar');
 import { useChatsStore } from '../store';
 import { useProjectsStore } from '../store/projects';
 import { useConnectionState } from '../hooks/useConnectionState';
@@ -26,7 +29,7 @@ export function StatusBar(): React.ReactElement {
       getGitBranch(activeProjectId, activeChatId ?? undefined)
         .then((res) => setGitBranch(res.branch))
         .catch((err) => {
-          console.warn('[status-bar] git branch fetch failed:', err);
+          log.warn('git branch fetch failed', { err: String(err) });
           setGitBranch(null);
         });
     };

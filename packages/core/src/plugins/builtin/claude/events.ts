@@ -4,7 +4,7 @@ import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
 import { createChildLogger } from '../../../logger.js';
 
-const log = createChildLogger('claude-events');
+const log = createChildLogger('claude:events');
 
 export function handleStdout(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
   session.state.buffer += chunk.toString();

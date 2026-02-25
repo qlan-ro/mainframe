@@ -20,7 +20,7 @@ function purgeOldLogs(): void {
   const cutoffMs = Date.now() - RETENTION_DAYS * 86_400_000;
   try {
     for (const file of readdirSync(logDir())) {
-      if (!file.startsWith('daemon.')) continue;
+      if (!file.startsWith('server.')) continue;
       const full = join(logDir(), file);
       try {
         if (statSync(full).mtimeMs < cutoffMs) unlinkSync(full);
@@ -37,7 +37,7 @@ function dailyDestination(): pino.DestinationStream {
   const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   // minLength: 0 disables sonic-boom buffering so every write reaches the file
   // immediately — critical for crash debugging in packaged/bundled deployments.
-  return pino.destination({ dest: join(logDir(), `daemon.${date}.log`), append: true, minLength: 0 });
+  return pino.destination({ dest: join(logDir(), `server.${date}.log`), append: true, minLength: 0 });
 }
 
 const VALID_LEVELS = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal']);
@@ -61,7 +61,17 @@ const streams: pino.StreamEntry[] = isTest
       ...(!isProd ? [{ stream: process.stdout as NodeJS.WritableStream, level: logLevel }] : []),
     ];
 
-export const logger = isTest ? pino({ level: 'silent' }) : pino({ level: logLevel }, pino.multistream(streams));
+export const logger = isTest
+  ? pino({ level: 'silent' })
+  : pino(
+      {
+        level: logLevel,
+        timestamp: pino.stdTimeFunctions.isoTime,
+        base: { pid: process.pid },
+        formatters: { level: (label) => ({ level: label.toUpperCase() }) },
+      },
+      pino.multistream(streams),
+    );
 
 if (!isTest) {
   logger.info({ logLevel, raw: process.env.LOG_LEVEL ?? '(unset)' }, 'logger initialized');

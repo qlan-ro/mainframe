@@ -10,7 +10,7 @@ import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
 
-const log = createChildLogger('chat-lifecycle');
+const log = createChildLogger('chat:lifecycle');
 
 export interface LifecycleManagerDeps {
   db: DatabaseManager;

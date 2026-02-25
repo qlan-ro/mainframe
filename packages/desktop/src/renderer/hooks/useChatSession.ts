@@ -5,9 +5,9 @@ import { useChatsStore } from '../store/chats';
 import type { ControlUpdate } from '@mainframe/types';
 import { createLogger } from '../lib/logger';
 
-const log = createLogger('daemon');
+const log = createLogger('renderer:chat-session');
 
-export function useChat(chatId: string | null) {
+export function useChatSession(chatId: string | null) {
   const { messages, pendingPermissions } = useChatsStore();
   const chatMessages = chatId ? messages.get(chatId) || [] : [];
   const pendingPermission = chatId ? pendingPermissions.get(chatId) : undefined;

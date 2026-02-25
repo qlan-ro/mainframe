@@ -1,9 +1,12 @@
 import React, { useCallback } from 'react';
 import { Plus, Archive } from 'lucide-react';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:panels');
 import { useChatsStore, useProjectsStore } from '../../store';
 import type { SessionStatus } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
-import { useProject } from '../../hooks/useDaemon';
+import { useProject } from '../../hooks/useAppInit';
 import { daemonClient } from '../../lib/client';
 import { archiveChat } from '../../lib/api';
 import { cn } from '../../lib/utils';
@@ -46,7 +49,7 @@ export function ChatsPanel(): React.ReactElement {
           removeChat(chatId);
           useTabsStore.getState().closeTab(`chat:${chatId}`);
         })
-        .catch((err) => console.warn('[chats] archive failed:', err));
+        .catch((err) => log.warn('archive failed', { err: String(err) }));
     },
     [removeChat],
   );

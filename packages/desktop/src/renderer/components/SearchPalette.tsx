@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Search, MessageSquare, FileText, Folder } from 'lucide-react';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger('renderer:search');
 import { useSearchStore, useChatsStore, useProjectsStore } from '../store';
 import { useTabsStore } from '../store/tabs';
 import { daemonClient } from '../lib/client';
@@ -69,7 +72,7 @@ export function SearchPalette(): React.ReactElement | null {
         .then((results) => {
           if (queryRef.current === q) setFileResults(results);
         })
-        .catch((err) => console.warn('[search] file search failed:', err));
+        .catch((err) => log.warn('file search failed', { err: String(err) }));
     }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);

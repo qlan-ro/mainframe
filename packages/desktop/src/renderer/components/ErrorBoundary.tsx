@@ -1,4 +1,7 @@
 import React from 'react';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger('renderer:app');
 
 interface Props {
   children: React.ReactNode;
@@ -21,7 +24,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
-    console.error('[ErrorBoundary]', error, info.componentStack);
+    log.error('render error caught', { err: String(error), componentStack: info.componentStack ?? '' });
   }
 
   render(): React.ReactNode {

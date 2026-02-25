@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { HighlighterCore } from 'shiki';
+import { createLogger } from '../../../../lib/logger';
+
+const log = createLogger('renderer:chat');
 
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 let highlighterInstance: HighlighterCore | null = null;
@@ -95,7 +98,7 @@ export function SyntaxHighlightedCode({ code, language }: { code: string; langua
         }
       })
       .catch((err) => {
-        console.warn('[highlight] syntax highlighting failed:', err);
+        log.warn('syntax highlighting failed', { err: String(err) });
         if (mountedRef.current) setHtml(null);
       });
   }, [code, language]);

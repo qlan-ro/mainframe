@@ -7,12 +7,12 @@ import { CenterPanel } from './components/center/CenterPanel';
 import { SearchPalette } from './components/SearchPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { TutorialOverlay } from './components/TutorialOverlay';
-import { useDaemon } from './hooks/useDaemon';
+import { useAppInit } from './hooks/useAppInit';
 import { useProjectsStore, useSettingsStore } from './store';
 import { daemonClient } from './lib/client';
 
 export default function App(): React.ReactElement {
-  useDaemon();
+  useAppInit();
 
   // Global ⌘N / Ctrl+N — new chat
   useEffect(() => {

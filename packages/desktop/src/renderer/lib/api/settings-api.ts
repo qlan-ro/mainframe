@@ -2,7 +2,7 @@ import type { ProviderConfig, GeneralConfig } from '@mainframe/types';
 import { fetchJson, putJson, API_BASE } from './http';
 import { createLogger } from '../logger';
 
-const log = createLogger('api');
+const log = createLogger('renderer:api');
 
 export async function getProviderSettings(): Promise<Record<string, ProviderConfig>> {
   const json = await fetchJson<{ success: boolean; data: Record<string, ProviderConfig> }>(

@@ -1,7 +1,7 @@
 import { fetchJson, API_BASE } from './http';
 import { createLogger } from '../logger';
 
-const log = createLogger('api');
+const log = createLogger('renderer:api');
 
 export async function getAttachment(
   chatId: string,

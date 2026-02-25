@@ -2,7 +2,7 @@ import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput } from '@ma
 import { fetchJson, postJson, putJson, deleteRequest, API_BASE } from './http';
 import { createLogger } from '../logger';
 
-const log = createLogger('api');
+const log = createLogger('renderer:api');
 
 export async function getSkills(adapterId: string, projectPath: string): Promise<Skill[]> {
   const json = await fetchJson<{ success: boolean; data: Skill[] }>(

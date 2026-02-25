@@ -5,7 +5,7 @@ import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { createMainLogger, logFromRenderer } from './logger.js';
 
-const log = createMainLogger('main');
+const log = createMainLogger('electron');
 
 const APP_AUTHOR = 'Mainframe Contributors';
 

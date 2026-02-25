@@ -2,7 +2,7 @@ import type { Project, Chat, ChatMessage, AdapterInfo } from '@mainframe/types';
 import { postJson, deleteRequest, API_BASE } from './http';
 import { createLogger } from '../logger';
 
-const log = createLogger('api');
+const log = createLogger('renderer:api');
 
 export async function getProjects(): Promise<Project[]> {
   const res = await fetch(`${API_BASE}/api/projects`);

@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Folder, FileText, ChevronRight, ChevronDown } from 'lucide-react';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:panels');
 import { useProjectsStore } from '../../store';
 import { useChatsStore } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
@@ -79,7 +82,7 @@ export function FilesTab(): React.ReactElement {
     if (!activeProjectId) return;
     getFileTree(activeProjectId, '.', activeChatId ?? undefined)
       .then(setRootEntries)
-      .catch((err) => console.warn('[files] load file tree failed:', err));
+      .catch((err) => log.warn('load file tree failed', { err: String(err) }));
   }, [activeProjectId, activeChatId]);
 
   if (!activeProject) {

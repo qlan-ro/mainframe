@@ -4,7 +4,7 @@ import { param } from './types.js';
 import { validate, CreateProjectBody } from './schemas.js';
 import { createChildLogger } from '../../logger.js';
 
-const logger = createChildLogger('projects-route');
+const logger = createChildLogger('routes:projects');
 
 export function projectRoutes(ctx: RouteContext): Router {
   const router = Router();

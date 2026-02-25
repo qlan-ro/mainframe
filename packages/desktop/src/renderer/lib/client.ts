@@ -2,9 +2,9 @@ import type { ClientEvent, DaemonEvent, ControlResponse } from '@mainframe/types
 import { createLogger } from './logger';
 
 const WS_URL = 'ws://127.0.0.1:31415';
-const log = createLogger('client');
+const log = createLogger('renderer:ws');
 
-class DaemonClient {
+export class DaemonClient {
   private ws: WebSocket | null = null;
   private eventHandlers = new Set<(event: DaemonEvent) => void>();
   private reconnectAttempts = 0;
@@ -37,16 +37,17 @@ class DaemonClient {
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) return;
 
     this.intentionalClose = false;
-    this.ws = new WebSocket(WS_URL);
+    const socket = new WebSocket(WS_URL);
+    this.ws = socket;
 
-    this.ws.onopen = () => {
+    socket.onopen = () => {
       log.info('connected');
       this.reconnectAttempts = 0;
       this.flushPendingMessages();
       this.notifyConnectionListeners();
     };
 
-    this.ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as DaemonEvent;
         this.eventHandlers.forEach((handler) => handler(data));
@@ -55,14 +56,16 @@ class DaemonClient {
       }
     };
 
-    this.ws.onclose = () => {
+    socket.onclose = () => {
+      if (socket !== this.ws) return;
       this.notifyConnectionListeners();
       if (this.intentionalClose) return;
       log.info('disconnected');
       this.attemptReconnect();
     };
 
-    this.ws.onerror = () => {
+    socket.onerror = () => {
+      if (socket !== this.ws) return;
       this.notifyConnectionListeners();
     };
   }

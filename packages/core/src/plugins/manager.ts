@@ -10,7 +10,7 @@ import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import { createChildLogger } from '../logger.js';
 
-const log = createChildLogger('plugin-manager');
+const log = createChildLogger('plugin:manager');
 
 interface LoadedPlugin {
   id: string;
