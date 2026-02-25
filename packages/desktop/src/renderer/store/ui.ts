@@ -8,7 +8,7 @@ interface UIState {
   panelCollapsed: Record<PanelId, boolean>;
   leftPanelTab: 'files' | 'chats' | 'context';
   rightPanelTab: 'diff' | 'preview' | 'info';
-  bottomPanelTab: 'terminal' | 'history' | 'logs';
+  bottomPanelTab: 'preview' | 'logs';
 
   setPanelSize: (id: PanelId, size: number) => void;
   togglePanel: (id: PanelId) => void;
@@ -24,7 +24,7 @@ export const useUIStore = create<UIState>()(
       panelCollapsed: { left: false, right: false, bottom: true },
       leftPanelTab: 'chats',
       rightPanelTab: 'diff',
-      bottomPanelTab: 'terminal',
+      bottomPanelTab: 'preview',
 
       setPanelSize: (id, size) =>
         set((state) => ({

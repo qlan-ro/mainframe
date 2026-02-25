@@ -7,7 +7,7 @@ function resetStore(): void {
     panelCollapsed: { left: false, right: false, bottom: true },
     leftPanelTab: 'chats',
     rightPanelTab: 'diff',
-    bottomPanelTab: 'terminal',
+    bottomPanelTab: 'preview',
   });
 }
 
@@ -36,7 +36,7 @@ describe('useUIStore', () => {
       const state = useUIStore.getState();
       expect(state.leftPanelTab).toBe('chats');
       expect(state.rightPanelTab).toBe('diff');
-      expect(state.bottomPanelTab).toBe('terminal');
+      expect(state.bottomPanelTab).toBe('preview');
     });
   });
 
@@ -123,12 +123,12 @@ describe('useUIStore', () => {
 
   describe('setBottomPanelTab', () => {
     it('changes the bottom panel tab', () => {
-      useUIStore.getState().setBottomPanelTab('history');
-      expect(useUIStore.getState().bottomPanelTab).toBe('history');
+      useUIStore.getState().setBottomPanelTab('logs');
+      expect(useUIStore.getState().bottomPanelTab).toBe('logs');
     });
 
     it('supports all bottom panel tabs', () => {
-      const tabs = ['terminal', 'history', 'logs'] as const;
+      const tabs = ['preview', 'logs'] as const;
       for (const tab of tabs) {
         useUIStore.getState().setBottomPanelTab(tab);
         expect(useUIStore.getState().bottomPanelTab).toBe(tab);
