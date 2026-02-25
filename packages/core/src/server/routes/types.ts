@@ -4,11 +4,23 @@ import type { ChatManager } from '../../chat/index.js';
 import type { AdapterRegistry } from '../../adapters/index.js';
 import type { AttachmentStore } from '../../attachment/index.js';
 
+export interface LaunchRegistryLike {
+  getOrCreate(
+    projectId: string,
+    projectPath: string,
+  ): {
+    start(config: import('@mainframe/types').LaunchConfiguration): Promise<void>;
+    stop(name: string): void;
+    getAllStatuses(): Record<string, import('@mainframe/types').LaunchProcessStatus>;
+  };
+}
+
 export interface RouteContext {
   db: DatabaseManager;
   chats: ChatManager;
   adapters: AdapterRegistry;
   attachmentStore?: AttachmentStore;
+  launchRegistry?: LaunchRegistryLike;
 }
 
 /** Extract a route param as a string (Express 5 params may be string | string[]). */
