@@ -77,14 +77,14 @@ afterEach(() => {
 describe('todos plugin routes', () => {
   it('GET /todos returns empty list initially', async () => {
     const { app } = makeApp();
-    const res = await request(app).get('/todos');
+    const res = await request(app).get('/todos?projectId=proj-1');
     expect(res.status).toBe(200);
     expect(res.body.todos).toEqual([]);
   });
 
   it('POST /todos creates a todo', async () => {
     const { app } = makeApp();
-    const res = await request(app).post('/todos').send({ title: 'Fix login bug', type: 'bug' });
+    const res = await request(app).post('/todos').send({ projectId: 'proj-1', title: 'Fix login bug', type: 'bug' });
     expect(res.status).toBe(201);
     expect(res.body.todo.title).toBe('Fix login bug');
     expect(res.body.todo.type).toBe('bug');
@@ -94,7 +94,7 @@ describe('todos plugin routes', () => {
 
   it('PATCH /todos/:id/move changes status', async () => {
     const { app } = makeApp();
-    const create = await request(app).post('/todos').send({ title: 'Test' });
+    const create = await request(app).post('/todos').send({ projectId: 'proj-1', title: 'Test' });
     const id = create.body.todo.id as string;
     const res = await request(app).patch(`/todos/${id}/move`).send({ status: 'in_progress' });
     expect(res.status).toBe(200);
@@ -103,16 +103,16 @@ describe('todos plugin routes', () => {
 
   it('DELETE /todos/:id removes a todo', async () => {
     const { app } = makeApp();
-    const create = await request(app).post('/todos').send({ title: 'Delete me' });
+    const create = await request(app).post('/todos').send({ projectId: 'proj-1', title: 'Delete me' });
     const id = create.body.todo.id as string;
     await request(app).delete(`/todos/${id}`);
-    const list = await request(app).get('/todos');
+    const list = await request(app).get('/todos?projectId=proj-1');
     expect(list.body.todos).toHaveLength(0);
   });
 
   it('POST /todos/:id/start-session creates a chat and emits event', async () => {
     const { app, emitEvent } = makeApp();
-    const create = await request(app).post('/todos').send({ title: 'Big feature' });
+    const create = await request(app).post('/todos').send({ projectId: 'proj-1', title: 'Big feature' });
     const id = create.body.todo.id as string;
     const res = await request(app).post(`/todos/${id}/start-session`).send({ projectId: 'proj-1' });
     expect(res.status).toBe(200);
