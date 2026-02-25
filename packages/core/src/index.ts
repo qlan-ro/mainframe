@@ -79,6 +79,7 @@ async function main(): Promise<void> {
   process.on('uncaughtException', (err) => {
     logger.fatal({ err }, 'Uncaught exception');
     adapters.killAll();
+    launchRegistry.stopAll();
     process.exit(1);
   });
 }

@@ -5,8 +5,6 @@ import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { LaunchRegistry } from '../launch/index.js';
 import { createChildLogger } from '../logger.js';
-
-const log = createChildLogger('http');
 import {
   projectRoutes,
   chatRoutes,
@@ -22,6 +20,8 @@ import {
   launchRoutes,
 } from './routes/index.js';
 import type { PluginManager } from '../plugins/manager.js';
+
+const log = createChildLogger('http');
 
 export function createHttpServer(
   db: DatabaseManager,
