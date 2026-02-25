@@ -136,6 +136,10 @@ describe('GET /api/projects/:id/search/files', () => {
 });
 
 describe('GET /api/filesystem/browse', () => {
+  afterEach(() => {
+    vi.mocked(homedir).mockReset();
+  });
+
   it('returns subdirectories of the given path', async () => {
     await mkdir(join(projectDir, 'alpha'));
     await mkdir(join(projectDir, 'beta'));
@@ -158,8 +162,6 @@ describe('GET /api/filesystem/browse', () => {
         { name: 'beta', path: expect.stringContaining('beta') },
       ],
     });
-
-    vi.mocked(homedir).mockReset();
   });
 
   it('hides dotfiles and ignored dirs', async () => {
@@ -180,8 +182,6 @@ describe('GET /api/filesystem/browse', () => {
     const result = res.json.mock.calls[0][0];
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0].name).toBe('visible');
-
-    vi.mocked(homedir).mockReset();
   });
 
   it('returns 404 for non-existent directory', async () => {
@@ -196,8 +196,6 @@ describe('GET /api/filesystem/browse', () => {
     await flushPromises();
 
     expect(res.status).toHaveBeenCalledWith(404);
-
-    vi.mocked(homedir).mockReset();
   });
 
   it('rejects paths outside home directory', async () => {
@@ -212,8 +210,6 @@ describe('GET /api/filesystem/browse', () => {
     await flushPromises();
 
     expect(res.status).toHaveBeenCalledWith(403);
-
-    vi.mocked(homedir).mockReset();
   });
 });
 

@@ -8,6 +8,7 @@ import { getEffectivePath, param } from './types.js';
 import { resolveAndValidatePath } from './path-utils.js';
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
+import { BrowseFilesystemQuery, validate } from './schemas.js';
 
 const logger = createChildLogger('routes:files');
 
@@ -213,13 +214,33 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
 
 /** GET /api/filesystem/browse?path=~ */
 async function handleBrowseFilesystem(_ctx: RouteContext, req: Request, res: Response): Promise<void> {
-  const homeDir = homedir();
-  const requestedPath = (req.query.path as string) || homeDir;
+  const parsed = validate(BrowseFilesystemQuery, req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
 
+  const homeDir = homedir();
+  const requestedPath = parsed.data.path || homeDir;
+
+  // Lexical check first — distinguishes 403 (outside home) from 404 (doesn't exist)
   const normalized = path.resolve(requestedPath);
   const normalizedHome = path.resolve(homeDir);
   if (!normalized.startsWith(normalizedHome + path.sep) && normalized !== normalizedHome) {
     res.status(403).json({ error: 'Path outside home directory' });
+    return;
+  }
+
+  // Resolve symlinks to prevent traversal via symlink pointing outside home
+  try {
+    const real = await realpath(normalized);
+    const realHome = await realpath(homeDir);
+    if (!real.startsWith(realHome + path.sep) && real !== realHome) {
+      res.status(403).json({ error: 'Path outside home directory' });
+      return;
+    }
+  } catch {
+    res.status(404).json({ error: 'Directory not found' });
     return;
   }
 

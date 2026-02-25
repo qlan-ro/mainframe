@@ -28,6 +28,16 @@ export function DirectoryPickerModal({
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [homePath, setHomePath] = useState<string>('');
 
+  // Escape key to close
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onCancel();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, onCancel]);
+
   useEffect(() => {
     if (!open) return;
     setSelectedPath(null);
@@ -137,8 +147,11 @@ export function DirectoryPickerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="w-[480px] max-h-[600px] bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onCancel}>
+      <div
+        className="w-[480px] max-h-[600px] bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border">
           <h2 className="text-mf-body font-semibold text-mf-text-primary">Select Project Directory</h2>
           <button onClick={onCancel} className="text-mf-text-secondary hover:text-mf-text-primary transition-colors">
