@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, dialog, utilityProcess, Menu } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, utilityProcess, Menu } from 'electron';
 import type { UtilityProcess } from 'electron';
 import { join, resolve } from 'path';
 import { readFile } from 'fs/promises';
@@ -84,21 +84,6 @@ function setupIPC(): void {
     version: app.getVersion(),
     author: APP_AUTHOR,
   }));
-
-  ipcMain.handle('dialog:openDirectory', async () => {
-    if (!mainWindow) return null;
-
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory'],
-      title: 'Select Project Directory',
-    });
-
-    if (result.canceled || result.filePaths.length === 0) {
-      return null;
-    }
-
-    return result.filePaths[0];
-  });
 
   ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
     const normalizedPath = resolve(filePath);
