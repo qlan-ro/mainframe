@@ -8,13 +8,11 @@ interface UIState {
   panelCollapsed: Record<PanelId, boolean>;
   leftPanelTab: 'files' | 'chats' | 'context';
   rightPanelTab: 'diff' | 'preview' | 'info';
-  bottomPanelTab: 'preview' | 'logs';
 
   setPanelSize: (id: PanelId, size: number) => void;
   togglePanel: (id: PanelId) => void;
   setLeftPanelTab: (tab: UIState['leftPanelTab']) => void;
   setRightPanelTab: (tab: UIState['rightPanelTab']) => void;
-  setBottomPanelTab: (tab: UIState['bottomPanelTab']) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -24,7 +22,6 @@ export const useUIStore = create<UIState>()(
       panelCollapsed: { left: false, right: false, bottom: true },
       leftPanelTab: 'chats',
       rightPanelTab: 'diff',
-      bottomPanelTab: 'preview',
 
       setPanelSize: (id, size) =>
         set((state) => ({
@@ -36,7 +33,6 @@ export const useUIStore = create<UIState>()(
         })),
       setLeftPanelTab: (tab) => set({ leftPanelTab: tab }),
       setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
-      setBottomPanelTab: (tab) => set({ bottomPanelTab: tab }),
     }),
     { name: 'mainframe-ui' },
   ),
