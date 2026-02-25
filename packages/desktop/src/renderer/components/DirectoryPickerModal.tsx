@@ -113,6 +113,7 @@ export function DirectoryPickerModal({
     return (
       <div key={node.path}>
         <button
+          data-testid={`dir-entry-${node.path}`}
           onClick={() => {
             setSelectedPath(node.path);
             void toggleExpand(node, indexPath);
@@ -147,7 +148,11 @@ export function DirectoryPickerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onCancel}>
+    <div
+      data-testid="dir-picker-modal"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+      onClick={onCancel}
+    >
       <div
         className="w-[480px] max-h-[600px] bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -177,6 +182,7 @@ export function DirectoryPickerModal({
               Cancel
             </button>
             <button
+              data-testid="dir-picker-select-btn"
               onClick={() => selectedPath && onSelect(selectedPath)}
               disabled={!selectedPath}
               className="px-3 py-1.5 text-mf-body bg-mf-accent text-white rounded-mf-card disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"

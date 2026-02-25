@@ -33,8 +33,7 @@ export function projectRoutes(ctx: RouteContext): Router {
 
     const existing = ctx.db.projects.getByPath(path);
     if (existing) {
-      ctx.db.projects.updateLastOpened(existing.id);
-      res.json({ success: true, data: existing });
+      res.status(409).json({ success: false, error: 'Project already registered', data: existing });
       return;
     }
 

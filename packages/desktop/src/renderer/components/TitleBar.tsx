@@ -65,8 +65,8 @@ export function TitleBar({
     async (selectedPath: string) => {
       setDirPickerOpen(false);
       try {
-        const project = await createProject(selectedPath);
-        addProject(project);
+        const { project, alreadyExists } = await createProject(selectedPath);
+        if (!alreadyExists) addProject(project);
         setActiveProject(project.id);
       } catch (error) {
         log.warn('failed to add project', { err: String(error) });

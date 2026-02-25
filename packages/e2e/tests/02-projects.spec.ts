@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
+import path from 'path';
 import { launchApp, closeApp } from '../fixtures/app.js';
-import { createTestProject, cleanupProject } from '../fixtures/project.js';
+import { createTestProject, cleanupProject, openPickerAndSelectPath } from '../fixtures/project.js';
 
 test.describe('§2 Project management', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
@@ -16,6 +17,31 @@ test.describe('§2 Project management', () => {
     const project = await createTestProject(fixture.page);
     try {
       await expect(fixture.page.locator('[data-testid="project-selector"]')).toBeVisible();
+    } finally {
+      await cleanupProject(project);
+    }
+  });
+
+  test('rejects duplicate path — project appears once in the dropdown', async () => {
+    const project = await createTestProject(fixture.page);
+    try {
+      // Re-submit the same path through the picker
+      await openPickerAndSelectPath(fixture.page, project.projectPath);
+
+      // The project should still be active (the existing project is activated)
+      const projectName = path.basename(project.projectPath);
+      await fixture.page
+        .locator('[data-testid="project-selector"]')
+        .getByText(projectName, { exact: true })
+        .waitFor({ timeout: 5_000 });
+
+      // Open the dropdown and verify no duplicate entry was added
+      await fixture.page.locator('[data-testid="project-selector"]').click();
+      await expect(
+        fixture.page.locator('[data-testid="project-dropdown"]').getByText(projectName, { exact: true }),
+      ).toHaveCount(1);
+      // Close the dropdown by clicking the selector again (Escape has no handler in TitleBar)
+      await fixture.page.locator('[data-testid="project-selector"]').click();
     } finally {
       await cleanupProject(project);
     }

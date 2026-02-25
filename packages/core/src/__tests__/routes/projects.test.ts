@@ -115,7 +115,7 @@ describe('projectRoutes', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
     });
 
-    it('returns existing project and updates lastOpened when path already exists', () => {
+    it('returns 409 with the existing project when path already exists', () => {
       const existing = { id: 'existing-1', path: '/exists', name: 'Exists' };
       (ctx.db.projects.getByPath as any).mockReturnValue(existing);
 
@@ -125,9 +125,14 @@ describe('projectRoutes', () => {
 
       handler({ params: {}, query: {}, body: { path: '/exists' } }, res, vi.fn());
 
-      expect(ctx.db.projects.updateLastOpened).toHaveBeenCalledWith('existing-1');
+      expect(ctx.db.projects.updateLastOpened).not.toHaveBeenCalled();
       expect(ctx.db.projects.create).not.toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith({ success: true, data: existing });
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        error: 'Project already registered',
+        data: existing,
+      });
     });
   });
 
