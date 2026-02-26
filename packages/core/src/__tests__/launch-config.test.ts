@@ -40,6 +40,22 @@ describe('parseLaunchConfig', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts a config with env vars', () => {
+    const result = parseLaunchConfig({
+      ...VALID_CONFIG,
+      configurations: [{ ...VALID_CONFIG.configurations[0]!, env: { NODE_ENV: 'test', PORT: '4001' } }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects env with non-uppercase key', () => {
+    const result = parseLaunchConfig({
+      ...VALID_CONFIG,
+      configurations: [{ ...VALID_CONFIG.configurations[0]!, env: { 'bad-key': 'value' } }],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('getPreviewUrl', () => {

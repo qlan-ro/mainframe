@@ -7,6 +7,7 @@ export interface LaunchConfiguration {
   port: number | null;
   url: string | null;
   preview?: boolean;
+  env?: Record<string, string>;
 }
 
 export interface LaunchConfig {
