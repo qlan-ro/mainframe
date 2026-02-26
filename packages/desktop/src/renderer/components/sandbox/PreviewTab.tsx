@@ -139,7 +139,7 @@ export function PreviewTab(): React.ReactElement {
     };
   }, [previewStatus, previewUrl]);
 
-  const [logExpanded, setLogExpanded] = useState(false);
+  const [logExpanded, setLogExpanded] = useState(true);
   const [selectedProcess, setSelectedProcess] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
