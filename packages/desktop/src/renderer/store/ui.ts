@@ -20,7 +20,7 @@ interface UIState {
 export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
-      panelSizes: { left: 240, right: 280, bottom: 200 },
+      panelSizes: { left: 260, right: 260, bottom: 200 },
       panelCollapsed: { left: false, right: false, bottom: true },
       panelVisible: false,
       leftPanelTab: 'chats',

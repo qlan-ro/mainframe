@@ -69,7 +69,7 @@ export function Layout({ leftPanel, centerPanel, rightPanel }: LayoutProps): Rea
                 {/* Left Sidebar */}
                 {!panelCollapsed.left && (
                   <>
-                    <Panel id="left" defaultSize="20%" minSize="15%" maxSize="35%">
+                    <Panel id="left" defaultSize="22%" minSize="15%" maxSize="35%">
                       <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{leftPanel}</div>
                     </Panel>
                     <ResizeHandle />
@@ -85,7 +85,7 @@ export function Layout({ leftPanel, centerPanel, rightPanel }: LayoutProps): Rea
                 {!panelCollapsed.right && (
                   <>
                     <ResizeHandle />
-                    <Panel id="right" panelRef={rightPanelRef} defaultSize="24%" minSize="10%" maxSize="70%">
+                    <Panel id="right" panelRef={rightPanelRef} defaultSize="22%" minSize="10%" maxSize="70%">
                       <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{rightPanel}</div>
                     </Panel>
                   </>
