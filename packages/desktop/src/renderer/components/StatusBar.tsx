@@ -5,7 +5,6 @@ import { createLogger } from '../lib/logger';
 const log = createLogger('renderer:statusbar');
 import { useChatsStore } from '../store';
 import { useProjectsStore } from '../store/projects';
-import { useUIStore } from '../store';
 import { useConnectionState } from '../hooks/useConnectionState';
 import { getGitBranch } from '../lib/api';
 import { cn } from '../lib/utils';
@@ -19,8 +18,6 @@ export function StatusBar(): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const panelVisible = useUIStore((s) => s.panelVisible);
-  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -74,24 +71,6 @@ export function StatusBar(): React.ReactElement {
             <span>{counts.idle} Idle</span>
           </div>
         )}
-      </div>
-
-      {/* Logs panel toggle */}
-      <div className="flex items-center gap-1 text-xs text-mf-text-secondary">
-        {/* Pipe divider */}
-        <div className="text-mf-divider">|</div>
-
-        {/* Toggle logs panel button */}
-        <button
-          onClick={() => setPanelVisible(!panelVisible)}
-          className={[
-            'px-2 py-1 rounded hover:text-mf-text-primary transition-colors',
-            panelVisible ? 'text-mf-text-primary' : 'text-mf-text-secondary',
-          ].join(' ')}
-          title="Toggle logs panel"
-        >
-          Logs
-        </button>
       </div>
     </div>
   );
