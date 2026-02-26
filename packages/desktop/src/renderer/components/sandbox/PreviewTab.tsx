@@ -84,10 +84,6 @@ export function PreviewTab(): React.ReactElement {
     ? (previewConfig.url ?? (previewConfig.port ? `http://localhost:${previewConfig.port}` : 'about:blank'))
     : 'about:blank';
 
-  // Check if the selected process has preview enabled
-  const selectedProcessConfig = configs.find((c) => c.name === selectedProcess);
-  const hasPreview = selectedProcessConfig?.preview === true;
-
   // Watch the preview process status — scoped to the active project
   const previewStatus = useSandboxStore((s) =>
     previewConfig && activeProjectId
@@ -146,6 +142,10 @@ export function PreviewTab(): React.ReactElement {
   const [logExpanded, setLogExpanded] = useState(true);
   const [selectedProcess, setSelectedProcess] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+
+  // Check if the selected process has preview enabled
+  const selectedProcessConfig = configs.find((c) => c.name === selectedProcess);
+  const hasPreview = selectedProcessConfig?.preview === true;
 
   // Auto-select first process when configs load
   useEffect(() => {
