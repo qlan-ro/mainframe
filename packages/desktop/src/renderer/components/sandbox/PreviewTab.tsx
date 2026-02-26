@@ -282,18 +282,29 @@ export function PreviewTab(): React.ReactElement {
       <div className="border-t border-mf-divider shrink-0">
         {/* Header */}
         <div className="flex items-center justify-between px-2 h-7">
-          <select
-            value={selectedProcess ?? ''}
-            onChange={(e) => setSelectedProcess(e.target.value || null)}
-            className="text-xs bg-transparent text-mf-text-secondary border-none outline-none cursor-pointer max-w-[160px]"
-          >
-            {configs.length === 0 && <option value="">No processes</option>}
-            {configs.map((c) => (
-              <option key={c.name} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          {/* Process tabs on left */}
+          <div className="flex items-center gap-1">
+            {configs.length === 0 ? (
+              <span className="text-xs text-mf-text-secondary">No processes</span>
+            ) : (
+              configs.map((c) => (
+                <button
+                  key={c.name}
+                  onClick={() => setSelectedProcess(c.name)}
+                  className={[
+                    'px-3 py-1 text-xs rounded transition-colors border',
+                    selectedProcess === c.name
+                      ? 'bg-mf-button-bg text-mf-text-primary border-mf-border'
+                      : 'text-mf-text-secondary hover:text-mf-text-primary border-transparent hover:border-mf-border',
+                  ].join(' ')}
+                >
+                  {c.name}
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* Clear/collapse buttons on right */}
           <div className="flex items-center gap-1">
             <button
               onClick={() => setLogExpanded((v) => !v)}
