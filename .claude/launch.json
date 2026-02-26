@@ -1,34 +1,23 @@
 {
-  "version": "1",
+  "version": "0.0.1",
   "configurations": [
     {
       "name": "Core Daemon",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@mainframe/core", "run", "dev"],
-      "port": 31416,
-      "url": null,
-      "env": {
-        "MAINFRAME_DATA_DIR": "~/.mainframe-sandbox"
-      }
+      "port": 31415
     },
     {
       "name": "Desktop App",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@mainframe/desktop", "run", "dev:web"],
-      "port": 5174,
-      "url": null,
-      "preview": true,
-      "env": {
-        "VITE_DAEMON_HTTP_PORT": "31416",
-        "VITE_DAEMON_WS_PORT": "31416"
-      }
+      "port": 5173
     },
     {
       "name": "Types Watch",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@mainframe/types", "run", "dev"],
-      "port": null,
-      "url": null
+      "port": null
     }
   ]
 }
