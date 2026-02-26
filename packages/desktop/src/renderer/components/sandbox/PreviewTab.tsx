@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useSandboxStore } from '../../store/sandbox';
 import { useProjectsStore } from '../../store/projects';
+import { useUIStore } from '../../store/ui';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 
 // CSS selector generator — injected into the webview page
@@ -69,10 +70,10 @@ interface ElementPickResult {
 
 export function PreviewTab(): React.ReactElement {
   const webviewRef = useRef<HTMLElement>(null);
-  const [url, setUrl] = useState('about:blank');
   const [inspecting, setInspecting] = useState(false);
   const { addCapture, logsOutput, clearLogsForProcess } = useSandboxStore();
   const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
 
   const launchConfig = useLaunchConfig();
   const configs = launchConfig?.configurations ?? [];
@@ -89,11 +90,6 @@ export function PreviewTab(): React.ReactElement {
       ? (s.processStatuses[activeProjectId]?.[previewConfig.name] ?? 'stopped')
       : 'stopped',
   );
-
-  // Keep address bar in sync with config URL
-  useEffect(() => {
-    if (previewUrl !== 'about:blank') setUrl(previewUrl);
-  }, [previewUrl]);
 
   // Only navigate the webview once the process is running
   const webviewSrc = previewStatus === 'running' ? previewUrl : 'about:blank';
@@ -211,31 +207,15 @@ export function PreviewTab(): React.ReactElement {
     wv?.reload();
   }, []);
 
-  const handleAddressKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const wv = webviewRef.current as any;
-
-        wv?.loadURL(url);
-      }
-    },
-    [url],
-  );
-
   const isElectron = typeof window !== 'undefined' && 'mainframe' in window;
 
   return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-mf-divider bg-mf-app-bg shrink-0">
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={handleAddressKeyDown}
-          className="flex-1 text-xs bg-mf-input-bg rounded px-2 py-1 text-mf-text-primary border border-mf-divider"
-          placeholder="http://localhost:3000"
-        />
+      <div className="flex items-center gap-2 px-3 py-1.5 shrink-0">
+        <div className="flex-1 flex items-center gap-2 px-3 py-[5px] rounded-mf-card border border-mf-border text-mf-text-secondary text-mf-body truncate">
+          {previewUrl !== 'about:blank' ? previewUrl : 'http://localhost:3000'}
+        </div>
         <button
           onClick={handleReload}
           className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-2 py-1 rounded"
@@ -260,10 +240,17 @@ export function PreviewTab(): React.ReactElement {
         >
           📷
         </button>
+        <button
+          onClick={() => setPanelVisible(false)}
+          className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-2 py-1 rounded"
+          title="Minimize"
+        >
+          _
+        </button>
       </div>
 
       {/* Webview or fallback */}
-      <div className="flex-1 overflow-hidden min-h-0 relative">
+      <div className="flex-1 overflow-hidden min-h-0 relative mx-2 my-2">
         {isElectron ? (
           // @ts-expect-error — webview is an Electron-specific HTML element not present in React's type definitions
           <webview ref={webviewRef} src={webviewSrc} className="w-full h-full" />
@@ -275,7 +262,7 @@ export function PreviewTab(): React.ReactElement {
         )}
         {/* Status overlay — shown until webview successfully loads */}
         {isElectron && !webviewReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-mf-app-bg text-mf-text-secondary text-sm">
+          <div className="absolute inset-0 flex items-center justify-center text-mf-text-secondary text-sm">
             {(previewStatus === 'starting' || previewStatus === 'running') && <span>Starting…</span>}
             {previewStatus === 'failed' && <span className="text-red-400">Process failed to start</span>}
             {previewStatus === 'stopped' && (
@@ -288,7 +275,7 @@ export function PreviewTab(): React.ReactElement {
       </div>
 
       {/* Log strip */}
-      <div className="border-t border-mf-divider shrink-0 bg-mf-app-bg">
+      <div className="border-t border-mf-divider shrink-0">
         {/* Header */}
         <div className="flex items-center justify-between px-2 h-7">
           <select
