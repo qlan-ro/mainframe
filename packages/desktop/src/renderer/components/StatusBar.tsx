@@ -1,18 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:statusbar');
 import { useChatsStore } from '../store';
 import { useProjectsStore } from '../store/projects';
-import { useUIStore } from '../store/ui';
+import { useUIStore } from '../store';
 import { useConnectionState } from '../hooks/useConnectionState';
 import { getGitBranch } from '../lib/api';
 import { cn } from '../lib/utils';
-import { LaunchPopover } from './sandbox/LaunchPopover';
-import { useLaunchConfig } from '../hooks/useLaunchConfig';
-import { useSandboxStore } from '../store/sandbox';
-import { startLaunchConfig, stopLaunchConfig } from '../lib/launch';
 
 const GIT_POLL_INTERVAL = 15_000;
 
@@ -21,9 +17,10 @@ export function StatusBar(): React.ReactElement {
   const activeProjectId = useProjectsStore((s) => s.activeProjectId);
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
-  const togglePanel = useUIStore((s) => s.togglePanel);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const panelVisible = useUIStore((s) => s.panelVisible);
+  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -52,43 +49,6 @@ export function StatusBar(): React.ReactElement {
     counts[chat.displayStatus ?? 'idle']++;
   }
 
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const launchConfig = useLaunchConfig();
-  const projectStatuses =
-    useSandboxStore((s) => (activeProjectId ? s.processStatuses[activeProjectId] : undefined)) ?? {};
-  const panelCollapsed = useUIStore((s) => s.panelCollapsed);
-
-  const aggregateIcon = (() => {
-    const statuses = (launchConfig?.configurations ?? []).map((c) => projectStatuses[c.name] ?? 'stopped');
-    if (statuses.some((s) => s === 'starting')) return '⟳';
-    if (statuses.some((s) => s === 'running')) return '■';
-    return '▷';
-  })();
-
-  const previewConfig = launchConfig?.configurations.find((c) => c.preview) ?? null;
-
-  const handlePreviewClick = useCallback(async () => {
-    // Read activeProjectId directly from store to avoid adding it as a dep
-    const projectId = useProjectsStore.getState().activeProjectId;
-    if (!projectId || !previewConfig) {
-      togglePanel('bottom');
-      return;
-    }
-    const status = projectStatuses[previewConfig.name] ?? 'stopped';
-    try {
-      if (status === 'running' || status === 'starting') {
-        await stopLaunchConfig(projectId, previewConfig.name);
-      } else {
-        await startLaunchConfig(projectId, previewConfig);
-        if (panelCollapsed.bottom) togglePanel('bottom');
-      }
-    } catch (err) {
-      console.warn('[sandbox] preview toggle failed', err);
-    }
-  }, [previewConfig, projectStatuses, panelCollapsed, togglePanel]);
-
-  const handleClosePopover = useCallback(() => setPopoverOpen(false), []);
-
   return (
     <div className="h-6 bg-mf-app-bg px-[10px] flex items-center justify-between text-mf-body">
       <div className="flex items-center gap-4">
@@ -116,25 +76,22 @@ export function StatusBar(): React.ReactElement {
         )}
       </div>
 
-      {/* Right side actions */}
-      <div className="flex items-center">
-        <div className="relative flex items-center">
-          <button
-            onClick={() => void handlePreviewClick()}
-            className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-2 py-0.5 rounded-l border-r border-mf-divider"
-            title="Start/stop preview"
-          >
-            {aggregateIcon} Preview
-          </button>
-          <button
-            onClick={() => setPopoverOpen((o) => !o)}
-            className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-1.5 py-0.5 rounded-r"
-            title="Launch configurations"
-          >
-            ∨
-          </button>
-          {popoverOpen && <LaunchPopover onClose={handleClosePopover} />}
-        </div>
+      {/* Logs panel toggle */}
+      <div className="flex items-center gap-1 text-xs text-mf-text-secondary">
+        {/* Pipe divider */}
+        <div className="text-mf-divider">|</div>
+
+        {/* Toggle logs panel button */}
+        <button
+          onClick={() => setPanelVisible(!panelVisible)}
+          className={[
+            'px-2 py-1 rounded hover:text-mf-text-primary transition-colors',
+            panelVisible ? 'text-mf-text-primary' : 'text-mf-text-secondary',
+          ].join(' ')}
+          title="Toggle logs panel"
+        >
+          Logs
+        </button>
       </div>
     </div>
   );
