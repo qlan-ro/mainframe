@@ -1,9 +1,19 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import { homedir } from 'node:os';
 import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@mainframe/types';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('launch');
+
+function expandEnvValues(env: Record<string, string>): Record<string, string> {
+  const home = homedir();
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env)) {
+    result[k] = v.startsWith('~/') || v === '~' ? home + v.slice(1) : v;
+  }
+  return result;
+}
 
 interface ManagedProcess {
   process: ChildProcess;
@@ -30,7 +40,11 @@ export class LaunchManager {
     const child = spawn(config.runtimeExecutable, config.runtimeArgs, {
       cwd: this.projectPath,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        ...(config.port != null ? { PORT: String(config.port) } : {}),
+        ...(config.env ? expandEnvValues(config.env) : {}),
+      },
     });
 
     const managed: ManagedProcess = { process: child, status: 'starting' };

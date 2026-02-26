@@ -86,4 +86,24 @@ describe('LaunchManager', () => {
     expect(manager.getStatus('server')).toBe('running');
     manager.stop('server');
   });
+
+  it('passes env vars to the spawned process', async () => {
+    const config = {
+      name: 'env-test',
+      runtimeExecutable: 'node',
+      runtimeArgs: ['-e', 'process.stdout.write(process.env.MY_VAR ?? "missing");process.exit(0);'],
+      port: null,
+      url: null,
+      preview: false,
+      env: { MY_VAR: 'hello-from-env' },
+    };
+    await manager.start(config);
+    await new Promise((r) => setTimeout(r, 200));
+    const outputEvents = events.filter((e) => e.type === 'launch.output') as Array<{
+      type: 'launch.output';
+      data: string;
+      stream: string;
+    }>;
+    expect(outputEvents.some((e) => e.data.includes('hello-from-env'))).toBe(true);
+  });
 });
