@@ -7,8 +7,9 @@ export interface MainframeConfig {
   dataDir: string;
 }
 
+const rawPort = process.env['PORT'];
 const DEFAULT_CONFIG: MainframeConfig = {
-  port: 31415,
+  port: rawPort !== undefined ? Number(rawPort) : 31415,
   dataDir: process.env['MAINFRAME_DATA_DIR'] ?? join(homedir(), '.mainframe'),
 };
 

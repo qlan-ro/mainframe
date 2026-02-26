@@ -16,6 +16,7 @@ const StartBody = z.object({
     port: z.number().nullable(),
     url: z.string().nullable(),
     preview: z.boolean().optional(),
+    env: z.record(z.string(), z.string()).optional(),
   }),
 });
 
