@@ -84,8 +84,9 @@ export function LeftRail(): React.ReactElement {
           <button
             onClick={() => setPanelVisible(!panelVisible)}
             className={cn(
-              'px-2 py-1 rounded transition-colors',
-              panelVisible ? 'text-mf-text-primary' : 'text-mf-text-secondary hover:text-mf-text-primary',
+              'px-2 py-1 rounded-mf-card transition-colors',
+              'hover:text-mf-text-primary',
+              panelVisible ? 'text-mf-text-primary' : 'text-mf-text-secondary',
             )}
             title="Toggle logs panel"
           >
