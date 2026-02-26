@@ -62,10 +62,10 @@ export function routeEvent(event: DaemonEvent): void {
       chats.updateProcessStatus(event.processId, 'stopped');
       break;
     case 'launch.output':
-      useSandboxStore.getState().appendLog(event.name, event.data, event.stream);
+      useSandboxStore.getState().appendLog(event.projectId, event.name, event.data, event.stream);
       break;
     case 'launch.status':
-      useSandboxStore.getState().setProcessStatus(event.name, event.status);
+      useSandboxStore.getState().setProcessStatus(event.projectId, event.name, event.status);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });

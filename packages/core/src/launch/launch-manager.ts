@@ -15,6 +15,17 @@ function expandEnvValues(env: Record<string, string>): Record<string, string> {
   return result;
 }
 
+/** Strip pnpm/npm vars leaked from the daemon's own pnpm run context. */
+function cleanEnv(): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v == null) continue;
+    if (k.startsWith('npm_') || k === 'PNPM_SCRIPT_SRC_DIR') continue;
+    result[k] = v;
+  }
+  return result;
+}
+
 interface ManagedProcess {
   process: ChildProcess;
   status: LaunchProcessStatus;
@@ -41,7 +52,7 @@ export class LaunchManager {
       cwd: this.projectPath,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
-        ...process.env,
+        ...cleanEnv(),
         ...(config.port != null ? { PORT: String(config.port) } : {}),
         ...(config.env ? expandEnvValues(config.env) : {}),
       },

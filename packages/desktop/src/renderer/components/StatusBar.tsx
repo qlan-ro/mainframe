@@ -54,11 +54,12 @@ export function StatusBar(): React.ReactElement {
 
   const [popoverOpen, setPopoverOpen] = useState(false);
   const launchConfig = useLaunchConfig();
-  const processStatuses = useSandboxStore((s) => s.processStatuses);
+  const projectStatuses =
+    useSandboxStore((s) => (activeProjectId ? s.processStatuses[activeProjectId] : undefined)) ?? {};
   const panelCollapsed = useUIStore((s) => s.panelCollapsed);
 
   const aggregateIcon = (() => {
-    const statuses = (launchConfig?.configurations ?? []).map((c) => processStatuses[c.name] ?? 'stopped');
+    const statuses = (launchConfig?.configurations ?? []).map((c) => projectStatuses[c.name] ?? 'stopped');
     if (statuses.some((s) => s === 'starting')) return '⟳';
     if (statuses.some((s) => s === 'running')) return '■';
     return '▷';
@@ -73,7 +74,7 @@ export function StatusBar(): React.ReactElement {
       togglePanel('bottom');
       return;
     }
-    const status = processStatuses[previewConfig.name] ?? 'stopped';
+    const status = projectStatuses[previewConfig.name] ?? 'stopped';
     try {
       if (status === 'running' || status === 'starting') {
         await stopLaunchConfig(projectId, previewConfig.name);
@@ -84,7 +85,7 @@ export function StatusBar(): React.ReactElement {
     } catch (err) {
       console.warn('[sandbox] preview toggle failed', err);
     }
-  }, [previewConfig, processStatuses, panelCollapsed, togglePanel]);
+  }, [previewConfig, projectStatuses, panelCollapsed, togglePanel]);
 
   const handleClosePopover = useCallback(() => setPopoverOpen(false), []);
 

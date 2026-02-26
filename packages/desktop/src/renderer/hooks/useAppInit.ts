@@ -10,6 +10,9 @@ import { useAdaptersStore } from '../store/adapters';
 import { usePluginLayoutStore } from '../store';
 import { routeEvent } from '../lib/ws-event-router';
 import { createLogger } from '../lib/logger';
+import { fetchLaunchStatuses } from '../lib/launch';
+import { useSandboxStore } from '../store/sandbox';
+import type { LaunchProcessStatus } from '@mainframe/types';
 
 export { useChatSession } from './useChatSession.js';
 
@@ -112,7 +115,20 @@ export function useProject(projectId: string | null) {
       }
     };
 
+    const syncLaunchStatuses = async () => {
+      try {
+        const statuses = await fetchLaunchStatuses(projectId);
+        const { setProcessStatus } = useSandboxStore.getState();
+        for (const [name, status] of Object.entries(statuses)) {
+          setProcessStatus(projectId, name, status as LaunchProcessStatus);
+        }
+      } catch (err) {
+        log.warn('launch status fetch failed', { err: String(err) });
+      }
+    };
+
     loadChats();
+    syncLaunchStatuses();
 
     // Eagerly load skills, agents & commands so menus (/ and @) work immediately
     const project = useProjectsStore.getState().projects.find((p) => p.id === projectId);
@@ -122,9 +138,12 @@ export function useProject(projectId: string | null) {
       useSkillsStore.getState().fetchCommands();
     }
 
-    // Re-fetch chats when daemon reconnects (e.g. daemon restart during dev)
+    // Re-fetch chats and launch statuses when daemon reconnects (e.g. daemon restart during dev)
     const unsubConnection = daemonClient.subscribeConnection(() => {
-      if (daemonClient.connected) loadChats();
+      if (daemonClient.connected) {
+        loadChats();
+        syncLaunchStatuses();
+      }
     });
 
     return () => {

@@ -33,16 +33,11 @@ export function createHttpServer(
 ): Express {
   const app = express();
 
-  const ALLOWED_ORIGINS = new Set([
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:31415',
-    'http://127.0.0.1:31415',
-  ]);
+  const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
   app.use((_req, res, next) => {
     const origin = _req.headers.origin;
-    if (origin && ALLOWED_ORIGINS.has(origin)) {
+    if (origin && LOCALHOST_ORIGIN.test(origin)) {
       res.header('Access-Control-Allow-Origin', origin);
     }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');

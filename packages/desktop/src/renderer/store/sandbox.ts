@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
+import type { LaunchProcessStatus } from '@mainframe/types';
 
 export interface Capture {
   id: string;
@@ -8,22 +9,19 @@ export interface Capture {
   selector?: string;
 }
 
-interface ProcessStatus {
-  [name: string]: 'stopped' | 'starting' | 'running' | 'failed';
-}
-
 interface SandboxState {
   captures: Capture[];
-  processStatuses: ProcessStatus;
-  logsOutput: { name: string; data: string; stream: 'stdout' | 'stderr' }[];
+  // Scoped by projectId so statuses from different projects never bleed together
+  processStatuses: { [projectId: string]: { [name: string]: LaunchProcessStatus } };
+  logsOutput: { projectId: string; name: string; data: string; stream: 'stdout' | 'stderr' }[];
 
   addCapture: (capture: Omit<Capture, 'id'>) => void;
   removeCapture: (id: string) => void;
   clearCaptures: () => void;
-  setProcessStatus: (name: string, status: ProcessStatus[string]) => void;
-  appendLog: (name: string, data: string, stream: 'stdout' | 'stderr') => void;
+  setProcessStatus: (projectId: string, name: string, status: LaunchProcessStatus) => void;
+  appendLog: (projectId: string, name: string, data: string, stream: 'stdout' | 'stderr') => void;
   clearLogs: () => void;
-  clearLogsForProcess: (name: string) => void;
+  clearLogsForProcess: (projectId: string, name: string) => void;
 }
 
 export const useSandboxStore = create<SandboxState>()((set) => ({
@@ -37,16 +35,24 @@ export const useSandboxStore = create<SandboxState>()((set) => ({
 
   clearCaptures: () => set({ captures: [] }),
 
-  setProcessStatus: (name, status) =>
-    set((state) => ({ processStatuses: { ...state.processStatuses, [name]: status } })),
+  setProcessStatus: (projectId, name, status) =>
+    set((state) => ({
+      processStatuses: {
+        ...state.processStatuses,
+        [projectId]: { ...(state.processStatuses[projectId] ?? {}), [name]: status },
+      },
+    })),
 
-  appendLog: (name, data, stream) =>
+  appendLog: (projectId, name, data, stream) =>
     set((state) => ({
       // Keep last 500 entries to avoid unbounded growth
-      logsOutput: [...state.logsOutput.slice(-499), { name, data, stream }],
+      logsOutput: [...state.logsOutput.slice(-499), { projectId, name, data, stream }],
     })),
 
   clearLogs: () => set({ logsOutput: [] }),
 
-  clearLogsForProcess: (name) => set((state) => ({ logsOutput: state.logsOutput.filter((l) => l.name !== name) })),
+  clearLogsForProcess: (projectId, name) =>
+    set((state) => ({
+      logsOutput: state.logsOutput.filter((l) => !(l.projectId === projectId && l.name === name)),
+    })),
 }));

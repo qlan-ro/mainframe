@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useSandboxStore } from '../../store/sandbox';
+import { useProjectsStore } from '../../store/projects';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 
 // CSS selector generator — injected into the webview page
@@ -71,6 +72,7 @@ export function PreviewTab(): React.ReactElement {
   const [url, setUrl] = useState('about:blank');
   const [inspecting, setInspecting] = useState(false);
   const { addCapture, logsOutput, clearLogsForProcess } = useSandboxStore();
+  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
 
   const launchConfig = useLaunchConfig();
   const configs = launchConfig?.configurations ?? [];
@@ -81,9 +83,11 @@ export function PreviewTab(): React.ReactElement {
     ? (previewConfig.url ?? (previewConfig.port ? `http://localhost:${previewConfig.port}` : 'about:blank'))
     : 'about:blank';
 
-  // Watch the preview process status
+  // Watch the preview process status — scoped to the active project
   const previewStatus = useSandboxStore((s) =>
-    previewConfig ? (s.processStatuses[previewConfig.name] ?? 'stopped') : 'stopped',
+    previewConfig && activeProjectId
+      ? (s.processStatuses[activeProjectId]?.[previewConfig.name] ?? 'stopped')
+      : 'stopped',
   );
 
   // Keep address bar in sync with config URL
@@ -96,10 +100,15 @@ export function PreviewTab(): React.ReactElement {
 
   // Track whether the webview has successfully loaded (separate from process status)
   const [webviewReady, setWebviewReady] = useState(false);
+  // Ref-based flag so pending retry callbacks can check without stale closure values
+  const retryActiveRef = useRef(false);
 
-  // Reset ready state when process stops/restarts
+  // Reset ready state and retry flag when process stops/restarts
   useEffect(() => {
-    if (previewStatus !== 'running') setWebviewReady(false);
+    if (previewStatus !== 'running') {
+      setWebviewReady(false);
+      retryActiveRef.current = false;
+    }
   }, [previewStatus]);
 
   // Attach webview event listeners for load success and retry on connection refused
@@ -108,13 +117,19 @@ export function PreviewTab(): React.ReactElement {
     const wv = webviewRef.current as any;
     if (!wv || previewStatus !== 'running') return;
 
-    const handleFinishLoad = () => setWebviewReady(true);
+    retryActiveRef.current = true;
+
+    const handleFinishLoad = () => {
+      setWebviewReady(true);
+      retryActiveRef.current = false; // page loaded — cancel any in-flight retries
+    };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleFailLoad = (e: any) => {
       // ERR_CONNECTION_REFUSED (-102) — server not ready yet, retry after 2s
-      if (e.errorCode === -102) {
+      if (e.errorCode === -102 && retryActiveRef.current) {
         setTimeout(() => {
-          wv.loadURL(previewUrl);
+          // Guard again: if the page loaded while we were waiting, don't interrupt it
+          if (retryActiveRef.current) wv.loadURL(previewUrl);
         }, 2000);
       }
     };
@@ -122,6 +137,7 @@ export function PreviewTab(): React.ReactElement {
     wv.addEventListener('did-finish-load', handleFinishLoad);
     wv.addEventListener('did-fail-load', handleFailLoad);
     return () => {
+      retryActiveRef.current = false;
       wv.removeEventListener('did-finish-load', handleFinishLoad);
       wv.removeEventListener('did-fail-load', handleFailLoad);
     };
@@ -143,7 +159,9 @@ export function PreviewTab(): React.ReactElement {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [logsOutput]);
 
-  const filteredLogs = selectedProcess ? logsOutput.filter((l) => l.name === selectedProcess) : logsOutput;
+  const filteredLogs = logsOutput.filter(
+    (l) => l.projectId === activeProjectId && (!selectedProcess || l.name === selectedProcess),
+  );
 
   const handleFullScreenshot = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -295,7 +313,7 @@ export function PreviewTab(): React.ReactElement {
             </button>
             <button
               onClick={() => {
-                if (selectedProcess) clearLogsForProcess(selectedProcess);
+                if (selectedProcess && activeProjectId) clearLogsForProcess(activeProjectId, selectedProcess);
               }}
               disabled={!selectedProcess}
               className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-1 disabled:opacity-40"

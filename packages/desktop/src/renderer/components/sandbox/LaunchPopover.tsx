@@ -21,7 +21,8 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
     s.activeProjectId ? (s.projects.find((p) => p.id === s.activeProjectId) ?? null) : null,
   );
   const launchConfig = useLaunchConfig();
-  const processStatuses = useSandboxStore((s) => s.processStatuses);
+  const projectStatuses =
+    useSandboxStore((s) => (activeProject ? s.processStatuses[activeProject.id] : undefined)) ?? {};
 
   // Close on click outside
   useEffect(() => {
@@ -34,7 +35,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
 
   const handleRowClick = async (config: LaunchConfiguration) => {
     if (!activeProject) return;
-    const status = processStatuses[config.name] ?? 'stopped';
+    const status = projectStatuses[config.name] ?? 'stopped';
     if (status === 'starting') return;
     try {
       if (status === 'running') {
@@ -58,7 +59,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
 
   const configs = launchConfig?.configurations ?? [];
   const anyRunning = configs.some((c) => {
-    const s = processStatuses[c.name] ?? 'stopped';
+    const s = projectStatuses[c.name] ?? 'stopped';
     return s === 'running' || s === 'starting';
   });
 
@@ -72,7 +73,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
       ) : (
         <>
           {configs.map((c) => {
-            const status = processStatuses[c.name] ?? 'stopped';
+            const status = projectStatuses[c.name] ?? 'stopped';
             return (
               <button
                 key={c.name}
