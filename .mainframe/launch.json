@@ -19,6 +19,7 @@
       "url": null,
       "preview": true,
       "env": {
+        "MAINFRAME_DATA_DIR": "~/.mainframe-sandbox",
         "VITE_DAEMON_HTTP_PORT": "31416",
         "VITE_DAEMON_WS_PORT": "31416"
       }
