@@ -16,6 +16,12 @@ const LaunchConfigurationSchema = z.object({
   port: z.number().int().positive().nullable(),
   url: z.string().url().nullable(),
   preview: z.boolean().optional(),
+  env: z
+    .record(
+      z.string().regex(/^[A-Z_][A-Z0-9_]*$/, 'env key must be uppercase letters, digits, or underscores'),
+      z.string(),
+    )
+    .optional(),
 });
 
 const LaunchConfigSchema = z
