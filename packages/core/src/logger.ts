@@ -9,7 +9,7 @@ const RETENTION_DAYS = 7;
 // without triggering a TDZ error from module-level evaluation.
 let _logDir: string | undefined;
 function logDir(): string {
-  return (_logDir ??= join(homedir(), '.mainframe', 'logs'));
+  return (_logDir ??= join(process.env['MAINFRAME_DATA_DIR'] ?? join(homedir(), '.mainframe'), 'logs'));
 }
 
 function ensureLogDir(): void {
