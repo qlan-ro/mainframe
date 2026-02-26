@@ -84,6 +84,10 @@ export function PreviewTab(): React.ReactElement {
     ? (previewConfig.url ?? (previewConfig.port ? `http://localhost:${previewConfig.port}` : 'about:blank'))
     : 'about:blank';
 
+  // Check if the selected process has preview enabled
+  const selectedProcessConfig = configs.find((c) => c.name === selectedProcess);
+  const hasPreview = selectedProcessConfig?.preview === true;
+
   // Watch the preview process status — scoped to the active project
   const previewStatus = useSandboxStore((s) =>
     previewConfig && activeProjectId
@@ -255,6 +259,10 @@ export function PreviewTab(): React.ReactElement {
           <div className="flex items-center justify-center h-full text-mf-text-secondary text-sm">
             No processes running
           </div>
+        ) : !hasPreview ? (
+          <div className="flex items-center justify-center h-full text-mf-text-secondary text-sm">
+            No preview available for this process
+          </div>
         ) : isElectron ? (
           // @ts-expect-error — webview is an Electron-specific HTML element not present in React's type definitions
           <webview ref={webviewRef} src={webviewSrc} className="w-full h-full" />
@@ -265,7 +273,7 @@ export function PreviewTab(): React.ReactElement {
           </div>
         )}
         {/* Status overlay — shown until webview successfully loads */}
-        {isElectron && !webviewReady && configs.length > 0 && (
+        {isElectron && !webviewReady && configs.length > 0 && hasPreview && (
           <div className="absolute inset-0 flex items-center justify-center text-mf-text-secondary text-sm">
             {(previewStatus === 'starting' || previewStatus === 'running') && <span>Starting…</span>}
             {previewStatus === 'failed' && <span className="text-red-400">Process failed to start</span>}
