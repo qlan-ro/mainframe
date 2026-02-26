@@ -51,6 +51,7 @@ export class LaunchManager {
     const child = spawn(config.runtimeExecutable, config.runtimeArgs, {
       cwd: this.projectPath,
       stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
       env: {
         ...cleanEnv(),
         ...(config.port != null ? { PORT: String(config.port) } : {}),
@@ -114,20 +115,51 @@ export class LaunchManager {
     });
   }
 
-  stop(name: string): void {
+  async stop(name: string): Promise<void> {
     const managed = this.processes.get(name);
     if (!managed) return;
     managed.status = 'stopped';
     this.emit({ type: 'launch.status', projectId: this.projectId, name, status: 'stopped' });
-    managed.process.kill('SIGTERM');
-    this.processes.delete(name);
+
+    const child = managed.process;
+    const pid = child.pid;
+
+    // Kill the entire process group (pnpm/tsx spawn child trees)
+    if (pid) {
+      try {
+        process.kill(-pid, 'SIGTERM');
+      } catch {
+        child.kill('SIGTERM');
+      }
+    } else {
+      child.kill('SIGTERM');
+    }
+    log.info({ name, pid }, 'SIGTERM sent to process group, waiting for exit');
+
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        log.warn({ name }, 'process did not exit after SIGTERM, sending SIGKILL');
+        if (pid) {
+          try {
+            process.kill(-pid, 'SIGKILL');
+          } catch {
+            child.kill('SIGKILL');
+          }
+        } else {
+          child.kill('SIGKILL');
+        }
+      }, 5_000);
+
+      child.once('exit', () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
     log.info({ name }, 'process stopped');
   }
 
-  stopAll(): void {
-    for (const name of Array.from(this.processes.keys())) {
-      this.stop(name);
-    }
+  async stopAll(): Promise<void> {
+    await Promise.all(Array.from(this.processes.keys()).map((name) => this.stop(name)));
   }
 
   getStatus(name: string): LaunchProcessStatus {

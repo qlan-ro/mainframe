@@ -14,7 +14,7 @@ export function useLaunchConfig(): LaunchConfig | null {
       return;
     }
     void window.mainframe
-      .readFile(`${activeProject.path}/.mainframe/launch.json`)
+      ?.readFile(`${activeProject.path}/.mainframe/launch.json`)
       .then((content) => {
         if (!content) {
           setConfig(null);

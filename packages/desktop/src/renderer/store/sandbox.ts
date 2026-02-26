@@ -14,6 +14,7 @@ interface SandboxState {
   // Scoped by projectId so statuses from different projects never bleed together
   processStatuses: { [projectId: string]: { [name: string]: LaunchProcessStatus } };
   logsOutput: { projectId: string; name: string; data: string; stream: 'stdout' | 'stderr' }[];
+  selectedConfigName: string | null;
 
   addCapture: (capture: Omit<Capture, 'id'>) => void;
   removeCapture: (id: string) => void;
@@ -22,12 +23,14 @@ interface SandboxState {
   appendLog: (projectId: string, name: string, data: string, stream: 'stdout' | 'stderr') => void;
   clearLogs: () => void;
   clearLogsForProcess: (projectId: string, name: string) => void;
+  setSelectedConfigName: (name: string | null) => void;
 }
 
 export const useSandboxStore = create<SandboxState>()((set) => ({
   captures: [],
   processStatuses: {},
   logsOutput: [],
+  selectedConfigName: null,
 
   addCapture: (capture) => set((state) => ({ captures: [...state.captures, { id: nanoid(), ...capture }] })),
 
@@ -55,4 +58,6 @@ export const useSandboxStore = create<SandboxState>()((set) => ({
     set((state) => ({
       logsOutput: state.logsOutput.filter((l) => !(l.projectId === projectId && l.name === name)),
     })),
+
+  setSelectedConfigName: (name) => set({ selectedConfigName: name }),
 }));

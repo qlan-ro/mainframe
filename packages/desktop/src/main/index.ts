@@ -114,6 +114,8 @@ function setupIPC(): void {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
+    show: false,
+    backgroundColor: '#1e1e2e',
     width: 1400,
     height: 900,
     ...(process.platform === 'linux' && {

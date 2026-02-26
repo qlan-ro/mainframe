@@ -80,7 +80,7 @@ export function launchRoutes(ctx: RouteContext): Router {
       }
       const name = param(req, 'name');
       const manager = ctx.launchRegistry?.getOrCreate(project.id, project.path);
-      manager?.stop(name);
+      await manager?.stop(name);
       logger.info({ projectId: project.id, name }, 'process stopped');
       res.json({ success: true });
     }),

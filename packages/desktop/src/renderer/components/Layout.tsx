@@ -58,45 +58,48 @@ export function Layout({ leftPanel, centerPanel, rightPanel }: LayoutProps): Rea
       <div className="flex-1 flex overflow-hidden gap-0">
         <LeftRail />
 
-        <div className="flex-1 flex overflow-hidden pb-mf-gap">
-          {activeFullviewId ? (
-            <div className="flex-1 bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-              <PluginView pluginId={activeFullviewId} />
-            </div>
-          ) : (
-            <Group orientation="horizontal" onLayoutChange={setPanelSizes}>
-              {/* Left Sidebar */}
-              {!panelCollapsed.left && (
-                <>
-                  <Panel id="left" defaultSize="20%" minSize="15%" maxSize="35%">
-                    <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{leftPanel}</div>
-                  </Panel>
-                  <ResizeHandle />
-                </>
-              )}
+        <div className="flex-1 flex flex-col overflow-hidden pb-mf-gap">
+          <div className="flex-1 flex overflow-hidden">
+            {activeFullviewId ? (
+              <div className="flex-1 bg-mf-panel-bg rounded-mf-panel overflow-hidden">
+                <PluginView pluginId={activeFullviewId} />
+              </div>
+            ) : (
+              <Group orientation="horizontal" onLayoutChange={setPanelSizes}>
+                {/* Left Sidebar */}
+                {!panelCollapsed.left && (
+                  <>
+                    <Panel id="left" defaultSize="20%" minSize="15%" maxSize="35%">
+                      <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{leftPanel}</div>
+                    </Panel>
+                    <ResizeHandle />
+                  </>
+                )}
 
-              {/* Center Panel */}
-              <Panel id="center">
-                <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>
-              </Panel>
+                {/* Center Panel */}
+                <Panel id="center">
+                  <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>
+                </Panel>
 
-              {/* Right Panel */}
-              {!panelCollapsed.right && (
-                <>
-                  <ResizeHandle />
-                  <Panel id="right" panelRef={rightPanelRef} defaultSize="24%" minSize="10%" maxSize="70%">
-                    <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{rightPanel}</div>
-                  </Panel>
-                </>
-              )}
-            </Group>
-          )}
+                {/* Right Panel */}
+                {!panelCollapsed.right && (
+                  <>
+                    <ResizeHandle />
+                    <Panel id="right" panelRef={rightPanelRef} defaultSize="24%" minSize="10%" maxSize="70%">
+                      <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{rightPanel}</div>
+                    </Panel>
+                  </>
+                )}
+              </Group>
+            )}
+          </div>
+
+          <BottomPanel />
         </div>
 
         <RightRail />
       </div>
 
-      <BottomPanel />
       <StatusBar />
     </div>
   );
