@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const LOG_DIR = join(homedir(), '.mainframe', 'logs');
+const LOG_DIR = join(process.env['MAINFRAME_DATA_DIR'] ?? join(homedir(), '.mainframe'), 'logs');
 const RETENTION_DAYS = 7;
 const isDev = process.env.NODE_ENV !== 'production';
 
