@@ -160,13 +160,18 @@ export class ChatManager {
     // Command routing — provider commands go to sendCommand, mainframe commands get wrapped
     if (metadata?.command) {
       const { name, source, args } = metadata.command;
+
+      // Store the user's command as a visible message so it renders in the thread
+      const userMessage = this.messages.createTransientMessage(chatId, 'user', [{ type: 'text', text: content }]);
+      this.messages.append(chatId, userMessage);
+      this.emitEvent({ type: 'message.added', chatId, message: userMessage });
+
       if (source === 'mainframe') {
         const wrappedContent = wrapMainframeCommand(name, content, args);
         await postStart.session.sendMessage(wrappedContent);
       } else {
         await postStart.session.sendCommand(name, args);
       }
-      // Update process state for commands too
       postStart.chat.processState = 'working';
       this.db.chats.update(chatId, { processState: 'working' });
       this.emitEvent({ type: 'chat.updated', chat: postStart.chat });

@@ -114,11 +114,12 @@ export function useProject(projectId: string | null) {
 
     loadChats();
 
-    // Eagerly load skills & agents so menus (/ and @) work immediately
+    // Eagerly load skills, agents & commands so menus (/ and @) work immediately
     const project = useProjectsStore.getState().projects.find((p) => p.id === projectId);
     if (project) {
       useSkillsStore.getState().fetchSkills('claude', project.path);
       useSkillsStore.getState().fetchAgents('claude', project.path);
+      useSkillsStore.getState().fetchCommands();
     }
 
     // Re-fetch chats when daemon reconnects (e.g. daemon restart during dev)
