@@ -8,6 +8,16 @@ test.describe('§26 Tutorial overlay', () => {
 
   test.beforeAll(async () => {
     fixture = await launchApp();
+
+    // Clear all persisted Zustand stores — Electron localStorage persists across
+    // test runs. Tutorial auto-advances based on projects/chats store state, so
+    // clearing only mf:tutorial isn't enough.
+    await fixture.page.evaluate(() => localStorage.clear());
+    await fixture.page.reload();
+    await fixture.page
+      .locator('[data-testid="connection-status"]')
+      .getByText('Connected', { exact: true })
+      .waitFor({ timeout: 15_000 });
   });
   test.afterAll(async () => {
     await closeApp(fixture);
