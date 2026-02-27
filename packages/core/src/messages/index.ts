@@ -26,4 +26,5 @@ export {
   decodeXmlAttr,
   parseAttachedFilePathTags,
   formatTurnDuration,
+  stripMainframeCommandTags,
 } from './message-parsing.js';

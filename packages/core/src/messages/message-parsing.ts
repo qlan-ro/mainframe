@@ -74,3 +74,14 @@ export function formatTurnDuration(durationMs: number): string {
   if (seconds < 10) return `${seconds.toFixed(1)}s`;
   return `${Math.round(seconds)}s`;
 }
+
+const MAINFRAME_CMD_RESPONSE_RE = /<mainframe-command-response[^>]*>([\s\S]*?)<\/mainframe-command-response>/;
+const MAINFRAME_CMD_WRAPPER_RE = /<mainframe-command[^>]*>[\s\S]*?<\/mainframe-command>/;
+
+export function stripMainframeCommandTags(text: string): string {
+  const responseMatch = text.match(MAINFRAME_CMD_RESPONSE_RE);
+  if (responseMatch) {
+    return responseMatch[1]!.trim();
+  }
+  return text.replace(MAINFRAME_CMD_WRAPPER_RE, '').trim();
+}
