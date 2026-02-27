@@ -47,6 +47,8 @@ export interface PluginManifest {
     binaryName: string;
     displayName: string;
   };
+  /** Custom commands this adapter exposes */
+  commands?: Array<{ name: string; description: string }>;
 }
 
 // ─── Public daemon events (never contain message content) ────────────────────
