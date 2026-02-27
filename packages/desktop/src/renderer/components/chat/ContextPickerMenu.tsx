@@ -240,6 +240,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
   return (
     <div
       ref={menuRef}
+      data-testid="context-picker-menu"
       className="absolute bottom-full left-0 right-0 mb-1 max-h-[240px] overflow-y-auto bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-lg z-50"
     >
       {items.map((item, index) => {
@@ -256,6 +257,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
           <button
             key={key}
             type="button"
+            data-testid={`picker-item-${item.type}-${item.type === 'agent' ? item.name : item.type === 'file' ? item.name : item.type === 'command' ? item.command.name : item.skill.invocationName || item.skill.name}`}
             onMouseDown={(e) => {
               e.preventDefault();
               selectItem(item);

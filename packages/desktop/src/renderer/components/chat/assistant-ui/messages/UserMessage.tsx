@@ -82,7 +82,10 @@ export function UserMessage() {
     const Icon = parsed.isCommand ? Wrench : Zap;
     return (
       <MessagePrimitive.Root className="flex flex-col items-end gap-2 pt-2">
-        <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5">
+        <div
+          data-testid={parsed.isCommand ? 'user-command-bubble' : 'user-skill-bubble'}
+          className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5"
+        >
           <div className="aui-md text-mf-chat text-mf-text-primary">
             <Icon size={14} className="text-mf-accent inline-block align-[-2px] mr-0.5" />
             <span className="font-mono text-mf-chat text-mf-accent mr-1.5">/{parsed.commandName}</span>
