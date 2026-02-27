@@ -151,7 +151,7 @@ export function TutorialOverlay() {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none' }}>
+    <div data-testid="tutorial-overlay" style={{ position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none' }}>
       {/* Outline ring around target element */}
       <div
         style={{
@@ -221,7 +221,12 @@ export function TutorialOverlay() {
           >
             Step {step} of {STEPS.length}
           </div>
-          <div style={{ color: '#fafafa', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{stepConfig.title}</div>
+          <div
+            data-testid="tutorial-title"
+            style={{ color: '#fafafa', fontSize: 13, fontWeight: 600, marginBottom: 4 }}
+          >
+            {stepConfig.title}
+          </div>
           <div style={{ color: '#a1a1aa', fontSize: 12, lineHeight: 1.5 }}>{stepConfig.description}</div>
           {!stepConfig.requiresAction && (
             <button
