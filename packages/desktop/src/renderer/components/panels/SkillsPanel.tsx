@@ -102,7 +102,7 @@ function SkillItem({
 }
 
 export function SkillsPanel(): React.ReactElement {
-  const { skills, loading, fetchSkills, deleteSkill, setPendingInvocation } = useSkillsStore();
+  const { skills, loading, fetchSkills, fetchCommands, deleteSkill, setPendingInvocation } = useSkillsStore();
   const projects = useProjectsStore((s) => s.projects);
   const activeProjectId = useProjectsStore((s) => s.activeProjectId);
   const activeProject = projects.find((p) => p.id === activeProjectId);
@@ -110,8 +110,9 @@ export function SkillsPanel(): React.ReactElement {
   useEffect(() => {
     if (activeProject) {
       fetchSkills('claude', activeProject.path);
+      fetchCommands();
     }
-  }, [activeProject?.path, fetchSkills]);
+  }, [activeProject?.path, fetchSkills, fetchCommands]);
 
   const handleInvoke = useCallback(
     (skill: Skill) => {
