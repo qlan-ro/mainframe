@@ -23,6 +23,7 @@ import { ChatLifecycleManager } from './lifecycle-manager.js';
 import { EventHandler } from './event-handler.js';
 import type { ActiveChat } from './types.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
+import { findMainframeCommand } from '../commands/registry.js';
 
 const logger = createChildLogger('chat:manager');
 
@@ -167,7 +168,8 @@ export class ChatManager {
       this.emitEvent({ type: 'message.added', chatId, message: userMessage });
 
       if (source === 'mainframe') {
-        const wrappedContent = wrapMainframeCommand(name, content, args);
+        const resolvedArgs = args ?? findMainframeCommand(name)?.promptTemplate ?? '';
+        const wrappedContent = wrapMainframeCommand(name, content, resolvedArgs);
         await postStart.session.sendMessage(wrappedContent);
       } else {
         await postStart.session.sendCommand(name, args);

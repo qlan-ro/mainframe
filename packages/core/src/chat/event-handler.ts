@@ -11,6 +11,7 @@ import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
 import { trackFileActivity } from './context-tracker.js';
+import { stripMainframeCommandTags } from '../messages/message-parsing.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('chat:events');
@@ -69,11 +70,21 @@ function buildSessionSink(
           emitEvent({ type: 'chat.updated', chat: active.chat });
         }
       }
+
+      // Strip mainframe command response tags from assistant text blocks
+      const cleaned = content.map((block: any) => {
+        if (block.type === 'text' && typeof block.text === 'string') {
+          const stripped = stripMainframeCommandTags(block.text);
+          return stripped !== block.text ? { ...block, text: stripped } : block;
+        }
+        return block;
+      });
+
       const msgMeta: Record<string, unknown> = {
         adapterId: getActiveChat(chatId)?.session?.adapterId,
         ...(metadata ? { model: metadata.model, usage: metadata.usage } : {}),
       };
-      const message = messages.createTransientMessage(chatId, 'assistant', content, msgMeta);
+      const message = messages.createTransientMessage(chatId, 'assistant', cleaned, msgMeta);
       messages.append(chatId, message);
       emitEvent({ type: 'message.added', chatId, message });
     },
