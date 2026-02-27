@@ -62,6 +62,18 @@ export function TutorialOverlay() {
   const activePrimaryTabId = useTabsStore((s) => s.activePrimaryTabId);
   const tabs = useTabsStore((s) => s.tabs);
 
+  // Existing-user guard: if any chat already has messages, the user knows the app — skip
+  // the entire tutorial. Covers upgrades where tutorial ships after the user is already active.
+  useEffect(() => {
+    if (completed) return;
+    for (const msgs of messages.values()) {
+      if (msgs.length > 0) {
+        complete();
+        return;
+      }
+    }
+  }, [completed, messages, complete]);
+
   // Step 1 → 2: a project was added
   useEffect(() => {
     if (step === 1 && projects.length > 0) nextStep();
