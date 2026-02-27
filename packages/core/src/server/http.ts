@@ -17,6 +17,7 @@ import {
   agentRoutes,
   adapterRoutes,
   settingRoutes,
+  commandRoutes,
 } from './routes/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 
@@ -66,6 +67,7 @@ export function createHttpServer(
   app.use(contextRoutes(ctx));
   app.use(attachmentRoutes(ctx));
   app.use(adapterRoutes(ctx));
+  app.use(commandRoutes(ctx));
   app.use(skillRoutes(ctx));
   app.use(agentRoutes(ctx));
   app.use(settingRoutes(ctx));

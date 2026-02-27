@@ -15,6 +15,10 @@ export class AdapterRegistry {
     return [...this.adapters.values()];
   }
 
+  getAll(): Adapter[] {
+    return [...this.adapters.values()];
+  }
+
   killAll(): void {
     for (const adapter of this.adapters.values()) {
       adapter.killAll();
