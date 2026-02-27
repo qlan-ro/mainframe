@@ -159,6 +159,7 @@ export interface Adapter {
     project: import('./context.js').ContextFile[];
   };
 
+  listCommands?(): import('./command.js').CustomCommand[];
   listSkills?(projectPath: string): Promise<import('./skill.js').Skill[]>;
   listAgents?(projectPath: string): Promise<import('./skill.js').AgentConfig[]>;
   createSkill?(projectPath: string, input: import('./skill.js').CreateSkillInput): Promise<import('./skill.js').Skill>;

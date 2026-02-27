@@ -3,6 +3,7 @@ import type {
   Adapter,
   AdapterModel,
   AdapterSession,
+  CustomCommand,
   SessionOptions,
   Skill,
   AgentConfig,
@@ -12,6 +13,7 @@ import type {
 import { ClaudeSession } from './session.js';
 import * as skills from './skills.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
+import manifest from './manifest.json' with { type: 'json' };
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const CLAUDE_MODELS: AdapterModel[] = [
@@ -106,6 +108,14 @@ export class ClaudeAdapter implements Adapter {
 
   async listAgents(projectPath: string): Promise<AgentConfig[]> {
     return skills.listAgents(projectPath);
+  }
+
+  listCommands(): CustomCommand[] {
+    return (manifest.commands ?? []).map((cmd) => ({
+      name: cmd.name,
+      description: cmd.description,
+      source: this.id,
+    }));
   }
 
   async createAgent(projectPath: string, input: CreateAgentInput): Promise<AgentConfig> {
