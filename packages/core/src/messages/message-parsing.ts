@@ -30,11 +30,23 @@ export function resolveSkillName(name: string, skills: Skill[]): string {
   return name;
 }
 
-export function parseRawCommand(text: string, skills: Skill[]): { commandName: string; userText: string } | null {
+export function parseRawCommand(
+  text: string,
+  skills: Skill[],
+  commands?: Array<{ name: string }>,
+): { commandName: string; userText: string; isCommand?: boolean } | null {
   if (!text.startsWith('/')) return null;
   const match = text.match(/^\/(\S+)/);
   if (!match) return null;
   const rawName = match[1]!;
+
+  // Check commands first
+  if (commands?.some((c) => c.name === rawName)) {
+    const userText = text.slice(match[0].length).trim();
+    return { commandName: rawName, userText, isCommand: true };
+  }
+
+  // Existing skill matching
   const isKnown = skills.some(
     (s) => s.invocationName === rawName || s.name === rawName || s.invocationName?.endsWith(`:${rawName}`),
   );
