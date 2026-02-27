@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, HelpCircle, MessageSquare } from 'lucide-react';
+import { Settings, HelpCircle, MessageSquare, Play } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { usePluginLayoutStore, useSettingsStore, useUIStore } from '../store';
 import { PluginIcon } from './plugins/PluginIcon';
@@ -79,20 +79,9 @@ export function LeftRail(): React.ReactElement {
         </RailButton>
 
         {/* Logs toggle button */}
-        <div className="flex items-center justify-center gap-1 text-xs text-mf-text-secondary px-2">
-          <div className="text-mf-divider">|</div>
-          <button
-            onClick={() => setPanelVisible(!panelVisible)}
-            className={cn(
-              'px-2 py-1 rounded-mf-card transition-colors',
-              'hover:text-mf-text-primary',
-              panelVisible ? 'text-mf-text-primary' : 'text-mf-text-secondary',
-            )}
-            title="Toggle logs panel"
-          >
-            Logs
-          </button>
-        </div>
+        <RailButton active={panelVisible} onClick={() => setPanelVisible(!panelVisible)} title="Toggle logs panel">
+          <Play size={16} />
+        </RailButton>
       </div>
     </div>
   );

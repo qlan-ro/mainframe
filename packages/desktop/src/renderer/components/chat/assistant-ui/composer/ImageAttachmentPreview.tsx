@@ -1,23 +1,35 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { AttachmentPrimitive, useAttachment } from '@assistant-ui/react';
+import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 
 export function ImageAttachmentPreview() {
   const attachment = useAttachment();
+  const { openLightbox } = useMainframeRuntime();
   const imageContent = attachment.content?.find((c: { type: string }) => c.type === 'image') as
     | { type: 'image'; image: string }
     | undefined;
 
+  const handleClick = () => {
+    if (!imageContent) return;
+    const match = imageContent.image.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return;
+    openLightbox([{ mediaType: match[1]!, data: match[2]! }], 0);
+  };
+
   return (
     <AttachmentPrimitive.Root className="relative group w-14 h-14">
       {imageContent ? (
-        <img
-          src={imageContent.image}
-          alt={attachment.name}
-          className="w-full h-full rounded overflow-hidden object-cover"
-        />
+        <button
+          type="button"
+          data-testid="attachment-thumb"
+          onClick={handleClick}
+          className="w-full h-full rounded overflow-hidden border border-mf-border"
+        >
+          <img src={imageContent.image} alt={attachment.name} className="w-full h-full object-cover" />
+        </button>
       ) : (
-        <div className="w-full h-full rounded bg-mf-hover flex items-center justify-center text-mf-small text-mf-text-secondary">
+        <div className="w-full h-full rounded bg-mf-hover border border-mf-border flex items-center justify-center text-mf-small text-mf-text-secondary">
           {attachment.name?.split('.').pop()}
         </div>
       )}

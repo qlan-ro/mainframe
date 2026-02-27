@@ -135,6 +135,9 @@ export function TitleBar({
       if (selectedRunning) {
         await stopLaunchConfig(projectId, selectedConfig.name);
       } else {
+        const store = useSandboxStore.getState();
+        store.clearLogsForName(selectedConfig.name);
+        store.markFreshLaunch(selectedConfig.name);
         await startLaunchConfig(projectId, selectedConfig);
         if (panelCollapsed.bottom) togglePanel('bottom');
       }
@@ -318,7 +321,7 @@ export function TitleBar({
               className={cn(
                 'w-7 h-7 flex items-center justify-center rounded-mf-card transition-colors disabled:opacity-40',
                 selectedRunning
-                  ? 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg'
+                  ? 'text-red-400 hover:text-red-300 hover:bg-mf-panel-bg'
                   : 'text-mf-accent hover:text-mf-accent hover:bg-mf-panel-bg',
               )}
               title={selectedRunning ? 'Stop' : 'Start'}

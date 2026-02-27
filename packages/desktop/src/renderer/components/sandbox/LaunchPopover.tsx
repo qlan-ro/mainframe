@@ -37,6 +37,9 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
     onClose();
   };
 
+  const clearLogsForName = useSandboxStore((s) => s.clearLogsForName);
+  const markFreshLaunch = useSandboxStore((s) => s.markFreshLaunch);
+
   const handleToggleProcess = async (e: React.MouseEvent, config: LaunchConfiguration) => {
     e.stopPropagation();
     setSelectedConfigName(config.name);
@@ -47,6 +50,8 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
       if (status === 'running') {
         await stopLaunchConfig(activeProject.id, config.name);
       } else {
+        clearLogsForName(config.name);
+        markFreshLaunch(config.name);
         await startLaunchConfig(activeProject.id, config);
         if (panelCollapsed.bottom) togglePanel('bottom');
       }
@@ -99,9 +104,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
                   disabled={status === 'starting'}
                   className={cn(
                     'w-5 h-5 flex items-center justify-center rounded transition-colors disabled:opacity-40',
-                    isRunning
-                      ? 'text-mf-text-secondary hover:text-mf-text-primary'
-                      : 'text-mf-accent hover:text-mf-accent',
+                    isRunning ? 'text-red-400 hover:text-red-300' : 'text-mf-accent hover:text-mf-accent',
                   )}
                   title={isRunning ? 'Stop' : 'Start'}
                 >
