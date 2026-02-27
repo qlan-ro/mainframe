@@ -88,6 +88,7 @@ export function useChatSession(chatId: string | null) {
         data: string;
         originalPath?: string;
       }[],
+      metadata?: { command?: { name: string; source: string; args?: string } },
     ) => {
       if (!chatId) return;
       let attachmentIds: string[] | undefined;
@@ -95,7 +96,7 @@ export function useChatSession(chatId: string | null) {
         const uploaded = await uploadAttachments(chatId, attachments);
         attachmentIds = uploaded.map((a) => a.id);
       }
-      daemonClient.sendMessage(chatId, content, attachmentIds);
+      daemonClient.sendMessage(chatId, content, attachmentIds, metadata);
     },
     [chatId],
   );

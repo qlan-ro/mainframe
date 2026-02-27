@@ -156,8 +156,13 @@ export class DaemonClient {
     log.info('interruptChat', { chatId });
   }
 
-  sendMessage(chatId: string, content: string, attachmentIds?: string[]): void {
-    this.send({ type: 'message.send', chatId, content, attachmentIds });
+  sendMessage(
+    chatId: string,
+    content: string,
+    attachmentIds?: string[],
+    metadata?: { command?: { name: string; source: string; args?: string } },
+  ): void {
+    this.send({ type: 'message.send', chatId, content, attachmentIds, metadata });
     log.info('sendMessage', { chatId, attachmentCount: attachmentIds?.length ?? 0 });
   }
 
