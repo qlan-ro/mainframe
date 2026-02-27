@@ -38,6 +38,17 @@ const MessageSend = z.object({
   chatId: z.string().min(1),
   content: z.string().min(1),
   attachmentIds: z.array(z.string()).optional(),
+  metadata: z
+    .object({
+      command: z
+        .object({
+          name: z.string().min(1),
+          source: z.string().min(1),
+          args: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 const PermissionRespond = z.object({

@@ -22,6 +22,7 @@ import { ChatConfigManager } from './config-manager.js';
 import { ChatLifecycleManager } from './lifecycle-manager.js';
 import { EventHandler } from './event-handler.js';
 import type { ActiveChat } from './types.js';
+import { wrapMainframeCommand } from '../commands/wrap.js';
 
 const logger = createChildLogger('chat:manager');
 
@@ -141,7 +142,12 @@ export class ChatManager {
     return this.lifecycle.interruptChat(chatId);
   }
 
-  async sendMessage(chatId: string, content: string, attachmentIds?: string[]): Promise<void> {
+  async sendMessage(
+    chatId: string,
+    content: string,
+    attachmentIds?: string[],
+    metadata?: { command?: { name: string; source: string; args?: string } },
+  ): Promise<void> {
     const active = this.activeChats.get(chatId);
     if (!active?.session?.isSpawned) {
       await this.lifecycle.startChat(chatId);
@@ -150,6 +156,22 @@ export class ChatManager {
     const postStart = this.activeChats.get(chatId);
     if (!postStart?.session?.isSpawned) throw new Error(`Chat ${chatId} not running`);
     logger.info({ chatId }, 'user message sent');
+
+    // Command routing — provider commands go to sendCommand, mainframe commands get wrapped
+    if (metadata?.command) {
+      const { name, source, args } = metadata.command;
+      if (source === 'mainframe') {
+        const wrappedContent = wrapMainframeCommand(name, content, args);
+        await postStart.session.sendMessage(wrappedContent);
+      } else {
+        await postStart.session.sendCommand(name, args);
+      }
+      // Update process state for commands too
+      postStart.chat.processState = 'working';
+      this.db.chats.update(chatId, { processState: 'working' });
+      this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
+      return;
+    }
 
     const empty: AttachmentResult = { images: [], messageContent: [], textPrefix: [], attachmentPreviews: [] };
     const { images, messageContent, textPrefix, attachmentPreviews } =

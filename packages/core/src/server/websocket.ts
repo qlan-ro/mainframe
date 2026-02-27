@@ -89,7 +89,7 @@ export class WebSocketManager {
       }
 
       case 'message.send': {
-        await this.chats.sendMessage(event.chatId, event.content, event.attachmentIds);
+        await this.chats.sendMessage(event.chatId, event.content, event.attachmentIds, event.metadata);
         break;
       }
 
