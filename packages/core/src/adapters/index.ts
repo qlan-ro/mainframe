@@ -11,7 +11,7 @@ export class AdapterRegistry {
     return this.adapters.get(id);
   }
 
-  all(): Adapter[] {
+  getAll(): Adapter[] {
     return [...this.adapters.values()];
   }
 

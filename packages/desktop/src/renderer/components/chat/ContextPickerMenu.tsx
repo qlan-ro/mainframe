@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
-import { File, Bot, Zap, FolderOpen, Globe, Puzzle } from 'lucide-react';
+import { File, Bot, Zap, FolderOpen, Globe, Puzzle, Wrench } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:chat');
@@ -8,14 +8,15 @@ import { focusComposerInput } from '../../lib/focus';
 import { useSkillsStore, useProjectsStore, useChatsStore } from '../../store';
 import { searchFiles, addMention } from '../../lib/api';
 import { cn } from '../../lib/utils';
-import type { Skill } from '@mainframe/types';
+import type { Skill, CustomCommand } from '@mainframe/types';
 
 type FilterMode = 'all' | 'agents-files' | 'skills';
 
 type PickerItem =
   | { type: 'agent'; name: string; description: string; scope: string }
   | { type: 'file'; name: string; path: string }
-  | { type: 'skill'; skill: Skill };
+  | { type: 'skill'; skill: Skill }
+  | { type: 'command'; command: CustomCommand };
 
 const SCOPE_ICON: Record<string, React.ReactNode> = {
   project: <FolderOpen size={12} />,
@@ -64,7 +65,7 @@ export interface ContextPickerMenuProps {
 }
 
 export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps): React.ReactElement | null {
-  const { agents, skills } = useSkillsStore();
+  const { agents, skills, commands } = useSkillsStore();
   const activeProjectId = useProjectsStore((s) => s.activeProjectId);
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const text = useComposerText();
@@ -142,6 +143,9 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
           return (order[a.scope] ?? 99) - (order[b.scope] ?? 99);
         })
         .forEach((s) => items.push({ type: 'skill', skill: s }));
+      commands
+        .filter((c) => !query || fuzzyMatch(query, c.name))
+        .forEach((c) => items.push({ type: 'command', command: c }));
     }
   }
 
@@ -156,7 +160,9 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
             ? `@${item.name} `
             : item.type === 'file'
               ? `@${item.path} `
-              : `/${item.skill.invocationName || item.skill.name} `;
+              : item.type === 'command'
+                ? `/${item.command.name} `
+                : `/${item.skill.invocationName || item.skill.name} `;
         const aInText = cur.match(/(?:^|\s)@(\S*)$/);
         const sInText = cur.match(/^\/(\S*)$/);
         if (aInText) {
@@ -234,16 +240,24 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
   return (
     <div
       ref={menuRef}
+      data-testid="context-picker-menu"
       className="absolute bottom-full left-0 right-0 mb-1 max-h-[240px] overflow-y-auto bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-lg z-50"
     >
       {items.map((item, index) => {
         const isSelected = index === selectedIndex;
         const key =
-          item.type === 'agent' ? `a:${item.name}` : item.type === 'file' ? `f:${item.path}` : `s:${item.skill.id}`;
+          item.type === 'agent'
+            ? `a:${item.name}`
+            : item.type === 'file'
+              ? `f:${item.path}`
+              : item.type === 'command'
+                ? `c:${item.command.name}`
+                : `s:${item.skill.id}`;
         return (
           <button
             key={key}
             type="button"
+            data-testid={`picker-item-${item.type}-${item.type === 'agent' ? item.name : item.type === 'file' ? item.name : item.type === 'command' ? item.command.name : item.skill.invocationName || item.skill.name}`}
             onMouseDown={(e) => {
               e.preventDefault();
               selectItem(item);
@@ -257,12 +271,15 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
             {item.type === 'agent' && <Bot size={14} className="text-mf-accent mt-0.5 shrink-0" />}
             {item.type === 'file' && <File size={14} className="text-mf-text-secondary mt-0.5 shrink-0" />}
             {item.type === 'skill' && <Zap size={14} className="text-mf-accent mt-0.5 shrink-0" />}
+            {item.type === 'command' && <Wrench size={14} className="text-mf-text-secondary mt-0.5 shrink-0" />}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 {item.type === 'skill' ? (
                   <span className="text-mf-body text-mf-text-primary font-medium font-mono">
                     /{item.skill.invocationName || item.skill.name}
                   </span>
+                ) : item.type === 'command' ? (
+                  <span className="font-mono text-mf-small text-mf-text-primary truncate">/{item.command.name}</span>
                 ) : (
                   <span
                     className="text-mf-body text-mf-text-primary font-medium font-mono truncate"
@@ -280,6 +297,11 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
                   )}
                   {item.type === 'file' && <span>file</span>}
                   {item.type === 'skill' && SCOPE_ICON[item.skill.scope]}
+                  {item.type === 'command' && (
+                    <span className="ml-auto text-[10px] text-mf-text-secondary/60 shrink-0">
+                      {item.command.source}
+                    </span>
+                  )}
                 </span>
               </div>
               {item.type === 'agent' && item.description && (
@@ -290,6 +312,11 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
               {item.type === 'skill' && item.skill.description && (
                 <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" title={item.skill.description}>
                   {item.skill.description}
+                </div>
+              )}
+              {item.type === 'command' && item.command.description && (
+                <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" title={item.command.description}>
+                  {item.command.description}
                 </div>
               )}
             </div>

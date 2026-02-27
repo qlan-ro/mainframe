@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput } from '@mainframe/types';
+import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput, CustomCommand } from '@mainframe/types';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:store');
@@ -12,17 +12,20 @@ import {
   createAgent as apiCreateAgent,
   updateAgent as apiUpdateAgent,
   deleteAgent as apiDeleteAgent,
+  getCommands,
 } from '../lib/api';
 
 interface SkillsState {
   skills: Skill[];
   agents: AgentConfig[];
+  commands: CustomCommand[];
   loading: boolean;
   pendingInvocation: string | null;
 
   setPendingInvocation(text: string | null): void;
   fetchSkills(adapterId: string, projectPath: string): Promise<void>;
   fetchAgents(adapterId: string, projectPath: string): Promise<void>;
+  fetchCommands(): Promise<void>;
 
   createSkill(adapterId: string, projectPath: string, input: CreateSkillInput): Promise<Skill>;
   updateSkill(adapterId: string, skillId: string, projectPath: string, content: string): Promise<Skill>;
@@ -36,6 +39,7 @@ interface SkillsState {
 export const useSkillsStore = create<SkillsState>((set, get) => ({
   skills: [],
   agents: [],
+  commands: [],
   loading: false,
   pendingInvocation: null,
 
@@ -60,6 +64,18 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       set({ agents });
     } catch (err) {
       log.error('fetch agents failed', { err: String(err) });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  fetchCommands: async () => {
+    set({ loading: true });
+    try {
+      const commands = await getCommands();
+      set({ commands });
+    } catch (err) {
+      log.error('fetch commands failed', { err: String(err) });
     } finally {
       set({ loading: false });
     }

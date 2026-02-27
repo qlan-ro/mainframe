@@ -29,7 +29,15 @@ export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }
   | { type: 'chat.resume'; chatId: string }
   | { type: 'chat.end'; chatId: string }
-  | { type: 'message.send'; chatId: string; content: string; attachmentIds?: string[] }
+  | {
+      type: 'message.send';
+      chatId: string;
+      content: string;
+      attachmentIds?: string[];
+      metadata?: {
+        command?: { name: string; source: string; args?: string };
+      };
+    }
   | { type: 'permission.respond'; chatId: string; response: import('./adapter.js').ControlResponse }
   | { type: 'chat.updateConfig'; chatId: string; adapterId?: string; model?: string; permissionMode?: PermissionMode }
   | { type: 'chat.interrupt'; chatId: string }

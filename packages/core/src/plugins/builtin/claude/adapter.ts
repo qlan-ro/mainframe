@@ -3,6 +3,7 @@ import type {
   Adapter,
   AdapterModel,
   AdapterSession,
+  CustomCommand,
   SessionOptions,
   Skill,
   AgentConfig,
@@ -12,6 +13,7 @@ import type {
 import { ClaudeSession } from './session.js';
 import * as skills from './skills.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
+import manifest from './manifest.json' with { type: 'json' };
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const CLAUDE_MODELS: AdapterModel[] = [
@@ -106,6 +108,12 @@ export class ClaudeAdapter implements Adapter {
 
   async listAgents(projectPath: string): Promise<AgentConfig[]> {
     return skills.listAgents(projectPath);
+  }
+
+  listCommands(): CustomCommand[] {
+    // Commands disabled: /clear and /compact don't work reliably via sendCommand()
+    // in stream-json mode. Keep the infrastructure for when this is fixed upstream.
+    return [];
   }
 
   async createAgent(projectPath: string, input: CreateAgentInput): Promise<AgentConfig> {

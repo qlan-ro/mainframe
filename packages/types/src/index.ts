@@ -4,6 +4,7 @@ export * from './events.js';
 export * from './skill.js';
 export * from './context.js';
 export * from './settings.js';
+export * from './command.js';
 export type {
   PluginCapability,
   PluginManifest,

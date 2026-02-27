@@ -16,6 +16,7 @@ import { useProjectsStore } from '../../../store/projects';
 import { useTabsStore } from '../../../store/tabs';
 import type { ControlRequest, ControlUpdate } from '@mainframe/types';
 import { AllToolUIs } from './parts/tool-ui-registry';
+import { useSkillsStore } from '../../../store/skills';
 
 interface MainframeRuntimeProviderProps {
   chatId: string;
@@ -79,6 +80,7 @@ function formatComposerError(error: unknown): string {
 export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeProviderProps) {
   const { messages: rawMessages, pendingPermission, sendMessage, respondToPermission } = useChatSession(chatId);
   const groupedMessages = useMemo(() => groupMessages(rawMessages), [rawMessages]);
+  const commands = useSkillsStore((s) => s.commands);
 
   const [composerError, setComposerError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ images: { mediaType: string; data: string }[]; index: number } | null>(
@@ -199,18 +201,20 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
 
       if (!userText && uploadAttachments.length === 0) return;
 
+      const commandMatch = userText.match(/^\/(\S+)/);
+      const matchedCommand = commandMatch ? commands.find((c) => c.name === commandMatch[1]) : undefined;
+      const metadata = matchedCommand
+        ? { command: { name: matchedCommand.name, source: matchedCommand.source } }
+        : undefined;
+
       try {
         setComposerError(null);
-        if (uploadAttachments.length > 0) {
-          await sendMessage(userText, uploadAttachments);
-        } else {
-          await sendMessage(userText);
-        }
+        await sendMessage(userText, uploadAttachments.length > 0 ? uploadAttachments : undefined, metadata);
       } catch (error) {
         setComposerError(formatComposerError(error));
       }
     },
-    [sendMessage, pendingPermission, setComposerError],
+    [sendMessage, pendingPermission, setComposerError, commands],
   );
 
   const isRunning = useChatsStore((s) => s.chats.find((c) => c.id === chatId)?.isRunning ?? false);

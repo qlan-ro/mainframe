@@ -161,6 +161,7 @@ export interface Adapter {
 
   listSkills?(projectPath: string): Promise<import('./skill.js').Skill[]>;
   listAgents?(projectPath: string): Promise<import('./skill.js').AgentConfig[]>;
+  listCommands?(): import('./command.js').CustomCommand[];
   createSkill?(projectPath: string, input: import('./skill.js').CreateSkillInput): Promise<import('./skill.js').Skill>;
   updateSkill?(skillId: string, projectPath: string, content: string): Promise<import('./skill.js').Skill>;
   deleteSkill?(skillId: string, projectPath: string): Promise<void>;

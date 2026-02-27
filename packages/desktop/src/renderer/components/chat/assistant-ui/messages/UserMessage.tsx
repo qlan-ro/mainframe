@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, ClipboardList } from 'lucide-react';
+import { Zap, Wrench, ClipboardList } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { MessagePrimitive, useMessage } from '@assistant-ui/react';
 import { getExternalStoreMessages } from '@assistant-ui/react';
@@ -30,6 +30,7 @@ export function UserMessage() {
   const message = useMessage();
   const { openLightbox } = useMainframeRuntime();
   const skills = useSkillsStore((s) => s.skills);
+  const commands = useSkillsStore((s) => s.commands);
 
   const [original] = getExternalStoreMessages<ChatMessage>(message);
   const imageBlocks = (original?.content?.filter((c): c is MessageContent & { type: 'image' } => c.type === 'image') ??
@@ -49,7 +50,7 @@ export function UserMessage() {
   if (parsed) {
     parsed = { ...parsed, commandName: resolveSkillName(parsed.commandName, skills) };
   } else if (cleanText) {
-    parsed = parseRawCommand(cleanText, skills);
+    parsed = parseRawCommand(cleanText, skills, commands);
   }
 
   if (cleanText.startsWith(PLAN_PREFIX)) {
@@ -78,11 +79,15 @@ export function UserMessage() {
   );
 
   if (parsed) {
+    const Icon = parsed.isCommand ? Wrench : Zap;
     return (
       <MessagePrimitive.Root className="flex flex-col items-end gap-2 pt-2">
-        <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5">
+        <div
+          data-testid={parsed.isCommand ? 'user-command-bubble' : 'user-skill-bubble'}
+          className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5"
+        >
           <div className="aui-md text-mf-chat text-mf-text-primary">
-            <Zap size={14} className="text-mf-accent inline-block align-[-2px] mr-0.5" />
+            <Icon size={14} className="text-mf-accent inline-block align-[-2px] mr-0.5" />
             <span className="font-mono text-mf-chat text-mf-accent mr-1.5">/{parsed.commandName}</span>
             {parsed.userText}
           </div>
