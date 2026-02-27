@@ -111,11 +111,9 @@ export class ClaudeAdapter implements Adapter {
   }
 
   listCommands(): CustomCommand[] {
-    return (manifest.commands ?? []).map((cmd) => ({
-      name: cmd.name,
-      description: cmd.description,
-      source: this.id,
-    }));
+    // Commands disabled: /clear and /compact don't work reliably via sendCommand()
+    // in stream-json mode. Keep the infrastructure for when this is fixed upstream.
+    return [];
   }
 
   async createAgent(projectPath: string, input: CreateAgentInput): Promise<AgentConfig> {
