@@ -8,20 +8,23 @@ interface StepConfig {
   title: string;
   description: string;
   labelSide: 'right' | 'above';
+  requiresAction?: boolean;
 }
 
 const STEPS: StepConfig[] = [
   {
     target: 'step-1',
     title: 'Add a project',
-    description: 'Point Mainframe to a codebase by adding your first project',
+    description: 'Click here to add your first project',
     labelSide: 'right',
+    requiresAction: true,
   },
   {
     target: 'step-2',
     title: 'Start a session',
     description: 'Open a new conversation with your AI agent',
     labelSide: 'right',
+    requiresAction: true,
   },
   {
     target: 'step-3',
@@ -44,7 +47,7 @@ interface SpotlightRect {
   height: number;
 }
 
-const PAD = 8;
+const PAD = 2;
 
 export function TutorialOverlay() {
   const { completed, step, nextStep, skip, complete } = useTutorialStore();
@@ -58,6 +61,18 @@ export function TutorialOverlay() {
   const messages = useChatsStore((s) => s.messages);
   const activePrimaryTabId = useTabsStore((s) => s.activePrimaryTabId);
   const tabs = useTabsStore((s) => s.tabs);
+
+  // Existing-user guard: if any chat already has messages, the user knows the app — skip
+  // the entire tutorial. Covers upgrades where tutorial ships after the user is already active.
+  useEffect(() => {
+    if (completed) return;
+    for (const msgs of messages.values()) {
+      if (msgs.length > 0) {
+        complete();
+        return;
+      }
+    }
+  }, [completed, messages, complete]);
 
   // Step 1 → 2: a project was added
   useEffect(() => {
@@ -81,11 +96,17 @@ export function TutorialOverlay() {
     }
   }, [step, activePrimaryTabId, tabs, messages, complete]);
 
+  const [modalOpen, setModalOpen] = useState(false);
+
   const measureTarget = useCallback(() => {
     if (!stepConfig) {
       setRect(null);
       return;
     }
+    // Hide tutorial when a modal overlay is visible
+    const hasModal = document.querySelector('[data-testid="dir-picker-modal"], [data-testid="settings-modal"]');
+    setModalOpen(!!hasModal);
+
     const el = document.querySelector(`[data-tutorial="${stepConfig.target}"]`);
     if (!el) {
       setRect(null);
@@ -98,10 +119,16 @@ export function TutorialOverlay() {
   useEffect(() => {
     measureTarget();
     window.addEventListener('resize', measureTarget);
-    return () => window.removeEventListener('resize', measureTarget);
+    // Re-measure when DOM changes (modals opening/closing)
+    const observer = new MutationObserver(measureTarget);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      window.removeEventListener('resize', measureTarget);
+      observer.disconnect();
+    };
   }, [measureTarget]);
 
-  if (completed || !stepConfig || !rect) return null;
+  if (completed || !stepConfig || !rect || modalOpen) return null;
 
   const holeTop = rect.top - PAD;
   const holeLeft = rect.left - PAD;
@@ -116,9 +143,10 @@ export function TutorialOverlay() {
   let labelLeft: number;
   let arrowPath: string;
 
+  const EDGE_PAD = 12;
   if (stepConfig.labelSide === 'right') {
     labelLeft = holeLeft + holeWidth + 48;
-    labelTop = holeCenterY - labelHeight / 2;
+    labelTop = Math.max(EDGE_PAD, holeCenterY - labelHeight / 2);
     const ax1 = labelLeft;
     const ay1 = labelTop + labelHeight / 2;
     const ax2 = holeLeft + holeWidth;
@@ -126,7 +154,7 @@ export function TutorialOverlay() {
     arrowPath = `M ${ax1} ${ay1} C ${ax1 - 30} ${ay1}, ${ax2 + 30} ${ay2}, ${ax2} ${ay2}`;
   } else {
     labelLeft = holeCenterX - labelWidth / 2;
-    labelTop = holeTop - labelHeight - 56;
+    labelTop = Math.max(EDGE_PAD, holeTop - labelHeight - 56);
     const ax1 = labelLeft + labelWidth / 2;
     const ay1 = labelTop + labelHeight;
     const ax2 = holeCenterX;
@@ -135,8 +163,8 @@ export function TutorialOverlay() {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none' }}>
-      {/* Dark overlay with spotlight hole via box-shadow */}
+    <div data-testid="tutorial-overlay" style={{ position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none' }}>
+      {/* Outline ring around target element */}
       <div
         style={{
           position: 'fixed',
@@ -145,9 +173,8 @@ export function TutorialOverlay() {
           width: holeWidth,
           height: holeHeight,
           borderRadius: 6,
-          boxShadow: '0 0 0 9999px rgba(0,0,0,0.65)',
           outline: '2px solid rgba(249,115,22,0.6)',
-          outlineOffset: 2,
+          outlineOffset: 0,
           transition: 'top 0.3s ease, left 0.3s ease, width 0.3s ease, height 0.3s ease',
           zIndex: 9998,
           pointerEvents: 'none',
@@ -206,24 +233,31 @@ export function TutorialOverlay() {
           >
             Step {step} of {STEPS.length}
           </div>
-          <div style={{ color: '#fafafa', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{stepConfig.title}</div>
-          <div style={{ color: '#a1a1aa', fontSize: 12, lineHeight: 1.5 }}>{stepConfig.description}</div>
-          <button
-            onClick={nextStep}
-            style={{
-              marginTop: 10,
-              background: '#f97316',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 4,
-              padding: '4px 12px',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+          <div
+            data-testid="tutorial-title"
+            style={{ color: '#fafafa', fontSize: 13, fontWeight: 600, marginBottom: 4 }}
           >
-            {step < STEPS.length ? 'Next →' : 'Done'}
-          </button>
+            {stepConfig.title}
+          </div>
+          <div style={{ color: '#a1a1aa', fontSize: 12, lineHeight: 1.5 }}>{stepConfig.description}</div>
+          {!stepConfig.requiresAction && (
+            <button
+              onClick={nextStep}
+              style={{
+                marginTop: 10,
+                background: '#f97316',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {step < STEPS.length ? 'Next →' : 'Done'}
+            </button>
+          )}
         </div>
       </div>
 

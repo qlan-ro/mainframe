@@ -119,6 +119,7 @@ export function TitleBar({
         <div className="relative">
           <button
             data-testid="project-selector"
+            data-tutorial="step-1"
             onClick={() => setDropdownOpen((o) => !o)}
             className={cn(
               'flex items-center gap-2 px-1.5 py-1 rounded-mf-card transition-colors',
