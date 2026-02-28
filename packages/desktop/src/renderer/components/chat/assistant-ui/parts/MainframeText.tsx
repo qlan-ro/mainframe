@@ -2,7 +2,7 @@ import React from 'react';
 import type { TextMessagePartComponent } from '@assistant-ui/react';
 import { getExternalStoreMessages } from '@assistant-ui/react';
 import { useMessage } from '@assistant-ui/react';
-import type { ChatMessage } from '@mainframe/types';
+import type { DisplayMessage } from '@mainframe/types';
 import { ERROR_PLACEHOLDER, PERMISSION_PLACEHOLDER } from '../convert-message';
 import { ErrorPart } from './ErrorPart';
 import { MarkdownText } from './markdown-text';
@@ -24,18 +24,13 @@ export const MainframeText: TextMessagePartComponent = (props) => {
 };
 
 function ErrorPartFromMessage() {
-  const originalMessages = useMessage((m) => getExternalStoreMessages<ChatMessage>(m));
+  const originalMessages = useMessage((m) => getExternalStoreMessages<DisplayMessage>(m));
   const errorMessage = findErrorMessage(originalMessages);
   return <ErrorPart message={errorMessage} />;
 }
 
-function findErrorMessage(messages: ChatMessage[]): string {
+function findErrorMessage(messages: DisplayMessage[]): string {
   for (const msg of messages) {
-    if (msg.type === 'error') {
-      for (const block of msg.content) {
-        if (block.type === 'error') return block.message;
-      }
-    }
     for (const block of msg.content) {
       if (block.type === 'error') return block.message;
     }
