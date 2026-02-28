@@ -15,6 +15,7 @@ function createMockContext(): RouteContext {
       getChat: vi.fn(),
       archiveChat: vi.fn(),
       getMessages: vi.fn(),
+      getDisplayMessages: vi.fn(),
       getPendingPermission: vi.fn(),
       on: vi.fn(),
     } as any,
@@ -119,9 +120,9 @@ describe('chatRoutes', () => {
   });
 
   describe('GET /api/chats/:id/messages', () => {
-    it('returns messages for chat', async () => {
-      const messages = [{ id: 'm1', role: 'user', content: 'hello' }];
-      (ctx.chats.getMessages as any).mockResolvedValue(messages);
+    it('returns display messages for chat', async () => {
+      const messages = [{ id: 'm1', type: 'user', content: [{ type: 'text', text: 'hello' }] }];
+      (ctx.chats.getDisplayMessages as any).mockResolvedValue(messages);
 
       const router = chatRoutes(ctx);
       const handler = extractHandler(router, 'get', '/api/chats/:id/messages');
@@ -130,7 +131,7 @@ describe('chatRoutes', () => {
       handler({ params: { id: 'c1' }, query: {} }, res, vi.fn());
       await flushPromises();
 
-      expect(ctx.chats.getMessages).toHaveBeenCalledWith('c1');
+      expect(ctx.chats.getDisplayMessages).toHaveBeenCalledWith('c1');
       expect(res.json).toHaveBeenCalledWith({ success: true, data: messages });
     });
   });

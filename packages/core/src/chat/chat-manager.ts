@@ -4,6 +4,7 @@ import type {
   ControlRequest,
   ControlResponse,
   DaemonEvent,
+  DisplayMessage,
   SessionMention,
   SessionContext,
 } from '@mainframe/types';
@@ -24,6 +25,7 @@ import { EventHandler } from './event-handler.js';
 import type { ActiveChat } from './types.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
+import { prepareMessagesForClient } from '../messages/display-pipeline.js';
 
 const logger = createChildLogger('chat:manager');
 
@@ -310,6 +312,14 @@ export class ChatManager {
       /* best-effort: return empty if history loading fails */
       return [];
     }
+  }
+
+  async getDisplayMessages(chatId: string): Promise<DisplayMessage[]> {
+    const raw = await this.getMessages(chatId);
+    const chat = this.getChat(chatId);
+    const adapter = chat ? this.adapters.get(chat.adapterId) : undefined;
+    const categories = adapter?.getToolCategories?.();
+    return prepareMessagesForClient(raw, categories);
   }
 
   isChatRunning(chatId: string): boolean {
