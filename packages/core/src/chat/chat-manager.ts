@@ -52,6 +52,11 @@ export class ChatManager {
       this.permissions,
       (chatId) => this.activeChats.get(chatId),
       (e) => this.emitEvent(e),
+      (chatId) => {
+        const chat = this.activeChats.get(chatId)?.chat ?? this.db.chats.get(chatId);
+        const adapter = chat ? this.adapters.get(chat.adapterId) : undefined;
+        return adapter?.getToolCategories?.();
+      },
     );
     this.planMode = new PlanModeHandler({
       permissions: this.permissions,
