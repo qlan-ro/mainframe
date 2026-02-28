@@ -13,8 +13,9 @@ import { cn } from '../lib/utils';
 import { PluginIcon } from './plugins/PluginIcon';
 import { DirectoryPickerModal } from './DirectoryPickerModal';
 import { LaunchPopover } from './sandbox/LaunchPopover';
+import { StopPopover } from './sandbox/StopPopover';
 import { useLaunchConfig } from '../hooks/useLaunchConfig';
-import { startLaunchConfig, stopLaunchConfig } from '../lib/launch';
+import { startLaunchConfig } from '../lib/launch';
 
 type PanelId = 'left' | 'right' | 'bottom';
 
@@ -114,6 +115,7 @@ export function TitleBar({
   const launchConfig = useLaunchConfig();
   const configs = launchConfig?.configurations ?? [];
   const togglePanel = useUIStore((s) => s.togglePanel);
+  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
   const panelCollapsed = useUIStore((s) => s.panelCollapsed);
   const projectStatuses =
     useSandboxStore((s) => (activeProjectId ? s.processStatuses[activeProjectId] : undefined)) ?? {};
@@ -125,28 +127,35 @@ export function TitleBar({
     configs.find((c) => c.preview) ??
     configs[0] ??
     null;
-  const selectedStatus = selectedConfig ? (projectStatuses[selectedConfig.name] ?? 'stopped') : 'stopped';
-  const selectedRunning = selectedStatus === 'running' || selectedStatus === 'starting';
+  const [stopPopoverOpen, setStopPopoverOpen] = useState(false);
+  const runningCount = configs.filter((c) => {
+    const s = projectStatuses[c.name] ?? 'stopped';
+    return s === 'running' || s === 'starting';
+  }).length;
+  const anyRunning = runningCount > 0;
 
-  const handlePlayStop = useCallback(async () => {
+  // Auto-close stop popover when nothing is running
+  useEffect(() => {
+    if (!anyRunning) setStopPopoverOpen(false);
+  }, [anyRunning]);
+
+  const handleStart = useCallback(async () => {
     const projectId = useProjectsStore.getState().activeProjectId;
     if (!projectId || !selectedConfig) return;
     try {
-      if (selectedRunning) {
-        await stopLaunchConfig(projectId, selectedConfig.name);
-      } else {
-        const store = useSandboxStore.getState();
-        store.clearLogsForName(selectedConfig.name);
-        store.markFreshLaunch(selectedConfig.name);
-        await startLaunchConfig(projectId, selectedConfig);
-        if (panelCollapsed.bottom) togglePanel('bottom');
-      }
+      const store = useSandboxStore.getState();
+      store.clearLogsForName(selectedConfig.name);
+      store.markFreshLaunch(selectedConfig.name);
+      await startLaunchConfig(projectId, selectedConfig.name);
+      setPanelVisible(true);
+      if (panelCollapsed.bottom) togglePanel('bottom');
     } catch (err) {
-      console.warn('[sandbox] preview toggle failed', err);
+      console.warn('[sandbox] start failed', err);
     }
-  }, [selectedConfig, selectedRunning, panelCollapsed, togglePanel]);
+  }, [selectedConfig, panelCollapsed, togglePanel, setPanelVisible]);
 
   const handleCloseLaunchPopover = useCallback(() => setLaunchPopoverOpen(false), []);
+  const handleCloseStopPopover = useCallback(() => setStopPopoverOpen(false), []);
 
   // Fullview plugin icons (right side of title bar)
   const fullviewContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'fullview');
@@ -302,7 +311,11 @@ export function TitleBar({
         {/* Preview / Launch button */}
         <div className="relative flex items-center" data-launch-popover>
           <button
-            onClick={() => setLaunchPopoverOpen((o) => !o)}
+            data-testid="launch-config-selector"
+            onClick={() => {
+              setLaunchPopoverOpen((o) => !o);
+              setStopPopoverOpen(false);
+            }}
             className={cn(
               'flex items-center gap-1.5 px-2 py-1 text-mf-body rounded-mf-card hover:bg-mf-panel-bg transition-colors',
               selectedConfig
@@ -314,23 +327,41 @@ export function TitleBar({
             <span>{selectedConfig?.name ?? 'No launch configurations'}</span>
             <ChevronDown size={12} />
           </button>
-          {selectedConfig && (
-            <button
-              onClick={() => void handlePlayStop()}
-              disabled={selectedStatus === 'starting'}
-              className={cn(
-                'w-7 h-7 flex items-center justify-center rounded-mf-card transition-colors disabled:opacity-40',
-                selectedRunning
-                  ? 'text-red-400 hover:text-red-300 hover:bg-mf-panel-bg'
-                  : 'text-mf-accent hover:text-mf-accent hover:bg-mf-panel-bg',
-              )}
-              title={selectedRunning ? 'Stop' : 'Start'}
-            >
-              {selectedRunning ? <Square size={12} /> : <Play size={12} />}
-            </button>
-          )}
           {launchPopoverOpen && <LaunchPopover onClose={handleCloseLaunchPopover} />}
         </div>
+
+        {/* Play button — only when a config is selected and nothing is running */}
+        {selectedConfig && !anyRunning && (
+          <button
+            data-testid="launch-start-btn"
+            onClick={() => void handleStart()}
+            className="w-7 h-7 flex items-center justify-center rounded-mf-card text-mf-accent hover:text-mf-accent hover:bg-mf-panel-bg transition-colors"
+            title="Start"
+          >
+            <Play size={12} />
+          </button>
+        )}
+
+        {/* Stop button with badge — when any process is running */}
+        {anyRunning && (
+          <div className="relative" data-stop-popover>
+            <button
+              data-testid="launch-stop-btn"
+              onClick={() => {
+                setStopPopoverOpen((o) => !o);
+                setLaunchPopoverOpen(false);
+              }}
+              className="relative w-7 h-7 flex items-center justify-center rounded-mf-card hover:bg-mf-panel-bg transition-colors"
+              title="Stop"
+            >
+              <Square size={12} className="text-red-400" />
+              <span className="absolute bottom-0 right-0.5 text-[9px] font-bold leading-none text-mf-text-primary">
+                {runningCount}
+              </span>
+            </button>
+            {stopPopoverOpen && <StopPopover onClose={handleCloseStopPopover} />}
+          </div>
+        )}
 
         {/* Separator */}
         {fullviewContributions.length > 0 && <div className="h-4 w-px bg-mf-divider mx-1" />}

@@ -8,8 +8,9 @@ export interface MainframeConfig {
 }
 
 const rawPort = process.env['PORT'];
+const parsedPort = rawPort !== undefined ? Number(rawPort) : NaN;
 const DEFAULT_CONFIG: MainframeConfig = {
-  port: rawPort !== undefined ? Number(rawPort) : 31415,
+  port: Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 31415,
   dataDir: process.env['MAINFRAME_DATA_DIR'] ?? join(homedir(), '.mainframe'),
 };
 

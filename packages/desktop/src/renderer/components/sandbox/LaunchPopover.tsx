@@ -2,9 +2,11 @@ import React, { useEffect } from 'react';
 import { Play, Square, Plus } from 'lucide-react';
 import { useSandboxStore } from '../../store/sandbox';
 import { useProjectsStore } from '../../store/projects';
+import { useChatsStore } from '../../store/chats';
 import { useUIStore } from '../../store/ui';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
+import { daemonClient } from '../../lib/client';
 import type { LaunchConfiguration } from '@mainframe/types';
 import { cn } from '../../lib/utils';
 
@@ -22,6 +24,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
   const selectedConfigName = useSandboxStore((s) => s.selectedConfigName);
   const setSelectedConfigName = useSandboxStore((s) => s.setSelectedConfigName);
   const togglePanel = useUIStore((s) => s.togglePanel);
+  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
   const panelCollapsed = useUIStore((s) => s.panelCollapsed);
 
   useEffect(() => {
@@ -52,7 +55,8 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
       } else {
         clearLogsForName(config.name);
         markFreshLaunch(config.name);
-        await startLaunchConfig(activeProject.id, config);
+        await startLaunchConfig(activeProject.id, config.name);
+        setPanelVisible(true);
         if (panelCollapsed.bottom) togglePanel('bottom');
       }
     } catch (err) {
@@ -61,23 +65,11 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
   };
 
   const configs = launchConfig?.configurations ?? [];
-  const anyRunning = configs.some((c) => {
-    const s = projectStatuses[c.name] ?? 'stopped';
-    return s === 'running' || s === 'starting';
-  });
-
-  const handleStopAll = async () => {
-    if (!activeProject || !launchConfig) return;
-    try {
-      await Promise.all(launchConfig.configurations.map((c) => stopLaunchConfig(activeProject.id, c.name)));
-    } catch (err) {
-      console.warn('[sandbox] stop all failed', err);
-    }
-  };
 
   return (
     <div
       data-launch-popover
+      data-testid="launch-popover"
       className="absolute right-0 top-full mt-1 w-56 bg-mf-panel-bg border border-mf-divider rounded shadow-lg z-50 py-1"
     >
       {configs.length > 0 && (
@@ -90,6 +82,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
             return (
               <div
                 key={c.name}
+                data-testid={`launch-config-${c.name}`}
                 onClick={() => handleSelect(c.name)}
                 className={cn(
                   'flex items-center justify-between px-3 py-1.5 text-xs cursor-pointer transition-colors',
@@ -113,20 +106,26 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
               </div>
             );
           })}
-          <div className="border-t border-mf-divider my-1" />
-          <button
-            onClick={() => void handleStopAll()}
-            disabled={!anyRunning}
-            className="w-full text-left px-3 py-1.5 text-xs text-mf-text-secondary hover:bg-mf-hover disabled:opacity-40 disabled:cursor-default"
-          >
-            Stop all
-          </button>
         </>
       )}
       {configs.length > 0 && <div className="border-t border-mf-divider my-1" />}
       <button
         onClick={() => {
-          /* TODO: add configuration */
+          if (!activeProject) return;
+          const chatId = useChatsStore.getState().activeChatId;
+          if (chatId) {
+            daemonClient.sendMessage(chatId, '/launch-config');
+          } else {
+            daemonClient.createChat(activeProject.id, 'claude');
+            // Chat creation is async; wait for it to appear, then send
+            const unsub = useChatsStore.subscribe((state) => {
+              if (state.activeChatId) {
+                daemonClient.sendMessage(state.activeChatId, '/launch-config');
+                unsub();
+              }
+            });
+          }
+          onClose();
         }}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
       >

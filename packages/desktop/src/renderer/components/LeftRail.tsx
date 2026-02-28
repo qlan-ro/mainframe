@@ -71,16 +71,20 @@ export function LeftRail(): React.ReactElement {
 
       {/* Bottom actions */}
       <div className="flex flex-col gap-2 pt-2">
+        {/* Logs toggle button */}
+        <RailButton active={panelVisible} onClick={() => setPanelVisible(!panelVisible)} title="Toggle logs panel">
+          <span data-testid="toggle-logs-panel">
+            <Play size={16} />
+          </span>
+        </RailButton>
+
+        <div className="w-5 h-px bg-mf-divider mx-auto" />
+
         <RailButton onClick={() => useSettingsStore.getState().open()} title="Settings">
           <Settings size={16} />
         </RailButton>
         <RailButton onClick={() => useSettingsStore.getState().open(undefined, 'about')} title="Help">
           <HelpCircle size={16} />
-        </RailButton>
-
-        {/* Logs toggle button */}
-        <RailButton active={panelVisible} onClick={() => setPanelVisible(!panelVisible)} title="Toggle logs panel">
-          <Play size={16} />
         </RailButton>
       </div>
     </div>

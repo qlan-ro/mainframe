@@ -1,5 +1,18 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Trash2 } from 'lucide-react';
+import {
+  Trash2,
+  RotateCw,
+  Square,
+  Play,
+  RefreshCw,
+  Crosshair,
+  Camera,
+  Minus,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
+import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useSandboxStore } from '../../store/sandbox';
 import { useChatsStore } from '../../store/chats';
 import { useProjectsStore } from '../../store/projects';
@@ -30,6 +43,7 @@ const INSPECT_SCRIPT = `
   ${GET_SELECTOR_FN}
   var old = document.getElementById('__mf_overlay');
   if (old) old.remove();
+  if (window.__mf_inspect_cleanup) { window.__mf_inspect_cleanup(); delete window.__mf_inspect_cleanup; }
 
   var overlay = document.createElement('div');
   overlay.id = '__mf_overlay';
@@ -45,6 +59,13 @@ const INSPECT_SCRIPT = `
   }
 
   return new Promise(function(resolve) {
+    function cleanup() {
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('click', onClick, true);
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      delete window.__mf_inspect_cleanup;
+    }
     function onMove(e) {
       var el = document.elementFromPoint(e.clientX, e.clientY);
       if (el && el !== overlay) highlight(el);
@@ -52,17 +73,26 @@ const INSPECT_SCRIPT = `
     function onClick(e) {
       e.preventDefault();
       e.stopPropagation();
-      document.removeEventListener('mousemove', onMove, true);
-      document.removeEventListener('click', onClick, true);
-      overlay.remove();
+      cleanup();
       var el = document.elementFromPoint(e.clientX, e.clientY);
       if (!el) { resolve(null); return; }
       var rect = el.getBoundingClientRect();
       resolve({ selector: getSelector(el), rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height }, viewport: { width: window.innerWidth, height: window.innerHeight } });
     }
+    function onKey(e) {
+      if (e.key === 'Escape') { cleanup(); resolve(null); }
+    }
     document.addEventListener('mousemove', onMove, true);
     document.addEventListener('click', onClick, true);
+    document.addEventListener('keydown', onKey, true);
+    window.__mf_inspect_cleanup = function() { cleanup(); resolve(null); };
   });
+})()
+`;
+
+const INSPECT_CANCEL_SCRIPT = `
+(function() {
+  if (window.__mf_inspect_cleanup) { window.__mf_inspect_cleanup(); }
 })()
 `;
 
@@ -78,6 +108,7 @@ export function PreviewTab(): React.ReactElement {
   const addCapture = useSandboxStore((s) => s.addCapture);
   const logsOutput = useSandboxStore((s) => s.logsOutput);
   const clearLogsForName = useSandboxStore((s) => s.clearLogsForName);
+  const markFreshLaunch = useSandboxStore((s) => s.markFreshLaunch);
   const setPanelVisible = useUIStore((s) => s.setPanelVisible);
 
   const launchConfig = useLaunchConfig();
@@ -101,34 +132,39 @@ export function PreviewTab(): React.ReactElement {
     if (freshLaunchedProcess) setSelectedProcess(freshLaunchedProcess);
   }, [freshLaunchedProcess, freshLaunchSeq]);
 
-  // Auto-select first process when configs load and nothing is selected
+  // Auto-select process when configs load and nothing is selected — prefer the preview config
   useEffect(() => {
     if (configs.length > 0 && !selectedProcess) {
-      setSelectedProcess(configs[0]!.name);
+      const preferred = configs.find((c) => c.preview) ?? configs[0]!;
+      setSelectedProcess(preferred.name);
     }
   }, [configs, selectedProcess]);
 
-  // Derive preview config and URL from selected process
+  // Selected tab's config — drives UI decisions (icons, log styling)
   const selectedProcessConfig = configs.find((c) => c.name === selectedProcess);
   const hasPreview = selectedProcessConfig?.preview === true;
-  const previewUrl =
-    hasPreview && selectedProcessConfig
-      ? (selectedProcessConfig.url ??
-        (selectedProcessConfig.port ? `http://localhost:${selectedProcessConfig.port}` : 'about:blank'))
-      : 'about:blank';
+  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const selectedProcessStatus = useSandboxStore((s) => {
+    if (!selectedProcess || !activeProjectId) return 'stopped' as const;
+    return s.processStatuses[activeProjectId]?.[selectedProcess] ?? 'stopped';
+  });
+  const isSelectedRunning = selectedProcessStatus === 'running' || selectedProcessStatus === 'starting';
 
-  // Watch the selected process status — searches across all projects
+  // The preview config — drives webview lifecycle independent of selected tab
+  const previewConfig = configs.find((c) => c.preview === true);
+  const previewProcessName = previewConfig?.name ?? null;
+  const previewUrl = previewConfig
+    ? (previewConfig.url ?? (previewConfig.port ? `http://localhost:${previewConfig.port}` : 'about:blank'))
+    : 'about:blank';
+
+  // Watch the preview process status (not the selected tab)
   const previewStatus = useSandboxStore((s) => {
-    if (!selectedProcess) return 'stopped' as const;
-    for (const projStatuses of Object.values(s.processStatuses)) {
-      const st = projStatuses[selectedProcess];
-      if (st) return st;
-    }
-    return 'stopped' as const;
+    if (!previewProcessName || !activeProjectId) return 'stopped' as const;
+    return s.processStatuses[activeProjectId]?.[previewProcessName] ?? 'stopped';
   });
 
   // Only retry-load when the user explicitly clicked Run (not on reconnect to an already-running process)
-  const isFreshLaunch = useSandboxStore((s) => (selectedProcess ? !!s.freshLaunches[selectedProcess] : false));
+  const isFreshLaunch = useSandboxStore((s) => (previewProcessName ? !!s.freshLaunches[previewProcessName] : false));
 
   // During fresh launches, keep src as about:blank — the retry effect handles navigation via loadURL.
   // For reconnect (not fresh launch), let src drive navigation directly.
@@ -136,13 +172,11 @@ export function PreviewTab(): React.ReactElement {
 
   // Track whether the webview has successfully loaded (separate from process status)
   const [webviewReady, setWebviewReady] = useState(false);
-  // True only while the retry effect is actively polling
-  const [webviewLoading, setWebviewLoading] = useState(false);
   // Ref-based flag so pending retry callbacks can check without stale closure values
   const retryActiveRef = useRef(false);
-  // Ref for selectedProcess used inside the retry effect callbacks (avoids unstable deps)
-  const selectedProcessRef = useRef(selectedProcess);
-  selectedProcessRef.current = selectedProcess;
+  // Ref for preview process name used inside the retry effect callbacks (avoids unstable deps)
+  const previewProcessRef = useRef(previewProcessName);
+  previewProcessRef.current = previewProcessName;
 
   // Reset ready state and retry flag when process stops/restarts
   useEffect(() => {
@@ -152,34 +186,49 @@ export function PreviewTab(): React.ReactElement {
     }
   }, [previewStatus]);
 
-  // For reconnect (non-fresh-launch): detect when the webview loads via src attribute.
-  // Also check immediately in case the page loaded before the effect ran.
+  // For reconnect (non-fresh-launch): navigate the webview via loadURL().
+  // Electron's <webview> only reads the src attribute on initial mount — changing it
+  // via React props does NOT trigger navigation. We must call loadURL() explicitly.
+  // loadURL() requires dom-ready to have fired first.
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wv = webviewRef.current as any;
-    if (!wv || isFreshLaunch) return;
-    const markReady = () => {
-      if (!retryActiveRef.current) setWebviewReady(true);
-    };
-    // Check if the page already loaded before we added the listener
-    try {
-      const url = wv.getURL?.() as string | undefined;
-      if (url && url !== 'about:blank' && !wv.isLoading?.()) {
-        markReady();
-        return;
-      }
-    } catch {
-      // getURL/isLoading may throw before dom-ready — fall through to listener
-    }
-    wv.addEventListener('did-finish-load', markReady);
-    return () => wv.removeEventListener('did-finish-load', markReady);
-  }, [isFreshLaunch, selectedProcess]);
+    if (!wv || isFreshLaunch || previewUrl === 'about:blank' || previewStatus !== 'running') return;
 
-  // Reset webview state when switching process tabs
-  useEffect(() => {
-    setWebviewReady(false);
-    retryActiveRef.current = false;
-  }, [selectedProcess]);
+    let cancelled = false;
+    const markReady = () => {
+      if (!retryActiveRef.current && !cancelled) setWebviewReady(true);
+    };
+
+    const navigate = () => {
+      if (cancelled) return;
+      try {
+        const currentUrl = wv.getURL?.() as string | undefined;
+        if (currentUrl === previewUrl && !wv.isLoading?.()) {
+          markReady();
+          return;
+        }
+      } catch {
+        /* not ready yet */
+      }
+      wv.loadURL(previewUrl)
+        .then(markReady)
+        .catch(() => {});
+    };
+
+    // Wait for dom-ready if the webview isn't ready yet
+    try {
+      // getURL() throws if dom-ready hasn't fired
+      wv.getURL();
+      navigate();
+    } catch {
+      wv.addEventListener('dom-ready', navigate, { once: true });
+    }
+    return () => {
+      cancelled = true;
+      wv.removeEventListener('dom-ready', navigate);
+    };
+  }, [isFreshLaunch, previewProcessName, previewUrl, previewStatus]);
 
   // Retry loading the webview URL until the server responds or 60s elapses.
   // Only activates on fresh launches (user clicked Run), not on reconnect.
@@ -188,22 +237,20 @@ export function PreviewTab(): React.ReactElement {
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wv = webviewRef.current as any;
-    if (!wv || !hasPreview || !isFreshLaunch) return;
+    if (!wv || !previewProcessName || !isFreshLaunch) return;
 
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const startTime = Date.now();
     retryActiveRef.current = true;
-    setWebviewLoading(true);
 
     const finish = (success: boolean) => {
       if (stopped) return;
       stopped = true;
       clearTimeout(timer);
       retryActiveRef.current = false;
-      setWebviewLoading(false);
       if (success) setWebviewReady(true);
-      const name = selectedProcessRef.current;
+      const name = previewProcessRef.current;
       if (name) useSandboxStore.getState().clearFreshLaunch(name);
     };
 
@@ -234,11 +281,18 @@ export function PreviewTab(): React.ReactElement {
       stopped = true;
       clearTimeout(timer);
       retryActiveRef.current = false;
-      setWebviewLoading(false);
     };
-  }, [previewUrl, hasPreview, isFreshLaunch]);
+  }, [previewUrl, previewProcessName, isFreshLaunch]);
 
-  const [logExpanded, setLogExpanded] = useState(true);
+  const [logExpandedPerTab, setLogExpandedPerTab] = useState<Record<string, boolean>>({});
+  const logExpanded = selectedProcess ? (logExpandedPerTab[selectedProcess] ?? !hasPreview) : true;
+  const setLogExpanded = useCallback(
+    (expanded: boolean) => {
+      if (!selectedProcess) return;
+      setLogExpandedPerTab((prev) => ({ ...prev, [selectedProcess]: expanded }));
+    },
+    [selectedProcess],
+  );
   const logRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll logs
@@ -246,8 +300,9 @@ export function PreviewTab(): React.ReactElement {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [logsOutput]);
 
-  // Filter logs by process name only — no project scoping
-  const filteredLogs = logsOutput.filter((l) => !selectedProcess || l.name === selectedProcess);
+  const filteredLogs = logsOutput.filter(
+    (l) => l.projectId === activeProjectId && (!selectedProcess || l.name === selectedProcess),
+  );
 
   const handleFullScreenshot = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -268,12 +323,13 @@ export function PreviewTab(): React.ReactElement {
   }, [addCapture]);
 
   const handleInspect = useCallback(async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wv = webviewRef.current as any;
     if (inspecting) {
+      if (wv) wv.executeJavaScript(INSPECT_CANCEL_SCRIPT).catch(() => {});
       setInspecting(false);
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const wv = webviewRef.current as any;
     if (!wv) return;
     setInspecting(true);
     try {
@@ -315,39 +371,131 @@ export function PreviewTab(): React.ReactElement {
     wv?.reload();
   }, []);
 
+  const handleStop = useCallback(async () => {
+    if (!activeProjectId || !selectedProcess) return;
+    try {
+      await stopLaunchConfig(activeProjectId, selectedProcess);
+    } catch (err) {
+      console.warn('[sandbox] stop failed', err);
+    }
+  }, [activeProjectId, selectedProcess]);
+
+  const handleStart = useCallback(async () => {
+    if (!activeProjectId || !selectedProcessConfig) return;
+    try {
+      clearLogsForName(selectedProcessConfig.name);
+      markFreshLaunch(selectedProcessConfig.name);
+      await startLaunchConfig(activeProjectId, selectedProcessConfig.name);
+    } catch (err) {
+      console.warn('[sandbox] start failed', err);
+    }
+  }, [activeProjectId, selectedProcessConfig, clearLogsForName, markFreshLaunch]);
+
+  const handleRestart = useCallback(async () => {
+    if (!activeProjectId || !selectedProcessConfig) return;
+    try {
+      await stopLaunchConfig(activeProjectId, selectedProcessConfig.name);
+      clearLogsForName(selectedProcessConfig.name);
+      markFreshLaunch(selectedProcessConfig.name);
+      await startLaunchConfig(activeProjectId, selectedProcessConfig.name);
+    } catch (err) {
+      console.warn('[sandbox] restart failed', err);
+    }
+  }, [activeProjectId, selectedProcessConfig, clearLogsForName, markFreshLaunch]);
+
   const isElectron = typeof window !== 'undefined' && 'mainframe' in window;
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header row: process tabs + minimize */}
-      <div className="flex items-center justify-between px-2 h-8 shrink-0 border-b border-mf-divider">
-        <div className="flex items-center gap-1">
+    <Tabs
+      data-testid="preview-tab"
+      value={selectedProcess ?? ''}
+      onValueChange={setSelectedProcess}
+      className="h-full flex flex-col"
+    >
+      {/* Header row: process tabs + actions */}
+      <div className="flex items-center justify-between shrink-0 border-b border-mf-divider">
+        <TabsList className="h-11 px-[10px] bg-transparent justify-start gap-1 shrink-0 rounded-none">
           {configs.length === 0 ? (
-            <span className="text-xs text-mf-text-secondary">No processes running</span>
+            <span className="text-mf-small text-mf-text-secondary">No processes running</span>
           ) : (
             configs.map((c) => (
-              <button
-                key={c.name}
-                onClick={() => setSelectedProcess(c.name)}
-                className={[
-                  'px-3 py-1 text-xs rounded transition-colors border',
-                  selectedProcess === c.name
-                    ? 'bg-mf-button-bg text-mf-text-primary border-mf-border'
-                    : 'text-mf-text-secondary hover:text-mf-text-primary border-transparent hover:border-mf-border',
-                ].join(' ')}
-              >
+              <TabsTrigger key={c.name} value={c.name} className="text-mf-small">
                 {c.name}
-              </button>
+              </TabsTrigger>
             ))
           )}
+        </TabsList>
+        <div className="flex items-center pr-2">
+          {/* Process controls: play (stopped) or restart+stop (running) */}
+          {selectedProcess &&
+            (isSelectedRunning ? (
+              <>
+                <button
+                  onClick={() => void handleRestart()}
+                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                  title="Restart"
+                >
+                  <RotateCw size={14} />
+                </button>
+                <button
+                  onClick={() => void handleStop()}
+                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-red-400 transition-colors"
+                  title="Stop"
+                >
+                  <Square size={14} />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => void handleStart()}
+                className="p-1.5 rounded hover:bg-mf-hover text-mf-accent transition-colors"
+                title="Start"
+              >
+                <Play size={14} />
+              </button>
+            ))}
+          {selectedProcess && <div className="w-px h-3.5 bg-mf-border mx-0.5" />}
+          {/* Preview controls: reload, inspect, screenshot */}
+          {hasPreview && (
+            <>
+              <button
+                onClick={handleReload}
+                className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                title="Reload"
+              >
+                <RefreshCw size={14} />
+              </button>
+              <button
+                onClick={() => void handleInspect()}
+                className={[
+                  'p-1.5 rounded transition-colors',
+                  inspecting
+                    ? 'bg-mf-hover text-mf-accent'
+                    : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                ].join(' ')}
+                title="Pick element"
+              >
+                <Crosshair size={14} />
+              </button>
+              <button
+                onClick={() => void handleFullScreenshot()}
+                className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                title="Screenshot"
+              >
+                <Camera size={14} />
+              </button>
+              <div className="w-px h-3.5 bg-mf-border mx-0.5" />
+            </>
+          )}
+          {/* Window controls: minimize */}
+          <button
+            onClick={() => setPanelVisible(false)}
+            className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+            title="Minimize"
+          >
+            <Minus size={14} />
+          </button>
         </div>
-        <button
-          onClick={() => setPanelVisible(false)}
-          className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-2 py-1 rounded"
-          title="Minimize"
-        >
-          _
-        </button>
       </div>
 
       {configs.length === 0 ? (
@@ -357,104 +505,78 @@ export function PreviewTab(): React.ReactElement {
         </div>
       ) : (
         <>
-          {/* Preview area for selected process */}
-          {hasPreview ? (
-            <>
-              {/* Toolbar — only shown when selected process has preview */}
-              <div className="flex items-center gap-2 px-3 py-1.5 shrink-0">
-                <div className="flex-1 flex items-center gap-2 px-3 py-[5px] rounded-mf-card border border-mf-border text-mf-text-secondary text-mf-body truncate">
-                  {webviewLoading && (
-                    <span className="inline-block w-3 h-3 border-[1.5px] border-mf-text-secondary border-t-transparent rounded-full animate-spin shrink-0" />
-                  )}
-                  {previewUrl !== 'about:blank' ? previewUrl : 'http://localhost:3000'}
+          {/* Webview — always mounted when a preview config exists, zero-dimensioned when another tab is selected.
+               MUST NOT use display:none (hidden class) — Electron webviews don't initialize their guest process
+               when display:none, breaking loadURL and did-finish-load events. */}
+          {previewConfig ? (
+            <div
+              className={hasPreview ? 'flex-1 overflow-hidden min-h-0 relative mx-2 my-2' : ''}
+              style={hasPreview ? undefined : { position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
+            >
+              {isElectron ? (
+                // @ts-expect-error — webview is an Electron-specific HTML element not present in React's type definitions
+                // Electron webviews render in a separate GPU process and paint OVER regular DOM,
+                // so visibility:hidden doesn't help. Use zero dimensions to truly hide until ready.
+                <webview
+                  ref={webviewRef}
+                  src={webviewSrc}
+                  className={webviewReady ? 'w-full h-full' : ''}
+                  style={webviewReady ? undefined : { position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-mf-text-secondary text-sm">
+                  Preview panel requires Electron. Use <code className="mx-1">pnpm dev:desktop</code> instead of{' '}
+                  <code className="mx-1">dev:web</code>.
                 </div>
-                <button
-                  onClick={handleReload}
-                  className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-2 py-1 rounded"
-                  title="Reload"
-                >
-                  ↺
-                </button>
-                <button
-                  onClick={() => void handleInspect()}
-                  className={[
-                    'text-xs px-2 py-1 rounded',
-                    inspecting ? 'bg-blue-500 text-white' : 'text-mf-text-secondary hover:text-mf-text-primary',
-                  ].join(' ')}
-                  title="Pick element"
-                >
-                  ⊕
-                </button>
-                <button
-                  onClick={() => void handleFullScreenshot()}
-                  className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-2 py-1 rounded"
-                  title="Full screenshot"
-                >
-                  📷
-                </button>
-              </div>
-
-              {/* Webview */}
-              <div className="flex-1 overflow-hidden min-h-0 relative mx-2 my-2">
-                {isElectron ? (
-                  // @ts-expect-error — webview is an Electron-specific HTML element not present in React's type definitions
-                  // Electron webviews render in a separate GPU process and paint OVER regular DOM,
-                  // so visibility:hidden doesn't help. Use zero dimensions to truly hide until ready.
-                  <webview
-                    ref={webviewRef}
-                    src={webviewSrc}
-                    className={webviewReady ? 'w-full h-full' : ''}
-                    style={webviewReady ? undefined : { position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-mf-text-secondary text-sm">
-                    Preview panel requires Electron. Use <code className="mx-1">pnpm dev:desktop</code> instead of{' '}
-                    <code className="mx-1">dev:web</code>.
-                  </div>
-                )}
-                {/* Status overlay — shown until webview successfully loads */}
-                {isElectron && !webviewReady && (
-                  <div className="absolute inset-0 flex items-center justify-center text-mf-text-secondary text-sm">
-                    {(previewStatus === 'starting' || previewStatus === 'running') && <span>Starting…</span>}
-                    {previewStatus === 'failed' && <span className="text-red-400">Process failed to start</span>}
-                    {previewStatus === 'stopped' && (
-                      <span>
-                        Start processes with <strong>▷ Preview</strong> to see your app here
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </>
+              )}
+              {/* Status overlay — shown until webview successfully loads */}
+              {isElectron && !webviewReady && (
+                <div className="absolute inset-0 flex items-center justify-center text-mf-text-secondary text-sm">
+                  {(previewStatus === 'starting' || previewStatus === 'running') && (
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-3 h-3 border-[1.5px] border-mf-text-secondary border-t-transparent rounded-full animate-spin shrink-0" />
+                      Waiting for {previewUrl !== 'about:blank' ? previewUrl : 'server'}
+                    </span>
+                  )}
+                  {previewStatus === 'failed' && <span className="text-red-400">Process failed to start</span>}
+                  {previewStatus === 'stopped' && (
+                    <span>
+                      Run Launch Configuration <strong>▷</strong> to see your app here
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           ) : null}
 
           {/* Log output area — takes all space when no preview */}
           <div className={hasPreview ? 'border-t border-mf-divider shrink-0' : 'flex-1 flex flex-col min-h-0'}>
             <div className="flex items-center justify-between px-2 h-7 shrink-0">
               <span className="text-xs text-mf-text-secondary font-medium">Console</span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center">
                 <button
                   onClick={() => {
                     if (selectedProcess) clearLogsForName(selectedProcess);
                   }}
                   disabled={!selectedProcess}
-                  className="text-mf-text-secondary hover:text-mf-text-primary px-1 disabled:opacity-40"
+                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40"
                   title="Clear logs"
                 >
-                  <Trash2 size={12} />
+                  <Trash2 size={14} />
                 </button>
                 <button
-                  onClick={() => setLogExpanded((v) => !v)}
-                  className="text-xs text-mf-text-secondary hover:text-mf-text-primary px-1"
+                  onClick={() => setLogExpanded(!logExpanded)}
+                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                   title={logExpanded ? 'Collapse logs' : 'Expand logs'}
                 >
-                  {logExpanded ? '∨' : '∧'}
+                  {logExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                 </button>
               </div>
             </div>
             {logExpanded && (
               <div
                 ref={logRef}
+                data-testid="preview-console-output"
                 className={[
                   'overflow-y-auto px-2 pb-2 font-mono text-xs text-mf-text-secondary',
                   hasPreview ? '' : 'flex-1',
@@ -475,6 +597,6 @@ export function PreviewTab(): React.ReactElement {
           </div>
         </>
       )}
-    </div>
+    </Tabs>
   );
 }

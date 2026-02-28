@@ -68,7 +68,7 @@ async function main(): Promise<void> {
     logger.info('Shutting down...');
     await pluginManager.unloadAll();
     adapters.killAll();
-    launchRegistry.stopAll();
+    await launchRegistry.stopAll();
     await server.stop();
     db.close();
     process.exit(0);
@@ -79,8 +79,9 @@ async function main(): Promise<void> {
   process.on('uncaughtException', (err) => {
     logger.fatal({ err }, 'Uncaught exception');
     adapters.killAll();
-    launchRegistry.stopAll();
-    process.exit(1);
+    launchRegistry.stopAll().finally(() => process.exit(1));
+    // Hard deadline: exit even if stopAll hangs
+    setTimeout(() => process.exit(1), 5_000).unref();
   });
 }
 

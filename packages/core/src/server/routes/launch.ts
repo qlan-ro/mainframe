@@ -1,24 +1,13 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { Router, type Request, type Response } from 'express';
-import { z } from 'zod';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
-import { validate } from './schemas.js';
+import { parseLaunchConfig } from '../../launch/launch-config.js';
 import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:launch');
-
-const StartBody = z.object({
-  configuration: z.object({
-    name: z.string().min(1),
-    runtimeExecutable: z.string().min(1),
-    runtimeArgs: z.array(z.string()),
-    port: z.coerce.number().int().positive().nullable().catch(null),
-    url: z.string().nullable().optional().default(null),
-    preview: z.boolean().optional(),
-    env: z.record(z.string(), z.string()).optional(),
-  }),
-});
 
 export function launchRoutes(ctx: RouteContext): Router {
   const router = Router();
@@ -45,13 +34,30 @@ export function launchRoutes(ctx: RouteContext): Router {
         res.status(404).json({ success: false, error: 'Project not found' });
         return;
       }
-      const parsed = validate(StartBody, req.body);
+      const name = param(req, 'name');
+
+      // Read and validate launch config from disk — never trust the client body
+      let raw: string;
+      try {
+        raw = await readFile(join(project.path, '.mainframe', 'launch.json'), 'utf-8');
+      } catch {
+        res.status(404).json({ success: false, error: 'No launch.json found for project' });
+        return;
+      }
+      let parsed: ReturnType<typeof parseLaunchConfig>;
+      try {
+        parsed = parseLaunchConfig(JSON.parse(raw));
+      } catch {
+        res.status(400).json({ success: false, error: 'Invalid launch.json' });
+        return;
+      }
       if (!parsed.success) {
         res.status(400).json({ success: false, error: parsed.error });
         return;
       }
-      if (param(req, 'name') !== parsed.data.configuration.name) {
-        res.status(400).json({ success: false, error: 'Route name does not match configuration name' });
+      const config = parsed.data.configurations.find((c) => c.name === name);
+      if (!config) {
+        res.status(404).json({ success: false, error: `Configuration "${name}" not found in launch.json` });
         return;
       }
       const manager = ctx.launchRegistry?.getOrCreate(project.id, project.path);
@@ -60,11 +66,11 @@ export function launchRoutes(ctx: RouteContext): Router {
         return;
       }
       try {
-        await manager.start(parsed.data.configuration);
-        logger.info({ projectId: project.id, name: parsed.data.configuration.name }, 'process started');
+        await manager.start(config);
+        logger.info({ projectId: project.id, name }, 'process started');
         res.json({ success: true });
       } catch (err) {
-        logger.error({ err, projectId: project.id, name: parsed.data.configuration.name }, 'Failed to start process');
+        logger.error({ err, projectId: project.id, name }, 'Failed to start process');
         res.status(500).json({ success: false, error: 'Failed to start process' });
       }
     }),

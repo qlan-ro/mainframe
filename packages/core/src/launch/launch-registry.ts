@@ -17,10 +17,8 @@ export class LaunchRegistry {
     return manager;
   }
 
-  stopAll(): void {
-    for (const manager of this.managers.values()) {
-      manager.stopAll();
-    }
+  async stopAll(): Promise<void> {
+    await Promise.allSettled(Array.from(this.managers.values()).map((manager) => manager.stopAll()));
     this.managers.clear();
   }
 }
