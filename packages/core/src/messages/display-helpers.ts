@@ -79,8 +79,7 @@ export function convertUserContent(content: MessageContent[]): {
       if (block.text.startsWith('[Request interrupted')) continue;
 
       const cmdInfo = parseCommandMessage(block.text);
-      if (cmdInfo)
-        metadata.command = { name: cmdInfo.commandName, userText: cmdInfo.userText, isCommand: cmdInfo.isCommand };
+      if (cmdInfo) metadata.command = { name: cmdInfo.commandName, userText: cmdInfo.userText };
 
       const { files, cleanText } = parseAttachedFilePathTags(block.text);
       if (files.length > 0) metadata.attachedFiles = files;

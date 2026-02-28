@@ -41,21 +41,21 @@ export function UserMessage() {
   // File attachments extracted by pipeline from <attached_file_path> tags
   const pipelineFiles = (original?.metadata?.attachedFiles as { name: string }[] | undefined) ?? [];
 
-  // Command info from pipeline metadata (richer object stored by convertUserContent)
-  const pipelineCommand = original?.metadata?.command as
-    | { name: string; userText: string; isCommand: boolean }
-    | undefined;
+  // Command info from metadata — either pipeline-extracted { name, userText } from
+  // <command-name> parsing, or send-side { name, source } from the desktop's onNew handler
+  const metaCommand = original?.metadata?.command as { name: string; userText?: string; source?: string } | undefined;
 
   const firstText = message.content.find((p): p is { type: 'text'; text: string } => p.type === 'text');
   const rawUserText = firstText?.text ?? '';
 
-  // Use pipeline metadata when available, fall back to runtime parsing
+  // Use metadata when available, fall back to runtime parsing for bare /command patterns
   let parsed: { commandName: string; userText: string; isCommand: boolean } | null = null;
-  if (pipelineCommand) {
+  if (metaCommand) {
+    const isCommand = metaCommand.source === 'commands';
     parsed = {
-      commandName: resolveSkillName(pipelineCommand.name, skills),
-      userText: pipelineCommand.userText,
-      isCommand: pipelineCommand.isCommand,
+      commandName: resolveSkillName(metaCommand.name, skills),
+      userText: metaCommand.userText ?? rawUserText,
+      isCommand,
     };
   } else if (rawUserText) {
     parsed = parseRawCommand(rawUserText, skills, commands);
