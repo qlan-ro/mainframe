@@ -49,12 +49,39 @@ describe('parseLaunchConfig', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects env with non-uppercase key', () => {
+  it('rejects env with invalid key (shell operators)', () => {
     const result = parseLaunchConfig({
       ...VALID_CONFIG,
       configurations: [{ ...VALID_CONFIG.configurations[0]!, env: { 'bad-key': 'value' } }],
     });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts configs with missing optional fields (port, url, runtimeArgs)', () => {
+    const result = parseLaunchConfig({
+      version: '1',
+      configurations: [
+        { name: 'DB', runtimeExecutable: 'docker', runtimeArgs: ['compose', 'up'], port: 5433, env: {} },
+        { name: 'API', runtimeExecutable: './gradlew', runtimeArgs: ['bootRun'], port: 8088 },
+        { name: 'Web', runtimeExecutable: 'npm', runtimeArgs: ['start'], preview: true },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.configurations[0]!.url).toBeNull();
+    expect(result.data.configurations[1]!.url).toBeNull();
+    expect(result.data.configurations[2]!.port).toBeNull();
+    expect(result.data.configurations[2]!.url).toBeNull();
+  });
+
+  it('accepts env keys with mixed case', () => {
+    const result = parseLaunchConfig({
+      ...VALID_CONFIG,
+      configurations: [
+        { ...VALID_CONFIG.configurations[0]!, env: { MAINFRAME_DATA_DIR: '~/.mainframe', nodeEnv: 'test' } },
+      ],
+    });
+    expect(result.success).toBe(true);
   });
 });
 

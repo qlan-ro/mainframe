@@ -133,8 +133,8 @@ function createWindow(): void {
     },
   });
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow?.show();
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.showInactive();
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

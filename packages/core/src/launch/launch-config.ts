@@ -12,15 +12,12 @@ const LaunchConfigurationSchema = z.object({
     .refine((v) => SAFE_EXECUTABLE.test(v) && !v.includes(';') && !v.includes('|') && !v.includes('&'), {
       message: 'runtimeExecutable must be a safe executable name (no shell operators)',
     }),
-  runtimeArgs: z.array(z.string()),
-  port: z.number().int().positive().nullable(),
-  url: z.string().url().nullable(),
+  runtimeArgs: z.array(z.string()).optional().default([]),
+  port: z.number().int().positive().nullable().optional().default(null),
+  url: z.string().url().nullable().optional().default(null),
   preview: z.boolean().optional(),
   env: z
-    .record(
-      z.string().regex(/^[A-Z_][A-Z0-9_]*$/, 'env key must be uppercase letters, digits, or underscores'),
-      z.string(),
-    )
+    .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'env key must be letters, digits, or underscores'), z.string())
     .optional(),
 });
 
