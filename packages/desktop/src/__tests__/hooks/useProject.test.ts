@@ -7,8 +7,14 @@ vi.mock('../../renderer/lib/launch.js', () => ({
   fetchLaunchStatuses: vi.fn(),
 }));
 
-vi.mock('../../renderer/lib/api.js', () => ({
+vi.mock('../../renderer/lib/api/projects-api.js', () => ({
   getChats: vi.fn().mockResolvedValue([]),
+  getProjects: vi.fn().mockResolvedValue([]),
+  createProject: vi.fn(),
+  removeProject: vi.fn(),
+  getAdapters: vi.fn().mockResolvedValue([]),
+  archiveChat: vi.fn(),
+  getChatMessages: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('../../renderer/lib/client.js', () => ({

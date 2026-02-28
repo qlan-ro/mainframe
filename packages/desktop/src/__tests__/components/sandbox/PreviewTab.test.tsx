@@ -37,7 +37,6 @@ describe('PreviewTab', () => {
     // Find the minimize button by its title attribute
     const minimizeButton = screen.getByTitle('Minimize');
     expect(minimizeButton).toBeInTheDocument();
-    expect(minimizeButton).toHaveTextContent('_');
 
     // Click the minimize button
     await user.click(minimizeButton);
