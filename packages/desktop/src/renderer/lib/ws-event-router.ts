@@ -2,6 +2,7 @@ import type { DaemonEvent } from '@mainframe/types';
 import { useChatsStore } from '../store/chats';
 import { useTabsStore } from '../store/tabs';
 import { useProjectsStore } from '../store/projects';
+import { useSandboxStore } from '../store/sandbox';
 import { createLogger } from './logger';
 
 const log = createLogger('renderer:ws');
@@ -59,6 +60,12 @@ export function routeEvent(event: DaemonEvent): void {
     case 'process.stopped':
       log.info('event:process.stopped', { processId: event.processId });
       chats.updateProcessStatus(event.processId, 'stopped');
+      break;
+    case 'launch.output':
+      useSandboxStore.getState().appendLog(event.projectId, event.name, event.data, event.stream);
+      break;
+    case 'launch.status':
+      useSandboxStore.getState().setProcessStatus(event.projectId, event.name, event.status);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });

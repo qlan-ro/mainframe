@@ -10,7 +10,7 @@ export function AboutSection(): React.ReactElement {
 
   useEffect(() => {
     window.mainframe
-      .getAppInfo()
+      ?.getAppInfo()
       .then(setInfo)
       .catch((err: unknown) => log.warn('failed to load app info', { err: String(err) }));
   }, []);

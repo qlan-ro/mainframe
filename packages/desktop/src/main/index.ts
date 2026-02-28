@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell, ipcMain, utilityProcess, Menu } from 'electron';
 import type { UtilityProcess } from 'electron';
-import { join, resolve } from 'path';
+import { join, resolve, sep } from 'path';
 import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { createMainLogger, logFromRenderer } from './logger.js';
@@ -88,9 +88,12 @@ function setupIPC(): void {
   ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
     const normalizedPath = resolve(filePath);
     const home = homedir();
-    const allowedPrefixes = [join(home, '.claude'), join(home, '.mainframe')];
+    const dataDir = process.env['MAINFRAME_DATA_DIR'] ?? join(home, '.mainframe');
+    const allowedPrefixes = [join(home, '.claude'), join(home, '.mainframe'), dataDir];
 
-    const isAllowed = allowedPrefixes.some((prefix) => normalizedPath.startsWith(prefix));
+    const isAllowed =
+      allowedPrefixes.some((prefix) => normalizedPath.startsWith(prefix)) ||
+      normalizedPath.includes(`${sep}.mainframe${sep}`);
     if (!isAllowed) {
       log.warn({ path: normalizedPath }, 'ipc blocked file read outside allowed paths');
       return null;
@@ -111,6 +114,8 @@ function setupIPC(): void {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
+    show: false,
+    backgroundColor: '#1e1e2e',
     width: 1400,
     height: 900,
     ...(process.platform === 'linux' && {
@@ -124,11 +129,12 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      webviewTag: true,
     },
   });
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow?.show();
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.showInactive();
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

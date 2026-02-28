@@ -14,6 +14,7 @@ export function ImageThumbs({
       {imageBlocks.map((img, i) => (
         <button
           key={i}
+          data-testid="message-image-thumb"
           onClick={() => openLightbox(imageBlocks, i)}
           className="w-16 h-16 rounded overflow-hidden hover:ring-2 hover:ring-mf-accent transition-all"
         >

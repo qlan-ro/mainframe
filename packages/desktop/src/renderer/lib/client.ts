@@ -1,7 +1,9 @@
 import type { ClientEvent, DaemonEvent, ControlResponse } from '@mainframe/types';
 import { createLogger } from './logger';
 
-const WS_URL = 'ws://127.0.0.1:31415';
+const host: string = (import.meta.env as Record<string, string>)['VITE_DAEMON_HOST'] ?? '127.0.0.1';
+const wsPort: string = (import.meta.env as Record<string, string>)['VITE_DAEMON_WS_PORT'] ?? '31415';
+const WS_URL = `ws://${host}:${wsPort}`;
 const log = createLogger('renderer:ws');
 
 export class DaemonClient {

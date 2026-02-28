@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
@@ -47,7 +47,7 @@ export function StatusBar(): React.ReactElement {
   }
 
   return (
-    <div className="h-6 bg-mf-app-bg px-[10px] flex items-center text-mf-body">
+    <div className="h-6 bg-mf-app-bg px-[10px] flex items-center justify-between text-mf-body">
       <div className="flex items-center gap-4">
         {/* Connection status */}
         <div data-testid="connection-status" className="flex items-center gap-[6px] text-mf-text-secondary">

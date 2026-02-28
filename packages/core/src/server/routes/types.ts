@@ -3,12 +3,14 @@ import type { DatabaseManager } from '../../db/index.js';
 import type { ChatManager } from '../../chat/index.js';
 import type { AdapterRegistry } from '../../adapters/index.js';
 import type { AttachmentStore } from '../../attachment/index.js';
+import type { LaunchRegistry } from '../../launch/index.js';
 
 export interface RouteContext {
   db: DatabaseManager;
   chats: ChatManager;
   adapters: AdapterRegistry;
   attachmentStore?: AttachmentStore;
+  launchRegistry?: LaunchRegistry;
 }
 
 /** Extract a route param as a string (Express 5 params may be string | string[]). */

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Settings, HelpCircle, MessageSquare } from 'lucide-react';
+import { Settings, HelpCircle, MessageSquare, Play } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { usePluginLayoutStore, useSettingsStore } from '../store';
+import { usePluginLayoutStore, useSettingsStore, useUIStore } from '../store';
 import { PluginIcon } from './plugins/PluginIcon';
 
 interface RailButtonProps {
@@ -31,6 +31,8 @@ function RailButton({ active, onClick, title, children }: RailButtonProps): Reac
 export function LeftRail(): React.ReactElement {
   const contributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'left-panel');
   const activeLeftPanelId = usePluginLayoutStore((s) => s.activeLeftPanelId);
+  const panelVisible = useUIStore((s) => s.panelVisible);
+  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
 
   const handleSessionsClick = (): void => {
     usePluginLayoutStore.getState().setActiveLeftPanel(null);
@@ -69,6 +71,15 @@ export function LeftRail(): React.ReactElement {
 
       {/* Bottom actions */}
       <div className="flex flex-col gap-2 pt-2">
+        {/* Logs toggle button */}
+        <RailButton active={panelVisible} onClick={() => setPanelVisible(!panelVisible)} title="Toggle logs panel">
+          <span data-testid="toggle-logs-panel">
+            <Play size={16} />
+          </span>
+        </RailButton>
+
+        <div className="w-5 h-px bg-mf-divider mx-auto" />
+
         <RailButton onClick={() => useSettingsStore.getState().open()} title="Settings">
           <Settings size={16} />
         </RailButton>

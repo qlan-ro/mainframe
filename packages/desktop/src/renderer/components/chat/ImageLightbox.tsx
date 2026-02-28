@@ -32,7 +32,11 @@ export function ImageLightbox({ images, index, onClose, onNavigate }: ImageLight
   }, [handleKeyDown]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-mf-overlay/80 app-no-drag" onClick={onClose}>
+    <div
+      data-testid="image-lightbox"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-mf-overlay/80 app-no-drag"
+      onClick={onClose}
+    >
       <button onClick={onClose} className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors">
         <X size={24} />
       </button>
@@ -62,6 +66,7 @@ export function ImageLightbox({ images, index, onClose, onNavigate }: ImageLight
       )}
 
       <img
+        data-testid="lightbox-image"
         src={`data:${image.mediaType};base64,${image.data}`}
         className="max-w-[90vw] max-h-[90vh] object-contain rounded"
         onClick={(e) => e.stopPropagation()}

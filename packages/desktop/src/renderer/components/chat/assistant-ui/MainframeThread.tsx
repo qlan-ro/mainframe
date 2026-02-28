@@ -53,7 +53,7 @@ export function MainframeThread() {
 
   return (
     <ThreadPrimitive.Root className="h-full flex flex-col">
-      <ThreadPrimitive.Viewport autoScroll className="flex-1 overflow-y-auto">
+      <ThreadPrimitive.Viewport autoScroll className="flex-1 overflow-y-auto scrollbar-none">
         <EmptyState />
         <div className="px-6 py-6 space-y-5">
           <ThreadPrimitive.Messages

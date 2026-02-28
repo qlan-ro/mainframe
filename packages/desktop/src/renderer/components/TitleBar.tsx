@@ -1,15 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Plus, Check, X } from 'lucide-react';
+import { Search, Plus, Check, X, Play, Square, ChevronDown } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:titlebar');
 import type { Layout } from 'react-resizable-panels';
 import { useProjectsStore, useChatsStore, useSearchStore, usePluginLayoutStore } from '../store';
 import { useTabsStore } from '../store/tabs';
+import { useUIStore } from '../store/ui';
+import { useSandboxStore } from '../store/sandbox';
 import { createProject, removeProject } from '../lib/api';
 import { cn } from '../lib/utils';
 import { PluginIcon } from './plugins/PluginIcon';
 import { DirectoryPickerModal } from './DirectoryPickerModal';
+import { LaunchPopover } from './sandbox/LaunchPopover';
+import { StopPopover } from './sandbox/StopPopover';
+import { useLaunchConfig } from '../hooks/useLaunchConfig';
+import { startLaunchConfig } from '../lib/launch';
 
 type PanelId = 'left' | 'right' | 'bottom';
 
@@ -104,6 +110,53 @@ export function TitleBar({
     setConfirmingDeleteId((prev) => (prev === id ? null : prev));
   }, []);
 
+  // Launch / Preview
+  const [launchPopoverOpen, setLaunchPopoverOpen] = useState(false);
+  const launchConfig = useLaunchConfig();
+  const configs = launchConfig?.configurations ?? [];
+  const togglePanel = useUIStore((s) => s.togglePanel);
+  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
+  const panelCollapsed = useUIStore((s) => s.panelCollapsed);
+  const projectStatuses =
+    useSandboxStore((s) => (activeProjectId ? s.processStatuses[activeProjectId] : undefined)) ?? {};
+
+  const selectedConfigName = useSandboxStore((s) => s.selectedConfigName);
+  // Resolve selected config: explicit selection > preview flag > first config
+  const selectedConfig =
+    (selectedConfigName ? configs.find((c) => c.name === selectedConfigName) : null) ??
+    configs.find((c) => c.preview) ??
+    configs[0] ??
+    null;
+  const [stopPopoverOpen, setStopPopoverOpen] = useState(false);
+  const runningCount = configs.filter((c) => {
+    const s = projectStatuses[c.name] ?? 'stopped';
+    return s === 'running' || s === 'starting';
+  }).length;
+  const anyRunning = runningCount > 0;
+
+  // Auto-close stop popover when nothing is running
+  useEffect(() => {
+    if (!anyRunning) setStopPopoverOpen(false);
+  }, [anyRunning]);
+
+  const handleStart = useCallback(async () => {
+    const projectId = useProjectsStore.getState().activeProjectId;
+    if (!projectId || !selectedConfig) return;
+    try {
+      const store = useSandboxStore.getState();
+      store.clearLogsForName(selectedConfig.name);
+      store.markFreshLaunch(selectedConfig.name);
+      await startLaunchConfig(projectId, selectedConfig.name);
+      setPanelVisible(true);
+      if (panelCollapsed.bottom) togglePanel('bottom');
+    } catch (err) {
+      console.warn('[sandbox] start failed', err);
+    }
+  }, [selectedConfig, panelCollapsed, togglePanel, setPanelVisible]);
+
+  const handleCloseLaunchPopover = useCallback(() => setLaunchPopoverOpen(false), []);
+  const handleCloseStopPopover = useCallback(() => setStopPopoverOpen(false), []);
+
   // Fullview plugin icons (right side of title bar)
   const fullviewContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'fullview');
   const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
@@ -136,6 +189,7 @@ export function TitleBar({
             ) : (
               <span className="text-mf-body text-mf-text-secondary">No project</span>
             )}
+            <ChevronDown size={12} className="text-mf-text-secondary" />
           </button>
 
           {dropdownOpen && (
@@ -252,31 +306,88 @@ export function TitleBar({
         </div>
       </div>
 
-      {/* Fullview plugin icons — right side */}
-      {fullviewContributions.length > 0 && (
-        <div className="absolute right-4 flex items-center gap-1 app-no-drag z-10">
-          {fullviewContributions.map((c) => (
-            <button
-              key={c.pluginId}
-              data-testid={`${c.pluginId}-panel-icon`}
-              onClick={() => handleFullviewClick(c.pluginId)}
-              title={c.label}
-              className={cn(
-                'w-7 h-7 flex items-center justify-center rounded-mf-card transition-colors',
-                activeFullviewId === c.pluginId
-                  ? 'bg-mf-accent text-white'
-                  : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
-              )}
-            >
-              {c.icon ? (
-                <PluginIcon name={c.icon} size={15} />
-              ) : (
-                <span className="text-mf-small font-semibold">{c.label.charAt(0)}</span>
-              )}
-            </button>
-          ))}
+      {/* Right side — Preview + plugin icons */}
+      <div className="absolute right-4 flex items-center gap-1 app-no-drag z-10">
+        {/* Preview / Launch button */}
+        <div className="relative flex items-center" data-launch-popover>
+          <button
+            data-testid="launch-config-selector"
+            onClick={() => {
+              setLaunchPopoverOpen((o) => !o);
+              setStopPopoverOpen(false);
+            }}
+            className={cn(
+              'flex items-center gap-1.5 px-2 py-1 text-mf-body rounded-mf-card hover:bg-mf-panel-bg transition-colors',
+              selectedConfig
+                ? 'text-mf-text-secondary hover:text-mf-text-primary'
+                : 'text-mf-text-secondary opacity-60 hover:opacity-100',
+            )}
+            title="Launch configurations"
+          >
+            <span>{selectedConfig?.name ?? 'No launch configurations'}</span>
+            <ChevronDown size={12} />
+          </button>
+          {launchPopoverOpen && <LaunchPopover onClose={handleCloseLaunchPopover} />}
         </div>
-      )}
+
+        {/* Play button — only when a config is selected and nothing is running */}
+        {selectedConfig && !anyRunning && (
+          <button
+            data-testid="launch-start-btn"
+            onClick={() => void handleStart()}
+            className="w-7 h-7 flex items-center justify-center rounded-mf-card text-mf-accent hover:text-mf-accent hover:bg-mf-panel-bg transition-colors"
+            title="Start"
+          >
+            <Play size={12} />
+          </button>
+        )}
+
+        {/* Stop button with badge — when any process is running */}
+        {anyRunning && (
+          <div className="relative" data-stop-popover>
+            <button
+              data-testid="launch-stop-btn"
+              onClick={() => {
+                setStopPopoverOpen((o) => !o);
+                setLaunchPopoverOpen(false);
+              }}
+              className="relative w-7 h-7 flex items-center justify-center rounded-mf-card hover:bg-mf-panel-bg transition-colors"
+              title="Stop"
+            >
+              <Square size={12} className="text-red-400" />
+              <span className="absolute bottom-0 right-0.5 text-[9px] font-bold leading-none text-mf-text-primary">
+                {runningCount}
+              </span>
+            </button>
+            {stopPopoverOpen && <StopPopover onClose={handleCloseStopPopover} />}
+          </div>
+        )}
+
+        {/* Separator */}
+        {fullviewContributions.length > 0 && <div className="h-4 w-px bg-mf-divider mx-1" />}
+
+        {/* Fullview plugin icons */}
+        {fullviewContributions.map((c) => (
+          <button
+            key={c.pluginId}
+            data-testid={`${c.pluginId}-panel-icon`}
+            onClick={() => handleFullviewClick(c.pluginId)}
+            title={c.label}
+            className={cn(
+              'w-7 h-7 flex items-center justify-center rounded-mf-card transition-colors',
+              activeFullviewId === c.pluginId
+                ? 'bg-mf-accent text-white'
+                : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
+            )}
+          >
+            {c.icon ? (
+              <PluginIcon name={c.icon} size={15} />
+            ) : (
+              <span className="text-mf-small font-semibold">{c.label.charAt(0)}</span>
+            )}
+          </button>
+        ))}
+      </div>
       <DirectoryPickerModal
         open={dirPickerOpen}
         onSelect={(p) => void handleDirSelected(p)}

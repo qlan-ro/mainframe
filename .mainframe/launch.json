@@ -1,0 +1,28 @@
+{
+  "version": "1",
+  "configurations": [
+    {
+      "name": "Core Daemon",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@mainframe/core", "run", "dev"],
+      "port": 31416,
+      "url": null,
+      "env": {
+        "MAINFRAME_DATA_DIR": "~/.mainframe-sandbox"
+      }
+    },
+    {
+      "name": "Desktop App",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@mainframe/desktop", "run", "dev:web"],
+      "port": 5174,
+      "url": null,
+      "preview": true,
+      "env": {
+        "MAINFRAME_DATA_DIR": "~/.mainframe-sandbox",
+        "VITE_DAEMON_HTTP_PORT": "31416",
+        "VITE_DAEMON_WS_PORT": "31416"
+      }
+    }
+  ]
+}

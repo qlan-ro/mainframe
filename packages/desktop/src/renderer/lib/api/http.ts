@@ -1,4 +1,6 @@
-const API_BASE = 'http://127.0.0.1:31415';
+const host: string = (import.meta.env as Record<string, string>)['VITE_DAEMON_HOST'] ?? '127.0.0.1';
+const port: string = (import.meta.env as Record<string, string>)['VITE_DAEMON_HTTP_PORT'] ?? '31415';
+const API_BASE = `http://${host}:${port}`;
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);

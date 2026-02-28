@@ -7,6 +7,7 @@ import type { ChatManager } from '../chat/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { PluginManager } from '../plugins/manager.js';
+import type { LaunchRegistry } from '../launch/index.js';
 import type { DaemonEvent } from '@mainframe/types';
 import { createChildLogger } from '../logger.js';
 
@@ -24,8 +25,9 @@ export function createServerManager(
   adapters: AdapterRegistry,
   attachmentStore?: AttachmentStore,
   pluginManager?: PluginManager,
+  launchRegistry?: LaunchRegistry,
 ): ServerManager {
-  const app: Express = createHttpServer(db, chats, adapters, attachmentStore, pluginManager);
+  const app: Express = createHttpServer(db, chats, adapters, attachmentStore, pluginManager, launchRegistry);
   const httpServer = createServer(app);
   let _wsManager: WebSocketManager | null = null;
 

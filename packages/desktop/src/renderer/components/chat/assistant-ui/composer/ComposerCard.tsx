@@ -15,6 +15,7 @@ import { ContextPickerMenu } from '../../ContextPickerMenu';
 import { ComposerDropdown } from './ComposerDropdown';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
+import { useSandboxStore } from '../../../../store/sandbox';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
@@ -79,13 +80,15 @@ function StopButton() {
 }
 
 export function ComposerCard() {
-  const { chatId, composerError, dismissComposerError } = useMainframeRuntime();
+  const { chatId, composerError, dismissComposerError, openLightbox } = useMainframeRuntime();
   const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
   const adapters = useAdaptersStore((s) => s.adapters);
   const messages = useChatsStore((s) => s.messages.get(chatId));
   const hasMessages = (messages?.length ?? 0) > 0;
   const composerRuntime = useComposerRuntime();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const captures = useSandboxStore((s) => s.captures);
+  const removeCapture = useSandboxStore((s) => s.removeCapture);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -167,13 +170,43 @@ export function ComposerCard() {
         </ComposerPrimitive.AddAttachment>
       </div>
 
-      <div className="flex gap-2 px-3 pt-1 flex-wrap">
+      <div data-testid="composer-attachments" className="flex gap-2 px-3 pt-1 flex-wrap">
         <ComposerPrimitive.Attachments
           components={{
             Image: ImageAttachmentPreview,
             Attachment: ImageAttachmentPreview,
           }}
         />
+        {captures.map((c, i) => (
+          <div key={c.id} className="relative group w-14 h-14">
+            <button
+              type="button"
+              data-testid="capture-thumb"
+              className="w-full h-full rounded overflow-hidden border border-mf-border"
+              onClick={() => {
+                const images = captures.map((cap) => {
+                  const match = cap.imageDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                  return { mediaType: match?.[1] ?? 'image/png', data: match?.[2] ?? '' };
+                });
+                openLightbox(images, i);
+              }}
+            >
+              <img
+                src={c.imageDataUrl}
+                alt={c.type === 'screenshot' ? 'screenshot' : (c.selector ?? 'element')}
+                className="w-full h-full object-cover"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => removeCapture(c.id)}
+              className="absolute -top-1 -right-1 w-4 h-4 bg-mf-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label="Remove capture"
+            >
+              <X size={10} className="text-mf-panel-bg" />
+            </button>
+          </div>
+        ))}
       </div>
       {composerError && (
         <div className="mx-3 mt-2 rounded-md bg-mf-chat-error/15 px-3 py-2 text-mf-small text-mf-chat-error-subtle flex items-center justify-between gap-2 shadow-chat-error-inset">

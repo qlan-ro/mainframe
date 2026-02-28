@@ -2,6 +2,7 @@ import type { Chat, ChatMessage } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
 import type { PermissionMode } from './settings.js';
 import type { UIZone } from './plugin.js';
+import type { LaunchProcessStatus } from './launch.js';
 
 export type DaemonEvent =
   | { type: 'chat.created'; chat: Chat }
@@ -23,7 +24,9 @@ export type DaemonEvent =
       icon?: string;
     }
   | { type: 'plugin.panel.unregistered'; pluginId: string }
-  | { type: 'plugin.notification'; pluginId: string; title: string; body: string; level?: string };
+  | { type: 'plugin.notification'; pluginId: string; title: string; body: string; level?: string }
+  | { type: 'launch.output'; projectId: string; name: string; data: string; stream: 'stdout' | 'stderr' }
+  | { type: 'launch.status'; projectId: string; name: string; status: LaunchProcessStatus };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }
