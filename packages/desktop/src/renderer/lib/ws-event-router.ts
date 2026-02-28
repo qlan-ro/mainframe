@@ -30,9 +30,17 @@ export function routeEvent(event: DaemonEvent): void {
       chats.removeChat(event.chatId);
       chats.removeProcess(event.chatId);
       break;
-    case 'message.added':
-      log.debug('event:message.added', { chatId: event.chatId, type: event.message.type });
+    case 'display.message.added':
+      log.debug('event:display.message.added', { chatId: event.chatId });
       chats.addMessage(event.chatId, event.message);
+      break;
+    case 'display.message.updated':
+      log.debug('event:display.message.updated', { chatId: event.chatId, messageId: event.message.id });
+      chats.updateMessage(event.chatId, event.message);
+      break;
+    case 'display.messages.set':
+      log.debug('event:display.messages.set', { chatId: event.chatId, count: event.messages.length });
+      chats.setMessages(event.chatId, event.messages);
       break;
     case 'messages.cleared':
       log.info('event:messages.cleared', { chatId: event.chatId });

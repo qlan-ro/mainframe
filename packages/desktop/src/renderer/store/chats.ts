@@ -1,12 +1,12 @@
 import { create } from 'zustand';
-import type { Chat, ChatMessage, ControlRequest, AdapterProcess } from '@mainframe/types';
+import type { Chat, DisplayMessage, ControlRequest, AdapterProcess } from '@mainframe/types';
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 
 interface ChatsState {
   chats: Chat[];
   activeChatId: string | null;
-  messages: Map<string, ChatMessage[]>;
+  messages: Map<string, DisplayMessage[]>;
   pendingPermissions: Map<string, ControlRequest>;
   processes: Map<string, AdapterProcess>;
 
@@ -15,8 +15,9 @@ interface ChatsState {
   addChat: (chat: Chat) => void;
   updateChat: (chat: Chat) => void;
   removeChat: (id: string) => void;
-  addMessage: (chatId: string, message: ChatMessage) => void;
-  setMessages: (chatId: string, messages: ChatMessage[]) => void;
+  addMessage: (chatId: string, message: DisplayMessage) => void;
+  setMessages: (chatId: string, messages: DisplayMessage[]) => void;
+  updateMessage: (chatId: string, message: DisplayMessage) => void;
   addPendingPermission: (chatId: string, request: ControlRequest) => void;
   removePendingPermission: (chatId: string) => void;
   setProcess: (chatId: string, process: AdapterProcess) => void;
@@ -54,6 +55,20 @@ export const useChatsStore = create<ChatsState>((set) => ({
     set((state) => {
       const newMessages = new Map(state.messages);
       newMessages.set(chatId, messages);
+      return { messages: newMessages };
+    }),
+  updateMessage: (chatId, message) =>
+    set((state) => {
+      const newMessages = new Map(state.messages);
+      const existing = newMessages.get(chatId) || [];
+      const idx = existing.findIndex((m) => m.id === message.id);
+      if (idx >= 0) {
+        const updated = [...existing];
+        updated[idx] = message;
+        newMessages.set(chatId, updated);
+      } else {
+        newMessages.set(chatId, [...existing, message]);
+      }
       return { messages: newMessages };
     }),
   addPendingPermission: (chatId, request) =>

@@ -1,4 +1,4 @@
-import type { Project, Chat, ChatMessage, AdapterInfo } from '@mainframe/types';
+import type { Project, Chat, DisplayMessage, AdapterInfo } from '@mainframe/types';
 import { postJson, deleteRequest, API_BASE } from './http';
 import { createLogger } from '../logger';
 
@@ -42,7 +42,7 @@ export async function archiveChat(chatId: string): Promise<void> {
   await postJson(`${API_BASE}/api/chats/${chatId}/archive`);
 }
 
-export async function getChatMessages(chatId: string): Promise<ChatMessage[]> {
+export async function getChatMessages(chatId: string): Promise<DisplayMessage[]> {
   const res = await fetch(`${API_BASE}/api/chats/${chatId}/messages`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
