@@ -64,7 +64,7 @@ export function settingRoutes(ctx: RouteContext): Router {
       res.status(400).json({ success: false, error: parsed.error });
       return;
     }
-    const { defaultModel, defaultMode, planExecutionMode } = parsed.data;
+    const { defaultModel, defaultMode, planExecutionMode, executablePath } = parsed.data;
 
     if (defaultModel !== undefined) {
       if (defaultModel) ctx.db.settings.set('provider', `${adapterId}.defaultModel`, defaultModel);
@@ -78,6 +78,10 @@ export function settingRoutes(ctx: RouteContext): Router {
     if (planExecutionMode !== undefined) {
       if (planExecutionMode) ctx.db.settings.set('provider', `${adapterId}.planExecutionMode`, planExecutionMode);
       else ctx.db.settings.delete('provider', `${adapterId}.planExecutionMode`);
+    }
+    if (executablePath !== undefined) {
+      if (executablePath) ctx.db.settings.set('provider', `${adapterId}.executablePath`, executablePath);
+      else ctx.db.settings.delete('provider', `${adapterId}.executablePath`);
     }
 
     res.json({ success: true });

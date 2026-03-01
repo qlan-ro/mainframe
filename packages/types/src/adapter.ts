@@ -31,6 +31,7 @@ export interface SessionOptions {
 export interface SessionSpawnOptions {
   model?: string;
   permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
+  executablePath?: string;
 }
 
 export interface AdapterProcess {

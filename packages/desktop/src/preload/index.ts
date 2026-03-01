@@ -9,6 +9,7 @@ export interface MainframeAPI {
   };
   getAppInfo: () => Promise<{ version: string; author: string }>;
   readFile: (filePath: string) => Promise<string | null>;
+  showItemInFolder: (fullPath: string) => Promise<void>;
   log: (level: string, module: string, message: string, data?: unknown) => void;
 }
 
@@ -21,6 +22,7 @@ const api: MainframeAPI = {
   },
   getAppInfo: () => ipcRenderer.invoke('app:getInfo'),
   readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
+  showItemInFolder: (fullPath: string) => ipcRenderer.invoke('shell:showItemInFolder', fullPath),
   log: (level: string, module: string, message: string, data?: unknown) =>
     ipcRenderer.send('log', level, module, message, data),
 };

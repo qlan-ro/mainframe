@@ -155,6 +155,31 @@ describe('settingRoutes', () => {
       expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'gemini.planExecutionMode', 'auto');
     });
 
+    it('sets executablePath', () => {
+      const router = settingRoutes(ctx);
+      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
+      const res = mockRes();
+
+      handler(
+        { params: { adapterId: 'claude' }, query: {}, body: { executablePath: '/usr/local/bin/claude' } },
+        res,
+        vi.fn(),
+      );
+
+      expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'claude.executablePath', '/usr/local/bin/claude');
+      expect(res.json).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('deletes executablePath when empty', () => {
+      const router = settingRoutes(ctx);
+      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
+      const res = mockRes();
+
+      handler({ params: { adapterId: 'claude' }, query: {}, body: { executablePath: '' } }, res, vi.fn());
+
+      expect(ctx.db.settings.delete).toHaveBeenCalledWith('provider', 'claude.executablePath');
+    });
+
     it('ignores undefined fields', () => {
       const router = settingRoutes(ctx);
       const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');

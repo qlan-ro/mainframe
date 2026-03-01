@@ -146,6 +146,8 @@
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
     font-size: 15px;
+    user-select: none;
+    -webkit-user-select: none;
   }
 }
 
@@ -189,6 +191,17 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--mf-scrollbar-hover);
+}
+
+/* Re-enable text selection for content areas */
+.aui-md,
+input,
+textarea,
+[contenteditable],
+pre,
+code {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* assistant-ui markdown overrides */
