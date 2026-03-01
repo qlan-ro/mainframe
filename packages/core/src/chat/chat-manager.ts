@@ -85,6 +85,7 @@ export class ChatManager {
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       startChat: (chatId) => this.lifecycle.startChat(chatId),
       emitEvent: (event) => this.emitEvent(event),
+      emitDisplay: (chatId) => this.eventHandler.emitDisplay(chatId),
       getChat: (chatId) => this.getChat(chatId),
       getMessages: (chatId) => this.getMessages(chatId),
     });
@@ -173,6 +174,7 @@ export class ChatManager {
       const userMessage = this.messages.createTransientMessage(chatId, 'user', [{ type: 'text', text: content }]);
       this.messages.append(chatId, userMessage);
       this.emitEvent({ type: 'message.added', chatId, message: userMessage });
+      this.eventHandler.emitDisplay(chatId);
 
       if (source === 'mainframe') {
         const resolvedArgs = args ?? findMainframeCommand(name)?.promptTemplate ?? '';
@@ -210,6 +212,7 @@ export class ChatManager {
     );
     this.messages.append(chatId, message);
     this.emitEvent({ type: 'message.added', chatId, message });
+    this.eventHandler.emitDisplay(chatId);
     if (attachmentIds && attachmentIds.length > 0) {
       this.emitEvent({ type: 'context.updated', chatId });
     }
@@ -240,11 +243,13 @@ export class ChatManager {
   }
 
   async archiveChat(chatId: string): Promise<void> {
-    return this.lifecycle.archiveChat(chatId);
+    await this.lifecycle.archiveChat(chatId);
+    this.eventHandler.clearDisplayCache(chatId);
   }
 
   async endChat(chatId: string): Promise<void> {
-    return this.lifecycle.endChat(chatId);
+    await this.lifecycle.endChat(chatId);
+    this.eventHandler.clearDisplayCache(chatId);
   }
 
   async removeProject(projectId: string): Promise<void> {

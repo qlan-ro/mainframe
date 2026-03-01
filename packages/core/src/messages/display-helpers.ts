@@ -98,6 +98,11 @@ export function convertUserContent(content: MessageContent[]): {
 
 /** Apply tool grouping (explore groups, task groups, progress accumulation). */
 export function applyToolGrouping(content: DisplayContent[], categories: ToolCategories): DisplayContent[] {
+  // The grouping functions only understand text and tool-call PartEntry values.
+  // Non-groupable content (thinking, image, etc.) is encoded as sentinel text
+  // entries (`\0ng:N`) so they pass through grouping untouched, then decoded back.
+  const nonGroupable: DisplayContent[] = [];
+
   const parts: PartEntry[] = content.map((c) => {
     if (c.type === 'tool_call') {
       return {
@@ -110,32 +115,39 @@ export function applyToolGrouping(content: DisplayContent[], categories: ToolCat
       };
     }
     if (c.type === 'text') return { type: 'text' as const, text: c.text };
-    // Pass non-groupable content through by encoding as a sentinel tool call
-    return { type: 'text' as const, text: '' };
+    // Encode non-groupable content as sentinel text so it survives grouping in-place
+    const idx = nonGroupable.length;
+    nonGroupable.push(c);
+    return { type: 'text' as const, text: `\0ng:${idx}` };
   });
 
   let grouped = groupToolCallParts(parts, categories);
   grouped = groupTaskChildren(grouped, categories);
 
-  return convertGroupedPartsToDisplay(grouped, content, categories);
+  return convertGroupedPartsToDisplay(grouped, content, categories, nonGroupable);
 }
+
+const NG_SENTINEL_RE = /^\0ng:(\d+)$/;
 
 /** Convert PartEntry[] back to DisplayContent[], handling virtual group entries. */
 function convertGroupedPartsToDisplay(
   parts: PartEntry[],
   originalContent: DisplayContent[],
   categories: ToolCategories,
+  nonGroupable: DisplayContent[] = [],
 ): DisplayContent[] {
   const result: DisplayContent[] = [];
 
-  // Re-insert non-text/non-tool_call content (thinking, image, etc.) at the front
-  for (const c of originalContent) {
-    if (c.type !== 'tool_call' && c.type !== 'text') result.push(c);
-  }
-
   for (const part of parts) {
     if (part.type === 'text') {
-      if (part.text) result.push({ type: 'text', text: part.text });
+      // Decode sentinel markers back to original non-groupable content
+      const match = NG_SENTINEL_RE.exec(part.text);
+      if (match) {
+        const item = nonGroupable[Number(match[1])];
+        if (item) result.push(item);
+      } else if (part.text) {
+        result.push({ type: 'text', text: part.text });
+      }
       continue;
     }
 

@@ -44,6 +44,17 @@ export class EventHandler {
       this.getToolCategories,
     );
   }
+
+  /** Emit display delta for a chat (for use by code paths outside the session sink). */
+  emitDisplay(chatId: string): void {
+    const categories = this.getToolCategories(chatId);
+    emitDisplayDelta(chatId, this.messages, this.displayCache, categories, this.emitEvent);
+  }
+
+  /** Remove display cache entry for a chat (call on chat end/archive). */
+  clearDisplayCache(chatId: string): void {
+    this.displayCache.delete(chatId);
+  }
 }
 
 function buildSessionSink(

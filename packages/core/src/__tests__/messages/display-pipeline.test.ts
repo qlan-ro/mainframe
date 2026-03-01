@@ -270,5 +270,29 @@ describe('prepareMessagesForClient', () => {
       const taskGroups = result[0]!.content.filter((c) => c.type === 'task_group');
       expect(taskGroups).toHaveLength(1);
     });
+
+    it('preserves thinking block position among grouped tool calls', () => {
+      // thinking appears between text and tool calls — should stay in order
+      const messages = [
+        rawMsg('assistant', [
+          txt('Let me think'),
+          { type: 'thinking', thinking: 'reasoning here' } as MessageContent,
+          tu('tu1', 'Read', { file_path: 'a.ts' }),
+          tu('tu2', 'Read', { file_path: 'b.ts' }),
+          tu('tu3', 'Bash', { command: 'ls' }),
+        ]),
+        rawMsg('tool_result', [tr('tu1', 'content-a'), tr('tu2', 'content-b'), tr('tu3', 'ls-output')]),
+      ];
+      const result = prepareMessagesForClient(messages, TEST_CATEGORIES);
+      const content = result[0]!.content;
+      const types = content.map((c) => c.type);
+
+      // thinking should appear between text and tool entries, not at the front or back
+      const thinkingIdx = types.indexOf('thinking');
+      const textIdx = types.indexOf('text');
+      expect(thinkingIdx).toBeGreaterThan(textIdx);
+      // Should NOT be pushed to front (the old bug)
+      expect(thinkingIdx).not.toBe(0);
+    });
   });
 });
