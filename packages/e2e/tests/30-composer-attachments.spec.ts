@@ -68,9 +68,10 @@ test.describe('§30 Composer attachments', () => {
     await sendMessage(page, 'I attached a test image. Reply with just "received".');
     await waitForAIIdle(page, 60_000);
 
-    // Sent message should show image thumbnail
+    // AI should have responded (verifies the attachment was processed)
     const messageThumb = page.locator('[data-testid="message-image-thumb"]').first();
     await messageThumb.waitFor({ timeout: 10_000 });
     await expect(messageThumb).toBeVisible();
+    await expect(page.getByText('received', { exact: true }).first()).toBeVisible({ timeout: 5_000 });
   });
 });
