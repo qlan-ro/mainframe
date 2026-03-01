@@ -107,6 +107,10 @@ function setupIPC(): void {
     }
   });
 
+  ipcMain.handle('shell:showItemInFolder', (_event, fullPath: string) => {
+    shell.showItemInFolder(fullPath);
+  });
+
   ipcMain.on('log', (_event, level: string, module: string, message: string, data?: unknown) => {
     logFromRenderer(level, module, message, data);
   });

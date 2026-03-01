@@ -39,6 +39,21 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
 
   return (
     <div className="space-y-4">
+      {/* Executable Path */}
+      <div className="space-y-1.5">
+        <label className="text-mf-small text-mf-text-secondary">Executable Path</label>
+        <input
+          type="text"
+          value={config.executablePath ?? ''}
+          onChange={(e) => update({ executablePath: e.target.value || undefined })}
+          placeholder={adapterId}
+          className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-mf-input focus:outline-none focus:border-mf-accent"
+        />
+        <p className="text-mf-status text-mf-text-secondary">
+          Full path to the CLI binary. Leave empty to use system PATH.
+        </p>
+      </div>
+
       {/* Config conflict warning */}
       {conflicts.length > 0 && (
         <div className="flex items-start gap-2 px-3 py-2 rounded-mf-input bg-mf-warning/10 border border-mf-warning/30">

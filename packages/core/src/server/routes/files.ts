@@ -45,7 +45,7 @@ async function handleTree(ctx: RouteContext, req: Request, res: Response): Promi
 
     const dirents = await readdir(fullPath, { withFileTypes: true });
     const entries = dirents
-      .filter((e) => !e.name.startsWith('.') && e.name !== 'node_modules')
+      .filter((e) => !IGNORED_DIRS.has(e.name))
       .map((e) => ({
         name: e.name,
         type: e.isDirectory() ? ('directory' as const) : ('file' as const),
@@ -110,7 +110,7 @@ async function handleSearchFiles(ctx: RouteContext, req: Request, res: Response)
     }
     for (const entry of entries) {
       if (substringHits.length + fuzzyHits.length >= scanLimit) return;
-      if (entry.name.startsWith('.') || IGNORED_DIRS.has(entry.name)) continue;
+      if (IGNORED_DIRS.has(entry.name)) continue;
       if (!resolveAndValidatePath(basePath, path.join(dir, entry.name))) continue;
       const rel = path.relative(basePath, path.join(dir, entry.name));
       const relLower = rel.toLowerCase();
@@ -163,7 +163,7 @@ async function handleFilesList(ctx: RouteContext, req: Request, res: Response): 
     }
     for (const entry of entries) {
       if (files.length >= limit) return;
-      if (entry.name.startsWith('.') || IGNORED_DIRS.has(entry.name)) continue;
+      if (IGNORED_DIRS.has(entry.name)) continue;
       if (!resolveAndValidatePath(basePath, path.join(dir, entry.name))) continue;
       const rel = path.relative(basePath, path.join(dir, entry.name));
       if (entry.isDirectory()) {

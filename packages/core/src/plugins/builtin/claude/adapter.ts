@@ -29,7 +29,6 @@ export class ClaudeAdapter implements Adapter {
 
   private sessions = new Set<ClaudeSession>();
 
-  // TODO we might need to support user provided path instead of relying it's added to $PATH
   async isInstalled(): Promise<boolean> {
     return new Promise((resolve) => {
       const child = spawn('claude', ['--version'], { shell: true });

@@ -103,6 +103,25 @@ describe('GET /api/projects/:id/tree', () => {
     expect(entries.find((e) => e.name === 'node_modules')).toBeUndefined();
     expect(entries.find((e) => e.name === 'src')).toBeDefined();
   });
+
+  it('includes dotfiles and dotfolders in listing', async () => {
+    await mkdir(join(projectDir, '.claude'));
+    await writeFile(join(projectDir, '.env'), 'SECRET=x');
+    await mkdir(join(projectDir, 'src'));
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
+    await flushPromises();
+
+    const entries = res.json.mock.calls[0][0] as Array<{ name: string }>;
+    expect(entries.find((e) => e.name === '.claude')).toBeDefined();
+    expect(entries.find((e) => e.name === '.env')).toBeDefined();
+    expect(entries.find((e) => e.name === 'src')).toBeDefined();
+  });
 });
 
 describe('GET /api/projects/:id/search/files', () => {

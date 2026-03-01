@@ -135,7 +135,8 @@ export class ClaudeSession implements AdapterSession {
       args.push('--dangerously-skip-permissions');
     }
 
-    const child = spawn('claude', args, {
+    const executable = options.executablePath || 'claude';
+    const child = spawn(executable, args, {
       cwd: this.projectPath,
       shell: process.platform === 'win32',
       detached: false,
