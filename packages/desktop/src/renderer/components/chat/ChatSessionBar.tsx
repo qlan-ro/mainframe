@@ -92,12 +92,14 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
   const progressColor = getProgressColor(usagePct);
 
   return (
-    <div className="h-7 flex items-center px-3 text-mf-status bg-mf-panel-bg shrink-0">
+    <div data-testid="session-bar" className="h-7 flex items-center px-3 text-mf-status bg-mf-panel-bg shrink-0">
       {/* Left: identity */}
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <div className={cn('w-[6px] h-[6px] rounded-full shrink-0', accentClass)} />
-          <span className="text-mf-text-secondary">{adapterLabel}</span>
+          <span data-testid="session-bar-adapter" className="text-mf-text-secondary">
+            {adapterLabel}
+          </span>
           {modelLabel && <span className="text-mf-text-secondary opacity-60">{modelLabel}</span>}
         </div>
 
@@ -115,7 +117,7 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
       </div>
 
       {/* Center: status */}
-      <div className="flex items-center justify-center px-3">
+      <div data-testid="session-bar-status" className="flex items-center justify-center px-3">
         <StatusIndicator chatId={chatId} />
       </div>
 
@@ -132,7 +134,11 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
             />
           ))}
         </div>
-        {usagePct > 0 && <span className="text-mf-text-secondary tabular-nums">{usagePct}%</span>}
+        {usagePct > 0 && (
+          <span data-testid="session-bar-context-pct" className="text-mf-text-secondary tabular-nums">
+            {usagePct}%
+          </span>
+        )}
       </div>
     </div>
   );
