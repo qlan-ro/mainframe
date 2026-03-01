@@ -11,6 +11,7 @@ export interface PlanModeContext {
   db: DatabaseManager;
   getActiveChat(chatId: string): ActiveChat | undefined;
   emitEvent(event: DaemonEvent): void;
+  clearDisplayCache(chatId: string): void;
   startChat(chatId: string): Promise<void>;
   sendMessage(chatId: string, content: string): Promise<void>;
 }
@@ -64,6 +65,7 @@ export class PlanModeHandler {
     this.ctx.emitEvent({ type: 'chat.updated', chat: active.chat });
 
     this.ctx.messages.set(chatId, []);
+    this.ctx.clearDisplayCache(chatId);
     this.ctx.emitEvent({ type: 'messages.cleared', chatId });
 
     await this.ctx.startChat(chatId);

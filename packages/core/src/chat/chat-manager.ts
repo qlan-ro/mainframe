@@ -64,6 +64,7 @@ export class ChatManager {
       db: this.db,
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       emitEvent: (event) => this.emitEvent(event),
+      clearDisplayCache: (chatId) => this.eventHandler.clearDisplayCache(chatId),
       startChat: (chatId) => this.lifecycle.startChat(chatId),
       sendMessage: (chatId, content) => this.sendMessage(chatId, content),
     });
@@ -267,6 +268,7 @@ export class ChatManager {
       this.activeChats.delete(chat.id);
       this.messages.delete(chat.id);
       this.permissions.clear(chat.id);
+      this.eventHandler.clearDisplayCache(chat.id);
     }
     this.db.projects.removeWithChats(projectId);
   }

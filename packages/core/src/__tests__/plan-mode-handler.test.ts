@@ -59,6 +59,7 @@ function makeContext(hasActiveSession = true): PlanModeContext & {
     } as any,
     getActiveChat: vi.fn().mockReturnValue(activeChat),
     emitEvent: vi.fn(),
+    clearDisplayCache: vi.fn(),
     startChat: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     session,
