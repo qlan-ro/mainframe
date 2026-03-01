@@ -7,6 +7,7 @@ import { CenterPanel } from './components/center/CenterPanel';
 import { SearchPalette } from './components/SearchPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { TutorialOverlay } from './components/TutorialOverlay';
+import { ConnectionOverlay } from './components/ConnectionOverlay';
 import { useAppInit } from './hooks/useAppInit';
 import { useProjectsStore, useSettingsStore } from './store';
 import { daemonClient } from './lib/client';
@@ -47,6 +48,7 @@ export default function App(): React.ReactElement {
       <SearchPalette />
       <SettingsModal />
       <TutorialOverlay />
+      <ConnectionOverlay />
     </ErrorBoundary>
   );
 }

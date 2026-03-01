@@ -1,8 +1,9 @@
 import type { ClientEvent, DaemonEvent, ControlResponse } from '@mainframe/types';
 import { createLogger } from './logger';
 
-const host: string = (import.meta.env as Record<string, string>)['VITE_DAEMON_HOST'] ?? '127.0.0.1';
-const wsPort: string = (import.meta.env as Record<string, string>)['VITE_DAEMON_WS_PORT'] ?? '31415';
+const env = (import.meta as { env?: Record<string, string> }).env ?? {};
+const host: string = env['VITE_DAEMON_HOST'] ?? '127.0.0.1';
+const wsPort: string = env['VITE_DAEMON_WS_PORT'] ?? '31415';
 const WS_URL = `ws://${host}:${wsPort}`;
 const log = createLogger('renderer:ws');
 
@@ -200,4 +201,6 @@ export class DaemonClient {
 export const daemonClient = new DaemonClient();
 
 // Expose for E2E test introspection (harmless: renderer runs inside Electron, not on the public web)
-(window as Window & { __daemonClient?: DaemonClient }).__daemonClient = daemonClient;
+if (typeof window !== 'undefined') {
+  (window as Window & { __daemonClient?: DaemonClient }).__daemonClient = daemonClient;
+}
