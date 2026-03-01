@@ -153,6 +153,7 @@ export interface Adapter {
 
   createSession(options: SessionOptions): AdapterSession;
   killAll(): void;
+  getToolCategories?(): import('./display.js').ToolCategories;
 
   getContextFiles?(projectPath: string): {
     global: import('./context.js').ContextFile[];

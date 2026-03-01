@@ -1,10 +1,12 @@
 import type {
   DaemonEvent,
+  DisplayMessage,
   SessionSink,
   ControlResponse,
   SessionResult,
   SkillFileEntry,
   MessageMetadata,
+  ToolCategories,
 } from '@mainframe/types';
 import type { DatabaseManager } from '../db/index.js';
 import type { MessageCache } from './message-cache.js';
@@ -12,17 +14,21 @@ import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
 import { trackFileActivity } from './context-tracker.js';
 import { stripMainframeCommandTags } from '../messages/message-parsing.js';
+import { emitDisplayDelta } from './display-emitter.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('chat:events');
 
 export class EventHandler {
+  private displayCache = new Map<string, DisplayMessage[]>();
+
   constructor(
     private db: DatabaseManager,
     private messages: MessageCache,
     private permissions: PermissionManager,
     private getActiveChat: (chatId: string) => ActiveChat | undefined,
     private emitEvent: (event: DaemonEvent) => void,
+    private getToolCategories: (chatId: string) => ToolCategories | undefined = () => undefined,
   ) {}
 
   buildSink(chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>): SessionSink {
@@ -34,7 +40,20 @@ export class EventHandler {
       this.getActiveChat,
       this.emitEvent,
       respondToPermission,
+      this.displayCache,
+      this.getToolCategories,
     );
+  }
+
+  /** Emit display delta for a chat (for use by code paths outside the session sink). */
+  emitDisplay(chatId: string): void {
+    const categories = this.getToolCategories(chatId);
+    emitDisplayDelta(chatId, this.messages, this.displayCache, categories, this.emitEvent);
+  }
+
+  /** Remove display cache entry for a chat (call on chat end/archive). */
+  clearDisplayCache(chatId: string): void {
+    this.displayCache.delete(chatId);
   }
 }
 
@@ -46,7 +65,14 @@ function buildSessionSink(
   getActiveChat: (chatId: string) => ActiveChat | undefined,
   emitEvent: (event: DaemonEvent) => void,
   respondToPermission: (response: ControlResponse) => Promise<void>,
+  displayCache: Map<string, DisplayMessage[]>,
+  getToolCategories: (chatId: string) => ToolCategories | undefined,
 ): SessionSink {
+  function emitDisplay(): void {
+    const categories = getToolCategories(chatId);
+    emitDisplayDelta(chatId, messages, displayCache, categories, emitEvent);
+  }
+
   return {
     onInit(sessionId: string) {
       const active = getActiveChat(chatId);
@@ -87,12 +113,14 @@ function buildSessionSink(
       const message = messages.createTransientMessage(chatId, 'assistant', cleaned, msgMeta);
       messages.append(chatId, message);
       emitEvent({ type: 'message.added', chatId, message });
+      emitDisplay();
     },
 
     onToolResult(content: any[]) {
       const message = messages.createTransientMessage(chatId, 'tool_result', content);
       messages.append(chatId, message);
       emitEvent({ type: 'message.added', chatId, message });
+      emitDisplay();
     },
 
     onPermission(request: any) {
@@ -160,6 +188,7 @@ function buildSessionSink(
           ]);
           messages.append(chatId, message);
           emitEvent({ type: 'message.added', chatId, message });
+          emitDisplay();
         }
       } else {
         permissions.clearInterrupted(chatId);
@@ -181,6 +210,7 @@ function buildSessionSink(
       const message = messages.createTransientMessage(chatId, 'system', [{ type: 'text', text: 'Context compacted' }]);
       messages.append(chatId, message);
       emitEvent({ type: 'message.added', chatId, message });
+      emitDisplay();
     },
 
     onPlanFile(filePath: string) {
@@ -206,6 +236,7 @@ function buildSessionSink(
         ]);
         messages.append(chatId, announcement);
         emitEvent({ type: 'message.added', chatId, message: announcement });
+        emitDisplay();
       }
 
       if (db.chats.addSkillFile(chatId, entry)) {

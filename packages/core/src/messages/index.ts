@@ -16,6 +16,8 @@ export {
 
 export { type GroupedMessage, groupMessages } from './message-grouping.js';
 
+export { prepareMessagesForClient } from './display-pipeline.js';
+
 export {
   COMMAND_NAME_RE,
   ATTACHED_FILE_PATH_RE,

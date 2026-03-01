@@ -4,6 +4,7 @@ import type {
   ControlRequest,
   ControlResponse,
   DaemonEvent,
+  DisplayMessage,
   SessionMention,
   SessionContext,
 } from '@mainframe/types';
@@ -24,6 +25,7 @@ import { EventHandler } from './event-handler.js';
 import type { ActiveChat } from './types.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
+import { prepareMessagesForClient } from '../messages/display-pipeline.js';
 
 const logger = createChildLogger('chat:manager');
 
@@ -50,6 +52,11 @@ export class ChatManager {
       this.permissions,
       (chatId) => this.activeChats.get(chatId),
       (e) => this.emitEvent(e),
+      (chatId) => {
+        const chat = this.activeChats.get(chatId)?.chat ?? this.db.chats.get(chatId);
+        const adapter = chat ? this.adapters.get(chat.adapterId) : undefined;
+        return adapter?.getToolCategories?.();
+      },
     );
     this.planMode = new PlanModeHandler({
       permissions: this.permissions,
@@ -57,6 +64,7 @@ export class ChatManager {
       db: this.db,
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       emitEvent: (event) => this.emitEvent(event),
+      clearDisplayCache: (chatId) => this.eventHandler.clearDisplayCache(chatId),
       startChat: (chatId) => this.lifecycle.startChat(chatId),
       sendMessage: (chatId, content) => this.sendMessage(chatId, content),
     });
@@ -78,6 +86,7 @@ export class ChatManager {
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       startChat: (chatId) => this.lifecycle.startChat(chatId),
       emitEvent: (event) => this.emitEvent(event),
+      emitDisplay: (chatId) => this.eventHandler.emitDisplay(chatId),
       getChat: (chatId) => this.getChat(chatId),
       getMessages: (chatId) => this.getMessages(chatId),
     });
@@ -166,6 +175,7 @@ export class ChatManager {
       const userMessage = this.messages.createTransientMessage(chatId, 'user', [{ type: 'text', text: content }]);
       this.messages.append(chatId, userMessage);
       this.emitEvent({ type: 'message.added', chatId, message: userMessage });
+      this.eventHandler.emitDisplay(chatId);
 
       if (source === 'mainframe') {
         const resolvedArgs = args ?? findMainframeCommand(name)?.promptTemplate ?? '';
@@ -203,6 +213,7 @@ export class ChatManager {
     );
     this.messages.append(chatId, message);
     this.emitEvent({ type: 'message.added', chatId, message });
+    this.eventHandler.emitDisplay(chatId);
     if (attachmentIds && attachmentIds.length > 0) {
       this.emitEvent({ type: 'context.updated', chatId });
     }
@@ -233,11 +244,13 @@ export class ChatManager {
   }
 
   async archiveChat(chatId: string): Promise<void> {
-    return this.lifecycle.archiveChat(chatId);
+    await this.lifecycle.archiveChat(chatId);
+    this.eventHandler.clearDisplayCache(chatId);
   }
 
   async endChat(chatId: string): Promise<void> {
-    return this.lifecycle.endChat(chatId);
+    await this.lifecycle.endChat(chatId);
+    this.eventHandler.clearDisplayCache(chatId);
   }
 
   async removeProject(projectId: string): Promise<void> {
@@ -255,6 +268,7 @@ export class ChatManager {
       this.activeChats.delete(chat.id);
       this.messages.delete(chat.id);
       this.permissions.clear(chat.id);
+      this.eventHandler.clearDisplayCache(chat.id);
     }
     this.db.projects.removeWithChats(projectId);
   }
@@ -310,6 +324,14 @@ export class ChatManager {
       /* best-effort: return empty if history loading fails */
       return [];
     }
+  }
+
+  async getDisplayMessages(chatId: string): Promise<DisplayMessage[]> {
+    const raw = await this.getMessages(chatId);
+    const chat = this.getChat(chatId);
+    const adapter = chat ? this.adapters.get(chat.adapterId) : undefined;
+    const categories = adapter?.getToolCategories?.();
+    return prepareMessagesForClient(raw, categories);
   }
 
   isChatRunning(chatId: string): boolean {

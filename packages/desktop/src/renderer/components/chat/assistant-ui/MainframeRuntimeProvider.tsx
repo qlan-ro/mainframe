@@ -8,7 +8,7 @@ import {
 } from '@assistant-ui/react';
 import type { AttachmentAdapter, ExternalStoreThreadListAdapter } from '@assistant-ui/react';
 import { useChatSession } from '../../../hooks/useChatSession';
-import { groupMessages, convertMessage } from './convert-message';
+import { convertMessage } from './convert-message';
 import { daemonClient } from '../../../lib/client';
 import { archiveChat } from '../../../lib/api';
 import { useChatsStore } from '../../../store/chats';
@@ -80,7 +80,6 @@ function formatComposerError(error: unknown): string {
 
 export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeProviderProps) {
   const { messages: rawMessages, pendingPermission, sendMessage, respondToPermission } = useChatSession(chatId);
-  const groupedMessages = useMemo(() => groupMessages(rawMessages), [rawMessages]);
   const commands = useSkillsStore((s) => s.commands);
 
   const [composerError, setComposerError] = useState<string | null>(null);
@@ -282,7 +281,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
 
   const runtime = useExternalStoreRuntime({
     isRunning,
-    messages: groupedMessages,
+    messages: rawMessages,
     convertMessage,
     onNew,
     onCancel,

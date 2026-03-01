@@ -7,15 +7,8 @@ import remarkGfm from 'remark-gfm';
 import { markdownComponents } from '../parts/markdown-text';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useSkillsStore } from '../../../../store/skills';
-import type { ChatMessage, MessageContent } from '@mainframe/types';
-import {
-  PLAN_PREFIX,
-  highlightMentions,
-  parseCommandMessage,
-  resolveSkillName,
-  parseRawCommand,
-  parseAttachedFilePathTags,
-} from '../message-parsing';
+import type { DisplayMessage, DisplayContent } from '@mainframe/types';
+import { PLAN_PREFIX, highlightMentions, resolveSkillName, parseRawCommand } from '../message-parsing';
 import { ImageThumbs, FileAttachmentThumbs } from './ImageThumbs';
 
 const REMARK_PLUGINS = [remarkGfm];
@@ -32,26 +25,48 @@ export function UserMessage() {
   const skills = useSkillsStore((s) => s.skills);
   const commands = useSkillsStore((s) => s.commands);
 
-  const [original] = getExternalStoreMessages<ChatMessage>(message);
-  const imageBlocks = (original?.content?.filter((c): c is MessageContent & { type: 'image' } => c.type === 'image') ??
+  const [original] = getExternalStoreMessages<DisplayMessage>(message);
+
+  // Images from DisplayContent
+  const imageBlocks = (original?.content?.filter((c): c is DisplayContent & { type: 'image' } => c.type === 'image') ??
     []) as { type: 'image'; mediaType: string; data: string }[];
-  const fileAttachmentBlocks = Array.isArray(original?.metadata?.attachments)
+
+  // File attachments from raw attachment metadata
+  const rawAttachments = Array.isArray(original?.metadata?.attachments)
     ? (original!.metadata!.attachments as Array<{ name?: string; kind?: string }>)
-        .filter((attachment) => attachment.kind === 'file' && !!attachment.name)
-        .map((attachment) => ({ name: attachment.name! }))
+        .filter((a) => a.kind === 'file' && !!a.name)
+        .map((a) => ({ name: a.name! }))
     : [];
 
+  // File attachments extracted by pipeline from <attached_file_path> tags
+  const pipelineFiles = (original?.metadata?.attachedFiles as { name: string }[] | undefined) ?? [];
+
+  // Command info from metadata — either pipeline-extracted { name, userText } from
+  // <command-name> parsing, or send-side { name, source } from the desktop's onNew handler
+  const metaCommand = original?.metadata?.command as { name: string; userText?: string; source?: string } | undefined;
+
   const firstText = message.content.find((p): p is { type: 'text'; text: string } => p.type === 'text');
-
   const rawUserText = firstText?.text ?? '';
-  const { files: parsedFileTags, cleanText } = parseAttachedFilePathTags(rawUserText);
 
-  let parsed = cleanText ? parseCommandMessage(cleanText) : null;
-  if (parsed) {
-    parsed = { ...parsed, commandName: resolveSkillName(parsed.commandName, skills) };
-  } else if (cleanText) {
-    parsed = parseRawCommand(cleanText, skills, commands);
+  // Use metadata when available, fall back to runtime parsing for bare /command patterns
+  let parsed: { commandName: string; userText: string; isCommand: boolean } | null = null;
+  if (metaCommand) {
+    const isCommand = metaCommand.source === 'commands';
+    parsed = {
+      commandName: resolveSkillName(metaCommand.name, skills),
+      userText: metaCommand.userText ?? rawUserText,
+      isCommand,
+    };
+  } else if (rawUserText) {
+    parsed = parseRawCommand(rawUserText, skills, commands);
   }
+
+  // cleanText from pipeline metadata, or raw text as fallback
+  const cleanText = (original?.metadata?.cleanText as string | undefined) ?? rawUserText;
+
+  const mergedFileAttachments = [...rawAttachments, ...pipelineFiles].filter(
+    (file, i, arr) => arr.findIndex((f) => f.name === file.name) === i,
+  );
 
   if (cleanText.startsWith(PLAN_PREFIX)) {
     const planBody = cleanText.slice(PLAN_PREFIX.length);
@@ -73,10 +88,6 @@ export function UserMessage() {
       </MessagePrimitive.Root>
     );
   }
-
-  const mergedFileAttachments = [...fileAttachmentBlocks, ...parsedFileTags].filter(
-    (file, i, arr) => arr.findIndex((f) => f.name === file.name) === i,
-  );
 
   if (parsed) {
     const Icon = parsed.isCommand ? Wrench : Zap;

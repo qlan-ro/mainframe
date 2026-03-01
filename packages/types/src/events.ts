@@ -12,6 +12,9 @@ export type DaemonEvent =
   | { type: 'process.ready'; processId: string; claudeSessionId: string }
   | { type: 'process.stopped'; processId: string }
   | { type: 'message.added'; chatId: string; message: ChatMessage }
+  | { type: 'display.message.added'; chatId: string; message: import('./display.js').DisplayMessage }
+  | { type: 'display.message.updated'; chatId: string; message: import('./display.js').DisplayMessage }
+  | { type: 'display.messages.set'; chatId: string; messages: import('./display.js').DisplayMessage[] }
   | { type: 'messages.cleared'; chatId: string }
   | { type: 'permission.requested'; chatId: string; request: ControlRequest }
   | { type: 'context.updated'; chatId: string }

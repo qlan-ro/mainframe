@@ -229,12 +229,14 @@ describe('message resilience across daemon restart', () => {
     const json = await res.json();
 
     expect(json.success).toBe(true);
-    expect(json.data).toHaveLength(10);
 
-    // Verify messages are in order
-    for (let i = 0; i < 10; i++) {
-      const content = json.data[i].content[0];
-      expect(content.text).toBe(`Message ${i + 1}`);
+    // REST now returns DisplayMessage[] which groups consecutive assistant turns.
+    // All 10 text blocks should be present (merged into grouped turns).
+    const allTexts = json.data.flatMap((m: any) =>
+      m.content.filter((c: any) => c.type === 'text').map((c: any) => c.text),
+    );
+    for (let i = 1; i <= 10; i++) {
+      expect(allTexts).toContain(`Message ${i}`);
     }
   }, 15_000);
 });

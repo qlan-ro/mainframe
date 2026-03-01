@@ -16,6 +16,7 @@ export interface PermissionHandlerDeps {
   getActiveChat: (chatId: string) => ActiveChat | undefined;
   startChat: (chatId: string) => Promise<void>;
   emitEvent: (event: DaemonEvent) => void;
+  emitDisplay: (chatId: string) => void;
   getChat: (chatId: string) => Chat | null;
   getMessages: (chatId: string) => Promise<ChatMessage[]>;
 }
@@ -45,6 +46,7 @@ export class ChatPermissionHandler {
       ]);
       this.deps.messages.append(chatId, message);
       this.deps.emitEvent({ type: 'message.added', chatId, message });
+      this.deps.emitDisplay(chatId);
     }
 
     if (response.clearContext && response.behavior === 'allow' && response.toolName === 'ExitPlanMode') {
