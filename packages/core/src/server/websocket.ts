@@ -62,7 +62,6 @@ export class WebSocketManager {
           event.permissionMode,
         );
         client.subscriptions.add(chat.id);
-        await this.chats.startChat(chat.id);
         break;
       }
 
