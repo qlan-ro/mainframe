@@ -61,8 +61,9 @@ export class ChatConfigManager {
       }
     }
 
-    if (active.session?.isSpawned) {
-      await active.session.kill();
+    const wasSpawned = active.session?.isSpawned ?? false;
+    if (wasSpawned) {
+      await active.session!.kill();
       active.session = null;
     }
 
@@ -82,7 +83,9 @@ export class ChatConfigManager {
 
     this.deps.db.chats.update(chatId, updates);
     this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
-    await this.deps.startChat(chatId);
+    if (wasSpawned) {
+      await this.deps.startChat(chatId);
+    }
   }
 
   async enableWorktree(chatId: string): Promise<void> {
