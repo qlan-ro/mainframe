@@ -100,6 +100,10 @@ export class ChatManager {
     });
   }
 
+  setPushService(service: import('../push/push-service.js').PushService): void {
+    this.eventHandler.setPushService(service);
+  }
+
   async createChat(
     projectId: string,
     adapterId: string,

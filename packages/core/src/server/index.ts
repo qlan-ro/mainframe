@@ -27,7 +27,8 @@ export function createServerManager(
   pluginManager?: PluginManager,
   launchRegistry?: LaunchRegistry,
 ): ServerManager {
-  const app: Express = createHttpServer(db, chats, adapters, attachmentStore, pluginManager, launchRegistry);
+  const { app, pushService } = createHttpServer(db, chats, adapters, attachmentStore, pluginManager, launchRegistry);
+  chats.setPushService(pushService);
   const httpServer = createServer(app);
   let _wsManager: WebSocketManager | null = null;
 

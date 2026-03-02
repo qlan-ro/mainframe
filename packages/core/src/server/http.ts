@@ -5,6 +5,7 @@ import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { LaunchRegistry } from '../launch/index.js';
 import { createChildLogger } from '../logger.js';
+import { createAuthMiddleware } from './middleware/auth.js';
 import {
   projectRoutes,
   chatRoutes,
@@ -19,6 +20,8 @@ import {
   commandRoutes,
   launchRoutes,
 } from './routes/index.js';
+import { authRoutes } from './routes/auth.js';
+import { PushService } from '../push/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 
 const log = createChildLogger('http');
@@ -30,8 +33,9 @@ export function createHttpServer(
   attachmentStore?: AttachmentStore,
   pluginManager?: PluginManager,
   launchRegistry?: LaunchRegistry,
-): Express {
+): { app: Express; pushService: PushService } {
   const app = express();
+  const pushService = new PushService();
 
   const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
@@ -52,12 +56,16 @@ export function createHttpServer(
 
   app.use(express.json({ limit: '30mb' }));
 
+  const authSecret = process.env.AUTH_TOKEN_SECRET ?? null;
+  app.use(createAuthMiddleware(authSecret));
+
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
   const ctx = { db, chats, adapters, attachmentStore, launchRegistry };
 
+  app.use(authRoutes({ pushService }));
   app.use(projectRoutes(ctx));
   app.use(chatRoutes(ctx));
   app.use(fileRoutes(ctx));
@@ -84,5 +92,5 @@ export function createHttpServer(
     }
   });
 
-  return app;
+  return { app, pushService };
 }
