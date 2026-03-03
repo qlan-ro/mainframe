@@ -29,7 +29,8 @@ export type DaemonEvent =
   | { type: 'plugin.panel.unregistered'; pluginId: string }
   | { type: 'plugin.notification'; pluginId: string; title: string; body: string; level?: string }
   | { type: 'launch.output'; projectId: string; name: string; data: string; stream: 'stdout' | 'stderr' }
-  | { type: 'launch.status'; projectId: string; name: string; status: LaunchProcessStatus };
+  | { type: 'launch.status'; projectId: string; name: string; status: LaunchProcessStatus }
+  | { type: 'launch.tunnel'; projectId: string; name: string; url: string };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }
