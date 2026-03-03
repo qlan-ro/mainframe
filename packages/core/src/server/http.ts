@@ -33,6 +33,7 @@ export function createHttpServer(
   attachmentStore?: AttachmentStore,
   pluginManager?: PluginManager,
   launchRegistry?: LaunchRegistry,
+  getTunnelUrl?: () => string | null,
 ): { app: Express; pushService: PushService } {
   const app = express();
   const pushService = new PushService();
@@ -60,10 +61,10 @@ export function createHttpServer(
   app.use(createAuthMiddleware(authSecret));
 
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), tunnelUrl: getTunnelUrl?.() ?? null });
   });
 
-  const ctx = { db, chats, adapters, attachmentStore, launchRegistry };
+  const ctx = { db, chats, adapters, attachmentStore, launchRegistry, tunnelUrl: getTunnelUrl?.() ?? null };
 
   app.use(authRoutes({ pushService }));
   app.use(projectRoutes(ctx));

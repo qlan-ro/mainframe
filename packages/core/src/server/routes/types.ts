@@ -11,6 +11,7 @@ export interface RouteContext {
   adapters: AdapterRegistry;
   attachmentStore?: AttachmentStore;
   launchRegistry?: LaunchRegistry;
+  tunnelUrl?: string | null;
 }
 
 /** Extract a route param as a string (Express 5 params may be string | string[]). */

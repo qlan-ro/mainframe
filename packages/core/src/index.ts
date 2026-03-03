@@ -11,6 +11,7 @@ import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
 import { PluginManager } from './plugins/manager.js';
 import { LaunchRegistry } from './launch/index.js';
+import { TunnelManager } from './tunnel/index.js';
 import claudeManifest from './plugins/builtin/claude/manifest.json' with { type: 'json' };
 import { activate as activateClaude } from './plugins/builtin/claude/index.js';
 import todosManifest from './plugins/builtin/todos/manifest.json' with { type: 'json' };
@@ -33,7 +34,8 @@ async function main(): Promise<void> {
   // server.start() (plugin loading) are safely dropped — no WS clients yet.
   let broadcastEvent: (event: DaemonEvent) => void = () => {};
   const chats = new ChatManager(db, adapters, attachmentStore, (event) => broadcastEvent(event));
-  const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event));
+  const tunnelManager = new TunnelManager();
+  const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 
   // PluginManager owns its own Express Router; no circular dep on the Express app
   const daemonBus = new EventEmitter();
@@ -57,10 +59,33 @@ async function main(): Promise<void> {
   // Load user-installed plugins from ~/.mainframe/plugins/
   await pluginManager.loadAll();
 
-  const server = createServerManager(db, chats, adapters, attachmentStore, pluginManager, launchRegistry);
+  let daemonTunnelUrl: string | null = null;
+
+  const server = createServerManager(
+    db,
+    chats,
+    adapters,
+    attachmentStore,
+    pluginManager,
+    launchRegistry,
+    () => daemonTunnelUrl,
+  );
 
   await server.start(config.port);
   broadcastEvent = (event) => server.broadcastEvent(event);
+
+  if (config.tunnelUrl) {
+    daemonTunnelUrl = config.tunnelUrl;
+    logger.info({ tunnelUrl: daemonTunnelUrl }, 'Using configured tunnel URL');
+  } else if (config.tunnel === true) {
+    try {
+      daemonTunnelUrl = await tunnelManager.start(config.port, 'daemon');
+      logger.info({ tunnelUrl: daemonTunnelUrl }, 'Daemon tunnel started');
+      logger.warn('Daemon is publicly accessible via tunnel — do not share this URL in untrusted environments');
+    } catch (err) {
+      logger.error({ err }, 'Failed to start daemon tunnel — continuing without tunnel');
+    }
+  }
 
   logger.info('Daemon ready');
 
@@ -69,6 +94,7 @@ async function main(): Promise<void> {
     await pluginManager.unloadAll();
     adapters.killAll();
     await launchRegistry.stopAll();
+    tunnelManager.stopAll();
     await server.stop();
     db.close();
     process.exit(0);

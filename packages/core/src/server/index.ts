@@ -26,8 +26,17 @@ export function createServerManager(
   attachmentStore?: AttachmentStore,
   pluginManager?: PluginManager,
   launchRegistry?: LaunchRegistry,
+  getTunnelUrl?: () => string | null,
 ): ServerManager {
-  const { app, pushService } = createHttpServer(db, chats, adapters, attachmentStore, pluginManager, launchRegistry);
+  const { app, pushService } = createHttpServer(
+    db,
+    chats,
+    adapters,
+    attachmentStore,
+    pluginManager,
+    launchRegistry,
+    getTunnelUrl,
+  );
   chats.setPushService(pushService);
   const httpServer = createServer(app);
   let _wsManager: WebSocketManager | null = null;
