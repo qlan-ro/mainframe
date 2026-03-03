@@ -26,6 +26,29 @@ export function launchRoutes(ctx: RouteContext): Router {
     }),
   );
 
+  router.get(
+    '/api/projects/:id/launch/configs',
+    asyncHandler(async (req: Request, res: Response) => {
+      const project = ctx.db.projects.get(param(req, 'id'));
+      if (!project) {
+        res.status(404).json({ success: false, error: 'Project not found' });
+        return;
+      }
+      const configPath = join(project.path, '.mainframe', 'launch.json');
+      try {
+        const raw = await readFile(configPath, 'utf-8');
+        const result = parseLaunchConfig(JSON.parse(raw));
+        if (!result.success) {
+          res.status(400).json({ success: false, error: result.error });
+          return;
+        }
+        res.json({ success: true, data: result.data.configurations });
+      } catch {
+        res.json({ success: true, data: [] });
+      }
+    }),
+  );
+
   router.post(
     '/api/projects/:id/launch/:name/start',
     asyncHandler(async (req: Request, res: Response) => {
