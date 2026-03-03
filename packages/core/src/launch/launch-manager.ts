@@ -3,6 +3,7 @@ import type { ChildProcess } from 'node:child_process';
 import { homedir } from 'node:os';
 import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@mainframe/types';
 import { createChildLogger } from '../logger.js';
+import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 
 const log = createChildLogger('launch');
 
@@ -38,6 +39,7 @@ export class LaunchManager {
     private projectId: string,
     private projectPath: string,
     private onEvent: (event: DaemonEvent) => void,
+    private tunnelManager?: TunnelManager,
   ) {}
 
   async start(config: LaunchConfiguration): Promise<void> {
@@ -113,6 +115,18 @@ export class LaunchManager {
         reject(err);
       });
     });
+
+    if (config.preview && config.port != null && this.tunnelManager) {
+      const label = `preview:${config.name}`;
+      this.tunnelManager.start(config.port, label).then(
+        (url) => {
+          this.emit({ type: 'launch.tunnel', projectId: this.projectId, name: config.name, url });
+        },
+        (err: unknown) => {
+          log.warn({ err, name: config.name }, 'tunnel failed to start');
+        },
+      );
+    }
   }
 
   async stop(name: string): Promise<void> {
@@ -120,6 +134,10 @@ export class LaunchManager {
     if (!managed) return;
     managed.status = 'stopped';
     this.emit({ type: 'launch.status', projectId: this.projectId, name, status: 'stopped' });
+
+    if (this.tunnelManager) {
+      this.tunnelManager.stop(`preview:${name}`);
+    }
 
     const child = managed.process;
     const pid = child.pid;

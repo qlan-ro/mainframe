@@ -15,7 +15,7 @@ export class LaunchRegistry {
     // projectPath is only used when creating a new manager; subsequent calls
     // with the same projectId return the existing manager regardless of path.
     if (!manager) {
-      manager = new LaunchManager(projectId, projectPath, this.onEvent);
+      manager = new LaunchManager(projectId, projectPath, this.onEvent, this.tunnelManager);
       this.managers.set(projectId, manager);
     }
     return manager;
