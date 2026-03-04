@@ -75,6 +75,16 @@ export function routeEvent(event: DaemonEvent): void {
     case 'launch.status':
       useSandboxStore.getState().setProcessStatus(event.projectId, event.name, event.status);
       break;
+    case 'launch.tunnel':
+      // Desktop uses localhost URLs, tunnel events are informational only
+      log.debug('event:launch.tunnel', { projectId: event.projectId, name: event.name, url: event.url });
+      break;
+    case 'launch.tunnel.failed':
+      log.warn('event:launch.tunnel.failed', { projectId: event.projectId, name: event.name, error: event.error });
+      break;
+    case 'launch.port.timeout':
+      log.warn('event:launch.port.timeout', { projectId: event.projectId, name: event.name, port: event.port });
+      break;
     case 'error':
       log.error('daemon error event', { error: event.error });
       useProjectsStore.getState().setError(event.error);

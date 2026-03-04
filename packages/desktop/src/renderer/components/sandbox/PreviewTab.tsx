@@ -108,7 +108,7 @@ export function PreviewTab(): React.ReactElement {
   const addCapture = useSandboxStore((s) => s.addCapture);
   const logsOutput = useSandboxStore((s) => s.logsOutput);
   const clearLogsForName = useSandboxStore((s) => s.clearLogsForName);
-  const markFreshLaunch = useSandboxStore((s) => s.markFreshLaunch);
+  const setLastStartedProcess = useSandboxStore((s) => s.setLastStartedProcess);
   const setPanelVisible = useUIStore((s) => s.setPanelVisible);
 
   const launchConfig = useLaunchConfig();
@@ -117,20 +117,14 @@ export function PreviewTab(): React.ReactElement {
   // Selected process tab
   const [selectedProcess, setSelectedProcess] = useState<string | null>(null);
 
-  // Switch to the tab of a freshly launched process.
-  // freshLaunchSeq increments on every markFreshLaunch call, ensuring this effect
-  // re-fires even when the same process is re-launched (same selector string).
-  const freshLaunchedProcess = useSandboxStore((s) => {
-    for (const [name, active] of Object.entries(s.freshLaunches)) {
-      if (active) return name;
-    }
-    return null;
-  });
-  const freshLaunchSeq = useSandboxStore((s) => s.freshLaunchSeq);
-
+  // Switch to the tab when a process is started
+  const lastStartedProcess = useSandboxStore((s) => s.lastStartedProcess);
   useEffect(() => {
-    if (freshLaunchedProcess) setSelectedProcess(freshLaunchedProcess);
-  }, [freshLaunchedProcess, freshLaunchSeq]);
+    if (lastStartedProcess) {
+      setSelectedProcess(lastStartedProcess);
+      setLastStartedProcess(null); // Clear after switching
+    }
+  }, [lastStartedProcess, setLastStartedProcess]);
 
   // Auto-select process when configs load and nothing is selected — prefer the preview config
   useEffect(() => {
@@ -163,56 +157,42 @@ export function PreviewTab(): React.ReactElement {
     return s.processStatuses[activeProjectId]?.[previewProcessName] ?? 'stopped';
   });
 
-  // Only retry-load when the user explicitly clicked Run (not on reconnect to an already-running process)
-  const isFreshLaunch = useSandboxStore((s) => (previewProcessName ? !!s.freshLaunches[previewProcessName] : false));
-
-  // During fresh launches, keep src as about:blank — the retry effect handles navigation via loadURL.
-  // For reconnect (not fresh launch), let src drive navigation directly.
-  const webviewSrc = previewStatus === 'running' && !isFreshLaunch ? previewUrl : 'about:blank';
-
   // Track whether the webview has successfully loaded (separate from process status)
   const [webviewReady, setWebviewReady] = useState(false);
-  // Ref-based flag so pending retry callbacks can check without stale closure values
-  const retryActiveRef = useRef(false);
-  // Ref for preview process name used inside the retry effect callbacks (avoids unstable deps)
-  const previewProcessRef = useRef(previewProcessName);
-  previewProcessRef.current = previewProcessName;
 
-  // Reset ready state and retry flag when process stops/restarts
+  // Reset ready state when process stops
   useEffect(() => {
     if (previewStatus !== 'running') {
       setWebviewReady(false);
-      retryActiveRef.current = false;
     }
   }, [previewStatus]);
 
-  // For reconnect (non-fresh-launch): navigate the webview via loadURL().
+  // Navigate the webview when process becomes running.
+  // Daemon waits for port readiness before emitting 'running', so the server should be available.
   // Electron's <webview> only reads the src attribute on initial mount — changing it
   // via React props does NOT trigger navigation. We must call loadURL() explicitly.
-  // loadURL() requires dom-ready to have fired first.
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wv = webviewRef.current as any;
-    if (!wv || isFreshLaunch || previewUrl === 'about:blank' || previewStatus !== 'running') return;
+    if (!wv || previewUrl === 'about:blank' || previewStatus !== 'running') return;
 
     let cancelled = false;
-    const markReady = () => {
-      if (!retryActiveRef.current && !cancelled) setWebviewReady(true);
-    };
 
     const navigate = () => {
       if (cancelled) return;
       try {
         const currentUrl = wv.getURL?.() as string | undefined;
         if (currentUrl === previewUrl && !wv.isLoading?.()) {
-          markReady();
+          setWebviewReady(true);
           return;
         }
       } catch {
         /* not ready yet */
       }
       wv.loadURL(previewUrl)
-        .then(markReady)
+        .then(() => {
+          if (!cancelled) setWebviewReady(true);
+        })
         .catch(() => {});
     };
 
@@ -228,61 +208,7 @@ export function PreviewTab(): React.ReactElement {
       cancelled = true;
       wv.removeEventListener('dom-ready', navigate);
     };
-  }, [isFreshLaunch, previewProcessName, previewUrl, previewStatus]);
-
-  // Retry loading the webview URL until the server responds or 60s elapses.
-  // Only activates on fresh launches (user clicked Run), not on reconnect.
-  // Uses loadURL()'s promise to detect success — resolves when page loads, rejects on failure.
-  // Schedule: every 1s for the first 10s, then every 5s until 60s.
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const wv = webviewRef.current as any;
-    if (!wv || !previewProcessName || !isFreshLaunch) return;
-
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const startTime = Date.now();
-    retryActiveRef.current = true;
-
-    const finish = (success: boolean) => {
-      if (stopped) return;
-      stopped = true;
-      clearTimeout(timer);
-      retryActiveRef.current = false;
-      if (success) setWebviewReady(true);
-      const name = previewProcessRef.current;
-      if (name) useSandboxStore.getState().clearFreshLaunch(name);
-    };
-
-    const attemptLoad = async () => {
-      if (stopped) return;
-      const elapsed = Date.now() - startTime;
-      if (elapsed >= 60_000) {
-        finish(false);
-        return;
-      }
-      try {
-        // loadURL returns a promise: resolves on success, rejects on failure
-        await wv.loadURL(previewUrl);
-        finish(true);
-        return;
-      } catch {
-        // ERR_CONNECTION_REFUSED, ERR_ABORTED, dom-not-ready throw — all retryable
-      }
-      if (stopped) return;
-      const delay = elapsed < 10_000 ? 1000 : 5000;
-      timer = setTimeout(() => void attemptLoad(), delay);
-    };
-
-    // Start after a brief delay to let dom-ready fire for the initial about:blank
-    timer = setTimeout(() => void attemptLoad(), 500);
-
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-      retryActiveRef.current = false;
-    };
-  }, [previewUrl, previewProcessName, isFreshLaunch]);
+  }, [previewProcessName, previewUrl, previewStatus]);
 
   const [logExpandedPerTab, setLogExpandedPerTab] = useState<Record<string, boolean>>({});
   const logExpanded = selectedProcess ? (logExpandedPerTab[selectedProcess] ?? !hasPreview) : true;
@@ -384,24 +310,23 @@ export function PreviewTab(): React.ReactElement {
     if (!activeProjectId || !selectedProcessConfig) return;
     try {
       clearLogsForName(selectedProcessConfig.name);
-      markFreshLaunch(selectedProcessConfig.name);
+      setLastStartedProcess(selectedProcessConfig.name);
       await startLaunchConfig(activeProjectId, selectedProcessConfig.name);
     } catch (err) {
       console.warn('[sandbox] start failed', err);
     }
-  }, [activeProjectId, selectedProcessConfig, clearLogsForName, markFreshLaunch]);
+  }, [activeProjectId, selectedProcessConfig, clearLogsForName, setLastStartedProcess]);
 
   const handleRestart = useCallback(async () => {
     if (!activeProjectId || !selectedProcessConfig) return;
     try {
       await stopLaunchConfig(activeProjectId, selectedProcessConfig.name);
       clearLogsForName(selectedProcessConfig.name);
-      markFreshLaunch(selectedProcessConfig.name);
       await startLaunchConfig(activeProjectId, selectedProcessConfig.name);
     } catch (err) {
       console.warn('[sandbox] restart failed', err);
     }
-  }, [activeProjectId, selectedProcessConfig, clearLogsForName, markFreshLaunch]);
+  }, [activeProjectId, selectedProcessConfig, clearLogsForName]);
 
   const isElectron = typeof window !== 'undefined' && 'mainframe' in window;
 
@@ -519,7 +444,7 @@ export function PreviewTab(): React.ReactElement {
                 // so visibility:hidden doesn't help. Use zero dimensions to truly hide until ready.
                 <webview
                   ref={webviewRef}
-                  src={webviewSrc}
+                  src="about:blank"
                   className={webviewReady ? 'w-full h-full' : ''}
                   style={webviewReady ? undefined : { position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
                 />

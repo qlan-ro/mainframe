@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import type {
   Adapter,
   AdapterModel,
@@ -31,25 +31,21 @@ export class ClaudeAdapter implements Adapter {
 
   async isInstalled(): Promise<boolean> {
     return new Promise((resolve) => {
-      const child = spawn('claude', ['--version'], { shell: true });
-      child.on('error', () => resolve(false));
-      child.on('close', (code) => resolve(code === 0));
+      execFile('claude', ['--version'], (err, _stdout, _stderr) => {
+        resolve(!err);
+      });
     });
   }
 
   async getVersion(): Promise<string | null> {
     return new Promise((resolve) => {
-      const child = spawn('claude', ['--version'], { shell: true });
-      let output = '';
-      child.stdout?.on('data', (chunk) => (output += chunk.toString()));
-      child.on('error', () => resolve(null));
-      child.on('close', (code) => {
-        if (code === 0) {
-          const match = output.match(/(\d+\.\d+\.\d+)/);
-          resolve(match?.[1] ?? output.trim());
-        } else {
+      execFile('claude', ['--version'], (err, stdout) => {
+        if (err) {
           resolve(null);
+          return;
         }
+        const match = stdout.match(/(\d+\.\d+\.\d+)/);
+        resolve(match?.[1] ?? stdout.trim());
       });
     });
   }

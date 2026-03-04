@@ -166,7 +166,15 @@ export class WebSocketManager {
 
   broadcastEvent(event: DaemonEvent): void {
     const chatId = 'chatId' in event ? event.chatId : undefined;
-    log.debug({ type: event.type, chatId }, 'broadcasting event');
+    // Skip per-line output events — they flood the log with no value
+    if (event.type !== 'launch.output') {
+      const extra: Record<string, unknown> = { type: event.type };
+      if (chatId) extra.chatId = chatId;
+      if ('name' in event) extra.name = event.name;
+      if ('status' in event) extra.status = event.status;
+      if ('projectId' in event) extra.projectId = event.projectId;
+      log.debug(extra, 'broadcast %s to %d client(s)', event.type, this.clients.size);
+    }
     const payload = JSON.stringify(event);
 
     for (const client of this.clients.values()) {

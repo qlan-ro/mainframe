@@ -41,7 +41,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
   };
 
   const clearLogsForName = useSandboxStore((s) => s.clearLogsForName);
-  const markFreshLaunch = useSandboxStore((s) => s.markFreshLaunch);
+  const setLastStartedProcess = useSandboxStore((s) => s.setLastStartedProcess);
 
   const handleToggleProcess = async (e: React.MouseEvent, config: LaunchConfiguration) => {
     e.stopPropagation();
@@ -54,7 +54,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
         await stopLaunchConfig(activeProject.id, config.name);
       } else {
         clearLogsForName(config.name);
-        markFreshLaunch(config.name);
+        setLastStartedProcess(config.name);
         await startLaunchConfig(activeProject.id, config.name);
         setPanelVisible(true);
         if (panelCollapsed.bottom) togglePanel('bottom');

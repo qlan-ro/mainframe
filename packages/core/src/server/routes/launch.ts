@@ -22,7 +22,18 @@ export function launchRoutes(ctx: RouteContext): Router {
       }
       const manager = ctx.launchRegistry?.getOrCreate(project.id, project.path);
       const statuses = manager?.getAllStatuses() ?? {};
-      res.json({ success: true, data: statuses });
+
+      // Include tunnel URLs for running processes
+      const tunnelUrls: Record<string, string> = {};
+      const tunnelManager = ctx.launchRegistry?.tunnelManager;
+      if (tunnelManager) {
+        for (const name of Object.keys(statuses)) {
+          const url = tunnelManager.getUrl(`preview:${name}`);
+          if (url) tunnelUrls[name] = url;
+        }
+      }
+
+      res.json({ success: true, data: { statuses, tunnelUrls } });
     }),
   );
 
@@ -90,10 +101,9 @@ export function launchRoutes(ctx: RouteContext): Router {
       }
       try {
         await manager.start(config);
-        logger.info({ projectId: project.id, name }, 'process started');
         res.json({ success: true });
       } catch (err) {
-        logger.error({ err, projectId: project.id, name }, 'Failed to start process');
+        logger.error({ err, projectId: project.id, name }, 'failed to start launch process');
         res.status(500).json({ success: false, error: 'Failed to start process' });
       }
     }),
@@ -110,7 +120,6 @@ export function launchRoutes(ctx: RouteContext): Router {
       const name = param(req, 'name');
       const manager = ctx.launchRegistry?.getOrCreate(project.id, project.path);
       await manager?.stop(name);
-      logger.info({ projectId: project.id, name }, 'process stopped');
       res.json({ success: true });
     }),
   );

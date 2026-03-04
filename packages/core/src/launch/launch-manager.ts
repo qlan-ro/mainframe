@@ -7,6 +7,9 @@ import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 
 const log = createChildLogger('launch');
 
+const PORT_POLL_MS = 1_000;
+const PORT_TIMEOUT_MS = 60_000;
+
 function expandEnvValues(env: Record<string, string>): Record<string, string> {
   const home = homedir();
   const result: Record<string, string> = {};
@@ -64,6 +67,9 @@ export class LaunchManager {
     const managed: ManagedProcess = { process: child, status: 'starting' };
     this.processes.set(config.name, managed);
 
+    const stderrTail: string[] = [];
+    const MAX_STDERR_LINES = 20;
+
     child.stdout?.on('data', (chunk: Buffer) => {
       this.emit({
         type: 'launch.output',
@@ -75,17 +81,28 @@ export class LaunchManager {
     });
 
     child.stderr?.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf-8');
+      for (const line of text.split('\n')) {
+        if (line.trim()) {
+          stderrTail.push(line);
+          if (stderrTail.length > MAX_STDERR_LINES) stderrTail.shift();
+        }
+      }
       this.emit({
         type: 'launch.output',
         projectId: this.projectId,
         name: config.name,
-        data: chunk.toString('utf-8'),
+        data: text,
         stream: 'stderr',
       });
     });
 
     child.on('exit', (code) => {
-      log.info({ name: config.name, code }, 'process exited');
+      if (code !== 0 && stderrTail.length > 0) {
+        log.warn({ name: config.name, pid: child.pid, code, stderr: stderrTail.join('\n') }, 'launch process failed');
+      } else {
+        log.info({ name: config.name, pid: child.pid, code }, 'launch process exited');
+      }
       if (managed.status !== 'stopped') {
         managed.status = code === 0 ? 'stopped' : 'failed';
         this.emit({
@@ -96,15 +113,25 @@ export class LaunchManager {
         });
       }
       this.processes.delete(config.name);
+
+      // Clean up tunnel when process exits unexpectedly
+      if (this.tunnelManager) {
+        this.tunnelManager.stop(`preview:${config.name}`);
+      }
     });
 
-    // Wait for spawn or error so callers can rely on getStatus() returning 'running'
-    // immediately after awaiting start().
+    // Wait for spawn or error
     await new Promise<void>((resolve, reject) => {
       child.once('spawn', () => {
-        managed.status = 'running';
-        this.emit({ type: 'launch.status', projectId: this.projectId, name: config.name, status: 'running' });
-        log.info({ name: config.name, pid: child.pid }, 'process started');
+        log.info(
+          {
+            name: config.name,
+            pid: child.pid,
+            cmd: `${config.runtimeExecutable} ${config.runtimeArgs.join(' ')}`,
+            port: config.port,
+          },
+          'launch process spawned',
+        );
         resolve();
       });
       child.once('error', (err) => {
@@ -112,9 +139,28 @@ export class LaunchManager {
         managed.status = 'failed';
         this.processes.delete(config.name);
         this.emit({ type: 'launch.status', projectId: this.projectId, name: config.name, status: 'failed' });
+        if (this.tunnelManager) {
+          this.tunnelManager.stop(`preview:${config.name}`);
+        }
         reject(err);
       });
     });
+
+    // If a port is configured, wait until the server is actually listening before
+    // emitting 'running'. This prevents clients from loading a URL too early.
+    if (config.port != null) {
+      log.info({ name: config.name, port: config.port }, 'waiting for port to become ready…');
+      const timedOut = await this.waitForPort(config.port, managed);
+      if (timedOut) {
+        this.emit({ type: 'launch.port.timeout', projectId: this.projectId, name: config.name, port: config.port });
+      }
+    }
+
+    if (managed.status === 'starting') {
+      managed.status = 'running';
+      this.emit({ type: 'launch.status', projectId: this.projectId, name: config.name, status: 'running' });
+      log.info({ name: config.name, port: config.port }, 'launch process ready');
+    }
 
     if (config.preview && config.port != null && this.tunnelManager) {
       const label = `preview:${config.name}`;
@@ -123,7 +169,9 @@ export class LaunchManager {
           this.emit({ type: 'launch.tunnel', projectId: this.projectId, name: config.name, url });
         },
         (err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
           log.warn({ err, name: config.name }, 'tunnel failed to start');
+          this.emit({ type: 'launch.tunnel.failed', projectId: this.projectId, name: config.name, error: message });
         },
       );
     }
@@ -152,7 +200,7 @@ export class LaunchManager {
     } else {
       child.kill('SIGTERM');
     }
-    log.info({ name, pid }, 'SIGTERM sent to process group, waiting for exit');
+    log.info({ name, pid }, 'stopping launch process (SIGTERM)');
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
@@ -173,7 +221,7 @@ export class LaunchManager {
         resolve();
       });
     });
-    log.info({ name }, 'process stopped');
+    log.info({ name, pid }, 'launch process stopped');
   }
 
   async stopAll(): Promise<void> {
@@ -190,6 +238,39 @@ export class LaunchManager {
       result[name] = managed.status;
     }
     return result;
+  }
+
+  /** Poll localhost:port until the dev server responds or the process exits. Returns true if timed out. */
+  private waitForPort(port: number, managed: ManagedProcess): Promise<boolean> {
+    const start = Date.now();
+    return new Promise<boolean>((resolve) => {
+      const attempt = async () => {
+        // Stop polling if the process died or was stopped
+        if (managed.status === 'stopped' || managed.status === 'failed') {
+          resolve(false);
+          return;
+        }
+        if (Date.now() - start > PORT_TIMEOUT_MS) {
+          log.warn({ port }, 'port readiness timeout, proceeding anyway');
+          resolve(true);
+          return;
+        }
+        try {
+          const res = await fetch(`http://localhost:${port}`, {
+            method: 'HEAD',
+            signal: AbortSignal.timeout(3_000),
+          });
+          if (res.ok) {
+            resolve(false);
+            return;
+          }
+        } catch {
+          // Not listening yet
+        }
+        setTimeout(attempt, PORT_POLL_MS);
+      };
+      attempt();
+    });
   }
 
   private emit(event: DaemonEvent): void {
