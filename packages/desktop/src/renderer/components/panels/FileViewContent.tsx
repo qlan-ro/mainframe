@@ -19,7 +19,7 @@ export function FileViewContent(): React.ReactElement | null {
 
   return (
     <Suspense fallback={<EditorFallback />}>
-      {fileView.type === 'editor' && <EditorTab filePath={fileView.filePath} />}
+      {fileView.type === 'editor' && <EditorTab filePath={fileView.filePath} content={fileView.content} />}
       {fileView.type === 'diff' && (
         <DiffTab
           filePath={fileView.filePath}
