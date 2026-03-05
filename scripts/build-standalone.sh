@@ -6,7 +6,7 @@ set -euo pipefail
 
 OS="${1:?Usage: build-standalone.sh <os> <arch>}"
 ARCH="${2:?Usage: build-standalone.sh <os> <arch>}"
-NODE_VERSION="24"
+NODE_VERSION="24.0.0"
 
 DIST_NAME="mainframe-daemon-${OS}-${ARCH}"
 DIST_DIR="dist-standalone/${DIST_NAME}"
@@ -19,8 +19,7 @@ mkdir -p "${DIST_DIR}/bin" "${DIST_DIR}/lib"
 # 1. Bundle daemon
 pnpm --filter @mainframe/types build
 pnpm --filter @mainframe/core build
-node packages/desktop/scripts/bundle-daemon.mjs
-cp packages/desktop/resources/daemon.cjs "${DIST_DIR}/lib/"
+node packages/desktop/scripts/bundle-daemon.mjs "${DIST_DIR}/lib/daemon.cjs"
 
 # 2. Copy better-sqlite3 prebuild for target platform
 PREBUILD_DIR="node_modules/better-sqlite3/prebuilds/${OS}-${ARCH}"
@@ -34,7 +33,7 @@ cp -r "${PREBUILD_DIR}/." "${DIST_DIR}/lib/prebuilds/${OS}-${ARCH}/"
 # 3. Download Node.js binary for target platform
 NODE_ARCH="$ARCH"
 
-NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}.0/node-v${NODE_VERSION}.0-${OS}-${NODE_ARCH}.tar.gz"
+NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${OS}-${NODE_ARCH}.tar.gz"
 echo "Downloading Node.js ${NODE_VERSION} for ${OS}-${NODE_ARCH}..."
 curl -fsSL "$NODE_URL" | tar -xz --strip-components=1 -C "${DIST_DIR}" "*/bin/node"
 

@@ -47,14 +47,14 @@ export async function runPair(): Promise<void> {
   // Poll for device confirmation
   console.log('  Waiting for device to pair...');
   const startDevices = await fetchDevices(baseUrl);
-  const startCount = startDevices.length;
+  const startIds = new Set(startDevices.map((d) => d.deviceId));
 
   const pollInterval = setInterval(async () => {
     const devices = await fetchDevices(baseUrl);
-    if (devices.length > startCount) {
+    const newDevice = devices.find((d) => !startIds.has(d.deviceId));
+    if (newDevice) {
       clearInterval(pollInterval);
-      const newest = devices[0]!;
-      console.log('\n  Device paired: %s (%s)\n', newest.deviceName, newest.deviceId);
+      console.log('\n  Device paired: %s (%s)\n', newDevice.deviceName, newDevice.deviceId);
       process.exit(0);
     }
   }, 2000);
