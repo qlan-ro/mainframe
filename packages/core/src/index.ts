@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
-import { getConfig, getDataDir } from './config.js';
+import { ensureAuthSecret, getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
 import { AdapterRegistry } from './adapters/index.js';
 import { ChatManager } from './chat/index.js';
@@ -21,6 +21,9 @@ import type { DaemonEvent, PluginManifest } from '@mainframe/types';
 
 async function main(): Promise<void> {
   const config = getConfig();
+  const authSecret = ensureAuthSecret();
+  process.env['AUTH_TOKEN_SECRET'] = authSecret;
+  logger.info('Auth secret loaded');
 
   logger.info('Mainframe Core Daemon');
   logger.info({ dataDir: getDataDir() }, 'Data directory');
