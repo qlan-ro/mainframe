@@ -54,6 +54,14 @@ export function routeEvent(event: DaemonEvent): void {
       });
       chats.addPendingPermission(event.chatId, event.request);
       break;
+    case 'permission.resolved': {
+      log.info('event:permission.resolved', { chatId: event.chatId, requestId: event.requestId });
+      const current = chats.pendingPermissions.get(event.chatId);
+      if (current?.requestId === event.requestId) {
+        chats.removePendingPermission(event.chatId);
+      }
+      break;
+    }
     case 'context.updated':
       log.debug('event:context.updated', { chatId: event.chatId });
       break;

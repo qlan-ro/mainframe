@@ -27,6 +27,15 @@ export class ChatPermissionHandler {
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
 
+    // Guard: reject stale/duplicate responses
+    if (active?.session?.isSpawned && !this.deps.permissions.matchesPending(chatId, response.requestId)) {
+      log.warn(
+        { chatId, requestId: response.requestId },
+        'respondToPermission: requestId does not match pending, ignoring stale response',
+      );
+      return;
+    }
+
     if (!active?.session?.isSpawned) {
       log.warn(
         { chatId, requestId: response.requestId, toolName: response.toolName, behavior: response.behavior },
@@ -108,6 +117,9 @@ export class ChatPermissionHandler {
     if (!active.session) throw new Error(`No session for chat ${chatId}`);
 
     await active.session.respondToPermission(response);
+
+    // Notify all clients this permission was resolved
+    this.deps.emitEvent({ type: 'permission.resolved', chatId, requestId: response.requestId });
 
     const nextRequest = this.deps.permissions.shift(chatId);
     if (nextRequest) {

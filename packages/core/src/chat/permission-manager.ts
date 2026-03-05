@@ -23,6 +23,11 @@ export class PermissionManager {
     return queue !== undefined && queue.length > 0;
   }
 
+  matchesPending(chatId: string, requestId: string): boolean {
+    const front = this.pendingPermissions.get(chatId)?.[0];
+    return front !== undefined && front.requestId === requestId;
+  }
+
   clear(chatId: string): void {
     this.pendingPermissions.delete(chatId);
     this.planExecutionModes.delete(chatId);
