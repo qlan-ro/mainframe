@@ -482,8 +482,9 @@ describe('respondToPermission clearContext ExitPlanMode', () => {
       assistantToolUse('ExitPlanMode', 'toolu_exit'),
     ]);
 
+    // requestId: '' matches the restored permission from loadChat history
     await manager.respondToPermission(chatId, {
-      requestId: 'req-1',
+      requestId: '',
       toolUseId: 'toolu_exit',
       toolName: 'ExitPlanMode',
       behavior: 'allow',
@@ -511,7 +512,7 @@ describe('respondToPermission clearContext ExitPlanMode', () => {
     ]);
 
     await manager.respondToPermission(chatId, {
-      requestId: 'req-2',
+      requestId: '',
       toolUseId: 'toolu_exit',
       toolName: 'ExitPlanMode',
       behavior: 'allow',

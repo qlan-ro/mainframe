@@ -27,8 +27,12 @@ export class ChatPermissionHandler {
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
 
-    // Guard: reject stale/duplicate responses
-    if (active?.session?.isSpawned && !this.deps.permissions.matchesPending(chatId, response.requestId)) {
+    // Guard: reject stale/duplicate responses (only when a permission is queued)
+    if (
+      active?.session?.isSpawned &&
+      this.deps.permissions.hasPending(chatId) &&
+      !this.deps.permissions.matchesPending(chatId, response.requestId)
+    ) {
       log.warn(
         { chatId, requestId: response.requestId },
         'respondToPermission: requestId does not match pending, ignoring stale response',
