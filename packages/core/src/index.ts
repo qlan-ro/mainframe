@@ -114,7 +114,15 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((error) => {
-  logger.fatal({ err: error }, 'Fatal error');
-  process.exit(1);
-});
+const subcommand = process.argv[2];
+
+if (subcommand === 'pair') {
+  import('./cli/pair.js').then(({ runPair }) => runPair());
+} else if (subcommand === 'status') {
+  import('./cli/status.js').then(({ runStatus }) => runStatus());
+} else {
+  main().catch((error) => {
+    logger.fatal({ err: error }, 'Fatal error');
+    process.exit(1);
+  });
+}
