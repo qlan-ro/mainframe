@@ -5,6 +5,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 export interface MainframeConfig {
   port: number;
   dataDir: string;
+  tunnel?: boolean;
+  tunnelUrl?: string;
 }
 
 const rawPort = process.env['PORT'];
@@ -25,16 +27,24 @@ export function getDataDir(): string {
 export function getConfig(): MainframeConfig {
   const configPath = join(getDataDir(), 'config.json');
 
+  let merged = DEFAULT_CONFIG;
   if (existsSync(configPath)) {
     try {
       const content = readFileSync(configPath, 'utf-8');
-      return { ...DEFAULT_CONFIG, ...JSON.parse(content) };
+      merged = { ...DEFAULT_CONFIG, ...JSON.parse(content) };
     } catch {
-      return DEFAULT_CONFIG;
+      // fall through with defaults
     }
   }
 
-  return DEFAULT_CONFIG;
+  if (process.env['TUNNEL'] === 'true') {
+    merged.tunnel = true;
+  }
+  if (process.env['TUNNEL_URL']) {
+    merged.tunnelUrl = process.env['TUNNEL_URL'];
+  }
+
+  return merged;
 }
 
 export function saveConfig(config: Partial<MainframeConfig>): void {

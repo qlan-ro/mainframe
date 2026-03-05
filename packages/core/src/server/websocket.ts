@@ -4,8 +4,16 @@ import type { ChatManager } from '../chat/index.js';
 import type { ClientEvent, DaemonEvent } from '@mainframe/types';
 import { ClientEventSchema } from './ws-schemas.js';
 import { createChildLogger } from '../logger.js';
+import { validateToken } from '../auth/token.js';
 
 const log = createChildLogger('ws');
+
+const LOCALHOST_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+export function isWsAuthRequired(ip: string, secret: string | null): boolean {
+  if (!secret) return false;
+  return !LOCALHOST_IPS.has(ip);
+}
 
 interface ClientConnection {
   ws: WebSocket;
@@ -20,8 +28,32 @@ export class WebSocketManager {
     server: Server,
     private chats: ChatManager,
   ) {
-    this.wss = new WebSocketServer({ server });
+    this.wss = new WebSocketServer({ noServer: true });
+    this.setupUpgradeAuth(server);
     this.setupEventHandlers();
+  }
+
+  private setupUpgradeAuth(server: Server): void {
+    server.on('upgrade', (request, socket, head) => {
+      const secret = process.env.AUTH_TOKEN_SECRET ?? null;
+      const ip = request.socket.remoteAddress ?? '';
+
+      if (isWsAuthRequired(ip, secret)) {
+        const url = new URL(request.url ?? '', 'http://localhost');
+        const token = url.searchParams.get('token');
+
+        if (!token || !validateToken(secret!, token)) {
+          log.warn({ ip }, 'ws upgrade rejected: invalid or missing token');
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+      }
+
+      this.wss.handleUpgrade(request, socket, head, (ws) => {
+        this.wss.emit('connection', ws, request);
+      });
+    });
   }
 
   private setupEventHandlers(): void {
@@ -134,7 +166,15 @@ export class WebSocketManager {
 
   broadcastEvent(event: DaemonEvent): void {
     const chatId = 'chatId' in event ? event.chatId : undefined;
-    log.debug({ type: event.type, chatId }, 'broadcasting event');
+    // Skip per-line output events — they flood the log with no value
+    if (event.type !== 'launch.output') {
+      const extra: Record<string, unknown> = { type: event.type };
+      if (chatId) extra.chatId = chatId;
+      if ('name' in event) extra.name = event.name;
+      if ('status' in event) extra.status = event.status;
+      if ('projectId' in event) extra.projectId = event.projectId;
+      log.debug(extra, 'broadcast %s to %d client(s)', event.type, this.clients.size);
+    }
     const payload = JSON.stringify(event);
 
     for (const client of this.clients.values()) {

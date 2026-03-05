@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { gitRoutes } from '../../server/routes/git.js';
 import type { RouteContext } from '../../server/routes/types.js';
 
-const flushPromises = () => new Promise<void>((r) => setTimeout(r, 50));
+const waitForResponse = (res: any) => vi.waitFor(() => expect(res.json).toHaveBeenCalled(), { timeout: 2000 });
 
 // Uses the actual monorepo as the git project so execGit calls real git
 const REAL_GIT_PATH = new URL('../../../../..', import.meta.url).pathname;
@@ -44,7 +44,7 @@ describe('GET /api/projects/:id/git/branch', () => {
     const res = mockRes();
 
     handler({ params: { id: 'proj-1' }, query: {} }, res, vi.fn());
-    await flushPromises();
+    await waitForResponse(res);
 
     const result = res.json.mock.calls[0][0] as { branch: string | null };
     expect(typeof result.branch).toBe('string');
@@ -58,7 +58,7 @@ describe('GET /api/projects/:id/git/branch', () => {
     const res = mockRes();
 
     handler({ params: { id: 'proj-1' }, query: {} }, res, vi.fn());
-    await flushPromises();
+    await waitForResponse(res);
 
     expect(res.json).toHaveBeenCalledWith({ branch: null });
   });
@@ -72,7 +72,7 @@ describe('GET /api/projects/:id/git/status', () => {
     const res = mockRes();
 
     handler({ params: { id: 'proj-1' }, query: {} }, res, vi.fn());
-    await flushPromises();
+    await waitForResponse(res);
 
     const result = res.json.mock.calls[0][0] as { files: unknown[] };
     expect(Array.isArray(result.files)).toBe(true);
@@ -85,7 +85,7 @@ describe('GET /api/projects/:id/git/status', () => {
     const res = mockRes();
 
     handler({ params: { id: 'proj-1' }, query: {} }, res, vi.fn());
-    await flushPromises();
+    await waitForResponse(res);
 
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ files: [], error: expect.any(String) }));
   });
@@ -101,7 +101,7 @@ describe('GET /api/projects/:id/diff?source=session (no file)', () => {
     const res = mockRes();
 
     handler({ params: { id: 'proj-1' }, query: { source: 'session', chatId: 'chat-1' } }, res, vi.fn());
-    await flushPromises();
+    await waitForResponse(res);
 
     expect(res.json).toHaveBeenCalledWith({
       files: ['src/main.ts', 'lib/utils.ts'],

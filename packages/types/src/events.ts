@@ -17,6 +17,7 @@ export type DaemonEvent =
   | { type: 'display.messages.set'; chatId: string; messages: import('./display.js').DisplayMessage[] }
   | { type: 'messages.cleared'; chatId: string }
   | { type: 'permission.requested'; chatId: string; request: ControlRequest }
+  | { type: 'permission.resolved'; chatId: string; requestId: string }
   | { type: 'context.updated'; chatId: string }
   | { type: 'error'; chatId?: string; error: string }
   | {
@@ -29,7 +30,10 @@ export type DaemonEvent =
   | { type: 'plugin.panel.unregistered'; pluginId: string }
   | { type: 'plugin.notification'; pluginId: string; title: string; body: string; level?: string }
   | { type: 'launch.output'; projectId: string; name: string; data: string; stream: 'stdout' | 'stderr' }
-  | { type: 'launch.status'; projectId: string; name: string; status: LaunchProcessStatus };
+  | { type: 'launch.status'; projectId: string; name: string; status: LaunchProcessStatus }
+  | { type: 'launch.tunnel'; projectId: string; name: string; url: string }
+  | { type: 'launch.tunnel.failed'; projectId: string; name: string; error: string }
+  | { type: 'launch.port.timeout'; projectId: string; name: string; port: number };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }

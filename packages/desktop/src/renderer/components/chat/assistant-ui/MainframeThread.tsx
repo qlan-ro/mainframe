@@ -1,5 +1,6 @@
 import React from 'react';
 import { ThreadPrimitive, useThread } from '@assistant-ui/react';
+import { Loader2 } from 'lucide-react';
 import { useMainframeRuntime } from './MainframeRuntimeProvider';
 import { PermissionCard } from '../PermissionCard';
 import { AskUserQuestionCard } from '../AskUserQuestionCard';
@@ -25,8 +26,8 @@ function GeneratingIndicator() {
   const thread = useThread();
   if (!thread.isRunning) return null;
   return (
-    <div className="flex items-center gap-2 px-1 py-1 text-mf-text-secondary opacity-60 text-mf-body">
-      <span className="w-2 h-2 rounded-full bg-mf-accent animate-pulse" />
+    <div className="flex items-center gap-2 py-2 text-mf-text-secondary text-mf-body">
+      <Loader2 size={14} className="animate-spin motion-reduce:animate-none text-mf-accent" />
       <span>Thinking...</span>
     </div>
   );

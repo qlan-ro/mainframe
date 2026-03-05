@@ -12,6 +12,7 @@ import type { DatabaseManager } from '../db/index.js';
 import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
+import type { PushService } from '../push/push-service.js';
 import { trackFileActivity } from './context-tracker.js';
 import { stripMainframeCommandTags } from '../messages/message-parsing.js';
 import { emitDisplayDelta } from './display-emitter.js';
@@ -21,6 +22,7 @@ const log = createChildLogger('chat:events');
 
 export class EventHandler {
   private displayCache = new Map<string, DisplayMessage[]>();
+  private pushService?: PushService;
 
   constructor(
     private db: DatabaseManager,
@@ -30,6 +32,10 @@ export class EventHandler {
     private emitEvent: (event: DaemonEvent) => void,
     private getToolCategories: (chatId: string) => ToolCategories | undefined = () => undefined,
   ) {}
+
+  setPushService(service: PushService): void {
+    this.pushService = service;
+  }
 
   buildSink(chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>): SessionSink {
     return buildSessionSink(
@@ -42,6 +48,7 @@ export class EventHandler {
       respondToPermission,
       this.displayCache,
       this.getToolCategories,
+      this.pushService,
     );
   }
 
@@ -67,6 +74,7 @@ function buildSessionSink(
   respondToPermission: (response: ControlResponse) => Promise<void>,
   displayCache: Map<string, DisplayMessage[]>,
   getToolCategories: (chatId: string) => ToolCategories | undefined,
+  pushService?: PushService,
 ): SessionSink {
   function emitDisplay(): void {
     const categories = getToolCategories(chatId);
@@ -146,6 +154,15 @@ function buildSessionSink(
           'permission.requested emitted to clients',
         );
         emitEvent({ type: 'permission.requested', chatId, request });
+
+        pushService
+          ?.sendPush({
+            title: 'Permission Required',
+            body: `Agent wants to run: ${request.toolName ?? 'unknown tool'}`,
+            data: { chatId, type: 'permission' },
+            priority: 'high',
+          })
+          .catch((err) => log.warn({ err }, 'push notification failed'));
       } else {
         log.info(
           { chatId, requestId: request.requestId, toolName: request.toolName },
@@ -189,9 +206,27 @@ function buildSessionSink(
           messages.append(chatId, message);
           emitEvent({ type: 'message.added', chatId, message });
           emitDisplay();
+
+          pushService
+            ?.sendPush({
+              title: 'Session Error',
+              body: 'A session ended unexpectedly',
+              data: { chatId, type: 'error' },
+              priority: 'high',
+            })
+            .catch((err) => log.warn({ err }, 'push notification failed'));
         }
       } else {
         permissions.clearInterrupted(chatId);
+
+        pushService
+          ?.sendPush({
+            title: 'Task Complete',
+            body: `Session finished (cost: $${cost.toFixed(4)})`,
+            data: { chatId, type: 'task_complete' },
+            priority: 'default',
+          })
+          .catch((err) => log.warn({ err }, 'push notification failed'));
       }
     },
 

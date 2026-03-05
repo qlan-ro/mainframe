@@ -51,12 +51,12 @@ describe('LaunchManager', () => {
   });
 
   it('stop emits status stopped', async () => {
-    // Use a long-running process
+    // Use a long-running process (port: null to skip port polling)
     const config = {
       name: 'server',
       runtimeExecutable: 'node',
       runtimeArgs: ['-e', 'setInterval(() => {}, 10000);'],
-      port: 3001,
+      port: null,
       url: null,
       preview: false,
     };
@@ -78,7 +78,7 @@ describe('LaunchManager', () => {
       name: 'server',
       runtimeExecutable: 'node',
       runtimeArgs: ['-e', 'setInterval(() => {}, 10000);'],
-      port: 3001,
+      port: null,
       url: null,
       preview: false,
     };

@@ -87,7 +87,7 @@ function createStack(adapter: MockAdapter, permissionMode = 'default') {
   registry.register(adapter);
   const wsRef: { current: WebSocketManager | null } = { current: null };
   const chats = new ChatManager(db as any, registry, undefined, (event) => wsRef.current?.broadcastEvent(event));
-  const app = createHttpServer(db as any, chats, registry);
+  const { app } = createHttpServer(db as any, chats, registry);
   const httpServer = createServer(app);
   wsRef.current = new WebSocketManager(httpServer, chats);
   return { httpServer, chats, db };
@@ -290,5 +290,66 @@ describe('permission flow', () => {
     // Second now emitted
     expect(permissionEvents).toHaveLength(2);
     expect((permissionEvents[1] as any).request.requestId).toBe('req-2');
+  }, 10_000);
+
+  it('emits permission.resolved when permission is answered', async () => {
+    const adapter = new MockAdapter();
+    const { httpServer } = createStack(adapter, 'default');
+    server = httpServer;
+    const port = await startServer(server);
+    ws = await connectWs(port);
+    ws.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    await sleep(100);
+
+    const resolvedEvents: DaemonEvent[] = [];
+    ws.on('message', (data) => {
+      const e = JSON.parse(data.toString()) as DaemonEvent;
+      if (e.type === 'permission.resolved') resolvedEvents.push(e);
+    });
+
+    adapter.currentSession!.simulatePermission(
+      makePermissionRequest('Bash', { requestId: 'req-99', toolUseId: 'tu-99' }),
+    );
+    await sleep(50);
+
+    ws!.send(
+      JSON.stringify({
+        type: 'permission.respond',
+        chatId: 'test-chat',
+        response: { requestId: 'req-99', toolUseId: 'tu-99', toolName: 'Bash', behavior: 'allow' },
+      }),
+    );
+    await sleep(50);
+
+    expect(resolvedEvents).toHaveLength(1);
+    expect((resolvedEvents[0] as any).requestId).toBe('req-99');
+  }, 10_000);
+
+  it('rejects stale permission response with mismatched requestId', async () => {
+    const adapter = new MockAdapter();
+    const { httpServer } = createStack(adapter, 'default');
+    server = httpServer;
+    const port = await startServer(server);
+    ws = await connectWs(port);
+    ws.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    await sleep(100);
+
+    adapter.currentSession!.simulatePermission(
+      makePermissionRequest('Bash', { requestId: 'req-current', toolUseId: 'tu-1' }),
+    );
+    await sleep(50);
+
+    // Send response with wrong requestId
+    ws!.send(
+      JSON.stringify({
+        type: 'permission.respond',
+        chatId: 'test-chat',
+        response: { requestId: 'req-stale', toolUseId: 'tu-old', toolName: 'Bash', behavior: 'allow' },
+      }),
+    );
+    await sleep(50);
+
+    // Should NOT have forwarded to adapter
+    expect(adapter.respondToPermissionSpy).not.toHaveBeenCalled();
   }, 10_000);
 });

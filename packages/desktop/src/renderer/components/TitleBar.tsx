@@ -145,7 +145,7 @@ export function TitleBar({
     try {
       const store = useSandboxStore.getState();
       store.clearLogsForName(selectedConfig.name);
-      store.markFreshLaunch(selectedConfig.name);
+      store.setLastStartedProcess(selectedConfig.name);
       await startLaunchConfig(projectId, selectedConfig.name);
       setPanelVisible(true);
       if (panelCollapsed.bottom) togglePanel('bottom');

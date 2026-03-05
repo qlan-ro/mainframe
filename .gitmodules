@@ -1,0 +1,3 @@
+[submodule "packages/mobile"]
+	path = packages/mobile
+	url = git@github.com:qlan-ro/mainframe-mobile.git

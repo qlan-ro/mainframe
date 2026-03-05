@@ -15,10 +15,8 @@ interface SandboxState {
   processStatuses: { [projectId: string]: { [name: string]: LaunchProcessStatus } };
   logsOutput: { projectId: string; name: string; data: string; stream: 'stdout' | 'stderr' }[];
   selectedConfigName: string | null;
-  // Tracks processes the user explicitly started — drives the retry/spinner logic (keyed by process name)
-  freshLaunches: Record<string, boolean>;
-  // Monotonically increasing counter — ensures Zustand selectors detect re-launches of the same process
-  freshLaunchSeq: number;
+  // Tracks which process was most recently started — used to auto-switch tabs
+  lastStartedProcess: string | null;
 
   addCapture: (capture: Omit<Capture, 'id'>) => void;
   removeCapture: (id: string) => void;
@@ -32,8 +30,7 @@ interface SandboxState {
   /** Clear logs matching a process name regardless of projectId */
   clearLogsForName: (name: string) => void;
   setSelectedConfigName: (name: string | null) => void;
-  markFreshLaunch: (name: string) => void;
-  clearFreshLaunch: (name: string) => void;
+  setLastStartedProcess: (name: string | null) => void;
 }
 
 export const useSandboxStore = create<SandboxState>()((set, get) => ({
@@ -41,8 +38,7 @@ export const useSandboxStore = create<SandboxState>()((set, get) => ({
   processStatuses: {},
   logsOutput: [],
   selectedConfigName: null,
-  freshLaunches: {},
-  freshLaunchSeq: 0,
+  lastStartedProcess: null,
 
   addCapture: (capture) => set((state) => ({ captures: [...state.captures, { id: nanoid(), ...capture }] })),
 
@@ -87,18 +83,7 @@ export const useSandboxStore = create<SandboxState>()((set, get) => ({
 
   setSelectedConfigName: (name) => set({ selectedConfigName: name }),
 
-  markFreshLaunch: (name) =>
-    set((state) => ({
-      freshLaunches: { ...state.freshLaunches, [name]: true },
-      freshLaunchSeq: state.freshLaunchSeq + 1,
-    })),
-
-  clearFreshLaunch: (name) =>
-    set((state) => {
-      if (!state.freshLaunches[name]) return state;
-      const { [name]: _removed, ...rest } = state.freshLaunches;
-      return { freshLaunches: rest };
-    }),
+  setLastStartedProcess: (name) => set({ lastStartedProcess: name }),
 }));
 
 // Expose for E2E test introspection (harmless: renderer runs inside Electron, not on the public web)

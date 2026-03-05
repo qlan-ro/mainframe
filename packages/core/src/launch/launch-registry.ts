@@ -1,17 +1,21 @@
 import type { DaemonEvent } from '@mainframe/types';
+import type { TunnelManager } from '../tunnel/index.js';
 import { LaunchManager } from './launch-manager.js';
 
 export class LaunchRegistry {
   private managers = new Map<string, LaunchManager>();
 
-  constructor(private onEvent: (event: DaemonEvent) => void) {}
+  constructor(
+    private onEvent: (event: DaemonEvent) => void,
+    public tunnelManager?: TunnelManager,
+  ) {}
 
   getOrCreate(projectId: string, projectPath: string): LaunchManager {
     let manager = this.managers.get(projectId);
     // projectPath is only used when creating a new manager; subsequent calls
     // with the same projectId return the existing manager regardless of path.
     if (!manager) {
-      manager = new LaunchManager(projectId, projectPath, this.onEvent);
+      manager = new LaunchManager(projectId, projectPath, this.onEvent, this.tunnelManager);
       this.managers.set(projectId, manager);
     }
     return manager;

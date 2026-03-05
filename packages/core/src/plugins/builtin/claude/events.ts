@@ -167,7 +167,12 @@ function handleResultEvent(session: ClaudeSession, event: Record<string, unknown
 }
 
 function handleEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
-  log.debug({ sessionId: session.id, type: event.type }, 'adapter event');
+  log.debug(
+    { sessionId: session.id, type: event.type, subtype: event.subtype },
+    'claude event: %s%s',
+    event.type,
+    event.subtype ? `.${event.subtype}` : '',
+  );
 
   switch (event.type) {
     case 'system':

@@ -13,7 +13,7 @@ function createMockContext() {
 describe('CORS policy', () => {
   it('does not reflect arbitrary origins', async () => {
     const ctx = createMockContext();
-    const app = createHttpServer(ctx.db, ctx.chats, ctx.adapters);
+    const { app } = createHttpServer(ctx.db, ctx.chats, ctx.adapters);
 
     const res = await request(app).options('/health').set('Origin', 'https://evil.com');
 
@@ -23,7 +23,7 @@ describe('CORS policy', () => {
 
   it('allows any localhost port origin', async () => {
     const ctx = createMockContext();
-    const app = createHttpServer(ctx.db, ctx.chats, ctx.adapters);
+    const { app } = createHttpServer(ctx.db, ctx.chats, ctx.adapters);
 
     for (const origin of [
       'http://localhost:5173',
@@ -40,7 +40,7 @@ describe('CORS policy', () => {
 
   it('adds security headers', async () => {
     const ctx = createMockContext();
-    const app = createHttpServer(ctx.db, ctx.chats, ctx.adapters);
+    const { app } = createHttpServer(ctx.db, ctx.chats, ctx.adapters);
 
     const res = await request(app).get('/health').set('Origin', 'http://localhost:5173');
 

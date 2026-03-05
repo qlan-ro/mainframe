@@ -68,7 +68,10 @@ describe('launchRoutes', () => {
     const req: any = { params: { id: 'proj-1' } };
     const res = mockRes();
     await handler(req, res);
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { server: 'running' } });
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { statuses: { server: 'running' }, tunnelUrls: {} },
+    });
   });
 
   it('POST start returns 404 when project not found', async () => {
