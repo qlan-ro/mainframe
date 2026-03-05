@@ -86,9 +86,9 @@ async function stopAllProcesses(projectId: string): Promise<void> {
   try {
     const res = await fetch(`${DAEMON_BASE}/api/projects/${projectId}/launch/status`);
     if (!res.ok) return;
-    const { data } = (await res.json()) as { data: Record<string, string> };
+    const { data } = (await res.json()) as { data: { statuses: Record<string, string> } };
     await Promise.allSettled(
-      Object.entries(data)
+      Object.entries(data.statuses)
         .filter(([, status]) => status === 'running' || status === 'starting')
         .map(([name]) =>
           fetch(`${DAEMON_BASE}/api/projects/${projectId}/launch/${encodeURIComponent(name)}/stop`, {
@@ -170,16 +170,16 @@ test.describe('§28 Sandbox launch configurations', () => {
   test('status API reflects running Worker process', async () => {
     const res = await fixture.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/launch/status`);
     expect(res.ok()).toBe(true);
-    const { data } = (await res.json()) as { data: Record<string, string> };
-    expect(data['Worker']).toBe('running');
+    const { data } = (await res.json()) as { data: { statuses: Record<string, string> } };
+    expect(data.statuses['Worker']).toBe('running');
   });
 
   test('stopping Worker via API clears status', async () => {
     await fixture.page.request.post(`${DAEMON_BASE}/api/projects/${project.projectId}/launch/Worker/stop`);
 
     const res = await fixture.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/launch/status`);
-    const { data } = (await res.json()) as { data: Record<string, string> };
-    expect(data['Worker']).toBeUndefined();
+    const { data } = (await res.json()) as { data: { statuses: Record<string, string> } };
+    expect(data.statuses['Worker']).toBeUndefined();
   });
 
   // --- Preview process (Web with HTTP server) ---
@@ -215,8 +215,8 @@ test.describe('§28 Sandbox launch configurations', () => {
     await fixture.page.request.post(`${DAEMON_BASE}/api/projects/${project.projectId}/launch/Web/stop`);
 
     const statusRes = await fixture.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/launch/status`);
-    const { data: stopped } = (await statusRes.json()) as { data: Record<string, string> };
-    expect(stopped['Web']).toBeUndefined();
+    const { data: stopped } = (await statusRes.json()) as { data: { statuses: Record<string, string> } };
+    expect(stopped.statuses['Web']).toBeUndefined();
 
     // Restart
     const startRes = await fixture.page.request.post(
@@ -225,8 +225,8 @@ test.describe('§28 Sandbox launch configurations', () => {
     expect(startRes.ok()).toBe(true);
 
     const statusRes2 = await fixture.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/launch/status`);
-    const { data: restarted } = (await statusRes2.json()) as { data: Record<string, string> };
-    expect(restarted['Web']).toBe('running');
+    const { data: restarted } = (await statusRes2.json()) as { data: { statuses: Record<string, string> } };
+    expect(restarted.statuses['Web']).toBe('running');
   });
 
   // --- Error cases ---

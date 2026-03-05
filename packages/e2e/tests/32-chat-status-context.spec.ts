@@ -23,7 +23,7 @@ test.describe('§32 Chat status & context usage', () => {
 
     const adapterLabel = page.locator('[data-testid="session-bar-adapter"]');
     await expect(adapterLabel).toBeVisible({ timeout: 5_000 });
-    await expect(adapterLabel).toHaveText('Claude');
+    await expect(adapterLabel).toHaveText('Claude CLI');
   });
 
   test('status shows "Thinking" while AI is working', async () => {

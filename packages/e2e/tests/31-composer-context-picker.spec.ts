@@ -50,7 +50,7 @@ test.describe('§31 Composer context picker', () => {
     await firstCommand.dispatchEvent('mousedown');
 
     // Composer should contain /<commandName> with trailing space
-    await expect(composer).toHaveValue(/^\/\w+ $/, { timeout: 3_000 });
+    await expect(composer).toHaveValue(/^\/[\w-]+ $/, { timeout: 3_000 });
 
     // Clear for next test
     await composer.fill('');

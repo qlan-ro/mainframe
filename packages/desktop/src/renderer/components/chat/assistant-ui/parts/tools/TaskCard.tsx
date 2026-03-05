@@ -7,7 +7,7 @@ export function TaskCard({ args, isError }: ToolCardProps) {
   const truncatedDesc = description.length > 60 ? description.slice(0, 60) + '...' : description;
 
   return (
-    <div className="ml-4 pl-3 border-l border-mf-divider/50">
+    <div data-testid="task-card" className="ml-4 pl-3 border-l border-mf-divider/50">
       <div className="flex items-center gap-2 py-0.5 text-mf-body">
         <span className="text-mf-body text-mf-accent font-medium">{agentType}</span>
         <span className="text-mf-small text-mf-text-secondary/70 truncate" title={description}>

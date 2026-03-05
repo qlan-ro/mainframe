@@ -63,9 +63,13 @@ export function TaskProgressCard({ args }: { args: Record<string, unknown> }) {
   if (tasks.length === 0) return null;
 
   return (
-    <div className="space-y-0.5 py-0.5">
+    <div data-testid="task-progress-card" className="space-y-0.5 py-0.5">
       {tasks.map((task) => (
-        <div key={task.id} className="flex items-center gap-2 px-1 py-0.5 text-mf-body">
+        <div
+          key={task.id}
+          data-testid={`task-progress-item-${task.status}`}
+          className="flex items-center gap-2 px-1 py-0.5 text-mf-body"
+        >
           <TaskStatusIcon status={task.status} />
           <span
             className={cn(
