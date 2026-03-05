@@ -15,6 +15,7 @@ export {
   getFilesList,
   searchFiles,
   getFileContent,
+  getFileBinary,
   getGitStatus,
   getGitBranch,
   getDiff,
