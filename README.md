@@ -50,6 +50,28 @@ AI CLI tools are powerful, but they live in the terminal. Mainframe adds the lay
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/qlan-ro/mainframe/releases).
 
+### Daemon Only
+
+Install the standalone daemon if you want to run it headless or build your own interface:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
+```
+
+#### Cloudflare Tunnel (remote access)
+
+To access the daemon from the mobile app or another network, enable the built-in [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) by setting `TUNNEL=true`. This requires `cloudflared` to be installed on the host.
+
+```bash
+TUNNEL=true mainframe
+```
+
+If you already have your own tunnel or reverse proxy, pass the public URL directly instead:
+
+```bash
+TUNNEL_URL=https://mainframe.example.com mainframe
+```
+
 ### Mobile Companion App
 
 - [App Store](https://apps.apple.com/app/mainframe/id000000000)
@@ -65,46 +87,10 @@ Download the latest release for your platform from [GitHub Releases](https://git
 **Pairing from the CLI (headless/daemon-only):**
 
 ```bash
-# Standalone binary
 mainframe pair
-
-# Docker
-docker exec -it <container-name> node daemon.cjs pair
 ```
 
-Both commands print a pairing code to the terminal. Enter it in the mobile app to complete pairing.
-
-### Daemon Only
-
-Install the standalone daemon if you want to run it headless or build your own interface:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
-```
-
-Or run it with Docker:
-
-```bash
-docker run -d -p 31415:31415 ghcr.io/qlan-ro/mainframe-daemon
-```
-
-#### Cloudflare Tunnel (remote access)
-
-To access the daemon from the mobile app or another network, enable the built-in [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) by setting `TUNNEL=true`. This requires `cloudflared` to be installed on the host.
-
-```bash
-# Standalone binary
-TUNNEL=true mainframe
-
-# Docker
-docker run -d -p 31415:31415 -e TUNNEL=true ghcr.io/qlan-ro/mainframe-daemon
-```
-
-If you already have your own tunnel or reverse proxy, pass the public URL directly instead:
-
-```bash
-TUNNEL_URL=https://mainframe.example.com mainframe
-```
+This prints a pairing code to the terminal. Enter it in the mobile app to complete pairing.
 
 ### Prerequisites
 
