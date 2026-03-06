@@ -82,6 +82,24 @@ Or run it with Docker:
 docker run -d -p 31415:31415 ghcr.io/qlan-ro/mainframe-daemon
 ```
 
+#### Cloudflare Tunnel (remote access)
+
+To access the daemon from the mobile app or another network, enable the built-in [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) by setting `TUNNEL=true`. This requires `cloudflared` to be installed on the host.
+
+```bash
+# Standalone binary
+TUNNEL=true mainframe
+
+# Docker
+docker run -d -p 31415:31415 -e TUNNEL=true ghcr.io/qlan-ro/mainframe-daemon
+```
+
+If you already have your own tunnel or reverse proxy, pass the public URL directly instead:
+
+```bash
+TUNNEL_URL=https://mainframe.example.com mainframe
+```
+
 ### Prerequisites
 
 Mainframe orchestrates AI coding agents — you'll need at least one installed:
