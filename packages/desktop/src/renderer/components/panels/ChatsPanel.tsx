@@ -78,7 +78,7 @@ export function ChatsPanel(): React.ReactElement {
       if (!activeProjectId) return;
       setLoadingImport(session.sessionId);
       try {
-        await importExternalSession(activeProjectId, session.sessionId, 'claude');
+        await importExternalSession(activeProjectId, session.sessionId, session.adapterId);
         setExternalSessions((prev) => prev.filter((s) => s.sessionId !== session.sessionId));
         useChatsStore.getState().setExternalSessionCount(useChatsStore.getState().externalSessionCount - 1);
       } catch (err) {

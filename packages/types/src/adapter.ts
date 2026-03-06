@@ -146,6 +146,7 @@ export interface AdapterModel {
 
 export interface ExternalSession {
   sessionId: string; // CLI's native session UUID
+  adapterId: string; // Which adapter discovered this session
   projectPath: string;
   firstPrompt?: string; // First user message (truncated)
   summary?: string; // AI-generated summary if available

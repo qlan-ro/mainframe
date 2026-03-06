@@ -31,6 +31,9 @@ export class ExternalSessionService {
       const excludeIds = this.db.chats.getImportedSessionIds(projectId);
       try {
         const sessions = await adapter.listExternalSessions(project.path, excludeIds);
+        for (const session of sessions) {
+          session.adapterId = adapter.id;
+        }
         allSessions.push(...sessions);
       } catch (err) {
         logger.warn({ err, adapterId: adapter.id, projectId }, 'Failed to scan external sessions');

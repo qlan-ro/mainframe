@@ -65,6 +65,7 @@ export async function listExternalSessions(
     .map(
       (entry): ExternalSession => ({
         sessionId: entry.sessionId,
+        adapterId: 'claude',
         projectPath,
         firstPrompt: entry.firstPrompt,
         summary: entry.summary,
