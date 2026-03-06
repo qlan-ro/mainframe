@@ -21,58 +21,105 @@
 
 ## What is Mainframe?
 
-Mainframe is an open-source desktop application for running, supervising, and orchestrating AI coding agents on your own machine. It wraps CLI-based agents (starting with Claude CLI) in a structured interface that keeps the engineer in control at every step.
+Mainframe is an open-source desktop app that brings all your AI coding agents into one interface. Instead of juggling terminal windows, switching between your IDE and CLI, and losing track of what each agent is doing across projects — Mainframe gives you a single place to manage it all.
 
-Most AI coding tools are designed to run autonomously. Mainframe takes a different approach: you see what the agent is doing, approve each tool use before it executes, and can intervene at any point. It's a human-in-the-loop environment built for developers who want the speed of AI assistance without giving up oversight.
+AI CLI tools are powerful, but they live in the terminal. Mainframe adds the layer terminals can't: visual file editing, live sandbox previews, task management, cross-project session history, and a mobile companion for working on the go.
 
 ## Features
 
-- **Multi-session management** — Run multiple agent sessions simultaneously with tabbed navigation
-- **Permission gating** — Review and approve each tool use before it executes; never surprised by what ran
-- **Context tracking** — Live context window usage and cost monitoring per session
-- **Session resume** — Sessions survive daemon restarts; pick up exactly where you left off
-- **Skills** — Extend agents with project-specific tools and instructions via `.claude/skills/`
-- **Subagent tracking** — Visual overview of parallel agent tasks spawned within a session
-- **Keyboard-first** — Full keyboard navigation (⌘N new session, ⌘F search, ⌘, settings)
+- **Unified provider interface** — One app for Claude, Gemini, and other AI coding agents — switch providers without changing your workflow
+- **Multi-project session management** — Run sessions across multiple projects with instant context switching and full session history
+- **In-app file editing** — View and edit files, diffs, and code directly in Mainframe without switching to your IDE
+- **Sandbox preview** — Launch dev servers and preview your app with a built-in browser and inspector for adding precise context
+- **Task management** — Integrated kanban board to track agent work and your own todos alongside sessions
+- **Content referencing** — @-mention files, diffs, and code snippets to give agents exactly the context they need
+- **AI tools management** — Makes sure your project is AI ready. Handling Subagents, Skills, MCPs, context files.
+- **Mobile companion** — Monitor and interact with your sessions from your phone — review, approve, and respond on the go
+- **Session history** — Every session is preserved and searchable; resume any past conversation instantly
+- **API-first daemon** — Run the daemon standalone and build your own UI, integrations, or automations on top of its HTTP and WebSocket API
 
-## Prerequisites
+## Getting Started
 
-- **Node.js** 20 or later
-- **pnpm** 8 or later (`npm install -g pnpm`)
-- **Claude CLI** — [Install instructions](https://claude.ai/code) (requires a Claude account)
+### Desktop App
 
-## Quick Start
+Download the latest release for your platform from [GitHub Releases](https://github.com/qlan-ro/mainframe/releases).
+
+### Mobile Companion App
+
+- [App Store](https://apps.apple.com/app/mainframe/id000000000)
+- [Google Play](https://play.google.com/store/apps/details?id=com.qlan.mainframe)
+
+**Pairing with your desktop:**
+
+1. Open the desktop app and go to **Settings → Devices → Pair New Device**
+2. A pairing code (and QR code) appears on screen
+3. Open the mobile app, tap **Connect**, and scan the QR code or enter the code manually
+4. The daemon issues a token — your phone is now paired and can send messages, respond to permissions, and receive push notifications
+
+**Pairing from the CLI (headless/daemon-only):**
+
+```bash
+# Standalone binary
+mainframe pair
+
+# Docker
+docker exec -it <container-name> node daemon.cjs pair
+```
+
+Both commands print a pairing code to the terminal. Enter it in the mobile app to complete pairing.
+
+### Daemon Only
+
+Install the standalone daemon if you want to run it headless or build your own interface:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
+```
+
+Or run it with Docker:
+
+```bash
+docker run -d -p 31415:31415 ghcr.io/qlan-ro/mainframe-daemon
+```
+
+### Prerequisites
+
+Mainframe orchestrates AI coding agents — you'll need at least one installed:
+
+- [Claude CLI](https://claude.ai/code) (requires a Claude account)
+
+## Development
+
+See the [Developer Guide](docs/DEVELOPER-GUIDE.md) for full setup instructions.
 
 ```bash
 git clone https://github.com/qlan-ro/mainframe.git
 cd mainframe
-pnpm install
-pnpm build
-pnpm dev
+pnpm install && pnpm build && pnpm dev
 ```
-
-This starts both the daemon (`localhost:31415`) and the Electron desktop app.
-
-## Documentation
 
 | Document | Description |
 |----------|-------------|
 | [Architecture](docs/ARCHITECTURE.md) | System design, data flow, package breakdown |
 | [API Reference](docs/API-REFERENCE.md) | HTTP and WebSocket API for the daemon |
 | [Developer Guide](docs/DEVELOPER-GUIDE.md) | Setup, workflow, monorepo conventions |
+| [Plugin Developer Guide](docs/PLUGIN-DEVELOPER-GUIDE.md) | Build plugins: manifest, APIs, UI panels, events |
 | [Contributing](CONTRIBUTING.md) | How to contribute, code standards, PR process |
 
-## Environment Variables
+## Plugin System
 
-All environment variables are optional — the application works without a `.env` file.
+Mainframe is built to be extended. Plugins can add UI panels, store data in isolated databases, listen to daemon events, expose HTTP endpoints, and even register new AI CLI adapters.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `31415` | Daemon HTTP port |
-| `LOG_LEVEL` | `info` | Logging verbosity (`debug`, `info`, `warn`, `error`) |
-| `NODE_ENV` | `development` | Environment mode |
+**What ships built-in:**
 
-Copy `.env.example` to `.env` to customize.
+- **Claude adapter** — the Claude CLI integration is itself a plugin
+- **Task board** — the kanban task manager is a plugin with its own database, attachment storage, and fullview panel
+
+**Build your own:** Write a `manifest.json` declaring your capabilities, export an `activate()` function in `index.js`, and drop it in `~/.mainframe/plugins/`. The daemon loads it on startup.
+
+See the [Plugin Developer Guide](docs/PLUGIN-DEVELOPER-GUIDE.md) for the full API reference — manifest schema, database access, UI zones, event bus, attachments, config, services, and adapter integration.
+
+We welcome plugin contributions. If you've built something useful, open a PR to include it as a builtin or share it with the community.
 
 ## Contributing
 
