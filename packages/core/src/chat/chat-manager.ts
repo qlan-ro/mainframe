@@ -22,6 +22,7 @@ import { ChatPermissionHandler } from './permission-handler.js';
 import { ChatConfigManager } from './config-manager.js';
 import { ChatLifecycleManager } from './lifecycle-manager.js';
 import { EventHandler } from './event-handler.js';
+import { ExternalSessionService } from './external-session-service.js';
 import type { ActiveChat } from './types.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
@@ -38,6 +39,7 @@ export class ChatManager {
   private configManager: ChatConfigManager;
   private lifecycle: ChatLifecycleManager;
   private eventHandler: EventHandler;
+  private externalSessions: ExternalSessionService;
 
   constructor(
     private db: DatabaseManager,
@@ -98,10 +100,15 @@ export class ChatManager {
       startChat: (chatId) => this.lifecycle.startChat(chatId),
       emitEvent: (event) => this.emitEvent(event),
     });
+    this.externalSessions = new ExternalSessionService(this.db, this.adapters, (e) => this.emitEvent(e));
   }
 
   setPushService(service: import('../push/push-service.js').PushService): void {
     this.eventHandler.setPushService(service);
+  }
+
+  getExternalSessionService(): ExternalSessionService {
+    return this.externalSessions;
   }
 
   async createChat(
