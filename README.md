@@ -13,11 +13,11 @@
   </a>
 </p>
 
-<p align="center">
-  <img src="docs/screenshot.png" alt="Mainframe desktop" height="420">
-  &nbsp;&nbsp;&nbsp;
-  <img src="docs/screenshot-mobile.png" alt="Mainframe mobile" height="380">
-</p>
+<table align="center" border="0" cellspacing="0" cellpadding="0"><tr>
+  <td valign="middle"><img src="docs/screenshot.png" alt="Mainframe desktop" height="420"></td>
+  <td width="12"></td>
+  <td valign="middle"><img src="docs/screenshot-mobile.png" alt="Mainframe mobile" height="380"></td>
+</tr></table>
 
 ---
 
