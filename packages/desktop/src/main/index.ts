@@ -134,6 +134,7 @@ function createWindow(): void {
       nodeIntegration: false,
       contextIsolation: true,
       webviewTag: true,
+      plugins: true,
     },
   });
 

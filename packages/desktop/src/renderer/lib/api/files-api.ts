@@ -37,6 +37,16 @@ export async function getFileContent(
   return fetchJson(`${API_BASE}/api/projects/${projectId}/files?${params}`);
 }
 
+export async function getFileBinary(
+  projectId: string,
+  filePath: string,
+  chatId?: string,
+): Promise<{ path: string; content: string; encoding: 'base64' }> {
+  const params = new URLSearchParams({ path: filePath, encoding: 'base64' });
+  if (chatId) params.set('chatId', chatId);
+  return fetchJson(`${API_BASE}/api/projects/${projectId}/files?${params}`);
+}
+
 export async function getGitStatus(
   projectId: string,
   chatId?: string,

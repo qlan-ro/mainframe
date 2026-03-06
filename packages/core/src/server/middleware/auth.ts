@@ -12,8 +12,14 @@ export function createAuthMiddleware(secret: string | null) {
     // No secret configured — auth disabled
     if (!secret) return next();
 
-    // Auth routes are always accessible (for pairing flow)
-    if (req.path.startsWith('/api/auth/')) return next();
+    // Pairing flow routes must be accessible without auth
+    const UNAUTHENTICATED_PATHS = new Set([
+      '/api/auth/pair',
+      '/api/auth/confirm',
+      '/api/auth/status',
+      '/api/auth/register-push',
+    ]);
+    if (UNAUTHENTICATED_PATHS.has(req.path)) return next();
 
     // Health check always accessible
     if (req.path === '/health') return next();

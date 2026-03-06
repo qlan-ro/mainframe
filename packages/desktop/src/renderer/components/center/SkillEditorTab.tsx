@@ -5,6 +5,7 @@ import { createLogger } from '../../lib/logger';
 const log = createLogger('renderer:skills');
 import { useSkillsStore, useProjectsStore } from '../../store';
 import { Button } from '../ui/button';
+import { MonacoEditor } from '../editor/MonacoEditor';
 
 export function SkillEditorTab({ skillId, adapterId }: { skillId: string; adapterId: string }): React.ReactElement {
   const { skills, updateSkill } = useSkillsStore();
@@ -73,16 +74,19 @@ export function SkillEditorTab({ skillId, adapterId }: { skillId: string; adapte
           {saving ? 'Saving...' : 'Save'}
         </Button>
       </div>
-      <textarea
-        value={content}
-        onChange={(e) => {
-          setContent(e.target.value);
-          setDirty(true);
-        }}
-        readOnly={skill.scope === 'plugin'}
-        className="flex-1 w-full bg-transparent text-mf-chat text-mf-text-primary font-mono p-4 resize-none focus:outline-none"
-        spellCheck={false}
-      />
+      <div className="flex-1 min-h-0">
+        <MonacoEditor
+          value={content}
+          language="markdown"
+          readOnly={skill.scope === 'plugin'}
+          onChange={(val) => {
+            if (val !== undefined) {
+              setContent(val);
+              setDirty(true);
+            }
+          }}
+        />
+      </div>
     </div>
   );
 }

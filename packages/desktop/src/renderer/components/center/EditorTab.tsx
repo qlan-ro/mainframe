@@ -32,20 +32,30 @@ function inferLanguage(filePath: string): string {
   return map[ext || ''] || 'plaintext';
 }
 
-export function EditorTab({ filePath }: { filePath: string }): React.ReactElement {
+export function EditorTab({
+  filePath,
+  content: providedContent,
+}: {
+  filePath: string;
+  content?: string;
+}): React.ReactElement {
   const { activeProjectId } = useProjectsStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
-  const [content, setContent] = useState<string | null>(null);
+  const [content, setContent] = useState<string | null>(providedContent ?? null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (providedContent !== undefined) {
+      setContent(providedContent);
+      return;
+    }
     if (!activeProjectId) return;
     setContent(null);
     setError(null);
     getFileContent(activeProjectId, filePath, activeChatId ?? undefined)
       .then((result) => setContent(result.content))
       .catch(() => setError('Failed to load file'));
-  }, [activeProjectId, filePath, activeChatId]);
+  }, [activeProjectId, filePath, activeChatId, providedContent]);
 
   const handleLineComment = useCallback(
     (line: number, lineContent: string, comment: string) => {

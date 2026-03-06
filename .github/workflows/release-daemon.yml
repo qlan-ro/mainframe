@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target_os: darwin
+            target_arch: arm64
+          - os: macos-13
+            target_os: darwin
+            target_arch: x64
+          - os: ubuntu-latest
+            target_os: linux
+            target_arch: x64
+          - os: ubuntu-24.04-arm
+            target_os: linux
+            target_arch: arm64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: bash scripts/build-standalone.sh ${{ matrix.target_os }} ${{ matrix.target_arch }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mainframe-daemon-${{ matrix.target_os }}-${{ matrix.target_arch }}
+          path: dist-standalone/*.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.tar.gz
+          generate_release_notes: true

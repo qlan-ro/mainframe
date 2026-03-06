@@ -44,6 +44,13 @@ export function initializeSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category);
     CREATE INDEX IF NOT EXISTS idx_settings_composite ON settings(category, key);
     CREATE INDEX IF NOT EXISTS idx_projects_path ON projects(path);
+
+    CREATE TABLE IF NOT EXISTS devices (
+      device_id   TEXT PRIMARY KEY,
+      device_name TEXT NOT NULL,
+      created_at  TEXT NOT NULL,
+      last_seen   TEXT
+    );
   `);
 
   // Migrations

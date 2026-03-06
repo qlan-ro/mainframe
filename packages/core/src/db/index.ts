@@ -5,12 +5,14 @@ import { initializeSchema } from './schema.js';
 import { ProjectsRepository } from './projects.js';
 import { ChatsRepository } from './chats.js';
 import { SettingsRepository } from './settings.js';
+import { DevicesRepository } from './devices.js';
 
 export class DatabaseManager {
   private db: Database.Database;
   public projects: ProjectsRepository;
   public chats: ChatsRepository;
   public settings: SettingsRepository;
+  public devices: DevicesRepository;
 
   constructor() {
     const dbPath = join(getDataDir(), 'mainframe.db');
@@ -23,6 +25,7 @@ export class DatabaseManager {
     this.projects = new ProjectsRepository(this.db);
     this.chats = new ChatsRepository(this.db);
     this.settings = new SettingsRepository(this.db);
+    this.devices = new DevicesRepository(this.db);
   }
 
   close(): void {
@@ -33,3 +36,4 @@ export class DatabaseManager {
 export { ProjectsRepository } from './projects.js';
 export { ChatsRepository } from './chats.js';
 export { SettingsRepository } from './settings.js';
+export { DevicesRepository } from './devices.js';

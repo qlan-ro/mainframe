@@ -5,7 +5,7 @@ import { useUIStore } from './ui';
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
 
 export type FileView =
-  | { type: 'editor'; filePath: string; label: string }
+  | { type: 'editor'; filePath: string; label: string; content?: string }
   | {
       type: 'diff';
       filePath: string;
@@ -43,7 +43,7 @@ interface TabsState {
   setActiveTab: (id: string) => void;
   openChatTab: (chatId: string, label?: string) => void;
   updateTabLabel: (id: string, label: string) => void;
-  openEditorTab: (filePath: string) => void;
+  openEditorTab: (filePath: string, content?: string) => void;
   openDiffTab: (filePath: string, source: 'git' | 'session', chatId?: string, oldPath?: string) => void;
   openInlineDiffTab: (filePath: string, original: string, modified: string, startLine?: number) => void;
   openSkillEditorTab: (skillId: string, adapterId: string, label: string) => void;
@@ -146,10 +146,10 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, label } : t)),
     })),
 
-  openEditorTab: (filePath) => {
+  openEditorTab: (filePath, content) => {
     const label = filePath.split('/').pop() || filePath;
     expandRightPanel();
-    set({ fileView: { type: 'editor', filePath, label }, fileViewCollapsed: false });
+    set({ fileView: { type: 'editor', filePath, label, content }, fileViewCollapsed: false });
   },
 
   openDiffTab: (filePath, source, chatId, oldPath) => {
@@ -184,9 +184,13 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   switchProject: (prevProjectId, nextProjectId) => {
     const state = get();
     if (prevProjectId) {
-      // Don't persist inline diffs (they contain large strings)
+      // Don't persist inline diffs or editor tabs with inline content (they contain large strings)
       const persistedFileView =
-        state.fileView?.type === 'diff' && state.fileView.source === 'inline' ? null : state.fileView;
+        state.fileView?.type === 'diff' && state.fileView.source === 'inline'
+          ? null
+          : state.fileView?.type === 'editor' && state.fileView.content
+            ? null
+            : state.fileView;
       projectTabs.set(prevProjectId, {
         tabs: state.tabs,
         activePrimaryTabId: state.activePrimaryTabId,
@@ -214,7 +218,11 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   const projectId = useProjectsStore.getState().activeProjectId;
   if (!projectId) return;
   const persistedFileView =
-    state.fileView?.type === 'diff' && state.fileView.source === 'inline' ? null : state.fileView;
+    state.fileView?.type === 'diff' && state.fileView.source === 'inline'
+      ? null
+      : state.fileView?.type === 'editor' && state.fileView.content
+        ? null
+        : state.fileView;
   projectTabs.set(projectId, {
     tabs: state.tabs,
     activePrimaryTabId: state.activePrimaryTabId,

@@ -87,13 +87,7 @@ export function ContextTab(): React.ReactElement {
 
       <ContextSection icon={MessageSquare} title="Session" count={sessionCount}>
         {Array.from(sessionFiles.entries()).map(([filePath, { badge, displayName }]) => (
-          <ContextFileItem
-            key={filePath}
-            path={filePath}
-            displayName={displayName}
-            chatId={activeChatId ?? undefined}
-            badge={badge}
-          />
+          <ContextFileItem key={filePath} path={filePath} displayName={displayName} badge={badge} />
         ))}
 
         {attachments.length > 0 && (

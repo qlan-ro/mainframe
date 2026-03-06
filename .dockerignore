@@ -1,0 +1,10 @@
+.git
+node_modules
+dist
+packages/desktop
+packages/mobile
+packages/e2e
+*.md
+.env*
+.claude
+.DS_Store
