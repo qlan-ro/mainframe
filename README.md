@@ -63,13 +63,13 @@ curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/inst
 To access the daemon from the mobile app or another network, enable the built-in [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) by setting `TUNNEL=true`. This requires `cloudflared` to be installed on the host.
 
 ```bash
-TUNNEL=true mainframe
+TUNNEL=true mainframe-daemon
 ```
 
 If you already have your own tunnel or reverse proxy, pass the public URL directly instead:
 
 ```bash
-TUNNEL_URL=https://mainframe.example.com mainframe
+TUNNEL_URL=https://mainframe.example.com mainframe-daemon
 ```
 
 ### Mobile Companion App
@@ -87,7 +87,7 @@ TUNNEL_URL=https://mainframe.example.com mainframe
 **Pairing from the CLI (headless/daemon-only):**
 
 ```bash
-mainframe pair
+mainframe-daemon pair
 ```
 
 This prints a pairing code to the terminal. Enter it in the mobile app to complete pairing.
