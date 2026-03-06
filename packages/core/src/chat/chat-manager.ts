@@ -111,6 +111,14 @@ export class ChatManager {
     return this.externalSessions;
   }
 
+  startExternalSessionScan(projectId: string): void {
+    this.externalSessions.startAutoScan(projectId);
+  }
+
+  stopExternalSessionScan(projectId: string): void {
+    this.externalSessions.stopAutoScan(projectId);
+  }
+
   async createChat(
     projectId: string,
     adapterId: string,

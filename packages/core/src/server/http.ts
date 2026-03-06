@@ -19,6 +19,7 @@ import {
   settingRoutes,
   commandRoutes,
   launchRoutes,
+  externalSessionRoutes,
 } from './routes/index.js';
 import { authRoutes } from './routes/auth.js';
 import { PushService } from '../push/index.js';
@@ -79,6 +80,7 @@ export function createHttpServer(
   app.use(agentRoutes(ctx));
   app.use(settingRoutes(ctx));
   app.use(launchRoutes(ctx));
+  app.use(externalSessionRoutes(ctx));
 
   // Plugin routes — the PluginManager owns a parent router with listing + per-plugin sub-routers
   if (pluginManager) {

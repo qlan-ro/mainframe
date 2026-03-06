@@ -50,6 +50,7 @@ export class ExternalSessionService {
     chat.claudeSessionId = sessionId;
 
     logger.info({ chatId: chat.id, sessionId, projectId }, 'external session imported');
+    this.emitEvent({ type: 'chat.created', chat });
     return chat;
   }
 
