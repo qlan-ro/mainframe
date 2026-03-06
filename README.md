@@ -32,10 +32,9 @@ AI CLI tools are powerful, but they live in the terminal. Mainframe adds the lay
 - **In-app file editing** — View and edit files, diffs, and code directly in Mainframe without switching to your IDE
 - **Sandbox preview** — Launch dev servers and preview your app with a built-in browser and inspector for adding precise context
 - **Task management** — Integrated kanban board to track agent work and your own todos alongside sessions
-- **Content referencing** — @-mention files, diffs, and code snippets to give agents exactly the context they need
+- **Content referencing** — @-mention files, add context on diff viewer, add context from the file editor, to give agents exactly the context they need
 - **AI tools management** — Makes sure your project is AI ready. Handling Subagents, Skills, MCPs, context files.
 - **Mobile companion** — Monitor and interact with your sessions from your phone — review, approve, and respond on the go
-- **Session history** — Every session is preserved and searchable; resume any past conversation instantly
 - **Extensible plugin system** — Add UI panels, databases, event listeners, and new AI adapters through a capability-based plugin API
 - **API-first daemon** — Run the daemon standalone and build your own UI, integrations, or automations on top of its HTTP and WebSocket API
 
