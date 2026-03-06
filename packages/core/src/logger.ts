@@ -44,6 +44,7 @@ const VALID_LEVELS = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal'
 const rawLevel = process.env.LOG_LEVEL?.trim().toLowerCase() ?? 'info';
 const isTest = process.env.NODE_ENV === 'test';
 const isProd = process.env.NODE_ENV === 'production';
+const forceStdout = process.env['LOG_TO_STDOUT'] === 'true';
 const logLevel: pino.Level = VALID_LEVELS.has(rawLevel) ? (rawLevel as pino.Level) : 'info';
 
 if (!isTest) {
@@ -58,7 +59,7 @@ const streams: pino.StreamEntry[] = isTest
   ? []
   : [
       { stream: dailyDestination(), level: logLevel },
-      ...(!isProd ? [{ stream: process.stdout as NodeJS.WritableStream, level: logLevel }] : []),
+      ...(!isProd || forceStdout ? [{ stream: process.stdout as NodeJS.WritableStream, level: logLevel }] : []),
     ];
 
 export const logger = isTest

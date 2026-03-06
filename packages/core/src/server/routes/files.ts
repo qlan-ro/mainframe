@@ -191,6 +191,8 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
     return;
   }
 
+  const encoding = req.query.encoding as string | undefined;
+
   try {
     const fullPath = resolveAndValidatePath(basePath, filePath);
     if (!fullPath) {
@@ -199,13 +201,19 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
     }
 
     const stats = await stat(fullPath);
-    if (stats.size > 2 * 1024 * 1024) {
-      res.status(413).json({ error: 'File too large (max 2MB)' });
+    const maxSize = encoding === 'base64' ? 10 * 1024 * 1024 : 2 * 1024 * 1024;
+    if (stats.size > maxSize) {
+      res.status(413).json({ error: `File too large (max ${maxSize / 1024 / 1024}MB)` });
       return;
     }
 
-    const content = await readFile(fullPath, 'utf-8');
-    res.json({ path: filePath, content });
+    if (encoding === 'base64') {
+      const buffer = await readFile(fullPath);
+      res.json({ path: filePath, content: buffer.toString('base64'), encoding: 'base64' });
+    } else {
+      const content = await readFile(fullPath, 'utf-8');
+      res.json({ path: filePath, content });
+    }
   } catch (err) {
     logger.warn({ err, path: filePath }, 'Failed to read file content');
     res.status(404).json({ error: 'File not found' });
