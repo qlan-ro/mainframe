@@ -13,10 +13,15 @@
   </a>
 </p>
 
-<table style="margin:0 auto;border:none;border-spacing:0"><tr>
-  <td style="vertical-align:middle;border:none;padding:0"><img src="docs/screenshot.png" alt="Mainframe desktop" style="height:420px"></td>
-  <td style="vertical-align:middle;border:none;padding:0 0 0 12px"><img src="docs/screenshot-mobile.png" alt="Mainframe mobile" style="height:380px"></td>
-</tr></table>
+<p align="center">
+  <picture>
+    <img src="docs/screenshot.png" alt="Mainframe desktop" height="440">
+  </picture>
+  &nbsp;&nbsp;
+  <picture>
+    <img src="docs/screenshot-mobile.png" alt="Mainframe mobile" height="440">
+  </picture>
+</p>
 
 ---
 
