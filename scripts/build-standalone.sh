@@ -21,14 +21,21 @@ pnpm --filter @qlan-ro/mainframe-types build
 pnpm --filter @qlan-ro/mainframe-core build
 node packages/desktop/scripts/bundle-daemon.mjs "${DIST_DIR}/lib/daemon.cjs"
 
-# 2. Copy better-sqlite3 prebuild for target platform
-PREBUILD_DIR="node_modules/better-sqlite3/prebuilds/${OS}-${ARCH}"
-if [ ! -d "$PREBUILD_DIR" ]; then
-  echo "No prebuild found at ${PREBUILD_DIR}" >&2
+# 2. Copy better-sqlite3 native binary for target platform
+SQLITE_PKG="$(node -e "console.log(require('path').dirname(require.resolve('better-sqlite3/package.json')))")"
+PREBUILD_DIR="${SQLITE_PKG}/prebuilds/${OS}-${ARCH}"
+BUILD_DIR="${SQLITE_PKG}/build/Release"
+
+if [ -d "$PREBUILD_DIR" ]; then
+  mkdir -p "${DIST_DIR}/lib/prebuilds/${OS}-${ARCH}"
+  cp -r "${PREBUILD_DIR}/." "${DIST_DIR}/lib/prebuilds/${OS}-${ARCH}/"
+elif [ -f "${BUILD_DIR}/better_sqlite3.node" ]; then
+  mkdir -p "${DIST_DIR}/lib/build/Release"
+  cp "${BUILD_DIR}/better_sqlite3.node" "${DIST_DIR}/lib/build/Release/"
+else
+  echo "No better-sqlite3 binary found at ${PREBUILD_DIR} or ${BUILD_DIR}" >&2
   exit 1
 fi
-mkdir -p "${DIST_DIR}/lib/prebuilds/${OS}-${ARCH}"
-cp -r "${PREBUILD_DIR}/." "${DIST_DIR}/lib/prebuilds/${OS}-${ARCH}/"
 
 # 3. Download Node.js binary for target platform
 NODE_ARCH="$ARCH"
