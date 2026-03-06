@@ -82,7 +82,7 @@ Content-Type: application/json
 | `path` | string | Yes | Absolute filesystem path |
 | `name` | string | No | Display name (defaults to directory name) |
 
-If a project with the same path already exists, updates `lastOpenedAt` and returns the existing project.
+Returns 409 if a project with the same path already exists.
 
 **Response**: `ApiResponse<Project>`
 
@@ -129,6 +129,7 @@ Returns all chats for a project.
       "totalCost": 0.0342,
       "totalTokensInput": 12400,
       "totalTokensOutput": 3200,
+      "lastContextTokensInput": 8000,
       "worktreePath": null,
       "branchName": null
     }
@@ -150,9 +151,9 @@ GET /api/chats/:id
 GET /api/chats/:id/messages
 ```
 
-Returns cached messages from daemon memory. Messages are ephemeral — they only exist while the daemon is running and the chat has been loaded.
+Returns display messages from daemon memory. Messages are ephemeral — they only exist while the daemon is running and the chat has been loaded.
 
-**Response**: `ApiResponse<ChatMessage[]>`
+**Response**: `ApiResponse<DisplayMessage[]>`
 
 ```json
 {
@@ -172,7 +173,13 @@ Returns cached messages from daemon memory. Messages are ephemeral — they only
       "content": [
         { "type": "thinking", "thinking": "Let me look at the auth module..." },
         { "type": "text", "text": "I'll fix the login bug." },
-        { "type": "tool_use", "id": "tu_01", "name": "Read", "input": { "file_path": "/src/auth.ts" } }
+        {
+          "type": "tool_call",
+          "id": "tu_01",
+          "name": "Read",
+          "input": { "file_path": "/src/auth.ts" },
+          "category": "explore"
+        }
       ],
       "timestamp": "2026-02-14T10:01:05.000Z"
     }
@@ -189,6 +196,16 @@ POST /api/chats/:id/archive
 Kills the CLI process (if running) and sets status to `archived`.
 
 **Response**: `ApiResponse<void>`
+
+#### Unarchive Chat
+
+```
+POST /api/chats/:id/unarchive
+```
+
+Sets the chat status back to `active`.
+
+**Response**: `ApiResponse<Chat>`
 
 #### Get Pending Permission
 
@@ -322,7 +339,21 @@ Returns attachment metadata and data.
 
 ### File System
 
-All file system endpoints accept an optional `chatId` query parameter. When provided and the chat has a worktree, operations use the worktree path instead of the project path.
+All project file system endpoints accept an optional `chatId` query parameter. When provided and the chat has a worktree, operations use the worktree path instead of the project path.
+
+#### Browse Filesystem
+
+```
+GET /api/filesystem/browse?path=<absolute-path>
+```
+
+Browses directories within the user's home directory. Returns only non-hidden, non-ignored subdirectories. Defaults to the home directory when `path` is omitted.
+
+**Response**:
+
+```json
+{ "path": "/Users/me/Projects", "entries": [{ "name": "my-project", "path": "/Users/me/Projects/my-project" }] }
+```
 
 #### File Tree
 
@@ -344,12 +375,12 @@ Returns directory entries, filtered (hides dotfiles and `node_modules`), sorted 
 #### File Content
 
 ```
-GET /api/projects/:id/files?path=<relative-path>&chatId=<optional>
+GET /api/projects/:id/files?path=<relative-path>&chatId=<optional>&encoding=<optional>
 ```
 
-Returns file content as UTF-8 text.
+Returns file content. Pass `encoding=base64` to receive binary files (max 10MB); default is UTF-8 text (max 2MB).
 
-**Response**: `{ path: string, content: string }`
+**Response**: `{ path: string, content: string }` — or `{ path: string, content: string, encoding: 'base64' }` for base64.
 
 #### File Search
 
@@ -357,7 +388,7 @@ Returns file content as UTF-8 text.
 GET /api/projects/:id/search/files?q=<query>&limit=50&chatId=<optional>
 ```
 
-Searches file names with substring + fuzzy matching. Minimum query length: 2 characters.
+Searches file names with substring + fuzzy matching. Minimum query length: 1 character.
 
 **Query Parameters**:
 
@@ -401,7 +432,8 @@ GET /api/projects/:id/git/status?chatId=<optional>
 {
   "files": [
     { "status": "M", "path": "src/auth.ts" },
-    { "status": "??", "path": "src/new-file.ts" }
+    { "status": "??", "path": "src/new-file.ts" },
+    { "status": "R", "path": "src/new-name.ts", "oldPath": "src/old-name.ts" }
   ]
 }
 ```
@@ -417,7 +449,7 @@ GET /api/projects/:id/git/branch?chatId=<optional>
 #### Diff
 
 ```
-GET /api/projects/:id/diff?file=<path>&source=git|session&chatId=<optional>
+GET /api/projects/:id/diff?file=<path>&source=git|session&oldPath=<optional>&chatId=<optional>
 ```
 
 **Query Parameters**:
@@ -426,6 +458,7 @@ GET /api/projects/:id/diff?file=<path>&source=git|session&chatId=<optional>
 |-------|------|---------|-------------|
 | `file` | string | — | Specific file to diff |
 | `source` | `'git' \| 'session'` | `'git'` | Diff source |
+| `oldPath` | string | — | Original path for renames |
 | `chatId` | string | — | Chat ID for worktree context |
 
 **`source=git`**: Returns `git diff` output plus original/modified file contents.
@@ -484,16 +517,6 @@ Returns all registered adapters with installation status.
   ]
 }
 ```
-
-#### Config Conflicts
-
-```
-GET /api/adapters/:adapterId/config-conflicts
-```
-
-Detects conflicts between Mainframe settings and the adapter's native config. Currently only checks Claude CLI's `~/.claude/settings.json` for `defaultMode`, `allowedTools`, `deniedTools`.
-
-**Response**: `ApiResponse<{ conflicts: string[] }>`
 
 ---
 
@@ -600,6 +623,25 @@ DELETE /api/adapters/:adapterId/agents/:id?projectPath=<path>
 
 ### Settings
 
+#### Get General Settings
+
+```
+GET /api/settings/general
+```
+
+Returns general application settings merged with defaults.
+
+**Response**: `ApiResponse<Record<string, unknown>>`
+
+#### Update General Settings
+
+```
+PUT /api/settings/general
+Content-Type: application/json
+```
+
+**Response**: `ApiResponse<void>`
+
 #### Get Provider Settings
 
 ```
@@ -635,7 +677,233 @@ Content-Type: application/json
 |-------|------|-------------|
 | `defaultModel` | string | Default model for new chats |
 | `defaultMode` | `'default' \| 'acceptEdits' \| 'plan' \| 'yolo'` | Default permission mode |
-| `planExecutionMode` | `'default' \| 'acceptEdits' \| 'yolo'` | Execution mode after ExitPlanMode approval — escalates permission mode for the remainder of the plan execution phase |
+| `planExecutionMode` | `'default' \| 'acceptEdits' \| 'yolo'` | Execution mode after ExitPlanMode approval |
+| `executablePath` | string | Path to the adapter CLI binary |
+
+**Response**: `ApiResponse<void>`
+
+#### Config Conflicts
+
+```
+GET /api/adapters/:adapterId/config-conflicts
+```
+
+Detects conflicts between Mainframe settings and the adapter's native config. Currently only checks Claude CLI's `~/.claude/settings.json` for `defaultMode`, `allowedTools`, `deniedTools`.
+
+**Response**: `ApiResponse<{ conflicts: string[] }>`
+
+---
+
+### Authentication
+
+Device pairing endpoints for the mobile companion app. These require `AUTH_TOKEN_SECRET` to be set in the daemon environment.
+
+#### Request Pairing
+
+```
+POST /api/auth/pair
+Content-Type: application/json
+```
+
+Initiates a new device pairing by generating a short-lived pairing code.
+
+**Body**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `deviceName` | string | No | Human-readable name for the device |
+
+**Response**: `ApiResponse<{ pairingCode: string }>`
+
+#### Confirm Pairing
+
+```
+POST /api/auth/confirm
+Content-Type: application/json
+```
+
+Exchanges a valid pairing code for a bearer token. The pairing code expires after 5 minutes.
+
+**Body**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pairingCode` | string | Yes | Code from `POST /api/auth/pair` |
+
+**Response**: `ApiResponse<{ token: string, deviceId: string }>`
+
+#### Auth Status
+
+```
+GET /api/auth/status
+Authorization: Bearer <token>
+```
+
+Validates the provided bearer token. When auth is disabled (no `AUTH_TOKEN_SECRET`), always returns `valid: true`.
+
+**Response**: `ApiResponse<{ valid: boolean, authEnabled?: boolean, deviceId?: string }>`
+
+#### Register Push Token
+
+```
+POST /api/auth/register-push
+Content-Type: application/json
+```
+
+Registers a device's push notification token.
+
+**Body**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `deviceId` | string | Yes | Device ID from pairing |
+| `pushToken` | string | Yes | Platform push notification token |
+
+**Response**: `ApiResponse<void>`
+
+#### List Devices
+
+```
+GET /api/auth/devices
+```
+
+Returns all paired devices.
+
+**Response**: `ApiResponse<Device[]>`
+
+#### Remove Device
+
+```
+DELETE /api/auth/devices/:deviceId
+```
+
+Revokes a paired device's access.
+
+**Response**: `ApiResponse<void>`
+
+---
+
+### Commands
+
+#### List Commands
+
+```
+GET /api/commands
+```
+
+Returns all available custom commands, combining built-in Mainframe commands with any commands registered by installed adapters.
+
+**Response**: `ApiResponse<CustomCommand[]>`
+
+---
+
+### External Sessions
+
+External sessions are Claude CLI sessions that exist on disk but have not been imported into Mainframe.
+
+#### List External Sessions
+
+```
+GET /api/projects/:projectId/external-sessions
+```
+
+Scans for importable external sessions for the project and starts periodic background scanning.
+
+**Response**: `ApiResponse<ExternalSession[]>`
+
+#### Import External Session
+
+```
+POST /api/projects/:projectId/external-sessions/import
+Content-Type: application/json
+```
+
+Imports an external session as a new chat record.
+
+**Body**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sessionId` | string | Yes | The external session ID (alphanumeric and hyphens) |
+| `adapterId` | string | Yes | Adapter that owns the session |
+| `title` | string | No | Display title for the imported chat |
+
+**Response**: `ApiResponse<Chat>`
+
+---
+
+### Launch
+
+Launch manages dev-server processes defined in a project's `.mainframe/launch.json` configuration file.
+
+#### Get Launch Status
+
+```
+GET /api/projects/:id/launch/status
+```
+
+Returns the current status of all configured launch processes, plus any active tunnel URLs.
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "statuses": {
+      "dev": "running",
+      "api": "stopped"
+    },
+    "tunnelUrls": {
+      "dev": "https://abc123.tunnel.example.com"
+    }
+  }
+}
+```
+
+#### Get Launch Configs
+
+```
+GET /api/projects/:id/launch/configs
+```
+
+Returns the parsed launch configurations from `.mainframe/launch.json`. Returns an empty array if no file exists.
+
+**Response**: `ApiResponse<LaunchConfiguration[]>`
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js"],
+      "port": 3000,
+      "url": null,
+      "preview": true
+    }
+  ]
+}
+```
+
+#### Start Launch Process
+
+```
+POST /api/projects/:id/launch/:name/start
+```
+
+Starts a named launch configuration. Reads the config from disk — the request body is not used.
+
+**Response**: `ApiResponse<void>`
+
+#### Stop Launch Process
+
+```
+POST /api/projects/:id/launch/:name/stop
+```
+
+Stops a named running process.
 
 **Response**: `ApiResponse<void>`
 
@@ -658,6 +926,14 @@ Send JSON messages to perform actions:
 
 // Send a message
 { "type": "message.send", "chatId": "chat_xyz", "content": "Fix the bug", "attachmentIds": ["att_01"] }
+
+// Send a message triggered by a slash command
+{
+  "type": "message.send",
+  "chatId": "chat_xyz",
+  "content": "/my-command arg",
+  "metadata": { "command": { "name": "my-command", "source": "project", "args": "arg" } }
+}
 
 // Respond to permission request
 { "type": "permission.respond", "chatId": "chat_xyz", "response": {
@@ -692,6 +968,7 @@ Events are broadcast to clients subscribed to the relevant chat:
 ```typescript
 // Chat lifecycle
 { "type": "chat.created", "chat": { /* Chat object */ } }
+{ "type": "chat.created", "chat": { /* Chat object */ }, "source": "import" } // when imported
 { "type": "chat.updated", "chat": { /* Chat object */ } }
 { "type": "chat.ended", "chatId": "chat_xyz" }
 
@@ -700,15 +977,36 @@ Events are broadcast to clients subscribed to the relevant chat:
 { "type": "process.ready", "processId": "proc_01", "claudeSessionId": "session_abc" }
 { "type": "process.stopped", "processId": "proc_01" }
 
-// Messages
+// Raw messages (internal, adapter-level)
 { "type": "message.added", "chatId": "chat_xyz", "message": { /* ChatMessage */ } }
 { "type": "messages.cleared", "chatId": "chat_xyz" }
 
+// Display messages (UI-ready, grouped and enriched)
+{ "type": "display.message.added", "chatId": "chat_xyz", "message": { /* DisplayMessage */ } }
+{ "type": "display.message.updated", "chatId": "chat_xyz", "message": { /* DisplayMessage */ } }
+{ "type": "display.messages.set", "chatId": "chat_xyz", "messages": [ /* DisplayMessage[] */ ] }
+
 // Permissions
-{ "type": "permission.requested", "chatId": "chat_xyz", "request": { /* PermissionRequest */ } }
+{ "type": "permission.requested", "chatId": "chat_xyz", "request": { /* ControlRequest */ } }
+{ "type": "permission.resolved", "chatId": "chat_xyz", "requestId": "req_001" }
 
 // Context
 { "type": "context.updated", "chatId": "chat_xyz" }
+
+// Plugin UI
+{ "type": "plugin.panel.registered", "pluginId": "my-plugin", "zone": "left-panel", "label": "My Panel", "icon": "LayoutDashboard" }
+{ "type": "plugin.panel.unregistered", "pluginId": "my-plugin" }
+{ "type": "plugin.notification", "pluginId": "my-plugin", "title": "Done", "body": "Task complete", "level": "info" }
+
+// Launch process events
+{ "type": "launch.output", "projectId": "abc123", "name": "dev", "data": "Server started\n", "stream": "stdout" }
+{ "type": "launch.status", "projectId": "abc123", "name": "dev", "status": "running" }
+{ "type": "launch.tunnel", "projectId": "abc123", "name": "dev", "url": "https://abc.tunnel.example.com" }
+{ "type": "launch.tunnel.failed", "projectId": "abc123", "name": "dev", "error": "Tunnel service unavailable" }
+{ "type": "launch.port.timeout", "projectId": "abc123", "name": "dev", "port": 3000 }
+
+// External sessions
+{ "type": "sessions.external.count", "projectId": "abc123", "count": 3 }
 
 // Errors
 { "type": "error", "chatId": "chat_xyz", "error": "Process crashed unexpectedly" }
@@ -748,12 +1046,53 @@ interface Chat {
   totalCost: number;
   totalTokensInput: number;
   totalTokensOutput: number;
+  lastContextTokensInput: number;
   contextFiles?: string[];
   mentions?: SessionMention[];
   modifiedFiles?: string[];
   worktreePath?: string;
   branchName?: string;
   processState?: 'working' | 'idle' | null;
+  displayStatus?: 'idle' | 'working' | 'waiting';
+  isRunning?: boolean;
+}
+```
+
+### DisplayMessage
+
+```typescript
+interface DisplayMessage {
+  id: string;
+  chatId: string;
+  type: 'user' | 'assistant' | 'system' | 'error' | 'permission';
+  content: DisplayContent[];
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+type DisplayContent =
+  | { type: 'text'; text: string }
+  | { type: 'thinking'; thinking: string }
+  | { type: 'image'; mediaType: string; data: string }
+  | {
+      type: 'tool_call';
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+      category: 'default' | 'explore' | 'hidden' | 'progress' | 'subagent';
+      result?: ToolCallResult;
+    }
+  | { type: 'tool_group'; calls: DisplayContent[] }
+  | { type: 'task_group'; agentId: string; calls: DisplayContent[] }
+  | { type: 'permission_request'; request: unknown }
+  | { type: 'error'; message: string };
+
+interface ToolCallResult {
+  content: string;
+  isError: boolean;
+  structuredPatch?: DiffHunk[];
+  originalFile?: string;
+  modifiedFile?: string;
 }
 ```
 
@@ -849,5 +1188,80 @@ interface AgentConfig {
   scope: 'project' | 'global';
   filePath: string;
   content: string;
+}
+```
+
+### LaunchConfiguration
+
+```typescript
+type LaunchProcessStatus = 'stopped' | 'starting' | 'running' | 'failed';
+
+interface LaunchConfiguration {
+  name: string;
+  runtimeExecutable: string;
+  runtimeArgs: string[];
+  port: number | null;
+  url: string | null;
+  preview?: boolean;
+  env?: Record<string, string>;
+}
+
+interface LaunchConfig {
+  version: string;
+  configurations: LaunchConfiguration[];
+}
+```
+
+### PluginManifest
+
+```typescript
+type PluginCapability =
+  | 'storage'
+  | 'ui:panels'
+  | 'ui:notifications'
+  | 'daemon:public-events'
+  | 'chat:read'
+  | 'chat:read:content'
+  | 'chat:create'
+  | 'adapters'
+  | 'process:exec'
+  | 'http:outbound';
+
+type UIZone =
+  | 'fullview'      // replaces Left + Center + Right; trigger in TitleBar
+  | 'left-panel'    // replaces entire LeftPanel; trigger icon in Left Rail
+  | 'right-panel'   // replaces entire RightPanel; trigger icon in Right Rail
+  | 'left-tab'      // tab appended to LeftPanel tab strip
+  | 'right-tab';    // tab appended to RightPanel tab strip
+
+interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  author?: string;
+  license?: string;
+  capabilities: PluginCapability[];
+  ui?: {
+    zone: UIZone;
+    label: string;
+    icon?: string;
+  };
+  adapter?: {
+    binaryName: string;
+    displayName: string;
+  };
+  commands?: Array<{ name: string; description: string }>;
+}
+```
+
+### Device
+
+```typescript
+interface Device {
+  deviceId: string;
+  deviceName: string;
+  createdAt: string;
+  lastSeen: string | null;
 }
 ```

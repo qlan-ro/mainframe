@@ -47,7 +47,10 @@ mainframe/
 ├── packages/
 │   ├── types/      # @mainframe/types — shared TypeScript definitions
 │   ├── core/       # @mainframe/core  — Node.js daemon server
-│   └── desktop/    # @mainframe/desktop — Electron + React app
+│   ├── desktop/    # @mainframe/desktop — Electron + React app
+│   ├── mobile/     # @mainframe/mobile — React Native companion (Expo)
+│   └── e2e/        # @mainframe/e2e — Playwright E2E tests
+├── scripts/        # Build/deploy scripts (install.sh, etc.)
 ├── docs/           # Documentation
 ├── package.json    # Root workspace config
 ├── pnpm-workspace.yaml
@@ -59,9 +62,11 @@ mainframe/
 ```
 @mainframe/desktop → @mainframe/types
 @mainframe/core    → @mainframe/types
+@mainframe/mobile  → @mainframe/types
+@mainframe/e2e     → (runtime dependency on desktop + core)
 ```
 
-Both `core` and `desktop` depend on `types`. They do **not** depend on each other — communication happens over HTTP/WebSocket at runtime.
+Both `core` and `desktop` depend on `types`. They do **not** depend on each other — communication happens over HTTP/WebSocket at runtime. The mobile app communicates with the daemon over HTTP/WebSocket at runtime, like desktop.
 
 ## Package Details
 
@@ -101,10 +106,14 @@ pnpm --filter @mainframe/core test     # Run tests (vitest)
 - `src/chat/permission-manager.ts` — Permission queue (FIFO)
 - `src/chat/event-handler.ts` — Adapter event wiring
 - `src/chat/message-cache.ts` — In-memory message store
-- `src/adapters/claude.ts` — Claude CLI adapter (spawn, stdin/stdout)
-- `src/adapters/claude-events.ts` — JSONL stdout/stderr parser
+- `src/plugins/manager.ts` — Plugin lifecycle management
+- `src/plugins/builtin/claude/` — Claude CLI adapter (builtin plugin)
+- `src/launch/launch-manager.ts` — Dev server/sandbox management
+- `src/messages/display-pipeline.ts` — DisplayMessage transform pipeline
+- `src/tunnel/tunnel-manager.ts` — Cloudflare tunnel management
+- `src/auth/token.ts` — JWT auth for mobile pairing
 - `src/server/http.ts` — Express app + CORS + error middleware
-- `src/server/routes/` — 10 route modules (files, git, chats, skills, etc.)
+- `src/server/routes/` — ~15 route modules (files, git, chats, skills, etc.)
 - `src/server/websocket.ts` — WebSocket event handler + broadcast
 
 **Data directory**: `~/.mainframe/` (SQLite DB, attachments, config)
@@ -124,8 +133,38 @@ pnpm --filter @mainframe/desktop package   # Create distributable
 - `src/preload/index.ts` — Preload script (IPC bridge)
 - `src/renderer/App.tsx` — Root React component
 - `src/renderer/lib/client.ts` — DaemonClient (WebSocket + REST)
-- `src/renderer/hooks/useDaemon.ts` — Daemon connection management
+- `src/renderer/lib/ws-event-router.ts` — WebSocket event routing
+- `src/renderer/lib/api/` — REST API client modules
+- `src/renderer/hooks/useAppInit.ts` — App initialization and daemon connection
+- `src/renderer/hooks/useChatSession.ts` — Chat session management
 - `src/renderer/store/` — Zustand state stores
+
+### @mainframe/mobile
+
+React Native companion app built with Expo.
+
+```bash
+cd packages/mobile
+npx expo start          # Start Expo dev server
+npx expo run:ios        # Run on iOS simulator
+```
+
+**Key files**:
+- `app/` — Expo Router screens
+- `components/` — React Native UI components
+- `hooks/` — Custom hooks
+- `lib/` — API client, utilities
+- `store/` — Zustand state management
+
+### @mainframe/e2e
+
+Playwright end-to-end test suite.
+
+```bash
+pnpm test:e2e           # Run full E2E suite
+```
+
+Tests live in `packages/e2e/tests/` and cover the full desktop app (daemon + Electron).
 
 ## Build Commands
 
@@ -139,7 +178,10 @@ pnpm --filter @mainframe/desktop package   # Create distributable
 | `pnpm dev:core` | Start daemon in watch mode |
 | `pnpm dev:desktop` | Start desktop in dev mode |
 | `pnpm test` | Run all tests |
+| `pnpm test:e2e` | Run Playwright E2E tests |
 | `pnpm lint` | Lint all packages |
+| `pnpm format` | Format code with Prettier |
+| `pnpm format:check` | Check formatting |
 | `pnpm clean` | Clean build artifacts |
 | `pnpm package` | Build + package Electron app |
 
@@ -160,20 +202,22 @@ pnpm --filter @mainframe/desktop package   # Create distributable
 2. **Build types**: `pnpm build:types`
 3. **Emit event** from `ChatManager` in `packages/core/src/chat/chat-manager.ts`
 4. **Handle event** in `WebSocketManager` (`packages/core/src/server/websocket.ts`)
-5. **Process event** in `useDaemon` hook (`packages/desktop/src/renderer/hooks/useDaemon.ts`)
+5. **Process event** in `ws-event-router.ts` (`packages/desktop/src/renderer/lib/ws-event-router.ts`)
 
-### Adding a New Adapter
+### Adding a New Adapter (Plugin)
 
-1. Create `packages/core/src/adapters/<name>.ts` extending `BaseAdapter`
+Adapters are implemented as builtin plugins. See `packages/core/src/plugins/builtin/claude/` for the reference implementation.
+
+1. Create a new directory under `packages/core/src/plugins/builtin/<name>/`
 2. Implement the `Adapter` interface from `@mainframe/types`
-3. Register in `AdapterRegistry` (`packages/core/src/adapters/index.ts`)
-4. Add adapter info to the UI display utilities
+3. Create an `index.ts` that exports a plugin activation function
+4. Register the plugin in `PluginManager`
 
 ### Adding a New Zustand Store
 
 1. Create `packages/desktop/src/renderer/store/<name>.ts`
 2. Export from `packages/desktop/src/renderer/store/index.ts`
-3. Initialize in `useDaemon.ts` if it needs daemon event synchronization
+3. Initialize in `useAppInit.ts` if it needs daemon event synchronization
 
 ## Architecture Decisions
 
@@ -216,6 +260,16 @@ pnpm --filter @mainframe/core test
 # Watch mode
 pnpm --filter @mainframe/core test -- --watch
 ```
+
+### E2E Tests
+
+End-to-end tests use Playwright and run against the full app:
+
+```bash
+pnpm test:e2e
+```
+
+Tests are in `packages/e2e/tests/`. See `packages/e2e/playwright.config.ts` for configuration.
 
 ## Debugging
 

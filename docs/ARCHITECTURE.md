@@ -4,12 +4,14 @@
 
 ## System Overview
 
-Mainframe is a monorepo with three packages that form a layered architecture:
+Mainframe is a monorepo with five packages that form a layered architecture:
 
 ```
 @mainframe/types   →  Shared TypeScript type definitions (zero runtime deps)
 @mainframe/core    →  Node.js daemon (HTTP + WebSocket server)
 @mainframe/desktop →  Electron + React application
+@mainframe/mobile  →  React Native companion app (Private Repo)
+@mainframe/e2e     →  Playwright end-to-end tests
 ```
 
 ```mermaid
@@ -20,6 +22,10 @@ graph TB
         Renderer[React Renderer]
     end
 
+    subgraph "Mobile App (Expo)"
+        MobileApp[React Native]
+    end
+
     subgraph "Daemon (@mainframe/core)"
         HTTP[HTTP Server<br/>Express + Routes]
         WS[WebSocket Server<br/>ws]
@@ -28,34 +34,41 @@ graph TB
         PM[PermissionManager]
         PMH[PlanModeHandler]
         MC[MessageCache]
+        DP[DisplayPipeline]
         DB[(SQLite<br/>better-sqlite3)]
-        AR[AdapterRegistry]
+        PLG[PluginManager]
+        LM[LaunchManager]
+        TM[TunnelManager]
+        PS[PushService]
         AS[AttachmentStore]
         CM --> EH
         CM --> PM
         CM --> PMH
         CM --> MC
+        CM --> DP
     end
 
-    subgraph "CLI Adapters"
-        Claude[Claude CLI<br/>child_process]
-        Gemini[Gemini CLI<br/>future]
-        OpenCode[OpenCode CLI<br/>future]
+    subgraph "Builtin Plugins"
+        Claude[Claude Adapter<br/>child_process]
+        Todos[Todos Plugin]
     end
 
     Renderer -->|REST| HTTP
     Renderer -->|Events| WS
+    MobileApp -->|REST/WS| HTTP
     MainProcess -->|Spawns| HTTP
     Preload -->|contextBridge| Renderer
 
     HTTP --> CM
     WS --> CM
     CM --> DB
-    CM --> AR
+    CM --> PLG
     CM --> AS
-    AR --> Claude
-    AR --> Gemini
-    AR --> OpenCode
+    PLG --> Claude
+    PLG --> Todos
+    HTTP --> LM
+    LM --> TM
+    HTTP --> PS
 ```
 
 ## Package Architecture
@@ -68,11 +81,15 @@ Pure TypeScript type definitions shared across all packages. Zero runtime depend
 |--------|---------|
 | `adapter.ts` | `Adapter` interface, `SpawnOptions`, `AdapterProcess`, `PermissionRequest/Response` |
 | `chat.ts` | `Chat`, `Project`, `ChatMessage`, `MessageContent` union type |
-| `events.ts` | `DaemonEvent` (server→client), `ClientEvent` (client→server) |
-| `api.ts` | `ApiResponse<T>` wrapper, REST API type interfaces |
-| `skill.ts` | `Skill`, `AgentConfig`, `CreateSkillInput`, `CreateAgentInput` |
+| `command.ts` | `Command` definitions for custom slash commands |
 | `context.ts` | `SessionContext`, `ContextFile`, `SessionMention`, `SessionAttachment` |
+| `device.ts` | `Device`, `PairRequest` types for mobile pairing |
+| `display.ts` | `DisplayMessage`, `DisplayTurn` for client-ready messages |
+| `events.ts` | `DaemonEvent` (server→client), `ClientEvent` (client→server) |
+| `launch.ts` | `LaunchConfig`, `LaunchStatus` for sandbox/dev server management |
+| `plugin.ts` | `PluginManifest`, `PluginCapability`, `PluginPanelRegistration` |
 | `settings.ts` | `PermissionMode`, `ProviderConfig` |
+| `skill.ts` | `Skill`, `AgentConfig`, `CreateSkillInput`, `CreateAgentInput` |
 
 ### @mainframe/core
 
@@ -81,56 +98,108 @@ Node.js daemon that manages CLI adapter processes and exposes APIs to frontends.
 ```
 packages/core/src/
 ├── adapters/
-│   ├── base.ts              # BaseAdapter abstract class
-│   ├── claude.ts            # ClaudeAdapter implementation
-│   ├── claude-events.ts     # CLI stdout/stderr parser
-│   ├── claude-history.ts    # JSONL history loader
-│   ├── claude-skills.ts     # Skills/agents CRUD
-│   ├── claude-types.ts      # ClaudeProcess, ClaudeEventEmitter
-│   ├── registry.ts          # AdapterRegistry
-│   └── index.ts             # Barrel export
+│   └── index.ts              # AdapterRegistry
 ├── attachment/
-│   ├── attachment-processor.ts
-│   ├── attachment-store.ts
+│   ├── attachment-helpers.ts  # Attachment utilities
+│   ├── attachment-store.ts    # Storage/retrieval
 │   └── index.ts
+├── auth/
+│   └── token.ts              # JWT token generation/validation
 ├── chat/
-│   ├── chat-manager.ts      # Central orchestrator
-│   ├── context-tracker.ts   # Mention/file tracking
-│   ├── event-handler.ts     # Adapter event wiring
-│   ├── message-cache.ts     # In-memory message store
-│   ├── permission-manager.ts # Permission queue
-│   ├── plan-mode-handler.ts # ExitPlanMode state machine
-│   ├── title-generator.ts   # AI title generation
-│   ├── types.ts             # Shared types (ActiveChat)
+│   ├── chat-manager.ts       # Central orchestrator (facade)
+│   ├── config-manager.ts     # Per-chat configuration
+│   ├── context-tracker.ts    # Mention/file tracking
+│   ├── display-emitter.ts    # Formats messages for UI emission
+│   ├── event-handler.ts      # Adapter event wiring
+│   ├── external-session-service.ts  # External session import
+│   ├── lifecycle-manager.ts  # Session start/stop/cleanup
+│   ├── message-cache.ts      # In-memory message store
+│   ├── permission-handler.ts # Permission request flows
+│   ├── permission-manager.ts # Permission queue (FIFO)
+│   ├── plan-mode-handler.ts  # ExitPlanMode state machine
+│   ├── title-generator.ts    # AI title generation
+│   ├── types.ts              # Shared types (ActiveChat)
 │   └── index.ts
+├── cli/
+│   ├── pair.ts               # Device pairing command
+│   └── status.ts             # Daemon status command
+├── commands/
+│   ├── registry.ts           # Custom command registry
+│   └── wrap.ts               # Command execution wrapper
 ├── db/
 │   ├── chats.ts
 │   ├── database.ts
+│   ├── devices.ts            # Device/pairing persistence
 │   ├── projects.ts
+│   ├── schema.ts             # SQLite schema definitions
 │   ├── settings.ts
 │   └── index.ts
+├── launch/
+│   ├── launch-config.ts      # Config parsing/validation
+│   ├── launch-manager.ts     # Runtime launch execution
+│   ├── launch-registry.ts    # Active launch tracking
+│   └── index.ts
+├── messages/
+│   ├── display-helpers.ts    # Formatting utilities
+│   ├── display-pipeline.ts   # Multi-stage message transform
+│   ├── message-grouping.ts   # Groups tool_use with results
+│   ├── message-parsing.ts    # Adapter NDJSON event parsing
+│   ├── tool-categorization.ts # Tool type categorization
+│   ├── tool-grouping.ts      # Consecutive tool grouping
+│   └── index.ts
+├── plugins/
+│   ├── manager.ts            # Plugin lifecycle management
+│   ├── context.ts            # PluginContext API surface
+│   ├── event-bus.ts          # Plugin event bus
+│   ├── ui-context.ts         # Plugin UI registration
+│   ├── db-context.ts         # Per-plugin SQLite isolation
+│   ├── security/
+│   │   └── manifest-validator.ts
+│   ├── services/
+│   │   ├── chat-service.ts
+│   │   └── project-service.ts
+│   └── builtin/
+│       ├── claude/            # Claude CLI adapter plugin
+│       │   ├── adapter.ts
+│       │   ├── events.ts
+│       │   ├── history.ts
+│       │   ├── session.ts
+│       │   ├── skills.ts
+│       │   └── index.ts
+│       └── todos/
+│           └── index.ts
+├── push/
+│   └── push-service.ts       # Push notification delivery
 ├── server/
-│   ├── http.ts              # Express app + CORS + error middleware
-│   ├── websocket.ts         # WebSocketManager
+│   ├── http.ts               # Express app + CORS + error middleware
+│   ├── websocket.ts          # WebSocketManager
+│   ├── middleware/
+│   │   └── auth.ts           # JWT validation middleware
 │   ├── routes/
 │   │   ├── adapters.ts
 │   │   ├── agents.ts
-│   │   ├── async-handler.ts
 │   │   ├── attachments.ts
+│   │   ├── auth.ts           # Device pairing/auth
 │   │   ├── chats.ts
+│   │   ├── commands.ts
 │   │   ├── context.ts
+│   │   ├── external-sessions.ts
 │   │   ├── files.ts
 │   │   ├── git.ts
+│   │   ├── launch.ts
 │   │   ├── projects.ts
+│   │   ├── schemas.ts        # Shared Zod schemas
 │   │   ├── settings.ts
 │   │   ├── skills.ts
-│   │   ├── types.ts
 │   │   └── index.ts
 │   └── index.ts
+├── tunnel/
+│   └── tunnel-manager.ts     # Cloudflare tunnel management
 ├── workspace/
 │   ├── worktree.ts
 │   └── index.ts
 ├── config.ts
+├── logger.ts
 └── index.ts
 ```
 
@@ -141,35 +210,67 @@ Electron application with React frontend.
 ```
 packages/desktop/src/
 ├── main/
-│   └── index.ts                # Electron main process (daemon lifecycle, IPC)
+│   ├── index.ts                # Electron main process (daemon lifecycle, IPC)
+│   └── logger.ts               # Main process logger
 ├── preload/
-│   └── index.ts                # contextBridge API (openDirectoryDialog, readFile)
+│   └── index.ts                # contextBridge API
 └── renderer/
     ├── main.tsx                # React entry point
     ├── App.tsx                 # Root layout + keyboard shortcuts
     ├── lib/
     │   ├── client.ts           # DaemonClient singleton (WS + REST)
+    │   ├── ws-event-router.ts  # WebSocket event routing
+    │   ├── api/                # REST API client modules
     │   ├── adapters.ts         # Adapter display utilities
+    │   ├── file-types.ts       # File type detection
+    │   ├── launch.ts           # Launch config utilities
+    │   ├── logger.ts           # Client-side pino logger
     │   └── utils.ts            # Helper functions
     ├── hooks/
-    │   ├── useDaemon.ts        # Daemon connection + event sync
-    │   └── useConnectionState.ts
+    │   ├── useAppInit.ts       # App initialization
+    │   ├── useChatSession.ts   # Chat session management
+    │   ├── useConnectionState.ts
+    │   └── useLaunchConfig.ts  # Launch config state
     ├── store/                  # Zustand state management
-    │   ├── projects.ts         # Projects store
+    │   ├── adapters.ts         # Adapter state
     │   ├── chats.ts            # Chats store + useChat() hook
-    │   ├── ui.ts               # UI state (modals, panels)
-    │   ├── tabs.ts             # Tab management
+    │   ├── plugins.ts          # Plugin state
+    │   ├── projects.ts         # Projects store
+    │   ├── sandbox.ts          # Sandbox/launch state
     │   ├── search.ts           # Search palette state
+    │   ├── settings.ts         # Settings state
     │   ├── skills.ts           # Skills/agents state
-    │   └── settings.ts         # Settings state
+    │   ├── tabs.ts             # Tab management
+    │   ├── theme.ts            # Theme state
+    │   ├── tutorial.ts         # Onboarding tutorial state
+    │   └── ui.ts               # UI state (modals, panels)
     └── components/
         ├── Layout.tsx
-        ├── panels/             # Left, Right, Center panels
+        ├── panels/             # Left, Right sidebar panels
         ├── chat/               # Chat UI + assistant-ui integration
         │   └── assistant-ui/   # Custom message/tool renderers
         ├── center/             # Tab content (editor, diff, skills)
+        ├── editor/             # Monaco editor integration
+        ├── sandbox/            # Launch/preview UI
+        ├── plugins/            # Plugin views
+        ├── todos/              # Kanban task management
+        ├── settings/           # Settings panels
+        ├── viewers/            # File viewers (image, PDF, CSV, SVG)
         └── ui/                 # Radix UI primitives
 ```
+
+### @mainframe/mobile
+
+React Native companion app built with Expo. Connects to the daemon over HTTP/WebSocket for remote session management.
+
+- Pairs with the daemon via QR code or manual code entry
+- Full chat interaction: send messages, respond to permissions, view tool output
+- Push notifications for permission requests when the app is backgrounded
+- Context picker for @-mentioning files
+
+### @mainframe/e2e
+
+Playwright end-to-end test suite that runs against the full desktop app (daemon + Electron).
 
 ## Data Flow
 
@@ -257,6 +358,7 @@ sequenceDiagram
 | `projects` | Registered project directories | id, name, path, createdAt, lastOpenedAt |
 | `chats` | Chat session metadata | id, adapterId, projectId, claudeSessionId, model, permissionMode, status, totalCost, totalTokens* |
 | `settings` | Key-value configuration | category, key, value |
+| `devices` | Paired mobile devices | id, name, publicKey, token, createdAt |
 
 **WAL mode** enabled for crash safety and concurrent reads.
 
@@ -327,7 +429,7 @@ interface Adapter {
 
 ### Claude CLI Adapter
 
-The only adapter implemented in M1. Spawns Claude CLI as a child process with JSON streaming:
+The Claude adapter is implemented as a builtin plugin at `plugins/builtin/claude/`. Spawns Claude CLI as a child process with JSON streaming:
 
 ```
 claude --output-format stream-json \
@@ -381,6 +483,17 @@ starting → ready → running → stopped
 | `permission.requested` | `{ chatId, request }` | Tool needs user approval |
 | `context.updated` | `{ chatId }` | Session context changed |
 | `error` | `{ chatId?, error }` | Error occurred |
+| `display.message.added` | `{ chatId, message }` | Display-ready message added |
+| `display.message.updated` | `{ chatId, message }` | Display message updated |
+| `display.messages.set` | `{ chatId, messages }` | Bulk display message set |
+| `permission.resolved` | `{ chatId }` | Permission response sent |
+| `plugin.panel.registered` | `{ panelId, pluginId }` | Plugin UI panel registered |
+| `plugin.panel.unregistered` | `{ panelId }` | Plugin UI panel removed |
+| `plugin.notification` | `{ pluginId, message }` | Plugin notification |
+| `launch.output` | `{ projectId, name, data }` | Launch process output |
+| `launch.status` | `{ projectId, name, status }` | Launch status change |
+| `launch.tunnel` | `{ projectId, name, url }` | Tunnel URL available |
+| `sessions.external.count` | `{ projectId, count }` | External session count |
 
 ### ClientEvent (Client → Server)
 
@@ -411,6 +524,11 @@ starting → ready → running → stopped
 | `search` | Search palette state | `isOpen`, `query`, `results` |
 | `skills` | Skills/agents per adapter | `skills`, `agents`, `refresh()` |
 | `settings` | Provider configs | `providerConfigs`, `updateProvider()` |
+| `adapters` | Adapter list, installation status | `adapters`, `fetchAdapters()` |
+| `plugins` | Plugin panels, notifications | `panels`, `notifications` |
+| `sandbox` | Launch configs, active launches | `launches`, `startLaunch()` |
+| `theme` | Theme preferences | `theme`, `setTheme()` |
+| `tutorial` | Onboarding state | `step`, `isComplete` |
 
 ### assistant-ui Integration
 
@@ -430,6 +548,45 @@ Each chat can optionally operate in an isolated git worktree:
 3. **Disable**: Removes worktree + branch
 4. **File APIs** use `chat.worktreePath` when set, falling back to `project.path`
 
+## Plugin System
+
+Mainframe uses a capability-gated plugin architecture. Plugins declare required capabilities in their `manifest.json` and receive a scoped `PluginContext` at activation.
+
+### Builtin Plugins
+
+| Plugin | Purpose |
+|--------|---------|
+| `claude` | Claude CLI adapter — spawns and manages Claude CLI processes |
+| `todos` | Kanban task management board |
+
+### Plugin Capabilities
+
+Plugins can request: `chats`, `projects`, `adapters`, `ui`, `db`, `attachments`, `config`. Each capability grants access to specific APIs through the `PluginContext`.
+
+### Plugin Isolation
+
+- Each plugin gets its own SQLite database at `~/.mainframe/plugins/{id}/data.db`
+- Plugins receive sanitized `PublicDaemonEvent` events — never raw internal events
+- Plugins cannot send messages into existing user chats (prompt injection prevention)
+
+## Launch System
+
+The launch system manages dev servers and sandbox processes within projects. Launch configs are defined in `.mainframe/launches.json` in each project.
+
+- **LaunchConfig**: Defines command, working directory, environment variables, and port to detect
+- **LaunchManager**: Spawns processes, streams output, detects when ports are ready
+- **TunnelManager**: Creates Cloudflare tunnels to expose launched services (used by mobile companion)
+
+## Mobile Pairing
+
+The daemon supports device pairing for the mobile companion app:
+
+1. Desktop generates a pairing code (QR or manual)
+2. Mobile sends `POST /api/auth/pair` with the code
+3. Daemon confirms and issues a JWT token
+4. Mobile authenticates subsequent requests with the JWT
+5. Push notifications are registered via `POST /api/auth/register-push`
+
 ## Configuration
 
 ### Default Ports
@@ -448,7 +605,10 @@ WebSocket upgrades happen on the same HTTP port — there is no separate WebSock
 ~/.mainframe/
 ├── config.json       # Port overrides, preferences
 ├── mainframe.db      # SQLite database
-└── attachments/      # Chat file attachments
+├── attachments/      # Chat file attachments
+└── plugins/          # Per-plugin isolated data
+    └── {pluginId}/
+        └── data.db   # Plugin-specific SQLite
 ```
 
 ### Permission Modes

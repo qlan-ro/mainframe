@@ -35,11 +35,13 @@ pnpm --filter @mainframe/desktop dev
 
 ### Monorepo Structure
 
-| Package | Description |
-|---------|-------------|
-| `@mainframe/types` | Shared TypeScript contracts (interfaces, event types) |
+| Package | Description                                                    |
+|---------|----------------------------------------------------------------|
+| `@mainframe/types` | Shared TypeScript contracts (interfaces, event types)          |
 | `@mainframe/core` | Daemon process — chat orchestration, CLI adapters, persistence |
-| `@mainframe/desktop` | Electron + React frontend |
+| `@mainframe/desktop` | Electron + React frontend                                      |
+| `@mainframe/mobile` | [Private Repo] React Native companion app                      |
+| `@mainframe/e2e` | Playwright end-to-end tests                                    |
 
 ---
 
@@ -52,32 +54,44 @@ pnpm --filter @mainframe/desktop dev
 | `chat/` | Session lifecycle, message routing, permissions, context tracking |
 | `attachment/` | File attachment storage and formatting |
 | `workspace/` | Git worktree management |
-| `adapters/` | CLI tool integrations (Claude, future Gemini/Codex) |
+| `adapters/` | Adapter registry (adapters are now implemented as plugins) |
+| `auth/` | JWT tokens and device pairing |
+| `cli/` | Daemon CLI subcommands (pair, status) |
+| `commands/` | Custom command registry and execution |
 | `db/` | SQLite persistence with repository pattern |
+| `launch/` | Dev server/sandbox process management |
+| `messages/` | Message parsing, grouping, and display pipeline |
+| `plugins/` | Plugin system — lifecycle, context, builtin plugins |
+| `push/` | Push notification delivery |
 | `server/` | HTTP REST + WebSocket transport (thin layer, no business logic) |
+| `tunnel/` | Cloudflare tunnel management |
 
 ### Dependency Direction
 
 ```
-server/ ──> chat/ ──> adapters/
+server/ ──> chat/ ──> plugins/
    │          │            │
    │          ├──> db/     └──> @mainframe/types
    │          ├──> attachment/
    │          └──> workspace/
    │
-   └──> db/
+   ├──> db/
+   ├──> launch/
+   └──> auth/
 ```
 
 - `server/` calls into `chat/` and `db/`, never the reverse
-- `chat/` depends on `adapters/`, `db/`, `attachment/`, `workspace/`
-- `adapters/` depends only on `@mainframe/types`
+- `chat/` depends on `plugins/`, `db/`, `attachment/`, `workspace/`
+- `plugins/` provides adapter implementations (Claude is a builtin plugin)
+- `launch/` manages dev servers and sandboxes
+- `auth/` handles device pairing for mobile companion
 - WebSocket/HTTP handlers must be thin transport — business logic belongs in `chat/` services
 
 ### Decomposition Rules
 
 - No file over 300 lines — split when approaching this limit
 - No god objects — each class/module has a single clear responsibility
-- New adapter event handling goes in `event-handler.ts`, not `chat-manager.ts`
+- New adapter event handling goes in the adapter's plugin (e.g., `plugins/builtin/claude/events.ts`)
 - Permission logic goes in `permission-manager.ts`
 - ExitPlanMode flows go in `plan-mode-handler.ts`
 - `ChatManager` is a facade — it delegates, it doesn't implement
