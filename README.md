@@ -35,7 +35,6 @@ AI CLI tools are powerful, but they live in the terminal. Mainframe adds the lay
 - **Content referencing** — @-mention files, add context on diff viewer, add context from the file editor, to give agents exactly the context they need
 - **AI tools management** — Makes sure your project is AI ready. Handling Subagents, Skills, MCPs, context files.
 - **Mobile companion** — Monitor and interact with your sessions from your phone — review, approve, and respond on the go
-- **Session history** — Every session is preserved and searchable; resume any past conversation instantly
 - **Extensible plugin system** — Add UI panels, databases, event listeners, and new AI adapters through a capability-based plugin API
 - **API-first daemon** — Run the daemon standalone and build your own UI, integrations, or automations on top of its HTTP and WebSocket API
 
