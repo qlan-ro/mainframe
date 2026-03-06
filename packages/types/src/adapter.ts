@@ -144,6 +144,18 @@ export interface AdapterModel {
   contextWindow?: number;
 }
 
+export interface ExternalSession {
+  sessionId: string; // CLI's native session UUID
+  projectPath: string;
+  firstPrompt?: string; // First user message (truncated)
+  summary?: string; // AI-generated summary if available
+  messageCount?: number;
+  createdAt: string; // ISO-8601
+  modifiedAt: string;
+  gitBranch?: string;
+  model?: string;
+}
+
 export interface Adapter {
   id: string;
   name: string;
@@ -173,4 +185,5 @@ export interface Adapter {
   ): Promise<import('./skill.js').AgentConfig>;
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
+  listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
 }
