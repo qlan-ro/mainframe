@@ -9,6 +9,7 @@ describe('auth middleware', () => {
 
   function createApp(authSecret: string | null) {
     const app = express();
+    app.set('trust proxy', 'loopback');
     app.use(createAuthMiddleware(authSecret));
     app.get('/test', (_req, res) => res.json({ success: true }));
     return app;
@@ -29,7 +30,6 @@ describe('auth middleware', () => {
 
   it('rejects non-localhost requests without token', async () => {
     const app = createApp(secret);
-    app.set('trust proxy', true);
     const res = await request(app).get('/test').set('X-Forwarded-For', '192.168.1.100');
     expect(res.status).toBe(401);
     expect(res.body.error).toBe('Unauthorized');
@@ -37,7 +37,6 @@ describe('auth middleware', () => {
 
   it('accepts non-localhost requests with valid token', async () => {
     const app = createApp(secret);
-    app.set('trust proxy', true);
     const token = generateToken(secret, 'device-1');
     const res = await request(app)
       .get('/test')
@@ -48,7 +47,6 @@ describe('auth middleware', () => {
 
   it('rejects non-localhost requests with invalid token', async () => {
     const app = createApp(secret);
-    app.set('trust proxy', true);
     const res = await request(app)
       .get('/test')
       .set('X-Forwarded-For', '192.168.1.100')
@@ -58,18 +56,18 @@ describe('auth middleware', () => {
 
   it('always allows /api/auth/ routes without token', async () => {
     const app = express();
+    app.set('trust proxy', 'loopback');
     app.use(createAuthMiddleware(secret));
     app.get('/api/auth/pair', (_req, res) => res.json({ success: true }));
-    app.set('trust proxy', true);
     const res = await request(app).get('/api/auth/pair').set('X-Forwarded-For', '192.168.1.100');
     expect(res.status).toBe(200);
   });
 
   it('always allows /health without token', async () => {
     const app = express();
+    app.set('trust proxy', 'loopback');
     app.use(createAuthMiddleware(secret));
     app.get('/health', (_req, res) => res.json({ status: 'ok' }));
-    app.set('trust proxy', true);
     const res = await request(app).get('/health').set('X-Forwarded-For', '192.168.1.100');
     expect(res.status).toBe(200);
   });

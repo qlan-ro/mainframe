@@ -37,6 +37,7 @@ export function createHttpServer(
   getTunnelUrl?: () => string | null,
 ): { app: Express; pushService: PushService } {
   const app = express();
+  app.set('trust proxy', 'loopback');
   const pushService = new PushService();
 
   const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
