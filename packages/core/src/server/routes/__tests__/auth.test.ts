@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import Database from 'better-sqlite3';
-import { authRoutes } from '../auth.js';
+import { authRoutes, _resetAuthState } from '../auth.js';
 import { DevicesRepository } from '../../../db/devices.js';
 
 describe('auth routes', () => {
@@ -10,6 +10,7 @@ describe('auth routes', () => {
   const originalSecret = process.env.AUTH_TOKEN_SECRET;
 
   beforeEach(() => {
+    _resetAuthState();
     app = express();
     app.use(express.json());
     app.use(authRoutes());
@@ -54,6 +55,27 @@ describe('auth routes', () => {
     expect(res.status).toBe(401);
   });
 
+  it('POST /api/auth/confirm accepts deviceName from mobile', async () => {
+    process.env.AUTH_TOKEN_SECRET = 'test-secret-at-least-32-characters-long!!';
+    const pairRes = await request(app).post('/api/auth/pair').send({});
+    const confirmRes = await request(app)
+      .post('/api/auth/confirm')
+      .send({ pairingCode: pairRes.body.data.pairingCode, deviceName: 'iOS device' });
+    expect(confirmRes.status).toBe(200);
+    expect(confirmRes.body.data.token).toBeDefined();
+  });
+
+  it('POST /api/auth/confirm rate-limits after too many failures', async () => {
+    process.env.AUTH_TOKEN_SECRET = 'test-secret-at-least-32-characters-long!!';
+    for (let i = 0; i < 10; i++) {
+      await request(app)
+        .post('/api/auth/confirm')
+        .send({ pairingCode: 'WRONG' + i });
+    }
+    const res = await request(app).post('/api/auth/confirm').send({ pairingCode: 'WRONG99' });
+    expect(res.status).toBe(429);
+  });
+
   it('GET /api/auth/status validates a token', async () => {
     process.env.AUTH_TOKEN_SECRET = 'test-secret-at-least-32-characters-long!!';
 
@@ -94,10 +116,12 @@ describe('auth routes', () => {
       deviceDb.close();
     });
 
-    it('POST /api/auth/confirm persists device to DB', async () => {
+    it('POST /api/auth/confirm persists device to DB with name from mobile', async () => {
       process.env.AUTH_TOKEN_SECRET = 'test-secret-at-least-32-characters-long!!';
-      const pairRes = await request(app).post('/api/auth/pair').send({ deviceName: 'My iPhone' });
-      await request(app).post('/api/auth/confirm').send({ pairingCode: pairRes.body.data.pairingCode });
+      const pairRes = await request(app).post('/api/auth/pair').send({});
+      await request(app)
+        .post('/api/auth/confirm')
+        .send({ pairingCode: pairRes.body.data.pairingCode, deviceName: 'My iPhone' });
       const devices = devicesRepo.getAll();
       expect(devices).toHaveLength(1);
       expect(devices[0]!.deviceName).toBe('My iPhone');

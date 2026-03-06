@@ -8,10 +8,20 @@ interface PendingPairing {
   deviceName: string;
   code: string;
   createdAt: number;
+  failedAttempts: number;
+}
+
+interface RateLimitEntry {
+  failures: number;
+  windowStart: number;
 }
 
 const pendingPairings = new Map<string, PendingPairing>();
+const confirmRateLimit = new Map<string, RateLimitEntry>();
 const PAIRING_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_PAIRING_ATTEMPTS = 5;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_FAILURES = 10;
 
 function cleanExpiredPairings(): void {
   const now = Date.now();
@@ -20,11 +30,42 @@ function cleanExpiredPairings(): void {
       pendingPairings.delete(key);
     }
   }
+  for (const [ip, entry] of confirmRateLimit) {
+    if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+      confirmRateLimit.delete(ip);
+    }
+  }
+}
+
+function isRateLimited(ip: string): boolean {
+  const entry = confirmRateLimit.get(ip);
+  if (!entry) return false;
+  if (Date.now() - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    confirmRateLimit.delete(ip);
+    return false;
+  }
+  return entry.failures >= RATE_LIMIT_MAX_FAILURES;
+}
+
+function recordFailure(ip: string): void {
+  const now = Date.now();
+  const entry = confirmRateLimit.get(ip);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    confirmRateLimit.set(ip, { failures: 1, windowStart: now });
+  } else {
+    entry.failures++;
+  }
 }
 
 export interface AuthRouteOptions {
   pushService?: PushService;
   devicesRepo?: DevicesRepository;
+}
+
+/** Exported for testing only — clears rate limit and pairing state. */
+export function _resetAuthState(): void {
+  pendingPairings.clear();
+  confirmRateLimit.clear();
 }
 
 export function authRoutes(options?: AuthRouteOptions): Router {
@@ -37,10 +78,9 @@ export function authRoutes(options?: AuthRouteOptions): Router {
       return;
     }
 
-    const deviceName = (req.body as { deviceName?: string }).deviceName ?? 'Unknown Device';
     const code = generatePairingCode();
 
-    pendingPairings.set(code, { deviceName, code, createdAt: Date.now() });
+    pendingPairings.set(code, { deviceName: 'Unknown Device', code, createdAt: Date.now(), failedAttempts: 0 });
     cleanExpiredPairings();
 
     res.json({ success: true, data: { pairingCode: code } });
@@ -53,16 +93,33 @@ export function authRoutes(options?: AuthRouteOptions): Router {
       return;
     }
 
-    const { pairingCode } = req.body as { pairingCode?: string };
+    const ip = req.ip ?? 'unknown';
+    if (isRateLimited(ip)) {
+      res.status(429).json({ success: false, error: 'Too many attempts, try again later' });
+      return;
+    }
+
+    const { pairingCode, deviceName } = req.body as { pairingCode?: string; deviceName?: string };
     if (!pairingCode) {
       res.status(400).json({ success: false, error: 'Missing pairingCode' });
       return;
     }
 
+    cleanExpiredPairings();
+
     const pairing = pendingPairings.get(pairingCode);
     if (!pairing || Date.now() - pairing.createdAt > PAIRING_EXPIRY_MS) {
       pendingPairings.delete(pairingCode);
+      recordFailure(ip);
       res.status(401).json({ success: false, error: 'Invalid or expired pairing code' });
+      return;
+    }
+
+    pairing.failedAttempts++;
+    if (pairing.failedAttempts > MAX_PAIRING_ATTEMPTS) {
+      pendingPairings.delete(pairingCode);
+      recordFailure(ip);
+      res.status(401).json({ success: false, error: 'Too many failed attempts, pairing code invalidated' });
       return;
     }
 
@@ -70,8 +127,9 @@ export function authRoutes(options?: AuthRouteOptions): Router {
 
     const deviceId = `mobile-${nanoid(10)}`;
     const token = generateToken(secret, deviceId);
+    const name = deviceName ?? pairing.deviceName;
 
-    options?.devicesRepo?.add(deviceId, pairing.deviceName);
+    options?.devicesRepo?.add(deviceId, name);
 
     res.json({ success: true, data: { token, deviceId } });
   });

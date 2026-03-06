@@ -13,12 +13,7 @@ export function createAuthMiddleware(secret: string | null) {
     if (!secret) return next();
 
     // Pairing flow routes must be accessible without auth
-    const UNAUTHENTICATED_PATHS = new Set([
-      '/api/auth/pair',
-      '/api/auth/confirm',
-      '/api/auth/status',
-      '/api/auth/register-push',
-    ]);
+    const UNAUTHENTICATED_PATHS = new Set(['/api/auth/confirm', '/api/auth/status', '/api/auth/register-push']);
     if (UNAUTHENTICATED_PATHS.has(req.path)) return next();
 
     // Health check always accessible

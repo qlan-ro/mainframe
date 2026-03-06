@@ -36,7 +36,15 @@ export class WebSocketManager {
   private setupUpgradeAuth(server: Server): void {
     server.on('upgrade', (request, socket, head) => {
       const secret = process.env.AUTH_TOKEN_SECRET ?? null;
-      const ip = request.socket.remoteAddress ?? '';
+      const rawIp = request.socket.remoteAddress ?? '';
+      // When behind a loopback proxy (cloudflared), read the real client IP
+      const forwarded = request.headers['x-forwarded-for'];
+      const ip =
+        LOCALHOST_IPS.has(rawIp) && forwarded
+          ? typeof forwarded === 'string'
+            ? forwarded.split(',')[0]!.trim()
+            : forwarded[0]!
+          : rawIp;
 
       if (isWsAuthRequired(ip, secret)) {
         const url = new URL(request.url ?? '', 'http://localhost');

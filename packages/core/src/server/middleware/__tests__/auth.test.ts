@@ -54,13 +54,22 @@ describe('auth middleware', () => {
     expect(res.status).toBe(401);
   });
 
-  it('always allows /api/auth/ routes without token', async () => {
+  it('always allows unauthenticated auth routes without token', async () => {
     const app = express();
     app.set('trust proxy', 'loopback');
     app.use(createAuthMiddleware(secret));
-    app.get('/api/auth/pair', (_req, res) => res.json({ success: true }));
-    const res = await request(app).get('/api/auth/pair').set('X-Forwarded-For', '192.168.1.100');
+    app.post('/api/auth/confirm', (_req, res) => res.json({ success: true }));
+    const res = await request(app).post('/api/auth/confirm').set('X-Forwarded-For', '192.168.1.100');
     expect(res.status).toBe(200);
+  });
+
+  it('rejects /api/auth/pair from non-localhost', async () => {
+    const app = express();
+    app.set('trust proxy', 'loopback');
+    app.use(createAuthMiddleware(secret));
+    app.post('/api/auth/pair', (_req, res) => res.json({ success: true }));
+    const res = await request(app).post('/api/auth/pair').set('X-Forwarded-For', '192.168.1.100');
+    expect(res.status).toBe(401);
   });
 
   it('always allows /health without token', async () => {
