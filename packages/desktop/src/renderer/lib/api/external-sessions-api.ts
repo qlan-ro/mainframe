@@ -8,10 +8,15 @@ export async function getExternalSessions(projectId: string): Promise<ExternalSe
   return json.data;
 }
 
-export async function importExternalSession(projectId: string, sessionId: string, adapterId: string): Promise<Chat> {
+export async function importExternalSession(
+  projectId: string,
+  sessionId: string,
+  adapterId: string,
+  title?: string,
+): Promise<Chat> {
   const json = await postJson<{ success: boolean; data: Chat }>(
     `${API_BASE}/api/projects/${projectId}/external-sessions/import`,
-    { sessionId, adapterId },
+    { sessionId, adapterId, title },
   );
   return json.data;
 }

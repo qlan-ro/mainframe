@@ -5,7 +5,7 @@ import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
 
 export type DaemonEvent =
-  | { type: 'chat.created'; chat: Chat }
+  | { type: 'chat.created'; chat: Chat; source?: 'import' }
   | { type: 'chat.updated'; chat: Chat }
   | { type: 'chat.ended'; chatId: string }
   | { type: 'process.started'; chatId: string; process: AdapterProcess }

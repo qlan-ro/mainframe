@@ -10,6 +10,7 @@ const logger = createChildLogger('routes:external-sessions');
 const importBodySchema = z.object({
   sessionId: z.string().regex(/^[a-zA-Z0-9-]+$/),
   adapterId: z.string().min(1),
+  title: z.string().max(500).optional(),
 });
 
 export function externalSessionRoutes(ctx: RouteContext): Router {
@@ -38,10 +39,10 @@ export function externalSessionRoutes(ctx: RouteContext): Router {
         res.status(400).json({ success: false, error: 'Invalid request body' });
         return;
       }
-      const { sessionId, adapterId } = result.data;
+      const { sessionId, adapterId, title } = result.data;
 
       const service = ctx.chats.getExternalSessionService();
-      const chat = await service.importSession(projectId, sessionId, adapterId);
+      const chat = await service.importSession(projectId, sessionId, adapterId, title);
       res.json({ success: true, data: chat });
     }),
   );

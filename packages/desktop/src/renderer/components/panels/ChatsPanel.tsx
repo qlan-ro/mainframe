@@ -78,7 +78,8 @@ export function ChatsPanel(): React.ReactElement {
       if (!activeProjectId) return;
       setLoadingImport(session.sessionId);
       try {
-        await importExternalSession(activeProjectId, session.sessionId, session.adapterId);
+        const title = session.summary ?? session.firstPrompt ?? undefined;
+        await importExternalSession(activeProjectId, session.sessionId, session.adapterId, title);
         setExternalSessions((prev) => prev.filter((s) => s.sessionId !== session.sessionId));
         useChatsStore.getState().setExternalSessionCount(useChatsStore.getState().externalSessionCount - 1);
       } catch (err) {
@@ -124,61 +125,66 @@ export function ChatsPanel(): React.ReactElement {
         </button>
       </div>
 
-      {/* External Sessions Import Section */}
-      {activeProjectId && externalSessionCount > 0 && (
-        <div className="px-[10px] pb-2">
-          <button
-            onClick={handleToggleImport}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label text-mf-text-secondary hover:bg-mf-hover/50 transition-colors"
-          >
-            {showImport ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            <Download size={12} />
-            <span>Import external sessions</span>
-            <span className="ml-auto text-mf-status bg-mf-accent/20 text-mf-accent px-1.5 py-0.5 rounded-full">
-              {externalSessionCount}
-            </span>
-          </button>
-          {showImport && (
-            <div className="mt-1 space-y-1">
-              {externalSessions.length === 0 ? (
-                <div className="px-3 py-2 text-mf-status text-mf-text-secondary">Loading...</div>
-              ) : (
-                externalSessions.map((session) => (
-                  <div
-                    key={session.sessionId}
-                    className="group flex items-center gap-2 px-3 py-2 rounded-mf-input hover:bg-mf-hover/50 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-mf-small text-mf-text-secondary truncate">
-                        {session.summary ?? session.firstPrompt ?? 'Untitled session'}
-                      </div>
-                      <div className="text-mf-status text-mf-text-secondary mt-0.5">
-                        {session.gitBranch && (
-                          <>
-                            {session.gitBranch}
-                            <span className="mx-0.5">•</span>
-                          </>
-                        )}
-                        {formatRelativeTime(session.modifiedAt)}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleImportSession(session)}
-                      disabled={loadingImport === session.sessionId}
-                      className="shrink-0 px-2 py-1 rounded text-mf-status text-mf-accent hover:bg-mf-accent/20 transition-colors disabled:opacity-40"
-                    >
-                      {loadingImport === session.sessionId ? '...' : 'Import'}
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Chat list */}
       <div className="flex-1 overflow-y-auto px-[10px]">
+        {/* External Sessions Import Section */}
+        {activeProjectId && externalSessionCount > 0 && (
+          <div className="pb-2" data-testid="external-sessions-section">
+            <button
+              data-testid="external-sessions-toggle"
+              onClick={handleToggleImport}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label text-mf-text-secondary hover:bg-mf-hover/50 transition-colors"
+            >
+              {showImport ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <Download size={12} />
+              <span>Import external sessions</span>
+              <span className="ml-auto text-mf-status bg-mf-accent/20 text-mf-accent px-1.5 py-0.5 rounded-full">
+                {externalSessionCount}
+              </span>
+            </button>
+            {showImport && (
+              <div className="mt-1 space-y-1">
+                {externalSessions.length === 0 ? (
+                  <div className="px-3 py-2 text-mf-status text-mf-text-secondary">Loading...</div>
+                ) : (
+                  externalSessions.map((session) => (
+                    <div
+                      key={session.sessionId}
+                      data-testid="external-session-item"
+                      className="group flex items-center gap-2 px-3 py-2 rounded-mf-input hover:bg-mf-hover/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="text-mf-small text-mf-text-secondary truncate"
+                          title={session.summary ?? session.firstPrompt ?? 'Untitled session'}
+                        >
+                          {session.summary ?? session.firstPrompt ?? 'Untitled session'}
+                        </div>
+                        <div className="text-mf-status text-mf-text-secondary mt-0.5">
+                          {session.gitBranch && (
+                            <>
+                              {session.gitBranch}
+                              <span className="mx-0.5">•</span>
+                            </>
+                          )}
+                          {formatRelativeTime(session.modifiedAt)}
+                        </div>
+                      </div>
+                      <button
+                        data-testid="import-session-btn"
+                        onClick={() => handleImportSession(session)}
+                        disabled={loadingImport === session.sessionId}
+                        className="shrink-0 px-2 py-1 rounded text-mf-status text-mf-accent hover:bg-mf-accent/20 transition-colors disabled:opacity-40"
+                      >
+                        {loadingImport === session.sessionId ? '...' : 'Import'}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {!activeProjectId ? (
           <div className="py-4 text-center text-mf-text-secondary text-mf-label">Select a project to view sessions</div>
         ) : chats.length === 0 ? (

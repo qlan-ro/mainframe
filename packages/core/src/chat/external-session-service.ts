@@ -44,16 +44,17 @@ export class ExternalSessionService {
   }
 
   /** Import an external session, creating a Mainframe chat for it */
-  async importSession(projectId: string, sessionId: string, adapterId: string): Promise<Chat> {
+  async importSession(projectId: string, sessionId: string, adapterId: string, title?: string): Promise<Chat> {
     const existing = this.db.chats.findByExternalSessionId(sessionId, projectId);
     if (existing) return existing;
 
     const chat = this.db.chats.create(projectId, adapterId);
-    this.db.chats.update(chat.id, { claudeSessionId: sessionId });
+    this.db.chats.update(chat.id, { claudeSessionId: sessionId, ...(title ? { title } : {}) });
     chat.claudeSessionId = sessionId;
+    if (title) chat.title = title;
 
     logger.info({ chatId: chat.id, sessionId, projectId }, 'external session imported');
-    this.emitEvent({ type: 'chat.created', chat });
+    this.emitEvent({ type: 'chat.created', chat, source: 'import' });
     return chat;
   }
 
