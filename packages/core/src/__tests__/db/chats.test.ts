@@ -455,4 +455,67 @@ describe('ChatsRepository', () => {
       expect(fetched!.processState).toBe('idle');
     });
   });
+
+  describe('external session queries', () => {
+    it('getImportedSessionIds returns empty array when no sessions imported', () => {
+      expect(chats.getImportedSessionIds(projectId)).toEqual([]);
+    });
+
+    it('getImportedSessionIds returns session IDs for project', () => {
+      const c1 = chats.create(projectId, 'claude');
+      const c2 = chats.create(projectId, 'claude');
+      chats.update(c1.id, { claudeSessionId: 'session-aaa' });
+      chats.update(c2.id, { claudeSessionId: 'session-bbb' });
+
+      const ids = chats.getImportedSessionIds(projectId);
+      expect(ids).toHaveLength(2);
+      expect(ids).toContain('session-aaa');
+      expect(ids).toContain('session-bbb');
+    });
+
+    it('getImportedSessionIds excludes chats without claudeSessionId', () => {
+      chats.create(projectId, 'claude'); // no session ID
+      const c2 = chats.create(projectId, 'claude');
+      chats.update(c2.id, { claudeSessionId: 'session-ccc' });
+
+      const ids = chats.getImportedSessionIds(projectId);
+      expect(ids).toEqual(['session-ccc']);
+    });
+
+    it('getImportedSessionIds only returns for specified project', () => {
+      const p2 = projects.create('/other/project', 'Other');
+      const c1 = chats.create(projectId, 'claude');
+      const c2 = chats.create(p2.id, 'claude');
+      chats.update(c1.id, { claudeSessionId: 'session-ddd' });
+      chats.update(c2.id, { claudeSessionId: 'session-eee' });
+
+      expect(chats.getImportedSessionIds(projectId)).toEqual(['session-ddd']);
+      expect(chats.getImportedSessionIds(p2.id)).toEqual(['session-eee']);
+    });
+
+    it('findByExternalSessionId returns matching chat', () => {
+      const c = chats.create(projectId, 'claude');
+      chats.update(c.id, { claudeSessionId: 'session-fff' });
+
+      const found = chats.findByExternalSessionId('session-fff', projectId);
+      expect(found).not.toBeNull();
+      expect(found!.id).toBe(c.id);
+      expect(found!.claudeSessionId).toBe('session-fff');
+    });
+
+    it('findByExternalSessionId returns null when not found', () => {
+      expect(chats.findByExternalSessionId('nonexistent', projectId)).toBeNull();
+    });
+
+    it('findByExternalSessionId scopes to project', () => {
+      const p2 = projects.create('/other/project2', 'Other2');
+      const c = chats.create(p2.id, 'claude');
+      chats.update(c.id, { claudeSessionId: 'session-ggg' });
+
+      // Same session ID but different project — should not find
+      expect(chats.findByExternalSessionId('session-ggg', projectId)).toBeNull();
+      // Correct project — should find
+      expect(chats.findByExternalSessionId('session-ggg', p2.id)).not.toBeNull();
+    });
+  });
 });
