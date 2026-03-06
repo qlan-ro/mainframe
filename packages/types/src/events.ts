@@ -5,7 +5,7 @@ import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
 
 export type DaemonEvent =
-  | { type: 'chat.created'; chat: Chat }
+  | { type: 'chat.created'; chat: Chat; source?: 'import' }
   | { type: 'chat.updated'; chat: Chat }
   | { type: 'chat.ended'; chatId: string }
   | { type: 'process.started'; chatId: string; process: AdapterProcess }
@@ -33,7 +33,8 @@ export type DaemonEvent =
   | { type: 'launch.status'; projectId: string; name: string; status: LaunchProcessStatus }
   | { type: 'launch.tunnel'; projectId: string; name: string; url: string }
   | { type: 'launch.tunnel.failed'; projectId: string; name: string; error: string }
-  | { type: 'launch.port.timeout'; projectId: string; name: string; port: number };
+  | { type: 'launch.port.timeout'; projectId: string; name: string; port: number }
+  | { type: 'sessions.external.count'; projectId: string; count: number };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }

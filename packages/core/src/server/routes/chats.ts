@@ -52,6 +52,22 @@ export function chatRoutes(ctx: RouteContext): Router {
     }),
   );
 
+  router.post('/api/chats/:id/unarchive', (req: Request, res: Response) => {
+    const chatId = param(req, 'id');
+    try {
+      ctx.db.chats.update(chatId, { status: 'active' });
+      const chat = ctx.db.chats.get(chatId);
+      if (!chat) {
+        res.status(404).json({ success: false, error: 'Chat not found' });
+        return;
+      }
+      res.json({ success: true, data: chat });
+    } catch (err) {
+      logger.warn({ err, chatId }, 'Failed to unarchive chat');
+      res.status(500).json({ success: false, error: 'Operation failed' });
+    }
+  });
+
   router.get('/api/chats/:id/changes', (req: Request, res: Response) => {
     const files = ctx.db.chats.getModifiedFilesList(param(req, 'id'));
     res.json({ files });

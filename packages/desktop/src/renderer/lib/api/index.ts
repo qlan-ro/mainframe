@@ -51,3 +51,5 @@ export { getAttachment, uploadAttachments } from './attachments-api';
 export { getPlugins } from './plugins-api';
 
 export { getCommands } from './commands-api';
+
+export { getExternalSessions, importExternalSession } from './external-sessions-api';

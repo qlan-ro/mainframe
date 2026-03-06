@@ -23,6 +23,8 @@ interface ChatsState {
   setProcess: (chatId: string, process: AdapterProcess) => void;
   updateProcessStatus: (processId: string, status: AdapterProcess['status']) => void;
   removeProcess: (chatId: string) => void;
+  externalSessionCount: number;
+  setExternalSessionCount: (count: number) => void;
 }
 
 export const useChatsStore = create<ChatsState>((set) => ({
@@ -31,6 +33,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   messages: new Map(),
   pendingPermissions: new Map(),
   processes: new Map(),
+  externalSessionCount: 0,
 
   setChats: (chats) => set({ chats }),
   setActiveChat: (id) => set({ activeChatId: id }),
@@ -106,4 +109,5 @@ export const useChatsStore = create<ChatsState>((set) => ({
       newProcesses.delete(chatId);
       return { processes: newProcesses };
     }),
+  setExternalSessionCount: (count) => set({ externalSessionCount: count }),
 }));

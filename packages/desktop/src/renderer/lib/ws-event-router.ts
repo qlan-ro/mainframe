@@ -13,10 +13,12 @@ export function routeEvent(event: DaemonEvent): void {
 
   switch (event.type) {
     case 'chat.created':
-      log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title });
+      log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title, source: event.source });
       chats.addChat(event.chat);
-      chats.setActiveChat(event.chat.id);
-      tabs.openChatTab(event.chat.id, event.chat.title);
+      if (event.source !== 'import') {
+        chats.setActiveChat(event.chat.id);
+        tabs.openChatTab(event.chat.id, event.chat.title);
+      }
       break;
     case 'chat.updated':
       log.debug('event:chat.updated', { chatId: event.chat.id });
@@ -92,6 +94,10 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'launch.port.timeout':
       log.warn('event:launch.port.timeout', { projectId: event.projectId, name: event.name, port: event.port });
+      break;
+    case 'sessions.external.count':
+      log.debug('event:sessions.external.count', { projectId: event.projectId, count: event.count });
+      chats.setExternalSessionCount(event.count);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });

@@ -4,6 +4,7 @@ import type {
   AdapterModel,
   AdapterSession,
   CustomCommand,
+  ExternalSession,
   SessionOptions,
   Skill,
   AgentConfig,
@@ -12,6 +13,7 @@ import type {
 } from '@mainframe/types';
 import { ClaudeSession } from './session.js';
 import * as skills from './skills.js';
+import { listExternalSessions } from './external-sessions.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 import manifest from './manifest.json' with { type: 'json' };
 
@@ -121,5 +123,9 @@ export class ClaudeAdapter implements Adapter {
 
   async deleteAgent(agentId: string, projectPath: string): Promise<void> {
     return skills.deleteAgent(agentId, projectPath);
+  }
+
+  async listExternalSessions(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]> {
+    return listExternalSessions(projectPath, excludeSessionIds);
   }
 }

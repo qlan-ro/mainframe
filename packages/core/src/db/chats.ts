@@ -197,4 +197,39 @@ export class ChatsRepository {
     this.db.prepare('UPDATE chats SET skill_files = ? WHERE id = ?').run(JSON.stringify(existing), chatId);
     return true;
   }
+
+  getImportedSessionIds(projectId: string): string[] {
+    const stmt = this.db.prepare(`
+      SELECT claude_session_id FROM chats
+      WHERE project_id = ? AND claude_session_id IS NOT NULL
+    `);
+    const rows = stmt.all(projectId) as { claude_session_id: string }[];
+    return rows.map((r) => r.claude_session_id);
+  }
+
+  findByExternalSessionId(sessionId: string, projectId: string): Chat | null {
+    const stmt = this.db.prepare(`
+      SELECT
+        id, adapter_id as adapterId, project_id as projectId,
+        title, claude_session_id as claudeSessionId, model,
+        permission_mode as permissionMode, status,
+        created_at as createdAt, updated_at as updatedAt,
+        total_cost as totalCost, total_tokens_input as totalTokensInput,
+        total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
+        mentions, modified_files as modifiedFiles,
+        worktree_path as worktreePath, branch_name as branchName,
+        process_state as processState
+      FROM chats WHERE claude_session_id = ? AND project_id = ?
+    `);
+    const row = stmt.get(sessionId, projectId) as (Chat & { mentions: string; modifiedFiles: string }) | null;
+    if (!row) return null;
+    return {
+      ...row,
+      mentions: parseJsonColumn(row.mentions, []),
+      modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
+      worktreePath: row.worktreePath || undefined,
+      branchName: row.branchName || undefined,
+      processState: (row.processState as Chat['processState']) || null,
+    };
+  }
 }
