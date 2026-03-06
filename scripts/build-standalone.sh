@@ -41,8 +41,9 @@ fi
 NODE_ARCH="$ARCH"
 
 NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${OS}-${NODE_ARCH}.tar.gz"
+NODE_PREFIX="node-v${NODE_VERSION}-${OS}-${NODE_ARCH}"
 echo "Downloading Node.js ${NODE_VERSION} for ${OS}-${NODE_ARCH}..."
-curl -fsSL "$NODE_URL" | tar -xz --strip-components=1 -C "${DIST_DIR}" "*/bin/node"
+curl -fsSL "$NODE_URL" | tar -xz -C "${DIST_DIR}/bin/" --strip-components=2 "${NODE_PREFIX}/bin/node"
 
 # 4. Download cloudflared for target platform
 if [ "$OS" = "darwin" ]; then
