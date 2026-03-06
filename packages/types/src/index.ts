@@ -1,4 +1,5 @@
 export * from './adapter.js';
+export * from './device.js';
 export * from './chat.js';
 export * from './display.js';
 export * from './events.js';

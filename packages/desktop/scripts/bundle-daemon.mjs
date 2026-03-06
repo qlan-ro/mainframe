@@ -8,7 +8,7 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const coreEntry = join(__dirname, '../../../packages/core/dist/index.js');
-const outfile = join(__dirname, '../resources/daemon.cjs');
+const outfile = process.argv[2] ?? join(__dirname, '../resources/daemon.cjs');
 
 await build({
   entryPoints: [coreEntry],

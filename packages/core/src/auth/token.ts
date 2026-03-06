@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export interface TokenPayload {
   deviceId: string;
@@ -19,7 +19,9 @@ export function validateToken(secret: string, token: string): TokenPayload | nul
   const [payloadB64, sig] = parts;
   const expectedSig = createHmac('sha256', secret).update(payloadB64!).digest('base64url');
 
-  if (sig !== expectedSig) return null;
+  const expectedBuf = Buffer.from(expectedSig);
+  const actualBuf = Buffer.from(sig ?? '');
+  if (expectedBuf.length !== actualBuf.length || !timingSafeEqual(expectedBuf, actualBuf)) return null;
 
   try {
     return JSON.parse(Buffer.from(payloadB64!, 'base64url').toString()) as TokenPayload;

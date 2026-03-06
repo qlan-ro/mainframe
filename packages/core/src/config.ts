@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -7,6 +8,7 @@ export interface MainframeConfig {
   dataDir: string;
   tunnel?: boolean;
   tunnelUrl?: string;
+  authSecret?: string;
 }
 
 const rawPort = process.env['PORT'];
@@ -52,4 +54,21 @@ export function saveConfig(config: Partial<MainframeConfig>): void {
   const current = getConfig();
   const merged = { ...current, ...config };
   writeFileSync(configPath, JSON.stringify(merged, null, 2));
+}
+
+function getAuthSecret(): string | null {
+  if (process.env['AUTH_TOKEN_SECRET']) {
+    return process.env['AUTH_TOKEN_SECRET'];
+  }
+  const config = getConfig();
+  return config.authSecret ?? null;
+}
+
+export function ensureAuthSecret(): string {
+  const existing = getAuthSecret();
+  if (existing) return existing;
+
+  const secret = randomBytes(32).toString('hex');
+  saveConfig({ authSecret: secret });
+  return secret;
 }

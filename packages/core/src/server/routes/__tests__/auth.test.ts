@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import Database from 'better-sqlite3';
 import { authRoutes } from '../auth.js';
+import { DevicesRepository } from '../../../db/devices.js';
 
 describe('auth routes', () => {
   let app: express.Express;
@@ -70,5 +72,50 @@ describe('auth routes', () => {
     process.env.AUTH_TOKEN_SECRET = 'test-secret-at-least-32-characters-long!!';
     const res = await request(app).get('/api/auth/status').set('Authorization', 'Bearer bad-token');
     expect(res.body.data.valid).toBe(false);
+  });
+
+  describe('device endpoints', () => {
+    let deviceDb: Database.Database;
+    let devicesRepo: DevicesRepository;
+
+    beforeEach(() => {
+      deviceDb = new Database(':memory:');
+      deviceDb.exec(`CREATE TABLE IF NOT EXISTS devices (
+        device_id TEXT PRIMARY KEY, device_name TEXT NOT NULL,
+        created_at TEXT NOT NULL, last_seen TEXT
+      )`);
+      devicesRepo = new DevicesRepository(deviceDb);
+      app = express();
+      app.use(express.json());
+      app.use(authRoutes({ devicesRepo }));
+    });
+
+    afterEach(() => {
+      deviceDb.close();
+    });
+
+    it('POST /api/auth/confirm persists device to DB', async () => {
+      process.env.AUTH_TOKEN_SECRET = 'test-secret-at-least-32-characters-long!!';
+      const pairRes = await request(app).post('/api/auth/pair').send({ deviceName: 'My iPhone' });
+      await request(app).post('/api/auth/confirm').send({ pairingCode: pairRes.body.data.pairingCode });
+      const devices = devicesRepo.getAll();
+      expect(devices).toHaveLength(1);
+      expect(devices[0]!.deviceName).toBe('My iPhone');
+    });
+
+    it('GET /api/auth/devices lists paired devices', async () => {
+      devicesRepo.add('mobile-1', 'iPhone');
+      devicesRepo.add('mobile-2', 'iPad');
+      const res = await request(app).get('/api/auth/devices');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(2);
+    });
+
+    it('DELETE /api/auth/devices/:deviceId removes a device', async () => {
+      devicesRepo.add('mobile-1', 'iPhone');
+      const res = await request(app).delete('/api/auth/devices/mobile-1');
+      expect(res.status).toBe(200);
+      expect(devicesRepo.getAll()).toHaveLength(0);
+    });
   });
 });

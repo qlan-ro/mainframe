@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
-import { getConfig, getDataDir } from './config.js';
+import { ensureAuthSecret, getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
 import { AdapterRegistry } from './adapters/index.js';
 import { ChatManager } from './chat/index.js';
@@ -21,6 +21,9 @@ import type { DaemonEvent, PluginManifest } from '@mainframe/types';
 
 async function main(): Promise<void> {
   const config = getConfig();
+  const authSecret = ensureAuthSecret();
+  process.env['AUTH_TOKEN_SECRET'] = authSecret;
+  logger.info('Auth secret loaded');
 
   logger.info('Mainframe Core Daemon');
   logger.info({ dataDir: getDataDir() }, 'Data directory');
@@ -111,7 +114,15 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((error) => {
-  logger.fatal({ err: error }, 'Fatal error');
-  process.exit(1);
-});
+const subcommand = process.argv[2];
+
+if (subcommand === 'pair') {
+  import('./cli/pair.js').then(({ runPair }) => runPair());
+} else if (subcommand === 'status') {
+  import('./cli/status.js').then(({ runStatus }) => runStatus());
+} else {
+  main().catch((error) => {
+    logger.fatal({ err: error }, 'Fatal error');
+    process.exit(1);
+  });
+}

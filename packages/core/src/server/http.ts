@@ -66,7 +66,7 @@ export function createHttpServer(
 
   const ctx = { db, chats, adapters, attachmentStore, launchRegistry, tunnelUrl: getTunnelUrl?.() ?? null };
 
-  app.use(authRoutes({ pushService }));
+  app.use(authRoutes({ pushService, devicesRepo: db.devices }));
   app.use(projectRoutes(ctx));
   app.use(chatRoutes(ctx));
   app.use(fileRoutes(ctx));

@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import { nanoid } from 'nanoid';
 import { generateToken, validateToken, generatePairingCode } from '../../auth/token.js';
 import type { PushService } from '../../push/push-service.js';
+import type { DevicesRepository } from '../../db/devices.js';
 
 interface PendingPairing {
   deviceName: string;
@@ -22,6 +24,7 @@ function cleanExpiredPairings(): void {
 
 export interface AuthRouteOptions {
   pushService?: PushService;
+  devicesRepo?: DevicesRepository;
 }
 
 export function authRoutes(options?: AuthRouteOptions): Router {
@@ -30,7 +33,7 @@ export function authRoutes(options?: AuthRouteOptions): Router {
   router.post('/api/auth/pair', (req, res) => {
     const secret = process.env.AUTH_TOKEN_SECRET;
     if (!secret) {
-      res.status(400).json({ success: false, error: 'Auth not configured. Set AUTH_TOKEN_SECRET.' });
+      res.status(400).json({ success: false, error: 'Auth not configured' });
       return;
     }
 
@@ -65,8 +68,10 @@ export function authRoutes(options?: AuthRouteOptions): Router {
 
     pendingPairings.delete(pairingCode);
 
-    const deviceId = `mobile-${Date.now()}`;
+    const deviceId = `mobile-${nanoid(10)}`;
     const token = generateToken(secret, deviceId);
+
+    options?.devicesRepo?.add(deviceId, pairing.deviceName);
 
     res.json({ success: true, data: { token, deviceId } });
   });
@@ -96,6 +101,17 @@ export function authRoutes(options?: AuthRouteOptions): Router {
     }
 
     options?.pushService?.registerDevice(deviceId, pushToken);
+    res.json({ success: true });
+  });
+
+  router.get('/api/auth/devices', (_req, res) => {
+    const devices = options?.devicesRepo?.getAll() ?? [];
+    res.json({ success: true, data: devices });
+  });
+
+  router.delete('/api/auth/devices/:deviceId', (req, res) => {
+    const { deviceId } = req.params;
+    options?.devicesRepo?.remove(deviceId);
     res.json({ success: true });
   });
 
