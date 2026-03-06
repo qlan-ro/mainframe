@@ -75,7 +75,13 @@
     "productName": "Mainframe",
     "icon": "resources/icon",
     "files": [
-      "out/**/*",
+      {
+        "from": "out",
+        "to": "out",
+        "filter": [
+          "**/*"
+        ]
+      },
       "resources/icon*",
       "resources/favicon.png",
       "package.json"
