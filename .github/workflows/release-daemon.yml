@@ -10,14 +10,12 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-14
             target_os: darwin
             target_arch: arm64
-          - os: macos-latest
-            target_os: darwin
-            target_arch: x64
           - os: ubuntu-latest
             target_os: linux
             target_arch: x64
