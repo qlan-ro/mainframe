@@ -50,26 +50,6 @@ AI CLI tools are powerful, but they live in the terminal. Mainframe adds the lay
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/qlan-ro/mainframe/releases).
 
-### Mobile Companion App
-
-- [App Store](https://apps.apple.com/app/mainframe/id000000000)
-- [Google Play](https://play.google.com/store/apps/details?id=com.qlan.mainframe)
-
-**Pairing with your desktop:**
-
-1. Open the desktop app and go to **Settings → Devices → Pair New Device**
-2. A pairing code (and QR code) appears on screen
-3. Open the mobile app, tap **Connect**, and scan the QR code or enter the code manually
-4. The daemon issues a token — your phone is now paired and can send messages, respond to permissions, and receive push notifications
-
-**Pairing from the CLI (headless/daemon-only):**
-
-```bash
-mainframe pair
-```
-
-This prints a pairing code to the terminal. Enter it in the mobile app to complete pairing.
-
 ### Daemon Only
 
 Install the standalone daemon if you want to run it headless or build your own interface:
@@ -91,6 +71,26 @@ If you already have your own tunnel or reverse proxy, pass the public URL direct
 ```bash
 TUNNEL_URL=https://mainframe.example.com mainframe
 ```
+
+### Mobile Companion App
+
+- [App Store](https://apps.apple.com/app/mainframe/id000000000)
+- [Google Play](https://play.google.com/store/apps/details?id=com.qlan.mainframe)
+
+**Pairing with your desktop:**
+
+1. Open the desktop app and go to **Settings → Devices → Pair New Device**
+2. A pairing code (and QR code) appears on screen
+3. Open the mobile app, tap **Connect**, and scan the QR code or enter the code manually
+4. The daemon issues a token — your phone is now paired and can send messages, respond to permissions, and receive push notifications
+
+**Pairing from the CLI (headless/daemon-only):**
+
+```bash
+mainframe pair
+```
+
+This prints a pairing code to the terminal. Enter it in the mobile app to complete pairing.
 
 ### Prerequisites
 
