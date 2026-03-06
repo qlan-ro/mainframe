@@ -17,8 +17,15 @@
       "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist",
     "dev": "tsc --watch",
     "lint": "eslint ."
