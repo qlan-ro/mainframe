@@ -49,14 +49,9 @@ Download the latest release for your platform from [GitHub Releases](https://git
 - [App Store](https://apps.apple.com/app/mainframe/id000000000)
 - [Google Play](https://play.google.com/store/apps/details?id=com.qlan.mainframe)
 
-**Pairing with your desktop:**
+**Pairing with your phone:**
 
-1. Open the desktop app and go to **Settings → Devices → Pair New Device**
-2. A pairing code (and QR code) appears on screen
-3. Open the mobile app, tap **Connect**, and scan the QR code or enter the code manually
-4. The daemon issues a token — your phone is now paired and can send messages, respond to permissions, and receive push notifications
-
-**Pairing from the CLI (headless/daemon-only):**
+Generate a pairing code from the daemon CLI, then enter it in the mobile app.
 
 ```bash
 # Standalone binary
@@ -66,7 +61,7 @@ mainframe pair
 docker exec -it <container-name> node daemon.cjs pair
 ```
 
-Both commands print a pairing code to the terminal. Enter it in the mobile app to complete pairing.
+The command prints a short-lived pairing code. Open the mobile app, tap **Connect**, and enter the code. The daemon issues a token — your phone is now paired and can send messages, respond to permissions, and receive push notifications.
 
 ### Daemon Only
 
