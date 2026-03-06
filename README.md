@@ -65,14 +65,10 @@ Download the latest release for your platform from [GitHub Releases](https://git
 **Pairing from the CLI (headless/daemon-only):**
 
 ```bash
-# Standalone binary
 mainframe pair
-
-# Docker
-docker exec -it <container-name> node daemon.cjs pair
 ```
 
-Both commands print a pairing code to the terminal. Enter it in the mobile app to complete pairing.
+This prints a pairing code to the terminal. Enter it in the mobile app to complete pairing.
 
 ### Daemon Only
 
@@ -82,22 +78,12 @@ Install the standalone daemon if you want to run it headless or build your own i
 curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
 ```
 
-Or run it with Docker:
-
-```bash
-docker run -d -p 31415:31415 ghcr.io/qlan-ro/mainframe-daemon
-```
-
 #### Cloudflare Tunnel (remote access)
 
 To access the daemon from the mobile app or another network, enable the built-in [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) by setting `TUNNEL=true`. This requires `cloudflared` to be installed on the host.
 
 ```bash
-# Standalone binary
 TUNNEL=true mainframe
-
-# Docker
-docker run -d -p 31415:31415 -e TUNNEL=true ghcr.io/qlan-ro/mainframe-daemon
 ```
 
 If you already have your own tunnel or reverse proxy, pass the public URL directly instead:
