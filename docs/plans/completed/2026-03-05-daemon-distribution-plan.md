@@ -68,7 +68,7 @@ Import `ensureAuthSecret` from `'./config.js'`.
 
 **Step 4: Typecheck**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: compiles with no errors
 
 **Step 5: Commit**
@@ -142,7 +142,7 @@ describe('DevicesRepository', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core vitest run src/db/__tests__/devices.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core vitest run src/db/__tests__/devices.test.ts`
 Expected: FAIL — `DevicesRepository` does not exist
 
 **Step 3: Write `DevicesRepository`**
@@ -195,7 +195,7 @@ export class DevicesRepository {
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/core vitest run src/db/__tests__/devices.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core vitest run src/db/__tests__/devices.test.ts`
 Expected: PASS (4 tests)
 
 **Step 5: Add table to schema**
@@ -221,7 +221,7 @@ In `packages/core/src/db/index.ts`:
 
 **Step 7: Typecheck**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: compiles with no errors
 
 **Step 8: Commit**
@@ -292,7 +292,7 @@ describe('device endpoints', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core vitest run src/server/routes/__tests__/auth.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core vitest run src/server/routes/__tests__/auth.test.ts`
 Expected: FAIL — `devicesRepo` option not accepted, endpoints don't exist
 
 **Step 3: Update auth routes**
@@ -333,7 +333,7 @@ router.delete('/api/auth/devices/:deviceId', (req, res) => {
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/core vitest run src/server/routes/__tests__/auth.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core vitest run src/server/routes/__tests__/auth.test.ts`
 Expected: ALL PASS
 
 **Step 5: Wire `devicesRepo` in `http.ts`**
@@ -346,7 +346,7 @@ app.use(authRoutes({ pushService, devicesRepo: db.devices }));
 
 **Step 6: Typecheck**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: compiles with no errors
 
 **Step 7: Commit**
@@ -366,8 +366,8 @@ feat(core): persist paired devices in SQLite, add list/revoke endpoints
 
 **Step 1: Install `qrcode-terminal`**
 
-Run: `pnpm --filter @mainframe/core add qrcode-terminal`
-Run: `pnpm --filter @mainframe/core add -D @types/qrcode-terminal` (if types exist; otherwise add a `declare module` in a `.d.ts`)
+Run: `pnpm --filter @qlan-ro/mainframe-core add qrcode-terminal`
+Run: `pnpm --filter @qlan-ro/mainframe-core add -D @types/qrcode-terminal` (if types exist; otherwise add a `declare module` in a `.d.ts`)
 
 **Step 2: Create `cli/pair.ts`**
 
@@ -530,13 +530,13 @@ if (subcommand === 'pair') {
 
 **Step 5: Typecheck**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: compiles with no errors
 
 **Step 6: Manual smoke test**
 
 Run: `pnpm dev:core` in one terminal.
-Run: `pnpm --filter @mainframe/core exec tsx src/index.ts status` in another terminal.
+Run: `pnpm --filter @qlan-ro/mainframe-core exec tsx src/index.ts status` in another terminal.
 Expected: prints daemon status with port 31415.
 
 **Step 7: Commit**
@@ -586,7 +586,7 @@ RUN pnpm install --frozen-lockfile
 COPY packages/types/ packages/types/
 COPY packages/core/ packages/core/
 COPY packages/desktop/scripts/bundle-daemon.mjs packages/desktop/scripts/
-RUN pnpm --filter @mainframe/types build && pnpm --filter @mainframe/core build
+RUN pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build
 RUN node packages/desktop/scripts/bundle-daemon.mjs
 
 # Stage 2: Runtime
@@ -811,8 +811,8 @@ rm -rf "$DIST_DIR"
 mkdir -p "${DIST_DIR}/bin" "${DIST_DIR}/lib"
 
 # 1. Bundle daemon
-pnpm --filter @mainframe/types build
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-types build
+pnpm --filter @qlan-ro/mainframe-core build
 node packages/desktop/scripts/bundle-daemon.mjs
 cp packages/desktop/resources/daemon.cjs "${DIST_DIR}/lib/"
 
@@ -941,7 +941,7 @@ ci: add standalone binary build and release workflow
 
 ---
 
-### Task 9: Unprivate `@mainframe/core` for npm publish (optional)
+### Task 9: Unprivate `@qlan-ro/mainframe-core` for npm publish (optional)
 
 **Files:**
 - Modify: `packages/core/package.json`
@@ -990,7 +990,7 @@ This keeps the existing behavior for the desktop build while allowing the standa
 
 **Step 2: Typecheck desktop build still works**
 
-Run: `pnpm --filter @mainframe/desktop run build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop run build`
 Expected: daemon.cjs is created in `packages/desktop/resources/`
 
 **Step 3: Commit**

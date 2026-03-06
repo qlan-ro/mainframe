@@ -4,7 +4,7 @@
     {
       "name": "Core Daemon",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@mainframe/core", "run", "dev"],
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-core", "run", "dev"],
       "port": 31416,
       "url": null,
       "env": {
@@ -14,7 +14,7 @@
     {
       "name": "Desktop App",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@mainframe/desktop", "run", "dev:web"],
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-desktop", "run", "dev:web"],
       "port": 5174,
       "url": null,
       "preview": true,

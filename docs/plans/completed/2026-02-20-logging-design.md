@@ -17,12 +17,12 @@ Three separate log files, all under `~/.mainframe/logs/`, with daily rotation an
 
 ```
 ~/.mainframe/logs/
-  daemon.2026-02-20.log     ← pino NDJSON, @mainframe/core daemon process
+  daemon.2026-02-20.log     ← pino NDJSON, @qlan-ro/mainframe-core daemon process
   main.2026-02-20.log       ← pino NDJSON, Electron main process
   renderer.2026-02-20.log   ← pino NDJSON, forwarded from renderer via IPC
 ```
 
-### Daemon (`@mainframe/core`)
+### Daemon (`@qlan-ro/mainframe-core`)
 
 Extend the existing `pino` logger in `packages/core/src/logger.ts` with a `pino-roll` file transport. The logger always writes to file (both dev and prod). In dev, also pretty-prints to stdout at `debug` level. In prod, writes NDJSON to stdout + file at `info` level.
 
@@ -45,7 +45,7 @@ New file: `packages/desktop/src/main/logger.ts`
 
 A fresh `pino` instance with its own `pino-roll` transport pointing to `~/.mainframe/logs/main.log`. Same daily rotation, 7-day retention. Replaces all `console.*` calls in `packages/desktop/src/main/index.ts`.
 
-Dependencies added to `@mainframe/desktop`: `pino`, `pino-roll`.
+Dependencies added to `@qlan-ro/mainframe-desktop`: `pino`, `pino-roll`.
 
 ### Renderer (IPC Bridge)
 
@@ -120,6 +120,6 @@ log: (level: string, module: string, message: string, data?: unknown) =>
 ## Constraints
 
 - No tight-loop DEBUG logs (no per-iteration logging without a meaningful timeout between steps).
-- No `console.log` / `console.error` in `@mainframe/core` — use pino child loggers only.
+- No `console.log` / `console.error` in `@qlan-ro/mainframe-core` — use pino child loggers only.
 - `console.warn` with a tag is acceptable in renderer/desktop code where pino is unavailable.
 - `pino-roll` uses worker threads — verify it builds correctly through electron-vite's rollup for the main process. If not, fall back to a simple async `fs.appendFile` writer for the main logger.

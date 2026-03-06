@@ -1,6 +1,6 @@
 import React from 'react';
 import { structuredPatch } from 'diff';
-import type { DiffHunk } from '@mainframe/types';
+import type { DiffHunk } from '@qlan-ro/mainframe-types';
 export function stripErrorXml(text: string): string {
   return text.replace(/<\/?(?:tool_use_error|error)>/g, '').trim();
 }

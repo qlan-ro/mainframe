@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { prepareMessagesForClient } from '../../messages/display-pipeline.js';
-import type { ChatMessage, MessageContent, ToolCategories } from '@mainframe/types';
+import type { ChatMessage, MessageContent, ToolCategories } from '@qlan-ro/mainframe-types';
 
 /* ── helpers ─────────────────────────────────────────────────────── */
 

@@ -93,7 +93,7 @@ describe('ChatManager.removeProject', () => {
 **Step 2: Run the test to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/core test -- chat-manager-remove-project
+pnpm --filter @qlan-ro/mainframe-core test -- chat-manager-remove-project
 ```
 
 Expected: FAIL — `removeProject is not a function`
@@ -135,7 +135,7 @@ const logger = createChildLogger('chat-manager');
 **Step 4: Run the test to verify it passes**
 
 ```bash
-pnpm --filter @mainframe/core test -- chat-manager-remove-project
+pnpm --filter @qlan-ro/mainframe-core test -- chat-manager-remove-project
 ```
 
 Expected: PASS
@@ -143,7 +143,7 @@ Expected: PASS
 **Step 5: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 
 Expected: no errors
@@ -188,7 +188,7 @@ describe('DELETE /api/projects/:id', () => {
 **Step 2: Run the test to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/core test -- routes/projects
+pnpm --filter @qlan-ro/mainframe-core test -- routes/projects
 ```
 
 Expected: FAIL — `ctx.chats.removeProject` not called
@@ -224,7 +224,7 @@ const logger = createChildLogger('projects-route');
 **Step 4: Run tests**
 
 ```bash
-pnpm --filter @mainframe/core test -- routes/projects
+pnpm --filter @qlan-ro/mainframe-core test -- routes/projects
 ```
 
 Expected: PASS
@@ -232,7 +232,7 @@ Expected: PASS
 **Step 5: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 
 **Step 6: Commit**
@@ -410,7 +410,7 @@ export function ProjectRail(): React.ReactElement {
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: no TypeScript errors
@@ -441,8 +441,8 @@ Start the app and verify:
 ### Task 5: Final typecheck and test run
 
 ```bash
-pnpm --filter @mainframe/core build
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core build
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 
 Expected: all tests pass, no type errors.

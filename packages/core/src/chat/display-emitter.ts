@@ -1,4 +1,4 @@
-import type { DaemonEvent, DisplayMessage, ToolCategories } from '@mainframe/types';
+import type { DaemonEvent, DisplayMessage, ToolCategories } from '@qlan-ro/mainframe-types';
 import type { MessageCache } from './message-cache.js';
 import { prepareMessagesForClient } from '../messages/display-pipeline.js';
 

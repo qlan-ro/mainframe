@@ -1,4 +1,4 @@
-import type { ClientEvent, DaemonEvent, ControlResponse } from '@mainframe/types';
+import type { ClientEvent, DaemonEvent, ControlResponse } from '@qlan-ro/mainframe-types';
 import { createLogger } from './logger';
 
 const env = (import.meta as { env?: Record<string, string> }).env ?? {};

@@ -4,7 +4,7 @@
 
 **Goal:** Expose available models via the Adapter interface and drive desktop model selectors from `/api/adapters`.
 
-**Architecture:** Add model metadata types to `@mainframe/types`, extend adapter contract with `listModels()`, implement it in `ClaudeAdapter`, and include models in `AdapterRegistry.list()`. On desktop, load adapters from API into store state and replace hardcoded model-source usage in settings/composer and model helpers.
+**Architecture:** Add model metadata types to `@qlan-ro/mainframe-types`, extend adapter contract with `listModels()`, implement it in `ClaudeAdapter`, and include models in `AdapterRegistry.list()`. On desktop, load adapters from API into store state and replace hardcoded model-source usage in settings/composer and model helpers.
 
 **Tech Stack:** TypeScript (strict), Node.js/Express, React, Zustand, Vitest
 
@@ -21,7 +21,7 @@
 
 **Step 2: Run single test to verify failure**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes/adapters.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes/adapters.test.ts`
 Expected: FAIL due missing `models` typing/shape.
 
 **Step 3: Add shared types and interface method**
@@ -32,7 +32,7 @@ Expected: FAIL due missing `models` typing/shape.
 
 **Step 4: Run core adapters route test**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes/adapters.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes/adapters.test.ts`
 Expected: still failing until core implementation is updated (next task).
 
 ### Task 2: Implement adapter model listing in core and expose via `/api/adapters`
@@ -55,7 +55,7 @@ Expected: still failing until core implementation is updated (next task).
 
 **Step 3: Run core adapters test**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes/adapters.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes/adapters.test.ts`
 Expected: PASS.
 
 ### Task 3: Add desktop adapters API client and store
@@ -80,7 +80,7 @@ Expected: PASS.
 
 **Step 4: Run targeted desktop test(s)**
 
-Run: `pnpm --filter @mainframe/desktop exec vitest run src/renderer/lib/adapters.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec vitest run src/renderer/lib/adapters.test.ts`
 Expected: FAIL until utility refactor in next task.
 
 ### Task 4: Refactor desktop adapter/model utilities to use API metadata
@@ -104,7 +104,7 @@ Expected: FAIL until utility refactor in next task.
 
 **Step 3: Run utility test**
 
-Run: `pnpm --filter @mainframe/desktop exec vitest run src/renderer/lib/adapters.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec vitest run src/renderer/lib/adapters.test.ts`
 Expected: PASS.
 
 ### Task 5: Switch settings and composer UI to adapter store metadata
@@ -127,7 +127,7 @@ Expected: PASS.
 
 **Step 3: Run targeted desktop tests**
 
-Run: `pnpm --filter @mainframe/desktop exec vitest run src/__tests__/stores/chats.test.ts src/renderer/lib/adapters.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec vitest run src/__tests__/stores/chats.test.ts src/renderer/lib/adapters.test.ts`
 Expected: PASS.
 
 ### Task 6: Verify types and package builds
@@ -143,7 +143,7 @@ Expected: PASS for all workspaces.
 **Step 2: Run focused tests touched by change**
 
 Run: 
-- `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes/adapters.test.ts`
-- `pnpm --filter @mainframe/desktop exec vitest run src/renderer/lib/adapters.test.ts`
+- `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes/adapters.test.ts`
+- `pnpm --filter @qlan-ro/mainframe-desktop exec vitest run src/renderer/lib/adapters.test.ts`
 
 Expected: PASS.

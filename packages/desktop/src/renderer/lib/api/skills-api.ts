@@ -1,4 +1,4 @@
-import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput } from '@mainframe/types';
+import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput } from '@qlan-ro/mainframe-types';
 import { fetchJson, postJson, putJson, deleteRequest, API_BASE } from './http';
 import { createLogger } from '../logger';
 

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vite
 import { createServer, type Server } from 'node:http';
 import { WebSocket } from 'ws';
 import { WebSocketManager } from '../server/websocket.js';
-import type { Chat } from '@mainframe/types';
+import type { Chat } from '@qlan-ro/mainframe-types';
 import { EventEmitter } from 'node:events';
 
 // ── Mock ChatManager ────────────────────────────────────────────────

@@ -4,7 +4,7 @@
 
 **Goal:** Build the foundation of Mainframe - a Node.js daemon that manages Claude CLI sessions, and an Electron desktop app with JetBrains-style configurable panels for AI-assisted development.
 
-**Architecture:** Monorepo with three packages: `@mainframe/types` (shared TypeScript types), `@mainframe/core` (Node.js daemon with WebSocket/REST API), and `@mainframe/desktop` (Electron + React app). The daemon manages Claude CLI processes via the adapter pattern and exposes APIs for the desktop app.
+**Architecture:** Monorepo with three packages: `@qlan-ro/mainframe-types` (shared TypeScript types), `@qlan-ro/mainframe-core` (Node.js daemon with WebSocket/REST API), and `@qlan-ro/mainframe-desktop` (Electron + React app). The daemon manages Claude CLI processes via the adapter pattern and exposes APIs for the desktop app.
 
 **Tech Stack:** Node.js 20+, TypeScript, pnpm workspaces, Electron 28+, React 18+, Vite, shadcn/ui, Tailwind CSS, Zustand, react-resizable-panels, Monaco Editor, better-sqlite3, ws (WebSocket)
 
@@ -143,7 +143,7 @@ Run: `git init && git add . && git commit -m "chore: initialize monorepo structu
 
 ```json
 {
-  "name": "@mainframe/types",
+  "name": "@qlan-ro/mainframe-types",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -369,7 +369,7 @@ Run: `git add . && git commit -m "feat(types): add shared type definitions"`
 
 ```json
 {
-  "name": "@mainframe/core",
+  "name": "@qlan-ro/mainframe-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -387,7 +387,7 @@ Run: `git add . && git commit -m "feat(types): add shared type definitions"`
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@mainframe/types": "workspace:*",
+    "@qlan-ro/mainframe-types": "workspace:*",
     "better-sqlite3": "^9.4.3",
     "express": "^4.18.2",
     "nanoid": "^5.0.4",
@@ -553,7 +553,7 @@ export function initializeSchema(db: Database.Database): void {
 
 ```typescript
 import type Database from 'better-sqlite3';
-import type { Project } from '@mainframe/types';
+import type { Project } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
 import { basename } from 'node:path';
 
@@ -615,7 +615,7 @@ export class ProjectsRepository {
 
 ```typescript
 import type Database from 'better-sqlite3';
-import type { Session, SessionMessage, MessageContent } from '@mainframe/types';
+import type { Session, SessionMessage, MessageContent } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
 
 export class SessionsRepository {
@@ -800,7 +800,7 @@ Run: `git add . && git commit -m "feat(core): add SQLite database layer"`
 
 ```typescript
 import { EventEmitter } from 'node:events';
-import type { AgentAdapter, AgentProcess, SpawnOptions, PermissionResponse, PermissionRequest, MessageContent } from '@mainframe/types';
+import type { AgentAdapter, AgentProcess, SpawnOptions, PermissionResponse, PermissionRequest, MessageContent } from '@qlan-ro/mainframe-types';
 
 export interface AdapterEvents {
   init: (processId: string, claudeSessionId: string, model: string, tools: string[]) => void;
@@ -837,7 +837,7 @@ export abstract class BaseAdapter extends EventEmitter implements AgentAdapter {
 ```typescript
 import { spawn, ChildProcess } from 'node:child_process';
 import { nanoid } from 'nanoid';
-import type { AgentProcess, SpawnOptions, PermissionResponse, PermissionRequest, MessageContent } from '@mainframe/types';
+import type { AgentProcess, SpawnOptions, PermissionResponse, PermissionRequest, MessageContent } from '@qlan-ro/mainframe-types';
 import { BaseAdapter } from './base';
 
 interface ClaudeProcess extends AgentProcess {
@@ -1060,7 +1060,7 @@ export class ClaudeAdapter extends BaseAdapter {
 **Step 3: Create packages/core/src/adapters/index.ts**
 
 ```typescript
-import type { AgentAdapter, AgentInfo } from '@mainframe/types';
+import type { AgentAdapter, AgentInfo } from '@qlan-ro/mainframe-types';
 import { ClaudeAdapter } from './claude';
 
 export class AdapterRegistry {
@@ -1117,7 +1117,7 @@ Run: `git add . && git commit -m "feat(core): add Claude CLI adapter with NDJSON
 
 ```typescript
 import { EventEmitter } from 'node:events';
-import type { Session, SessionMessage, AgentProcess, PermissionRequest, PermissionResponse, MessageContent, DaemonEvent } from '@mainframe/types';
+import type { Session, SessionMessage, AgentProcess, PermissionRequest, PermissionResponse, MessageContent, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from './db';
 import type { AdapterRegistry } from './adapters';
 import { ClaudeAdapter } from './adapters';
@@ -1416,7 +1416,7 @@ export function createHttpServer(
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'node:http';
 import type { SessionManager } from '../session-manager';
-import type { ClientEvent, DaemonEvent } from '@mainframe/types';
+import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 interface ClientConnection {
   ws: WebSocket;
@@ -1640,7 +1640,7 @@ Run: `git add . && git commit -m "feat(core): add HTTP and WebSocket servers"`
 
 ```json
 {
-  "name": "@mainframe/desktop",
+  "name": "@qlan-ro/mainframe-desktop",
   "version": "0.1.0",
   "private": true,
   "main": "./out/main/index.js",
@@ -1653,7 +1653,7 @@ Run: `git add . && git commit -m "feat(core): add HTTP and WebSocket servers"`
     "package": "electron-builder"
   },
   "dependencies": {
-    "@mainframe/types": "workspace:*",
+    "@qlan-ro/mainframe-types": "workspace:*",
     "@radix-ui/react-context-menu": "^2.1.5",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-dropdown-menu": "^2.0.6",
@@ -2120,7 +2120,7 @@ Run: `git add . && git commit -m "feat(desktop): add React renderer with Tailwin
 
 ```typescript
 import { create } from 'zustand';
-import type { Project } from '@mainframe/types';
+import type { Project } from '@qlan-ro/mainframe-types';
 
 interface ProjectsState {
   projects: Project[];
@@ -2158,7 +2158,7 @@ export const useProjectsStore = create<ProjectsState>((set) => ({
 
 ```typescript
 import { create } from 'zustand';
-import type { Session, SessionMessage, PermissionRequest } from '@mainframe/types';
+import type { Session, SessionMessage, PermissionRequest } from '@qlan-ro/mainframe-types';
 
 interface SessionsState {
   sessions: Session[];
@@ -2289,7 +2289,7 @@ Run: `git add . && git commit -m "feat(desktop): add Zustand state stores"`
 import type {
   Project, Session, SessionMessage, AgentInfo,
   ClientEvent, DaemonEvent, PermissionResponse
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 
 const API_BASE = 'http://localhost:31415';
 const WS_URL = 'ws://localhost:31415';
@@ -2439,7 +2439,7 @@ export const daemonClient = new DaemonClient();
 import { useEffect, useCallback } from 'react';
 import { daemonClient } from '../lib/client';
 import { useProjectsStore, useSessionsStore } from '../store';
-import type { DaemonEvent } from '@mainframe/types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 
 export function useDaemon(): void {
   const { setProjects, addProject, setLoading, setError } = useProjectsStore();
@@ -2853,7 +2853,7 @@ Run: `git add . && git commit -m "feat(desktop): add panel layout system with pr
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { User, Bot, Terminal, AlertTriangle } from 'lucide-react';
-import type { SessionMessage, MessageContent } from '@mainframe/types';
+import type { SessionMessage, MessageContent } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 
 interface MessageItemProps {
@@ -2944,7 +2944,7 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
 
 ```typescript
 import React, { useRef, useEffect } from 'react';
-import type { SessionMessage } from '@mainframe/types';
+import type { SessionMessage } from '@qlan-ro/mainframe-types';
 import { MessageItem } from './MessageItem';
 
 interface MessageListProps {
@@ -3388,7 +3388,7 @@ Run: `git add . && git commit -m "feat(desktop): add session list and left panel
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { ShieldAlert, Check, X, Shield } from 'lucide-react';
-import type { PermissionRequest } from '@mainframe/types';
+import type { PermissionRequest } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 
 interface PermissionDialogProps {
@@ -3956,17 +3956,17 @@ Run: `git add . && git commit -m "feat(desktop): add project directory picker"`
   "private": true,
   "description": "AI-native development environment for orchestrating agents",
   "scripts": {
-    "dev": "pnpm --filter @mainframe/core run dev & sleep 2 && pnpm --filter @mainframe/desktop run dev",
-    "dev:core": "pnpm --filter @mainframe/core run dev",
-    "dev:desktop": "pnpm --filter @mainframe/desktop run dev",
+    "dev": "pnpm --filter @qlan-ro/mainframe-core run dev & sleep 2 && pnpm --filter @qlan-ro/mainframe-desktop run dev",
+    "dev:core": "pnpm --filter @qlan-ro/mainframe-core run dev",
+    "dev:desktop": "pnpm --filter @qlan-ro/mainframe-desktop run dev",
     "build": "pnpm -r run build",
-    "build:types": "pnpm --filter @mainframe/types run build",
-    "build:core": "pnpm --filter @mainframe/core run build",
-    "build:desktop": "pnpm --filter @mainframe/desktop run build",
+    "build:types": "pnpm --filter @qlan-ro/mainframe-types run build",
+    "build:core": "pnpm --filter @qlan-ro/mainframe-core run build",
+    "build:desktop": "pnpm --filter @qlan-ro/mainframe-desktop run build",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test",
     "clean": "pnpm -r run clean",
-    "package": "pnpm build && pnpm --filter @mainframe/desktop run package"
+    "package": "pnpm build && pnpm --filter @qlan-ro/mainframe-desktop run package"
   },
   "devDependencies": {
     "typescript": "^5.3.3"
@@ -4000,9 +4000,9 @@ pnpm dev
 
 ## Architecture
 
-- **@mainframe/types** - Shared TypeScript types
-- **@mainframe/core** - Node.js daemon (WebSocket + REST API)
-- **@mainframe/desktop** - Electron + React desktop app
+- **@qlan-ro/mainframe-types** - Shared TypeScript types
+- **@qlan-ro/mainframe-core** - Node.js daemon (WebSocket + REST API)
+- **@qlan-ro/mainframe-desktop** - Electron + React desktop app
 
 ## Development
 

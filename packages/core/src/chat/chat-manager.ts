@@ -7,7 +7,7 @@ import type {
   DisplayMessage,
   SessionMention,
   SessionContext,
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';

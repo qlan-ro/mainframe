@@ -6,6 +6,7 @@ settings:
 
 overrides:
   tar: '>=7.5.7'
+  '@qlan-ro/mainframe-types': workspace:*
 
 importers:
 
@@ -38,7 +39,7 @@ importers:
 
   packages/core:
     dependencies:
-      '@mainframe/types':
+      '@qlan-ro/mainframe-types':
         specifier: workspace:*
         version: link:../types
       better-sqlite3:
@@ -108,15 +109,15 @@ importers:
       '@assistant-ui/react-markdown':
         specifier: ^0.12.4
         version: 0.12.4(@assistant-ui/react@0.12.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4)))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@mainframe/core':
-        specifier: workspace:*
-        version: link:../core
-      '@mainframe/types':
-        specifier: workspace:*
-        version: link:../types
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@qlan-ro/mainframe-core':
+        specifier: workspace:*
+        version: link:../core
+      '@qlan-ro/mainframe-types':
+        specifier: workspace:*
+        version: link:../types
       '@radix-ui/react-scroll-area':
         specifier: ^1.2.10
         version: 1.2.10(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -247,7 +248,7 @@ importers:
 
   packages/mobile:
     dependencies:
-      '@mainframe/types':
+      '@qlan-ro/mainframe-types':
         specifier: workspace:*
         version: link:../types
       '@react-native-async-storage/async-storage':
@@ -313,9 +314,6 @@ importers:
       react-native-safe-area-context:
         specifier: ^5.7.0
         version: 5.7.0(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
-      react-native-screens:
-        specifier: ~4.23.0
-        version: 4.23.0(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
       react-native-svg:
         specifier: ^15.15.3
         version: 15.15.3(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)

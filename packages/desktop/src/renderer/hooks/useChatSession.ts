@@ -2,7 +2,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { daemonClient } from '../lib/client';
 import { getChatMessages, getPendingPermission, uploadAttachments } from '../lib/api';
 import { useChatsStore } from '../store/chats';
-import type { ControlUpdate } from '@mainframe/types';
+import type { ControlUpdate } from '@qlan-ro/mainframe-types';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:chat-session');

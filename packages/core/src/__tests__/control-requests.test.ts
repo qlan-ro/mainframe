@@ -12,7 +12,7 @@ import type {
   SessionOptions,
   SessionSpawnOptions,
   ChatMessage,
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 
 // ── Helpers: capture stdin writes from ClaudeSession ────────────────
 

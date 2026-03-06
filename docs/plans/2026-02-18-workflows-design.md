@@ -185,7 +185,7 @@ interface PluginContext {
 
 Permissive model: plugins receive the full `PluginContext` with no permission gating. To be hardened in a future iteration if needed.
 
-### New Files in `@mainframe/core`
+### New Files in `@qlan-ro/mainframe-core`
 
 ```
 src/plugins/

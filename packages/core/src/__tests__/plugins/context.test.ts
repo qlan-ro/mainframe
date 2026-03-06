@@ -3,7 +3,7 @@ import { buildPluginContext, type PluginContextDeps } from '../../plugins/contex
 import { EventEmitter } from 'node:events';
 import { Router } from 'express';
 import { pino } from 'pino';
-import type { PluginManifest } from '@mainframe/types';
+import type { PluginManifest } from '@qlan-ro/mainframe-types';
 
 const baseManifest: PluginManifest = {
   id: 'test-plugin',

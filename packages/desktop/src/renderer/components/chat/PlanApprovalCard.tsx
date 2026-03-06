@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { ClipboardList, ShieldOff, FileEdit, Shield, ChevronDown } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { ControlRequest, ControlUpdate } from '@mainframe/types';
+import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
 import { Button } from '../ui/button';
 import { useChatsStore } from '../../store/chats';
 import { useMainframeRuntime } from './assistant-ui/MainframeRuntimeProvider';

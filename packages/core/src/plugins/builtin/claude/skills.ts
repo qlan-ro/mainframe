@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile, mkdir, rm, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput } from '@mainframe/types';
+import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput } from '@qlan-ro/mainframe-types';
 import { parseFrontmatter, buildFrontmatter } from './frontmatter.js';
 
 // TODO rename as claude-tools.ts

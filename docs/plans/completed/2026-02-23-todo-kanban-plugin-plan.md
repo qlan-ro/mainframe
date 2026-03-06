@@ -15,7 +15,7 @@
 
 ---
 
-## Task 1: Add `PluginAttachmentContext` to `@mainframe/types`
+## Task 1: Add `PluginAttachmentContext` to `@qlan-ro/mainframe-types`
 
 **Files:**
 - Modify: `packages/types/src/plugin.ts`
@@ -55,7 +55,7 @@ In the `PluginContext` interface, after `readonly db: PluginDatabaseContext;` ad
 **Step 2: Typecheck types package**
 
 ```bash
-pnpm --filter @mainframe/types build
+pnpm --filter @qlan-ro/mainframe-types build
 ```
 Expected: No errors.
 
@@ -146,7 +146,7 @@ describe('createPluginAttachmentContext', () => {
 **Step 2: Run test — expect FAIL**
 
 ```bash
-pnpm --filter @mainframe/core test packages/core/src/__tests__/plugins/attachment-context.test.ts
+pnpm --filter @qlan-ro/mainframe-core test packages/core/src/__tests__/plugins/attachment-context.test.ts
 ```
 Expected: FAIL — "attachment-context module not found"
 
@@ -156,7 +156,7 @@ Expected: FAIL — "attachment-context module not found"
 import { mkdir, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { nanoid } from 'nanoid';
-import type { PluginAttachmentContext, PluginAttachmentMeta } from '@mainframe/types';
+import type { PluginAttachmentContext, PluginAttachmentMeta } from '@qlan-ro/mainframe-types';
 
 interface AttachmentRecord {
   id: string;
@@ -234,7 +234,7 @@ export function createPluginAttachmentContext(baseDir: string): PluginAttachment
 **Step 4: Run test — expect PASS**
 
 ```bash
-pnpm --filter @mainframe/core test packages/core/src/__tests__/plugins/attachment-context.test.ts
+pnpm --filter @qlan-ro/mainframe-core test packages/core/src/__tests__/plugins/attachment-context.test.ts
 ```
 Expected: All 5 tests pass.
 
@@ -318,7 +318,7 @@ it('provides attachments when storage capability is declared', () => {
 **Step 4: Run context tests**
 
 ```bash
-pnpm --filter @mainframe/core test packages/core/src/__tests__/plugins/context.test.ts
+pnpm --filter @qlan-ro/mainframe-core test packages/core/src/__tests__/plugins/context.test.ts
 ```
 Expected: All tests pass.
 
@@ -341,7 +341,7 @@ git commit -m "feat(core): wire ctx.attachments into PluginContext, add pluginDi
 
 At the top of `chat-service.ts`, change the import to include `DaemonEvent`:
 ```typescript
-import type { ChatServiceAPI, ChatSummary, PluginManifest, DaemonEvent } from '@mainframe/types';
+import type { ChatServiceAPI, ChatSummary, PluginManifest, DaemonEvent } from '@qlan-ro/mainframe-types';
 ```
 
 Change `buildChatService` signature to:
@@ -381,7 +381,7 @@ const chatService = buildChatService(manifest, deps.db, deps.emitEvent);
 **Step 3: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 Expected: No errors.
 
@@ -428,7 +428,7 @@ import { pino } from 'pino';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { PluginManifest } from '@mainframe/types';
+import type { PluginManifest } from '@qlan-ro/mainframe-types';
 import request from 'supertest';
 import express from 'express';
 
@@ -532,14 +532,14 @@ describe('todos plugin routes', () => {
 **Step 3: Run test — expect FAIL**
 
 ```bash
-pnpm --filter @mainframe/core test packages/core/src/__tests__/plugins/builtin/todos.test.ts
+pnpm --filter @qlan-ro/mainframe-core test packages/core/src/__tests__/plugins/builtin/todos.test.ts
 ```
 Expected: FAIL — module not found.
 
 **Step 4: Create `packages/core/src/plugins/builtin/todos/index.ts`**
 
 ```typescript
-import type { PluginContext } from '@mainframe/types';
+import type { PluginContext } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
@@ -718,7 +718,7 @@ export function activate(ctx: PluginContext): void {
 **Step 5: Run test — expect PASS**
 
 ```bash
-pnpm --filter @mainframe/core test packages/core/src/__tests__/plugins/builtin/todos.test.ts
+pnpm --filter @qlan-ro/mainframe-core test packages/core/src/__tests__/plugins/builtin/todos.test.ts
 ```
 Expected: All 5 tests pass.
 
@@ -763,7 +763,7 @@ import { mkdirSync } from 'node:fs';
 **Step 4: Build core**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 Expected: No errors.
 
@@ -821,7 +821,7 @@ const tabs = (raw.tabs ?? []).filter((t) => t.type === 'chat' || t.type === 'tod
 **Step 5: Run desktop tests**
 
 ```bash
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 Expected: All existing tests pass. (Tabs store tests may need a quick scan — todos tab has a fixed id `'todos'` and is deduped by the existing `openTab` logic.)
 
@@ -867,7 +867,7 @@ import { useTabsStore } from '../store/tabs';
 **Step 4: Typecheck desktop**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: No type errors.
 
@@ -1109,7 +1109,7 @@ export function TodoCard({ todo, onMove, onEdit, onDelete, onStartSession }: Pro
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | head -30
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | head -30
 ```
 Expected: No errors in this file.
 
@@ -1430,7 +1430,7 @@ export function TodosPanel(): React.ReactElement {
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -E "error|Error" | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -E "error|Error" | head -20
 ```
 Expected: No errors.
 
@@ -1474,7 +1474,7 @@ Change to:
 **Step 3: Run typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: No errors. If there are type issues with the discriminated union, cast `activePrimaryTab` explicitly using the narrowed type check.
 
@@ -1499,14 +1499,14 @@ Expected: All packages build with no type errors.
 **Step 2: Run core tests**
 
 ```bash
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 Expected: All tests pass. Coverage thresholds met.
 
 **Step 3: Run desktop tests**
 
 ```bash
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 Expected: All tests pass.
 
@@ -1515,7 +1515,7 @@ Expected: All tests pass.
 Follow test output. Common issues:
 - Missing `afterEach` import in attachment test — add `import { afterEach } from 'vitest'`
 - CenterPanel type narrowing — use `activePrimaryTab.type === 'chat'` guard
-- `supertest` not installed — run `pnpm --filter @mainframe/core add -D supertest @types/supertest`
+- `supertest` not installed — run `pnpm --filter @qlan-ro/mainframe-core add -D supertest @types/supertest`
 
 **Step 5: Final commit**
 
@@ -1531,7 +1531,7 @@ git commit -m "chore: fix typecheck and test issues for todos plugin"
 **Step 1: Build and start**
 
 ```bash
-pnpm build && pnpm --filter @mainframe/desktop start
+pnpm build && pnpm --filter @qlan-ro/mainframe-desktop start
 ```
 
 **Step 2: Verify the Tasks button**

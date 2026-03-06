@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Replace the EventEmitter-based session→core communication with a typed `SessionSink` callback interface, remove `BaseAdapter`/`BaseSession`, rename `Permission*` → `Control*`, and make `@mainframe/types` a publishable SDK.
+**Goal:** Replace the EventEmitter-based session→core communication with a typed `SessionSink` callback interface, remove `BaseAdapter`/`BaseSession`, rename `Permission*` → `Control*`, and make `@qlan-ro/mainframe-types` a publishable SDK.
 
 **Architecture:** `AdapterSession.spawn()` receives a `SessionSink` that the core builds — sessions call `sink.onMessage(...)` etc. instead of `this.emit('message', ...)`. All base classes move to test helpers. The types package becomes the SDK: no private flag, full `PluginContext` typing, no magic event strings.
 
@@ -79,7 +79,7 @@ Expected: PASS — clean build, no errors.
 **Step 7: Run tests**
 
 ```bash
-pnpm --filter @mainframe/core test 2>&1 | tail -20
+pnpm --filter @qlan-ro/mainframe-core test 2>&1 | tail -20
 ```
 
 Expected: 477/480 (same as before — only pre-existing title-generation failures).
@@ -98,7 +98,7 @@ EOF
 
 ---
 
-## Task 2: Add `SessionSink` to `@mainframe/types`, update `AdapterSession` interface
+## Task 2: Add `SessionSink` to `@qlan-ro/mainframe-types`, update `AdapterSession` interface
 
 **Files:**
 - Modify: `packages/types/src/adapter.ts`
@@ -219,13 +219,13 @@ If found, remove the line.
 **Step 6: Verify build (expected failures are OK)**
 
 ```bash
-pnpm --filter @mainframe/types build 2>&1 | tail -10
+pnpm --filter @qlan-ro/mainframe-types build 2>&1 | tail -10
 ```
 
 Expected: PASS for types package.
 
 ```bash
-pnpm --filter @mainframe/core build 2>&1 | grep "error TS" | head -20
+pnpm --filter @qlan-ro/mainframe-core build 2>&1 | grep "error TS" | head -20
 ```
 
 Expected: TypeScript errors in `ClaudeSession` (still extends BaseSession which has `on/off/emit`), `event-handler.ts` (calls `session.on()`), and test files (mock sessions extend BaseSession). These are fixed in subsequent tasks.
@@ -287,7 +287,7 @@ export function handleStdout(line: string, sink: SessionSink): void
 
 Apply same pattern to `handleStderr`, `handleSystemEvent`, `handleAssistantEvent`, `handleUserEvent`, `handleControlRequestEvent` (was `handlePermissionRequestEvent`), `handleResultEvent`.
 
-Import `SessionSink` from `'@mainframe/types'` instead of the old session type.
+Import `SessionSink` from `'@qlan-ro/mainframe-types'` instead of the old session type.
 
 **Step 3: Rewrite `ClaudeSession` in `session.ts`**
 
@@ -338,12 +338,12 @@ Key changes:
    };
    ```
 8. Remove any `this.emit(...)` calls — all event emission now goes through `sink`
-9. Import `SessionSink` from `'@mainframe/types'`
+9. Import `SessionSink` from `'@qlan-ro/mainframe-types'`
 
 **Step 4: Build the plugin to verify**
 
 ```bash
-pnpm --filter @mainframe/core build 2>&1 | grep "builtin/claude" | head -10
+pnpm --filter @qlan-ro/mainframe-core build 2>&1 | grep "builtin/claude" | head -10
 ```
 
 Expected: No errors in the claude plugin files. Remaining errors should be in `event-handler.ts` only (still calls `session.on()`).
@@ -376,7 +376,7 @@ The file has an `EventHandler` class with `attachSession(chatId, session)` and a
 The class keeps all the same constructor dependencies. The method changes from attaching listeners on a session to building and returning a `SessionSink`:
 
 ```typescript
-import type { SessionSink } from '@mainframe/types';
+import type { SessionSink } from '@qlan-ro/mainframe-types';
 
 // BEFORE
 attachSession(chatId: string, session: AdapterSession): void {
@@ -453,7 +453,7 @@ After this change, `event-handler.ts` no longer needs `AdapterSession` (it doesn
 **Step 5: Build to verify**
 
 ```bash
-pnpm --filter @mainframe/core build 2>&1 | grep "error TS" | head -20
+pnpm --filter @qlan-ro/mainframe-core build 2>&1 | grep "error TS" | head -20
 ```
 
 Expected: Errors only in `lifecycle-manager.ts` (calls `eventHandler.attachSession()` which no longer exists). All other source files should be clean.
@@ -525,7 +525,7 @@ Expected: zero matches after your edits.
 **Step 5: Build to verify source files are clean**
 
 ```bash
-pnpm --filter @mainframe/core build 2>&1 | grep "error TS"
+pnpm --filter @qlan-ro/mainframe-core build 2>&1 | grep "error TS"
 ```
 
 Expected: Zero errors in source files. Only test file errors remain (they still import BaseAdapter/BaseSession and call session.emit()).
@@ -563,7 +563,7 @@ import { BaseAdapter } from '../../../adapters/base.js';
 export class ClaudeAdapter extends BaseAdapter { ... }
 
 // AFTER
-import type { Adapter, AdapterSession, AdapterModel, SessionOptions } from '@mainframe/types';
+import type { Adapter, AdapterSession, AdapterModel, SessionOptions } from '@qlan-ro/mainframe-types';
 export class ClaudeAdapter implements Adapter { ... }
 ```
 
@@ -581,7 +581,7 @@ export { BaseAdapter } from './base.js';
 export { BaseSession } from './base-session.js';
 ```
 
-Also remove `MessageMetadata` re-export if it was there (it's now in `@mainframe/types`).
+Also remove `MessageMetadata` re-export if it was there (it's now in `@qlan-ro/mainframe-types`).
 
 **Step 3: Delete the base files**
 
@@ -593,7 +593,7 @@ rm packages/core/src/adapters/base-session.ts
 **Step 4: Create `packages/core/src/__tests__/helpers/mock-adapter.ts`**
 
 ```typescript
-import type { Adapter, AdapterSession, AdapterModel, SessionOptions } from '@mainframe/types';
+import type { Adapter, AdapterSession, AdapterModel, SessionOptions } from '@qlan-ro/mainframe-types';
 
 export class MockBaseAdapter implements Adapter {
   id = 'mock';
@@ -631,7 +631,7 @@ import type {
   SkillFileEntry,
   ContextFile,
   ChatMessage,
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 
 export class MockBaseSession implements AdapterSession {
   readonly id: string;
@@ -700,7 +700,7 @@ export class MockBaseSession implements AdapterSession {
 **Step 6: Verify source build is still clean**
 
 ```bash
-pnpm --filter @mainframe/core build 2>&1 | grep "error TS"
+pnpm --filter @qlan-ro/mainframe-core build 2>&1 | grep "error TS"
 ```
 
 Expected: Only test file errors (they still import from deleted base files).
@@ -838,7 +838,7 @@ await session.spawn({}, testSink);
 **Step 6: Run each test file individually as you go**
 
 ```bash
-pnpm --filter @mainframe/core exec vitest run src/__tests__/adapter-events-flow.test.ts 2>&1 | tail -15
+pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/adapter-events-flow.test.ts 2>&1 | tail -15
 ```
 
 Fix any failures before moving to the next file.
@@ -846,7 +846,7 @@ Fix any failures before moving to the next file.
 **Step 7: Run all core tests**
 
 ```bash
-pnpm --filter @mainframe/core test 2>&1 | tail -20
+pnpm --filter @qlan-ro/mainframe-core test 2>&1 | tail -20
 ```
 
 Expected: 477/480 (same pre-existing failures only).
@@ -878,7 +878,7 @@ Expected: PASS — zero errors across all packages.
 **Step 2: Full core test run**
 
 ```bash
-pnpm --filter @mainframe/core test 2>&1 | tail -20
+pnpm --filter @qlan-ro/mainframe-core test 2>&1 | tail -20
 ```
 
 Expected: 477/480 (pre-existing title-generation failures only).

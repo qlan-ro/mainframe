@@ -1,4 +1,4 @@
-import type { ControlRequest, SessionContext } from '@mainframe/types';
+import type { ControlRequest, SessionContext } from '@qlan-ro/mainframe-types';
 import { fetchJson, postJson, API_BASE } from './http';
 
 export async function getFileTree(

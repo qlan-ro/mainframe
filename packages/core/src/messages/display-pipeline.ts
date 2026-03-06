@@ -1,4 +1,4 @@
-import type { ChatMessage, ToolCategories, DisplayMessage } from '@mainframe/types';
+import type { ChatMessage, ToolCategories, DisplayMessage } from '@qlan-ro/mainframe-types';
 import { groupMessages } from './message-grouping.js';
 import {
   isInternalUserMessage,

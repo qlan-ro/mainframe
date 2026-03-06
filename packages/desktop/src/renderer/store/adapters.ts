@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AdapterInfo } from '@mainframe/types';
+import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 
 interface AdaptersState {
   adapters: AdapterInfo[];

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { LaunchProcessStatus } from '@mainframe/types';
+import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 
 export interface Capture {
   id: string;

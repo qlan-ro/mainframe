@@ -1,7 +1,7 @@
 import { mkdir, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { nanoid } from 'nanoid';
-import type { PluginAttachmentContext, PluginAttachmentMeta } from '@mainframe/types';
+import type { PluginAttachmentContext, PluginAttachmentMeta } from '@qlan-ro/mainframe-types';
 
 interface AttachmentRecord {
   id: string;

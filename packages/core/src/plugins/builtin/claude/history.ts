@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
-import type { ChatMessage, MessageContent, DiffHunk, SkillFileEntry } from '@mainframe/types';
+import type { ChatMessage, MessageContent, DiffHunk, SkillFileEntry } from '@qlan-ro/mainframe-types';
 
 export function deriveModifiedFile(
   tur: Record<string, unknown> | undefined,

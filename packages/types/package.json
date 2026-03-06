@@ -1,5 +1,5 @@
 {
-  "name": "@mainframe/types",
+  "name": "@qlan-ro/mainframe-types",
   "version": "0.2.0",
   "description": "Shared TypeScript types for Mainframe",
   "license": "MIT",
@@ -21,7 +21,7 @@
     "dist"
   ],
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",

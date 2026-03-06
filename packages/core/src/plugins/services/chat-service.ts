@@ -1,4 +1,4 @@
-import type { ChatServiceAPI, ChatSummary, PluginManifest, DaemonEvent } from '@mainframe/types';
+import type { ChatServiceAPI, ChatSummary, PluginManifest, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../../db/index.js';
 
 export function buildChatService(

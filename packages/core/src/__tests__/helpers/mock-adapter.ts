@@ -1,4 +1,4 @@
-import type { Adapter, AdapterSession, AdapterModel, SessionOptions } from '@mainframe/types';
+import type { Adapter, AdapterSession, AdapterModel, SessionOptions } from '@qlan-ro/mainframe-types';
 import { MockBaseSession } from './mock-session.js';
 
 export class MockBaseAdapter implements Adapter {

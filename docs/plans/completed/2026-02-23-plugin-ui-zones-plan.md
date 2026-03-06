@@ -112,7 +112,7 @@ grep "UIZone\|plugin" packages/types/src/index.ts
 **Step 6: Verify types compile**
 
 ```bash
-pnpm --filter @mainframe/types build
+pnpm --filter @qlan-ro/mainframe-types build
 ```
 
 Expected: `dist/` rebuilt with no errors.
@@ -138,7 +138,7 @@ git commit -m "feat(types): replace PluginPanelPosition with UIZone, add manifes
 Replace the entire file content:
 
 ```typescript
-import type { PluginUIContext, UIZone, DaemonEvent } from '@mainframe/types';
+import type { PluginUIContext, UIZone, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 export function createPluginUIContext(
   pluginId: string,
@@ -195,7 +195,7 @@ createPluginUIContext(pluginId, emitEvent)
 **Step 3: Build core to verify**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 
 Expected: no errors.
@@ -203,7 +203,7 @@ Expected: no errors.
 **Step 4: Run core tests**
 
 ```bash
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 
 Expected: all pass (ui-context has no tests yet; existing tests should still pass).
@@ -231,7 +231,7 @@ git commit -m "feat(core): update ui-context to use UIZone, drop pluginDir and e
 // packages/desktop/src/renderer/store/plugins.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import { usePluginLayoutStore } from './plugins';
-import type { PluginUIContribution } from '@mainframe/types';
+import type { PluginUIContribution } from '@qlan-ro/mainframe-types';
 
 const makeContrib = (pluginId: string, zone: PluginUIContribution['zone']): PluginUIContribution => ({
   pluginId,
@@ -312,7 +312,7 @@ describe('setActiveLeftPanel / setActiveRightPanel', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/desktop test src/renderer/store/plugins.test.ts
+pnpm --filter @qlan-ro/mainframe-desktop test src/renderer/store/plugins.test.ts
 ```
 
 Expected: FAIL — "Cannot find module './plugins'"
@@ -322,7 +322,7 @@ Expected: FAIL — "Cannot find module './plugins'"
 ```typescript
 // packages/desktop/src/renderer/store/plugins.ts
 import { create } from 'zustand';
-import type { PluginUIContribution } from '@mainframe/types';
+import type { PluginUIContribution } from '@qlan-ro/mainframe-types';
 
 interface PluginLayoutState {
   contributions: PluginUIContribution[];
@@ -390,7 +390,7 @@ Export from `packages/types/src/index.ts` if not already.
 **Step 5: Run test to verify it passes**
 
 ```bash
-pnpm --filter @mainframe/desktop test src/renderer/store/plugins.test.ts
+pnpm --filter @qlan-ro/mainframe-desktop test src/renderer/store/plugins.test.ts
 ```
 
 Expected: all 8 tests pass.
@@ -464,7 +464,7 @@ Adjust the import if it lives elsewhere.
 **Step 3: Build desktop to verify no type errors**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -i error | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -i error | head -20
 ```
 
 **Step 4: Commit**
@@ -597,7 +597,7 @@ export function LeftRail(): React.ReactElement {
 **Step 2: Build to verify**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -i error | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -i error | head -20
 ```
 
 **Step 3: Commit**
@@ -694,7 +694,7 @@ export function RightRail(): React.ReactElement {
 **Step 2: Build to verify**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -i error | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -i error | head -20
 ```
 
 **Step 3: Commit**
@@ -908,7 +908,7 @@ export function TitleBar({ panelSizes: _panelSizes, panelCollapsed: _panelCollap
 **Step 2: Build to verify**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -i error | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -i error | head -20
 ```
 
 **Step 3: Commit**
@@ -1049,7 +1049,7 @@ Remove any remaining import (there should only be one, which was in `Layout.tsx`
 **Step 4: Build to verify**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -i error | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -i error | head -20
 ```
 
 **Step 5: Commit**
@@ -1128,7 +1128,7 @@ export function LeftPanel(): React.ReactElement {
 **Step 2: Build to verify**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -i error | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -i error | head -20
 ```
 
 **Step 3: Commit**
@@ -1191,7 +1191,7 @@ For right-tab contributions, append to the existing `<TabsList>` and add matchin
 **Step 2: Build to verify**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -i error | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -i error | head -20
 ```
 
 **Step 3: Commit**
@@ -1244,7 +1244,7 @@ Import `usePluginLayoutStore` at the top of that file.
 **Step 3: Build to verify**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -i error | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -i error | head -20
 ```
 
 **Step 4: Commit**
@@ -1263,9 +1263,9 @@ git commit -m "feat(desktop): handle plugin.panel.registered WS events in layout
 **Step 1: Build all packages in order**
 
 ```bash
-pnpm --filter @mainframe/types build
-pnpm --filter @mainframe/core build
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-types build
+pnpm --filter @qlan-ro/mainframe-core build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: no errors in any package.
@@ -1273,8 +1273,8 @@ Expected: no errors in any package.
 **Step 2: Run all tests**
 
 ```bash
-pnpm --filter @mainframe/core test
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-core test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 
 Expected: all pass. The `title-generation.test.ts` tests may time out (pre-existing issue, unrelated to this work).
@@ -1345,7 +1345,7 @@ ctx.onUnload(() => ctx.ui.removePanel());
 **Step 3: Build core to verify**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 
 **Step 4: Commit**
@@ -1399,7 +1399,7 @@ The ternary should go straight from the "no active tab" case to `<ChatContainer 
 **Step 4: Build to verify**
 
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | grep -i error | head -20
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | grep -i error | head -20
 ```
 
 **Step 5: Commit**
@@ -1420,7 +1420,7 @@ git commit -m "feat(desktop): route todos through PluginView, remove bespoke Tod
 **Step 1: Full build**
 
 ```bash
-pnpm --filter @mainframe/types build && pnpm --filter @mainframe/core build && pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build && pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: no errors.
@@ -1428,8 +1428,8 @@ Expected: no errors.
 **Step 2: Run tests**
 
 ```bash
-pnpm --filter @mainframe/core test
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-core test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 
 **Step 3: Manual smoke test checklist**

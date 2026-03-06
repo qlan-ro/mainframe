@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/experimental-ct-react';
 import React from 'react';
 import { AskUserQuestionCard } from '../../renderer/components/chat/AskUserQuestionCard.js';
-import type { ControlRequest } from '@mainframe/types';
+import type { ControlRequest } from '@qlan-ro/mainframe-types';
 
 function makeRequest(): ControlRequest {
   return {

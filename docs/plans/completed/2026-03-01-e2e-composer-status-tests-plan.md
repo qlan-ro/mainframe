@@ -53,7 +53,7 @@ Apply these edits to `ChatSessionBar.tsx`:
 
 **Step 2: Verify build**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: Build succeeds.
 
 **Step 3: Commit**
@@ -431,7 +431,7 @@ Expected: All 13 tests pass (3 + 6 + 4).
 
 **Step 2: Typecheck the desktop package**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: Build succeeds.
 
 **Step 3: Create PR**

@@ -2,7 +2,7 @@ import React, { useEffect, useCallback, useState } from 'react';
 import { Bot, MoreHorizontal, Pencil, Trash2, Globe, FolderOpen } from 'lucide-react';
 import { useSkillsStore, useProjectsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
-import type { AgentConfig } from '@mainframe/types';
+import type { AgentConfig } from '@qlan-ro/mainframe-types';
 
 const SCOPE_ICON: Record<string, React.ReactNode> = {
   project: <FolderOpen size={12} />,

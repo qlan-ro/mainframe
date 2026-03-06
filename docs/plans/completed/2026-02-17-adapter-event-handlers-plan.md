@@ -56,7 +56,7 @@ describe('parameterized categorization', () => {
 
 **Step 2: Run test to verify failure**
 
-Run: `pnpm --filter @mainframe/core test -- tool-categorization`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- tool-categorization`
 Expected: FAIL — `ToolCategories` and parameterized signatures don't exist yet.
 
 **Step 3: Implement ToolCategories type and parameterized functions**
@@ -118,7 +118,7 @@ export {
 
 **Step 7: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- tool-categorization`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- tool-categorization`
 Expected: PASS.
 
 **Step 8: Commit**
@@ -156,7 +156,7 @@ describe('ClaudeAdapter.getToolCategories', () => {
 
 **Step 2: Run test to verify failure**
 
-Run: `pnpm --filter @mainframe/core test -- adapter-registry`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- adapter-registry`
 Expected: FAIL — `getToolCategories` returns empty sets from BaseAdapter default.
 
 **Step 3: Override in ClaudeAdapter**
@@ -182,7 +182,7 @@ override getToolCategories(): ToolCategories {
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- adapter-registry`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- adapter-registry`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -256,7 +256,7 @@ describe('with empty categories (no grouping)', () => {
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- tool-grouping`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- tool-grouping`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -282,7 +282,7 @@ Update the two call sites inside the function:
 - `groupToolCallParts(parts as PartEntry[])` → `groupToolCallParts(parts as PartEntry[], categories)`
 - `groupTaskChildren(afterGrouping)` → `groupTaskChildren(afterGrouping, categories)`
 
-Add the import: `import type { ToolCategories } from '@mainframe/core/messages';`
+Add the import: `import type { ToolCategories } from '@qlan-ro/mainframe-core/messages';`
 
 **Step 2: Update existing tests**
 
@@ -294,12 +294,12 @@ Search for `convertMessage(` in the desktop package. Update each call site to pa
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/desktop test -- convert-message`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop test -- convert-message`
 Expected: PASS.
 
 **Step 5: Run typecheck**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: PASS — no type errors from callers passing the new param.
 
 **Step 6: Commit**
@@ -342,7 +342,7 @@ import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ChatLookup, AdapterEventHandler } from './event-handler.js';
 import type { BaseAdapter } from '../adapters/base.js';
-import type { DaemonEvent } from '@mainframe/types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { trackFileActivity } from './context-tracker.js';
 
 export class ClaudeEventHandler implements AdapterEventHandler {
@@ -403,7 +403,7 @@ all(): Adapter[] {
 
 **Step 5: Run existing event-handler tests — they must still pass unchanged**
 
-Run: `pnpm --filter @mainframe/core test -- event-handler`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- event-handler`
 Expected: PASS — behavior is identical, only the code location changed.
 
 **Step 6: Remove the `ClaudeAdapter` import from `event-handler.ts`**
@@ -412,7 +412,7 @@ The only import of `ClaudeAdapter` in event-handler.ts was for the cast. Now eve
 
 **Step 7: Run typecheck**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: PASS.
 
 **Step 8: Commit**
@@ -479,7 +479,7 @@ Expected: No matches (all renamed).
 
 **Step 5: Run typecheck**
 
-Run: `pnpm --filter @mainframe/types build && pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build`
 Expected: PASS.
 
 **Step 6: Commit**
@@ -522,7 +522,7 @@ it('stamps adapterId on emitted messages', () => {
 
 **Step 2: Run test to verify failure**
 
-Run: `pnpm --filter @mainframe/core test -- event-handler`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- event-handler`
 Expected: FAIL — metadata doesn't include `adapterId` yet.
 
 **Step 3: Add adapterId to metadata in ClaudeEventHandler**
@@ -544,7 +544,7 @@ Update the EventHandler constructor to pass `'claude'` when creating ClaudeEvent
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- event-handler`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- event-handler`
 Expected: PASS.
 
 **Step 5: Commit**

@@ -1,4 +1,4 @@
-import type { Project, Chat, DisplayMessage, AdapterInfo } from '@mainframe/types';
+import type { Project, Chat, DisplayMessage, AdapterInfo } from '@qlan-ro/mainframe-types';
 import { postJson, deleteRequest, API_BASE } from './http';
 import { createLogger } from '../logger';
 

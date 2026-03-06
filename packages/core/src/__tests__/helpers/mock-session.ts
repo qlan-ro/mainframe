@@ -11,7 +11,7 @@ import type {
   MessageMetadata,
   ControlRequest,
   SessionResult,
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 
 export class MockBaseSession implements AdapterSession {
   readonly id: string;

@@ -107,7 +107,7 @@ describe('buildToolResultBlocks', () => {
 
 **Step 2: Run test to verify failure**
 
-Run: `pnpm --filter @mainframe/core test -- message-loading`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- message-loading`
 Expected: FAIL — `buildToolResultBlocks` is not exported.
 
 **Step 3: Extract `buildToolResultBlocks` from `convertUserEntry`**
@@ -175,7 +175,7 @@ Replace the inline tool_result extraction in `convertUserEntry` with:
 
 **Step 5: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- message-loading`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- message-loading`
 Expected: PASS.
 
 **Step 6: Commit**
@@ -241,7 +241,7 @@ describe('handleUserEvent — tool_result blocks', () => {
 
 **Step 2: Run test to verify it passes (it should already pass)**
 
-Run: `pnpm --filter @mainframe/core test -- claude-events`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- claude-events`
 Expected: If the test was already correct, PASS. If FAIL, it reveals an actual mismatch.
 
 **Step 3: Update `handleUserEvent` to use `buildToolResultBlocks`**
@@ -292,12 +292,12 @@ function handleUserEvent(processId: string, event: Record<string, unknown>, emit
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- claude-events`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- claude-events`
 Expected: PASS.
 
 **Step 5: Typecheck**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: PASS — no circular imports (claude-events imports from claude-history, not the other way around).
 
 **Step 6: Commit**
@@ -323,7 +323,7 @@ Create `packages/core/src/__tests__/event-pipeline-parity.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest';
 import { buildToolResultBlocks, convertHistoryEntry } from '../adapters/claude-history.js';
-import type { ToolResultMessageContent } from '@mainframe/types';
+import type { ToolResultMessageContent } from '@qlan-ro/mainframe-types';
 
 /**
  * Ensures that tool_result blocks produced by history loading and live stream
@@ -411,13 +411,13 @@ describe('event pipeline parity', () => {
 
 **Step 2: Run test to verify failure (before Task 1/2 are done)**
 
-Run: `pnpm --filter @mainframe/core test -- event-pipeline-parity`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- event-pipeline-parity`
 Expected: FAIL — `buildToolResultBlocks` not exported yet (if running before Task 1).
 After Tasks 1 and 2: PASS.
 
 **Step 3: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/core test -- event-pipeline-parity`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- event-pipeline-parity`
 Expected: PASS.
 
 **Step 4: Commit**
@@ -464,12 +464,12 @@ In `claude-history.ts`, in `convertUserEntry`, add:
 
 **Step 3: Run full test suite**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: PASS — all existing tests plus the new parity and helper tests.
 
 **Step 4: Typecheck**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -487,7 +487,7 @@ git commit -m "docs(code): document intentional live-stream vs history divergenc
 
 **Step 1: Run all core tests**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: PASS — all tests including the new event-pipeline-parity suite.
 
 **Step 2: Run full monorepo build**

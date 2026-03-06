@@ -3,7 +3,7 @@ import { FileText } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
-import type { SessionAttachment } from '@mainframe/types';
+import type { SessionAttachment } from '@qlan-ro/mainframe-types';
 import { getAttachment } from '../../lib/api';
 import { ImageLightbox } from '../chat/ImageLightbox';
 

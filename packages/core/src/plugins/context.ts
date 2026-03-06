@@ -1,4 +1,4 @@
-import type { PluginContext, PluginManifest, DaemonEvent } from '@mainframe/types';
+import type { PluginContext, PluginManifest, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { createPluginDatabaseContext } from './db-context.js';
 import { createPluginAttachmentContext } from './attachment-context.js';
 import { createPluginEventBus } from './event-bus.js';

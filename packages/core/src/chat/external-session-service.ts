@@ -1,4 +1,4 @@
-import type { Chat, DaemonEvent, ExternalSession } from '@mainframe/types';
+import type { Chat, DaemonEvent, ExternalSession } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import { createChildLogger } from '../logger.js';

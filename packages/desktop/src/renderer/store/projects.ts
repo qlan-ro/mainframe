@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project } from '@mainframe/types';
+import type { Project } from '@qlan-ro/mainframe-types';
 
 interface ProjectsState {
   projects: Project[];

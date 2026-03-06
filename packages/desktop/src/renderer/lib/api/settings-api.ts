@@ -1,4 +1,4 @@
-import type { ProviderConfig, GeneralConfig } from '@mainframe/types';
+import type { ProviderConfig, GeneralConfig } from '@qlan-ro/mainframe-types';
 import { fetchJson, putJson, API_BASE } from './http';
 import { createLogger } from '../logger';
 

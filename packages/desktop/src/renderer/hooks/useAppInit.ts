@@ -12,7 +12,7 @@ import { routeEvent } from '../lib/ws-event-router';
 import { createLogger } from '../lib/logger';
 import { fetchLaunchStatuses } from '../lib/launch';
 import { useSandboxStore } from '../store/sandbox';
-import type { LaunchProcessStatus } from '@mainframe/types';
+import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 
 export { useChatSession } from './useChatSession.js';
 

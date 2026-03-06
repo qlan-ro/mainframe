@@ -432,7 +432,7 @@ Daemon stop / unload:
 
 ```typescript
 // A hypothetical Gemini CLI adapter plugin
-import type { PluginContext } from '@mainframe/types';
+import type { PluginContext } from '@qlan-ro/mainframe-types';
 import { GeminiAdapter } from './gemini-adapter.js';
 
 export function activate(ctx: PluginContext): void {
@@ -498,7 +498,7 @@ const PluginPanel = ({ pluginId, entryPoint }: Props) => {
 
 Plugin UI components communicate with the daemon only via `api.fetch()` (scoped to
 `/api/plugins/{id}/`) and `api.onEvent()` (scoped WS events). They cannot import
-from `@mainframe/core` or access the main Zustand store.
+from `@qlan-ro/mainframe-core` or access the main Zustand store.
 
 ### 9.3 Consent Dialog Component (Desktop)
 
@@ -544,12 +544,12 @@ Elevated to required because `ctx.adapters.register(adapter)` depends on `Adapte
 
 ## 11. File Map
 
-### New in `@mainframe/types/src/`
+### New in `@qlan-ro/mainframe-types/src/`
 ```
 plugin.ts     — all plugin types: manifest, capabilities, context, sub-APIs, events
 ```
 
-### New in `@mainframe/core/src/plugins/`
+### New in `@qlan-ro/mainframe-core/src/plugins/`
 ```
 manager.ts                   — PluginManager: discovery, consent flow, lifecycle
 context.ts                   — buildPluginContext() with capability gating
@@ -570,12 +570,12 @@ builtin/
     index.ts
 ```
 
-### New in `@mainframe/core/src/server/routes/`
+### New in `@qlan-ro/mainframe-core/src/server/routes/`
 ```
 plugins.ts     — GET /api/plugins, GET /api/plugins/:id, POST /api/plugins/:id/consent
 ```
 
-### New in `@mainframe/desktop/src/renderer/`
+### New in `@qlan-ro/mainframe-desktop/src/renderer/`
 ```
 components/plugins/
   PluginConsentDialog.tsx   — install-time consent UI

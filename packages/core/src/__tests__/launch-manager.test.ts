@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LaunchManager } from '../launch/launch-manager.js';
-import type { DaemonEvent } from '@mainframe/types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 
 const ECHO_CONFIG = {
   version: '0.0.1',

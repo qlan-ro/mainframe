@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildToolResultBlocks, convertHistoryEntry } from '../plugins/builtin/claude/history.js';
-import type { ToolResultMessageContent } from '@mainframe/types';
+import type { ToolResultMessageContent } from '@qlan-ro/mainframe-types';
 
 /**
  * Ensures that tool_result blocks produced by history loading and live stream

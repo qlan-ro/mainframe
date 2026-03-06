@@ -242,9 +242,9 @@ interface SpawnOptions {
 
 ## Verification
 
-1. `pnpm --filter @mainframe/types build` — types compile
-2. `pnpm --filter @mainframe/core build` — core compiles
-3. `pnpm --filter @mainframe/core test` — all tests pass
+1. `pnpm --filter @qlan-ro/mainframe-types build` — types compile
+2. `pnpm --filter @qlan-ro/mainframe-core build` — core compiles
+3. `pnpm --filter @qlan-ro/mainframe-core test` — all tests pass
 4. `pnpm build` — full monorepo builds
 5. Manual: start daemon, create a chat, send a message, verify events flow correctly
 6. Manual: resume a chat (tests session re-creation + history loading without spawn)

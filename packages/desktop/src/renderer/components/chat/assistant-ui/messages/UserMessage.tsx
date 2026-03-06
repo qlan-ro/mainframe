@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import { markdownComponents } from '../parts/markdown-text';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useSkillsStore } from '../../../../store/skills';
-import type { DisplayMessage, DisplayContent } from '@mainframe/types';
+import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 import { PLAN_PREFIX, highlightMentions, resolveSkillName, parseRawCommand } from '../message-parsing';
 import { ImageThumbs, FileAttachmentThumbs } from './ImageThumbs';
 

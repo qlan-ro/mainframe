@@ -43,7 +43,7 @@ Ensure the store initializes with `panelVisible: false` so panel is hidden by de
 
 **Step 4: Run typecheck to verify no errors**
 
-Run: `pnpm --filter @mainframe/desktop typecheck`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop typecheck`
 
 Expected: No TS errors related to `panelVisible`.
 
@@ -97,7 +97,7 @@ const setPanelVisible = useUIStore((s) => s.setPanelVisible);
 
 **Step 3: Run typecheck**
 
-Run: `pnpm --filter @mainframe/desktop typecheck`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop typecheck`
 
 Expected: No TS errors.
 
@@ -162,7 +162,7 @@ In PreviewTab header, change the minimize button to:
 
 **Step 4: Run typecheck**
 
-Run: `pnpm --filter @mainframe/desktop typecheck`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop typecheck`
 
 Expected: No TS errors.
 
@@ -283,7 +283,7 @@ To:
 
 **Step 3: Run typecheck**
 
-Run: `pnpm --filter @mainframe/desktop typecheck`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop typecheck`
 
 Expected: No TS errors.
 
@@ -406,7 +406,7 @@ Around line 244 where the webview renders, add:
 
 **Step 3: Run typecheck**
 
-Run: `pnpm --filter @mainframe/desktop typecheck`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop typecheck`
 
 Expected: No TS errors.
 
@@ -430,13 +430,13 @@ git commit -m "feat(desktop): show 'No preview available' for processes without 
 
 **Step 1: Verify UI store changes compile and work**
 
-Run: `pnpm --filter @mainframe/desktop typecheck && pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop typecheck && pnpm --filter @qlan-ro/mainframe-desktop build`
 
 Expected: No errors.
 
 **Step 2: Run existing tests (if any)**
 
-Run: `pnpm --filter @mainframe/desktop test`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop test`
 
 Expected: All tests pass.
 

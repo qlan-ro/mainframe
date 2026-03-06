@@ -1,4 +1,4 @@
-import type { ProjectServiceAPI, ProjectSummary } from '@mainframe/types';
+import type { ProjectServiceAPI, ProjectSummary } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../../db/index.js';
 
 export function buildProjectService(db: DatabaseManager): ProjectServiceAPI {

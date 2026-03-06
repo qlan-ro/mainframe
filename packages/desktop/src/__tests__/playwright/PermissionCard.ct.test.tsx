@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/experimental-ct-react';
 import React from 'react';
 import { PermissionCard } from '../../renderer/components/chat/PermissionCard.js';
-import type { ControlRequest } from '@mainframe/types';
+import type { ControlRequest } from '@qlan-ro/mainframe-types';
 
 const request: ControlRequest = {
   requestId: 'req-1',

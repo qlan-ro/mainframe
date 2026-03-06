@@ -1,4 +1,4 @@
-import type { Adapter, AdapterInfo } from '@mainframe/types';
+import type { Adapter, AdapterInfo } from '@qlan-ro/mainframe-types';
 
 export class AdapterRegistry {
   private adapters = new Map<string, Adapter>();

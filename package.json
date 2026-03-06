@@ -13,20 +13,20 @@
     "url": "https://github.com/qlan-ro/mainframe/issues"
   },
   "scripts": {
-    "dev": "pnpm --filter @mainframe/core run dev & sleep 2 && pnpm --filter @mainframe/desktop run dev",
-    "dev:core": "pnpm --filter @mainframe/core run dev",
-    "dev:desktop": "pnpm --filter @mainframe/desktop run dev",
+    "dev": "pnpm --filter @qlan-ro/mainframe-core run dev & sleep 2 && pnpm --filter @qlan-ro/mainframe-desktop run dev",
+    "dev:core": "pnpm --filter @qlan-ro/mainframe-core run dev",
+    "dev:desktop": "pnpm --filter @qlan-ro/mainframe-desktop run dev",
     "build": "pnpm -r run build",
-    "build:types": "pnpm --filter @mainframe/types run build",
-    "build:core": "pnpm --filter @mainframe/core run build",
-    "build:desktop": "pnpm --filter @mainframe/desktop run build",
+    "build:types": "pnpm --filter @qlan-ro/mainframe-types run build",
+    "build:core": "pnpm --filter @qlan-ro/mainframe-core run build",
+    "build:desktop": "pnpm --filter @qlan-ro/mainframe-desktop run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "pnpm -r run lint",
-    "test": "pnpm -r --filter=!@mainframe/e2e run test",
-    "test:e2e": "pnpm --filter @mainframe/e2e test",
+    "test": "pnpm -r --filter=!@qlan-ro/mainframe-e2e run test",
+    "test:e2e": "pnpm --filter @qlan-ro/mainframe-e2e test",
     "clean": "pnpm -r run clean",
-    "package": "pnpm build && pnpm --filter @mainframe/desktop run package",
+    "package": "pnpm build && pnpm --filter @qlan-ro/mainframe-desktop run package",
     "version": "pnpm -r version --no-git-tag-version $npm_new_version && git add -A",
     "prepare": "husky"
   },
@@ -47,7 +47,8 @@
       "esbuild"
     ],
     "overrides": {
-      "tar": ">=7.5.7"
+      "tar": ">=7.5.7",
+      "@qlan-ro/mainframe-types": "workspace:*"
     }
   },
   "lint-staged": {

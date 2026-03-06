@@ -29,7 +29,7 @@ if (q.length < 1) {
 **Step 2: Verify build passes**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 Expected: no TypeScript errors.
 
@@ -57,7 +57,7 @@ import { focusComposerInput } from '../../lib/focus';
 import { useSkillsStore, useProjectsStore, useChatsStore } from '../../store';
 import { searchFiles, addMention } from '../../lib/api';
 import { cn } from '../../lib/utils';
-import type { AgentConfig, Skill } from '@mainframe/types';
+import type { AgentConfig, Skill } from '@qlan-ro/mainframe-types';
 
 // ── types ──────────────────────────────────────────────────────────────────
 
@@ -364,7 +364,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: no TypeScript errors.
 
@@ -443,7 +443,7 @@ Replace the entire `<button>` block that has `onClick` inserting `@` (lines 102�
 **Step 5: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: no TypeScript errors.
 
@@ -472,7 +472,7 @@ git rm packages/desktop/src/renderer/components/chat/SlashCommandMenu.tsx
 **Step 2: Typecheck to confirm nothing else imports them**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: no TypeScript errors. If there are import errors, find and remove the remaining references.
 

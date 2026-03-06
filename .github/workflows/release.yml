@@ -35,6 +35,6 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Package
-        run: pnpm --filter @mainframe/desktop package -- --publish always
+        run: pnpm --filter @qlan-ro/mainframe-desktop package -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

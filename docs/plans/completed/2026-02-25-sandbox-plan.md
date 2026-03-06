@@ -84,7 +84,7 @@ export * from './launch.js';
 **Step 4: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/types build
+pnpm --filter @qlan-ro/mainframe-types build
 ```
 
 Expected: clean build, no errors.
@@ -179,7 +179,7 @@ describe('getPreviewUrl', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose launch-config
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose launch-config
 ```
 
 Expected: FAIL with "Cannot find module '../launch/launch-config.js'"
@@ -188,7 +188,7 @@ Expected: FAIL with "Cannot find module '../launch/launch-config.js'"
 
 ```typescript
 import { z } from 'zod';
-import type { LaunchConfig, LaunchConfiguration } from '@mainframe/types';
+import type { LaunchConfig, LaunchConfiguration } from '@qlan-ro/mainframe-types';
 
 // Allowed executables: common package managers + node. No shell operators.
 const SAFE_EXECUTABLE = /^(node|pnpm|npm|yarn|bun|python|python3|[a-zA-Z0-9_\-./]+)$/;
@@ -239,7 +239,7 @@ export function getPreviewUrl(configurations: LaunchConfiguration[]): string | n
 **Step 4: Run test to verify it passes**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose launch-config
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose launch-config
 ```
 
 Expected: all 7 tests pass.
@@ -266,7 +266,7 @@ git commit -m "feat(core): add launch-config parser with Zod validation"
 // packages/core/src/__tests__/launch-manager.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LaunchManager } from '../launch/launch-manager.js';
-import type { DaemonEvent } from '@mainframe/types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 
 const ECHO_CONFIG = {
   version: '0.0.1',
@@ -358,7 +358,7 @@ describe('LaunchManager', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose launch-manager
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose launch-manager
 ```
 
 Expected: FAIL with "Cannot find module"
@@ -368,7 +368,7 @@ Expected: FAIL with "Cannot find module"
 ```typescript
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@mainframe/types';
+import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('launch');
@@ -496,7 +496,7 @@ export { parseLaunchConfig, getPreviewUrl } from './launch-config.js';
 **Step 5: Run test to verify it passes**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose launch-manager
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose launch-manager
 ```
 
 Expected: all 5 tests pass.
@@ -613,7 +613,7 @@ describe('launchRoutes', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose routes/launch
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose routes/launch
 ```
 
 Expected: FAIL with "Cannot find module"
@@ -701,7 +701,7 @@ export function launchRoutes(ctx: RouteContext): Router {
 **Step 4: Run test to verify it passes**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose routes/launch
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose routes/launch
 ```
 
 Expected: all 4 tests pass.
@@ -729,7 +729,7 @@ git commit -m "feat(core): add launch API routes for dev server process control"
 A simple registry that creates one `LaunchManager` per project.
 
 ```typescript
-import type { DaemonEvent } from '@mainframe/types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { LaunchManager } from './launch-manager.js';
 
 export class LaunchRegistry {
@@ -847,7 +847,7 @@ launchRegistry.stopAll();
 **Step 7: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 
 Expected: clean build.
@@ -890,7 +890,7 @@ webPreferences: {
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: clean build.
@@ -978,7 +978,7 @@ export { useSandboxStore } from './sandbox.js';
 **Step 3: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: clean build.
@@ -1024,7 +1024,7 @@ bottomPanelTab: 'preview',
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: clean build. Fix any type errors from the changed union.
@@ -1082,7 +1082,7 @@ export async function stopLaunchConfig(projectId: string, name: string): Promise
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 **Step 3: Commit**
@@ -1175,7 +1175,7 @@ const togglePanel = useUIStore((s) => s.togglePanel);
 **Step 3: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: clean build (stub `PreviewTab` and `LogsTab` with placeholder if needed).
@@ -1391,7 +1391,7 @@ export function PreviewTab(): React.ReactElement {
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: clean (the `@ts-expect-error` handles the `<webview>` typing).
@@ -1539,7 +1539,7 @@ export function LogsTab(): React.ReactElement {
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 **Step 3: Commit**
@@ -1581,7 +1581,7 @@ case 'launch.status': {
 **Step 3: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 **Step 4: Commit**
@@ -1679,7 +1679,7 @@ client.sendMessage(chatId, finalContent, allAttachmentIds.length > 0 ? allAttach
 **Step 4: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: clean build.
@@ -1698,7 +1698,7 @@ git commit -m "feat(desktop): integrate capture stack into chat composer"
 **Step 1: Run all core tests**
 
 ```bash
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 
 Expected: all pass.

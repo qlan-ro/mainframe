@@ -154,7 +154,7 @@ In `packages/desktop/src/renderer/components/panels/ContextTab.tsx`, remove `cha
 
 ### Step 5: Typecheck
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 
 ### Step 6: Commit
 
@@ -293,7 +293,7 @@ Key changes:
 
 ### Step 2: Typecheck
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 
 ### Step 3: Commit
 
@@ -385,7 +385,7 @@ Export it from `packages/desktop/src/renderer/lib/api/index.ts` if not auto-expo
 
 ### Step 3: Typecheck
 
-Run: `pnpm --filter @mainframe/core exec tsc --noEmit && pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit && pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 
 ### Step 4: Commit
 
@@ -822,7 +822,7 @@ export function FileViewContent(): React.ReactElement | null {
 
 ### Step 2: Typecheck
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit && pnpm --filter @mainframe/core exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit && pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit`
 
 ### Step 3: Commit
 
@@ -844,6 +844,6 @@ Run: `pnpm build`
 
 ### Step 2: Verify no broken imports
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 
 ### Step 3: Commit any fixups if needed

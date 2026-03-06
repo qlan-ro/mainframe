@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Chat, DisplayMessage, ControlRequest, AdapterProcess } from '@mainframe/types';
+import type { Chat, DisplayMessage, ControlRequest, AdapterProcess } from '@qlan-ro/mainframe-types';
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 

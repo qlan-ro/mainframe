@@ -60,7 +60,7 @@ describe('ChatManager.isChatRunning', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core test -- --run src/__tests__/chat-manager-is-running.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run src/__tests__/chat-manager-is-running.test.ts`
 Expected: FAIL — first test returns `true` instead of `false`
 
 **Step 3: Fix the bug**
@@ -76,7 +76,7 @@ return active?.process != null;
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/core test -- --run src/__tests__/chat-manager-is-running.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run src/__tests__/chat-manager-is-running.test.ts`
 Expected: PASS (all 3 tests)
 
 **Step 5: Commit**
@@ -196,7 +196,7 @@ describe('EventHandler token accumulation', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core test -- --run src/__tests__/event-handler.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run src/__tests__/event-handler.test.ts`
 Expected: FAIL — `totalTokensInput` is 200 (overwritten) not 300 (accumulated)
 
 **Step 3: Fix the bug**
@@ -214,7 +214,7 @@ to:
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/core test -- --run src/__tests__/event-handler.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run src/__tests__/event-handler.test.ts`
 Expected: PASS
 
 **Step 5: Commit**
@@ -287,7 +287,7 @@ describe('CORS policy', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core test -- --run src/__tests__/cors.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run src/__tests__/cors.test.ts`
 Expected: FAIL — currently reflects `https://evil.com`
 
 **Step 3: Fix the CORS middleware**
@@ -320,12 +320,12 @@ In `packages/core/src/server/http.ts`, replace the CORS middleware block (lines 
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/core test -- --run src/__tests__/cors.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run src/__tests__/cors.test.ts`
 Expected: PASS
 
 **Step 5: Run full test suite**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All existing tests pass
 
 **Step 6: Commit**
@@ -404,7 +404,7 @@ In the `walk` function, add containment check after constructing the full path.
 
 **Step 4: Run full test suite**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass
 
 **Step 5: Commit**
@@ -446,7 +446,7 @@ Also add `import { realpathSync } from 'node:fs';` to imports.
 
 **Step 2: Run tests**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass
 
 **Step 3: Commit**
@@ -534,7 +534,7 @@ export { asyncHandler } from './async-handler.js';
 
 **Step 6: Run tests**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass
 
 **Step 7: Commit**
@@ -585,7 +585,7 @@ Replace lines 50-61 in `handleClearContext`:
 
 **Step 2: Run tests**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass
 
 **Step 3: Commit**
@@ -643,7 +643,7 @@ Replace lines 297-311:
 
 **Step 2: Run tests**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass
 
 **Step 3: Commit**
@@ -688,12 +688,12 @@ The import for `ClaudeEventEmitter` from `claude-types.ts` stays the same, but t
 
 **Step 3: Verify build**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: No type errors
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass
 
 **Step 5: Commit**
@@ -723,7 +723,7 @@ Fixes: CQ-H5, BP-H1, AR-L3"
 
 ```typescript
 // packages/core/src/chat/types.ts
-import type { Chat, AdapterProcess } from '@mainframe/types';
+import type { Chat, AdapterProcess } from '@qlan-ro/mainframe-types';
 
 export interface ActiveChat {
   chat: Chat;
@@ -749,7 +749,7 @@ export type { ActiveChat } from './types.js';
 
 **Step 4: Build & test**
 
-Run: `pnpm --filter @mainframe/core build && pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core build && pnpm --filter @qlan-ro/mainframe-core test`
 Expected: Pass
 
 **Step 5: Commit**
@@ -795,7 +795,7 @@ Replace the message handler in `websocket.ts`:
 
 **Step 2: Run tests**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass
 
 **Step 3: Commit**
@@ -848,7 +848,7 @@ Replace the `fs:readFile` IPC handler:
 
 **Step 2: Verify desktop builds**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: Build succeeds
 
 **Step 3: Commit**
@@ -895,7 +895,7 @@ export function handleStderr(processId: string, chunk: Buffer, emitter: ClaudeEv
 
 **Step 2: Run tests**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass
 
 **Step 3: Commit**
@@ -935,7 +935,7 @@ const DEFAULT_CONFIG: MainframeConfig = {
 
 **Step 2: Verify build**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: No errors (wsPort is not referenced anywhere else)
 
 **Step 3: Commit**
@@ -994,7 +994,7 @@ Fixes: PERF-H2"
 
 ```typescript
 import { nanoid } from 'nanoid';
-import type { ChatMessage, MessageContent } from '@mainframe/types';
+import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 
 const MAX_MESSAGES_PER_CHAT = 2000;
 const MAX_CHATS = 50;
@@ -1319,7 +1319,7 @@ Fixes: OPS-C4"
 // packages/core/src/__tests__/permission-manager.test.ts
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PermissionManager } from '../chat/permission-manager.js';
-import type { PermissionRequest } from '@mainframe/types';
+import type { PermissionRequest } from '@qlan-ro/mainframe-types';
 
 function makeRequest(overrides: Partial<PermissionRequest> = {}): PermissionRequest {
   return {
@@ -1410,7 +1410,7 @@ describe('PermissionManager', () => {
 
 **Step 2: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- --run src/__tests__/permission-manager.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run src/__tests__/permission-manager.test.ts`
 Expected: All pass
 
 **Step 3: Commit**
@@ -1914,7 +1914,7 @@ After all phases complete:
 
 1. `pnpm build` — all packages compile
 2. `pnpm test` — all tests pass
-3. `pnpm --filter @mainframe/core test` — core tests pass
+3. `pnpm --filter @qlan-ro/mainframe-core test` — core tests pass
 4. Verify no `console.error` debug logging in hot paths
 5. Verify CORS rejects arbitrary origins
 6. Verify path traversal is blocked in all file routes

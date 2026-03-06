@@ -7,11 +7,11 @@
 Mainframe is a monorepo with five packages that form a layered architecture:
 
 ```
-@mainframe/types   →  Shared TypeScript type definitions (zero runtime deps)
-@mainframe/core    →  Node.js daemon (HTTP + WebSocket server)
-@mainframe/desktop →  Electron + React application
-@mainframe/mobile  →  React Native companion app (Private Repo)
-@mainframe/e2e     →  Playwright end-to-end tests
+@qlan-ro/mainframe-types   →  Shared TypeScript type definitions (zero runtime deps)
+@qlan-ro/mainframe-core    →  Node.js daemon (HTTP + WebSocket server)
+@qlan-ro/mainframe-desktop →  Electron + React application
+@qlan-ro/mainframe-mobile  →  React Native companion app (Private Repo)
+@qlan-ro/mainframe-e2e     →  Playwright end-to-end tests
 ```
 
 ```mermaid
@@ -26,7 +26,7 @@ graph TB
         MobileApp[React Native]
     end
 
-    subgraph "Daemon (@mainframe/core)"
+    subgraph "Daemon (@qlan-ro/mainframe-core)"
         HTTP[HTTP Server<br/>Express + Routes]
         WS[WebSocket Server<br/>ws]
         CM[ChatManager]
@@ -73,7 +73,7 @@ graph TB
 
 ## Package Architecture
 
-### @mainframe/types
+### @qlan-ro/mainframe-types
 
 Pure TypeScript type definitions shared across all packages. Zero runtime dependencies.
 
@@ -91,7 +91,7 @@ Pure TypeScript type definitions shared across all packages. Zero runtime depend
 | `settings.ts` | `PermissionMode`, `ProviderConfig` |
 | `skill.ts` | `Skill`, `AgentConfig`, `CreateSkillInput`, `CreateAgentInput` |
 
-### @mainframe/core
+### @qlan-ro/mainframe-core
 
 Node.js daemon that manages CLI adapter processes and exposes APIs to frontends.
 
@@ -203,7 +203,7 @@ packages/core/src/
 └── index.ts
 ```
 
-### @mainframe/desktop
+### @qlan-ro/mainframe-desktop
 
 Electron application with React frontend.
 
@@ -259,7 +259,7 @@ packages/desktop/src/
         └── ui/                 # Radix UI primitives
 ```
 
-### @mainframe/mobile
+### @qlan-ro/mainframe-mobile
 
 React Native companion app built with Expo. Connects to the daemon over HTTP/WebSocket for remote session management.
 
@@ -268,7 +268,7 @@ React Native companion app built with Expo. Connects to the daemon over HTTP/Web
 - Push notifications for permission requests when the app is backgrounded
 - Context picker for @-mentioning files
 
-### @mainframe/e2e
+### @qlan-ro/mainframe-e2e
 
 Playwright end-to-end test suite that runs against the full desktop app (daemon + Electron).
 

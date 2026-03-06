@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput, CustomCommand } from '@mainframe/types';
+import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput, CustomCommand } from '@qlan-ro/mainframe-types';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:store');

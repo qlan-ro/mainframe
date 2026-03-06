@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Chat, SessionMention, SkillFileEntry } from '@mainframe/types';
+import type { Chat, SessionMention, SkillFileEntry } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
 
 function parseJsonColumn<T>(value: string | null | undefined, fallback: T): T {

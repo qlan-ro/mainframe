@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { createChildLogger } from '../../../logger.js';
-import type { ExternalSession } from '@mainframe/types';
+import type { ExternalSession } from '@qlan-ro/mainframe-types';
 
 const logger = createChildLogger('claude:external-sessions');
 

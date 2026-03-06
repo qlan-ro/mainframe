@@ -3,7 +3,7 @@ import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { MockBaseAdapter } from './helpers/mock-adapter.js';
 import { MockBaseSession } from './helpers/mock-session.js';
-import type { ChatMessage, AdapterSession, SessionOptions, DaemonEvent } from '@mainframe/types';
+import type { ChatMessage, AdapterSession, SessionOptions, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 // ── Mock adapter & DB (infrastructure, not what we're testing) ──────
 

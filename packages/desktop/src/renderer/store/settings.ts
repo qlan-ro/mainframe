@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { ProviderConfig, GeneralConfig } from '@mainframe/types';
-import { GENERAL_DEFAULTS } from '@mainframe/types';
+import type { ProviderConfig, GeneralConfig } from '@qlan-ro/mainframe-types';
+import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 
 export type SettingsTab = 'providers' | 'general' | 'keybindings' | 'about';
 

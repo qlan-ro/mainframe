@@ -109,7 +109,7 @@ CREATE TABLE todo_attachments (
 
 ## 4. Plugin System Changes Required
 
-### 4a. `@mainframe/types/src/plugin.ts`
+### 4a. `@qlan-ro/mainframe-types/src/plugin.ts`
 
 Add `PluginAttachmentContext`:
 

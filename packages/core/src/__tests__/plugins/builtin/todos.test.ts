@@ -7,7 +7,7 @@ import { pino } from 'pino';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { PluginManifest } from '@mainframe/types';
+import type { PluginManifest } from '@qlan-ro/mainframe-types';
 import request from 'supertest';
 import express from 'express';
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { handleStdout, handleStderr } from '../plugins/builtin/claude/events.js';
 import { ClaudeSession } from '../plugins/builtin/claude/session.js';
-import type { SessionSink } from '@mainframe/types';
+import type { SessionSink } from '@qlan-ro/mainframe-types';
 
 function createSession() {
   return new ClaudeSession({ projectPath: '/tmp', chatId: '' });

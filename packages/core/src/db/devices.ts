@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Device } from '@mainframe/types';
+import type { Device } from '@qlan-ro/mainframe-types';
 
 export class DevicesRepository {
   constructor(private db: Database.Database) {}

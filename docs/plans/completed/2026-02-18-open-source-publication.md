@@ -615,7 +615,7 @@ Open `packages/desktop/src/renderer/index.html`. Find the `<head>` section and a
 **Step 4: TypeScript check**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: Builds without errors.
@@ -658,7 +658,7 @@ jobs:
         run: pnpm build
 
       - name: Package
-        run: pnpm --filter @mainframe/desktop package -- --publish always
+        run: pnpm --filter @qlan-ro/mainframe-desktop package -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```

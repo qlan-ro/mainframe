@@ -5,7 +5,7 @@ import {
   extractPlanFilePathFromText,
   extractLatestPlanFileFromMessages,
 } from '../chat/context-tracker.js';
-import type { ChatMessage, MessageContent } from '@mainframe/types';
+import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 
 function makeDb(addMentionReturn = true, addModifiedFileReturn = true) {
   return {

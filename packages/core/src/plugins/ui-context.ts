@@ -1,4 +1,4 @@
-import type { PluginUIContext, UIZone, DaemonEvent } from '@mainframe/types';
+import type { PluginUIContext, UIZone, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 export function createPluginUIContext(pluginId: string, emitEvent: (event: DaemonEvent) => void): PluginUIContext {
   return {

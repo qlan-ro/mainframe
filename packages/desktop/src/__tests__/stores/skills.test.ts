@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { Skill, AgentConfig } from '@mainframe/types';
+import type { Skill, AgentConfig } from '@qlan-ro/mainframe-types';
 
 vi.mock('../../renderer/lib/api/index.js', () => ({
   getSkills: vi.fn(),

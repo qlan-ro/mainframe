@@ -1,4 +1,4 @@
-import type { DaemonEvent } from '@mainframe/types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { TunnelManager } from '../tunnel/index.js';
 import { LaunchManager } from './launch-manager.js';
 

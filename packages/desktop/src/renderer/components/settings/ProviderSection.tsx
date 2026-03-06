@@ -7,7 +7,7 @@ import { useSettingsStore } from '../../store/settings';
 import { useAdaptersStore } from '../../store/adapters';
 import { getConfigConflicts, updateProviderSettings } from '../../lib/api';
 import { getModelOptions } from '../../lib/adapters';
-import type { ProviderConfig } from '@mainframe/types';
+import type { ProviderConfig } from '@qlan-ro/mainframe-types';
 import { ModelDropdown } from './ModelDropdown';
 import { MODE_OPTIONS, EXECUTION_MODE_OPTIONS } from './constants';
 

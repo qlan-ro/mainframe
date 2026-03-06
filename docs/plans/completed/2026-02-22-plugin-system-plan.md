@@ -45,7 +45,7 @@ Do not start Phase 1 until Phase 0 is 100% done and `pnpm build` passes.
 
 ## Phase 1 — Plugin System Types
 
-### Task 1.1: Add plugin types to @mainframe/types
+### Task 1.1: Add plugin types to @qlan-ro/mainframe-types
 
 **Files:**
 - Create: `packages/types/src/plugin.ts`
@@ -247,7 +247,7 @@ export type {
 
 **Step 3: Build types package**
 
-Run: `pnpm --filter @mainframe/types build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build`
 Expected: PASS.
 
 **Step 4: Commit**
@@ -308,7 +308,7 @@ Create `packages/core/src/plugins/security/manifest-validator.ts`:
 
 ```typescript
 import { z } from 'zod';
-import type { PluginManifest } from '@mainframe/types';
+import type { PluginManifest } from '@qlan-ro/mainframe-types';
 
 const VALID_CAPABILITIES = [
   'storage', 'ui:panels', 'ui:notifications', 'daemon:public-events',
@@ -348,7 +348,7 @@ export function validateManifest(raw: unknown): { success: true; manifest: Plugi
 
 **Step 3: Run tests, commit**
 
-Run: `pnpm --filter @mainframe/core test -- manifest-validator`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- manifest-validator`
 Expected: PASS.
 
 ```bash
@@ -410,7 +410,7 @@ Create `packages/core/src/plugins/db-context.ts`:
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import type { PluginDatabaseContext, PluginDatabaseStatement } from '@mainframe/types';
+import type { PluginDatabaseContext, PluginDatabaseStatement } from '@qlan-ro/mainframe-types';
 
 export function createPluginDatabaseContext(dbPath: string): PluginDatabaseContext {
   mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -497,7 +497,7 @@ Create `packages/core/src/plugins/event-bus.ts`:
 
 ```typescript
 import { EventEmitter } from 'node:events';
-import type { PluginEventBus, PublicDaemonEventName, PublicDaemonEvent } from '@mainframe/types';
+import type { PluginEventBus, PublicDaemonEventName, PublicDaemonEvent } from '@qlan-ro/mainframe-types';
 
 export const PUBLIC_DAEMON_EVENT_PREFIX = 'plugin:public:';
 
@@ -571,7 +571,7 @@ describe('PluginConfig', () => {
 Create `packages/core/src/plugins/config-context.ts`:
 
 ```typescript
-import type { PluginConfig } from '@mainframe/types';
+import type { PluginConfig } from '@qlan-ro/mainframe-types';
 
 export function createPluginConfig(
   pluginId: string,
@@ -644,8 +644,8 @@ Create `packages/core/src/plugins/ui-context.ts`:
 
 ```typescript
 import path from 'node:path';
-import type { PluginUIContext, PluginPanelSpec } from '@mainframe/types';
-import type { DaemonEvent } from '@mainframe/types';
+import type { PluginUIContext, PluginPanelSpec } from '@qlan-ro/mainframe-types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 
 export function createPluginUIContext(
   pluginId: string,
@@ -734,7 +734,7 @@ Build a `PluginContext` where each capability-gated property is either:
 - A Proxy that throws a `PluginCapabilityError` (if not declared)
 
 ```typescript
-import type { PluginContext, PluginManifest } from '@mainframe/types';
+import type { PluginContext, PluginManifest } from '@qlan-ro/mainframe-types';
 import { createPluginDatabaseContext } from './db-context.js';
 import { createPluginEventBus } from './event-bus.js';
 import { createPluginConfig } from './config-context.js';
@@ -742,7 +742,7 @@ import { createPluginUIContext } from './ui-context.js';
 import type { EventEmitter } from 'node:events';
 import type { Router } from 'express';
 import type { Logger } from 'pino';
-import type { DaemonEvent } from '@mainframe/types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 
@@ -869,7 +869,7 @@ import { readdirSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { Router } from 'express';
-import type { PluginContext, PluginModule } from '@mainframe/types';
+import type { PluginContext, PluginModule } from '@qlan-ro/mainframe-types';
 import { validateManifest } from './security/manifest-validator.js';
 import { buildPluginContext } from './context.js';
 import { createChildLogger } from '../logger.js';
@@ -1014,7 +1014,7 @@ process.on('SIGTERM', async () => {
 
 **Step 3: Build and typecheck**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: PASS.
 
 **Step 4: Commit**
@@ -1115,7 +1115,7 @@ git commit -m "feat(core): add plugin listing routes and WS event types"
 ```typescript
 // packages/desktop/src/renderer/store/plugins.ts
 import { create } from 'zustand';
-import type { PluginPanelSpec } from '@mainframe/types';
+import type { PluginPanelSpec } from '@qlan-ro/mainframe-types';
 
 interface RegisteredPanel {
   pluginId: string;
@@ -1266,7 +1266,7 @@ const panels = usePluginsStore((s) => s.panels.filter((p) => p.position === 'sid
 
 **Step 5: Build and typecheck**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: PASS.
 
 **Step 6: Commit**
@@ -1311,7 +1311,7 @@ activated via a builtin plugin.
 
 ```typescript
 // packages/core/src/plugins/builtin/claude/index.ts
-import type { PluginContext } from '@mainframe/types';
+import type { PluginContext } from '@qlan-ro/mainframe-types';
 import { ClaudeAdapter } from '../../../adapters/claude.js';
 
 export function activate(ctx: PluginContext): void {
@@ -1404,7 +1404,7 @@ git commit -m "test(plugins): add plugin system integration test"
 | Capability-gated context | `context.ts` | ✅ |
 | Plugin lifecycle manager | `manager.ts` | ✅ |
 | Plugin HTTP routes | `server/routes/plugins.ts` | ✅ |
-| WS event types | `@mainframe/types` | — |
+| WS event types | `@qlan-ro/mainframe-types` | — |
 | Desktop panel store | `store/plugins.ts` | — |
 | Dynamic panel loading | `components/plugins/` | — |
 | Claude builtin plugin | `builtin/claude/` | manual |

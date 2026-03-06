@@ -25,7 +25,7 @@ In `packages/types/src/events.ts`, add after the `launch.status` line (line 32):
 
 **Step 2: Build types package**
 
-Run: `pnpm --filter @mainframe/types build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build`
 Expected: Clean build, no errors
 
 **Step 3: Commit**
@@ -70,7 +70,7 @@ if (process.env['TUNNEL_URL']) {
 
 **Step 3: Build core**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: Clean build
 
 **Step 4: Commit**
@@ -133,7 +133,7 @@ describe('TunnelManager', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core test -- src/__tests__/tunnel/tunnel-manager.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- src/__tests__/tunnel/tunnel-manager.test.ts`
 Expected: FAIL — module not found
 
 **Step 3: Implement TunnelManager**
@@ -256,7 +256,7 @@ export { TunnelManager } from './tunnel-manager.js';
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/core test -- src/__tests__/tunnel/tunnel-manager.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- src/__tests__/tunnel/tunnel-manager.test.ts`
 Expected: PASS
 
 **Step 5: Commit**
@@ -333,7 +333,7 @@ Add `tunnelUrl?: string | null` to `RouteContext` in `packages/core/src/server/r
 
 **Step 3: Build and verify**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: Clean build
 
 **Step 4: Commit**
@@ -442,8 +442,8 @@ const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunn
 
 **Step 7: Run tests, build, commit**
 
-Run: `pnpm --filter @mainframe/core test -- src/__tests__/launch/`
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- src/__tests__/launch/`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 
 ```bash
 git add packages/core/src/launch/ packages/core/src/index.ts packages/core/src/__tests__/launch/
@@ -637,7 +637,7 @@ Or if preferred, add to a separate barrel in `packages/core/src/tunnel/index.ts`
 **Step 2: Final build and typecheck**
 
 Run: `pnpm build`
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All pass
 
 **Step 3: Commit**

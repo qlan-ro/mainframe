@@ -32,7 +32,7 @@ Expose model availability through the Adapter interface and surface it via `/api
 
 ### Type contract changes
 
-In `@mainframe/types`:
+In `@qlan-ro/mainframe-types`:
 
 - Add `AdapterModel` type:
   - `id: string`

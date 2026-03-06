@@ -1,4 +1,4 @@
-import type { PluginConfig } from '@mainframe/types';
+import type { PluginConfig } from '@qlan-ro/mainframe-types';
 
 export function createPluginConfig(
   pluginId: string,

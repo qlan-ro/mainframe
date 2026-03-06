@@ -14,7 +14,7 @@ import { archiveChat } from '../../../lib/api';
 import { useChatsStore } from '../../../store/chats';
 import { useProjectsStore } from '../../../store/projects';
 import { useTabsStore } from '../../../store/tabs';
-import type { ControlRequest, ControlUpdate } from '@mainframe/types';
+import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
 import { AllToolUIs } from './parts/tool-ui-registry';
 import { useSkillsStore } from '../../../store/skills';
 import { useSandboxStore } from '../../../store/sandbox';

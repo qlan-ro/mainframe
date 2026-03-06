@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Adapter, AdapterModel } from '@mainframe/types';
+import type { Adapter, AdapterModel } from '@qlan-ro/mainframe-types';
 import { AdapterRegistry } from '../adapters/index.js';
 import { ClaudeAdapter } from '../plugins/builtin/claude/adapter.js';
 

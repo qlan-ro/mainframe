@@ -121,7 +121,7 @@ export function createChildLogger(name: string) {
 **Step 2: Run core tests to confirm no regressions**
 
 ```bash
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 
 Expected: all tests pass.
@@ -244,7 +244,7 @@ export function logFromRenderer(level: string, module: string, message: string, 
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop exec tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit
 ```
 
 Fix any type errors before proceeding.
@@ -347,7 +347,7 @@ log.info('window created');
 **Step 6: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop exec tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit
 ```
 
 Fix any errors.
@@ -423,7 +423,7 @@ const api: MainframeAPI = {
 **Step 3: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop exec tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit
 ```
 
 **Step 4: Commit**
@@ -500,7 +500,7 @@ describe('createLogger', () => {
 **Step 2: Run the test to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/desktop test -- --reporter=verbose renderer/lib/logger
+pnpm --filter @qlan-ro/mainframe-desktop test -- --reporter=verbose renderer/lib/logger
 ```
 
 Expected: FAIL — `cannot find module './logger'`
@@ -556,7 +556,7 @@ export function createLogger(module: string): ModuleLogger {
 **Step 4: Run tests to verify they pass**
 
 ```bash
-pnpm --filter @mainframe/desktop test -- --reporter=verbose renderer/lib/logger
+pnpm --filter @qlan-ro/mainframe-desktop test -- --reporter=verbose renderer/lib/logger
 ```
 
 Expected: all 5 tests pass.
@@ -631,7 +631,7 @@ logger.info({ projectId: param(req, 'id') }, 'project deleted');
 **Step 4: Run core tests**
 
 ```bash
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 
 Expected: all pass.
@@ -703,7 +703,7 @@ log.debug({ type: event.type, chatId: 'chatId' in event ? event.chatId : undefin
 **Step 4: Run core tests**
 
 ```bash
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 
 Expected: all pass.
@@ -843,7 +843,7 @@ to:
 **Step 5: Run desktop tests**
 
 ```bash
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 
 Expected: all pass.
@@ -862,8 +862,8 @@ git commit -m "feat(desktop): replace console.* with structured renderer logger 
 **Step 1: Typecheck all packages**
 
 ```bash
-pnpm --filter @mainframe/core exec tsc --noEmit
-pnpm --filter @mainframe/desktop exec tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit
 ```
 
 Expected: zero errors.
@@ -880,7 +880,7 @@ Expected: all tests pass.
 
 Start the daemon in dev mode:
 ```bash
-pnpm --filter @mainframe/core dev
+pnpm --filter @qlan-ro/mainframe-core dev
 ```
 
 Check that a log file was created:

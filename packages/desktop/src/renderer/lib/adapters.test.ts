@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AdapterInfo } from '@mainframe/types';
+import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import { getAdapterLabel, getAdapterOptions, getModelContextWindow, getModelLabel, getModelOptions } from './adapters';
 
 describe('adapters model metadata', () => {

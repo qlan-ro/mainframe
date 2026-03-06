@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ShieldAlert, Terminal, ChevronRight } from 'lucide-react';
-import type { ControlRequest, ControlUpdate } from '@mainframe/types';
+import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
 

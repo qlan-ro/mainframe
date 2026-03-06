@@ -8,7 +8,7 @@ import { focusComposerInput } from '../../lib/focus';
 import { useSkillsStore, useProjectsStore, useChatsStore } from '../../store';
 import { searchFiles, addMention } from '../../lib/api';
 import { cn } from '../../lib/utils';
-import type { Skill, CustomCommand } from '@mainframe/types';
+import type { Skill, CustomCommand } from '@qlan-ro/mainframe-types';
 
 type FilterMode = 'all' | 'agents-files' | 'skills';
 

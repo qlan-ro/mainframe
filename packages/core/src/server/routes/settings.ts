@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { homedir } from 'node:os';
-import { GENERAL_DEFAULTS } from '@mainframe/types';
+import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 import type { RouteContext } from './types.js';
 import { validate, UpdateProviderSettingsBody, UpdateGeneralSettingsBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';

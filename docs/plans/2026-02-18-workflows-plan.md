@@ -14,7 +14,7 @@
 
 ## Phase 1: Plugin System (OSS Core)
 
-### Task 1: Plugin types in @mainframe/types
+### Task 1: Plugin types in @qlan-ro/mainframe-types
 
 **Files:**
 - Create: `packages/types/src/plugin.ts`
@@ -44,7 +44,7 @@ describe('plugin types', () => {
 **Step 2: Run to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/types test
+pnpm --filter @qlan-ro/mainframe-types test
 ```
 Expected: FAIL — `plugin.ts` not found.
 
@@ -139,8 +139,8 @@ export * from './plugin.js';
 **Step 5: Run to verify it passes**
 
 ```bash
-pnpm --filter @mainframe/types test
-pnpm --filter @mainframe/types build
+pnpm --filter @qlan-ro/mainframe-types test
+pnpm --filter @qlan-ro/mainframe-types build
 ```
 
 **Step 6: Commit**
@@ -215,7 +215,7 @@ describe('PluginManager', () => {
 **Step 2: Run to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/core test src/__tests__/plugins/plugin-manager.test.ts
+pnpm --filter @qlan-ro/mainframe-core test src/__tests__/plugins/plugin-manager.test.ts
 ```
 
 **Step 3: Implement `packages/core/src/plugins/plugin-manager.ts`**
@@ -226,7 +226,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { z } from 'zod';
 import { createChildLogger } from '../logger.js';
-import type { PluginManifest } from '@mainframe/types';
+import type { PluginManifest } from '@qlan-ro/mainframe-types';
 
 const logger = createChildLogger('plugin-manager');
 
@@ -321,7 +321,7 @@ export class PluginManager {
 **Step 4: Run to verify it passes**
 
 ```bash
-pnpm --filter @mainframe/core test src/__tests__/plugins/plugin-manager.test.ts
+pnpm --filter @qlan-ro/mainframe-core test src/__tests__/plugins/plugin-manager.test.ts
 ```
 
 **Step 5: Commit**
@@ -409,14 +409,14 @@ describe('buildPluginContext', () => {
 **Step 2: Run to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/core test src/__tests__/plugins/plugin-context.test.ts
+pnpm --filter @qlan-ro/mainframe-core test src/__tests__/plugins/plugin-context.test.ts
 ```
 
 **Step 3: Implement the context builder files**
 
 `packages/core/src/plugins/plugin-event-bus.ts`:
 ```typescript
-import type { PluginEventBus } from '@mainframe/types';
+import type { PluginEventBus } from '@qlan-ro/mainframe-types';
 import { EventEmitter } from 'node:events';
 
 export function buildPluginEventBus(pluginId: string, emitter: EventEmitter): PluginEventBus {
@@ -432,7 +432,7 @@ export function buildPluginEventBus(pluginId: string, emitter: EventEmitter): Pl
 `packages/core/src/plugins/plugin-router.ts`:
 ```typescript
 import { Router } from 'express';
-import type { PluginRouter } from '@mainframe/types';
+import type { PluginRouter } from '@qlan-ro/mainframe-types';
 
 export function buildPluginRouter(pluginId: string): { router: Router; api: PluginRouter } {
   const router = Router();
@@ -450,7 +450,7 @@ export function buildPluginRouter(pluginId: string): { router: Router; api: Plug
 `packages/core/src/plugins/plugin-db-context.ts`:
 ```typescript
 import type Database from 'better-sqlite3';
-import type { PluginDatabaseContext } from '@mainframe/types';
+import type { PluginDatabaseContext } from '@qlan-ro/mainframe-types';
 
 export function buildPluginDbContext(db: Database.Database): PluginDatabaseContext {
   return {
@@ -463,7 +463,7 @@ export function buildPluginDbContext(db: Database.Database): PluginDatabaseConte
 
 `packages/core/src/plugins/plugin-ui-context.ts`:
 ```typescript
-import type { PluginUIContext, PluginUIContribution } from '@mainframe/types';
+import type { PluginUIContext, PluginUIContribution } from '@qlan-ro/mainframe-types';
 
 export function buildPluginUIContext(
   pluginId: string,
@@ -484,7 +484,7 @@ export function buildPluginUIContext(
 `packages/core/src/plugins/plugin-context.ts`:
 ```typescript
 import type Database from 'better-sqlite3';
-import type { PluginContext, PluginUIContribution } from '@mainframe/types';
+import type { PluginContext, PluginUIContribution } from '@qlan-ro/mainframe-types';
 import { EventEmitter } from 'node:events';
 import { createChildLogger } from '../logger.js';
 import { buildPluginEventBus } from './plugin-event-bus.js';
@@ -551,7 +551,7 @@ export function buildPluginContext(opts: PluginContextBuildOptions): PluginConte
 **Step 4: Run to verify it passes**
 
 ```bash
-pnpm --filter @mainframe/core test src/__tests__/plugins/plugin-context.test.ts
+pnpm --filter @qlan-ro/mainframe-core test src/__tests__/plugins/plugin-context.test.ts
 ```
 
 **Step 5: Commit**
@@ -646,7 +646,7 @@ raw(): Database.Database { return this.db; }
 **Step 5: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 
 **Step 6: Commit**
@@ -689,7 +689,7 @@ describe('workflow types', () => {
 **Step 2: Run to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/types test
+pnpm --filter @qlan-ro/mainframe-types test
 ```
 
 **Step 3: Create `packages/types/src/workflow.ts`**
@@ -818,7 +818,7 @@ export * from './workflow.js';
 **Step 5: Run and verify**
 
 ```bash
-pnpm --filter @mainframe/types test && pnpm --filter @mainframe/types build
+pnpm --filter @qlan-ro/mainframe-types test && pnpm --filter @qlan-ro/mainframe-types build
 ```
 
 **Step 6: Commit**
@@ -856,7 +856,7 @@ git commit -m "feat(types): add workflow domain types"
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mainframe/types": "workspace:*",
+    "@qlan-ro/mainframe-types": "workspace:*",
     "@temporalio/client": "^1.12.0",
     "@temporalio/worker": "^1.12.0",
     "@temporalio/workflow": "^1.12.0",
@@ -906,7 +906,7 @@ Create `packages/plugin-workflows/tsconfig.build.json`:
 
 `packages/plugin-workflows/src/activate.ts`:
 ```typescript
-import type { PluginContext } from '@mainframe/types';
+import type { PluginContext } from '@qlan-ro/mainframe-types';
 
 export async function activate(_ctx: PluginContext): Promise<void> {
   // implemented in later tasks
@@ -1015,7 +1015,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import yaml from 'js-yaml';
 import { z } from 'zod';
-import type { WorkflowDefinition } from '@mainframe/types';
+import type { WorkflowDefinition } from '@qlan-ro/mainframe-types';
 
 const AgentConfigSchema = z.object({
   adapterId: z.string(),
@@ -1138,7 +1138,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { runWorkflowMigrations } from '../db-migrations.js';
 import { WorkflowRegistry } from '../workflow-registry.js';
-import type { WorkflowDefinition } from '@mainframe/types';
+import type { WorkflowDefinition } from '@qlan-ro/mainframe-types';
 
 const SAMPLE_DEF: WorkflowDefinition = {
   name: 'test',
@@ -1243,7 +1243,7 @@ export function runWorkflowMigrations(db: Database.Database): void {
 ```typescript
 import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
-import type { WorkflowDefinition, WorkflowRecord, WorkflowRun, WorkflowStepRun, TriggerType, RunStatus, StepStatus } from '@mainframe/types';
+import type { WorkflowDefinition, WorkflowRecord, WorkflowRun, WorkflowStepRun, TriggerType, RunStatus, StepStatus } from '@qlan-ro/mainframe-types';
 
 export class WorkflowRegistry {
   constructor(private db: Database.Database) {}
@@ -1702,8 +1702,8 @@ Expected: FAIL — none of the step files exist yet.
 **Step 3: Implement `steps/handler.ts`**
 
 ```typescript
-import type { PluginConfig } from '@mainframe/types';
-import type { ChatServiceAPI } from '@mainframe/types';
+import type { PluginConfig } from '@qlan-ro/mainframe-types';
+import type { ChatServiceAPI } from '@qlan-ro/mainframe-types';
 import type { Logger } from 'pino';
 import type { StepDefinition } from '../workflow-loader.js';
 
@@ -1865,7 +1865,7 @@ export class HttpStepHandler implements WorkflowStepHandler {
 ```typescript
 import type { WorkflowStepHandler, StepExecutionContext, StepOutput, StepValidationResult } from './handler.js';
 import type { StepDefinition } from '../workflow-loader.js';
-import type { PluginConfig } from '@mainframe/types';
+import type { PluginConfig } from '@qlan-ro/mainframe-types';
 import type { Logger } from 'pino';
 import { ValidationError } from './registry.js';
 
@@ -2012,7 +2012,7 @@ pnpm --filter @mainframe/plugin-workflows test src/__tests__/activities/prompt-a
 
 ```typescript
 import { sleep } from '@temporalio/activity';
-import type { AgentConfig } from '@mainframe/types';
+import type { AgentConfig } from '@qlan-ro/mainframe-types';
 
 export interface PromptStepInput {
   runId: string;
@@ -2154,7 +2154,7 @@ Expected: FAIL.
 ```typescript
 import type { StepHandlerRegistry } from '../../steps/registry.js';
 import type { StepDefinition } from '../../workflow-loader.js';
-import type { PluginConfig } from '@mainframe/types';
+import type { PluginConfig } from '@qlan-ro/mainframe-types';
 
 export interface ToolActivityDeps {
   registry: StepHandlerRegistry;
@@ -2214,7 +2214,7 @@ pnpm --filter @mainframe/plugin-workflows test src/__tests__/activities/tool-act
 ```typescript
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { ToolType } from '@mainframe/types';
+import type { ToolType } from '@qlan-ro/mainframe-types';
 
 const execFileAsync = promisify(execFile);
 
@@ -2346,7 +2346,7 @@ export async function waitForHumanInput(timeoutMs: number): Promise<HumanInputRe
 import { proxyActivities, sleep, ApplicationFailure } from '@temporalio/workflow';
 import type { createPromptActivityFunctions } from '../activities/prompt-activity.js';
 import type { runToolStep } from '../activities/tool-activity.js';
-import type { WorkflowDefinition } from '@mainframe/types';
+import type { WorkflowDefinition } from '@qlan-ro/mainframe-types';
 import { waitForHumanInput } from '../activities/human-input-activity.js';
 
 const { runPromptStep } = proxyActivities<ReturnType<typeof createPromptActivityFunctions>>({
@@ -2523,7 +2523,7 @@ git commit -m "feat(plugin-workflows): add Temporal worker, runner workflow, and
 ```typescript
 import type { Client } from '@temporalio/client';
 import type { WorkflowRegistry } from './workflow-registry.js';
-import type { WorkflowRun, TriggerType } from '@mainframe/types';
+import type { WorkflowRun, TriggerType } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
 
 export class WorkflowManager {
@@ -2777,7 +2777,7 @@ export function createWebhookRoutes(registry: WorkflowRegistry, manager: Workflo
 import type { Client, ScheduleHandle } from '@temporalio/client';
 import type { WorkflowRegistry } from './workflow-registry.js';
 import type { WorkflowManager } from './workflow-manager.js';
-import type { PluginEventBus } from '@mainframe/types';
+import type { PluginEventBus } from '@qlan-ro/mainframe-types';
 
 export class TriggerManager {
   private scheduleHandles = new Map<string, ScheduleHandle>();
@@ -3005,7 +3005,7 @@ git commit -m "feat(plugin-workflows): add license key validation with 7-day off
 **Step 1: Implement the full activate function**
 
 ```typescript
-import type { PluginContext } from '@mainframe/types';
+import type { PluginContext } from '@qlan-ro/mainframe-types';
 import { runWorkflowMigrations } from './db-migrations.js';
 import { WorkflowRegistry } from './workflow-registry.js';
 import { WorkflowManager } from './workflow-manager.js';
@@ -3194,7 +3194,7 @@ import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs/promises';
-import mime from 'mime-types';  // add: pnpm --filter @mainframe/core add mime-types
+import mime from 'mime-types';  // add: pnpm --filter @qlan-ro/mainframe-core add mime-types
 
 // GET /api/plugins/ui-contributions — returns all registered panel contributions
 app.get('/api/plugins/ui-contributions', (_req, res) => {
@@ -3265,14 +3265,14 @@ describe('plugin UI static serving', () => {
 **Step 5: Run the test**
 
 ```bash
-pnpm --filter @mainframe/core test src/__tests__/routes/plugin-ui.test.ts
+pnpm --filter @qlan-ro/mainframe-core test src/__tests__/routes/plugin-ui.test.ts
 ```
 
 **Step 6: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/types build
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-types build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 
 **Step 7: Commit**
@@ -3326,14 +3326,14 @@ describe('usePluginContributions', () => {
 **Step 2: Run to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/desktop test src/__tests__/usePluginContributions.test.ts
+pnpm --filter @qlan-ro/mainframe-desktop test src/__tests__/usePluginContributions.test.ts
 ```
 
 **Step 3: Implement `usePluginContributions.ts`**
 
 ```typescript
 import { useState, useEffect } from 'react';
-import type { PluginUIContribution } from '@mainframe/types';
+import type { PluginUIContribution } from '@qlan-ro/mainframe-types';
 
 const DAEMON_URL = 'http://localhost:31415';
 
@@ -3358,7 +3358,7 @@ export function usePluginContributions() {
 This module sends context to iframes and listens for navigation messages from them:
 
 ```typescript
-import type { HostToPluginMessage, PluginToHostMessage } from '@mainframe/types';
+import type { HostToPluginMessage, PluginToHostMessage } from '@qlan-ro/mainframe-types';
 
 export interface PluginBridgeOptions {
   pluginId: string;
@@ -3420,7 +3420,7 @@ export function sendNavigationToPlugin(
 
 ```tsx
 import { useRef, useEffect, useState } from 'react';
-import type { PluginUIContribution } from '@mainframe/types';
+import type { PluginUIContribution } from '@qlan-ro/mainframe-types';
 import { attachPluginBridge, sendNavigationToPlugin } from '../../lib/plugin-bridge.js';
 
 const DAEMON_URL = 'http://localhost:31415';
@@ -3551,7 +3551,7 @@ export function LeftPanel(): React.ReactElement {
 **Step 7: Run tests**
 
 ```bash
-pnpm --filter @mainframe/desktop test src/__tests__/usePluginContributions.test.ts
+pnpm --filter @qlan-ro/mainframe-desktop test src/__tests__/usePluginContributions.test.ts
 ```
 
 **Step 8: Commit**
@@ -3566,7 +3566,7 @@ git commit -m "feat(desktop): dynamic plugin panel tabs with iframe rendering an
 ### Task 20: Workflows plugin UI (self-contained Vite app)
 
 > **Key principle:** This Vite app lives inside `packages/plugin-workflows/ui/` and is entirely
-> separate from `@mainframe/desktop`. It bundles its own React and React Flow. The daemon serves
+> separate from `@qlan-ro/mainframe-desktop`. It bundles its own React and React Flow. The daemon serves
 > its built output as static files. No workflow UI code lives in the desktop package.
 
 **Files:**
@@ -3665,7 +3665,7 @@ This is the iframe side of the bridge (mirrors `plugin-bridge.ts` in the desktop
 ```typescript
 import type { PluginToHostMessage, HostToPluginMessage } from '../types.js';
 
-// Re-declare the types locally since this app doesn't depend on @mainframe/types
+// Re-declare the types locally since this app doesn't depend on @qlan-ro/mainframe-types
 export interface Context {
   projectId: string | null;
   theme: 'dark' | 'light';
@@ -3845,7 +3845,7 @@ describe('graph-serializer', () => {
 **Step 7: Implement `src/lib/graph-serializer.ts`**
 
 ```typescript
-// Minimal local types (mirrors @mainframe/types without the dependency)
+// Minimal local types (mirrors @qlan-ro/mainframe-types without the dependency)
 export interface WorkflowStep {
   id: string; type: string; depends_on?: string[]; condition?: string;
   agent?: { adapterId: string }; prompt?: string;
@@ -4193,7 +4193,7 @@ sqlite3 ~/.mainframe/mainframe.db "INSERT INTO settings (id, category, key, valu
 **Step 5: Start the daemon and trigger a run**
 
 ```bash
-pnpm --filter @mainframe/core dev
+pnpm --filter @qlan-ro/mainframe-core dev
 # In another terminal:
 curl -X POST http://localhost:31415/api/plugins/workflows/workflows/proj-id:hello/runs \
   -H 'Content-Type: application/json' \
@@ -4344,7 +4344,7 @@ git commit -m "chore: document submodule workflow and configure OSS CI to skip s
 | Phase | Tasks | Deliverable |
 |-------|-------|-------------|
 | 1 — Plugin System | 1–4 | PluginManager, PluginContext, Express integration |
-| 2 — Types | 5 | WorkflowDefinition, WorkflowRun types in @mainframe/types |
+| 2 — Types | 5 | WorkflowDefinition, WorkflowRun types in @qlan-ro/mainframe-types |
 | 3 — Plugin Foundation | 6–8 | Package scaffold, YAML parser, DB + registry |
 | 4 — Temporal | 9–13 | Worker, PromptActivity, ToolActivity, HumanInput, runner |
 | 5 — Routes + Triggers | 14–15 | REST API, webhook, cron, event triggers |
@@ -4359,6 +4359,6 @@ git commit -m "chore: document submodule workflow and configure OSS CI to skip s
 - `git submodule update --remote --merge` — pull latest plugin code
 - `pnpm --filter @mainframe/plugin-workflows test` — run plugin tests
 - `pnpm --filter @mainframe/plugin-workflows-ui build` — build the iframe UI
-- `pnpm --filter @mainframe/core test` — run core tests
-- `pnpm --filter @mainframe/desktop dev` — start desktop in dev mode
+- `pnpm --filter @qlan-ro/mainframe-core test` — run core tests
+- `pnpm --filter @qlan-ro/mainframe-desktop dev` — start desktop in dev mode
 - `temporal workflow list` — check Temporal for running workflows

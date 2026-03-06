@@ -1,4 +1,4 @@
-import type { ChatMessage, MessageContent } from '@mainframe/types';
+import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 
 export interface GroupedMessage extends ChatMessage {
   _toolResults?: Map<string, MessageContent & { type: 'tool_result' }>;

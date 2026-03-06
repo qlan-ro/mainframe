@@ -28,7 +28,7 @@ export const BrowseFilesystemQuery = z.object({
 
 **Step 2: Verify types build**
 
-Run: `pnpm --filter @mainframe/types build && pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build`
 Expected: PASS
 
 **Step 3: Commit**
@@ -117,7 +117,7 @@ describe('GET /api/filesystem/browse', () => {
 
 **Step 2: Run tests to verify they fail**
 
-Run: `pnpm --filter @mainframe/core test -- --reporter=verbose packages/core/src/__tests__/routes/files.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose packages/core/src/__tests__/routes/files.test.ts`
 Expected: FAIL — `No handler for GET /api/filesystem/browse`
 
 **Step 3: Write the handler and register route**
@@ -168,7 +168,7 @@ router.get(
 
 **Step 4: Run tests to verify they pass**
 
-Run: `pnpm --filter @mainframe/core test -- --reporter=verbose packages/core/src/__tests__/routes/files.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose packages/core/src/__tests__/routes/files.test.ts`
 Expected: PASS (note: the home-dir validation test may need adjustment since the temp dir may be under `/tmp` not `~/` — mock `homedir` or use a temp dir under `~/`)
 
 **Step 5: Commit**
@@ -208,7 +208,7 @@ Add `browseFilesystem` to the `files-api` export block in `packages/desktop/src/
 
 **Step 3: Verify types build**
 
-Run: `pnpm --filter @mainframe/desktop build` (or just typecheck)
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build` (or just typecheck)
 Expected: PASS
 
 **Step 4: Commit**
@@ -410,7 +410,7 @@ export function DirectoryPickerModal({ open, onSelect, onCancel }: DirectoryPick
 
 **Step 2: Verify types build**
 
-Run: `pnpm --filter @mainframe/desktop build` (or typecheck)
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build` (or typecheck)
 Expected: PASS
 
 **Step 3: Commit**
@@ -479,7 +479,7 @@ Add modal at the end of the returned JSX, before the closing `</div>`:
 
 **Step 2: Verify types build and manual test**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: PASS
 
 Manual test: Open `dev:web` in browser, click project dropdown → "Add project" → modal opens, browse directories, select one → project created.
@@ -523,7 +523,7 @@ Run: `grep -r "openDirectoryDialog" packages/desktop/src/` — should return no 
 
 **Step 5: Verify types build**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: PASS
 
 **Step 6: Commit**
@@ -539,13 +539,13 @@ git commit -m "refactor(desktop): remove Electron openDirectoryDialog IPC"
 
 **Step 1: Run all tests**
 
-Run: `pnpm --filter @mainframe/core test && pnpm --filter @mainframe/desktop test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test && pnpm --filter @qlan-ro/mainframe-desktop test`
 Expected: PASS
 
 **Step 2: Manual test — browser mode**
 
 1. Start daemon: `pnpm dev:core`
-2. Start web: `pnpm --filter @mainframe/desktop run dev:web`
+2. Start web: `pnpm --filter @qlan-ro/mainframe-desktop run dev:web`
 3. Open `http://localhost:5173` in browser
 4. Click project dropdown → "Add project"
 5. Modal opens with home directory contents
@@ -555,7 +555,7 @@ Expected: PASS
 **Step 3: Manual test — Electron mode**
 
 1. Start daemon: `pnpm dev:core`
-2. Start Electron: `pnpm --filter @mainframe/desktop run dev`
+2. Start Electron: `pnpm --filter @qlan-ro/mainframe-desktop run dev`
 3. Same flow as above — modal works identically
 
 **Step 4: Verify path traversal is blocked**

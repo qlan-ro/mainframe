@@ -3,7 +3,7 @@ import { ChatManager } from '../index.js';
 import { wrapMainframeCommand } from '../../commands/wrap.js';
 import { MockBaseSession } from '../../__tests__/helpers/mock-session.js';
 import { MockBaseAdapter } from '../../__tests__/helpers/mock-adapter.js';
-import type { AdapterSession, SessionOptions } from '@mainframe/types';
+import type { AdapterSession, SessionOptions } from '@qlan-ro/mainframe-types';
 
 // ── wrapMainframeCommand unit tests ──────────────────────────────────────────
 
