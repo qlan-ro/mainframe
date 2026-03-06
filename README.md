@@ -105,6 +105,7 @@ TUNNEL_URL=https://mainframe.example.com mainframe
 Mainframe orchestrates AI coding agents — you'll need at least one installed:
 
 - [Claude CLI](https://claude.ai/code) (requires a Claude account)
+- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (optional — only needed for remote/mobile access via tunnel)
 
 ## Development
 
