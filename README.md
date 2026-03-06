@@ -14,7 +14,13 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Mainframe screenshot" width="860">
+  <picture>
+    <img src="docs/screenshot.png" alt="Mainframe desktop" height="440">
+  </picture>
+  &nbsp;&nbsp;
+  <picture>
+    <img src="docs/screenshot-mobile.png" alt="Mainframe mobile" height="440">
+  </picture>
 </p>
 
 ---
