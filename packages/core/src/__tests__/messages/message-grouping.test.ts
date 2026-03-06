@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { groupMessages, type GroupedMessage } from '../../messages/message-grouping.js';
-import type { ChatMessage, MessageContent } from '@mainframe/types';
+import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 
 /* ── helpers ─────────────────────────────────────────────────────── */
 

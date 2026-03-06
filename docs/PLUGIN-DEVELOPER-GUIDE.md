@@ -728,7 +728,7 @@ Adapter plugins register new AI CLI tool integrations. The builtin Claude adapte
 
 ### Entry point
 
-Your adapter class must implement the `Adapter` interface from `@mainframe/types`. Register it via `ctx.adapters.register()`.
+Your adapter class must implement the `Adapter` interface from `@qlan-ro/mainframe-types`. Register it via `ctx.adapters.register()`.
 
 ```js
 // index.js

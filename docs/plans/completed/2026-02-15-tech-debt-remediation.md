@@ -71,7 +71,7 @@ describe('CreateAgentBody', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/schemas.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/schemas.test.ts`
 Expected: FAIL — `../evil` and `foo/bar` currently pass validation.
 
 **Step 3: Add regex validation to Zod schemas**
@@ -101,12 +101,12 @@ export const CreateAgentBody = z.object({
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/schemas.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/schemas.test.ts`
 Expected: PASS
 
 **Step 5: Run full test suite**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass.
 
 **Step 6: Commit**
@@ -128,7 +128,7 @@ git commit -m "fix: add path character validation to skill/agent name schemas"
 Run:
 ```bash
 cd /Users/doruchiulan/Projects/qlan/mainframe
-pnpm --filter @mainframe/desktop remove @radix-ui/react-context-menu @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-select postcss
+pnpm --filter @qlan-ro/mainframe-desktop remove @radix-ui/react-context-menu @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-select postcss
 ```
 
 **Step 2: Verify build still works**
@@ -196,7 +196,7 @@ Keep `escapeXmlAttr` in `attachment-helpers.ts` (used internally by `buildAttach
 **Step 5: Verify build**
 
 Run: `pnpm build`
-Expected: All packages build. If anything imports `ApiResponse`, `ProjectsApi`, etc. from `@mainframe/types`, it will fail here — but our audit confirmed nothing does.
+Expected: All packages build. If anything imports `ApiResponse`, `ProjectsApi`, etc. from `@qlan-ro/mainframe-types`, it will fail here — but our audit confirmed nothing does.
 
 **Step 6: Run tests**
 
@@ -334,8 +334,8 @@ import type { PermissionMode } from './settings.js';
 In `packages/core/src/adapters/base.ts`, update the import and line 30:
 
 ```typescript
-// Add PermissionMode to existing @mainframe/types import (line 2):
-import type { ..., PermissionMode } from '@mainframe/types';
+// Add PermissionMode to existing @qlan-ro/mainframe-types import (line 2):
+import type { ..., PermissionMode } from '@qlan-ro/mainframe-types';
 
 // FROM (line 30):
   async setPermissionMode(_process: AdapterProcess, _mode: string): Promise<void> {}
@@ -362,7 +362,7 @@ git commit -m "refactor: consolidate PermissionMode type across all definitions"
 
 ---
 
-### Task 7: Declare `@mainframe/core` as Desktop Dependency
+### Task 7: Declare `@qlan-ro/mainframe-core` as Desktop Dependency
 
 **Files:**
 - Modify: `packages/desktop/package.json` (add dependency)
@@ -373,12 +373,12 @@ git commit -m "refactor: consolidate PermissionMode type across all definitions"
 Run:
 ```bash
 cd /Users/doruchiulan/Projects/qlan/mainframe
-pnpm --filter @mainframe/desktop add @mainframe/core@workspace:*
+pnpm --filter @qlan-ro/mainframe-desktop add @qlan-ro/mainframe-core@workspace:*
 ```
 
 **Step 2: Update the Vite alias to use the published export**
 
-In `packages/desktop/electron.vite.config.ts`, check if the alias can be removed entirely. The `@mainframe/core` package exports `"./messages": "./dist/messages/index.js"` in its `package.json`. With the dependency declared, the bundler should resolve `@mainframe/core/messages` automatically.
+In `packages/desktop/electron.vite.config.ts`, check if the alias can be removed entirely. The `@qlan-ro/mainframe-core` package exports `"./messages": "./dist/messages/index.js"` in its `package.json`. With the dependency declared, the bundler should resolve `@qlan-ro/mainframe-core/messages` automatically.
 
 Try removing the alias:
 
@@ -386,7 +386,7 @@ Try removing the alias:
 // FROM (lines 38-42):
     resolve: {
       alias: {
-        '@mainframe/core/messages': resolve(__dirname, '../core/src/messages/index.ts'),
+        '@qlan-ro/mainframe-core/messages': resolve(__dirname, '../core/src/messages/index.ts'),
       },
     },
 // TO:
@@ -399,12 +399,12 @@ Or remove the entire `resolve` block if empty.
 
 Run: `pnpm build`
 
-If the build fails because Vite can't resolve `@mainframe/core/messages` from `dist/`, we keep the alias but point it to the compiled output:
+If the build fails because Vite can't resolve `@qlan-ro/mainframe-core/messages` from `dist/`, we keep the alias but point it to the compiled output:
 
 ```typescript
 resolve: {
   alias: {
-    '@mainframe/core/messages': resolve(__dirname, '../core/dist/messages/index.js'),
+    '@qlan-ro/mainframe-core/messages': resolve(__dirname, '../core/dist/messages/index.js'),
   },
 },
 ```
@@ -418,7 +418,7 @@ Expected: All tests pass.
 
 ```bash
 git add packages/desktop/package.json packages/desktop/electron.vite.config.ts pnpm-lock.yaml
-git commit -m "refactor: declare @mainframe/core as desktop dependency, use published export"
+git commit -m "refactor: declare @qlan-ro/mainframe-core as desktop dependency, use published export"
 ```
 
 ---
@@ -475,12 +475,12 @@ export function handleEvent(event: ClaudeEvent, state: AdapterState, emit: EmitF
 
 **Step 3: Run existing tests**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/claude-events.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/claude-events.test.ts`
 Expected: All existing tests pass (pure refactor, no behavior change).
 
 **Step 4: Run full test suite**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass.
 
 **Step 5: Commit**
@@ -538,12 +538,12 @@ export function convertHistoryEntry(
 
 **Step 3: Run existing tests**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/message-loading.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/message-loading.test.ts`
 Expected: All 21 test cases pass (pure refactor).
 
 **Step 4: Run full test suite**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass.
 
 **Step 5: Commit**
@@ -609,12 +609,12 @@ update(id: string, fields: Partial<ChatUpdateFields>): void {
 
 **Step 3: Run existing tests**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/chats.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/chats.test.ts`
 Expected: All tests pass.
 
 **Step 4: Run full test suite**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass.
 
 **Step 5: Commit**
@@ -671,12 +671,12 @@ export function gitRoutes(router: Router, db: DatabaseManager, adapters: Adapter
 
 **Step 3: Run route tests**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes-files.test.ts src/__tests__/routes-git.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes-files.test.ts src/__tests__/routes-git.test.ts`
 Expected: All tests pass (pure refactor).
 
 **Step 4: Run full test suite**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass.
 
 **Step 5: Commit**
@@ -715,7 +715,7 @@ Key breaking changes (v1→v2→v3→v4):
 
 Run:
 ```bash
-pnpm --filter @mainframe/desktop add react-resizable-panels@^4
+pnpm --filter @qlan-ro/mainframe-desktop add react-resizable-panels@^4
 ```
 
 **Step 4: Fix breaking changes**
@@ -796,7 +796,7 @@ Expected: Build succeeds.
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/core test`
+Run: `pnpm --filter @qlan-ro/mainframe-core test`
 Expected: All tests pass.
 
 **Step 5: Commit**
@@ -817,7 +817,7 @@ git commit -m "fix: add logging to bare catch blocks in server routes"
 
 Run:
 ```bash
-pnpm --filter @mainframe/desktop add -D @vitejs/plugin-react@^5
+pnpm --filter @qlan-ro/mainframe-desktop add -D @vitejs/plugin-react@^5
 ```
 
 **Step 2: Check for breaking changes**

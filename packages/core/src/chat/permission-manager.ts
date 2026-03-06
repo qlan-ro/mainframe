@@ -1,4 +1,4 @@
-import type { Chat, ChatMessage, ControlRequest, DaemonEvent, AdapterProcess } from '@mainframe/types';
+import type { Chat, ChatMessage, ControlRequest, DaemonEvent, AdapterProcess } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 

@@ -7,7 +7,7 @@ import type {
   SkillFileEntry,
   MessageMetadata,
   ToolCategories,
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';

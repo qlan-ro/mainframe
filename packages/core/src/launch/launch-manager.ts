@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { homedir } from 'node:os';
-import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@mainframe/types';
+import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 

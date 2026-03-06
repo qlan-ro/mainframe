@@ -1,5 +1,5 @@
 {
-  "name": "@mainframe/desktop",
+  "name": "@qlan-ro/mainframe-desktop",
   "version": "0.2.0",
   "description": "Mainframe desktop app — Electron/React frontend for orchestrating AI agents",
   "license": "MIT",
@@ -27,8 +27,8 @@
   "dependencies": {
     "@assistant-ui/react": "^0.12.11",
     "@assistant-ui/react-markdown": "^0.12.4",
-    "@mainframe/core": "workspace:*",
-    "@mainframe/types": "workspace:*",
+    "@qlan-ro/mainframe-core": "workspace:*",
+    "@qlan-ro/mainframe-types": "workspace:*",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-slot": "^1.2.4",

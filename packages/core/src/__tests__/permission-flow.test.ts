@@ -7,7 +7,13 @@ import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { MockBaseAdapter } from './helpers/mock-adapter.js';
 import { MockBaseSession } from './helpers/mock-session.js';
-import type { ControlResponse, AdapterSession, SessionOptions, DaemonEvent, ControlRequest } from '@mainframe/types';
+import type {
+  ControlResponse,
+  AdapterSession,
+  SessionOptions,
+  DaemonEvent,
+  ControlRequest,
+} from '@qlan-ro/mainframe-types';
 
 class MockSession extends MockBaseSession {
   constructor(private adapter: MockAdapter) {

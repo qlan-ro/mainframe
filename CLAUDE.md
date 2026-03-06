@@ -20,18 +20,18 @@ AI-native development environment for orchestrating agents.
 
 - `pnpm install` — Install dependencies
 - `pnpm build` — Build all packages
-- `pnpm --filter @mainframe/core build` — Build a specific package
+- `pnpm --filter @qlan-ro/mainframe-core build` — Build a specific package
 - `pnpm test` — Run all tests
-- `pnpm --filter @mainframe/core test` — Test a specific package
+- `pnpm --filter @qlan-ro/mainframe-core test` — Test a specific package
 
 ## Architecture
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 
 - **Monorepo Structure**: Uses pnpm workspaces with three main packages:
-    - `@mainframe/types`: Shared TypeScript interfaces and domain models.
-    - `@mainframe/core`: The background Daemon (Node.js). Responsible for process management, session lifecycle, and metadata storage.
-    - `@mainframe/desktop`: The Frontend (Electron/React). Provides the user interface for chatting and workspace orchestration.
+    - `@qlan-ro/mainframe-types`: Shared TypeScript interfaces and domain models.
+    - `@qlan-ro/mainframe-core`: The background Daemon (Node.js). Responsible for process management, session lifecycle, and metadata storage.
+    - `@qlan-ro/mainframe-desktop`: The Frontend (Electron/React). Provides the user interface for chatting and workspace orchestration.
 - **Facilitator Model**: The app manages CLI agent processes (like Claude CLI) via a structured JSON-RPC-like interface over stdio. It respects existing `~/.agents/` configurations and `CLAUDE.md` files in target projects.
 - **Data Flow**: User Input (Desktop) → ChatManager (Daemon) → CLI Adapter (Process Stdin) → Agent Logic → NDJSON Events (Process Stdout) → Daemon Event Stream → UI Update (WebSocket).
 - **Metadata Storage**: Uses SQLite (`better-sqlite3`) for project tracking and chat metadata (costs, tokens, session IDs). Message history is NOT duplicated; it is replayed by the CLI agents using `--resume` flags.
@@ -83,7 +83,7 @@ Invoke the listed skill **before** taking the described action. No exceptions.
 - **Comments**: Omit notes about removed or missing features. Focus on *why*, not *what*.
 - **Strict TypeScript**: Uses strict mode with `NodeNext` module resolution and `noUncheckedIndexedAccess`.
 - **Adapter-Provider Decoupling**: New agents must implement the `AgentAdapter` interface in `packages/types/src/adapter.ts`.
-- **Stateless UI**: The desktop app is a "thin" client; business logic and pure functions belong in `@mainframe/core`, not `@mainframe/desktop`.
+- **Stateless UI**: The desktop app is a "thin" client; business logic and pure functions belong in `@qlan-ro/mainframe-core`, not `@qlan-ro/mainframe-desktop`.
 
 ## Code Rules
 
@@ -110,9 +110,9 @@ These rules exist because every one was violated before and required cleanup. Fo
 - **No `execFileSync` in route handlers.** Use the promisified `execGit` helper.
 
 ### Architecture & Types
-- **Single canonical type.** Never duplicate a type across packages. Define once in `@mainframe/types`, import everywhere.
+- **Single canonical type.** Never duplicate a type across packages. Define once in `@qlan-ro/mainframe-types`, import everywhere.
 - **Workspace deps only.** Desktop must depend on core via `workspace:*` in `package.json`. Never alias core source paths directly.
-- **Pure logic in core.** Message parsing, status derivation, and data transforms belong in `@mainframe/core`, not in React components.
+- **Pure logic in core.** Message parsing, status derivation, and data transforms belong in `@qlan-ro/mainframe-core`, not in React components.
 
 ### Testing
 - **New public methods need tests.** Route handlers, DB methods, and core logic must have corresponding test files.

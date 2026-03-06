@@ -1,4 +1,4 @@
-import type { UIZone } from '@mainframe/types';
+import type { UIZone } from '@qlan-ro/mainframe-types';
 import { API_BASE, fetchJson } from './http';
 
 interface PluginPanel {

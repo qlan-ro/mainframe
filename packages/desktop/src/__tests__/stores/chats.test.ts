@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { Chat, ChatMessage, ControlRequest, AdapterProcess } from '@mainframe/types';
+import type { Chat, ChatMessage, ControlRequest, AdapterProcess } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../renderer/store/chats.js';
 
 function makeChat(overrides: Partial<Chat> = {}): Chat {

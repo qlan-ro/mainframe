@@ -1,5 +1,5 @@
 import type { SettingsTab } from '../../store/settings';
-import type { ProviderConfig } from '@mainframe/types';
+import type { ProviderConfig } from '@qlan-ro/mainframe-types';
 import { SlidersHorizontal, Keyboard, Info, Cpu } from 'lucide-react';
 import type React from 'react';
 

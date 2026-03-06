@@ -3,7 +3,7 @@ import { EventHandler } from '../chat/event-handler.js';
 import { MessageCache } from '../chat/message-cache.js';
 import { PermissionManager } from '../chat/permission-manager.js';
 import { AdapterRegistry } from '../adapters/index.js';
-import type { DaemonEvent, SessionSink } from '@mainframe/types';
+import type { DaemonEvent, SessionSink } from '@qlan-ro/mainframe-types';
 
 function createRespondToPermission() {
   return vi.fn().mockResolvedValue(undefined);

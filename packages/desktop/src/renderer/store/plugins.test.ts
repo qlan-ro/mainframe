@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { usePluginLayoutStore } from './plugins';
-import type { PluginUIContribution } from '@mainframe/types';
+import type { PluginUIContribution } from '@qlan-ro/mainframe-types';
 
 const makeContrib = (pluginId: string, zone: PluginUIContribution['zone']): PluginUIContribution => ({
   pluginId,

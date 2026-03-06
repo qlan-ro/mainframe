@@ -17,8 +17,8 @@ rm -rf "$DIST_DIR"
 mkdir -p "${DIST_DIR}/bin" "${DIST_DIR}/lib"
 
 # 1. Bundle daemon
-pnpm --filter @mainframe/types build
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-types build
+pnpm --filter @qlan-ro/mainframe-core build
 node packages/desktop/scripts/bundle-daemon.mjs "${DIST_DIR}/lib/daemon.cjs"
 
 # 2. Copy better-sqlite3 prebuild for target platform

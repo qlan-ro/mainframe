@@ -1,4 +1,4 @@
-import type { Chat, ChatMessage, ControlRequest, ControlResponse, DaemonEvent } from '@mainframe/types';
+import type { Chat, ChatMessage, ControlRequest, ControlResponse, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { PlanModeHandler } from './plan-mode-handler.js';

@@ -1,4 +1,4 @@
-import type { Chat, AdapterSession } from '@mainframe/types';
+import type { Chat, AdapterSession } from '@qlan-ro/mainframe-types';
 
 export interface ActiveChat {
   chat: Chat;

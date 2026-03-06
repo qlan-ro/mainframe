@@ -136,7 +136,7 @@ interface CustomCommand {
 }
 ```
 
-Added to `@mainframe/types` as the canonical command type.
+Added to `@qlan-ro/mainframe-types` as the canonical command type.
 
 ### 6. Data Flow
 

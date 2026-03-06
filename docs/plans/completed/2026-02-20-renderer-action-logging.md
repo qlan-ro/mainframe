@@ -110,7 +110,7 @@ disableWorktree(chatId: string): void {
 **Step 4: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop tsc --noEmit
 ```
 
 Expected: no errors.
@@ -162,7 +162,7 @@ export async function archiveChat(chatId: string): Promise<void> {
 **Step 3: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop tsc --noEmit
 ```
 
 Expected: no errors.
@@ -209,7 +209,7 @@ export async function uploadAttachments(
 **Step 3: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop tsc --noEmit
 ```
 
 Expected: no errors.
@@ -275,7 +275,7 @@ export async function deleteAgent(adapterId: string, agentId: string, projectPat
 **Step 3: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop tsc --noEmit
 ```
 
 Expected: no errors.
@@ -321,7 +321,7 @@ export async function updateGeneralSettings(settings: Partial<GeneralConfig>): P
 **Step 3: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop tsc --noEmit
 ```
 
 Expected: no errors.
@@ -340,7 +340,7 @@ git commit -m "feat(desktop): log settings mutations in api layer"
 **Step 1: Run logger unit tests**
 
 ```bash
-pnpm --filter @mainframe/desktop test -- renderer/lib/logger
+pnpm --filter @qlan-ro/mainframe-desktop test -- renderer/lib/logger
 ```
 
 Expected: all 5 tests pass.
@@ -348,7 +348,7 @@ Expected: all 5 tests pass.
 **Step 2: Run full desktop test suite**
 
 ```bash
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 
 Expected: all tests pass, no regressions.

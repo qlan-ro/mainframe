@@ -23,25 +23,25 @@ pnpm build
 pnpm build
 
 # Build a specific package
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 
 # Run tests
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 
 # Dev mode
-pnpm --filter @mainframe/core dev
-pnpm --filter @mainframe/desktop dev
+pnpm --filter @qlan-ro/mainframe-core dev
+pnpm --filter @qlan-ro/mainframe-desktop dev
 ```
 
 ### Monorepo Structure
 
 | Package | Description                                                    |
 |---------|----------------------------------------------------------------|
-| `@mainframe/types` | Shared TypeScript contracts (interfaces, event types)          |
-| `@mainframe/core` | Daemon process — chat orchestration, CLI adapters, persistence |
-| `@mainframe/desktop` | Electron + React frontend                                      |
-| `@mainframe/mobile` | [Private Repo] React Native companion app                      |
-| `@mainframe/e2e` | Playwright end-to-end tests                                    |
+| `@qlan-ro/mainframe-types` | Shared TypeScript contracts (interfaces, event types)          |
+| `@qlan-ro/mainframe-core` | Daemon process — chat orchestration, CLI adapters, persistence |
+| `@qlan-ro/mainframe-desktop` | Electron + React frontend                                      |
+| `@qlan-ro/mainframe-mobile` | [Private Repo] React Native companion app                      |
+| `@qlan-ro/mainframe-e2e` | Playwright end-to-end tests                                    |
 
 ---
 
@@ -71,7 +71,7 @@ pnpm --filter @mainframe/desktop dev
 ```
 server/ ──> chat/ ──> plugins/
    │          │            │
-   │          ├──> db/     └──> @mainframe/types
+   │          ├──> db/     └──> @qlan-ro/mainframe-types
    │          ├──> attachment/
    │          └──> workspace/
    │
@@ -125,7 +125,7 @@ server/ ──> chat/ ──> plugins/
 
 ## Testing Standards
 
-**Framework:** Vitest (`pnpm --filter @mainframe/core test`)
+**Framework:** Vitest (`pnpm --filter @qlan-ro/mainframe-core test`)
 
 ### Test File Location
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { initializeSchema } from '../db/schema.js';
 import { ExternalSessionService } from '../chat/external-session-service.js';
-import type { Adapter, ExternalSession, DaemonEvent } from '@mainframe/types';
+import type { Adapter, ExternalSession, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { AdapterRegistry } from '../adapters/index.js';
 import { ChatsRepository } from '../db/chats.js';
 import { ProjectsRepository } from '../db/projects.js';

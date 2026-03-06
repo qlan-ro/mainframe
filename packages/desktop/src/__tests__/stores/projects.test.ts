@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { Project } from '@mainframe/types';
+import type { Project } from '@qlan-ro/mainframe-types';
 import { useProjectsStore } from '../../renderer/store/projects.js';
 
 function makeProject(overrides: Partial<Project> = {}): Project {

@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Add CustomCommand type to @mainframe/types
+### Task 1: Add CustomCommand type to @qlan-ro/mainframe-types
 
 **Files:**
 - Create: `packages/types/src/command.ts`
@@ -43,7 +43,7 @@ export * from './command.js';
 
 **Step 3: Build types package**
 
-Run: `pnpm --filter @mainframe/types build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build`
 Expected: Clean build, no errors.
 
 **Step 4: Commit**
@@ -94,7 +94,7 @@ In `packages/core/src/plugins/builtin/claude/manifest.json`, add the `commands` 
 
 **Step 3: Build types package**
 
-Run: `pnpm --filter @mainframe/types build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build`
 Expected: Clean build.
 
 **Step 4: Commit**
@@ -134,11 +134,11 @@ listCommands(): CustomCommand[] {
 }
 ```
 
-Import `CustomCommand` from `@mainframe/types` and import `manifest` from `./manifest.json`.
+Import `CustomCommand` from `@qlan-ro/mainframe-types` and import `manifest` from `./manifest.json`.
 
 **Step 3: Build**
 
-Run: `pnpm --filter @mainframe/types build && pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build`
 Expected: Clean build.
 
 **Step 4: Commit**
@@ -160,7 +160,7 @@ git commit -m "feat: add Adapter.listCommands() and implement for Claude"
 Create `packages/core/src/commands/registry.ts`:
 
 ```typescript
-import type { CustomCommand } from '@mainframe/types';
+import type { CustomCommand } from '@qlan-ro/mainframe-types';
 
 /**
  * Static registry of Mainframe-defined custom commands.
@@ -175,7 +175,7 @@ export function getMainframeCommands(): CustomCommand[] {
 
 **Step 2: Build**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: Clean build.
 
 **Step 3: Commit**
@@ -231,7 +231,7 @@ describe('GET /api/commands', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core test -- src/server/routes/__tests__/commands.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- src/server/routes/__tests__/commands.test.ts`
 Expected: FAIL — module not found.
 
 **Step 3: Create the route**
@@ -243,7 +243,7 @@ import { Router } from 'express';
 import type { RouteContext } from './types.js';
 import { getMainframeCommands } from '../../commands/registry.js';
 import { asyncHandler } from './async-handler.js';
-import type { CustomCommand } from '@mainframe/types';
+import type { CustomCommand } from '@qlan-ro/mainframe-types';
 
 export function commandRoutes(ctx: RouteContext): Router {
   const router = Router();
@@ -291,7 +291,7 @@ app.use(commandRoutes(ctx));
 
 **Step 6: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/core test -- src/server/routes/__tests__/commands.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- src/server/routes/__tests__/commands.test.ts`
 Expected: PASS.
 
 **Step 7: Commit**
@@ -354,7 +354,7 @@ Note: The exact test setup depends on how ChatManager is constructed. Look at ex
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core test -- src/chat/__tests__/command-routing.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- src/chat/__tests__/command-routing.test.ts`
 Expected: FAIL.
 
 **Step 3: Extend MessageSend schema**
@@ -445,12 +445,12 @@ function wrapMainframeCommand(name: string, _content: string, args?: string): st
 
 **Step 6: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- src/chat/__tests__/command-routing.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- src/chat/__tests__/command-routing.test.ts`
 Expected: PASS.
 
 **Step 7: Build**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 Expected: Clean build.
 
 **Step 8: Commit**
@@ -497,7 +497,7 @@ describe('stripMainframeCommandTags', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core test -- src/messages/__tests__/message-parsing.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- src/messages/__tests__/message-parsing.test.ts`
 Expected: FAIL — function not exported.
 
 **Step 3: Implement**
@@ -521,7 +521,7 @@ export function stripMainframeCommandTags(text: string): string {
 
 **Step 4: Run test**
 
-Run: `pnpm --filter @mainframe/core test -- src/messages/__tests__/message-parsing.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- src/messages/__tests__/message-parsing.test.ts`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -545,7 +545,7 @@ git commit -m "feat(core): add stripMainframeCommandTags for response extraction
 
 ```typescript
 import { fetchJson, API_BASE } from './http';
-import type { CustomCommand } from '@mainframe/types';
+import type { CustomCommand } from '@qlan-ro/mainframe-types';
 
 export async function getCommands(): Promise<CustomCommand[]> {
   const json = await fetchJson<{ success: boolean; data: CustomCommand[] }>(
@@ -575,7 +575,7 @@ Add a `fetchCommands` action that calls `getCommands()` and sets `commands`. Cal
 
 **Step 4: Build desktop**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: Clean build.
 
 **Step 5: Commit**
@@ -608,7 +608,7 @@ type PickerItem =
   | { type: 'command'; command: CustomCommand };
 ```
 
-Import `CustomCommand` from `@mainframe/types`.
+Import `CustomCommand` from `@qlan-ro/mainframe-types`.
 
 **Step 2: Pull commands from store**
 
@@ -664,7 +664,7 @@ Import `Wrench` from `lucide-react`.
 
 **Step 6: Build desktop**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: Clean build.
 
 **Step 7: Commit**
@@ -744,7 +744,7 @@ Pull `commands` from `useSkillsStore()` in the provider component.
 
 **Step 4: Build desktop**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: Clean build.
 
 **Step 5: Commit**
@@ -809,7 +809,7 @@ Import `Wrench` from `lucide-react`. Pass `commands` from the skills store to `p
 
 **Step 3: Build**
 
-Run: `pnpm --filter @mainframe/core build && pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build && pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: Clean build.
 
 **Step 4: Commit**
@@ -842,7 +842,7 @@ useEffect(() => {
 
 **Step 2: Build desktop**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: Clean build.
 
 **Step 3: Commit**
@@ -868,8 +868,8 @@ Expected: All tests pass (new tests + existing).
 
 **Step 3: Manual smoke test**
 
-1. Start the daemon: `pnpm --filter @mainframe/core dev`
-2. Start the desktop: `pnpm --filter @mainframe/desktop dev`
+1. Start the daemon: `pnpm --filter @qlan-ro/mainframe-core dev`
+2. Start the desktop: `pnpm --filter @qlan-ro/mainframe-desktop dev`
 3. Open a project, start a chat.
 4. Type `/` in the composer — verify `/clear` and `/compact` appear with wrench icons alongside skills.
 5. Select `/compact` — verify it sends and the CLI processes it (context compacted).

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PlanModeHandler, type PlanModeContext } from '../chat/plan-mode-handler.js';
-import type { Chat, ControlResponse } from '@mainframe/types';
+import type { Chat, ControlResponse } from '@qlan-ro/mainframe-types';
 import type { ActiveChat } from '../chat/types.js';
 
 function makeChat(overrides: Partial<Chat> = {}): Chat {

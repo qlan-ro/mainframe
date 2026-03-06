@@ -763,7 +763,7 @@ git commit -m "feat(desktop): add Agents tab to left panel"
 
 Run from project root:
 ```bash
-pnpm --filter @mainframe/desktop add @monaco-editor/react monaco-editor
+pnpm --filter @qlan-ro/mainframe-desktop add @monaco-editor/react monaco-editor
 ```
 
 **Step 2: Create MonacoEditor wrapper component**
@@ -1615,7 +1615,7 @@ Run: `pnpm build`
 
 **Step 3: Visual verification**
 
-Run: `pnpm --filter @mainframe/desktop dev`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop dev`
 - Verify all three tabs render in the right panel
 - Verify Context tab loads project context files with expandable previews
 - Verify Files tab shows directory tree with expand/collapse; clicking a file opens an editor tab in the center panel

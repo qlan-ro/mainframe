@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Project } from '@mainframe/types';
+import type { Project } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
 import { basename } from 'node:path';
 

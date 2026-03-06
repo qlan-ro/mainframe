@@ -60,7 +60,7 @@ describe('execGit', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes/exec-git.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes/exec-git.test.ts`
 Expected: FAIL — module not found
 
 **Step 3: Write minimal implementation**
@@ -80,7 +80,7 @@ export async function execGit(args: string[], cwd: string): Promise<string> {
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes/exec-git.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes/exec-git.test.ts`
 Expected: PASS
 
 **Step 5: Commit**
@@ -239,7 +239,7 @@ export function gitRoutes(ctx: RouteContext): Router {
 
 **Step 2: Run all tests**
 
-Run: `pnpm --filter @mainframe/core exec vitest run`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run`
 Expected: PASS (no git route tests exist, but ensure nothing else broke)
 
 **Step 3: Commit**
@@ -476,7 +476,7 @@ export function fileRoutes(ctx: RouteContext): Router {
 
 **Step 2: Run all tests**
 
-Run: `pnpm --filter @mainframe/core exec vitest run`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run`
 Expected: PASS
 
 **Step 3: Commit**
@@ -527,7 +527,7 @@ The handler becomes:
 
 **Step 2: Run tests**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes/context.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes/context.test.ts`
 Expected: PASS
 
 **Step 3: Commit**
@@ -578,7 +578,7 @@ Add `asyncHandler` import and wrap the handler:
 
 **Step 2: Run tests**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes/settings.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes/settings.test.ts`
 Expected: PASS
 
 **Step 3: Commit**
@@ -661,7 +661,7 @@ Update the mock context to include `removeWithChats`:
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/core exec vitest run src/__tests__/routes/projects.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec vitest run src/__tests__/routes/projects.test.ts`
 Expected: PASS
 
 **Step 5: Commit**
@@ -721,7 +721,7 @@ export function FileViewContent(): React.ReactElement | null {
 
 **Step 2: Build to verify**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: PASS — Vite will now code-split Monaco into a separate chunk
 
 **Step 3: Commit**
@@ -751,7 +751,7 @@ perf: lazy-load Monaco editor via React.lazy
 
 **Step 2: Run type check to see what breaks**
 
-Run: `pnpm --filter @mainframe/core exec tsc --noEmit && pnpm --filter @mainframe/types exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit && pnpm --filter @qlan-ro/mainframe-types exec tsc --noEmit`
 Expected: Type errors where indexed access returns `T | undefined`
 
 **Step 3: Fix each error**

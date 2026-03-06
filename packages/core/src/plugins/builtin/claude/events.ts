@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { ControlRequest, ControlUpdate, MessageContent, SessionSink } from '@mainframe/types';
+import type { ControlRequest, ControlUpdate, MessageContent, SessionSink } from '@qlan-ro/mainframe-types';
 import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
 import { createChildLogger } from '../../../logger.js';

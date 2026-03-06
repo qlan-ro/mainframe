@@ -25,7 +25,7 @@ In `packages/types/src/events.ts`, add after the `permission.requested` line (li
 
 **Step 2: Build types package**
 
-Run: `pnpm --filter @mainframe/types build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build`
 Expected: clean build
 
 **Step 3: Commit**
@@ -169,7 +169,7 @@ it('rejects stale permission response with mismatched requestId', async () => {
 
 **Step 5: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- --run src/__tests__/permission-flow.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run src/__tests__/permission-flow.test.ts`
 Expected: all tests pass
 
 **Step 6: Commit**
@@ -206,7 +206,7 @@ case 'permission.resolved': {
 
 **Step 2: Build desktop**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 Expected: clean build
 
 **Step 3: Commit**
@@ -258,7 +258,7 @@ Replace the `respondToPermission` callback in `packages/mobile/hooks/useChatSess
 const respondToPermission = useCallback(
   (
     behavior: 'allow' | 'deny',
-    alwaysAllow?: import('@mainframe/types').ControlUpdate[],
+    alwaysAllow?: import('@qlan-ro/mainframe-types').ControlUpdate[],
     overrideInput?: Record<string, unknown>,
     message?: string,
     executionMode?: string,
@@ -291,7 +291,7 @@ const respondToPermission = useCallback(
 The hook return type changes. Update the `ControlResponse` import to also import `ControlUpdate`:
 
 ```typescript
-import type { ControlResponse, ControlUpdate, DisplayMessage } from '@mainframe/types';
+import type { ControlResponse, ControlUpdate, DisplayMessage } from '@qlan-ro/mainframe-types';
 ```
 
 Remove `ControlResponse` from the import if it's no longer used directly (the callback now takes individual params instead of a full `ControlResponse` object).
@@ -318,7 +318,7 @@ import { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable } from 'react-native';
 import { ShieldAlert, ChevronDown, ChevronUp } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import type { ControlRequest, ControlUpdate } from '@mainframe/types';
+import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
 
 interface PermissionCardProps {
   request: ControlRequest;
@@ -435,7 +435,7 @@ import { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Pressable } from 'react-native';
 import { HelpCircle, Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import type { ControlRequest } from '@mainframe/types';
+import type { ControlRequest } from '@qlan-ro/mainframe-types';
 
 interface Question {
   question: string;
@@ -663,7 +663,7 @@ import { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { ClipboardList } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import type { ControlRequest } from '@mainframe/types';
+import type { ControlRequest } from '@qlan-ro/mainframe-types';
 import { MarkdownText } from './MarkdownText';
 
 interface AllowedPrompt {
@@ -840,7 +840,7 @@ interface MessageListProps {
   pendingPermission: ControlRequest | null;
   onRespondToPermission: (
     behavior: 'allow' | 'deny',
-    alwaysAllow?: import('@mainframe/types').ControlUpdate[],
+    alwaysAllow?: import('@qlan-ro/mainframe-types').ControlUpdate[],
     overrideInput?: Record<string, unknown>,
     message?: string,
     executionMode?: string,
@@ -913,7 +913,7 @@ Expected: clean build
 
 **Step 2: Run core tests**
 
-Run: `pnpm --filter @mainframe/core test -- --run src/__tests__/permission-flow.test.ts`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run src/__tests__/permission-flow.test.ts`
 Expected: all pass including new guard + resolved tests
 
 **Step 3: Commit all together if any fixes needed**

@@ -8,7 +8,7 @@ import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 import type { LaunchRegistry } from '../launch/index.js';
-import type { DaemonEvent } from '@mainframe/types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('server');

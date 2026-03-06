@@ -1,4 +1,4 @@
-import type { MessageContent, ToolCategories, DisplayContent, ToolCallResult } from '@mainframe/types';
+import type { MessageContent, ToolCategories, DisplayContent, ToolCallResult } from '@qlan-ro/mainframe-types';
 import { stripMainframeCommandTags, parseCommandMessage, parseAttachedFilePathTags } from './message-parsing.js';
 import type { GroupedMessage } from './message-grouping.js';
 import type { PartEntry } from './tool-grouping.js';

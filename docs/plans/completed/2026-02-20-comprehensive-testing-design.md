@@ -109,7 +109,7 @@ Tier 3: Desktop Components (Vitest+RTL + Playwright CT)
 ```json
 // root package.json
 "test": "pnpm -r run test",
-"test:playwright": "pnpm --filter @mainframe/desktop run test:playwright"
+"test:playwright": "pnpm --filter @qlan-ro/mainframe-desktop run test:playwright"
 
 // packages/desktop/package.json
 "test:playwright": "playwright test -c playwright-ct.config.ts"

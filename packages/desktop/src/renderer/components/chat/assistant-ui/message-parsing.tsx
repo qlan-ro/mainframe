@@ -11,7 +11,7 @@ export {
   decodeXmlAttr,
   parseAttachedFilePathTags,
   formatTurnDuration,
-} from '@mainframe/core/messages';
+} from '@qlan-ro/mainframe-core/messages';
 
 export const MENTION_RE = /(?:^|\s)(@[\w.\/\-]+)/g;
 export const PLAN_PREFIX = 'Implement the following plan:\n\n';

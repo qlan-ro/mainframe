@@ -1,4 +1,4 @@
-import type { MessageContent } from '@mainframe/types';
+import type { MessageContent } from '@qlan-ro/mainframe-types';
 import type { AttachmentStore } from '../attachment/index.js';
 import { buildAttachedFilePathTag } from '../attachment/index.js';
 

@@ -61,7 +61,7 @@ describe('useTutorialStore', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/desktop test -- tutorial.test
+pnpm --filter @qlan-ro/mainframe-desktop test -- tutorial.test
 ```
 Expected: FAIL — `Cannot find module './tutorial'`
 
@@ -107,7 +107,7 @@ export const useTutorialStore = create<TutorialState>()(
 **Step 4: Run test to verify it passes**
 
 ```bash
-pnpm --filter @mainframe/desktop test -- tutorial.test
+pnpm --filter @qlan-ro/mainframe-desktop test -- tutorial.test
 ```
 Expected: PASS (5 tests)
 
@@ -584,7 +584,7 @@ git commit -m "feat(desktop): add auto-advancement logic to TutorialOverlay"
 **Step 1: Run TypeScript compiler**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: No TypeScript errors.
 
@@ -593,7 +593,7 @@ If you see errors about missing store imports (step 5), adjust the import path t
 **Step 2: Run tests**
 
 ```bash
-pnpm --filter @mainframe/desktop test -- tutorial
+pnpm --filter @qlan-ro/mainframe-desktop test -- tutorial
 ```
 Expected: All tutorial store tests pass.
 

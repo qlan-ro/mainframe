@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'node:http';
 import type { ChatManager } from '../chat/index.js';
-import type { ClientEvent, DaemonEvent } from '@mainframe/types';
+import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { ClientEventSchema } from './ws-schemas.js';
 import { createChildLogger } from '../logger.js';
 import { validateToken } from '../auth/token.js';

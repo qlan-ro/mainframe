@@ -11,7 +11,7 @@ import type {
   SessionOptions,
   SessionSpawnOptions,
   AdapterProcess,
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 
 // ── Minimal mock session & adapter ──────────────────────────────────
 

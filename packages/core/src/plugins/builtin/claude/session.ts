@@ -14,7 +14,7 @@ import type {
   ChatMessage,
   ContextFile,
   SkillFileEntry,
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 import { handleStdout, handleStderr } from './events.js';
 import { createChildLogger } from '../../../logger.js';
 import {

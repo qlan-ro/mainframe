@@ -182,7 +182,7 @@ After the rewrite, `PRIORITY_COLORS` is deleted (replaced by `PRIORITY_PILL`). V
 **Step 4: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop tsc --noEmit
+pnpm --filter @qlan-ro/mainframe-desktop tsc --noEmit
 ```
 
 Expected: no errors.

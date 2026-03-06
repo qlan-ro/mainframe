@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { LaunchConfig } from '@mainframe/types';
+import type { LaunchConfig } from '@qlan-ro/mainframe-types';
 import { useProjectsStore } from '../store/projects';
 
 export function useLaunchConfig(): LaunchConfig | null {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { convertMessage, ERROR_PLACEHOLDER, PERMISSION_PLACEHOLDER } from './convert-message';
-import type { DisplayMessage, DisplayContent } from '@mainframe/types';
+import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 
 /* ── helpers ─────────────────────────────────────────────────────── */
 

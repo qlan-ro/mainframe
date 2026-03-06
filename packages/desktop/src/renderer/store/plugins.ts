@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { PluginUIContribution } from '@mainframe/types';
+import type { PluginUIContribution } from '@qlan-ro/mainframe-types';
 
 interface PluginLayoutState {
   contributions: PluginUIContribution[];

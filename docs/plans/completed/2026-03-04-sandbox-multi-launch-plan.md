@@ -6,7 +6,7 @@
 
 **Architecture:** `react-native-pager-view` provides native horizontal swipe between pages. Each page is a self-contained component (`PreviewPage` or `ConsolePage`) that manages its own content. The header updates dynamically based on the active page index.
 
-**Tech Stack:** React Native, Expo, react-native-pager-view, zustand, @mainframe/types
+**Tech Stack:** React Native, Expo, react-native-pager-view, zustand, @qlan-ro/mainframe-types
 
 ---
 

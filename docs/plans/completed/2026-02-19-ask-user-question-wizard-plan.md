@@ -38,6 +38,6 @@
 - Test: `packages/desktop/src/renderer/components/chat/AskUserQuestionCard.test.ts`
 - Verify: `packages/desktop/src/renderer/components/chat/AskUserQuestionCard.tsx`
 
-1. Run: `pnpm --filter @mainframe/desktop test -- src/renderer/components/chat/AskUserQuestionCard.test.ts`
-2. Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+1. Run: `pnpm --filter @qlan-ro/mainframe-desktop test -- src/renderer/components/chat/AskUserQuestionCard.test.ts`
+2. Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 3. Confirm tests and typecheck pass.

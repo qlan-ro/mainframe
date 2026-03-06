@@ -10,7 +10,7 @@ import type {
   AgentConfig,
   CreateSkillInput,
   CreateAgentInput,
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 import { ClaudeSession } from './session.js';
 import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';

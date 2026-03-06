@@ -44,7 +44,7 @@ it('rejects env with non-uppercase key', () => {
 **Step 2: Run to verify failure**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose src/__tests__/launch-config.test.ts
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose src/__tests__/launch-config.test.ts
 ```
 Expected: both new tests FAIL (env field unknown to Zod / type error).
 
@@ -98,7 +98,7 @@ env: z
 **Step 2: Run tests**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose src/__tests__/launch-config.test.ts
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose src/__tests__/launch-config.test.ts
 ```
 Expected: all tests pass.
 
@@ -146,7 +146,7 @@ it('passes env vars to the spawned process', async () => {
 **Step 2: Run to verify failure**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose src/__tests__/launch-manager.test.ts
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose src/__tests__/launch-manager.test.ts
 ```
 Expected: new test FAIL — output contains "missing", not "hello-from-env".
 
@@ -184,7 +184,7 @@ env: {
 **Step 4: Run tests**
 
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose src/__tests__/launch-manager.test.ts
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose src/__tests__/launch-manager.test.ts
 ```
 Expected: all pass.
 
@@ -217,7 +217,7 @@ No test needed — this is a pure config change with no runtime logic to verify 
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop exec tsc --noEmit 2>&1 | grep -v TS6305
+pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit 2>&1 | grep -v TS6305
 ```
 Expected: no new errors.
 
@@ -254,7 +254,7 @@ const WS_URL = `ws://${host}:${wsPort}`;
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop exec tsc --noEmit 2>&1 | grep -v TS6305
+pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit 2>&1 | grep -v TS6305
 ```
 Expected: no new errors.
 
@@ -281,7 +281,7 @@ git commit -m "feat(desktop): read daemon WS host/port from VITE_* env vars"
     {
       "name": "Core Daemon",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@mainframe/core", "run", "dev"],
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-core", "run", "dev"],
       "port": 31416,
       "url": null,
       "env": {
@@ -291,7 +291,7 @@ git commit -m "feat(desktop): read daemon WS host/port from VITE_* env vars"
     {
       "name": "Desktop App",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@mainframe/desktop", "run", "dev:web"],
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-desktop", "run", "dev:web"],
       "port": 5174,
       "url": null,
       "preview": true,
@@ -303,7 +303,7 @@ git commit -m "feat(desktop): read daemon WS host/port from VITE_* env vars"
     {
       "name": "Types Watch",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@mainframe/types", "run", "dev"],
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-types", "run", "dev"],
       "port": null,
       "url": null
     }
@@ -332,8 +332,8 @@ git commit -m "feat: configure sandbox isolation via launch.json env vars"
 ### Task 7: Run full test suites
 
 ```bash
-pnpm --filter @mainframe/core test
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-core test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 
 Expected: all tests pass, no regressions.

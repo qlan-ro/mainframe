@@ -1,6 +1,12 @@
 import { nanoid } from 'nanoid';
 import { relative, isAbsolute } from 'node:path';
-import type { MessageContent, SessionMention, SessionContext, ChatMessage, AdapterSession } from '@mainframe/types';
+import type {
+  MessageContent,
+  SessionMention,
+  SessionContext,
+  ChatMessage,
+  AdapterSession,
+} from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';

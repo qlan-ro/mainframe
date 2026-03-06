@@ -1,4 +1,4 @@
-import type { Chat, DaemonEvent, SessionSink, ControlResponse } from '@mainframe/types';
+import type { Chat, DaemonEvent, SessionSink, ControlResponse } from '@qlan-ro/mainframe-types';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';

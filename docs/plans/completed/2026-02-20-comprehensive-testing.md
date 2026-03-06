@@ -87,7 +87,7 @@ rm packages/core/src/__tests__/set-model-integration.test.ts
 
 **Step 2: Verify tests still pass**
 ```bash
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 Expected: all remaining tests pass, no references to deleted file.
 
@@ -117,7 +117,7 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 class MockAdapter extends BaseAdapter {
   id = 'claude'; name = 'Mock';
@@ -254,7 +254,7 @@ describe('send-message flow', () => {
 
 **Step 2: Run the test**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose send-message-flow
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose send-message-flow
 ```
 Expected: 1 test passes.
 
@@ -284,7 +284,7 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent, PermissionRequest } from '@mainframe/types';
+import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent, PermissionRequest } from '@qlan-ro/mainframe-types';
 
 class MockAdapter extends BaseAdapter {
   id = 'claude'; name = 'Mock';
@@ -454,7 +454,7 @@ describe('permission flow', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose permission-flow
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose permission-flow
 ```
 Expected: 4 tests pass.
 
@@ -484,7 +484,7 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 class MockAdapter extends BaseAdapter {
   id = 'claude'; name = 'Mock';
@@ -615,7 +615,7 @@ describe('file-edit flow', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose file-edit-flow
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose file-edit-flow
 ```
 Expected: 1 test passes.
 
@@ -697,7 +697,7 @@ describe('buildFrontmatter', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose frontmatter
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose frontmatter
 ```
 Expected: 7 tests pass.
 
@@ -724,7 +724,7 @@ import {
   extractPlanFilePathFromText,
   extractLatestPlanFileFromMessages,
 } from '../chat/context-tracker.js';
-import type { ChatMessage, MessageContent } from '@mainframe/types';
+import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 
 function makeDb(addMentionReturn = true, addModifiedFileReturn = true) {
   return {
@@ -884,7 +884,7 @@ describe('extractLatestPlanFileFromMessages', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose context-tracker
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose context-tracker
 ```
 Expected: 14 tests pass.
 
@@ -1010,7 +1010,7 @@ describe('AttachmentStore', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose attachment-store
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose attachment-store
 ```
 Expected: 7 tests pass.
 
@@ -1144,7 +1144,7 @@ describe('agents', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose claude-skills
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose claude-skills
 ```
 Expected: 8 tests pass.
 
@@ -1166,7 +1166,7 @@ git commit -m "test(core): add claude-skills FS CRUD unit tests"
 ```ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PlanModeHandler, type PlanModeContext } from '../chat/plan-mode-handler.js';
-import type { Chat, DaemonEvent, PermissionResponse } from '@mainframe/types';
+import type { Chat, DaemonEvent, PermissionResponse } from '@qlan-ro/mainframe-types';
 
 function makeChat(overrides: Partial<Chat> = {}): Chat {
   return {
@@ -1311,7 +1311,7 @@ describe('PlanModeHandler', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose plan-mode-handler
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose plan-mode-handler
 ```
 Expected: 6 tests pass.
 
@@ -1488,7 +1488,7 @@ describe('GET /api/projects/:id/files', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose "routes/files"
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose "routes/files"
 ```
 Expected: 6 tests pass.
 
@@ -1619,7 +1619,7 @@ describe('GET /api/projects/:id/diff?source=session (no file)', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/core test -- --reporter=verbose "routes/git"
+pnpm --filter @qlan-ro/mainframe-core test -- --reporter=verbose "routes/git"
 ```
 Expected: 5 tests pass.
 
@@ -1656,7 +1656,7 @@ export default defineConfig({
 
 **Step 2: Run with coverage to verify thresholds pass**
 ```bash
-pnpm --filter @mainframe/core test -- --coverage
+pnpm --filter @qlan-ro/mainframe-core test -- --coverage
 ```
 Expected: all thresholds met. If a threshold fails, check which module is dragging it down and either add a focused test or adjust the threshold by 5%.
 
@@ -1678,7 +1678,7 @@ git commit -m "test(core): raise coverage thresholds to 60/50/55"
 
 **Step 1: Install jest-dom**
 ```bash
-pnpm --filter @mainframe/desktop add -D @testing-library/jest-dom @types/testing-library__jest-dom
+pnpm --filter @qlan-ro/mainframe-desktop add -D @testing-library/jest-dom @types/testing-library__jest-dom
 ```
 
 **Step 2: Update vitest.config.ts**
@@ -1710,7 +1710,7 @@ import '@testing-library/jest-dom';
 
 **Step 4: Run existing tests to confirm nothing broke**
 ```bash
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 Expected: all existing tests pass.
 
@@ -1734,7 +1734,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PermissionCard } from '../../renderer/components/chat/PermissionCard.js';
-import type { PermissionRequest } from '@mainframe/types';
+import type { PermissionRequest } from '@qlan-ro/mainframe-types';
 
 function makeRequest(overrides: Partial<PermissionRequest> = {}): PermissionRequest {
   return {
@@ -1800,7 +1800,7 @@ describe('PermissionCard', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/desktop test -- --reporter=verbose PermissionCard
+pnpm --filter @qlan-ro/mainframe-desktop test -- --reporter=verbose PermissionCard
 ```
 Expected: 7 tests pass.
 
@@ -1831,7 +1831,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AskUserQuestionCard } from './AskUserQuestionCard.js';
-import type { PermissionRequest } from '@mainframe/types';
+import type { PermissionRequest } from '@qlan-ro/mainframe-types';
 
 function makeRequest(questions: unknown[]): PermissionRequest {
   return {
@@ -1951,7 +1951,7 @@ rm packages/desktop/src/renderer/components/chat/AskUserQuestionCard.test.ts
 
 **Step 4: Run**
 ```bash
-pnpm --filter @mainframe/desktop test -- --reporter=verbose AskUserQuestionCard
+pnpm --filter @qlan-ro/mainframe-desktop test -- --reporter=verbose AskUserQuestionCard
 ```
 Expected: 6+ tests pass.
 
@@ -2017,7 +2017,7 @@ describe('BashCard', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/desktop test -- --reporter=verbose BashCard
+pnpm --filter @qlan-ro/mainframe-desktop test -- --reporter=verbose BashCard
 ```
 Expected: 5 tests pass.
 
@@ -2102,7 +2102,7 @@ describe('EditFileCard', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/desktop test -- --reporter=verbose EditFileCard
+pnpm --filter @qlan-ro/mainframe-desktop test -- --reporter=verbose EditFileCard
 ```
 Expected: 4 tests pass.
 
@@ -2159,7 +2159,7 @@ describe('PLAN_PREFIX', () => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/desktop test -- --reporter=verbose message-parsing
+pnpm --filter @qlan-ro/mainframe-desktop test -- --reporter=verbose message-parsing
 ```
 Expected: 4 tests pass.
 
@@ -2181,8 +2181,8 @@ git commit -m "test(desktop): add message-parsing unit tests"
 
 **Step 1: Install**
 ```bash
-pnpm --filter @mainframe/desktop add -D @playwright/experimental-ct-react
-pnpm --filter @mainframe/desktop exec playwright install chromium
+pnpm --filter @qlan-ro/mainframe-desktop add -D @playwright/experimental-ct-react
+pnpm --filter @qlan-ro/mainframe-desktop exec playwright install chromium
 ```
 
 **Step 2: Create `packages/desktop/playwright-ct.config.ts`**
@@ -2224,7 +2224,7 @@ mkdir -p packages/desktop/src/__tests__/playwright
 
 **Step 5: Verify config is valid**
 ```bash
-pnpm --filter @mainframe/desktop exec playwright test -c playwright-ct.config.ts --list 2>&1 | head -20
+pnpm --filter @qlan-ro/mainframe-desktop exec playwright test -c playwright-ct.config.ts --list 2>&1 | head -20
 ```
 Expected: runs without error (no tests found yet is fine).
 
@@ -2246,7 +2246,7 @@ git commit -m "test(desktop): add Playwright CT configuration"
 ```tsx
 import { test, expect } from '@playwright/experimental-ct-react';
 import { PermissionCard } from '../../renderer/components/chat/PermissionCard.js';
-import type { PermissionRequest } from '@mainframe/types';
+import type { PermissionRequest } from '@qlan-ro/mainframe-types';
 
 const request: PermissionRequest = {
   requestId: 'req-1',
@@ -2305,7 +2305,7 @@ test('expands details section on click', async ({ mount }) => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/desktop test:playwright -- PermissionCard
+pnpm --filter @qlan-ro/mainframe-desktop test:playwright -- PermissionCard
 ```
 Expected: 4 tests pass.
 
@@ -2327,7 +2327,7 @@ git commit -m "test(desktop): add PermissionCard Playwright CT tests"
 ```tsx
 import { test, expect } from '@playwright/experimental-ct-react';
 import { AskUserQuestionCard } from '../../renderer/components/chat/AskUserQuestionCard.js';
-import type { PermissionRequest } from '@mainframe/types';
+import type { PermissionRequest } from '@qlan-ro/mainframe-types';
 
 function makeRequest(): PermissionRequest {
   return {
@@ -2396,7 +2396,7 @@ test('calls onRespond with selected answer', async ({ mount }) => {
 
 **Step 2: Run**
 ```bash
-pnpm --filter @mainframe/desktop test:playwright -- AskUserQuestionCard
+pnpm --filter @qlan-ro/mainframe-desktop test:playwright -- AskUserQuestionCard
 ```
 Expected: 4 tests pass.
 
@@ -2480,7 +2480,7 @@ test('shows running indicator while processing', async ({ mount }) => {
 
 **Step 3: Run all Playwright tests**
 ```bash
-pnpm --filter @mainframe/desktop test:playwright
+pnpm --filter @qlan-ro/mainframe-desktop test:playwright
 ```
 Expected: all CT tests pass.
 
@@ -2497,20 +2497,20 @@ git commit -m "test(desktop): add BashCard and EditFileCard Playwright CT tests"
 
 **Step 1: Run all core tests**
 ```bash
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 Expected: all pass.
 
 **Step 2: Run all desktop unit/RTL tests**
 ```bash
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 Expected: all pass.
 
 **Step 3: Typecheck both packages**
 ```bash
-pnpm --filter @mainframe/core build
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-core build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: no TypeScript errors.
 
@@ -2530,9 +2530,9 @@ gh pr create \
 
 ## Test plan
 
-- [ ] `pnpm --filter @mainframe/core test` passes
-- [ ] `pnpm --filter @mainframe/desktop test` passes
-- [ ] `pnpm --filter @mainframe/desktop test:playwright` passes (run manually)
+- [ ] `pnpm --filter @qlan-ro/mainframe-core test` passes
+- [ ] `pnpm --filter @qlan-ro/mainframe-desktop test` passes
+- [ ] `pnpm --filter @qlan-ro/mainframe-desktop test:playwright` passes (run manually)
 - [ ] TypeScript compiles without errors
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

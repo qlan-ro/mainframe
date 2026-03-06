@@ -1,4 +1,4 @@
-import type { Skill } from '@mainframe/types';
+import type { Skill } from '@qlan-ro/mainframe-types';
 
 // TODO: Big, the parsing in this class is mostly related to a specific implementation (Claude), I feel like all Claude related classes should live under adapters/claude/
 export const COMMAND_NAME_RE = /<command-name>\/?([^<]*)<\/command-name>/;

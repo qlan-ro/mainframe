@@ -103,7 +103,7 @@ Remove the `Send` import from lucide-react.
 
 **Step 3: Verify typecheck**
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 Expected: PASS
 
 **Step 4: Commit**
@@ -301,7 +301,7 @@ export function MonacoDiffEditor({
 
 **Step 2: Verify typecheck**
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 Expected: PASS
 
 **Step 3: Commit**
@@ -374,7 +374,7 @@ function ensureResumedAndSend(chatId: string, content: string): void {
 
 **Step 2: Verify typecheck**
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 Expected: PASS
 
 **Step 3: Commit**
@@ -418,7 +418,7 @@ const handleLineComment = useCallback(
 
 **Step 2: Verify typecheck**
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 Expected: PASS
 
 **Step 3: Commit**
@@ -457,7 +457,7 @@ Remove unused imports: `useChatsStore`, `daemonClient`.
 
 **Step 2: Verify typecheck**
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 Expected: PASS
 
 **Step 3: Commit**
@@ -473,7 +473,7 @@ git commit -m "fix: EditorTab comments auto-create session when none active"
 
 **Step 1: Full typecheck**
 
-Run: `pnpm --filter @mainframe/desktop exec tsc --noEmit`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop exec tsc --noEmit`
 Expected: PASS
 
 **Step 2: Verify no unused imports or dead code**

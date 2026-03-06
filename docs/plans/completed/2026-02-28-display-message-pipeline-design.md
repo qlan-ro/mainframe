@@ -21,7 +21,7 @@ Message transformations are scattered across daemon and desktop:
 
 Raw `MessageCache` stays unchanged. A `prepareMessagesForClient()` pipeline transforms raw messages into `DisplayMessage[]` on demand when serving via REST or WS. This avoids a second cache and keeps the raw cache as the single source of truth.
 
-## 1. New Types (`@mainframe/types`)
+## 1. New Types (`@qlan-ro/mainframe-types`)
 
 ```typescript
 // Display-ready content blocks — superset of raw MessageContent

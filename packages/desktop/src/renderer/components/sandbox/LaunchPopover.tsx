@@ -7,7 +7,7 @@ import { useUIStore } from '../../store/ui';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 import { daemonClient } from '../../lib/client';
-import type { LaunchConfiguration } from '@mainframe/types';
+import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 
 interface Props {

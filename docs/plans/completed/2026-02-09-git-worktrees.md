@@ -45,7 +45,7 @@ In `packages/types/src/events.ts`, add two new variants to the `ClientEvent` uni
 
 **Step 3: Build types**
 
-Run: `pnpm --filter @mainframe/types build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build`
 
 **Step 4: Commit**
 
@@ -104,7 +104,7 @@ if (updates.branchName !== undefined) {
 
 **Step 5: Build core**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 
 **Step 6: Commit**
 
@@ -305,7 +305,7 @@ getEffectivePath(chatId: string): string | null {
 
 **Step 10: Build core**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 
 **Step 11: Commit**
 
@@ -336,7 +336,7 @@ case 'chat.disableWorktree': {
 
 **Step 2: Build core**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 
 **Step 3: Commit**
 
@@ -396,7 +396,7 @@ const context = chats.getSessionContext(req.params.id, effectivePath);
 
 **Step 5: Build core**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 
 **Step 6: Commit**
 
@@ -555,7 +555,7 @@ const activeChatId = useChatsStore((s) => s.activeChatId);
 
 **Step 3: Build desktop**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 
 **Step 4: Commit**
 

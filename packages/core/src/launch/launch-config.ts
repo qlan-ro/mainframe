@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { LaunchConfig, LaunchConfiguration } from '@mainframe/types';
+import type { LaunchConfig, LaunchConfiguration } from '@qlan-ro/mainframe-types';
 
 // Allowed executables: common package managers + node. No shell operators.
 const SAFE_EXECUTABLE = /^(node|pnpm|npm|yarn|bun|python|python3|[a-zA-Z0-9_\-./]+)$/;

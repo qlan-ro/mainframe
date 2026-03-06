@@ -6,7 +6,7 @@ const log = createLogger('renderer:panels');
 import { useChatsStore } from '../../store';
 import { daemonClient } from '../../lib/client';
 import { getSessionContext } from '../../lib/api';
-import type { SessionContext } from '@mainframe/types';
+import type { SessionContext } from '@qlan-ro/mainframe-types';
 import { ContextSection } from './ContextSection';
 import { ContextFileItem } from './ContextFileItem';
 import { SessionAttachmentsGrid } from './SessionAttachmentsGrid';

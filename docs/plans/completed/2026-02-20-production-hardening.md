@@ -38,7 +38,7 @@ app.on('second-instance', () => {
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: builds with no TypeScript errors.
 
@@ -71,7 +71,7 @@ mainWindow.on('ready-to-show', () => {
 **Step 2: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: builds with no TypeScript errors.
 
@@ -168,7 +168,7 @@ if (process.env.NODE_ENV !== 'development') {
 **Step 5: Typecheck**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 Expected: builds with no TypeScript errors.
 
@@ -185,8 +185,8 @@ git commit -m "feat(desktop): block devtools access in production builds"
 
 After all tasks:
 
-1. **Single instance** — Build and run the app (`pnpm --filter @mainframe/desktop start`). Try launching a second instance from terminal. The second launch should exit and the first window should come to the foreground.
+1. **Single instance** — Build and run the app (`pnpm --filter @qlan-ro/mainframe-desktop start`). Try launching a second instance from terminal. The second launch should exit and the first window should come to the foreground.
 
-2. **No DevTools auto-open** — Run `pnpm --filter @mainframe/desktop dev`. Window should open without DevTools panel visible. Open DevTools manually via ⌥⌘I to confirm they still work in dev.
+2. **No DevTools auto-open** — Run `pnpm --filter @qlan-ro/mainframe-desktop dev`. Window should open without DevTools panel visible. Open DevTools manually via ⌥⌘I to confirm they still work in dev.
 
-3. **Production DevTools blocked** — Run `pnpm --filter @mainframe/desktop start` (preview mode, `NODE_ENV=production`). Open View menu → "Toggle Developer Tools" should be absent. Press ⌥⌘I — DevTools should not open (or open and immediately close).
+3. **Production DevTools blocked** — Run `pnpm --filter @qlan-ro/mainframe-desktop start` (preview mode, `NODE_ENV=production`). Open View menu → "Toggle Developer Tools" should be absent. Press ⌥⌘I — DevTools should not open (or open and immediately close).

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { PluginManifest } from '@mainframe/types';
+import type { PluginManifest } from '@qlan-ro/mainframe-types';
 
 const VALID_CAPABILITIES = [
   'storage',

@@ -19,7 +19,7 @@
 
 ```typescript
 // After existing imports, add:
-import type { CustomCommand, Skill, AgentConfig } from '@mainframe/types';
+import type { CustomCommand, Skill, AgentConfig } from '@qlan-ro/mainframe-types';
 
 // After existing exports, add:
 
@@ -136,7 +136,7 @@ git commit -m "feat(mobile): forward command metadata through sendMessage chain"
 ```typescript
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getCommands, getSkills, getAgents, searchFiles } from '../lib/api';
-import type { CustomCommand, Skill, AgentConfig } from '@mainframe/types';
+import type { CustomCommand, Skill, AgentConfig } from '@qlan-ro/mainframe-types';
 
 export type PickerItem =
   | { type: 'skill'; name: string; displayName: string; invocationName: string; description: string; scope: string; source: string }

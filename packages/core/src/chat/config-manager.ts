@@ -1,5 +1,5 @@
-import type { Chat, DaemonEvent } from '@mainframe/types';
-import { GENERAL_DEFAULTS } from '@mainframe/types';
+import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
+import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { DatabaseManager } from '../db/index.js';
 import { createWorktree, removeWorktree } from '../workspace/index.js';

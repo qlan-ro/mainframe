@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { ProviderConfig } from '@mainframe/types';
-import { GENERAL_DEFAULTS } from '@mainframe/types';
+import type { ProviderConfig } from '@qlan-ro/mainframe-types';
+import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 import { useSettingsStore } from '../../renderer/store/settings.js';
 import type { SettingsTab } from '../../renderer/store/settings.js';
 

@@ -1,6 +1,6 @@
 # Mainframe API Reference
 
-> Complete HTTP REST and WebSocket API documentation for `@mainframe/core`
+> Complete HTTP REST and WebSocket API documentation for `@qlan-ro/mainframe-core`
 
 **Base URL**: `http://127.0.0.1:31415`
 **WebSocket**: `ws://127.0.0.1:31415` (upgrades on the same HTTP port)

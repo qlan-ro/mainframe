@@ -1,5 +1,5 @@
 {
-  "name": "@mainframe/core",
+  "name": "@qlan-ro/mainframe-core",
   "version": "0.2.0",
   "description": "Mainframe daemon — session lifecycle, agent process management, and metadata storage",
   "license": "MIT",
@@ -31,7 +31,7 @@
     "status": "node dist/index.js status"
   },
   "dependencies": {
-    "@mainframe/types": "workspace:*",
+    "@qlan-ro/mainframe-types": "workspace:*",
     "better-sqlite3": "^12.6.2",
     "express": "^5.0.0",
     "nanoid": "^5.0.4",

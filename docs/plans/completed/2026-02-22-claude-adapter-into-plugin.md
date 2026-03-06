@@ -49,7 +49,7 @@ Also fix the upward path to `BaseAdapter`/`BaseSession` — they moved FROM a si
 **Step 3: Verify moved files compile**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 Expected: TypeScript errors about missing imports in other files — that's expected, those are fixed in subsequent tasks. The moved files themselves should have no internal errors.
 
@@ -65,7 +65,7 @@ Expected: TypeScript errors about missing imports in other files — that's expe
 Replace the entire file with:
 
 ```typescript
-import type { Adapter, AdapterInfo } from '@mainframe/types';
+import type { Adapter, AdapterInfo } from '@qlan-ro/mainframe-types';
 
 export class AdapterRegistry {
   private adapters = new Map<string, Adapter>();
@@ -114,7 +114,7 @@ export { BaseSession } from './base-session.js';
 **Step 2: Build to confirm**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 Expected: Errors in files that imported `ClaudeAdapter` from `adapters/index.js` — fixed in subsequent tasks.
 
@@ -139,7 +139,7 @@ import { ClaudeAdapter } from './adapter.js';
 **Step 2: Build**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 Expected: Remaining errors in test files and `core/src/index.ts` — not yet fixed.
 
@@ -159,7 +159,7 @@ The daemon entry point imports `claudeManifest` and `activate` from the plugin. 
 **Step 2: Build**
 
 ```bash
-pnpm --filter @mainframe/core build
+pnpm --filter @qlan-ro/mainframe-core build
 ```
 Expected: Only test-related errors remain.
 
@@ -199,7 +199,7 @@ import { buildToolResultBlocks, convertHistoryEntry } from '../plugins/builtin/c
 **Step 3: Run these two test files**
 
 ```bash
-pnpm --filter @mainframe/core exec vitest run -- "adapter-registry|event-pipeline-parity"
+pnpm --filter @qlan-ro/mainframe-core exec vitest run -- "adapter-registry|event-pipeline-parity"
 ```
 Expected: PASS.
 
@@ -240,7 +240,7 @@ import { parseFrontmatter } from '../plugins/builtin/claude/frontmatter.js';
 **Step 3: Run**
 
 ```bash
-pnpm --filter @mainframe/core exec vitest run -- "claude-events|claude-skills"
+pnpm --filter @qlan-ro/mainframe-core exec vitest run -- "claude-events|claude-skills"
 ```
 Expected: PASS.
 
@@ -293,7 +293,7 @@ import { ClaudeAdapter } from '../plugins/builtin/claude/adapter.js';
 **Step 4: Run**
 
 ```bash
-pnpm --filter @mainframe/core exec vitest run -- "frontmatter|message-loading|control-requests"
+pnpm --filter @qlan-ro/mainframe-core exec vitest run -- "frontmatter|message-loading|control-requests"
 ```
 Expected: PASS.
 
@@ -311,7 +311,7 @@ Expected: PASS — no errors, no warnings.
 **Step 2: Full test run**
 
 ```bash
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 ```
 Expected: Same pass rate as before (477/480 — only pre-existing title-generation failures).
 

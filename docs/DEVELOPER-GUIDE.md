@@ -45,11 +45,11 @@ pnpm dev:desktop
 ```
 mainframe/
 ├── packages/
-│   ├── types/      # @mainframe/types — shared TypeScript definitions
-│   ├── core/       # @mainframe/core  — Node.js daemon server
-│   ├── desktop/    # @mainframe/desktop — Electron + React app
-│   ├── mobile/     # @mainframe/mobile — React Native companion (Expo)
-│   └── e2e/        # @mainframe/e2e — Playwright E2E tests
+│   ├── types/      # @qlan-ro/mainframe-types — shared TypeScript definitions
+│   ├── core/       # @qlan-ro/mainframe-core  — Node.js daemon server
+│   ├── desktop/    # @qlan-ro/mainframe-desktop — Electron + React app
+│   ├── mobile/     # @qlan-ro/mainframe-mobile — React Native companion (Expo)
+│   └── e2e/        # @qlan-ro/mainframe-e2e — Playwright E2E tests
 ├── scripts/        # Build/deploy scripts (install.sh, etc.)
 ├── docs/           # Documentation
 ├── package.json    # Root workspace config
@@ -60,22 +60,22 @@ mainframe/
 ### Dependency Graph
 
 ```
-@mainframe/desktop → @mainframe/types
-@mainframe/core    → @mainframe/types
-@mainframe/mobile  → @mainframe/types
-@mainframe/e2e     → (runtime dependency on desktop + core)
+@qlan-ro/mainframe-desktop → @qlan-ro/mainframe-types
+@qlan-ro/mainframe-core    → @qlan-ro/mainframe-types
+@qlan-ro/mainframe-mobile  → @qlan-ro/mainframe-types
+@qlan-ro/mainframe-e2e     → (runtime dependency on desktop + core)
 ```
 
 Both `core` and `desktop` depend on `types`. They do **not** depend on each other — communication happens over HTTP/WebSocket at runtime. The mobile app communicates with the daemon over HTTP/WebSocket at runtime, like desktop.
 
 ## Package Details
 
-### @mainframe/types
+### @qlan-ro/mainframe-types
 
 Pure TypeScript type definitions. Zero runtime dependencies.
 
 ```bash
-pnpm --filter @mainframe/types build    # Compile types
+pnpm --filter @qlan-ro/mainframe-types build    # Compile types
 ```
 
 **When to modify**: Adding new API endpoints, changing data models, adding adapter capabilities.
@@ -89,14 +89,14 @@ pnpm --filter @mainframe/types build    # Compile types
 - `src/context.ts` — Session context, mentions, attachments
 - `src/settings.ts` — Permission modes, provider config
 
-### @mainframe/core
+### @qlan-ro/mainframe-core
 
 Node.js daemon that manages CLI adapters and serves the API.
 
 ```bash
-pnpm --filter @mainframe/core build    # Compile
-pnpm --filter @mainframe/core dev      # Watch mode (tsx)
-pnpm --filter @mainframe/core test     # Run tests (vitest)
+pnpm --filter @qlan-ro/mainframe-core build    # Compile
+pnpm --filter @qlan-ro/mainframe-core dev      # Watch mode (tsx)
+pnpm --filter @qlan-ro/mainframe-core test     # Run tests (vitest)
 ```
 
 **Key files**:
@@ -118,14 +118,14 @@ pnpm --filter @mainframe/core test     # Run tests (vitest)
 
 **Data directory**: `~/.mainframe/` (SQLite DB, attachments, config)
 
-### @mainframe/desktop
+### @qlan-ro/mainframe-desktop
 
 Electron application with React frontend.
 
 ```bash
-pnpm --filter @mainframe/desktop build     # Build for production
-pnpm --filter @mainframe/desktop dev       # Development mode
-pnpm --filter @mainframe/desktop package   # Create distributable
+pnpm --filter @qlan-ro/mainframe-desktop build     # Build for production
+pnpm --filter @qlan-ro/mainframe-desktop dev       # Development mode
+pnpm --filter @qlan-ro/mainframe-desktop package   # Create distributable
 ```
 
 **Key files**:
@@ -139,7 +139,7 @@ pnpm --filter @mainframe/desktop package   # Create distributable
 - `src/renderer/hooks/useChatSession.ts` — Chat session management
 - `src/renderer/store/` — Zustand state stores
 
-### @mainframe/mobile
+### @qlan-ro/mainframe-mobile
 
 React Native companion app built with Expo.
 
@@ -156,7 +156,7 @@ npx expo run:ios        # Run on iOS simulator
 - `lib/` — API client, utilities
 - `store/` — Zustand state management
 
-### @mainframe/e2e
+### @qlan-ro/mainframe-e2e
 
 Playwright end-to-end test suite.
 
@@ -209,7 +209,7 @@ Tests live in `packages/e2e/tests/` and cover the full desktop app (daemon + Ele
 Adapters are implemented as builtin plugins. See `packages/core/src/plugins/builtin/claude/` for the reference implementation.
 
 1. Create a new directory under `packages/core/src/plugins/builtin/<name>/`
-2. Implement the `Adapter` interface from `@mainframe/types`
+2. Implement the `Adapter` interface from `@qlan-ro/mainframe-types`
 3. Create an `index.ts` that exports a plugin activation function
 4. Register the plugin in `PluginManager`
 
@@ -255,10 +255,10 @@ Tests use [Vitest](https://vitest.dev/) and live in `packages/core/src/__tests__
 pnpm test
 
 # Run core tests only
-pnpm --filter @mainframe/core test
+pnpm --filter @qlan-ro/mainframe-core test
 
 # Watch mode
-pnpm --filter @mainframe/core test -- --watch
+pnpm --filter @qlan-ro/mainframe-core test -- --watch
 ```
 
 ### E2E Tests

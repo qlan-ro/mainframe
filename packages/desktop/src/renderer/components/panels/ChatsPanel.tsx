@@ -12,7 +12,7 @@ import { archiveChat, getExternalSessions, importExternalSession } from '../../l
 import { cn } from '../../lib/utils';
 import { getAdapterLabel } from '../../lib/adapters';
 import { useAdaptersStore } from '../../store/adapters';
-import type { ExternalSession } from '@mainframe/types';
+import type { ExternalSession } from '@qlan-ro/mainframe-types';
 
 function SessionStatusDot({ status }: { status: SessionStatus }) {
   const isWorking = status === 'working' || status === 'waiting';

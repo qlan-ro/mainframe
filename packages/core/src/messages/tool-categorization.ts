@@ -1,7 +1,7 @@
 /* ── Adapter-declared tool categorization ──────────────────────── */
 
-import type { ToolCategories } from '@mainframe/types';
-export type { ToolCategories } from '@mainframe/types';
+import type { ToolCategories } from '@qlan-ro/mainframe-types';
+export type { ToolCategories } from '@qlan-ro/mainframe-types';
 
 export function isExploreTool(name: string, categories: ToolCategories): boolean {
   return categories.explore.has(name);

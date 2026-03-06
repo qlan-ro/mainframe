@@ -1,4 +1,4 @@
-import type { Chat, ExternalSession } from '@mainframe/types';
+import type { Chat, ExternalSession } from '@qlan-ro/mainframe-types';
 import { API_BASE, postJson } from './http';
 
 export async function getExternalSessions(projectId: string): Promise<ExternalSession[]> {

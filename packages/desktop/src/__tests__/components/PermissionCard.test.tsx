@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { ControlRequest } from '@mainframe/types';
+import type { ControlRequest } from '@qlan-ro/mainframe-types';
 import { PermissionCard } from '../../renderer/components/chat/PermissionCard.js';
 
 function createRequest(overrides?: Partial<ControlRequest>): ControlRequest {

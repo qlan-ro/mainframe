@@ -4,7 +4,7 @@
 
 **Goal:** Replace the "Preview" toggle button in StatusBar with a split button + popover launcher, and merge log output into the bottom panel as a collapsible strip below the webview.
 
-**Architecture:** UI-only changes in `@mainframe/desktop`. No backend changes needed — process start/stop already works via `startLaunchConfig`/`stopLaunchConfig` in `lib/launch.ts`. Process statuses flow in via WebSocket events into the sandbox Zustand store.
+**Architecture:** UI-only changes in `@qlan-ro/mainframe-desktop`. No backend changes needed — process start/stop already works via `startLaunchConfig`/`stopLaunchConfig` in `lib/launch.ts`. Process statuses flow in via WebSocket events into the sandbox Zustand store.
 
 **Tech Stack:** React 18, TypeScript strict/NodeNext, Zustand, Tailwind CSS
 
@@ -38,7 +38,7 @@ clearLogsForProcess: (name) =>
 
 **Step 4: Typecheck**
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | tail -5
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | tail -5
 ```
 Expected: no errors.
 
@@ -62,7 +62,7 @@ git commit -m "feat(desktop): add clearLogsForProcess to sandbox store"
 Create `packages/desktop/src/renderer/hooks/useLaunchConfig.ts`:
 ```typescript
 import { useEffect, useState } from 'react';
-import type { LaunchConfig } from '@mainframe/types';
+import type { LaunchConfig } from '@qlan-ro/mainframe-types';
 import { useProjectsStore } from '../store/projects';
 
 export function useLaunchConfig(): LaunchConfig | null {
@@ -91,7 +91,7 @@ export function useLaunchConfig(): LaunchConfig | null {
 
 **Step 2: Typecheck**
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | tail -5
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | tail -5
 ```
 Expected: no errors.
 
@@ -119,7 +119,7 @@ import { useSandboxStore } from '../../store/sandbox';
 import { useProjectsStore } from '../../store/projects';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
-import type { LaunchConfiguration } from '@mainframe/types';
+import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 
 interface Props {
   onClose: () => void;
@@ -220,7 +220,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
 
 **Step 2: Typecheck**
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | tail -5
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | tail -5
 ```
 Expected: no errors.
 
@@ -336,7 +336,7 @@ Replace with:
 
 **Step 5: Typecheck**
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | tail -5
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | tail -5
 ```
 Expected: no errors.
 
@@ -392,7 +392,7 @@ export function BottomPanel(): React.ReactElement | null {
 
 **Step 4: Typecheck**
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | tail -5
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | tail -5
 ```
 Expected: no errors and no remaining references to `bottomPanelTab`, `setBottomPanelTab`, or `LogsTab`.
 
@@ -420,7 +420,7 @@ Read `packages/desktop/src/renderer/components/sandbox/PreviewTab.tsx`. Note the
 
 Remove:
 ```typescript
-import type { LaunchConfig } from '@mainframe/types';
+import type { LaunchConfig } from '@qlan-ro/mainframe-types';
 import { useProjectsStore } from '../../store/projects';
 ```
 
@@ -569,7 +569,7 @@ After the closing `</div>` of the webview wrapper, add the log strip:
 
 **Step 6: Typecheck**
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | tail -5
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | tail -5
 ```
 Expected: no errors.
 
@@ -585,13 +585,13 @@ git commit -m "feat(desktop): add log strip to PreviewTab"
 
 **Step 1: Full build**
 ```bash
-pnpm --filter @mainframe/desktop build 2>&1 | tail -10
+pnpm --filter @qlan-ro/mainframe-desktop build 2>&1 | tail -10
 ```
 Expected: clean build, no TypeScript errors.
 
 **Step 2: Run desktop tests**
 ```bash
-pnpm --filter @mainframe/desktop test 2>&1 | tail -20
+pnpm --filter @qlan-ro/mainframe-desktop test 2>&1 | tail -20
 ```
 Expected: all tests pass (no desktop component tests exist, but the build itself is the verification).
 

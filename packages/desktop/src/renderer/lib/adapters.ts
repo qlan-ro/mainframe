@@ -1,4 +1,4 @@
-import type { AdapterInfo } from '@mainframe/types';
+import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 
 const ADAPTER_LABEL_FALLBACK: Record<string, string> = {
   claude: 'Claude',

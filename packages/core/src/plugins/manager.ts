@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { Router } from 'express';
 import type { EventEmitter } from 'node:events';
-import type { PluginContext, PluginManifest, PluginModule, DaemonEvent } from '@mainframe/types';
+import type { PluginContext, PluginManifest, PluginModule, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { validateManifest } from './security/manifest-validator.js';
 import { buildPluginContext } from './context.js';
 import type { DatabaseManager } from '../db/index.js';

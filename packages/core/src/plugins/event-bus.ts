@@ -5,7 +5,7 @@ import type {
   PublicDaemonEvent,
   ChatEventName,
   ChatEvent,
-} from '@mainframe/types';
+} from '@qlan-ro/mainframe-types';
 
 export const PUBLIC_DAEMON_EVENT_PREFIX = 'plugin:public:';
 

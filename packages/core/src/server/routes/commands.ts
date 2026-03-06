@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { RouteContext } from './types.js';
 import { getMainframeCommands } from '../../commands/registry.js';
 import { asyncHandler } from './async-handler.js';
-import type { CustomCommand } from '@mainframe/types';
+import type { CustomCommand } from '@qlan-ro/mainframe-types';
 
 export function commandRoutes(ctx: RouteContext): Router {
   const router = Router();

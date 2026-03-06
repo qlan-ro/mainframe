@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { GENERAL_DEFAULTS } from '@mainframe/types';
+import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:settings');

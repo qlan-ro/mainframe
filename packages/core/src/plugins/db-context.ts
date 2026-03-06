@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import type { PluginDatabaseContext, PluginDatabaseStatement } from '@mainframe/types';
+import type { PluginDatabaseContext, PluginDatabaseStatement } from '@qlan-ro/mainframe-types';
 
 export function createPluginDatabaseContext(dbPath: string): PluginDatabaseContext {
   mkdirSync(path.dirname(dbPath), { recursive: true });

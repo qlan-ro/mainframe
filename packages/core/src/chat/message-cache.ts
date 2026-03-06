@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { ChatMessage, MessageContent } from '@mainframe/types';
+import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 
 const MAX_MESSAGES_PER_CHAT = 2000;
 const MAX_CHATS = 50;

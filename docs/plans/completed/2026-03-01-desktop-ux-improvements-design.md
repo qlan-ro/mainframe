@@ -7,7 +7,7 @@ Four small, self-contained UX improvements to the desktop app.
 The Claude adapter spawns `'claude'` via PATH lookup. Users with non-standard installations need to specify the full path.
 
 **Changes:**
-- Add `executablePath?: string` to `ProviderConfig` in `@mainframe/types`
+- Add `executablePath?: string` to `ProviderConfig` in `@qlan-ro/mainframe-types`
 - Add "Executable Path" text input in Provider settings section
 - Adapter uses `config.executablePath || 'claude'` for spawn and `isInstalled()` calls
 

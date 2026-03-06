@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PermissionManager } from '../chat/permission-manager.js';
-import type { ControlRequest } from '@mainframe/types';
+import type { ControlRequest } from '@qlan-ro/mainframe-types';
 
 function makeRequest(overrides: Partial<ControlRequest> = {}): ControlRequest {
   return {

@@ -1,4 +1,4 @@
-import type { CustomCommand } from '@mainframe/types';
+import type { CustomCommand } from '@qlan-ro/mainframe-types';
 
 const LAUNCH_CONFIG_PROMPT = `\
 Analyze this project and generate a .mainframe/launch.json file that defines how to run its development processes.

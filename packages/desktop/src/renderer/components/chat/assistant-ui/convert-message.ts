@@ -1,11 +1,11 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { DisplayMessage, DisplayContent } from '@mainframe/types';
+import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 
 // Mutable version of the content array element type (ThreadMessageLike['content'] is readonly)
 type ContentPart = Exclude<ThreadMessageLike['content'], string>[number];
 
 // Re-export for consumers that import from this module
-export type { ToolGroupItem, TaskProgressItem, PartEntry } from '@mainframe/core/messages';
+export type { ToolGroupItem, TaskProgressItem, PartEntry } from '@qlan-ro/mainframe-core/messages';
 
 // Sentinel placeholders — null-byte prefix prevents collision with user content
 export const ERROR_PLACEHOLDER = Object.freeze({ type: 'text' as const, text: '\0__MF_ERROR__' });

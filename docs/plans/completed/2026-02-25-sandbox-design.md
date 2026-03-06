@@ -73,7 +73,7 @@ A new **bottom panel** sits below the existing left/center/right panel row and s
 
 ### Daemon — Process Management
 
-New routes under `@mainframe/core`:
+New routes under `@qlan-ro/mainframe-core`:
 
 | Route | Purpose |
 |-------|---------|
@@ -172,13 +172,13 @@ type LaunchProcessStatus = 'stopped' | 'starting' | 'running' | 'failed';
 
 | Package | Path | Purpose |
 |---------|------|---------|
-| `@mainframe/core` | `src/launch/launch-manager.ts` | Spawn, track, stream launch processes |
-| `@mainframe/core` | `src/launch/launch-config.ts` | Read/validate `launch.json` |
-| `@mainframe/core` | `src/server/routes/launch.ts` | Express routes for launch API |
-| `@mainframe/types` | `src/launch.ts` | Shared launch types |
-| `@mainframe/desktop` | `src/main/sandbox.ts` | IPC handlers: inject, screenshot, capture |
-| `@mainframe/desktop` | `src/renderer/components/sandbox/` | BottomPanel, PreviewTab, LogsTab |
-| `@mainframe/desktop` | `src/renderer/store/sandbox.ts` | Capture stack Zustand store |
+| `@qlan-ro/mainframe-core` | `src/launch/launch-manager.ts` | Spawn, track, stream launch processes |
+| `@qlan-ro/mainframe-core` | `src/launch/launch-config.ts` | Read/validate `launch.json` |
+| `@qlan-ro/mainframe-core` | `src/server/routes/launch.ts` | Express routes for launch API |
+| `@qlan-ro/mainframe-types` | `src/launch.ts` | Shared launch types |
+| `@qlan-ro/mainframe-desktop` | `src/main/sandbox.ts` | IPC handlers: inject, screenshot, capture |
+| `@qlan-ro/mainframe-desktop` | `src/renderer/components/sandbox/` | BottomPanel, PreviewTab, LogsTab |
+| `@qlan-ro/mainframe-desktop` | `src/renderer/store/sandbox.ts` | Capture stack Zustand store |
 
 ---
 

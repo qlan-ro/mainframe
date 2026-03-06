@@ -17,7 +17,7 @@ import { activate as activateClaude } from './plugins/builtin/claude/index.js';
 import todosManifest from './plugins/builtin/todos/manifest.json' with { type: 'json' };
 import { activate as activateTodos } from './plugins/builtin/todos/index.js';
 import { logger } from './logger.js';
-import type { DaemonEvent, PluginManifest } from '@mainframe/types';
+import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
 
 async function main(): Promise<void> {
   const config = getConfig();

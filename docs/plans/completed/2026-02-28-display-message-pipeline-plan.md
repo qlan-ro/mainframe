@@ -4,7 +4,7 @@
 
 **Goal:** Move all message transformations from the desktop to the daemon so clients receive display-ready messages.
 
-**Architecture:** A `prepareMessagesForClient()` pipeline in `@mainframe/core/messages` transforms raw `ChatMessage[]` into `DisplayMessage[]`. The daemon runs this pipeline when serving messages via REST and when emitting WS events. The desktop becomes a thin mapper from `DisplayMessage` to the UI framework's `ThreadMessageLike`.
+**Architecture:** A `prepareMessagesForClient()` pipeline in `@qlan-ro/mainframe-core/messages` transforms raw `ChatMessage[]` into `DisplayMessage[]`. The daemon runs this pipeline when serving messages via REST and when emitting WS events. The desktop becomes a thin mapper from `DisplayMessage` to the UI framework's `ThreadMessageLike`.
 
 **Tech Stack:** TypeScript, Node.js, Vitest, React, assistant-ui, pnpm workspaces
 
@@ -29,7 +29,7 @@ Expected: clean working tree on `feat/display-message-pipeline`
 
 ---
 
-### Task 2: Add DisplayMessage types to `@mainframe/types`
+### Task 2: Add DisplayMessage types to `@qlan-ro/mainframe-types`
 
 **Files:**
 - Create: `packages/types/src/display.ts`
@@ -83,7 +83,7 @@ describe('DisplayMessage types', () => {
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @mainframe/types test -- --run display-types`
+Run: `pnpm --filter @qlan-ro/mainframe-types test -- --run display-types`
 Expected: FAIL — module `../display.js` not found
 
 **Step 3: Create the types file**
@@ -134,12 +134,12 @@ Modify: `packages/types/src/index.ts` — add `export * from './display.js';`
 
 **Step 5: Run test to verify it passes**
 
-Run: `pnpm --filter @mainframe/types test -- --run display-types`
+Run: `pnpm --filter @qlan-ro/mainframe-types test -- --run display-types`
 Expected: PASS
 
 **Step 6: Typecheck**
 
-Run: `pnpm --filter @mainframe/types build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build`
 Expected: no errors
 
 **Step 7: Commit**
@@ -164,7 +164,7 @@ In `packages/types/src/adapter.ts`, add to the `Adapter` interface (after line 1
   getToolCategories?(): import('./tool-categorization.js').ToolCategories;
 ```
 
-Wait — `ToolCategories` is defined in `@mainframe/core`, not `@mainframe/types`. We need to either:
+Wait — `ToolCategories` is defined in `@qlan-ro/mainframe-core`, not `@qlan-ro/mainframe-types`. We need to either:
 - Move `ToolCategories` to types, OR
 - Define a simpler version in types
 
@@ -188,7 +188,7 @@ export interface ToolCategories {
 Modify: `packages/core/src/messages/tool-categorization.ts` — change to import and re-export from types:
 
 ```typescript
-export type { ToolCategories } from '@mainframe/types';
+export type { ToolCategories } from '@qlan-ro/mainframe-types';
 // keep predicate functions as-is
 ```
 
@@ -202,7 +202,7 @@ In `packages/types/src/adapter.ts`, add to the `Adapter` interface after `killAl
 
 **Step 2: Typecheck**
 
-Run: `pnpm --filter @mainframe/types build && pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build`
 Expected: no errors (ClaudeAdapter already has `getToolCategories()` — it now satisfies the interface)
 
 **Step 3: Commit**
@@ -231,7 +231,7 @@ Add to the `DaemonEvent` union in `packages/types/src/events.ts`:
 
 **Step 2: Typecheck**
 
-Run: `pnpm --filter @mainframe/types build`
+Run: `pnpm --filter @qlan-ro/mainframe-types build`
 Expected: no errors
 
 **Step 3: Commit**
@@ -278,7 +278,7 @@ Test helper structure:
 ```typescript
 import { describe, it, expect, beforeEach } from 'vitest';
 import { prepareMessagesForClient } from '../../messages/display-pipeline.js';
-import type { ChatMessage, MessageContent, ToolCategories } from '@mainframe/types';
+import type { ChatMessage, MessageContent, ToolCategories } from '@qlan-ro/mainframe-types';
 
 let idCounter = 0;
 function resetIds() { idCounter = 0; }
@@ -309,7 +309,7 @@ const CATEGORIES: ToolCategories = {
 
 **Step 2: Run tests to verify they fail**
 
-Run: `pnpm --filter @mainframe/core test -- --run display-pipeline`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run display-pipeline`
 Expected: FAIL — module not found
 
 **Step 3: Implement `prepareMessagesForClient()`**
@@ -343,7 +343,7 @@ If `categories` is not provided, all tools get `category: 'default'` and no grou
 
 **Step 4: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- --run display-pipeline`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run display-pipeline`
 Expected: PASS
 
 **Step 5: Export from index**
@@ -356,7 +356,7 @@ export { prepareMessagesForClient } from './display-pipeline.js';
 
 **Step 6: Typecheck**
 
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 
 **Step 7: Commit**
 
@@ -402,8 +402,8 @@ const messages = await ctx.chats.getDisplayMessages(param(req, 'id'));
 
 **Step 4: Run tests and typecheck**
 
-Run: `pnpm --filter @mainframe/core test -- --run` (relevant tests)
-Run: `pnpm --filter @mainframe/core build`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run` (relevant tests)
+Run: `pnpm --filter @qlan-ro/mainframe-core build`
 
 **Step 5: Commit**
 
@@ -473,7 +473,7 @@ git commit -m "feat(core): emit display.message events from event handler"
 In `packages/desktop/src/renderer/store/chats.ts`:
 - Change `messages: Map<string, ChatMessage[]>` to `messages: Map<string, DisplayMessage[]>`
 - Update `addMessage` and `setMessages` signatures
-- Import `DisplayMessage` from `@mainframe/types`
+- Import `DisplayMessage` from `@qlan-ro/mainframe-types`
 - Remove `ChatMessage` import if no longer needed
 
 **Step 2: Update WS event router**
@@ -505,7 +505,7 @@ updateMessage: (chatId, message) =>
 
 **Step 3: Typecheck**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 
 **Step 4: Commit**
 
@@ -532,7 +532,7 @@ The hook should work with `DisplayMessage[]` now. The types flow from the store.
 
 **Step 3: Typecheck**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 
 **Step 4: Commit**
 
@@ -555,7 +555,7 @@ This is where the desktop sheds most of its message transformation logic.
 Remove:
 - `CLAUDE_CATEGORIES` constant (lines 14-28)
 - `getToolCategoriesForAdapter` function (lines 31-34)
-- Imports of `groupMessages`, `GroupedMessage`, `ToolGroupItem`, `TaskProgressItem`, `PartEntry`, `ToolCategories`, `groupToolCallParts`, `groupTaskChildren` from `@mainframe/core/messages`
+- Imports of `groupMessages`, `GroupedMessage`, `ToolGroupItem`, `TaskProgressItem`, `PartEntry`, `ToolCategories`, `groupToolCallParts`, `groupTaskChildren` from `@qlan-ro/mainframe-core/messages`
 - Re-exports on line 40
 
 **Step 2: Rewrite convertMessage for DisplayMessage**
@@ -564,7 +564,7 @@ The function now maps `DisplayMessage` → `ThreadMessageLike`. It's much simple
 
 ```typescript
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { DisplayMessage, DisplayContent } from '@mainframe/types';
+import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 
 export const ERROR_PLACEHOLDER = Object.freeze({ type: 'text' as const, text: '\0__MF_ERROR__' });
 export const PERMISSION_PLACEHOLDER = Object.freeze({ type: 'text' as const, text: '\0__MF_PERMISSION__' });
@@ -688,7 +688,7 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
 
 **Step 3: Typecheck**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 
 **Step 4: Commit**
 
@@ -717,7 +717,7 @@ Components that call `getExternalStoreMessages<ChatMessage>` should use `getExte
 
 **Step 3: Typecheck**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 
 **Step 4: Commit**
 
@@ -759,7 +759,7 @@ Replace `parsed` references with `command`, replace `parsedFileTags` with `attac
 
 **Step 4: Typecheck**
 
-Run: `pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-desktop build`
 
 **Step 5: Commit**
 
@@ -804,7 +804,7 @@ Modify `packages/core/src/__tests__/message-loading.test.ts`:
 
 **Step 3: Run tests**
 
-Run: `pnpm --filter @mainframe/core test -- --run message-loading`
+Run: `pnpm --filter @qlan-ro/mainframe-core test -- --run message-loading`
 
 **Step 4: Commit**
 
@@ -839,7 +839,7 @@ Keep: `PLAN_PREFIX`, `highlightMentions`, `renderHighlights`, `formatTurnDuratio
 
 **Step 3: Typecheck both packages**
 
-Run: `pnpm --filter @mainframe/core build && pnpm --filter @mainframe/desktop build`
+Run: `pnpm --filter @qlan-ro/mainframe-core build && pnpm --filter @qlan-ro/mainframe-desktop build`
 
 **Step 4: Commit**
 

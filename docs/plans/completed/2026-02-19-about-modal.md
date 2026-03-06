@@ -32,7 +32,7 @@ it('opens directly to a given tab', () => {
 **Step 2: Run the test to verify it fails**
 
 ```bash
-pnpm --filter @mainframe/desktop test src/__tests__/stores/settings.test.ts
+pnpm --filter @qlan-ro/mainframe-desktop test src/__tests__/stores/settings.test.ts
 ```
 
 Expected: FAIL — `open` doesn't accept a second argument, `activeTab` will be `'general'` instead of `'about'`.
@@ -66,7 +66,7 @@ open: (defaultProvider?: string, tab?: SettingsTab) =>
 **Step 4: Run tests to verify they pass**
 
 ```bash
-pnpm --filter @mainframe/desktop test src/__tests__/stores/settings.test.ts
+pnpm --filter @qlan-ro/mainframe-desktop test src/__tests__/stores/settings.test.ts
 ```
 
 Expected: All tests PASS (new test + all existing tests).
@@ -135,7 +135,7 @@ function Row({ label, value }: { label: string; value: string }): React.ReactEle
 **Step 2: Verify TypeScript compiles**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: no type errors.
@@ -177,7 +177,7 @@ case 'about':
 **Step 2: Verify TypeScript compiles**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: no errors.
@@ -223,7 +223,7 @@ Also remove `useCallback` from imports if it's no longer used after this change 
 **Step 2: Verify TypeScript compiles**
 
 ```bash
-pnpm --filter @mainframe/desktop build
+pnpm --filter @qlan-ro/mainframe-desktop build
 ```
 
 Expected: no errors.
@@ -231,7 +231,7 @@ Expected: no errors.
 **Step 3: Run the full desktop test suite**
 
 ```bash
-pnpm --filter @mainframe/desktop test
+pnpm --filter @qlan-ro/mainframe-desktop test
 ```
 
 Expected: all tests PASS.

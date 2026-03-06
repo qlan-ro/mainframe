@@ -9,7 +9,7 @@ COPY packages/core/package.json packages/core/
 RUN pnpm install --frozen-lockfile
 COPY packages/types/ packages/types/
 COPY packages/core/ packages/core/
-RUN pnpm --filter @mainframe/types build && pnpm --filter @mainframe/core build
+RUN pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build
 RUN pnpm exec esbuild packages/core/dist/index.js --bundle --platform=node --target=node20 --format=cjs \
     --external:better-sqlite3 "--external:*.node" --log-override:empty-import-meta=silent \
     --outfile=daemon.cjs

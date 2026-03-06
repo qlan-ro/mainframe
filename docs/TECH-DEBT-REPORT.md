@@ -81,10 +81,10 @@
 
 | # | Issue | Resolution |
 |---|-------|------------|
-| 1 | Message grouping/parsing in desktop | Moved to `@mainframe/core/messages` (pure functions, no React deps) |
+| 1 | Message grouping/parsing in desktop | Moved to `@qlan-ro/mainframe-core/messages` (pure functions, no React deps) |
 | 2 | Status derivation in desktop | Added `displayStatus` and `isRunning` computed fields to Chat type |
 | 3 | Tool result metadata not pre-computed | Core populates `structuredPatch`, `originalFile`, `modifiedFile` |
-| 4 | Command/mention XML parsing in desktop | Moved pure functions to `@mainframe/core` |
+| 4 | Command/mention XML parsing in desktop | Moved pure functions to `@qlan-ro/mainframe-core` |
 | 5 | `@types/diff` redundant | Removed (diff@8 ships own types) |
 | 6 | vitest 1.x → 4.x | Upgraded |
 | 7 | better-sqlite3 9.x → 12.x | Upgraded for Node 25 support |
@@ -121,7 +121,7 @@
 | 4 | `tar` dependency vulnerability (3 HIGH) | Added `pnpm.overrides` for `tar >= 7.5.7` |
 | 5 | `tsconfig.web.json` inconsistency | Added `module: ESNext` for bundler resolution |
 | 6 | `PermissionMode` type duplication | Consolidated to canonical type from `settings.ts` across events/adapter/base |
-| 7 | Desktop→core source alias violation | Declared `@mainframe/core` as workspace dep, removed raw source alias |
+| 7 | Desktop→core source alias violation | Declared `@qlan-ro/mainframe-core` as workspace dep, removed raw source alias |
 | 8 | `handleEvent()` 142-line switch | Decomposed into 5 per-type handler functions |
 | 9 | `convertHistoryEntry()` 101 lines | Split into `convertUserEntry()` + `convertAssistantEntry()` |
 | 10 | `ChatsRepository.update()` 13 sequential ifs | Replaced with data-driven column map loop |

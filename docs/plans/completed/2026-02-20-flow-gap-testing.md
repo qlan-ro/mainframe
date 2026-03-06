@@ -203,7 +203,7 @@ it('second queued permission is emitted after first is answered', async () => {
 **Step 2: Run the new tests only**
 
 ```bash
-pnpm --filter @mainframe/core test -- --run --reporter=verbose permission-flow
+pnpm --filter @qlan-ro/mainframe-core test -- --run --reporter=verbose permission-flow
 ```
 
 Expected: 6 tests pass (4 existing + 2 new).
@@ -236,7 +236,7 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 // [Paste MockAdapter, createMockDb, createStack, startServer, stopServer, connectWs, sleep helpers here]
 // Same as permission-flow.test.ts but MockAdapter also needs kill and sendMessage
@@ -401,7 +401,7 @@ describe('adapter events flow', () => {
 **Step 2: Run the new file**
 
 ```bash
-pnpm --filter @mainframe/core test -- --run --reporter=verbose adapter-events-flow
+pnpm --filter @qlan-ro/mainframe-core test -- --run --reporter=verbose adapter-events-flow
 ```
 
 Expected: 7 tests pass.
@@ -433,7 +433,7 @@ import { createHttpServer } from '../server/http.js';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { BaseAdapter } from '../adapters/base.js';
-import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@mainframe/types';
+import type { AdapterProcess, PermissionResponse, SpawnOptions, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 // [Paste MockAdapter, createMockDb, createStack, startServer, stopServer, connectWs, sleep helpers here]
 
@@ -539,7 +539,7 @@ describe('WS inbound flows', () => {
 **Step 2: Run the new file**
 
 ```bash
-pnpm --filter @mainframe/core test -- --run --reporter=verbose ws-inbound-flow
+pnpm --filter @qlan-ro/mainframe-core test -- --run --reporter=verbose ws-inbound-flow
 ```
 
 Expected: 5 tests pass.
@@ -558,7 +558,7 @@ git commit -m "test(core): add WS inbound flow tests (message.send, interrupt, e
 **Step 1: Run full test suite**
 
 ```bash
-CI=1 pnpm --filter @mainframe/core test --run
+CI=1 pnpm --filter @qlan-ro/mainframe-core test --run
 ```
 
 Expected: All tests pass (no failures in new or existing files). The `title-generation.test.ts` tests are skipped because `CI=1`.
@@ -566,7 +566,7 @@ Expected: All tests pass (no failures in new or existing files). The `title-gene
 **Step 2: Check coverage**
 
 ```bash
-CI=1 pnpm --filter @mainframe/core test --coverage
+CI=1 pnpm --filter @qlan-ro/mainframe-core test --coverage
 ```
 
 Expected coverage (current baseline — new tests should improve `server/` coverage):
@@ -581,7 +581,7 @@ If new tests push branches or lines significantly higher, bump the thresholds in
 **Step 4: Run desktop tests to ensure nothing regressed**
 
 ```bash
-pnpm --filter @mainframe/desktop test --run
+pnpm --filter @qlan-ro/mainframe-desktop test --run
 ```
 
 Expected: 222 tests pass (Playwright CT excluded).

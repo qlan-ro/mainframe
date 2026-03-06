@@ -1,4 +1,4 @@
-import type { PluginContext } from '@mainframe/types';
+import type { PluginContext } from '@qlan-ro/mainframe-types';
 import { ClaudeAdapter } from './adapter.js';
 
 export function activate(ctx: PluginContext): void {
