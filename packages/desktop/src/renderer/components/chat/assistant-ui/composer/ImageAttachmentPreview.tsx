@@ -33,7 +33,10 @@ export function ImageAttachmentPreview() {
           {attachment.name?.split('.').pop()}
         </div>
       )}
-      <AttachmentPrimitive.Remove className="absolute -top-1 -right-1 w-4 h-4 bg-mf-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+      <AttachmentPrimitive.Remove
+        aria-label="Remove"
+        className="absolute -top-1 -right-1 w-4 h-4 bg-mf-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+      >
         <X size={10} className="text-mf-panel-bg" />
       </AttachmentPrimitive.Remove>
     </AttachmentPrimitive.Root>
