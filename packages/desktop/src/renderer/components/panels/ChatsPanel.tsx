@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { Plus, Archive } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { Plus, Archive, Download, ChevronDown, ChevronRight } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
@@ -8,10 +8,11 @@ import type { SessionStatus } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
 import { useProject } from '../../hooks/useAppInit';
 import { daemonClient } from '../../lib/client';
-import { archiveChat } from '../../lib/api';
+import { archiveChat, getExternalSessions, importExternalSession } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { getAdapterLabel } from '../../lib/adapters';
 import { useAdaptersStore } from '../../store/adapters';
+import type { ExternalSession } from '@mainframe/types';
 
 function SessionStatusDot({ status }: { status: SessionStatus }) {
   const isWorking = status === 'working' || status === 'waiting';
@@ -31,6 +32,11 @@ export function ChatsPanel(): React.ReactElement {
   const { chats, activeChatId, setActiveChat, removeChat } = useChatsStore();
   const adapters = useAdaptersStore((s) => s.adapters);
   const { createChat } = useProject(activeProjectId);
+  const externalSessionCount = useChatsStore((s) => s.externalSessionCount);
+
+  const [showImport, setShowImport] = useState(false);
+  const [externalSessions, setExternalSessions] = useState<ExternalSession[]>([]);
+  const [loadingImport, setLoadingImport] = useState<string | null>(null);
 
   const handleSelectChat = useCallback(
     (chatId: string, title?: string) => {
@@ -52,6 +58,36 @@ export function ChatsPanel(): React.ReactElement {
         .catch((err) => log.warn('archive failed', { err: String(err) }));
     },
     [removeChat],
+  );
+
+  const handleToggleImport = useCallback(async () => {
+    if (!activeProjectId) return;
+    if (!showImport) {
+      try {
+        const sessions = await getExternalSessions(activeProjectId);
+        setExternalSessions(sessions);
+      } catch (err) {
+        log.warn('failed to fetch external sessions', { err: String(err) });
+      }
+    }
+    setShowImport((prev) => !prev);
+  }, [activeProjectId, showImport]);
+
+  const handleImportSession = useCallback(
+    async (session: ExternalSession) => {
+      if (!activeProjectId) return;
+      setLoadingImport(session.sessionId);
+      try {
+        await importExternalSession(activeProjectId, session.sessionId, 'claude');
+        setExternalSessions((prev) => prev.filter((s) => s.sessionId !== session.sessionId));
+        useChatsStore.getState().setExternalSessionCount(useChatsStore.getState().externalSessionCount - 1);
+      } catch (err) {
+        log.warn('failed to import session', { err: String(err) });
+      } finally {
+        setLoadingImport(null);
+      }
+    },
+    [activeProjectId],
   );
 
   const formatRelativeTime = (isoString: string): string => {
@@ -87,6 +123,59 @@ export function ChatsPanel(): React.ReactElement {
           <Plus size={14} />
         </button>
       </div>
+
+      {/* External Sessions Import Section */}
+      {activeProjectId && externalSessionCount > 0 && (
+        <div className="px-[10px] pb-2">
+          <button
+            onClick={handleToggleImport}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label text-mf-text-secondary hover:bg-mf-hover/50 transition-colors"
+          >
+            {showImport ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            <Download size={12} />
+            <span>Import external sessions</span>
+            <span className="ml-auto text-mf-status bg-mf-accent/20 text-mf-accent px-1.5 py-0.5 rounded-full">
+              {externalSessionCount}
+            </span>
+          </button>
+          {showImport && (
+            <div className="mt-1 space-y-1">
+              {externalSessions.length === 0 ? (
+                <div className="px-3 py-2 text-mf-status text-mf-text-secondary">Loading...</div>
+              ) : (
+                externalSessions.map((session) => (
+                  <div
+                    key={session.sessionId}
+                    className="group flex items-center gap-2 px-3 py-2 rounded-mf-input hover:bg-mf-hover/50 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-mf-small text-mf-text-secondary truncate">
+                        {session.summary ?? session.firstPrompt ?? 'Untitled session'}
+                      </div>
+                      <div className="text-mf-status text-mf-text-secondary mt-0.5">
+                        {session.gitBranch && (
+                          <>
+                            {session.gitBranch}
+                            <span className="mx-0.5">•</span>
+                          </>
+                        )}
+                        {formatRelativeTime(session.modifiedAt)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleImportSession(session)}
+                      disabled={loadingImport === session.sessionId}
+                      className="shrink-0 px-2 py-1 rounded text-mf-status text-mf-accent hover:bg-mf-accent/20 transition-colors disabled:opacity-40"
+                    >
+                      {loadingImport === session.sessionId ? '...' : 'Import'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Chat list */}
       <div className="flex-1 overflow-y-auto px-[10px]">

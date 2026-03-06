@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { daemonClient } from '../lib/client';
-import { getProjects, getAdapters, getProviderSettings, getChats, getPlugins } from '../lib/api';
+import { getProjects, getAdapters, getProviderSettings, getChats, getPlugins, getExternalSessions } from '../lib/api';
 import { useProjectsStore } from '../store/projects';
 import { useChatsStore } from '../store/chats';
 import { useTabsStore } from '../store/tabs';
@@ -127,7 +127,17 @@ export function useProject(projectId: string | null) {
       }
     };
 
+    const loadExternalSessions = async () => {
+      try {
+        const sessions = await getExternalSessions(projectId);
+        useChatsStore.getState().setExternalSessionCount(sessions.length);
+      } catch (err) {
+        log.warn('external sessions fetch failed', { err: String(err) });
+      }
+    };
+
     loadChats();
+    loadExternalSessions();
     syncLaunchStatuses();
 
     // Eagerly load skills, agents & commands so menus (/ and @) work immediately
@@ -142,6 +152,7 @@ export function useProject(projectId: string | null) {
     const unsubConnection = daemonClient.subscribeConnection(() => {
       if (daemonClient.connected) {
         loadChats();
+        loadExternalSessions();
         syncLaunchStatuses();
       }
     });

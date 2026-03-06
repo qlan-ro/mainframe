@@ -93,6 +93,10 @@ export function routeEvent(event: DaemonEvent): void {
     case 'launch.port.timeout':
       log.warn('event:launch.port.timeout', { projectId: event.projectId, name: event.name, port: event.port });
       break;
+    case 'sessions.external.count':
+      log.debug('event:sessions.external.count', { projectId: event.projectId, count: event.count });
+      chats.setExternalSessionCount(event.count);
+      break;
     case 'error':
       log.error('daemon error event', { error: event.error });
       useProjectsStore.getState().setError(event.error);
