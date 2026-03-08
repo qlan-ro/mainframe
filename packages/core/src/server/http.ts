@@ -22,8 +22,10 @@ import {
   externalSessionRoutes,
 } from './routes/index.js';
 import { authRoutes } from './routes/auth.js';
+import { tunnelRoutes } from './routes/tunnel.js';
 import { PushService } from '../push/index.js';
 import type { PluginManager } from '../plugins/manager.js';
+import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 
 const log = createChildLogger('http');
 
@@ -35,6 +37,8 @@ export function createHttpServer(
   pluginManager?: PluginManager,
   launchRegistry?: LaunchRegistry,
   getTunnelUrl?: () => string | null,
+  tunnelManager?: TunnelManager,
+  port?: number,
 ): { app: Express; pushService: PushService } {
   const app = express();
   app.set('trust proxy', 'loopback');
@@ -63,12 +67,31 @@ export function createHttpServer(
   app.use(createAuthMiddleware(authSecret));
 
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), tunnelUrl: getTunnelUrl?.() ?? null });
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      tunnelUrl: ctx.tunnelUrl ?? getTunnelUrl?.() ?? null,
+    });
   });
 
-  const ctx = { db, chats, adapters, attachmentStore, launchRegistry, tunnelUrl: getTunnelUrl?.() ?? null };
+  const setTunnelUrl = (url: string | null) => {
+    ctx.tunnelUrl = url;
+  };
+
+  const ctx = {
+    db,
+    chats,
+    adapters,
+    attachmentStore,
+    launchRegistry,
+    tunnelUrl: getTunnelUrl?.() ?? null,
+    tunnelManager,
+    setTunnelUrl,
+    port,
+  };
 
   app.use(authRoutes({ pushService, devicesRepo: db.devices }));
+  app.use(tunnelRoutes(ctx));
   app.use(projectRoutes(ctx));
   app.use(chatRoutes(ctx));
   app.use(fileRoutes(ctx));

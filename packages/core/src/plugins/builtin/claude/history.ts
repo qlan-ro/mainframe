@@ -229,17 +229,19 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
     for (const entry of entries) {
       if (!entry.endsWith('.jsonl') || entry === sessionId + '.jsonl') continue;
       const filePath = path.join(projectDir, entry);
+      const stream = createReadStream(filePath);
       try {
-        const rl = createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
+        const rl = createInterface({ input: stream, crlfDelay: Infinity });
         for await (const line of rl) {
           if (!line.trim()) continue;
           const first = JSON.parse(line);
           if (first.sessionId === sessionId) jsonlFiles.push(filePath);
           break;
         }
-        rl.close();
       } catch {
         /* skip unreadable files */
+      } finally {
+        stream.destroy();
       }
     }
   } catch {
@@ -248,18 +250,23 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
 
   const messages: ChatMessage[] = [];
   for (const file of jsonlFiles) {
-    const rl = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.isMeta === true) continue; // Skip metadata-only entries (skill content injections)
-        if (entry.isCompactSummary === true || entry.isVisibleInTranscriptOnly === true) continue; // Skip context compaction summaries
-        const msg = convertHistoryEntry(entry, sessionId);
-        if (msg) messages.push(msg);
-      } catch {
-        // Skip malformed lines
+    const stream = createReadStream(file);
+    try {
+      const rl = createInterface({ input: stream, crlfDelay: Infinity });
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.isMeta === true) continue;
+          if (entry.isCompactSummary === true || entry.isVisibleInTranscriptOnly === true) continue;
+          const msg = convertHistoryEntry(entry, sessionId);
+          if (msg) messages.push(msg);
+        } catch {
+          // Skip malformed lines
+        }
       }
+    } finally {
+      stream.destroy();
     }
   }
 
@@ -276,19 +283,24 @@ export async function extractPlanFilePaths(sessionId: string, projectPath: strin
   }
 
   const planFiles: string[] = [];
-  const rl = createInterface({ input: createReadStream(jsonlPath), crlfDelay: Infinity });
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    try {
-      const entry = JSON.parse(line);
-      if (entry.type !== 'user') continue;
-      const tur = entry.toolUseResult as Record<string, unknown> | undefined;
-      if (typeof tur?.plan === 'string' && typeof tur?.filePath === 'string') {
-        planFiles.push(tur.filePath as string);
+  const stream = createReadStream(jsonlPath);
+  try {
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (entry.type !== 'user') continue;
+        const tur = entry.toolUseResult as Record<string, unknown> | undefined;
+        if (typeof tur?.plan === 'string' && typeof tur?.filePath === 'string') {
+          planFiles.push(tur.filePath as string);
+        }
+      } catch {
+        /* skip malformed */
       }
-    } catch {
-      /* skip malformed */
     }
+  } finally {
+    stream.destroy();
   }
 
   return planFiles;
@@ -304,24 +316,29 @@ export async function extractSkillFilePaths(sessionId: string, projectPath: stri
   }
 
   const skillFiles: SkillFileEntry[] = [];
-  const rl = createInterface({ input: createReadStream(jsonlPath), crlfDelay: Infinity });
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    try {
-      const entry = JSON.parse(line);
-      if (entry.type !== 'user' || entry.isMeta !== true) continue;
-      const content = entry.message?.content;
-      if (!Array.isArray(content)) continue;
-      const skillPath = extractSkillPathFromText(content);
-      if (skillPath) {
-        const segments = skillPath.split('/');
-        const file = segments.pop() ?? skillPath;
-        const displayName = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
-        skillFiles.push({ path: skillPath, displayName });
+  const stream = createReadStream(jsonlPath);
+  try {
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (entry.type !== 'user' || entry.isMeta !== true) continue;
+        const content = entry.message?.content;
+        if (!Array.isArray(content)) continue;
+        const skillPath = extractSkillPathFromText(content);
+        if (skillPath) {
+          const segments = skillPath.split('/');
+          const file = segments.pop() ?? skillPath;
+          const displayName = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
+          skillFiles.push({ path: skillPath, displayName });
+        }
+      } catch {
+        /* skip malformed */
       }
-    } catch {
-      /* skip malformed */
     }
+  } finally {
+    stream.destroy();
   }
 
   return skillFiles;

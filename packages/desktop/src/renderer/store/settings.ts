@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { ProviderConfig, GeneralConfig } from '@qlan-ro/mainframe-types';
 import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 
-export type SettingsTab = 'providers' | 'general' | 'keybindings' | 'about';
+export type SettingsTab = 'providers' | 'general' | 'keybindings' | 'remote-access' | 'about';
 
 interface SettingsState {
   isOpen: boolean;

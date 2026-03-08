@@ -72,22 +72,25 @@ async function main(): Promise<void> {
     pluginManager,
     launchRegistry,
     () => daemonTunnelUrl,
+    tunnelManager,
+    config.port,
   );
 
   await server.start(config.port);
   broadcastEvent = (event) => server.broadcastEvent(event);
 
-  if (config.tunnelUrl) {
-    daemonTunnelUrl = config.tunnelUrl;
-    logger.info({ tunnelUrl: daemonTunnelUrl }, 'Using configured tunnel URL');
-  } else if (config.tunnel === true) {
+  if (config.tunnel === true) {
     try {
-      daemonTunnelUrl = await tunnelManager.start(config.port, 'daemon');
+      const tunnelOpts = config.tunnelToken ? { token: config.tunnelToken, url: config.tunnelUrl } : undefined;
+      daemonTunnelUrl = await tunnelManager.start(config.port, 'daemon', tunnelOpts);
       logger.info({ tunnelUrl: daemonTunnelUrl }, 'Daemon tunnel started');
       logger.warn('Daemon is publicly accessible via tunnel — do not share this URL in untrusted environments');
     } catch (err) {
       logger.error({ err }, 'Failed to start daemon tunnel — continuing without tunnel');
     }
+  } else if (config.tunnelUrl) {
+    daemonTunnelUrl = config.tunnelUrl;
+    logger.info({ tunnelUrl: daemonTunnelUrl }, 'Using configured tunnel URL (no auto-start)');
   }
 
   logger.info('Daemon ready');

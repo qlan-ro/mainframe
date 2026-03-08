@@ -11,5 +11,6 @@ export { settingRoutes } from './settings.js';
 export { commandRoutes } from './commands.js';
 export { launchRoutes } from './launch.js';
 export { externalSessionRoutes } from './external-sessions.js';
+export { tunnelRoutes } from './tunnel.js';
 export { asyncHandler } from './async-handler.js';
 export type { RouteContext } from './types.js';
