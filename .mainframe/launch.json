@@ -8,7 +8,7 @@
       "port": 31416,
       "url": null,
       "env": {
-        "MAINFRAME_DATA_DIR": "~/.mainframe_dev"
+        "MAINFRAME_DATA_DIR": "/Users/doruchiulan/.mainframe_dev"
       }
     },
     {
@@ -19,7 +19,7 @@
       "url": null,
       "preview": true,
       "env": {
-        "MAINFRAME_DATA_DIR": "~/.mainframe_dev",
+        "MAINFRAME_DATA_DIR": "/Users/doruchiulan/.mainframe_dev",
         "VITE_DAEMON_HTTP_PORT": "31416",
         "VITE_DAEMON_WS_PORT": "31416"
       }
