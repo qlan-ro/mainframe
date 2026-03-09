@@ -131,50 +131,53 @@ async function extractSessionMeta(
   const fileStat = await stat(filePath);
   const modifiedAt = fileStat.mtime.toISOString();
 
-  const rl = createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
+  const stream = createReadStream(filePath);
   let firstPrompt: string | undefined;
   let createdAt: string | undefined;
   let gitBranch: string | undefined;
   let isSidechain = false;
   let linesRead = 0;
 
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    linesRead++;
-    if (linesRead > 30) break; // Only scan first 30 lines for metadata
+  try {
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      linesRead++;
+      if (linesRead > 30) break;
 
-    try {
-      const entry = JSON.parse(line);
+      try {
+        const entry = JSON.parse(line);
 
-      if (entry.isSidechain) {
-        isSidechain = true;
-        break;
-      }
-
-      if (!createdAt && entry.timestamp) createdAt = entry.timestamp;
-      if (!gitBranch && entry.gitBranch) gitBranch = entry.gitBranch;
-
-      if (!firstPrompt && entry.type === 'user' && entry.message?.content) {
-        const content = entry.message.content;
-        if (Array.isArray(content)) {
-          for (const block of content) {
-            if (block?.type === 'text' && block.text) {
-              firstPrompt = block.text.slice(0, 200);
-              break;
-            }
-          }
-        } else if (typeof content === 'string') {
-          firstPrompt = content.slice(0, 200);
+        if (entry.isSidechain) {
+          isSidechain = true;
+          break;
         }
+
+        if (!createdAt && entry.timestamp) createdAt = entry.timestamp;
+        if (!gitBranch && entry.gitBranch) gitBranch = entry.gitBranch;
+
+        if (!firstPrompt && entry.type === 'user' && entry.message?.content) {
+          const content = entry.message.content;
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              if (block?.type === 'text' && block.text) {
+                firstPrompt = block.text.slice(0, 200);
+                break;
+              }
+            }
+          } else if (typeof content === 'string') {
+            firstPrompt = content.slice(0, 200);
+          }
+        }
+
+        if (firstPrompt && createdAt && gitBranch) break;
+      } catch {
+        // Skip malformed lines
       }
-
-      if (firstPrompt && createdAt && gitBranch) break; // Got everything we need
-    } catch {
-      // Skip malformed lines
     }
+  } finally {
+    stream.destroy();
   }
-
-  rl.close();
 
   if (isSidechain) return null;
 

@@ -8,6 +8,7 @@ export interface MainframeConfig {
   dataDir: string;
   tunnel?: boolean;
   tunnelUrl?: string;
+  tunnelToken?: string;
   authSecret?: string;
 }
 
@@ -44,6 +45,9 @@ export function getConfig(): MainframeConfig {
   }
   if (process.env['TUNNEL_URL']) {
     merged.tunnelUrl = process.env['TUNNEL_URL'];
+  }
+  if (process.env['TUNNEL_TOKEN']) {
+    merged.tunnelToken = process.env['TUNNEL_TOKEN'];
   }
 
   return merged;

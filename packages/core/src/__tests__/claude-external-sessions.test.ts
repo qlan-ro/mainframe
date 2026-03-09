@@ -33,7 +33,7 @@ function mockJsonlFile(lines: string[]): void {
     },
     close: vi.fn(),
   };
-  mockCreateReadStream.mockReturnValue({} as ReturnType<typeof createReadStream>);
+  mockCreateReadStream.mockReturnValue({ destroy: vi.fn() } as unknown as ReturnType<typeof createReadStream>);
   mockCreateInterface.mockReturnValue(rl as unknown as ReturnType<typeof createInterface>);
 }
 

@@ -53,3 +53,13 @@ export { getPlugins } from './plugins-api';
 export { getCommands } from './commands-api';
 
 export { getExternalSessions, importExternalSession } from './external-sessions-api';
+
+export {
+  getTunnelStatus,
+  startTunnel,
+  stopTunnel,
+  getTunnelConfig,
+  generatePairingCode,
+  getDevices,
+  removeDevice,
+} from './remote-access-api';

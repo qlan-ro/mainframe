@@ -82,7 +82,7 @@ export function EditorTab({
       value={content}
       language={inferLanguage(filePath)}
       filePath={filePath}
-      readOnly
+      readOnly={false}
       onLineComment={handleLineComment}
     />
   );

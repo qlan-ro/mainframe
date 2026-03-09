@@ -66,10 +66,11 @@ To access the daemon from the mobile app or another network, enable the built-in
 TUNNEL=true mainframe-daemon
 ```
 
-If you already have your own tunnel or reverse proxy, pass the public URL directly instead:
+For a **persistent URL** with your own domain (so the URL never changes between restarts), create a named tunnel via the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/) → Networks → Tunnels → Create, add a public hostname pointing to `http://localhost:31415`, then run:
 
 ```bash
-TUNNEL_URL=https://mainframe.example.com mainframe-daemon
+cloudflared tunnel run --token <TOKEN> &                  # run named tunnel
+TUNNEL_URL=https://mainframe.example.com mainframe-daemon # start daemon
 ```
 
 ### Mobile Companion App

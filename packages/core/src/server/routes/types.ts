@@ -4,6 +4,7 @@ import type { ChatManager } from '../../chat/index.js';
 import type { AdapterRegistry } from '../../adapters/index.js';
 import type { AttachmentStore } from '../../attachment/index.js';
 import type { LaunchRegistry } from '../../launch/index.js';
+import type { TunnelManager } from '../../tunnel/tunnel-manager.js';
 
 export interface RouteContext {
   db: DatabaseManager;
@@ -12,6 +13,9 @@ export interface RouteContext {
   attachmentStore?: AttachmentStore;
   launchRegistry?: LaunchRegistry;
   tunnelUrl?: string | null;
+  tunnelManager?: TunnelManager;
+  setTunnelUrl?: (url: string | null) => void;
+  port?: number;
 }
 
 /** Extract a route param as a string (Express 5 params may be string | string[]). */

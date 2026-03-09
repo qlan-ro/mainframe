@@ -1,6 +1,6 @@
 import type { SettingsTab } from '../../store/settings';
 import type { ProviderConfig } from '@qlan-ro/mainframe-types';
-import { SlidersHorizontal, Keyboard, Info, Cpu } from 'lucide-react';
+import { SlidersHorizontal, Keyboard, Info, Cpu, Globe } from 'lucide-react';
 import type React from 'react';
 
 export const MODE_OPTIONS: {
@@ -38,6 +38,7 @@ export const SIDEBAR_TABS: { id: SettingsTab; label: string; icon: React.Element
   { id: 'general', label: 'General', icon: SlidersHorizontal },
   { id: 'providers', label: 'Providers', icon: Cpu },
   { id: 'keybindings', label: 'Keybindings', icon: Keyboard },
+  { id: 'remote-access', label: 'Remote Access', icon: Globe },
   { id: 'about', label: 'About', icon: Info },
 ];
 

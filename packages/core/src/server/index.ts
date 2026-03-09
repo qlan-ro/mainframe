@@ -8,6 +8,7 @@ import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 import type { LaunchRegistry } from '../launch/index.js';
+import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 
@@ -27,6 +28,8 @@ export function createServerManager(
   pluginManager?: PluginManager,
   launchRegistry?: LaunchRegistry,
   getTunnelUrl?: () => string | null,
+  tunnelManager?: TunnelManager,
+  port?: number,
 ): ServerManager {
   const { app, pushService } = createHttpServer(
     db,
@@ -36,6 +39,8 @@ export function createServerManager(
     pluginManager,
     launchRegistry,
     getTunnelUrl,
+    tunnelManager,
+    port,
   );
   chats.setPushService(pushService);
   const httpServer = createServer(app);
