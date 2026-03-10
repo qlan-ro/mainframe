@@ -10,9 +10,11 @@ const log = createLogger('renderer:ws');
 export function routeEvent(event: DaemonEvent): void {
   const chats = useChatsStore.getState();
   const tabs = useTabsStore.getState();
+  const activeProjectId = useProjectsStore.getState().activeProjectId;
 
   switch (event.type) {
     case 'chat.created':
+      if (event.chat.projectId !== activeProjectId) break;
       log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title, source: event.source });
       chats.addChat(event.chat);
       if (event.source !== 'import') {
@@ -21,6 +23,7 @@ export function routeEvent(event: DaemonEvent): void {
       }
       break;
     case 'chat.updated':
+      if (event.chat.projectId !== activeProjectId) break;
       log.debug('event:chat.updated', { chatId: event.chat.id });
       chats.updateChat(event.chat);
       if (event.chat.title) {
@@ -96,6 +99,7 @@ export function routeEvent(event: DaemonEvent): void {
       log.warn('event:launch.port.timeout', { projectId: event.projectId, name: event.name, port: event.port });
       break;
     case 'sessions.external.count':
+      if (event.projectId !== activeProjectId) break;
       log.debug('event:sessions.external.count', { projectId: event.projectId, count: event.count });
       chats.setExternalSessionCount(event.count);
       break;
