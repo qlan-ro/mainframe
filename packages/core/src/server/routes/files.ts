@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { readdir, stat, readFile, realpath } from 'node:fs/promises';
+import { readdir, stat, readFile, writeFile, realpath } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
@@ -220,6 +220,36 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
   }
 }
 
+/** PUT /api/projects/:id/files — write file content */
+async function handleWriteFile(ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const basePath = getEffectivePath(ctx, param(req, 'id'), req.body?.chatId as string | undefined);
+  if (!basePath) {
+    res.status(404).json({ error: 'Project not found' });
+    return;
+  }
+
+  const filePath = req.body?.path as string;
+  const content = req.body?.content as string;
+  if (!filePath || content == null) {
+    res.status(400).json({ error: 'path and content required' });
+    return;
+  }
+
+  try {
+    const fullPath = resolveAndValidatePath(basePath, filePath);
+    if (!fullPath) {
+      res.status(403).json({ error: 'Path outside project' });
+      return;
+    }
+
+    await writeFile(fullPath, content, 'utf-8');
+    res.json({ path: filePath, success: true });
+  } catch (err) {
+    logger.warn({ err, path: filePath }, 'Failed to write file');
+    res.status(500).json({ error: 'Failed to write file' });
+  }
+}
+
 /** GET /api/filesystem/browse?path=~ */
 async function handleBrowseFilesystem(_ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = validate(BrowseFilesystemQuery, req.query);
@@ -288,6 +318,10 @@ export function fileRoutes(ctx: RouteContext): Router {
   router.get(
     '/api/projects/:id/files',
     asyncHandler((req, res) => handleFileContent(ctx, req, res)),
+  );
+  router.put(
+    '/api/projects/:id/files',
+    asyncHandler((req, res) => handleWriteFile(ctx, req, res)),
   );
 
   return router;

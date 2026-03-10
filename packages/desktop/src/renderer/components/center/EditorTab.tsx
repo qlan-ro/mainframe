@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Save } from 'lucide-react';
 import { useProjectsStore } from '../../store';
 import { useChatsStore } from '../../store/chats';
-import { getFileContent } from '../../lib/api';
+import { getFileContent, saveFileContent } from '../../lib/api';
 import { sendCommentMessage } from '../../lib/send-comment-message';
 import { MonacoEditor } from '../editor/MonacoEditor';
 
@@ -41,21 +42,62 @@ export function EditorTab({
 }): React.ReactElement {
   const { activeProjectId } = useProjectsStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
-  const [content, setContent] = useState<string | null>(providedContent ?? null);
+  const [savedContent, setSavedContent] = useState<string | null>(providedContent ?? null);
+  const [currentContent, setCurrentContent] = useState<string | null>(providedContent ?? null);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const dirty = savedContent !== null && currentContent !== null && savedContent !== currentContent;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
   useEffect(() => {
     if (providedContent !== undefined) {
-      setContent(providedContent);
+      setSavedContent(providedContent);
+      setCurrentContent(providedContent);
       return;
     }
     if (!activeProjectId) return;
-    setContent(null);
+    setSavedContent(null);
+    setCurrentContent(null);
     setError(null);
     getFileContent(activeProjectId, filePath, activeChatId ?? undefined)
-      .then((result) => setContent(result.content))
+      .then((result) => {
+        setSavedContent(result.content);
+        setCurrentContent(result.content);
+      })
       .catch(() => setError('Failed to load file'));
   }, [activeProjectId, filePath, activeChatId, providedContent]);
+
+  const handleSave = useCallback(async () => {
+    if (!activeProjectId || currentContent == null) return;
+    setSaving(true);
+    try {
+      await saveFileContent(activeProjectId, filePath, currentContent, activeChatId ?? undefined);
+      setSavedContent(currentContent);
+    } catch {
+      console.warn('[EditorTab] save failed');
+    } finally {
+      setSaving(false);
+    }
+  }, [activeProjectId, filePath, currentContent, activeChatId]);
+
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (dirtyRef.current) handleSaveRef.current();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const handleChange = useCallback((value: string | undefined) => {
+    if (value !== undefined) setCurrentContent(value);
+  }, []);
 
   const handleLineComment = useCallback(
     (line: number, lineContent: string, comment: string) => {
@@ -71,19 +113,36 @@ export function EditorTab({
     return <div className="h-full flex items-center justify-center text-mf-text-secondary text-mf-body">{error}</div>;
   }
 
-  if (content === null) {
+  if (currentContent === null) {
     return (
       <div className="h-full flex items-center justify-center text-mf-text-secondary text-mf-body">Loading...</div>
     );
   }
 
   return (
-    <MonacoEditor
-      value={content}
-      language={inferLanguage(filePath)}
-      filePath={filePath}
-      readOnly={false}
-      onLineComment={handleLineComment}
-    />
+    <div className="h-full flex flex-col">
+      {dirty && (
+        <div className="flex items-center justify-end px-3 py-1 shrink-0">
+          <button
+            className="flex items-center gap-1 px-2 py-1 text-mf-small rounded hover:bg-mf-input text-mf-text-secondary hover:text-mf-text-primary disabled:opacity-40"
+            disabled={saving}
+            onClick={handleSave}
+          >
+            <Save size={13} />
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      )}
+      <div className="flex-1 min-h-0">
+        <MonacoEditor
+          value={currentContent}
+          language={inferLanguage(filePath)}
+          filePath={filePath}
+          readOnly={false}
+          onChange={handleChange}
+          onLineComment={handleLineComment}
+        />
+      </div>
+    </div>
   );
 }
