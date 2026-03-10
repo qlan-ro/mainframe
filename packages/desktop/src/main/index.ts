@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, utilityProcess, Menu } from 'electron';
+import { app, BrowserWindow, session, shell, ipcMain, utilityProcess, Menu } from 'electron';
 import type { UtilityProcess } from 'electron';
 import { join, resolve, sep } from 'path';
 import { execFileSync } from 'child_process';
@@ -177,6 +177,15 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   log.info({ version: app.getVersion() }, 'app ready');
+
+  // Deny media/sensor permissions — the app doesn't need camera, mic, etc.
+  // Prevents macOS from prompting for Apple Music, microphone, or camera access
+  // when user projects loaded in the preview webview request these APIs.
+  const ALLOWED_PERMISSIONS = new Set(['clipboard-read', 'clipboard-sanitized-write', 'notifications']);
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(ALLOWED_PERMISSIONS.has(permission));
+  });
+
   setupIPC();
   startDaemon();
 

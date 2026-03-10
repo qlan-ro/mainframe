@@ -1,4 +1,4 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { access, constants, readFile, readdir, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
@@ -73,22 +73,31 @@ async function listFromIndex(
     return null;
   }
 
-  return index.entries
-    .filter((e) => e.sessionId && !excludeSet.has(e.sessionId) && !e.isSidechain)
-    .map(
-      (entry): ExternalSession => ({
-        sessionId: entry.sessionId,
-        adapterId: 'claude',
-        projectPath,
-        firstPrompt: entry.firstPrompt,
-        summary: entry.summary,
-        messageCount: entry.messageCount,
-        createdAt: entry.created ?? new Date().toISOString(),
-        modifiedAt: entry.modified ?? entry.created ?? new Date().toISOString(),
-        gitBranch: entry.gitBranch || undefined,
-      }),
-    )
-    .sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
+  const candidates = index.entries.filter((e) => e.sessionId && !excludeSet.has(e.sessionId) && !e.isSidechain);
+
+  // Verify JSONL files exist on disk — the index can reference deleted sessions
+  const verified: ExternalSession[] = [];
+  for (const entry of candidates) {
+    const jsonlPath = entry.fullPath ?? path.join(projectDir, entry.sessionId + '.jsonl');
+    try {
+      await access(jsonlPath, constants.R_OK);
+    } catch {
+      continue; // JSONL deleted — skip ghost entry
+    }
+    verified.push({
+      sessionId: entry.sessionId,
+      adapterId: 'claude',
+      projectPath,
+      firstPrompt: entry.firstPrompt,
+      summary: entry.summary,
+      messageCount: entry.messageCount,
+      createdAt: entry.created ?? new Date().toISOString(),
+      modifiedAt: entry.modified ?? entry.created ?? new Date().toISOString(),
+      gitBranch: entry.gitBranch || undefined,
+    });
+  }
+
+  return verified.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
 }
 
 /** Scan *.jsonl files, reading the first user message from each for metadata. */

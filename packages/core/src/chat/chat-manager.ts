@@ -334,11 +334,13 @@ export class ChatManager {
         chatId: chat.claudeSessionId,
       });
       const history = await session.loadHistory();
-      if (history.length > 0) {
-        this.messages.set(chatId, history);
-        this.permissions.restorePendingPermission(chatId, history);
+      // loadHistory embeds the Claude sessionId as chatId — remap to Mainframe chatId
+      const remapped = history.map((msg) => ({ ...msg, chatId }));
+      if (remapped.length > 0) {
+        this.messages.set(chatId, remapped);
+        this.permissions.restorePendingPermission(chatId, remapped);
       }
-      return history;
+      return remapped;
     } catch {
       /* best-effort: return empty if history loading fails */
       return [];

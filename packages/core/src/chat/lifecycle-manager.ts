@@ -4,7 +4,7 @@ import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';
 import { removeWorktree } from '../workspace/index.js';
 import { createChildLogger } from '../logger.js';
-import { deriveTitleFromMessage, generateTitle } from './title-generator.js';
+import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
 import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
@@ -217,9 +217,11 @@ export class ChatLifecycleManager {
 
       try {
         const history = await session.loadHistory();
-        if (history.length > 0) {
-          this.deps.messages.set(chatId, history);
-          this.deps.permissions.restorePendingPermission(chatId, history);
+        // loadHistory embeds the Claude sessionId as chatId — remap to Mainframe chatId
+        const remapped = history.map((msg) => ({ ...msg, chatId }));
+        if (remapped.length > 0) {
+          this.deps.messages.set(chatId, remapped);
+          this.deps.permissions.restorePendingPermission(chatId, remapped);
         }
       } catch {
         // Best-effort
@@ -230,7 +232,11 @@ export class ChatLifecycleManager {
         for (const msg of cached) {
           if (msg.type !== 'user') continue;
           for (const block of msg.content) {
-            if (block.type === 'text') extractMentionsFromText(chatId, block.text, this.deps.db);
+            if (block.type !== 'text') continue;
+            const text = (block as { text: string }).text;
+            // Skip command/skill injections — they contain example @-patterns
+            if (/<mainframe-command|<command-name>/.test(text)) continue;
+            extractMentionsFromText(chatId, text, this.deps.db);
           }
         }
       }
