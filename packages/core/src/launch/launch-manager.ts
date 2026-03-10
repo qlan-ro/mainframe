@@ -19,13 +19,44 @@ function expandEnvValues(env: Record<string, string>): Record<string, string> {
   return result;
 }
 
-/** Strip pnpm/npm vars leaked from the daemon's own pnpm run context. */
+/**
+ * Allowlisted env var names and prefixes passed to launched processes.
+ * Everything else from the daemon (Electron, pnpm, internal Node vars) is dropped.
+ * Users can add arbitrary vars via the launch config `env` block.
+ */
+const ENV_ALLOWLIST_EXACT = new Set([
+  'PATH',
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'TERM',
+  'TERM_PROGRAM',
+  'TMPDIR',
+  'XDG_CONFIG_HOME',
+  'XDG_DATA_HOME',
+  'XDG_CACHE_HOME',
+  'XDG_RUNTIME_DIR',
+  'DISPLAY',
+  'SSH_AUTH_SOCK',
+  'COLORTERM',
+  'EDITOR',
+  'VISUAL',
+]);
+
+const ENV_ALLOWLIST_PREFIXES = ['LANG', 'LC_'];
+
+function isAllowedEnvVar(key: string): boolean {
+  if (ENV_ALLOWLIST_EXACT.has(key)) return true;
+  return ENV_ALLOWLIST_PREFIXES.some((p) => key.startsWith(p));
+}
+
+/** Build a minimal env for launched processes — only essential OS/user vars. */
 function cleanEnv(): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v == null) continue;
-    if (k.startsWith('npm_') || k === 'PNPM_SCRIPT_SRC_DIR') continue;
-    result[k] = v;
+    if (isAllowedEnvVar(k)) result[k] = v;
   }
   return result;
 }
