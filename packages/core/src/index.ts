@@ -2,6 +2,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { ensureAuthSecret, getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
@@ -19,7 +20,25 @@ import { activate as activateTodos } from './plugins/builtin/todos/index.js';
 import { logger } from './logger.js';
 import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
 
+function enrichPath(): void {
+  try {
+    const shell = process.env['SHELL'] || '/bin/zsh';
+    const result = execFileSync(shell, ['-lc', 'echo "$PATH"'], {
+      encoding: 'utf-8',
+      timeout: 5_000,
+    }).trim();
+    if (result) process.env['PATH'] = result;
+  } catch {
+    const current = process.env['PATH'] ?? '/usr/bin:/bin:/usr/sbin:/sbin';
+    const extra = [`${homedir()}/.local/bin`, '/usr/local/bin', '/opt/homebrew/bin'];
+    const seen = new Set(current.split(':'));
+    const additions = extra.filter((p) => !seen.has(p));
+    if (additions.length) process.env['PATH'] = `${additions.join(':')}:${current}`;
+  }
+}
+
 async function main(): Promise<void> {
+  enrichPath();
   const config = getConfig();
   const authSecret = ensureAuthSecret();
   process.env['AUTH_TOKEN_SECRET'] = authSecret;
