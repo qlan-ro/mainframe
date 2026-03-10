@@ -185,6 +185,24 @@ Tests live in `packages/e2e/tests/` and cover the full desktop app (daemon + Ele
 | `pnpm clean` | Clean build artifacts |
 | `pnpm package` | Build + package Electron app |
 
+## Releasing
+
+Bump the version across all workspace packages and create a git tag:
+
+```bash
+npm version patch   # 0.2.1 → 0.2.2
+npm version minor   # 0.2.2 → 0.3.0
+npm version major   # 0.3.0 → 1.0.0
+```
+
+This runs `pnpm -r version --no-git-tag-version <version>` to update all `package.json` files, stages them, creates a commit, and tags it (`v<version>`). Push the tag to trigger the release workflow:
+
+```bash
+git push origin <branch> --follow-tags
+```
+
+Do **not** manually edit version strings in `package.json` files — `npm version` keeps all packages in sync.
+
 ## Development Workflow
 
 ### Adding a New REST Endpoint
