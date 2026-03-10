@@ -110,6 +110,26 @@ cd mainframe
 pnpm install && pnpm build && pnpm dev
 ```
 
+### Configuration
+
+Env vars override `~/.mainframe/config.json`, which overrides defaults.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DAEMON_PORT` | 31415 | Daemon HTTP + WebSocket port |
+| `VITE_PORT` | 5173 | Vite dev server port |
+| `MAINFRAME_DATA_DIR` | `~/.mainframe` | Data directory (DB, config, plugins, logs) |
+| `LOG_LEVEL` | info | Logging verbosity |
+| `AUTH_TOKEN_SECRET` | auto-generated | JWT signing secret for mobile pairing |
+| `TUNNEL` | — | Set `true` to enable Cloudflare tunnel |
+| `TUNNEL_URL` | — | Named tunnel URL |
+| `TUNNEL_TOKEN` | — | Cloudflare tunnel token |
+| `VITE_DAEMON_HOST` | `127.0.0.1` | Daemon host for desktop renderer |
+| `VITE_DAEMON_HTTP_PORT` | 31415 | Daemon HTTP port for desktop renderer |
+| `VITE_DAEMON_WS_PORT` | 31415 | Daemon WebSocket port for desktop renderer |
+
+See the [Developer Guide](docs/DEVELOPER-GUIDE.md#environment-variables) for details on IntelliJ run configurations and precedence.
+
 | Document | Description |
 |----------|-------------|
 | [Architecture](docs/ARCHITECTURE.md) | System design, data flow, package breakdown |

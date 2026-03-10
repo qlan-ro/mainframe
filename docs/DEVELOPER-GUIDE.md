@@ -240,11 +240,33 @@ The `@assistant-ui/react` library provides headless chat primitives that work wi
 
 ## Environment Variables
 
+Configuration precedence: **env vars > `~/.mainframe/config.json` > defaults**.
+
+### Daemon (`@qlan-ro/mainframe-core`)
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | 31415 | Daemon HTTP + WebSocket server port |
-| `LOG_LEVEL` | info | Logging verbosity |
-| `NODE_ENV` | — | `development` enables dev tools, assumes daemon running separately |
+| `DAEMON_PORT` | 31415 | Daemon HTTP + WebSocket server port |
+| `MAINFRAME_DATA_DIR` | `~/.mainframe` | Data directory (SQLite DB, config, plugins, logs) |
+| `LOG_LEVEL` | info | Logging verbosity (`trace`, `debug`, `info`, `warn`, `error`) |
+| `AUTH_TOKEN_SECRET` | auto-generated | JWT signing secret for mobile pairing (min 32 chars) |
+| `TUNNEL` | — | Set to `true` to enable Cloudflare tunnel on startup |
+| `TUNNEL_URL` | — | Named tunnel URL (e.g. `https://mainframe.example.com`) |
+| `TUNNEL_TOKEN` | — | Cloudflare tunnel token for named tunnels |
+| `NODE_ENV` | — | `development` skips embedded daemon startup in Electron |
+
+### Desktop (`@qlan-ro/mainframe-desktop`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_PORT` | 5173 | Vite dev server port |
+| `VITE_DAEMON_HOST` | `127.0.0.1` | Daemon host for CSP and API connections |
+| `VITE_DAEMON_HTTP_PORT` | 31415 | Daemon HTTP port the renderer connects to |
+| `VITE_DAEMON_WS_PORT` | 31415 | Daemon WebSocket port the renderer connects to |
+
+### IntelliJ Run Configurations
+
+The `.run/` directory contains pre-configured IntelliJ run configs. For development with isolated data, these set `DAEMON_PORT=31416`, `VITE_PORT=5174`, and `MAINFRAME_DATA_DIR=~/.mainframe_dev` to avoid colliding with a production instance.
 
 ## Testing
 

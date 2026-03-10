@@ -24,6 +24,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), dynamicCspPlugin()],
   server: {
     host: '127.0.0.1',
-    port: process.env['PORT'] ? parseInt(process.env['PORT'], 10) : 5173,
+    port: process.env['VITE_PORT'] ? parseInt(process.env['VITE_PORT'], 10) : 5173,
   },
 });

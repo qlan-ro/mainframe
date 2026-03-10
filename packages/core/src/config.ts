@@ -12,15 +12,32 @@ export interface MainframeConfig {
   authSecret?: string;
 }
 
-const rawPort = process.env['PORT'];
-const parsedPort = rawPort !== undefined ? Number(rawPort) : NaN;
 const DEFAULT_CONFIG: MainframeConfig = {
-  port: Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 31415,
-  dataDir: process.env['MAINFRAME_DATA_DIR'] ?? join(homedir(), '.mainframe'),
+  port: 31415,
+  dataDir: join(homedir(), '.mainframe'),
 };
 
+/** Env vars always override config.json values. */
+function envOverrides(): Partial<MainframeConfig> {
+  const overrides: Partial<MainframeConfig> = {};
+
+  const rawPort = process.env['DAEMON_PORT'];
+  if (rawPort !== undefined) {
+    const parsed = Number(rawPort);
+    if (Number.isFinite(parsed) && parsed > 0) overrides.port = parsed;
+  }
+  if (process.env['MAINFRAME_DATA_DIR']) {
+    overrides.dataDir = process.env['MAINFRAME_DATA_DIR'];
+  }
+  if (process.env['TUNNEL'] === 'true') overrides.tunnel = true;
+  if (process.env['TUNNEL_URL']) overrides.tunnelUrl = process.env['TUNNEL_URL'];
+  if (process.env['TUNNEL_TOKEN']) overrides.tunnelToken = process.env['TUNNEL_TOKEN'];
+
+  return overrides;
+}
+
 export function getDataDir(): string {
-  const dir = DEFAULT_CONFIG.dataDir;
+  const dir = process.env['MAINFRAME_DATA_DIR'] ?? DEFAULT_CONFIG.dataDir;
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
@@ -30,27 +47,17 @@ export function getDataDir(): string {
 export function getConfig(): MainframeConfig {
   const configPath = join(getDataDir(), 'config.json');
 
-  let merged = DEFAULT_CONFIG;
+  let fileConfig: Partial<MainframeConfig> = {};
   if (existsSync(configPath)) {
     try {
       const content = readFileSync(configPath, 'utf-8');
-      merged = { ...DEFAULT_CONFIG, ...JSON.parse(content) };
+      fileConfig = JSON.parse(content);
     } catch {
       // fall through with defaults
     }
   }
 
-  if (process.env['TUNNEL'] === 'true') {
-    merged.tunnel = true;
-  }
-  if (process.env['TUNNEL_URL']) {
-    merged.tunnelUrl = process.env['TUNNEL_URL'];
-  }
-  if (process.env['TUNNEL_TOKEN']) {
-    merged.tunnelToken = process.env['TUNNEL_TOKEN'];
-  }
-
-  return merged;
+  return { ...DEFAULT_CONFIG, ...fileConfig, ...envOverrides() };
 }
 
 export function saveConfig(config: Partial<MainframeConfig>): void {
