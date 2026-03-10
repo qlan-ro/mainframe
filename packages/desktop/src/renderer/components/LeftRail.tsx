@@ -33,6 +33,7 @@ export function LeftRail(): React.ReactElement {
   const activeLeftPanelId = usePluginLayoutStore((s) => s.activeLeftPanelId);
   const panelVisible = useUIStore((s) => s.panelVisible);
   const setPanelVisible = useUIStore((s) => s.setPanelVisible);
+  const togglePanel = useUIStore((s) => s.togglePanel);
 
   const handleSessionsClick = (): void => {
     usePluginLayoutStore.getState().setActiveLeftPanel(null);
@@ -72,7 +73,17 @@ export function LeftRail(): React.ReactElement {
       {/* Bottom actions */}
       <div className="flex flex-col gap-2 pt-2">
         {/* Logs toggle button */}
-        <RailButton active={panelVisible} onClick={() => setPanelVisible(!panelVisible)} title="Toggle logs panel">
+        <RailButton
+          active={panelVisible}
+          onClick={() => {
+            const next = !panelVisible;
+            setPanelVisible(next);
+            if (next && useUIStore.getState().panelCollapsed.bottom) {
+              togglePanel('bottom');
+            }
+          }}
+          title="Toggle logs panel"
+        >
           <span data-testid="toggle-logs-panel">
             <Play size={16} />
           </span>
