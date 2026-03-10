@@ -38,7 +38,7 @@ function resolveShellPath(): string {
   const fallback = process.env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin';
   try {
     const userShell = process.env.SHELL || '/bin/zsh';
-    const result = execFileSync(userShell, ['-lc', 'echo "$PATH"'], {
+    const result = execFileSync(userShell, ['-lic', 'echo "$PATH"'], {
       encoding: 'utf-8',
       timeout: 5_000,
     });

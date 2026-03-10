@@ -23,7 +23,7 @@ import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
 function enrichPath(): void {
   try {
     const shell = process.env['SHELL'] || '/bin/zsh';
-    const result = execFileSync(shell, ['-lc', 'echo "$PATH"'], {
+    const result = execFileSync(shell, ['-lic', 'echo "$PATH"'], {
       encoding: 'utf-8',
       timeout: 5_000,
     }).trim();
