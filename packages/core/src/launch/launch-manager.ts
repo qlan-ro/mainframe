@@ -25,6 +25,7 @@ function expandEnvValues(env: Record<string, string>): Record<string, string> {
  * Users can add arbitrary vars via the launch config `env` block.
  */
 const ENV_ALLOWLIST_EXACT = new Set([
+  // OS / user identity
   'PATH',
   'HOME',
   'USER',
@@ -42,6 +43,23 @@ const ENV_ALLOWLIST_EXACT = new Set([
   'COLORTERM',
   'EDITOR',
   'VISUAL',
+  // Developer toolchains
+  'JAVA_HOME',
+  'ANDROID_HOME',
+  'ANDROID_SDK_ROOT',
+  'GOPATH',
+  'GOROOT',
+  'CARGO_HOME',
+  'RUSTUP_HOME',
+  'PYENV_ROOT',
+  'NVM_DIR',
+  'VOLTA_HOME',
+  'BUN_INSTALL',
+  'DENO_DIR',
+  'DOTNET_ROOT',
+  'GRADLE_HOME',
+  'MAVEN_HOME',
+  'M2_HOME',
 ]);
 
 const ENV_ALLOWLIST_PREFIXES = ['LANG', 'LC_'];
