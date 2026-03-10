@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
@@ -102,7 +103,14 @@ export class LaunchManager {
 
     this.emit({ type: 'launch.status', projectId: this.projectId, name: config.name, status: 'starting' });
 
-    const child = spawn(config.runtimeExecutable, config.runtimeArgs, {
+    // Resolve relative executables (./gradlew, ../bin/foo) against the project directory.
+    // Node's spawn only searches PATH, not cwd, for the executable.
+    const executable =
+      config.runtimeExecutable.startsWith('./') || config.runtimeExecutable.startsWith('../')
+        ? resolve(this.projectPath, config.runtimeExecutable)
+        : config.runtimeExecutable;
+
+    const child = spawn(executable, config.runtimeArgs, {
       cwd: this.projectPath,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: true,

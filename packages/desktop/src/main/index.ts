@@ -31,27 +31,32 @@ app.on('second-instance', () => {
 let mainWindow: BrowserWindow | null = null;
 let daemon: UtilityProcess | null = null;
 
-// Electron apps launch with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin).
-// Resolve the user's full login-shell PATH so the daemon can find CLI tools
-// installed via nvm, fnm, homebrew, etc.
-function resolveShellPath(): string {
-  const fallback = process.env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin';
+// Electron apps launch with a minimal environment (/usr/bin:/bin:/usr/sbin:/sbin PATH,
+// no JAVA_HOME, etc.). Resolve the user's full login-shell environment so the daemon
+// can find CLI tools installed via nvm, sdkman, homebrew, etc.
+function resolveShellEnv(): Record<string, string> {
   try {
     const userShell = process.env.SHELL || '/bin/zsh';
-    const result = execFileSync(userShell, ['-lic', 'echo "$PATH"'], {
+    const result = execFileSync(userShell, ['-lic', 'env'], {
       encoding: 'utf-8',
       timeout: 5_000,
     });
-    const shellPath = result.trim();
-    if (shellPath) return shellPath;
+    const env: Record<string, string> = {};
+    for (const line of result.split('\n')) {
+      const eqIdx = line.indexOf('=');
+      if (eqIdx <= 0) continue;
+      env[line.slice(0, eqIdx)] = line.slice(eqIdx + 1);
+    }
+    if (env['PATH']) return env;
   } catch (err) {
-    log.warn({ err }, 'failed to resolve shell PATH, using fallback');
+    log.warn({ err }, 'failed to resolve shell env, using fallback');
   }
-  // Fallback: at least add common user-level locations
+  // Fallback: at least add common user-level PATH locations
+  const fallback = process.env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin';
   const extra = [`${homedir()}/.local/bin`, '/usr/local/bin', '/opt/homebrew/bin', '/opt/homebrew/sbin'];
   const seen = new Set(fallback.split(':'));
   const additions = extra.filter((p) => !seen.has(p));
-  return additions.length ? `${additions.join(':')}:${fallback}` : fallback;
+  return { PATH: additions.length ? `${additions.join(':')}:${fallback}` : fallback };
 }
 
 function startDaemon(): void {
@@ -66,7 +71,7 @@ function startDaemon(): void {
   log.info({ path: daemonPath }, 'daemon starting');
   daemon = utilityProcess.fork(daemonPath, [], {
     stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'production', PATH: resolveShellPath() },
+    env: { ...process.env, NODE_ENV: 'production', ...resolveShellEnv() },
   });
 
   daemon.on('exit', (code) => {
