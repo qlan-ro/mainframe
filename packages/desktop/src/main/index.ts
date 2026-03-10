@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain, utilityProcess, Menu } from 'electron';
 import type { UtilityProcess } from 'electron';
 import { join, resolve, sep } from 'path';
+import { execFileSync } from 'child_process';
 import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { createMainLogger, logFromRenderer } from './logger.js';
@@ -31,14 +32,26 @@ let mainWindow: BrowserWindow | null = null;
 let daemon: UtilityProcess | null = null;
 
 // Electron apps launch with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin).
-// Prepend common user-level locations so the daemon can find CLI tools like `claude`
-// that are installed outside the system PATH (e.g. ~/.local/bin from the Claude CLI installer).
-function buildDaemonPath(): string {
-  const base = process.env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin';
+// Resolve the user's full login-shell PATH so the daemon can find CLI tools
+// installed via nvm, fnm, homebrew, etc.
+function resolveShellPath(): string {
+  const fallback = process.env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin';
+  try {
+    const userShell = process.env.SHELL || '/bin/zsh';
+    const result = execFileSync(userShell, ['-lc', 'echo "$PATH"'], {
+      encoding: 'utf-8',
+      timeout: 5_000,
+    });
+    const shellPath = result.trim();
+    if (shellPath) return shellPath;
+  } catch (err) {
+    log.warn({ err }, 'failed to resolve shell PATH, using fallback');
+  }
+  // Fallback: at least add common user-level locations
   const extra = [`${homedir()}/.local/bin`, '/usr/local/bin', '/opt/homebrew/bin', '/opt/homebrew/sbin'];
-  const seen = new Set(base.split(':'));
+  const seen = new Set(fallback.split(':'));
   const additions = extra.filter((p) => !seen.has(p));
-  return additions.length ? `${additions.join(':')}:${base}` : base;
+  return additions.length ? `${additions.join(':')}:${fallback}` : fallback;
 }
 
 function startDaemon(): void {
@@ -53,7 +66,7 @@ function startDaemon(): void {
   log.info({ path: daemonPath }, 'daemon starting');
   daemon = utilityProcess.fork(daemonPath, [], {
     stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'production', PATH: buildDaemonPath() },
+    env: { ...process.env, NODE_ENV: 'production', PATH: resolveShellPath() },
   });
 
   daemon.on('exit', (code) => {
