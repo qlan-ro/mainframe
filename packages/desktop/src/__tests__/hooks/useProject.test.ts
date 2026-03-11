@@ -56,8 +56,8 @@ describe('useProject', () => {
   it('syncs launch statuses into useSandboxStore on mount', async () => {
     const { fetchLaunchStatuses } = await import('../../renderer/lib/launch.js');
     vi.mocked(fetchLaunchStatuses).mockResolvedValue({
-      'Desktop App': 'running',
-      api: 'stopped',
+      statuses: { 'Desktop App': 'running', api: 'stopped' },
+      tunnelUrls: {},
     });
 
     renderHook(() => useProject('proj-1'));

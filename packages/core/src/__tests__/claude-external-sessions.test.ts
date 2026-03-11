@@ -5,6 +5,8 @@ vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
   readdir: vi.fn(),
   stat: vi.fn(),
+  access: vi.fn(),
+  constants: { R_OK: 4 },
 }));
 
 vi.mock('node:fs', () => ({
@@ -15,13 +17,14 @@ vi.mock('node:readline', () => ({
   createInterface: vi.fn(),
 }));
 
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat, access } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 const mockReadFile = vi.mocked(readFile);
 const mockReaddir = vi.mocked(readdir);
 const mockStat = vi.mocked(stat);
+const mockAccess = vi.mocked(access);
 const mockCreateReadStream = vi.mocked(createReadStream);
 const mockCreateInterface = vi.mocked(createInterface);
 
@@ -43,6 +46,8 @@ describe('listExternalSessions', () => {
     // Default: no index, no JSONL files
     mockReadFile.mockRejectedValue(new Error('ENOENT'));
     mockReaddir.mockRejectedValue(new Error('ENOENT'));
+    // Default: JSONL files exist on disk (for sessions-index tests)
+    mockAccess.mockResolvedValue(undefined);
   });
 
   describe('from sessions-index.json', () => {

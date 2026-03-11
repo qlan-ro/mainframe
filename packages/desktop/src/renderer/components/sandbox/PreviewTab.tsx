@@ -439,7 +439,6 @@ export function PreviewTab(): React.ReactElement {
               style={hasPreview ? undefined : { position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
             >
               {isElectron ? (
-                // @ts-expect-error — webview is an Electron-specific HTML element not present in React's type definitions
                 // Electron webviews render in a separate GPU process and paint OVER regular DOM,
                 // so visibility:hidden doesn't help. Use zero dimensions to truly hide until ready.
                 <webview
@@ -503,7 +502,7 @@ export function PreviewTab(): React.ReactElement {
                 ref={logRef}
                 data-testid="preview-console-output"
                 className={[
-                  'overflow-y-auto px-2 pb-2 font-mono text-xs text-mf-text-secondary',
+                  'overflow-y-auto px-2 pb-2 font-mono text-xs text-mf-text-secondary whitespace-pre-wrap select-text',
                   hasPreview ? '' : 'flex-1',
                 ].join(' ')}
                 style={hasPreview ? { height: 150 } : undefined}

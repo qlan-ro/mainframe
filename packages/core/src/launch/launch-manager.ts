@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
@@ -19,13 +20,62 @@ function expandEnvValues(env: Record<string, string>): Record<string, string> {
   return result;
 }
 
-/** Strip pnpm/npm vars leaked from the daemon's own pnpm run context. */
+/**
+ * Allowlisted env var names and prefixes passed to launched processes.
+ * Everything else from the daemon (Electron, pnpm, internal Node vars) is dropped.
+ * Users can add arbitrary vars via the launch config `env` block.
+ */
+const ENV_ALLOWLIST_EXACT = new Set([
+  // OS / user identity
+  'PATH',
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'TERM',
+  'TERM_PROGRAM',
+  'TMPDIR',
+  'XDG_CONFIG_HOME',
+  'XDG_DATA_HOME',
+  'XDG_CACHE_HOME',
+  'XDG_RUNTIME_DIR',
+  'DISPLAY',
+  'SSH_AUTH_SOCK',
+  'COLORTERM',
+  'EDITOR',
+  'VISUAL',
+  // Developer toolchains
+  'JAVA_HOME',
+  'ANDROID_HOME',
+  'ANDROID_SDK_ROOT',
+  'GOPATH',
+  'GOROOT',
+  'CARGO_HOME',
+  'RUSTUP_HOME',
+  'PYENV_ROOT',
+  'NVM_DIR',
+  'VOLTA_HOME',
+  'BUN_INSTALL',
+  'DENO_DIR',
+  'DOTNET_ROOT',
+  'GRADLE_HOME',
+  'MAVEN_HOME',
+  'M2_HOME',
+]);
+
+const ENV_ALLOWLIST_PREFIXES = ['LANG', 'LC_'];
+
+function isAllowedEnvVar(key: string): boolean {
+  if (ENV_ALLOWLIST_EXACT.has(key)) return true;
+  return ENV_ALLOWLIST_PREFIXES.some((p) => key.startsWith(p));
+}
+
+/** Build a minimal env for launched processes — only essential OS/user vars. */
 function cleanEnv(): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v == null) continue;
-    if (k.startsWith('npm_') || k === 'PNPM_SCRIPT_SRC_DIR') continue;
-    result[k] = v;
+    if (isAllowedEnvVar(k)) result[k] = v;
   }
   return result;
 }
@@ -53,7 +103,14 @@ export class LaunchManager {
 
     this.emit({ type: 'launch.status', projectId: this.projectId, name: config.name, status: 'starting' });
 
-    const child = spawn(config.runtimeExecutable, config.runtimeArgs, {
+    // Resolve relative executables (./gradlew, ../bin/foo) against the project directory.
+    // Node's spawn only searches PATH, not cwd, for the executable.
+    const executable =
+      config.runtimeExecutable.startsWith('./') || config.runtimeExecutable.startsWith('../')
+        ? resolve(this.projectPath, config.runtimeExecutable)
+        : config.runtimeExecutable;
+
+    const child = spawn(executable, config.runtimeArgs, {
       cwd: this.projectPath,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: true,

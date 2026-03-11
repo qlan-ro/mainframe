@@ -274,7 +274,7 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
 }
 
 export async function extractPlanFilePaths(sessionId: string, projectPath: string): Promise<string[]> {
-  const { jsonlPath } = getSessionJsonlPath(sessionId, projectPath);
+  const { jsonlPath, projectDir } = getSessionJsonlPath(sessionId, projectPath);
 
   try {
     await access(jsonlPath, constants.R_OK);
@@ -293,7 +293,9 @@ export async function extractPlanFilePaths(sessionId: string, projectPath: strin
         if (entry.type !== 'user') continue;
         const tur = entry.toolUseResult as Record<string, unknown> | undefined;
         if (typeof tur?.plan === 'string' && typeof tur?.filePath === 'string') {
-          planFiles.push(tur.filePath as string);
+          // CLI stores relative paths (e.g. ../../../.claude/plans/foo.md) — resolve
+          // against the JSONL's directory so downstream consumers get absolute paths.
+          planFiles.push(path.resolve(projectDir, tur.filePath as string));
         }
       } catch {
         /* skip malformed */
