@@ -25,6 +25,7 @@ export {
   getSessionFile,
   addMention,
   browseFilesystem,
+  saveFileContent,
 } from './files-api';
 
 export {

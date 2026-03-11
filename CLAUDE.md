@@ -135,5 +135,7 @@ These rules exist because every one was violated before and required cleanup. Fo
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PORT` | Daemon HTTP server port | 31415 |
+| `DAEMON_PORT` | Daemon HTTP + WebSocket port | 31415 |
+| `VITE_PORT` | Vite dev server port | 5173 |
+| `MAINFRAME_DATA_DIR` | Data directory | `~/.mainframe` |
 | `LOG_LEVEL` | Logging verbosity | info |

@@ -185,6 +185,24 @@ Tests live in `packages/e2e/tests/` and cover the full desktop app (daemon + Ele
 | `pnpm clean` | Clean build artifacts |
 | `pnpm package` | Build + package Electron app |
 
+## Releasing
+
+Bump the version across all workspace packages and create a git tag:
+
+```bash
+npm version patch   # 0.2.1 → 0.2.2
+npm version minor   # 0.2.2 → 0.3.0
+npm version major   # 0.3.0 → 1.0.0
+```
+
+This runs `pnpm -r version --no-git-tag-version <version>` to update all `package.json` files, stages them, creates a commit, and tags it (`v<version>`). Push the tag to trigger the release workflow:
+
+```bash
+git push origin <branch> --follow-tags
+```
+
+Do **not** manually edit version strings in `package.json` files — `npm version` keeps all packages in sync.
+
 ## Development Workflow
 
 ### Adding a New REST Endpoint
@@ -240,11 +258,33 @@ The `@assistant-ui/react` library provides headless chat primitives that work wi
 
 ## Environment Variables
 
+Configuration precedence: **env vars > `~/.mainframe/config.json` > defaults**.
+
+### Daemon (`@qlan-ro/mainframe-core`)
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | 31415 | Daemon HTTP + WebSocket server port |
-| `LOG_LEVEL` | info | Logging verbosity |
-| `NODE_ENV` | — | `development` enables dev tools, assumes daemon running separately |
+| `DAEMON_PORT` | 31415 | Daemon HTTP + WebSocket server port |
+| `MAINFRAME_DATA_DIR` | `~/.mainframe` | Data directory (SQLite DB, config, plugins, logs) |
+| `LOG_LEVEL` | info | Logging verbosity (`trace`, `debug`, `info`, `warn`, `error`) |
+| `AUTH_TOKEN_SECRET` | auto-generated | JWT signing secret for mobile pairing (min 32 chars) |
+| `TUNNEL` | — | Set to `true` to enable Cloudflare tunnel on startup |
+| `TUNNEL_URL` | — | Named tunnel URL (e.g. `https://mainframe.example.com`) |
+| `TUNNEL_TOKEN` | — | Cloudflare tunnel token for named tunnels |
+| `NODE_ENV` | — | `development` skips embedded daemon startup in Electron |
+
+### Desktop (`@qlan-ro/mainframe-desktop`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_PORT` | 5173 | Vite dev server port |
+| `VITE_DAEMON_HOST` | `127.0.0.1` | Daemon host for CSP and API connections |
+| `VITE_DAEMON_HTTP_PORT` | 31415 | Daemon HTTP port the renderer connects to |
+| `VITE_DAEMON_WS_PORT` | 31415 | Daemon WebSocket port the renderer connects to |
+
+### IntelliJ Run Configurations
+
+The `.run/` directory contains pre-configured IntelliJ run configs. For development with isolated data, these set `DAEMON_PORT=31416`, `VITE_PORT=5174`, and `MAINFRAME_DATA_DIR=~/.mainframe_dev` to avoid colliding with a production instance.
 
 ## Testing
 

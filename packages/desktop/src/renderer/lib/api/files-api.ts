@@ -1,5 +1,5 @@
 import type { ControlRequest, SessionContext } from '@qlan-ro/mainframe-types';
-import { fetchJson, postJson, API_BASE } from './http';
+import { fetchJson, postJson, putJson, API_BASE } from './http';
 
 export async function getFileTree(
   projectId: string,
@@ -35,6 +35,15 @@ export async function getFileContent(
   const params = new URLSearchParams({ path: filePath });
   if (chatId) params.set('chatId', chatId);
   return fetchJson(`${API_BASE}/api/projects/${projectId}/files?${params}`);
+}
+
+export async function saveFileContent(
+  projectId: string,
+  filePath: string,
+  content: string,
+  chatId?: string,
+): Promise<void> {
+  await putJson(`${API_BASE}/api/projects/${projectId}/files`, { path: filePath, content, chatId });
 }
 
 export async function getFileBinary(
