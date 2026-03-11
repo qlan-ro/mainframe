@@ -10,6 +10,7 @@ import {
   Minus,
   ChevronDown,
   ChevronUp,
+  Smartphone,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
@@ -105,6 +106,7 @@ interface ElementPickResult {
 export function PreviewTab(): React.ReactElement {
   const webviewRef = useRef<HTMLElement>(null);
   const [inspecting, setInspecting] = useState(false);
+  const [mobileView, setMobileView] = useState(false);
   const addCapture = useSandboxStore((s) => s.addCapture);
   const logsOutput = useSandboxStore((s) => s.logsOutput);
   const clearLogsForName = useSandboxStore((s) => s.clearLogsForName);
@@ -191,7 +193,9 @@ export function PreviewTab(): React.ReactElement {
       }
       wv.loadURL(previewUrl)
         .then(() => {
-          if (!cancelled) setWebviewReady(true);
+          if (cancelled) return;
+          setWebviewReady(true);
+          wv.insertCSS('::-webkit-scrollbar { display: none; }').catch(() => {});
         })
         .catch(() => {});
     };
@@ -409,6 +413,18 @@ export function PreviewTab(): React.ReactElement {
               >
                 <Camera size={14} />
               </button>
+              <button
+                onClick={() => setMobileView((v) => !v)}
+                className={[
+                  'p-1.5 rounded transition-colors',
+                  mobileView
+                    ? 'bg-mf-hover text-mf-accent'
+                    : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                ].join(' ')}
+                title="Mobile view (390×844)"
+              >
+                <Smartphone size={14} />
+              </button>
               <div className="w-px h-3.5 bg-mf-border mx-0.5" />
             </>
           )}
@@ -435,7 +451,9 @@ export function PreviewTab(): React.ReactElement {
                when display:none, breaking loadURL and did-finish-load events. */}
           {previewConfig ? (
             <div
-              className={hasPreview ? 'flex-1 overflow-hidden min-h-0 relative mx-2 my-2' : ''}
+              className={
+                hasPreview ? 'flex-1 overflow-hidden min-h-0 relative mx-2 my-2 flex items-start justify-center' : ''
+              }
               style={hasPreview ? undefined : { position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
             >
               {isElectron ? (
@@ -444,8 +462,16 @@ export function PreviewTab(): React.ReactElement {
                 <webview
                   ref={webviewRef}
                   src="about:blank"
-                  className={webviewReady ? 'w-full h-full' : ''}
-                  style={webviewReady ? undefined : { position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
+                  className={
+                    webviewReady ? (mobileView ? 'h-full rounded border border-mf-border' : 'w-full h-full') : ''
+                  }
+                  style={
+                    webviewReady
+                      ? mobileView
+                        ? { width: 390, maxHeight: 844 }
+                        : undefined
+                      : { position: 'absolute', width: 0, height: 0, overflow: 'hidden' }
+                  }
                 />
               ) : (
                 <div className="flex items-center justify-center h-full text-mf-text-secondary text-sm">
