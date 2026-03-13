@@ -87,7 +87,17 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
   h3: ({ className, ...props }) => <h3 className={cn('aui-md-h3', className)} {...props} />,
   h4: ({ className, ...props }) => <h4 className={cn('aui-md-h4', className)} {...props} />,
   p: ({ className, ...props }) => <p className={cn('aui-md-p', className)} {...props} />,
-  a: ({ className, ...props }) => <a className={cn('aui-md-a', className)} {...props} />,
+  a: ({ className, href, ...props }) => (
+    <a
+      className={cn('aui-md-a', className)}
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        if (href) window.mainframe.openExternal(href);
+      }}
+      {...props}
+    />
+  ),
   blockquote: ({ className, ...props }) => <blockquote className={cn('aui-md-blockquote', className)} {...props} />,
   ul: ({ className, ...props }) => <ul className={cn('aui-md-ul', className)} {...props} />,
   ol: ({ className, ...props }) => <ol className={cn('aui-md-ol', className)} {...props} />,
