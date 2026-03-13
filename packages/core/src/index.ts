@@ -27,14 +27,23 @@ function enrichPath(): void {
       encoding: 'utf-8',
       timeout: 5_000,
     }).trim();
-    if (result) process.env['PATH'] = result;
-  } catch {
-    const current = process.env['PATH'] ?? '/usr/bin:/bin:/usr/sbin:/sbin';
-    const extra = [`${homedir()}/.local/bin`, '/usr/local/bin', '/opt/homebrew/bin'];
-    const seen = new Set(current.split(':'));
-    const additions = extra.filter((p) => !seen.has(p));
-    if (additions.length) process.env['PATH'] = `${additions.join(':')}:${current}`;
+    if (result) {
+      process.env['PATH'] = result;
+      logger.debug({ shell, pathLength: result.split(':').length }, 'enrichPath: resolved from login shell');
+      return;
+    }
+  } catch (err) {
+    logger.warn({ err }, 'enrichPath: login shell failed, using fallback');
   }
+  const current = process.env['PATH'] ?? '/usr/bin:/bin:/usr/sbin:/sbin';
+  const extra = [`${homedir()}/.local/bin`, '/usr/local/bin', '/opt/homebrew/bin'];
+  const seen = new Set(current.split(':'));
+  const additions = extra.filter((p) => !seen.has(p));
+  if (additions.length) process.env['PATH'] = `${additions.join(':')}:${current}`;
+  logger.debug(
+    { additions, totalPaths: (process.env['PATH'] ?? '').split(':').length },
+    'enrichPath: fallback applied',
+  );
 }
 
 async function main(): Promise<void> {
