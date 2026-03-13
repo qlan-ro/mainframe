@@ -195,7 +195,6 @@ export function PreviewTab(): React.ReactElement {
         .then(() => {
           if (cancelled) return;
           setWebviewReady(true);
-          wv.insertCSS('::-webkit-scrollbar { display: none; }').catch(() => {});
         })
         .catch(() => {});
     };
