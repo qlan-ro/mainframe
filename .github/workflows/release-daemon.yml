@@ -31,7 +31,7 @@ jobs:
         with:
           version: 10
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
@@ -40,7 +40,7 @@ jobs:
 
       - run: bash scripts/build-standalone.sh ${{ matrix.target_os }} ${{ matrix.target_arch }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mainframe-daemon-${{ matrix.target_os }}-${{ matrix.target_arch }}
           path: dist-standalone/*.tar.gz
@@ -49,7 +49,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
