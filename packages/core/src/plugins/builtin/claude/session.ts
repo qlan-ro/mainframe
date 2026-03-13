@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, accessSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
@@ -136,6 +136,11 @@ export class ClaudeSession implements AdapterSession {
     }
 
     const executable = options.executablePath || 'claude';
+    try {
+      accessSync(this.projectPath);
+    } catch {
+      throw new Error(`Project directory does not exist or is not accessible: ${this.projectPath}`);
+    }
     const child = spawn(executable, args, {
       cwd: this.projectPath,
       shell: process.platform === 'win32',
