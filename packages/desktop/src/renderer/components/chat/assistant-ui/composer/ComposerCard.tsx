@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { ArrowUp, Square, Paperclip, Shield, GitBranch, X } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:composer');
-import { ComposerPrimitive, useThread, useComposerRuntime } from '@assistant-ui/react';
+import { ComposerPrimitive, useThread, useComposerRuntime, type ComposerRuntime } from '@assistant-ui/react';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useChatsStore } from '../../../../store/chats';
 import { useSkillsStore } from '../../../../store/skills';
@@ -65,6 +65,25 @@ function ContextPickerIcon() {
   );
 }
 
+function useComposerEmpty(composerRuntime: ComposerRuntime) {
+  return useSyncExternalStore(
+    (cb) => {
+      try {
+        return composerRuntime.subscribe(cb);
+      } catch {
+        return () => {};
+      }
+    },
+    () => {
+      try {
+        return composerRuntime.getState().isEmpty;
+      } catch {
+        return true;
+      }
+    },
+  );
+}
+
 function StopButton() {
   const thread = useThread();
   if (!thread.isRunning) return null;
@@ -76,6 +95,29 @@ function StopButton() {
     >
       <Square size={12} />
     </ComposerPrimitive.Cancel>
+  );
+}
+
+function SendButton({ composerRuntime, hasCaptures }: { composerRuntime: ComposerRuntime; hasCaptures: boolean }) {
+  const composerEmpty = useComposerEmpty(composerRuntime);
+  const disabled = composerEmpty && !hasCaptures;
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        try {
+          composerRuntime.send();
+        } catch (err) {
+          log.warn('failed to send from composer', { err: String(err) });
+        }
+      }}
+      className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      title="Send message"
+      aria-label="Send message"
+    >
+      <ArrowUp size={16} />
+    </button>
   );
 }
 
@@ -280,13 +322,7 @@ export function ComposerCard() {
         </div>
         <div className="flex items-center gap-1">
           <StopButton />
-          <ComposerPrimitive.Send
-            className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Send message"
-            aria-label="Send message"
-          >
-            <ArrowUp size={16} />
-          </ComposerPrimitive.Send>
+          <SendButton composerRuntime={composerRuntime} hasCaptures={captures.length > 0} />
         </div>
       </div>
     </ComposerPrimitive.Root>
