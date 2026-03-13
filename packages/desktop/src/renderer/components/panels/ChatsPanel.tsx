@@ -12,7 +12,15 @@ import { archiveChat, getExternalSessions, importExternalSession } from '../../l
 import { cn } from '../../lib/utils';
 import { getAdapterLabel } from '../../lib/adapters';
 import { useAdaptersStore } from '../../store/adapters';
+import { ContextMenu } from '../ui/context-menu';
+import type { ContextMenuItem } from '../ui/context-menu';
 import type { ExternalSession } from '@qlan-ro/mainframe-types';
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
+}
 
 function SessionStatusDot({ status }: { status: SessionStatus }) {
   const isWorking = status === 'working' || status === 'waiting';
@@ -37,6 +45,7 @@ export function ChatsPanel(): React.ReactElement {
   const [showImport, setShowImport] = useState(false);
   const [externalSessions, setExternalSessions] = useState<ExternalSession[]>([]);
   const [loadingImport, setLoadingImport] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const handleSelectChat = useCallback(
     (chatId: string, title?: string) => {
@@ -46,6 +55,25 @@ export function ChatsPanel(): React.ReactElement {
     },
     [setActiveChat],
   );
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string | undefined) => {
+    e.preventDefault();
+    if (!sessionId) return;
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: 'Copy Session ID',
+          onClick: () => {
+            navigator.clipboard.writeText(sessionId).catch((err) => {
+              log.warn('failed to copy session id', { err: String(err) });
+            });
+          },
+        },
+      ],
+    });
+  }, []);
 
   const handleArchiveChat = useCallback(
     (e: React.MouseEvent, chatId: string) => {
@@ -195,6 +223,8 @@ export function ChatsPanel(): React.ReactElement {
               <div
                 key={chat.id}
                 data-testid="chat-list-item"
+                onContextMenu={(e) => handleContextMenu(e, chat.claudeSessionId)}
+                title={chat.claudeSessionId ? `Session: ${chat.claudeSessionId}` : undefined}
                 className={cn(
                   'group w-full rounded-mf-input transition-colors flex items-center gap-2',
                   activeChatId === chat.id ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
@@ -238,6 +268,14 @@ export function ChatsPanel(): React.ReactElement {
           </div>
         )}
       </div>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
