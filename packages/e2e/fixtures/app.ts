@@ -91,6 +91,22 @@ export async function launchApp(): Promise<AppFixture> {
 
 export async function closeApp(fixture: AppFixture): Promise<void> {
   await fixture.app.close();
-  fixture.daemon.kill();
+
+  // Wait for the daemon to fully exit so the next launchApp() doesn't connect
+  // to a stale process still holding the port.
+  await new Promise<void>((resolve) => {
+    if (fixture.daemon.exitCode !== null) {
+      resolve();
+      return;
+    }
+    fixture.daemon.on('exit', () => resolve());
+    fixture.daemon.kill();
+    // Safety timeout — don't block forever if SIGTERM is ignored
+    setTimeout(() => {
+      fixture.daemon.kill('SIGKILL');
+      resolve();
+    }, 3_000);
+  });
+
   rmSync(fixture.testDataDir, { recursive: true, force: true });
 }
