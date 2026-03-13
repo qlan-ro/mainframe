@@ -17,7 +17,10 @@ const LaunchConfigurationSchema = z.object({
   url: z.string().url().nullable().optional().default(null),
   preview: z.boolean().optional(),
   env: z
-    .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'env key must be letters, digits, or underscores'), z.string())
+    .record(
+      z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'env key must be letters, digits, or underscores'),
+      z.coerce.string(),
+    )
     .optional(),
 });
 
