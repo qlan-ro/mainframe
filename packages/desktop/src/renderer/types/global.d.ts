@@ -8,6 +8,7 @@ export interface MainframeAPI {
   getAppInfo: () => Promise<{ version: string; author: string }>;
   readFile: (filePath: string) => Promise<string | null>;
   showItemInFolder: (fullPath: string) => Promise<void>;
+  openExternal: (url: string) => Promise<void>;
   log: (level: string, module: string, message: string, data?: unknown) => void;
 }
 

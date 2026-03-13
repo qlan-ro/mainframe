@@ -129,6 +129,20 @@ function setupIPC(): void {
     shell.showItemInFolder(fullPath);
   });
 
+  const ALLOWED_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
+  ipcMain.handle('shell:openExternal', (_event, url: string) => {
+    try {
+      const parsed = new URL(url);
+      if (!ALLOWED_SCHEMES.has(parsed.protocol)) {
+        log.warn({ url }, 'blocked openExternal with disallowed scheme');
+        return;
+      }
+      return shell.openExternal(url);
+    } catch {
+      log.warn({ url }, 'blocked openExternal with invalid URL');
+    }
+  });
+
   ipcMain.on('log', (_event, level: string, module: string, message: string, data?: unknown) => {
     logFromRenderer(level, module, message, data);
   });
@@ -165,6 +179,14 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const appOrigin = new URL(mainWindow!.webContents.getURL()).origin;
+    if (new URL(url).origin !== appOrigin) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
   if (process.env.NODE_ENV !== 'development') {
     mainWindow.webContents.on('devtools-opened', () => {
       mainWindow?.webContents.closeDevTools();
@@ -199,6 +221,23 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+
+  app.on('web-contents-created', (_event, contents) => {
+    if (contents.getType() !== 'webview') return;
+
+    contents.on('will-navigate', (event, url) => {
+      const currentOrigin = new URL(contents.getURL()).origin;
+      if (new URL(url).origin !== currentOrigin) {
+        event.preventDefault();
+        shell.openExternal(url);
+      }
+    });
+
+    contents.setWindowOpenHandler((details) => {
+      shell.openExternal(details.url);
+      return { action: 'deny' };
+    });
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
