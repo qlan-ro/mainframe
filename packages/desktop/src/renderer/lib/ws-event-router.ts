@@ -22,14 +22,18 @@ export function routeEvent(event: DaemonEvent): void {
         tabs.openChatTab(event.chat.id, event.chat.title);
       }
       break;
-    case 'chat.updated':
-      if (event.chat.projectId !== activeProjectId) break;
+    case 'chat.updated': {
+      // Allow updates for chats already in the store (e.g. processState changes while
+      // browsing another project). Only block chats we haven't loaded.
+      const knownChat = chats.chats.some((c) => c.id === event.chat.id);
+      if (!knownChat && event.chat.projectId !== activeProjectId) break;
       log.debug('event:chat.updated', { chatId: event.chat.id });
       chats.updateChat(event.chat);
       if (event.chat.title) {
         tabs.updateTabLabel(`chat:${event.chat.id}`, event.chat.title);
       }
       break;
+    }
     case 'chat.ended':
       log.info('event:chat.ended', { chatId: event.chatId });
       chats.removeChat(event.chatId);
