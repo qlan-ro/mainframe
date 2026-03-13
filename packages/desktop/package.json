@@ -112,7 +112,7 @@
       "provider": "github",
       "owner": "qlan-ro",
       "repo": "mainframe",
-      "releaseType": "release"
+      "releaseType": "draft"
     },
     "mac": {
       "category": "public.app-category.developer-tools",
