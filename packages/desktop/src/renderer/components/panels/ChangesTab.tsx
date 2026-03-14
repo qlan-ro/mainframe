@@ -21,7 +21,7 @@ const statusLabels: Record<string, { label: string; color: string }> = {
   M: { label: 'Modified', color: 'text-mf-warning' },
   A: { label: 'Added', color: 'text-mf-success' },
   D: { label: 'Deleted', color: 'text-mf-destructive' },
-  '?': { label: 'Untracked', color: 'text-mf-text-secondary' },
+  '??': { label: 'Untracked', color: 'text-mf-text-secondary' },
   R: { label: 'Renamed', color: 'text-mf-info' },
 };
 
@@ -72,6 +72,7 @@ export function ChangesTab(): React.ReactElement {
   }, [activeProjectId]);
   useEffect(() => {
     if (mode === 'session') refreshSession();
+    else refreshBranch();
   }, [activeChatId, mode]);
 
   useEffect(() => {
@@ -159,7 +160,7 @@ export function ChangesTab(): React.ReactElement {
               return (
                 <button
                   key={file.path}
-                  onClick={() => openDiffTab(file.path, 'git', undefined, file.oldPath)}
+                  onClick={() => openDiffTab(file.path, 'git', activeChatId ?? undefined, file.oldPath)}
                   className={cn(
                     'w-full flex items-center gap-2 px-2 py-1 rounded-mf-input text-left',
                     isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
