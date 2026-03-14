@@ -23,6 +23,7 @@ export interface Chat {
   processState?: 'working' | 'idle' | null;
   displayStatus?: 'idle' | 'working' | 'waiting';
   isRunning?: boolean;
+  worktreeMissing?: boolean;
 }
 
 export interface Project {

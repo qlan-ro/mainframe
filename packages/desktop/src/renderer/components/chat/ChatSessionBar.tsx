@@ -32,6 +32,15 @@ function StatusIndicator({ chatId }: { chatId: string }) {
 
   if (!chat) return null;
 
+  if (chat.worktreeMissing) {
+    return (
+      <div className="flex items-center gap-1.5 text-mf-destructive">
+        <AlertTriangle size={12} className="shrink-0" />
+        <span>Worktree Missing</span>
+      </div>
+    );
+  }
+
   if (hasPendingPermission) {
     return (
       <div className="flex items-center gap-1.5 text-mf-text-secondary">

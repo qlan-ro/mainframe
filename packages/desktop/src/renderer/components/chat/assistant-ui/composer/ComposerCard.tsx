@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { ArrowUp, Square, Paperclip, Shield, GitBranch, X } from 'lucide-react';
+import { ArrowUp, Square, Paperclip, Shield, GitBranch, X, AlertTriangle } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:composer');
@@ -98,9 +98,17 @@ function StopButton() {
   );
 }
 
-function SendButton({ composerRuntime, hasCaptures }: { composerRuntime: ComposerRuntime; hasCaptures: boolean }) {
+function SendButton({
+  composerRuntime,
+  hasCaptures,
+  disabled: externalDisabled,
+}: {
+  composerRuntime: ComposerRuntime;
+  hasCaptures: boolean;
+  disabled?: boolean;
+}) {
   const composerEmpty = useComposerEmpty(composerRuntime);
-  const disabled = composerEmpty && !hasCaptures;
+  const disabled = externalDisabled || (composerEmpty && !hasCaptures);
   return (
     <button
       type="button"
@@ -263,6 +271,15 @@ export function ComposerCard() {
           </button>
         </div>
       )}
+      {chat?.worktreeMissing && (
+        <div className="mx-3 mt-2 rounded-md bg-mf-destructive/15 px-3 py-2 text-mf-small text-mf-destructive flex items-center gap-2">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span>
+            The worktree for this session was deleted. Archive this session or recreate the worktree at{' '}
+            <code className="font-mono text-mf-status">{chat.worktreePath}</code>.
+          </span>
+        </div>
+      )}
 
       <div className="relative">
         <ComposerHighlight />
@@ -271,6 +288,7 @@ export function ComposerCard() {
           rows={2}
           autoFocus
           spellCheck={false}
+          disabled={chat?.worktreeMissing}
           placeholder="Type @ to search files, / for skills… (Enter to send)"
           className="w-full bg-transparent border-none px-3 py-2 font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
@@ -322,7 +340,11 @@ export function ComposerCard() {
         </div>
         <div className="flex items-center gap-1">
           <StopButton />
-          <SendButton composerRuntime={composerRuntime} hasCaptures={captures.length > 0} />
+          <SendButton
+            composerRuntime={composerRuntime}
+            hasCaptures={captures.length > 0}
+            disabled={chat?.worktreeMissing}
+          />
         </div>
       </div>
     </ComposerPrimitive.Root>

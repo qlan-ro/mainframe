@@ -11,6 +11,7 @@ import type {
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
+import { existsSync } from 'node:fs';
 import { createChildLogger } from '../logger.js';
 import { MessageCache } from './message-cache.js';
 import { PermissionManager } from './permission-manager.js';
@@ -171,6 +172,20 @@ export class ChatManager {
     attachmentIds?: string[],
     metadata?: { command?: { name: string; source: string; args?: string } },
   ): Promise<void> {
+    const chat = this.getChat(chatId);
+    if (chat?.worktreeMissing) {
+      const errorMsg = this.messages.createTransientMessage(chatId, 'error', [
+        {
+          type: 'error',
+          message: `Worktree directory no longer exists: ${chat.worktreePath}. Archive this session or recreate the worktree.`,
+        },
+      ]);
+      this.messages.append(chatId, errorMsg);
+      this.emitEvent({ type: 'message.added', chatId, message: errorMsg });
+      this.eventHandler.emitDisplay(chatId);
+      return;
+    }
+
     const active = this.activeChats.get(chatId);
     if (!active?.session?.isSpawned) {
       await this.lifecycle.startChat(chatId);
@@ -288,8 +303,11 @@ export class ChatManager {
 
   getChat(chatId: string): Chat | null {
     const active = this.activeChats.get(chatId);
-    if (active) return active.chat;
-    return this.db.chats.get(chatId);
+    const chat = active ? active.chat : this.db.chats.get(chatId);
+    if (chat?.worktreePath) {
+      chat.worktreeMissing = !existsSync(chat.worktreePath);
+    }
+    return chat;
   }
 
   getEffectivePath(chatId: string): string | null {
@@ -392,6 +410,7 @@ export class ChatManager {
       const hasPending = this.permissions.hasPending(chat.id);
       chat.displayStatus = hasPending ? 'waiting' : chat.processState === 'working' ? 'working' : 'idle';
       chat.isRunning = chat.processState === 'working' && !hasPending;
+      chat.worktreeMissing = chat.worktreePath ? !existsSync(chat.worktreePath) : false;
     }
     this.onEvent(event);
   }
