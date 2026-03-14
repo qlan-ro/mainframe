@@ -82,6 +82,10 @@ export class MockBaseSession implements AdapterSession {
     return [];
   }
 
+  async extractModifiedFiles(): Promise<string[]> {
+    return [];
+  }
+
   // ── Test simulation helpers ───────────────────────────────────────────────
 
   simulateInit(sessionId: string): void {
