@@ -102,8 +102,10 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       const text = (block.text as string) || '';
       const skillMatch = text.match(/^Base directory for this skill: (.+)/m);
       if (skillMatch?.[1]) {
-        const skillPath = path.join(skillMatch[1].trim(), 'SKILL.md');
-        sink.onSkillFile({ path: skillPath, displayName: skillMatch[1].trim() });
+        const basePath = skillMatch[1].trim();
+        const skillPath = path.join(basePath, 'SKILL.md');
+        const skillName = basePath.split('/').pop() ?? basePath;
+        sink.onSkillFile({ path: skillPath, displayName: skillName });
       }
     }
   }
@@ -111,8 +113,10 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   if (typeof rawContent === 'string') {
     const skillMatch = rawContent.match(/^Base directory for this skill: (.+)/m);
     if (skillMatch?.[1]) {
-      const skillPath = path.join(skillMatch[1].trim(), 'SKILL.md');
-      sink.onSkillFile({ path: skillPath, displayName: skillMatch[1].trim() });
+      const basePath = skillMatch[1].trim();
+      const skillPath = path.join(basePath, 'SKILL.md');
+      const skillName = basePath.split('/').pop() ?? basePath;
+      sink.onSkillFile({ path: skillPath, displayName: skillName });
     }
   }
 }
