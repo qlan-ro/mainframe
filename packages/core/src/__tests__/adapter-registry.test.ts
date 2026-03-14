@@ -21,7 +21,7 @@ describe('ClaudeAdapter.getToolCategories', () => {
   it('returns Claude-specific tool categories', () => {
     const adapter = new ClaudeAdapter();
     const cats = adapter.getToolCategories();
-    expect(cats.explore).toEqual(new Set(['Read', 'Glob', 'Grep']));
+    expect(cats.explore).toEqual(new Set(['Read', 'Glob', 'Grep', 'LS']));
     expect(cats.hidden).toContain('TaskList');
     expect(cats.hidden).toContain('Skill');
     expect(cats.progress).toEqual(new Set(['TaskCreate', 'TaskUpdate']));

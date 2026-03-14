@@ -58,7 +58,7 @@ export class ClaudeAdapter implements Adapter {
 
   getToolCategories(): ToolCategories {
     return {
-      explore: new Set(['Read', 'Glob', 'Grep']),
+      explore: new Set(['Read', 'Glob', 'Grep', 'LS']),
       hidden: new Set([
         'TaskList',
         'TaskGet',
@@ -68,6 +68,7 @@ export class ClaudeAdapter implements Adapter {
         'Skill',
         'EnterPlanMode',
         'AskUserQuestion',
+        'ToolSearch',
       ]),
       progress: new Set(['TaskCreate', 'TaskUpdate']),
       subagent: new Set(['Task']),
