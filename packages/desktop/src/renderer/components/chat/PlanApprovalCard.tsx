@@ -4,9 +4,6 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
 import { Button } from '../ui/button';
-import { useChatsStore } from '../../store/chats';
-import { useMainframeRuntime } from './assistant-ui/MainframeRuntimeProvider';
-import { useSettingsStore } from '../../store/settings';
 
 interface PlanApprovalCardProps {
   request: ControlRequest;
@@ -37,10 +34,7 @@ export function PlanApprovalCard({ request, onRespond }: PlanApprovalCardProps):
   const [revising, setRevising] = useState(false);
   const [feedback, setFeedback] = useState('');
 
-  const { chatId } = useMainframeRuntime();
-  const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
-  const providerConfig = useSettingsStore((s) => s.providers[chat?.adapterId ?? '']);
-  const settingsDefault: ExecutionMode = providerConfig?.planExecutionMode ?? 'default';
+  const settingsDefault: ExecutionMode = 'default';
 
   const [execMode, setExecMode] = useState<ExecutionMode>(settingsDefault);
   const [execModeTouched, setExecModeTouched] = useState(false);

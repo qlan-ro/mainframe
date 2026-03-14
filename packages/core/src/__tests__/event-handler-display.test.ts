@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventHandler } from '../chat/event-handler.js';
 import { MessageCache } from '../chat/message-cache.js';
 import { PermissionManager } from '../chat/permission-manager.js';
-import { AdapterRegistry } from '../adapters/index.js';
 import type { DaemonEvent, SessionSink } from '@qlan-ro/mainframe-types';
 
 function createRespondToPermission() {
@@ -11,7 +10,6 @@ function createRespondToPermission() {
 
 describe('EventHandler display event emission', () => {
   let db: any;
-  let adapters: AdapterRegistry;
   let messages: MessageCache;
   let permissions: PermissionManager;
   let emitEvent: ReturnType<typeof vi.fn<(event: DaemonEvent) => void>>;
@@ -25,9 +23,8 @@ describe('EventHandler display event emission', () => {
       projects: { get: vi.fn() },
       settings: { get: vi.fn() },
     };
-    adapters = new AdapterRegistry();
     messages = new MessageCache();
-    permissions = new PermissionManager(db, adapters);
+    permissions = new PermissionManager();
     emitEvent = vi.fn();
     activeChats = new Map();
     activeChats.set(chatId, {

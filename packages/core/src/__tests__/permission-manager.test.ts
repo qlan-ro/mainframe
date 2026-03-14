@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { PermissionManager } from '../chat/permission-manager.js';
 import type { ControlRequest } from '@qlan-ro/mainframe-types';
 
@@ -15,15 +15,9 @@ function makeRequest(overrides: Partial<ControlRequest> = {}): ControlRequest {
 
 describe('PermissionManager', () => {
   let pm: PermissionManager;
-  let db: any;
 
   beforeEach(() => {
-    db = {
-      chats: { get: vi.fn() },
-      settings: { get: vi.fn() },
-    };
-    const adapters = { get: vi.fn() } as any;
-    pm = new PermissionManager(db, adapters);
+    pm = new PermissionManager();
   });
 
   describe('enqueue/shift FIFO', () => {
@@ -63,10 +57,9 @@ describe('PermissionManager', () => {
       expect(pm.getPending('c1')?.requestId).toBe('r1');
     });
 
-    it('returns null in yolo mode', () => {
-      db.chats.get.mockReturnValue({ permissionMode: 'yolo' });
+    it('returns enqueued request regardless of permission mode', () => {
       pm.enqueue('c1', makeRequest());
-      expect(pm.getPending('c1')).toBeNull();
+      expect(pm.getPending('c1')?.requestId).toBe('req-1');
     });
   });
 

@@ -42,6 +42,20 @@ test.describe('§7 Plan approval', () => {
     await waitForAIIdle(fixture.page, 60_000);
   });
 
+  test('session exits plan mode after approval — next message does not re-enter plan mode', async () => {
+    // This is the same chat from the previous test — plan was approved, execution completed.
+    // Sending a new message should NOT trigger another plan card.
+    await sendMessage(fixture.page, 'What is 2 + 2? Answer with just the number.');
+    const planCard = fixture.page.locator('[data-testid="plan-approval-card"]');
+    // Wait for AI to either show a plan card (bug) or finish (correct).
+    // Use a race: if the plan card appears within 15s, that's a regression.
+    const raced = await Promise.race([
+      planCard.waitFor({ timeout: 15_000 }).then(() => 'plan-card' as const),
+      waitForAIIdle(fixture.page, 30_000).then(() => 'idle' as const),
+    ]);
+    expect(raced).toBe('idle');
+  });
+
   test('plan revision feedback is sent back to AI', async () => {
     await createTestChat(fixture.page, project.projectId, 'plan');
     await sendMessage(

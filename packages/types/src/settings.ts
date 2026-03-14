@@ -3,7 +3,6 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'yolo';
 export interface ProviderConfig {
   defaultModel?: string;
   defaultMode?: 'default' | 'acceptEdits' | 'yolo' | 'plan';
-  planExecutionMode?: 'default' | 'acceptEdits' | 'yolo';
   executablePath?: string;
 }
 

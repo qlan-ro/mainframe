@@ -43,8 +43,6 @@ function makeContext(hasActiveSession = true): PlanModeContext & {
 
   return {
     permissions: {
-      getPlanExecutionMode: vi.fn().mockReturnValue(undefined),
-      deletePlanExecutionMode: vi.fn(),
       shift: vi.fn(),
       enqueue: vi.fn(),
       hasPending: vi.fn(),
@@ -87,6 +85,19 @@ describe('PlanModeHandler', () => {
 
       expect(ctx.db.chats.update).toHaveBeenCalledWith('chat-1', expect.objectContaining({ permissionMode: 'yolo' }));
       expect(ctx.emitEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.updated' }));
+    });
+
+    it('falls back to "default" when executionMode is not provided', async () => {
+      const ctx = makeContext();
+      const handler = new PlanModeHandler(ctx);
+      const active = ctx.getActiveChat('chat-1')!;
+
+      await handler.handleNoProcess('chat-1', active, makeResponse());
+
+      expect(ctx.db.chats.update).toHaveBeenCalledWith(
+        'chat-1',
+        expect.objectContaining({ permissionMode: 'default' }),
+      );
     });
 
     it('does not emit chat.updated when mode is unchanged', async () => {
@@ -157,6 +168,19 @@ describe('PlanModeHandler', () => {
       expect(ctx.db.chats.update).toHaveBeenCalledWith('chat-1', expect.objectContaining({ permissionMode: 'yolo' }));
       expect(ctx.emitEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.updated' }));
       expect(ctx.session!.setPermissionMode).toHaveBeenCalledWith('yolo');
+    });
+
+    it('falls back to "default" when executionMode is not provided', async () => {
+      const ctx = makeContext(true);
+      const handler = new PlanModeHandler(ctx);
+      const active = ctx.getActiveChat('chat-1')!;
+
+      await handler.handleEscalation('chat-1', active, makeResponse());
+
+      expect(ctx.db.chats.update).toHaveBeenCalledWith(
+        'chat-1',
+        expect.objectContaining({ permissionMode: 'default' }),
+      );
     });
   });
 });

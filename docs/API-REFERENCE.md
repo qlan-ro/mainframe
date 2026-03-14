@@ -677,7 +677,6 @@ Content-Type: application/json
 |-------|------|-------------|
 | `defaultModel` | string | Default model for new chats |
 | `defaultMode` | `'default' \| 'acceptEdits' \| 'plan' \| 'yolo'` | Default permission mode |
-| `planExecutionMode` | `'default' \| 'acceptEdits' \| 'yolo'` | Execution mode after ExitPlanMode approval |
 | `executablePath` | string | Path to the adapter CLI binary |
 
 **Response**: `ApiResponse<void>`

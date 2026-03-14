@@ -175,18 +175,19 @@ describe('permission flow', () => {
     expect((events[0] as any).request.toolName).toBe('AskUserQuestion');
   }, 10_000);
 
-  it('auto-approves bash tool in yolo mode (no permission.requested emitted)', async () => {
+  it('enqueues and emits permission.requested in yolo mode (no daemon-side auto-approve)', async () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'yolo');
 
     adapter.currentSession!.simulatePermission(makePermissionRequest('Bash'));
     await sleep(50);
 
-    expect(events).toHaveLength(0);
-    expect(adapter.respondToPermissionSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'allow' }));
+    expect(events).toHaveLength(1);
+    expect((events[0] as any).request.toolName).toBe('Bash');
+    expect(adapter.respondToPermissionSpy).not.toHaveBeenCalled();
   }, 10_000);
 
-  it('does NOT auto-approve AskUserQuestion in yolo mode', async () => {
+  it('enqueues AskUserQuestion in yolo mode like any other tool', async () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'yolo');
 
@@ -201,7 +202,7 @@ describe('permission flow', () => {
     expect(adapter.respondToPermissionSpy).not.toHaveBeenCalled();
   }, 10_000);
 
-  it('does NOT auto-approve ExitPlanMode in yolo mode', async () => {
+  it('enqueues ExitPlanMode in yolo mode like any other tool', async () => {
     const adapter = new MockAdapter();
     const events = await setupAndResume(adapter, 'yolo');
 

@@ -47,7 +47,7 @@ export class ChatManager {
     private attachmentStore?: AttachmentStore,
     private onEvent: (event: DaemonEvent) => void = () => {},
   ) {
-    this.permissions = new PermissionManager(db, adapters);
+    this.permissions = new PermissionManager();
     this.eventHandler = new EventHandler(
       this.db,
       this.messages,
@@ -119,14 +119,8 @@ export class ChatManager {
     this.externalSessions.stopAutoScan(projectId);
   }
 
-  async createChat(
-    projectId: string,
-    adapterId: string,
-    model?: string,
-    permissionMode?: string,
-    planExecutionMode?: string,
-  ): Promise<Chat> {
-    return this.lifecycle.createChat(projectId, adapterId, model, permissionMode, planExecutionMode);
+  async createChat(projectId: string, adapterId: string, model?: string, permissionMode?: string): Promise<Chat> {
+    return this.lifecycle.createChat(projectId, adapterId, model, permissionMode);
   }
 
   async createChatWithDefaults(

@@ -39,19 +39,10 @@ export class ChatLifecycleManager {
     return this.loadingChats;
   }
 
-  async createChat(
-    projectId: string,
-    adapterId: string,
-    model?: string,
-    permissionMode?: string,
-    planExecutionMode?: string,
-  ): Promise<Chat> {
+  async createChat(projectId: string, adapterId: string, model?: string, permissionMode?: string): Promise<Chat> {
     const chat = this.deps.db.chats.create(projectId, adapterId, model, permissionMode);
     log.info({ chatId: chat.id, projectId, adapterId }, 'chat created');
     this.deps.activeChats.set(chat.id, { chat, session: null });
-    if (planExecutionMode && permissionMode === 'plan') {
-      this.deps.permissions.setPlanExecutionMode(chat.id, planExecutionMode as Chat['permissionMode']);
-    }
     this.deps.emitEvent({ type: 'chat.created', chat });
     return chat;
   }
@@ -64,25 +55,16 @@ export class ChatLifecycleManager {
   ): Promise<Chat> {
     let effectiveModel = model;
     let effectiveMode = permissionMode;
-    let planExecutionMode: string | undefined;
 
     if (!effectiveModel || !effectiveMode) {
       const defaultModel = this.deps.db.settings.get('provider', `${adapterId}.defaultModel`);
       const defaultMode = this.deps.db.settings.get('provider', `${adapterId}.defaultMode`);
 
       if (!effectiveModel && defaultModel) effectiveModel = defaultModel;
-      if (!effectiveMode) {
-        if (defaultMode === 'plan') {
-          effectiveMode = 'plan';
-          const storedExec = this.deps.db.settings.get('provider', `${adapterId}.planExecutionMode`);
-          if (storedExec) planExecutionMode = storedExec;
-        } else if (defaultMode) {
-          effectiveMode = defaultMode;
-        }
-      }
+      if (!effectiveMode && defaultMode) effectiveMode = defaultMode;
     }
 
-    return this.createChat(projectId, adapterId, effectiveModel, effectiveMode, planExecutionMode);
+    return this.createChat(projectId, adapterId, effectiveModel, effectiveMode);
   }
 
   async resumeChat(chatId: string): Promise<void> {
