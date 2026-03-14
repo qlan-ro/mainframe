@@ -21,6 +21,7 @@ import {
   loadHistory as loadHistoryFromDisk,
   extractPlanFilePaths as extractPlans,
   extractSkillFilePaths as extractSkills,
+  extractModifiedFiles as extractModified,
 } from './history.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 
@@ -354,5 +355,10 @@ export class ClaudeSession implements AdapterSession {
   async extractSkillFiles(): Promise<SkillFileEntry[]> {
     if (!this.resumeSessionId) return [];
     return extractSkills(this.resumeSessionId, this.projectPath);
+  }
+
+  async extractModifiedFiles(): Promise<string[]> {
+    if (!this.resumeSessionId) return [];
+    return extractModified(this.resumeSessionId, this.projectPath);
   }
 }

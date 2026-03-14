@@ -32,7 +32,8 @@ async function handleGitStatus(ctx: RouteContext, req: Request, res: Response): 
           }
         }
         return { status: code, path: rest };
-      });
+      })
+      .filter((f) => !f.path.endsWith('/'));
     res.json({ files });
   } catch (err) {
     if ((err as { code?: unknown }).code !== 128) {
@@ -94,7 +95,11 @@ async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promi
           res.status(403).json({ error: 'Path outside project' });
           return;
         }
-        modified = await readFile(resolvedFile, 'utf-8');
+        try {
+          modified = await readFile(resolvedFile, 'utf-8');
+        } catch {
+          /* deleted file */
+        }
       }
       res.json({ diff, original, modified, source: 'git' });
     } catch (err) {
@@ -109,25 +114,25 @@ async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promi
       res.json({ files: modifiedFiles, source: 'session' });
       return;
     }
-    try {
-      const resolvedFile = resolveAndValidatePath(basePath, file);
-      if (!resolvedFile) {
-        res.status(403).json({ error: 'Path outside project' });
-        return;
-      }
-      let original = '';
-      const headPath = oldPath || file;
-      try {
-        original = await execGit(['show', `HEAD:${headPath}`], basePath);
-      } catch {
-        /* new file */
-      }
-      const modified = await readFile(resolvedFile, 'utf-8');
-      res.json({ original, modified, source: 'session', file });
-    } catch (err) {
-      logger.warn({ err, file }, 'Failed to read session diff file');
-      res.status(404).json({ error: 'File not found' });
+    const resolvedFile = resolveAndValidatePath(basePath, file);
+    if (!resolvedFile) {
+      res.status(403).json({ error: 'Path outside project' });
+      return;
     }
+    let original = '';
+    const headPath = oldPath || file;
+    try {
+      original = await execGit(['show', `HEAD:${headPath}`], basePath);
+    } catch {
+      /* new file */
+    }
+    let modified = '';
+    try {
+      modified = await readFile(resolvedFile, 'utf-8');
+    } catch {
+      /* deleted file */
+    }
+    res.json({ original, modified, source: 'session', file });
   } else {
     res.status(400).json({ error: 'Invalid source. Use "git" or "session".' });
   }
