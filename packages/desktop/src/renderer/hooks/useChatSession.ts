@@ -20,17 +20,15 @@ export function useChatSession(chatId: string | null) {
     // If the process is already running, startChat returns early — this is a safe no-op.
     daemonClient.resumeChat(chatId);
 
-    // Load cached messages from daemon (survives desktop reloads)
-    const existing = useChatsStore.getState().messages.get(chatId);
-    if (!existing || existing.length === 0) {
-      getChatMessages(chatId)
-        .then((msgs) => {
-          if (msgs.length > 0) {
-            useChatsStore.getState().setMessages(chatId, msgs);
-          }
-        })
-        .catch((err) => log.warn('message fetch failed', { err: String(err) }));
-    }
+    // Always load messages from daemon — the store may have stale data from before
+    // the WS subscription was dropped (e.g. user switched tabs/projects).
+    getChatMessages(chatId)
+      .then((msgs) => {
+        if (msgs.length > 0) {
+          useChatsStore.getState().setMessages(chatId, msgs);
+        }
+      })
+      .catch((err) => log.warn('message fetch failed', { err: String(err) }));
 
     // Restore pending permission from daemon (survives desktop reloads)
     if (!useChatsStore.getState().pendingPermissions.has(chatId)) {
