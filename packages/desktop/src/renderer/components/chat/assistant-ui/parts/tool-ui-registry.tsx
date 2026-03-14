@@ -10,6 +10,7 @@ import { TaskGroupCard } from './tools/TaskGroupCard';
 import { TaskProgressCard } from './tools/TaskProgressCard';
 import { PlanCard } from './tools/PlanCard';
 import { SlashCommandCard } from './tools/SlashCommandCard';
+import { AskUserQuestionToolCard } from './tools/AskUserQuestionToolCard';
 
 export const EditToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Edit',
@@ -85,7 +86,6 @@ const HIDDEN_TOOLS = [
   'TaskStop',
   'TodoWrite',
   'EnterPlanMode',
-  'AskUserQuestion',
 ] as const;
 export const HiddenToolUIs = HIDDEN_TOOLS.map((toolName) =>
   makeAssistantToolUI<Record<string, unknown>, unknown>({
@@ -93,6 +93,11 @@ export const HiddenToolUIs = HIDDEN_TOOLS.map((toolName) =>
     render: () => null,
   }),
 );
+
+export const AskUserQuestionToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
+  toolName: 'AskUserQuestion',
+  render: ({ args, result }) => <AskUserQuestionToolCard args={args} result={result} />,
+});
 
 export const AllToolUIs = [
   EditToolUI,
@@ -104,6 +109,7 @@ export const AllToolUIs = [
   TaskToolUI,
   ExitPlanModeToolUI,
   SkillToolUI,
+  AskUserQuestionToolUI,
   ToolGroupUI,
   TaskGroupUI,
   TaskProgressUI,
