@@ -65,6 +65,49 @@ describe('handleStdout', () => {
     expect(sink.onInit).not.toHaveBeenCalled();
     expect(sink.onMessage).not.toHaveBeenCalled();
   });
+
+  it('extracts skill name (not full path) from user text blocks', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Base directory for this skill: /home/user/.claude/skills/brainstorming\n\n# Skill Content',
+          },
+        ],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onSkillFile).toHaveBeenCalledWith({
+      path: '/home/user/.claude/skills/brainstorming/SKILL.md',
+      displayName: 'brainstorming',
+    });
+  });
+
+  it('extracts skill name from rawContent string (non-array content)', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: 'Base directory for this skill: /home/user/.claude/skills/my-skill\n\nSkill body here.',
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onSkillFile).toHaveBeenCalledWith({
+      path: '/home/user/.claude/skills/my-skill/SKILL.md',
+      displayName: 'my-skill',
+    });
+  });
 });
 
 describe('handleStderr', () => {
