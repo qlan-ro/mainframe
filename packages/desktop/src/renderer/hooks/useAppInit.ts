@@ -93,25 +93,32 @@ export function useProject(projectId: string | null) {
 
     const hasRestoredTabs = useTabsStore.getState().tabs.length > 0;
 
-    // Sync activeChatId from restored tabs so the sidebar highlights correctly
-    if (hasRestoredTabs) {
-      const tabState = useTabsStore.getState();
-      const activeTab = tabState.tabs.find((t) => t.id === tabState.activePrimaryTabId);
-      if (activeTab?.type === 'chat') {
-        useChatsStore.getState().setActiveChat(activeTab.chatId);
-      }
-    }
+    // Clear immediately so the sidebar doesn't show a stale highlight during fetch
+    useChatsStore.getState().setActiveChat(null);
 
     const loadChats = async () => {
       const chatsList = await getChats(projectId);
       setChats(chatsList);
 
-      if (!hasRestoredTabs && chatsList.length > 0) {
+      // Sync activeChatId AFTER chats are loaded so we can validate it exists
+      if (hasRestoredTabs) {
+        const tabState = useTabsStore.getState();
+        const activeTab = tabState.tabs.find((t) => t.id === tabState.activePrimaryTabId);
+        if (activeTab?.type === 'chat' && chatsList.some((c) => c.id === activeTab.chatId)) {
+          useChatsStore.getState().setActiveChat(activeTab.chatId);
+          return;
+        }
+      }
+
+      // Fallback: select the most recent chat
+      if (chatsList.length > 0) {
         const sorted = [...chatsList].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
         const mostRecent = sorted[0]!;
         useChatsStore.getState().setActiveChat(mostRecent.id);
-        useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
-        daemonClient.subscribe(mostRecent.id);
+        if (!hasRestoredTabs) {
+          useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
+          daemonClient.subscribe(mostRecent.id);
+        }
       }
     };
 

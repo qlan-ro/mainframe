@@ -106,7 +106,6 @@ export class ClaudeSession implements AdapterSession {
         'TodoWrite',
         'Skill',
         'EnterPlanMode',
-        'AskUserQuestion',
       ]),
       progress: new Set(['TaskCreate', 'TaskUpdate']),
       subagent: new Set(['Task']),
