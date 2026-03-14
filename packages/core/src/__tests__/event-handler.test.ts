@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventHandler } from '../chat/event-handler.js';
 import { MessageCache } from '../chat/message-cache.js';
 import { PermissionManager } from '../chat/permission-manager.js';
-import { AdapterRegistry } from '../adapters/index.js';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
 
 function createRespondToPermission() {
@@ -11,7 +10,6 @@ function createRespondToPermission() {
 
 describe('EventHandler token accumulation', () => {
   let db: any;
-  let adapters: AdapterRegistry;
   let messages: MessageCache;
   let permissions: PermissionManager;
   let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
@@ -25,9 +23,8 @@ describe('EventHandler token accumulation', () => {
       projects: { get: vi.fn() },
       settings: { get: vi.fn() },
     };
-    adapters = new AdapterRegistry();
     messages = new MessageCache();
-    permissions = new PermissionManager(db, adapters);
+    permissions = new PermissionManager();
     emitEvent = vi.fn();
     activeChats = new Map();
   });
@@ -70,7 +67,6 @@ describe('EventHandler token accumulation', () => {
 
 describe('EventHandler adapterId stamping', () => {
   let db: any;
-  let adapters: AdapterRegistry;
   let messages: MessageCache;
   let permissions: PermissionManager;
   let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
@@ -84,9 +80,8 @@ describe('EventHandler adapterId stamping', () => {
       projects: { get: vi.fn() },
       settings: { get: vi.fn() },
     };
-    adapters = new AdapterRegistry();
     messages = new MessageCache();
-    permissions = new PermissionManager(db, adapters);
+    permissions = new PermissionManager();
     emitEvent = vi.fn();
     activeChats = new Map();
   });
@@ -117,7 +112,6 @@ describe('EventHandler adapterId stamping', () => {
 
 describe('EventHandler skill_file announcement', () => {
   let db: any;
-  let adapters: AdapterRegistry;
   let msgCache: MessageCache;
   let permissions: PermissionManager;
   let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
@@ -131,9 +125,8 @@ describe('EventHandler skill_file announcement', () => {
       projects: { get: vi.fn() },
       settings: { get: vi.fn() },
     };
-    adapters = new AdapterRegistry();
     msgCache = new MessageCache();
-    permissions = new PermissionManager(db, adapters);
+    permissions = new PermissionManager();
     emitEvent = vi.fn();
     activeChats = new Map();
     activeChats.set(chatId, {
@@ -192,5 +185,76 @@ describe('EventHandler skill_file announcement', () => {
 
     expect(systemEvents).toHaveLength(1);
     expect(systemEvents[0][0].message.content[0]).toMatchObject({ text: 'Using skill: my-skill' });
+  });
+});
+
+describe('EventHandler onPermission — yolo no longer auto-approves', () => {
+  let db: any;
+  let messages: MessageCache;
+  let permissions: PermissionManager;
+  let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
+  let activeChats: Map<string, any>;
+  let respondToPermission: ReturnType<typeof createRespondToPermission>;
+
+  const chatId = 'chat-yolo';
+
+  beforeEach(() => {
+    db = {
+      chats: {
+        update: vi.fn(),
+        get: vi.fn(),
+        addPlanFile: vi.fn().mockReturnValue(false),
+        addSkillFile: vi.fn().mockReturnValue(false),
+      },
+      projects: { get: vi.fn() },
+      settings: { get: vi.fn() },
+    };
+    messages = new MessageCache();
+    permissions = new PermissionManager();
+    emitEvent = vi.fn();
+    respondToPermission = createRespondToPermission();
+    activeChats = new Map();
+    activeChats.set(chatId, {
+      chat: {
+        id: chatId,
+        permissionMode: 'yolo',
+        totalCost: 0,
+        totalTokensInput: 0,
+        totalTokensOutput: 0,
+        processState: 'working',
+      },
+      session: { id: 'session-1', adapterId: 'claude' },
+    });
+  });
+
+  it('enqueues permissions normally in yolo mode without calling respondToPermission', () => {
+    const handler = new EventHandler(db, messages, permissions, (id) => activeChats.get(id), emitEvent);
+    const sink: SessionSink = handler.buildSink(chatId, respondToPermission);
+
+    sink.onPermission({ requestId: 'req-1', toolName: 'Bash', toolUseId: 'tu-1', input: {}, suggestions: [] });
+
+    expect(respondToPermission).not.toHaveBeenCalled();
+    expect(permissions.hasPending(chatId)).toBe(true);
+    expect(permissions.getPending(chatId)?.requestId).toBe('req-1');
+
+    const permissionEvent = emitEvent.mock.calls.find(([e]: [any]) => e.type === 'permission.requested');
+    expect(permissionEvent).toBeDefined();
+    expect(permissionEvent![0].request.toolName).toBe('Bash');
+  });
+
+  it('enqueues AskUserQuestion in yolo mode without auto-approving', () => {
+    const handler = new EventHandler(db, messages, permissions, (id) => activeChats.get(id), emitEvent);
+    const sink: SessionSink = handler.buildSink(chatId, respondToPermission);
+
+    sink.onPermission({
+      requestId: 'req-ask',
+      toolName: 'AskUserQuestion',
+      toolUseId: 'tu-ask',
+      input: { questions: [] },
+      suggestions: [],
+    });
+
+    expect(respondToPermission).not.toHaveBeenCalled();
+    expect(permissions.hasPending(chatId)).toBe(true);
   });
 });

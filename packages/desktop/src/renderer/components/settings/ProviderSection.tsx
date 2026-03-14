@@ -9,7 +9,7 @@ import { getConfigConflicts, updateProviderSettings } from '../../lib/api';
 import { getModelOptions } from '../../lib/adapters';
 import type { ProviderConfig } from '@qlan-ro/mainframe-types';
 import { ModelDropdown } from './ModelDropdown';
-import { MODE_OPTIONS, EXECUTION_MODE_OPTIONS } from './constants';
+import { MODE_OPTIONS } from './constants';
 
 const EMPTY_CONFIG: ProviderConfig = {};
 
@@ -98,37 +98,6 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
           ))}
         </div>
       </div>
-
-      {/* Plan execution mode (shown when Plan Mode is active) */}
-      {(config.defaultMode ?? 'default') === 'plan' && (
-        <div className="space-y-1.5">
-          <label className="text-mf-small text-mf-text-secondary">After Plan Approval</label>
-          <div className="space-y-1">
-            {EXECUTION_MODE_OPTIONS.map((mode) => (
-              <label
-                key={mode.id}
-                className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors"
-              >
-                <input
-                  type="radio"
-                  name={`${adapterId}-exec-mode`}
-                  checked={(config.planExecutionMode ?? 'default') === mode.id}
-                  onChange={() => update({ planExecutionMode: mode.id })}
-                  className={`mt-0.5 ${mode.id === 'yolo' ? 'accent-mf-destructive' : 'accent-mf-accent'}`}
-                />
-                <div>
-                  <span
-                    className={`text-mf-small ${mode.id === 'yolo' ? 'text-mf-destructive' : 'text-mf-text-primary'}`}
-                  >
-                    {mode.label}
-                  </span>
-                  <p className="text-mf-status text-mf-text-secondary">{mode.description}</p>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

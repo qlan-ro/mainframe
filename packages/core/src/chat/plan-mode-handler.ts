@@ -6,9 +6,9 @@ import type { ActiveChat } from './types.js';
 import { extractLatestPlanFileFromMessages } from './context-tracker.js';
 
 export interface PlanModeContext {
-  permissions: PermissionManager;
   messages: MessageCache;
   db: DatabaseManager;
+  permissions: PermissionManager;
   getActiveChat(chatId: string): ActiveChat | undefined;
   emitEvent(event: DaemonEvent): void;
   clearDisplayCache(chatId: string): void;
@@ -20,11 +20,7 @@ export class PlanModeHandler {
   constructor(private ctx: PlanModeContext) {}
 
   async handleNoProcess(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
-    const targetMode = (response.executionMode ?? this.ctx.permissions.getPlanExecutionMode(chatId)) as
-      | Chat['permissionMode']
-      | undefined;
-    this.ctx.permissions.deletePlanExecutionMode(chatId);
-    const newMode = targetMode || 'default';
+    const newMode = (response.executionMode ?? 'default') as Chat['permissionMode'];
     if (newMode !== active.chat.permissionMode) {
       active.chat.permissionMode = newMode;
       this.ctx.db.chats.update(chatId, { permissionMode: newMode });
@@ -38,11 +34,7 @@ export class PlanModeHandler {
     if (recoveredPlanPath && this.ctx.db.chats.addPlanFile(chatId, recoveredPlanPath)) {
       this.ctx.emitEvent({ type: 'context.updated', chatId });
     }
-    const targetMode = (response.executionMode ?? this.ctx.permissions.getPlanExecutionMode(chatId)) as
-      | Chat['permissionMode']
-      | undefined;
-    this.ctx.permissions.deletePlanExecutionMode(chatId);
-    const newMode = targetMode || 'default';
+    const newMode = (response.executionMode ?? 'default') as Chat['permissionMode'];
 
     if (!active.session?.isSpawned) {
       this.ctx.permissions.shift(chatId);
@@ -76,11 +68,7 @@ export class PlanModeHandler {
   }
 
   async handleEscalation(chatId: string, active: ActiveChat, response: ControlResponse): Promise<void> {
-    const targetMode = (response.executionMode ?? this.ctx.permissions.getPlanExecutionMode(chatId)) as
-      | Chat['permissionMode']
-      | undefined;
-    this.ctx.permissions.deletePlanExecutionMode(chatId);
-    const newMode = targetMode || 'default';
+    const newMode = (response.executionMode ?? 'default') as NonNullable<Chat['permissionMode']>;
     if (newMode !== active.chat.permissionMode) {
       active.chat.permissionMode = newMode;
       this.ctx.db.chats.update(chatId, { permissionMode: newMode });

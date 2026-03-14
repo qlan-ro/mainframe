@@ -145,16 +145,6 @@ describe('settingRoutes', () => {
       expect(ctx.db.settings.delete).toHaveBeenCalledWith('provider', 'claude.skipPermissions');
     });
 
-    it('sets planExecutionMode', () => {
-      const router = settingRoutes(ctx);
-      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
-      const res = mockRes();
-
-      handler({ params: { adapterId: 'gemini' }, query: {}, body: { planExecutionMode: 'auto' } }, res, vi.fn());
-
-      expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'gemini.planExecutionMode', 'auto');
-    });
-
     it('sets executablePath', () => {
       const router = settingRoutes(ctx);
       const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');

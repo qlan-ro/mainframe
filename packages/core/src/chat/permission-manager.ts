@@ -1,20 +1,10 @@
-import type { Chat, ChatMessage, ControlRequest, DaemonEvent, AdapterProcess } from '@qlan-ro/mainframe-types';
-import type { DatabaseManager } from '../db/index.js';
-import type { AdapterRegistry } from '../adapters/index.js';
+import type { ChatMessage, ControlRequest } from '@qlan-ro/mainframe-types';
 
 export class PermissionManager {
   private pendingPermissions = new Map<string, ControlRequest[]>();
-  private planExecutionModes = new Map<string, Chat['permissionMode']>();
   private interruptedChats = new Set<string>();
 
-  constructor(
-    private db: DatabaseManager,
-    private adapters: AdapterRegistry,
-  ) {}
-
   getPending(chatId: string): ControlRequest | null {
-    const chat = this.db.chats.get(chatId);
-    if (chat?.permissionMode === 'yolo') return null;
     return this.pendingPermissions.get(chatId)?.[0] ?? null;
   }
 
@@ -30,7 +20,6 @@ export class PermissionManager {
 
   clear(chatId: string): void {
     this.pendingPermissions.delete(chatId);
-    this.planExecutionModes.delete(chatId);
     this.interruptedChats.delete(chatId);
   }
 
@@ -49,18 +38,6 @@ export class PermissionManager {
       return undefined;
     }
     return queue[0];
-  }
-
-  setPlanExecutionMode(chatId: string, mode: Chat['permissionMode']): void {
-    this.planExecutionModes.set(chatId, mode);
-  }
-
-  getPlanExecutionMode(chatId: string): Chat['permissionMode'] | undefined {
-    return this.planExecutionModes.get(chatId);
-  }
-
-  deletePlanExecutionMode(chatId: string): void {
-    this.planExecutionModes.delete(chatId);
   }
 
   markInterrupted(chatId: string): void {

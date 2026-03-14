@@ -71,7 +71,7 @@ function buildSessionSink(
   permissions: PermissionManager,
   getActiveChat: (chatId: string) => ActiveChat | undefined,
   emitEvent: (event: DaemonEvent) => void,
-  respondToPermission: (response: ControlResponse) => Promise<void>,
+  _respondToPermission: (response: ControlResponse) => Promise<void>,
   displayCache: Map<string, DisplayMessage[]>,
   getToolCategories: (chatId: string) => ToolCategories | undefined,
   pushService?: PushService,
@@ -132,21 +132,6 @@ function buildSessionSink(
     },
 
     onPermission(request: any) {
-      const active = getActiveChat(chatId);
-      const mode = active?.chat.permissionMode;
-
-      // Interactive tools require real user input even in yolo mode.
-      const requiresUserInput = request.toolName === 'AskUserQuestion' || request.toolName === 'ExitPlanMode';
-      if (mode === 'yolo' && !requiresUserInput) {
-        respondToPermission({
-          requestId: request.requestId,
-          toolUseId: request.toolUseId,
-          behavior: 'allow',
-          updatedInput: request.input,
-        }).catch((err) => log.warn({ err, chatId }, 'yolo auto-approve failed'));
-        return;
-      }
-
       const isFirst = permissions.enqueue(chatId, request);
       if (isFirst) {
         log.info(

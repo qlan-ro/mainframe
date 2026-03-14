@@ -20,20 +20,6 @@ export const MODE_OPTIONS: {
   { id: 'plan', label: 'Plan Mode', description: 'Research only until plan is approved' },
 ];
 
-export const EXECUTION_MODE_OPTIONS: {
-  id: NonNullable<ProviderConfig['planExecutionMode']>;
-  label: string;
-  description: string;
-}[] = [
-  { id: 'default', label: 'Interactive', description: 'Prompts for everything after plan approval' },
-  { id: 'acceptEdits', label: 'Auto-Accept Edits', description: 'Auto-approves file edits, prompts for bash' },
-  {
-    id: 'yolo',
-    label: 'Skip All Permissions',
-    description: 'Auto-approves everything — use in isolated environments only',
-  },
-];
-
 export const SIDEBAR_TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
   { id: 'providers', label: 'Providers', icon: Cpu },
