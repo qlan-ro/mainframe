@@ -22,6 +22,7 @@ const HIDDEN_TOOL_NAMES = new Set([
   'TodoWrite',
   'EnterPlanMode',
   'AskUserQuestion',
+  'ToolSearch',
 ]);
 
 export function renderToolCard(
@@ -43,7 +44,7 @@ export function renderToolCard(
   if (toolName === 'Write') return <WriteFileCard args={args} result={result} isError={isError} />;
   if (toolName === 'Bash') return <BashCard args={args} result={result} isError={isError} />;
   if (toolName === 'Read') return <ReadFileCard args={args} result={result} isError={isError} />;
-  if (toolName === 'Glob' || toolName === 'Grep')
+  if (toolName === 'Glob' || toolName === 'Grep' || toolName === 'LS')
     return <SearchCard toolName={toolName} args={args} result={result} isError={isError} />;
   return <DefaultToolCard toolName={toolName} args={args} argsText={argsText} result={result} isError={isError} />;
 }

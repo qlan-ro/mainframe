@@ -9,6 +9,8 @@ interface CollapsibleToolCardProps {
   wrapperClassName?: string;
   /** Disable toggling (e.g. PlanCard with no result) */
   disabled?: boolean;
+  /** Start expanded */
+  defaultOpen?: boolean;
   /** Content between chevron and flex spacer */
   header: React.ReactNode;
   /** Content after flex spacer (status dots, action buttons) */
@@ -23,12 +25,13 @@ export function CollapsibleToolCard({
   variant = 'primary',
   wrapperClassName,
   disabled,
+  defaultOpen = false,
   header,
   trailing,
   subHeader,
   children,
 }: CollapsibleToolCardProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const isPrimary = variant === 'primary';
 
   return (

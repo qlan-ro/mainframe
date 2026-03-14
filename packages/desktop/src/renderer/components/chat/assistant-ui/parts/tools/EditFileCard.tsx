@@ -49,6 +49,7 @@ export function EditFileCard({ args, result, isError }: ToolCardProps) {
 
   return (
     <CollapsibleToolCard
+      defaultOpen
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
