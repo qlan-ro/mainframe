@@ -44,24 +44,34 @@ function FileTreeNode({
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const { openEditorTab } = useTabsStore();
 
-  const expandedRef = useRef(expanded);
-  expandedRef.current = expanded;
-  const childrenRef = useRef(children);
-  childrenRef.current = children;
   const isActive = useTabsStore(
     (s) => entry.type === 'file' && s.fileView?.type === 'editor' && s.fileView.filePath === entry.path,
   );
 
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
+  const childrenRef = useRef(children);
+  childrenRef.current = children;
+
   useEffect(() => {
     if (refreshKey === 0) return;
     if (entry.type !== 'directory') return;
+    let cancelled = false;
     if (expandedRef.current && activeProjectId) {
       getFileTree(activeProjectId, entry.path, activeChatId ?? undefined)
-        .then(setChildren)
-        .catch((err) => log.warn('refresh file tree failed', { err: String(err) }));
+        .then((entries) => {
+          if (!cancelled) setChildren(entries);
+        })
+        .catch((err) => {
+          if (!cancelled) log.warn('refresh file tree failed', { err: String(err) });
+        });
     } else if (childrenRef.current.length > 0) {
+      // Clear stale cache so next expand fetches fresh data
       setChildren([]);
     }
+    return () => {
+      cancelled = true;
+    };
   }, [refreshKey, activeProjectId, activeChatId, entry.path, entry.type]);
 
   const handleClick = async (): Promise<void> => {
