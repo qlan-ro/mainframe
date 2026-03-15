@@ -72,7 +72,9 @@ export class ChatLifecycleManager {
     await this.loadChat(chatId);
 
     const chat = this.deps.activeChats.get(chatId)?.chat ?? this.deps.db.chats.get(chatId);
-    if (chat?.processState === 'working') {
+    if (!chat) return;
+
+    if (chat.processState === 'working') {
       if (chat.permissionMode === 'yolo') {
         this.deps.permissions.clear(chatId);
         await this.startChat(chatId);
@@ -80,6 +82,10 @@ export class ChatLifecycleManager {
         await this.startChat(chatId);
       }
     }
+
+    // Always push current state to the just-(re)subscribed client so it can
+    // recover displayStatus/isRunning after a project switch.
+    this.deps.emitEvent({ type: 'chat.updated', chat });
   }
 
   async loadChat(chatId: string): Promise<void> {

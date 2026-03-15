@@ -301,13 +301,16 @@ export class ChatManager {
     this.db.projects.removeWithChats(projectId);
   }
 
+  listChats(projectId: string): Chat[] {
+    const chats = this.db.chats.list(projectId);
+    return chats.map((chat) => this.enrichChat(chat));
+  }
+
   getChat(chatId: string): Chat | null {
     const active = this.activeChats.get(chatId);
     const chat = active ? active.chat : this.db.chats.get(chatId);
-    if (chat?.worktreePath) {
-      chat.worktreeMissing = !existsSync(chat.worktreePath);
-    }
-    return chat;
+    if (!chat) return null;
+    return this.enrichChat(chat);
   }
 
   getEffectivePath(chatId: string): string | null {
@@ -404,13 +407,17 @@ export class ChatManager {
     this.permissionHandler.clearPendingPermission(chatId);
   }
 
+  private enrichChat(chat: Chat): Chat {
+    const hasPending = this.permissions.hasPending(chat.id);
+    chat.displayStatus = hasPending ? 'waiting' : chat.processState === 'working' ? 'working' : 'idle';
+    chat.isRunning = chat.processState === 'working' && !hasPending;
+    chat.worktreeMissing = chat.worktreePath ? !existsSync(chat.worktreePath) : false;
+    return chat;
+  }
+
   private emitEvent(event: DaemonEvent): void {
     if (event.type === 'chat.updated' || event.type === 'chat.created') {
-      const chat = event.chat;
-      const hasPending = this.permissions.hasPending(chat.id);
-      chat.displayStatus = hasPending ? 'waiting' : chat.processState === 'working' ? 'working' : 'idle';
-      chat.isRunning = chat.processState === 'working' && !hasPending;
-      chat.worktreeMissing = chat.worktreePath ? !existsSync(chat.worktreePath) : false;
+      this.enrichChat(event.chat);
     }
     this.onEvent(event);
   }

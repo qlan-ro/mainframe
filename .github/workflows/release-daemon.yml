@@ -59,3 +59,4 @@ jobs:
           files: artifacts/*.tar.gz
           draft: true
           append_body: true
+          generate_release_notes: true
