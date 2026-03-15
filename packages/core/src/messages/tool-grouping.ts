@@ -152,6 +152,12 @@ export function groupTaskChildren(parts: PartEntry[], categories: ToolCategories
       let j = i + 1;
       while (j < parts.length) {
         const next = parts[j]!;
+        // Sentinel text entries (\0ng:N) are non-groupable placeholders (thinking,
+        // images) — skip over them without breaking or adding as children.
+        if (next.type === 'text' && next.text.startsWith('\0ng:')) {
+          j++;
+          continue;
+        }
         if (next.type === 'text') break;
         if (next.type === 'tool-call' && isSubagentTool(next.toolName, categories)) break;
         children.push(next);
