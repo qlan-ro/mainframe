@@ -3,6 +3,7 @@ import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';
 import { removeWorktree } from '../workspace/index.js';
+import { existsSync } from 'node:fs';
 import { createChildLogger } from '../logger.js';
 import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
@@ -192,6 +193,10 @@ export class ChatLifecycleManager {
 
     const effectivePath = chat.worktreePath ?? project.path;
 
+    if (chat.worktreePath && !existsSync(chat.worktreePath)) {
+      return;
+    }
+
     if (chat.claudeSessionId) {
       const session = adapter.createSession({ projectPath: effectivePath, chatId: chat.claudeSessionId });
       const active = this.deps.activeChats.get(chatId)!;
@@ -250,6 +255,11 @@ export class ChatLifecycleManager {
     }
 
     const { chat } = active;
+
+    if (chat.worktreePath && !existsSync(chat.worktreePath)) {
+      throw new Error(`Worktree directory does not exist: ${chat.worktreePath}`);
+    }
+
     const adapter = this.deps.adapters.get(chat.adapterId);
     if (!adapter) throw new Error(`Adapter ${chat.adapterId} not found`);
 

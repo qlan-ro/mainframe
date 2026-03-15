@@ -22,7 +22,10 @@ interface ContextMenuState {
   items: ContextMenuItem[];
 }
 
-function SessionStatusDot({ status }: { status: SessionStatus }) {
+function SessionStatusDot({ status, worktreeMissing }: { status: SessionStatus; worktreeMissing?: boolean }) {
+  if (worktreeMissing) {
+    return <div data-testid="chat-status-missing" className="w-2 h-2 rounded-full shrink-0 bg-mf-destructive" />;
+  }
   const isWorking = status === 'working' || status === 'waiting';
   return (
     <div
@@ -236,7 +239,7 @@ export function ChatsPanel(): React.ReactElement {
                   className="flex-1 min-w-0 px-3 py-2 text-left rounded-mf-input"
                 >
                   <div className="flex items-center gap-2">
-                    <SessionStatusDot status={chat.displayStatus ?? 'idle'} />
+                    <SessionStatusDot status={chat.displayStatus ?? 'idle'} worktreeMissing={chat.worktreeMissing} />
                     <div className="flex-1 min-w-0">
                       <div
                         className={cn(
