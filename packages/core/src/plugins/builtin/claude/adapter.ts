@@ -71,7 +71,7 @@ export class ClaudeAdapter implements Adapter {
         'ToolSearch',
       ]),
       progress: new Set(['TaskCreate', 'TaskUpdate']),
-      subagent: new Set(['Task']),
+      subagent: new Set(['Task', 'Agent']),
     };
   }
 

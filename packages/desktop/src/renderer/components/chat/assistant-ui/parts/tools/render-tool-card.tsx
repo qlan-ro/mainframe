@@ -37,7 +37,7 @@ export function renderToolCard(
   if (toolName === '_ToolGroup') return <ToolGroupCard args={args} />;
   if (toolName === '_TaskProgress') return <TaskProgressCard args={args} />;
   if (toolName === '_TaskGroup') return <TaskGroupCard args={args} result={result} isError={isError} />;
-  if (toolName === 'Task') return <TaskCard args={args} result={result} isError={isError} />;
+  if (toolName === 'Task' || toolName === 'Agent') return <TaskCard args={args} result={result} isError={isError} />;
   if (toolName === 'ExitPlanMode') return <PlanCard args={args} result={result} isError={isError} />;
   if (toolName === 'Edit' && args.old_string !== undefined)
     return <EditFileCard args={args} result={result} isError={isError} />;

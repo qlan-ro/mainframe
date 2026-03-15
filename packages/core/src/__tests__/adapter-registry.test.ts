@@ -25,7 +25,7 @@ describe('ClaudeAdapter.getToolCategories', () => {
     expect(cats.hidden).toContain('TaskList');
     expect(cats.hidden).toContain('Skill');
     expect(cats.progress).toEqual(new Set(['TaskCreate', 'TaskUpdate']));
-    expect(cats.subagent).toEqual(new Set(['Task']));
+    expect(cats.subagent).toEqual(new Set(['Task', 'Agent']));
   });
 });
 

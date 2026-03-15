@@ -33,6 +33,7 @@ export function TaskGroupCard({ args, isError }: ToolCardProps) {
   const children = (args.children as TaskGroupChild[]) || [];
 
   const agentType = (taskArgs.subagent_type as string) || 'Task';
+  const model = taskArgs.model as string | undefined;
   const description = (taskArgs.description as string) || (taskArgs.prompt as string) || '';
   const truncatedDesc = description.length > 60 ? description.slice(0, 60) + '...' : description;
   const summary = buildSummary(children);
@@ -48,6 +49,7 @@ export function TaskGroupCard({ args, isError }: ToolCardProps) {
           className={cn('text-mf-text-secondary/40 transition-transform duration-150', open && 'rotate-90')}
         />
         <span className="text-mf-body text-mf-accent font-medium">{agentType}</span>
+        {model && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{model}</span>}
         <span className="text-mf-small text-mf-text-secondary/70 truncate" title={description}>
           {truncatedDesc}
         </span>
