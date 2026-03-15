@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
-import { cn } from '../../../../../lib/utils';
+import { Bot, ChevronDown, ChevronUp } from 'lucide-react';
 import { ErrorDot, type ToolCardProps } from './shared';
 import { renderToolCard } from './render-tool-card';
 
@@ -62,15 +61,17 @@ export function TaskGroupCard({ args, isError }: ToolCardProps) {
   const summary = buildSummary(children);
 
   return (
-    <div className="ml-4 pl-3 border-l border-mf-divider/50 space-y-1">
+    <div className="space-y-1">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-2 py-0.5 text-mf-body hover:bg-mf-hover/20 transition-colors"
       >
-        <ChevronRight
-          size={14}
-          className={cn('text-mf-text-secondary/40 transition-transform duration-150', open && 'rotate-90')}
-        />
+        <Bot size={14} className="text-mf-accent shrink-0" />
+        {open ? (
+          <ChevronUp size={14} className="text-mf-text-secondary/40 shrink-0" />
+        ) : (
+          <ChevronDown size={14} className="text-mf-text-secondary/40 shrink-0" />
+        )}
         <span className="text-mf-body text-mf-accent font-medium">{agentType}</span>
         {model && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{model}</span>}
         <span className="text-mf-small text-mf-text-secondary/70 truncate" title={description}>

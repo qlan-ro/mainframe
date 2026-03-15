@@ -28,7 +28,7 @@ export function DefaultToolCard({
           <span className="text-mf-body font-medium text-mf-text-primary">{toolName}</span>
         </>
       }
-      trailing={<StatusDot result={result} isError={isError} />}
+      statusDot={<StatusDot result={result} isError={isError} />}
     >
       <div className="border-t border-mf-divider px-3 py-2 space-y-2">
         <div>

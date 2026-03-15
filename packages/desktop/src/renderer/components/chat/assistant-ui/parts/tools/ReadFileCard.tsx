@@ -19,7 +19,7 @@ export function ReadFileCard({ args, result, isError }: ToolCardProps) {
           </span>
         </>
       }
-      trailing={<ErrorDot isError={isError} />}
+      statusDot={<ErrorDot isError={isError} />}
     >
       {resultText && (
         <div className="border-t border-mf-divider/50 ml-5">

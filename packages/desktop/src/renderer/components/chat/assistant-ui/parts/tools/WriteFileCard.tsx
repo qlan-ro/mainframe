@@ -1,5 +1,5 @@
 import React from 'react';
-import { Maximize2 } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { useTabsStore } from '../../../../../store/tabs';
 import { FileTypeIcon } from '../FileTypeIcon';
@@ -53,6 +53,7 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
           </span>
         </>
       }
+      statusDot={<StatusDot result={result} isError={isError} />}
       trailing={
         <>
           {addedCount !== null && (
@@ -72,9 +73,8 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
             className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors"
             title="Open in diff editor"
           >
-            <Maximize2 size={14} />
+            <ExternalLink size={14} />
           </span>
-          <StatusDot result={result} isError={isError} />
         </>
       }
     >

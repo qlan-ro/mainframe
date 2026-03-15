@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 
 interface CollapsibleToolCardProps {
@@ -11,9 +11,11 @@ interface CollapsibleToolCardProps {
   disabled?: boolean;
   /** Start expanded */
   defaultOpen?: boolean;
-  /** Content between chevron and flex spacer */
+  /** Status dot rendered at the start of the line */
+  statusDot?: React.ReactNode;
+  /** Content after status dot */
   header: React.ReactNode;
-  /** Content after flex spacer (status dots, action buttons) */
+  /** Content after flex spacer (action buttons, etc.) */
   trailing?: React.ReactNode;
   /** Content shown between header and expanded area when NOT open */
   subHeader?: React.ReactNode;
@@ -26,6 +28,7 @@ export function CollapsibleToolCard({
   wrapperClassName,
   disabled,
   defaultOpen = false,
+  statusDot,
   header,
   trailing,
   subHeader,
@@ -44,16 +47,15 @@ export function CollapsibleToolCard({
           disabled && 'cursor-default',
         )}
       >
-        <ChevronRight
-          size={14}
-          className={cn(
-            'transition-transform duration-150',
-            isPrimary ? 'text-mf-text-secondary/60' : 'text-mf-text-secondary/40',
-            open && 'rotate-90',
-          )}
-        />
+        {statusDot}
         {header}
         <span className="flex-1" />
+        {!disabled &&
+          (open ? (
+            <Minimize2 size={14} className="text-mf-text-secondary/40 shrink-0" />
+          ) : (
+            <Maximize2 size={14} className="text-mf-text-secondary/40 shrink-0" />
+          ))}
         {trailing}
       </button>
       {!open && subHeader}
