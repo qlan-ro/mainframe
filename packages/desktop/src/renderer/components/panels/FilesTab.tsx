@@ -30,20 +30,39 @@ function FileTreeNode({
   depth,
   projectPath,
   onContextMenu,
+  refreshKey,
 }: {
   entry: FileEntry;
   depth: number;
   projectPath: string;
   onContextMenu: (e: React.MouseEvent, entryPath: string) => void;
+  refreshKey: number;
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<FileEntry[]>([]);
   const { activeProjectId } = useProjectsStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const { openEditorTab } = useTabsStore();
+
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
+  const childrenRef = useRef(children);
+  childrenRef.current = children;
   const isActive = useTabsStore(
     (s) => entry.type === 'file' && s.fileView?.type === 'editor' && s.fileView.filePath === entry.path,
   );
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    if (entry.type !== 'directory') return;
+    if (expandedRef.current && activeProjectId) {
+      getFileTree(activeProjectId, entry.path, activeChatId ?? undefined)
+        .then(setChildren)
+        .catch((err) => log.warn('refresh file tree failed', { err: String(err) }));
+    } else if (childrenRef.current.length > 0) {
+      setChildren([]);
+    }
+  }, [refreshKey, activeProjectId, activeChatId, entry.path, entry.type]);
 
   const handleClick = async (): Promise<void> => {
     if (entry.type === 'directory') {
@@ -94,6 +113,7 @@ function FileTreeNode({
             depth={depth + 1}
             projectPath={projectPath}
             onContextMenu={onContextMenu}
+            refreshKey={refreshKey}
           />
         ))}
     </>
@@ -190,6 +210,7 @@ export function FilesTab(): React.ReactElement {
                 depth={1}
                 projectPath={activeProject.path}
                 onContextMenu={handleContextMenu}
+                refreshKey={refreshKey}
               />
             ))}
         </div>
