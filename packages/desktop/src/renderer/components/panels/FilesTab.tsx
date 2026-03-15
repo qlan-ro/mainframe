@@ -207,7 +207,7 @@ export function FilesTab(): React.ReactElement {
     <>
       <ScrollArea className="h-full">
         <div className="py-1">
-          <div className="flex items-center">
+          <div className="@container flex items-center">
             <button
               onClick={() => setExpanded(!expanded)}
               onContextMenu={(e) => handleContextMenu(e, '.')}
@@ -221,7 +221,7 @@ export function FilesTab(): React.ReactElement {
             </button>
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
-              className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
+              className="hidden @min-[160px]:block p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
               title="Refresh file tree"
               aria-label="Refresh file tree"
             >
