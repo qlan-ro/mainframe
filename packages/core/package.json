@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@qlan-ro/mainframe-types": "workspace:*",
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "^12.8.0",
     "express": "^5.0.0",
     "nanoid": "^5.0.4",
     "pino": "^10.3.1",
