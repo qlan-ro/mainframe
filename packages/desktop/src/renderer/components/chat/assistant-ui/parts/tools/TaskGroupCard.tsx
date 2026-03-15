@@ -12,19 +12,42 @@ interface TaskGroupChild {
   isError?: boolean;
 }
 
-const FRIENDLY_NAMES: Record<string, string> = {
-  _ToolGroup: 'Explore',
-  _TaskProgress: 'Tasks',
-  _TaskGroup: 'Agent',
+interface ToolGroupItem {
+  toolName: string;
+}
+
+const TOOL_LABELS: Record<string, string> = {
+  Read: 'Read',
+  Grep: 'Searched',
+  Glob: 'Globbed',
+  LS: 'Listed',
 };
 
 function buildSummary(children: TaskGroupChild[]): string {
   const counts = new Map<string, number>();
   for (const child of children) {
-    const label = FRIENDLY_NAMES[child.toolName] ?? child.toolName;
-    counts.set(label, (counts.get(label) ?? 0) + 1);
+    if (child.toolName === '_ToolGroup') {
+      const items = (child.args.items as ToolGroupItem[]) || [];
+      for (const item of items) {
+        const label = TOOL_LABELS[item.toolName] ?? item.toolName;
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+    } else if (child.toolName === '_TaskProgress' || child.toolName === '_TaskGroup') {
+      continue;
+    } else {
+      const label = TOOL_LABELS[child.toolName] ?? child.toolName;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
   }
-  return [...counts.entries()].map(([name, n]) => `${n} ${name}`).join(' · ');
+  return [...counts.entries()]
+    .map(([label, n]) => {
+      if (label === 'Read') return `Read ${n} file${n > 1 ? 's' : ''}`;
+      if (label === 'Searched') return `Searched ${n} pattern${n > 1 ? 's' : ''}`;
+      if (label === 'Globbed') return `Globbed ${n} pattern${n > 1 ? 's' : ''}`;
+      if (label === 'Listed') return `Listed ${n} dir${n > 1 ? 's' : ''}`;
+      return `${n} ${label}`;
+    })
+    .join(' · ');
 }
 
 export function TaskGroupCard({ args, isError }: ToolCardProps) {
@@ -54,7 +77,7 @@ export function TaskGroupCard({ args, isError }: ToolCardProps) {
           {truncatedDesc}
         </span>
         <span className="flex-1" />
-        {!open && summary && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{summary}</span>}
+        {summary && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{summary}</span>}
         <ErrorDot isError={isError} />
       </button>
       {open &&
