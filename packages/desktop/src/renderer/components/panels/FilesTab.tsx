@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Folder, FileText, ChevronRight, ChevronDown } from 'lucide-react';
+import { daemonClient } from '../../lib/client';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
@@ -106,13 +107,31 @@ export function FilesTab(): React.ReactElement {
   const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!activeProjectId) return;
     getFileTree(activeProjectId, '.', activeChatId ?? undefined)
       .then(setRootEntries)
       .catch((err) => log.warn('load file tree failed', { err: String(err) }));
-  }, [activeProjectId, activeChatId]);
+  }, [activeProjectId, activeChatId, refreshKey]);
+
+  useEffect(() => {
+    if (!activeChatId) return;
+    const unsub = daemonClient.onEvent((event) => {
+      if (event.type === 'context.updated' && event.chatId === activeChatId) {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          setRefreshKey((k) => k + 1);
+        }, 500);
+      }
+    });
+    return () => {
+      unsub();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [activeChatId]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, entryPath: string) => {
