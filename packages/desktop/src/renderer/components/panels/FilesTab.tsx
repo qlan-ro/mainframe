@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
 import { daemonClient } from '../../lib/client';
 import { createLogger } from '../../lib/logger';
 
@@ -163,6 +163,12 @@ export function FilesTab(): React.ReactElement {
     };
   }, [activeChatId]);
 
+  useEffect(() => {
+    const onFocus = (): void => setRefreshKey((k) => k + 1);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, entryPath: string) => {
       e.preventDefault();
@@ -201,17 +207,27 @@ export function FilesTab(): React.ReactElement {
     <>
       <ScrollArea className="h-full">
         <div className="py-1">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            onContextMenu={(e) => handleContextMenu(e, '.')}
-            className="w-full flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary"
-          >
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            <Folder size={14} className="text-mf-accent shrink-0" />
-            <span className="truncate" title={activeProject.path}>
-              {activeProject.path}
-            </span>
-          </button>
+          <div className="flex items-center">
+            <button
+              onClick={() => setExpanded(!expanded)}
+              onContextMenu={(e) => handleContextMenu(e, '.')}
+              className="flex-1 flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary min-w-0"
+            >
+              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <Folder size={14} className="text-mf-accent shrink-0" />
+              <span className="truncate" title={activeProject.path}>
+                {activeProject.path}
+              </span>
+            </button>
+            <button
+              onClick={() => setRefreshKey((k) => k + 1)}
+              className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
+              title="Refresh file tree"
+              aria-label="Refresh file tree"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
           {expanded &&
             rootEntries.map((entry) => (
               <FileTreeNode
