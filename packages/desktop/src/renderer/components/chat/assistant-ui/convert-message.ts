@@ -104,13 +104,12 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
             const calls = block.calls.filter(
               (c): c is DisplayContent & { type: 'tool_call' } => c.type === 'tool_call',
             );
-            const firstCall = calls[0];
             parts.push({
               type: 'tool-call',
               toolCallId: block.agentId,
               toolName: '_TaskGroup',
               args: {
-                taskArgs: firstCall?.input ?? {},
+                taskArgs: block.taskArgs,
                 children: calls.map((c) => ({
                   toolCallId: c.id,
                   toolName: c.name,
@@ -119,7 +118,7 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
                   isError: c.result?.isError,
                 })),
               } as import('assistant-stream/utils').ReadonlyJSONObject,
-              result: firstCall?.result,
+              result: calls[0]?.result,
             });
             break;
           }

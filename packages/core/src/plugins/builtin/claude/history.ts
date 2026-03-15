@@ -208,6 +208,44 @@ export function filterSkillExpansions(messages: ChatMessage[]): ChatMessage[] {
   });
 }
 
+function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: Map<string, MessageContent[]>): void {
+  const parentId = entry.parentToolUseID as string | undefined;
+  if (!parentId) return;
+  const data = entry.data as Record<string, unknown>;
+  const msg = data.message as Record<string, unknown> | undefined;
+  const inner = msg?.message as Record<string, unknown> | undefined;
+  if (!inner || inner.role !== 'assistant') return;
+  const content = inner.content as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(content)) return;
+
+  for (const block of content) {
+    if (block.type !== 'tool_use') continue;
+    const existing = agentTools.get(parentId) ?? [];
+    existing.push({
+      type: 'tool_use',
+      id: (block.id as string) || nanoid(),
+      name: block.name as string,
+      input: (block.input as Record<string, unknown>) ?? {},
+    });
+    agentTools.set(parentId, existing);
+  }
+}
+
+function injectAgentChildren(messages: ChatMessage[], agentTools: Map<string, MessageContent[]>): void {
+  for (const msg of messages) {
+    if (msg.type !== 'assistant') continue;
+    const newContent: MessageContent[] = [];
+    for (const block of msg.content) {
+      newContent.push(block);
+      if (block.type === 'tool_use' && (block.name === 'Agent' || block.name === 'Task')) {
+        const children = agentTools.get(block.id);
+        if (children) newContent.push(...children);
+      }
+    }
+    msg.content = newContent;
+  }
+}
+
 function getSessionJsonlPath(sessionId: string, projectPath: string): { jsonlPath: string; projectDir: string } {
   const encodedPath = projectPath.replace(/[^a-zA-Z0-9-]/g, '-');
   const projectDir = path.join(homedir(), '.claude', 'projects', encodedPath);
@@ -249,6 +287,8 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
   }
 
   const messages: ChatMessage[] = [];
+  const agentTools = new Map<string, MessageContent[]>();
+
   for (const file of jsonlFiles) {
     const stream = createReadStream(file);
     try {
@@ -259,6 +299,13 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
           const entry = JSON.parse(line);
           if (entry.isMeta === true) continue;
           if (entry.isCompactSummary === true || entry.isVisibleInTranscriptOnly === true) continue;
+
+          // Collect tool_use blocks from agent_progress events
+          if (entry.type === 'progress' && entry.data?.type === 'agent_progress') {
+            collectAgentProgressTools(entry, agentTools);
+            continue;
+          }
+
           const msg = convertHistoryEntry(entry, sessionId);
           if (msg) messages.push(msg);
         } catch {
@@ -268,6 +315,11 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
     } finally {
       stream.destroy();
     }
+  }
+
+  // Inject collected subagent tool calls after their parent Agent tool_use blocks
+  if (agentTools.size > 0) {
+    injectAgentChildren(messages, agentTools);
   }
 
   return filterSkillExpansions(messages);

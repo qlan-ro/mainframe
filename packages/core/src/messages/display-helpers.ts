@@ -179,6 +179,7 @@ function convertGroupedPartsToDisplay(
       result.push({
         type: 'task_group',
         agentId,
+        taskArgs: taskArgs ?? {},
         calls: children.map((child) => {
           if (child.type !== 'tool-call') return { type: 'text' as const, text: child.text };
           return {
