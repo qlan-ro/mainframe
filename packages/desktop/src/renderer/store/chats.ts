@@ -39,9 +39,19 @@ export const useChatsStore = create<ChatsState>((set) => ({
   setActiveChat: (id) => set({ activeChatId: id }),
   addChat: (chat) => set((state) => ({ chats: [chat, ...state.chats] })),
   updateChat: (chat) =>
-    set((state) => ({
-      chats: [chat, ...state.chats.filter((c) => c.id !== chat.id)],
-    })),
+    set((state) => {
+      const idx = state.chats.findIndex((c) => c.id === chat.id);
+      if (idx === -1) return { chats: [chat, ...state.chats] };
+      const prev = state.chats[idx]!;
+      // Only move to top when updatedAt actually changed (real content update)
+      if (chat.updatedAt !== prev.updatedAt) {
+        return { chats: [chat, ...state.chats.filter((c) => c.id !== chat.id)] };
+      }
+      // Otherwise update in-place to preserve list order
+      const updated = [...state.chats];
+      updated[idx] = chat;
+      return { chats: updated };
+    }),
   removeChat: (id) =>
     set((state) => ({
       chats: state.chats.filter((c) => c.id !== id),
