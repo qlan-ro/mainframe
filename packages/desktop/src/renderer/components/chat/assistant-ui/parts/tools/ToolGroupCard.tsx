@@ -48,7 +48,7 @@ export function ToolGroupCard({ args }: { args: Record<string, unknown> }) {
           <span className="text-mf-body text-mf-text-secondary/60">{toolGroupSummary(items)}</span>
         </>
       }
-      trailing={anyError ? <span className="w-2 h-2 rounded-full bg-mf-chat-error shrink-0" /> : undefined}
+      statusDot={anyError ? <span className="w-2 h-2 rounded-full bg-mf-chat-error shrink-0" /> : undefined}
     >
       <div className="ml-5 border-l border-mf-divider/50">
         {items.map((item) => (

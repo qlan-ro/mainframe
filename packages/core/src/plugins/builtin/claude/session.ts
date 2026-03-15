@@ -23,7 +23,6 @@ import {
   extractSkillFilePaths as extractSkills,
   extractModifiedFiles as extractModified,
 } from './history.js';
-import type { ToolCategories } from '../../../messages/tool-categorization.js';
 
 const log = createChildLogger('claude:session');
 
@@ -92,23 +91,6 @@ export class ClaudeSession implements AdapterSession {
       pid: this.state.pid,
       status: this.state.status,
       projectPath: this.projectPath,
-    };
-  }
-
-  getToolCategories(): ToolCategories {
-    return {
-      explore: new Set(['Read', 'Glob', 'Grep']),
-      hidden: new Set([
-        'TaskList',
-        'TaskGet',
-        'TaskOutput',
-        'TaskStop',
-        'TodoWrite',
-        'Skill',
-        'EnterPlanMode',
-      ]),
-      progress: new Set(['TaskCreate', 'TaskUpdate']),
-      subagent: new Set(['Task']),
     };
   }
 

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
-import { cn } from '../../../../../lib/utils';
+import { Bot, ChevronDown, ChevronUp } from 'lucide-react';
 import { ErrorDot, type ToolCardProps } from './shared';
 import { renderToolCard } from './render-tool-card';
 
@@ -12,19 +11,42 @@ interface TaskGroupChild {
   isError?: boolean;
 }
 
-const FRIENDLY_NAMES: Record<string, string> = {
-  _ToolGroup: 'Explore',
-  _TaskProgress: 'Tasks',
-  _TaskGroup: 'Agent',
+interface ToolGroupItem {
+  toolName: string;
+}
+
+const TOOL_LABELS: Record<string, string> = {
+  Read: 'Read',
+  Grep: 'Searched',
+  Glob: 'Globbed',
+  LS: 'Listed',
 };
 
 function buildSummary(children: TaskGroupChild[]): string {
   const counts = new Map<string, number>();
   for (const child of children) {
-    const label = FRIENDLY_NAMES[child.toolName] ?? child.toolName;
-    counts.set(label, (counts.get(label) ?? 0) + 1);
+    if (child.toolName === '_ToolGroup') {
+      const items = (child.args.items as ToolGroupItem[]) || [];
+      for (const item of items) {
+        const label = TOOL_LABELS[item.toolName] ?? item.toolName;
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+    } else if (child.toolName === '_TaskProgress' || child.toolName === '_TaskGroup') {
+      continue;
+    } else {
+      const label = TOOL_LABELS[child.toolName] ?? child.toolName;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
   }
-  return [...counts.entries()].map(([name, n]) => `${n} ${name}`).join(' · ');
+  return [...counts.entries()]
+    .map(([label, n]) => {
+      if (label === 'Read') return `Read ${n} file${n > 1 ? 's' : ''}`;
+      if (label === 'Searched') return `Searched ${n} pattern${n > 1 ? 's' : ''}`;
+      if (label === 'Globbed') return `Globbed ${n} pattern${n > 1 ? 's' : ''}`;
+      if (label === 'Listed') return `Listed ${n} dir${n > 1 ? 's' : ''}`;
+      return `${n} ${label}`;
+    })
+    .join(' · ');
 }
 
 export function TaskGroupCard({ args, isError }: ToolCardProps) {
@@ -33,26 +55,30 @@ export function TaskGroupCard({ args, isError }: ToolCardProps) {
   const children = (args.children as TaskGroupChild[]) || [];
 
   const agentType = (taskArgs.subagent_type as string) || 'Task';
+  const model = taskArgs.model as string | undefined;
   const description = (taskArgs.description as string) || (taskArgs.prompt as string) || '';
   const truncatedDesc = description.length > 60 ? description.slice(0, 60) + '...' : description;
   const summary = buildSummary(children);
 
   return (
-    <div className="ml-4 pl-3 border-l border-mf-divider/50 space-y-1">
+    <div className="space-y-1">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-2 py-0.5 text-mf-body hover:bg-mf-hover/20 transition-colors"
       >
-        <ChevronRight
-          size={14}
-          className={cn('text-mf-text-secondary/40 transition-transform duration-150', open && 'rotate-90')}
-        />
+        <Bot size={14} className="text-mf-accent shrink-0" />
+        {open ? (
+          <ChevronUp size={14} className="text-mf-text-secondary/40 shrink-0" />
+        ) : (
+          <ChevronDown size={14} className="text-mf-text-secondary/40 shrink-0" />
+        )}
         <span className="text-mf-body text-mf-accent font-medium">{agentType}</span>
+        {model && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{model}</span>}
         <span className="text-mf-small text-mf-text-secondary/70 truncate" title={description}>
           {truncatedDesc}
         </span>
         <span className="flex-1" />
-        {!open && summary && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{summary}</span>}
+        {summary && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{summary}</span>}
         <ErrorDot isError={isError} />
       </button>
       {open &&

@@ -2,7 +2,6 @@ import React from 'react';
 import { Bot } from 'lucide-react';
 import { MessagePrimitive } from '@assistant-ui/react';
 import { MainframeText } from '../parts/MainframeText';
-import { ThinkingPart } from '../parts/ThinkingPart';
 import { DefaultToolCard } from '../parts/tools/DefaultToolCard';
 import { TurnFooter } from './TurnFooter';
 
@@ -17,7 +16,7 @@ export function AssistantMessage() {
           <MessagePrimitive.Parts
             components={{
               Text: MainframeText,
-              Reasoning: ThinkingPart,
+              Reasoning: () => null,
               tools: {
                 Fallback: ({ toolName, args, argsText, result, isError }) => (
                   <DefaultToolCard

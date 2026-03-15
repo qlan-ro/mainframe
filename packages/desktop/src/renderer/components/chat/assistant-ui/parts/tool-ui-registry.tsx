@@ -50,6 +50,11 @@ export const TaskToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>(
   render: ({ args, result, isError }) => <TaskCard args={args} result={result} isError={isError} />,
 });
 
+export const AgentToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
+  toolName: 'Agent',
+  render: ({ args, result, isError }) => <TaskCard args={args} result={result} isError={isError} />,
+});
+
 export const ExitPlanModeToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'ExitPlanMode',
   render: ({ args, result, isError }) => <PlanCard args={args} result={result} isError={isError} />,
@@ -86,6 +91,7 @@ const HIDDEN_TOOLS = [
   'TaskStop',
   'TodoWrite',
   'EnterPlanMode',
+  'ToolSearch',
 ] as const;
 export const HiddenToolUIs = HIDDEN_TOOLS.map((toolName) =>
   makeAssistantToolUI<Record<string, unknown>, unknown>({
@@ -107,6 +113,7 @@ export const AllToolUIs = [
   GlobToolUI,
   GrepToolUI,
   TaskToolUI,
+  AgentToolUI,
   ExitPlanModeToolUI,
   SkillToolUI,
   AskUserQuestionToolUI,

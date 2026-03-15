@@ -17,7 +17,7 @@ export function PlanCard({ result, isError }: ToolCardProps) {
           <span className="text-mf-body text-mf-text-secondary/60">Updated plan</span>
         </>
       }
-      trailing={<ErrorDot isError={isError} />}
+      statusDot={<ErrorDot isError={isError} />}
     >
       {resultText && (
         <div className="ml-5 border-l border-mf-divider/50 py-1">

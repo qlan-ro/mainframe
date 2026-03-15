@@ -23,7 +23,7 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
           </span>
         </>
       }
-      trailing={<StatusDot result={result} isError={isError} />}
+      statusDot={<StatusDot result={result} isError={isError} />}
       subHeader={
         description ? (
           <div

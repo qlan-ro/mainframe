@@ -178,15 +178,12 @@ export class ChatsRepository {
     const stmt = this.db.prepare('SELECT skill_files FROM chats WHERE id = ?');
     const row = stmt.get(chatId) as { skill_files: string } | undefined;
     const raw: unknown[] = parseJsonColumn(row?.skill_files, []);
-    // Migrate legacy string[] entries to SkillFileEntry[]
     return raw.map((entry) => {
-      if (typeof entry === 'string') {
-        const segments = entry.split('/');
-        const file = segments.pop() ?? entry;
-        const name = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
-        return { path: entry, displayName: name };
-      }
-      return entry as SkillFileEntry;
+      const skillPath = typeof entry === 'string' ? entry : (entry as SkillFileEntry).path;
+      const segments = skillPath.split('/');
+      const file = segments.pop() ?? skillPath;
+      const name = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
+      return { path: skillPath, displayName: name };
     });
   }
 

@@ -63,7 +63,7 @@ export function AskUserQuestionToolCard({ args, result }: AskUserQuestionToolCar
           </span>
         </>
       }
-      trailing={<StatusDot result={result} isError={false} />}
+      statusDot={<StatusDot result={result} isError={false} />}
     >
       <div className="px-3 py-2 space-y-3">
         {questions.map((q, i) => (
