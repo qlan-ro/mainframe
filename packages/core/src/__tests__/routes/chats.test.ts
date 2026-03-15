@@ -13,6 +13,7 @@ function createMockContext(): RouteContext {
     } as any,
     chats: {
       getChat: vi.fn(),
+      listChats: vi.fn(),
       archiveChat: vi.fn(),
       getMessages: vi.fn(),
       getDisplayMessages: vi.fn(),
@@ -47,7 +48,7 @@ describe('chatRoutes', () => {
   describe('GET /api/projects/:projectId/chats', () => {
     it('returns chat list for project', () => {
       const chats = [{ id: 'c1', projectId: 'p1' }];
-      (ctx.db.chats.list as any).mockReturnValue(chats);
+      (ctx.chats.listChats as any).mockReturnValue(chats);
 
       const router = chatRoutes(ctx);
       const handler = extractHandler(router, 'get', '/api/projects/:projectId/chats');
@@ -55,7 +56,7 @@ describe('chatRoutes', () => {
 
       handler({ params: { projectId: 'p1' }, query: {} }, res, vi.fn());
 
-      expect(ctx.db.chats.list).toHaveBeenCalledWith('p1');
+      expect(ctx.chats.listChats).toHaveBeenCalledWith('p1');
       expect(res.json).toHaveBeenCalledWith({ success: true, data: chats });
     });
   });

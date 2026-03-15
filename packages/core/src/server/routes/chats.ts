@@ -10,7 +10,7 @@ export function chatRoutes(ctx: RouteContext): Router {
   const router = Router();
 
   router.get('/api/projects/:projectId/chats', (req: Request, res: Response) => {
-    const chatsList = ctx.db.chats.list(param(req, 'projectId'));
+    const chatsList = ctx.chats.listChats(param(req, 'projectId'));
     res.json({ success: true, data: chatsList });
   });
 
