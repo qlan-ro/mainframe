@@ -55,7 +55,11 @@ export function LeftRail(): React.ReactElement {
       {/* Activity icons */}
       <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
         {/* Default: Sessions / AI workspace */}
-        <RailButton active={activeLeftPanelId === null} onClick={handleSessionsClick} title="Sessions">
+        <RailButton
+          active={activeLeftPanelId === null && !activeFullviewId}
+          onClick={handleSessionsClick}
+          title="Sessions"
+        >
           <MessageSquare size={16} />
         </RailButton>
 
@@ -80,8 +84,16 @@ export function LeftRail(): React.ReactElement {
       <div className="flex flex-col gap-2 pt-2">
         {/* Logs toggle button */}
         <RailButton
-          active={panelVisible}
+          active={panelVisible && !activeFullviewId}
           onClick={() => {
+            if (activeFullviewId) {
+              usePluginLayoutStore.getState().activateFullview(activeFullviewId);
+              setPanelVisible(true);
+              if (useUIStore.getState().panelCollapsed.bottom) {
+                togglePanel('bottom');
+              }
+              return;
+            }
             const next = !panelVisible;
             setPanelVisible(next);
             if (next && useUIStore.getState().panelCollapsed.bottom) {
