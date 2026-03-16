@@ -37,13 +37,25 @@ export function LeftRail(): React.ReactElement {
   const setPanelVisible = useUIStore((s) => s.setPanelVisible);
   const togglePanel = useUIStore((s) => s.togglePanel);
 
+  const panelCollapsed = useUIStore((s) => s.panelCollapsed);
+
   const handleSessionsClick = (): void => {
+    if (activeLeftPanelId === null && !panelCollapsed.left) {
+      togglePanel('left');
+      return;
+    }
     usePluginLayoutStore.getState().setActiveLeftPanel(null);
+    if (panelCollapsed.left) togglePanel('left');
   };
 
   const handlePluginClick = (pluginId: string): void => {
     const { activeLeftPanelId: current, setActiveLeftPanel } = usePluginLayoutStore.getState();
-    setActiveLeftPanel(current === pluginId ? null : pluginId);
+    if (current === pluginId && !panelCollapsed.left) {
+      togglePanel('left');
+      return;
+    }
+    setActiveLeftPanel(pluginId);
+    if (panelCollapsed.left) togglePanel('left');
   };
 
   const handleFullviewClick = (pluginId: string): void => {
@@ -56,7 +68,7 @@ export function LeftRail(): React.ReactElement {
       <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
         {/* Default: Sessions / AI workspace */}
         <RailButton
-          active={activeLeftPanelId === null && !activeFullviewId}
+          active={activeLeftPanelId === null && !activeFullviewId && !panelCollapsed.left}
           onClick={handleSessionsClick}
           title="Sessions"
         >
@@ -67,7 +79,7 @@ export function LeftRail(): React.ReactElement {
         {contributions.map((c) => (
           <RailButton
             key={c.pluginId}
-            active={activeLeftPanelId === c.pluginId}
+            active={activeLeftPanelId === c.pluginId && !panelCollapsed.left}
             onClick={() => handlePluginClick(c.pluginId)}
             title={c.label}
           >
