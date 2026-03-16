@@ -1,5 +1,5 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { PanelLeftOpen } from 'lucide-react';
+import { Minus, PanelLeftOpen } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { ContextTab } from './ContextTab';
 import { FilesTab } from './FilesTab';
@@ -7,7 +7,7 @@ import { ChangesTab } from './ChangesTab';
 import { FileViewHeader } from './FileViewHeader';
 import { FileViewContent } from './FileViewContent';
 import { useTabsStore } from '../../store/tabs';
-import { usePluginLayoutStore } from '../../store';
+import { usePluginLayoutStore, useUIStore } from '../../store';
 import { PluginView } from '../plugins/PluginView';
 
 type SidebarTab = 'context' | 'files' | 'changes';
@@ -19,6 +19,7 @@ export function RightPanel(): React.ReactElement {
   const activeRightPanelId = usePluginLayoutStore((s) => s.activeRightPanelId);
   const rightTabContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'right-tab');
 
+  const togglePanel = useUIStore((s) => s.togglePanel);
   const fileView = useTabsStore((s) => s.fileView);
   const fileViewCollapsed = useTabsStore((s) => s.fileViewCollapsed);
   const toggleFileViewCollapsed = useTabsStore((s) => s.toggleFileViewCollapsed);
@@ -125,6 +126,14 @@ export function RightPanel(): React.ReactElement {
                 {c.label}
               </TabsTrigger>
             ))}
+            <button
+              onClick={() => togglePanel('right')}
+              className="ml-auto flex items-center justify-center w-6 h-6 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors cursor-pointer"
+              title="Collapse right panel"
+              aria-label="Collapse right panel"
+            >
+              <Minus size={14} />
+            </button>
           </TabsList>
 
           <TabsContent value="context" className="flex-1 overflow-y-auto px-[10px] mt-0">

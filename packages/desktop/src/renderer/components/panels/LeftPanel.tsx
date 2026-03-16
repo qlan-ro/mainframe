@@ -1,14 +1,16 @@
 import React from 'react';
+import { Minus } from 'lucide-react';
 import { ChatsPanel } from './ChatsPanel';
 import { AgentsPanel } from './AgentsPanel';
 import { SkillsPanel } from './SkillsPanel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
-import { usePluginLayoutStore } from '../../store';
+import { usePluginLayoutStore, useUIStore } from '../../store';
 import { PluginView } from '../plugins/PluginView';
 
 export function LeftPanel(): React.ReactElement {
   const activeLeftPanelId = usePluginLayoutStore((s) => s.activeLeftPanelId);
   const leftTabContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'left-tab');
+  const togglePanel = useUIStore((s) => s.togglePanel);
 
   // Full-panel plugin mode — return early
   if (activeLeftPanelId) {
@@ -34,6 +36,14 @@ export function LeftPanel(): React.ReactElement {
               {c.label}
             </TabsTrigger>
           ))}
+          <button
+            onClick={() => togglePanel('left')}
+            className="ml-auto flex items-center justify-center w-6 h-6 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors cursor-pointer"
+            title="Collapse left panel"
+            aria-label="Collapse left panel"
+          >
+            <Minus size={14} />
+          </button>
         </TabsList>
         <TabsContent value="sessions" className="flex-1 overflow-hidden mt-0">
           <ChatsPanel />

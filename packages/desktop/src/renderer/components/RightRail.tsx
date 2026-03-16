@@ -1,7 +1,7 @@
 import React from 'react';
 import { PanelRight } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { usePluginLayoutStore } from '../store';
+import { usePluginLayoutStore, useUIStore } from '../store';
 import { PluginIcon } from './plugins/PluginIcon';
 
 interface RailButtonProps {
@@ -32,14 +32,26 @@ export function RightRail(): React.ReactElement {
   const contributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'right-panel');
   const activeRightPanelId = usePluginLayoutStore((s) => s.activeRightPanelId);
   const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
+  const panelCollapsed = useUIStore((s) => s.panelCollapsed);
+  const togglePanel = useUIStore((s) => s.togglePanel);
 
   const handleContextClick = (): void => {
+    if (activeRightPanelId === null && !panelCollapsed.right) {
+      togglePanel('right');
+      return;
+    }
     usePluginLayoutStore.getState().setActiveRightPanel(null);
+    if (panelCollapsed.right) togglePanel('right');
   };
 
   const handlePluginClick = (pluginId: string): void => {
     const { activeRightPanelId: current, setActiveRightPanel } = usePluginLayoutStore.getState();
-    setActiveRightPanel(current === pluginId ? null : pluginId);
+    if (current === pluginId && !panelCollapsed.right) {
+      togglePanel('right');
+      return;
+    }
+    setActiveRightPanel(pluginId);
+    if (panelCollapsed.right) togglePanel('right');
   };
 
   return (
@@ -48,7 +60,7 @@ export function RightRail(): React.ReactElement {
       <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
         {/* Default: Context panel */}
         <RailButton
-          active={activeRightPanelId === null && !activeFullviewId}
+          active={activeRightPanelId === null && !activeFullviewId && !panelCollapsed.right}
           onClick={handleContextClick}
           title="Context"
         >
@@ -59,7 +71,7 @@ export function RightRail(): React.ReactElement {
         {contributions.map((c) => (
           <RailButton
             key={c.pluginId}
-            active={activeRightPanelId === c.pluginId}
+            active={activeRightPanelId === c.pluginId && !panelCollapsed.right}
             onClick={() => handlePluginClick(c.pluginId)}
             title={c.label}
           >
