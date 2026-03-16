@@ -43,10 +43,11 @@ export function SearchPalette(): React.ReactElement | null {
     }
   }, [isOpen]);
 
-  // Global ⌘F / Ctrl+F
+  // Global ⌘F / Ctrl+F and ⌘O / Ctrl+O
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+      const key = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && (key === 'f' || key === 'o')) {
         e.preventDefault();
         if (isOpen) {
           close();
