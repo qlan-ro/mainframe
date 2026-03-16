@@ -31,6 +31,8 @@ function RailButton({ active, onClick, title, children }: RailButtonProps): Reac
 export function LeftRail(): React.ReactElement {
   const contributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'left-panel');
   const activeLeftPanelId = usePluginLayoutStore((s) => s.activeLeftPanelId);
+  const fullviewContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'fullview');
+  const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
   const panelVisible = useUIStore((s) => s.panelVisible);
   const setPanelVisible = useUIStore((s) => s.setPanelVisible);
   const togglePanel = useUIStore((s) => s.togglePanel);
@@ -42,6 +44,10 @@ export function LeftRail(): React.ReactElement {
   const handlePluginClick = (pluginId: string): void => {
     const { activeLeftPanelId: current, setActiveLeftPanel } = usePluginLayoutStore.getState();
     setActiveLeftPanel(current === pluginId ? null : pluginId);
+  };
+
+  const handleFullviewClick = (pluginId: string): void => {
+    usePluginLayoutStore.getState().activateFullview(pluginId);
   };
 
   return (
@@ -90,6 +96,22 @@ export function LeftRail(): React.ReactElement {
         </RailButton>
 
         <div className="w-5 h-px bg-mf-divider mx-auto" />
+
+        {/* Fullview plugin icons */}
+        {fullviewContributions.map((c) => (
+          <RailButton
+            key={c.pluginId}
+            active={activeFullviewId === c.pluginId}
+            onClick={() => handleFullviewClick(c.pluginId)}
+            title={c.label}
+          >
+            {c.icon ? (
+              <PluginIcon name={c.icon} size={16} />
+            ) : (
+              <span className="text-mf-text-secondary">{c.label.charAt(0)}</span>
+            )}
+          </RailButton>
+        ))}
 
         <RailButton onClick={() => useSettingsStore.getState().open()} title="Settings">
           <Settings size={16} />

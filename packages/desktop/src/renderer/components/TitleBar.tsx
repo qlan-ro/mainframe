@@ -4,13 +4,12 @@ import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:titlebar');
 import type { Layout } from 'react-resizable-panels';
-import { useProjectsStore, useChatsStore, useSearchStore, usePluginLayoutStore } from '../store';
+import { useProjectsStore, useChatsStore, useSearchStore } from '../store';
 import { useTabsStore } from '../store/tabs';
 import { useUIStore } from '../store/ui';
 import { useSandboxStore } from '../store/sandbox';
 import { createProject, removeProject } from '../lib/api';
 import { cn } from '../lib/utils';
-import { PluginIcon } from './plugins/PluginIcon';
 import { DirectoryPickerModal } from './DirectoryPickerModal';
 import { LaunchPopover } from './sandbox/LaunchPopover';
 import { StopPopover } from './sandbox/StopPopover';
@@ -157,14 +156,6 @@ export function TitleBar({
   const handleCloseLaunchPopover = useCallback(() => setLaunchPopoverOpen(false), []);
   const handleCloseStopPopover = useCallback(() => setStopPopoverOpen(false), []);
 
-  // Fullview plugin icons (right side of title bar)
-  const fullviewContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'fullview');
-  const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
-
-  const handleFullviewClick = (pluginId: string): void => {
-    usePluginLayoutStore.getState().activateFullview(pluginId);
-  };
-
   return (
     <div className="h-11 bg-mf-app-bg flex items-center app-drag relative">
       {/* Traffic lights + project picker dropdown */}
@@ -307,7 +298,7 @@ export function TitleBar({
       </div>
 
       {/* Right side — Preview + plugin icons */}
-      <div className="absolute right-4 flex items-center gap-1 app-no-drag z-10">
+      <div className="absolute right-11 flex items-center gap-1 app-no-drag z-10">
         {/* Preview / Launch button */}
         <div className="relative flex items-center" data-launch-popover>
           <button
@@ -362,31 +353,6 @@ export function TitleBar({
             {stopPopoverOpen && <StopPopover onClose={handleCloseStopPopover} />}
           </div>
         )}
-
-        {/* Separator */}
-        {fullviewContributions.length > 0 && <div className="h-4 w-px bg-mf-divider mx-1" />}
-
-        {/* Fullview plugin icons */}
-        {fullviewContributions.map((c) => (
-          <button
-            key={c.pluginId}
-            data-testid={`${c.pluginId}-panel-icon`}
-            onClick={() => handleFullviewClick(c.pluginId)}
-            title={c.label}
-            className={cn(
-              'w-7 h-7 flex items-center justify-center rounded-mf-card transition-colors',
-              activeFullviewId === c.pluginId
-                ? 'bg-mf-accent text-white'
-                : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
-            )}
-          >
-            {c.icon ? (
-              <PluginIcon name={c.icon} size={15} />
-            ) : (
-              <span className="text-mf-small font-semibold">{c.label.charAt(0)}</span>
-            )}
-          </button>
-        ))}
       </div>
       <DirectoryPickerModal
         open={dirPickerOpen}
