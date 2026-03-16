@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Folder, FileText, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
+import { daemonClient } from '../../lib/client';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
@@ -29,20 +30,49 @@ function FileTreeNode({
   depth,
   projectPath,
   onContextMenu,
+  refreshKey,
 }: {
   entry: FileEntry;
   depth: number;
   projectPath: string;
   onContextMenu: (e: React.MouseEvent, entryPath: string) => void;
+  refreshKey: number;
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<FileEntry[]>([]);
   const { activeProjectId } = useProjectsStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const { openEditorTab } = useTabsStore();
+
   const isActive = useTabsStore(
     (s) => entry.type === 'file' && s.fileView?.type === 'editor' && s.fileView.filePath === entry.path,
   );
+
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
+  const childrenRef = useRef(children);
+  childrenRef.current = children;
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    if (entry.type !== 'directory') return;
+    let cancelled = false;
+    if (expandedRef.current && activeProjectId) {
+      getFileTree(activeProjectId, entry.path, activeChatId ?? undefined)
+        .then((entries) => {
+          if (!cancelled) setChildren(entries);
+        })
+        .catch((err) => {
+          if (!cancelled) log.warn('refresh file tree failed', { err: String(err) });
+        });
+    } else if (childrenRef.current.length > 0) {
+      // Clear stale cache so next expand fetches fresh data
+      setChildren([]);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey, activeProjectId, activeChatId, entry.path, entry.type]);
 
   const handleClick = async (): Promise<void> => {
     if (entry.type === 'directory') {
@@ -93,6 +123,7 @@ function FileTreeNode({
             depth={depth + 1}
             projectPath={projectPath}
             onContextMenu={onContextMenu}
+            refreshKey={refreshKey}
           />
         ))}
     </>
@@ -106,13 +137,37 @@ export function FilesTab(): React.ReactElement {
   const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);
   const [expanded, setExpanded] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!activeProjectId) return;
     getFileTree(activeProjectId, '.', activeChatId ?? undefined)
       .then(setRootEntries)
       .catch((err) => log.warn('load file tree failed', { err: String(err) }));
-  }, [activeProjectId, activeChatId]);
+  }, [activeProjectId, activeChatId, refreshKey]);
+
+  useEffect(() => {
+    if (!activeChatId) return;
+    const unsub = daemonClient.onEvent((event) => {
+      if (event.type === 'context.updated' && event.chatId === activeChatId) {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          setRefreshKey((k) => k + 1);
+        }, 500);
+      }
+    });
+    return () => {
+      unsub();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [activeChatId]);
+
+  useEffect(() => {
+    const onFocus = (): void => setRefreshKey((k) => k + 1);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, entryPath: string) => {
@@ -152,17 +207,27 @@ export function FilesTab(): React.ReactElement {
     <>
       <ScrollArea className="h-full">
         <div className="py-1">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            onContextMenu={(e) => handleContextMenu(e, '.')}
-            className="w-full flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary"
-          >
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            <Folder size={14} className="text-mf-accent shrink-0" />
-            <span className="truncate" title={activeProject.path}>
-              {activeProject.path}
-            </span>
-          </button>
+          <div className="@container flex items-center">
+            <button
+              onClick={() => setExpanded(!expanded)}
+              onContextMenu={(e) => handleContextMenu(e, '.')}
+              className="flex-1 flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary min-w-0"
+            >
+              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <Folder size={14} className="text-mf-accent shrink-0" />
+              <span className="truncate" title={activeProject.path}>
+                {activeProject.path}
+              </span>
+            </button>
+            <button
+              onClick={() => setRefreshKey((k) => k + 1)}
+              className="hidden @min-[160px]:block p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
+              title="Refresh file tree"
+              aria-label="Refresh file tree"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
           {expanded &&
             rootEntries.map((entry) => (
               <FileTreeNode
@@ -171,6 +236,7 @@ export function FilesTab(): React.ReactElement {
                 depth={1}
                 projectPath={activeProject.path}
                 onContextMenu={handleContextMenu}
+                refreshKey={refreshKey}
               />
             ))}
         </div>
