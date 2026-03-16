@@ -1,5 +1,5 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { PanelLeftOpen, PanelLeftClose } from 'lucide-react';
+import { PanelLeftOpen } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { ContextTab } from './ContextTab';
 import { FilesTab } from './FilesTab';
@@ -26,8 +26,6 @@ export function RightPanel(): React.ReactElement {
 
   const hasFileView = fileView != null;
   const showFileView = fileView != null && !fileViewCollapsed;
-  const toggleMode: 'expand' | 'collapse' | undefined =
-    fileView == null ? undefined : fileViewCollapsed ? 'expand' : 'collapse';
 
   const sidebarWidth = useTabsStore((s) => s.sidebarWidth);
   const setSidebarWidth = useTabsStore((s) => s.setSidebarWidth);
@@ -75,36 +73,41 @@ export function RightPanel(): React.ReactElement {
       {/* File view — conditionally rendered, sidebar stays mounted */}
       {hasFileView && (
         <>
-          <div
-            className={
-              showFileView
-                ? 'flex-1 flex flex-col min-w-0 overflow-hidden'
-                : 'w-0 min-w-0 overflow-hidden opacity-0 pointer-events-none'
-            }
-          >
-            <FileViewHeader />
-            <div className="flex-1 overflow-hidden">
-              <FileViewContent />
-            </div>
-          </div>
-          <div
-            className={showFileView ? 'relative w-[5px] shrink-0 cursor-col-resize group' : 'w-0 shrink-0'}
-            onPointerDown={showFileView ? onPointerDown : undefined}
-            onPointerMove={showFileView ? onPointerMove : undefined}
-            onPointerUp={showFileView ? onPointerUp : undefined}
-          >
-            {showFileView && (
-              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-mf-divider group-hover:w-[3px] group-active:bg-mf-divider transition-all" />
-            )}
-          </div>
+          {showFileView ? (
+            <>
+              <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                <FileViewHeader />
+                <div className="flex-1 overflow-hidden">
+                  <FileViewContent />
+                </div>
+              </div>
+              <div
+                className="relative w-[5px] shrink-0 cursor-col-resize group"
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+              >
+                <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-mf-divider group-hover:w-[3px] group-active:bg-mf-divider transition-all" />
+              </div>
+            </>
+          ) : (
+            <button
+              onClick={toggleFileViewCollapsed}
+              className="w-7 shrink-0 flex items-center justify-center border-r border-mf-divider text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors cursor-pointer"
+              title="Expand file view"
+              aria-label="Expand file view"
+            >
+              <PanelLeftOpen size={14} />
+            </button>
+          )}
         </>
       )}
 
       {/* Sidebar — always mounted */}
       <div
         data-testid="right-panel"
-        className="flex flex-col min-w-0 shrink-0"
-        style={showFileView ? { width: `${sidebarWidth}px` } : { width: '100%' }}
+        className={showFileView ? 'flex flex-col min-w-0 shrink-0' : 'flex flex-col min-w-0 flex-1'}
+        style={showFileView ? { width: `${sidebarWidth}px` } : undefined}
       >
         <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as SidebarTab)} className="h-full flex flex-col">
           <TabsList className="h-11 px-[10px] bg-transparent justify-start gap-1 shrink-0 rounded-none">
@@ -122,19 +125,6 @@ export function RightPanel(): React.ReactElement {
                 {c.label}
               </TabsTrigger>
             ))}
-            {toggleMode && (
-              <>
-                <div className="flex-1" />
-                <button
-                  onClick={toggleFileViewCollapsed}
-                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                  title={toggleMode === 'expand' ? 'Expand file view' : 'Collapse file view'}
-                  aria-label={toggleMode === 'expand' ? 'Expand file view' : 'Collapse file view'}
-                >
-                  {toggleMode === 'expand' ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-                </button>
-              </>
-            )}
           </TabsList>
 
           <TabsContent value="context" className="flex-1 overflow-y-auto px-[10px] mt-0">
