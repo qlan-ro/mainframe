@@ -94,7 +94,7 @@ export function Layout({ leftPanel, centerPanel, rightPanel }: LayoutProps): Rea
             )}
           </div>
 
-          <BottomPanel />
+          {!activeFullviewId && <BottomPanel />}
         </div>
 
         <RightRail />

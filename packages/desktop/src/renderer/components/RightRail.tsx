@@ -31,6 +31,7 @@ function RailButton({ active, onClick, title, children }: RailButtonProps): Reac
 export function RightRail(): React.ReactElement {
   const contributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'right-panel');
   const activeRightPanelId = usePluginLayoutStore((s) => s.activeRightPanelId);
+  const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
 
   const handleContextClick = (): void => {
     usePluginLayoutStore.getState().setActiveRightPanel(null);
@@ -46,7 +47,11 @@ export function RightRail(): React.ReactElement {
       {/* Activity icons */}
       <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
         {/* Default: Context panel */}
-        <RailButton active={activeRightPanelId === null} onClick={handleContextClick} title="Context">
+        <RailButton
+          active={activeRightPanelId === null && !activeFullviewId}
+          onClick={handleContextClick}
+          title="Context"
+        >
           <PanelRight size={16} />
         </RailButton>
 
