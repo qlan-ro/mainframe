@@ -31,6 +31,8 @@ Mainframe is an open-source desktop app that brings all your AI coding agents in
 
 AI CLI tools are powerful, but they live in the terminal. Mainframe adds the layer terminals can't: visual file editing, live sandbox previews, task management, cross-project session history, and a mobile companion for working on the go.
 
+> **Work in progress.** Mainframe is under active development — some features are incomplete and the mobile companion app is not yet published. Expect rough edges.
+
 ## Features
 
 - **Unified provider interface** — One app for Claude, Gemini, and other AI coding agents — switch providers without changing your workflow
@@ -58,20 +60,14 @@ Install the standalone daemon if you want to run it headless or build your own i
 curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
 ```
 
-#### Cloudflare Tunnel (remote access)
+### Remote Access (e.g. Mobile App)
 
-To access the daemon from the mobile app or another network, enable the built-in [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) by setting `TUNNEL=true`. This requires `cloudflared` to be installed on the host.
+The mobile companion app and any remote access require a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — a secure outbound connection from your machine to Cloudflare's edge, so you don't need to open ports or configure a firewall.
 
-```bash
-TUNNEL=true mainframe-daemon
-```
+- **Desktop app:** Enable the tunnel from **Settings → Tunnel**.
+- **Standalone daemon:** Set `TUNNEL=true` when starting the daemon, or configure it in `~/.mainframe/config.json`.
 
-For a **persistent URL** with your own domain (so the URL never changes between restarts), create a named tunnel via the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/) → Networks → Tunnels → Create, add a public hostname pointing to `http://localhost:31415`, then run:
-
-```bash
-cloudflared tunnel run --token <TOKEN> &                  # run named tunnel
-TUNNEL_URL=https://mainframe.example.com mainframe-daemon # start daemon
-```
+See the [Cloudflare Tunnel guide](docs/guides/cloudflare-tunnel.md) for named tunnels with a persistent URL, self-managed setups, and troubleshooting.
 
 ### Mobile Companion App
 
