@@ -60,15 +60,12 @@ Install the standalone daemon if you want to run it headless or build your own i
 curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
 ```
 
-#### Remote Access (e.g. Mobile App)
+### Remote Access (e.g. Mobile App)
 
-The mobile companion app and any remote access require a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — a secure outbound connection from your machine to Cloudflare's edge, so you don't need to open ports or configure a firewall. The daemon can manage the tunnel process for you, or you can run `cloudflared` independently.
+The mobile companion app and any remote access require a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — a secure outbound connection from your machine to Cloudflare's edge, so you don't need to open ports or configure a firewall.
 
-Quick start (anonymous URL, changes on each restart):
-
-```bash
-TUNNEL=true mainframe-daemon
-```
+- **Desktop app:** Enable the tunnel from **Settings → Tunnel**.
+- **Standalone daemon:** Set `TUNNEL=true` when starting the daemon, or configure it in `~/.mainframe/config.json`.
 
 See the [Cloudflare Tunnel guide](docs/guides/cloudflare-tunnel.md) for named tunnels with a persistent URL, self-managed setups, and troubleshooting.
 
