@@ -60,7 +60,7 @@ Install the standalone daemon if you want to run it headless or build your own i
 curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
 ```
 
-#### Cloudflare Tunnel (remote access)
+#### Remote Access (e.g. Mobile App)
 
 The mobile companion app and any remote access require a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — a secure outbound connection from your machine to Cloudflare's edge, so you don't need to open ports or configure a firewall. The daemon can manage the tunnel process for you, or you can run `cloudflared` independently.
 
