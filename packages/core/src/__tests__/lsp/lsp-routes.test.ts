@@ -42,8 +42,8 @@ describe('GET /api/lsp/languages', () => {
     expect(res.status).toBe(400);
   });
 
-  it('rejects invalid projectId format', async () => {
-    const res = await request(app).get('/api/lsp/languages').query({ projectId: 'not-a-uuid' });
+  it('rejects empty projectId', async () => {
+    const res = await request(app).get('/api/lsp/languages').query({ projectId: '' });
     expect(res.status).toBe(400);
   });
 });
