@@ -406,6 +406,36 @@ describe('bridgeWsToProcess', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(ws.send).toHaveBeenCalledWith(json);
   });
+
+  it('returns a cleanup function that removes listeners', () => {
+    const ws = createMockWs();
+    ws.on.mockImplementation(() => {});
+
+    const cleanup = bridgeWsToProcess(ws as any, stdin, stdout, stderr);
+    cleanup();
+
+    // After cleanup, stdout data should not be forwarded
+    const json = '{"jsonrpc":"2.0","id":2}';
+    const frame = `Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`;
+    stdout.write(frame);
+
+    expect(ws.send).not.toHaveBeenCalled();
+  });
+
+  it('does not send to WS when WS is not open', async () => {
+    const ws = createMockWs();
+    ws.readyState = 3; // WebSocket.CLOSED
+    ws.on.mockImplementation(() => {});
+
+    bridgeWsToProcess(ws as any, stdin, stdout, stderr);
+
+    const json = '{"jsonrpc":"2.0","id":1}';
+    const frame = `Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`;
+    stdout.write(frame);
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(ws.send).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -955,6 +985,23 @@ describe('LspConnectionHandler.handleUpgrade', () => {
     await handler.handleUpgrade('proj-1', 'rust', {} as any, socket as any, Buffer.alloc(0));
 
     expect(written.some((w) => w.includes('404'))).toBe(true);
+  });
+
+  it('rejects upgrade with 409 when client already connected', async () => {
+    const registry = new LspRegistry();
+    vi.spyOn(registry, 'resolveCommand').mockResolvedValue({ command: 'node', args: ['--stdio'] });
+    const manager = new LspManager(registry);
+    const mockDb = { projects: { get: vi.fn().mockReturnValue({ path: '/tmp/test' }) } } as any;
+
+    // Simulate an existing handle with a connected client
+    const existingHandle = await manager.getOrSpawn('proj-1', 'typescript', '/tmp/test');
+    existingHandle.client = { readyState: 1 } as any; // WebSocket.OPEN
+
+    const handler = new LspConnectionHandler(manager, mockDb);
+    const { socket, written } = createMockSocket();
+    await handler.handleUpgrade('proj-1', 'typescript', {} as any, socket as any, Buffer.alloc(0));
+
+    expect(written.some((w) => w.includes('409'))).toBe(true);
   });
 });
 ```
