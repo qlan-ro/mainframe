@@ -20,6 +20,7 @@ import {
   commandRoutes,
   launchRoutes,
   externalSessionRoutes,
+  contentSearchRoutes,
 } from './routes/index.js';
 import { authRoutes } from './routes/auth.js';
 import { tunnelRoutes } from './routes/tunnel.js';
@@ -95,6 +96,7 @@ export function createHttpServer(
   app.use(projectRoutes(ctx));
   app.use(chatRoutes(ctx));
   app.use(fileRoutes(ctx));
+  app.use(contentSearchRoutes(ctx));
   app.use(gitRoutes(ctx));
   app.use(contextRoutes(ctx));
   app.use(attachmentRoutes(ctx));
