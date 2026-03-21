@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { ChatMessage } from '@qlan-ro/mainframe-types';
 import { extractSessionDiffs } from '../../messages/session-diffs.js';
 
-function msg(role: 'assistant' | 'user', content: any[]): ChatMessage {
-  return { id: `msg-${Math.random()}`, chatId: 'c1', role, content, timestamp: new Date().toISOString() };
+function msg(type: 'assistant' | 'user', content: any[]): ChatMessage {
+  return { id: `msg-${Math.random()}`, chatId: 'c1', type, content, timestamp: new Date().toISOString() };
 }
 
 describe('extractSessionDiffs', () => {
