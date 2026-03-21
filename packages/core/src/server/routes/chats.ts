@@ -3,6 +3,7 @@ import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
+import { extractSessionDiffs } from '../../messages/session-diffs.js';
 
 const logger = createChildLogger('routes:chats');
 
@@ -68,10 +69,15 @@ export function chatRoutes(ctx: RouteContext): Router {
     }
   });
 
-  router.get('/api/chats/:id/changes', (req: Request, res: Response) => {
-    const files = ctx.db.chats.getModifiedFilesList(param(req, 'id'));
-    res.json({ files });
-  });
+  router.get(
+    '/api/chats/:id/session-diffs',
+    asyncHandler(async (req: Request, res: Response) => {
+      const chatId = param(req, 'id');
+      const messages = await ctx.chats.getMessages(chatId);
+      const files = extractSessionDiffs(messages);
+      res.json({ files });
+    }),
+  );
 
   return router;
 }

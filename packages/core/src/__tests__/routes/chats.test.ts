@@ -8,7 +8,7 @@ function createMockContext(): RouteContext {
   return {
     db: {
       projects: { get: vi.fn(), list: vi.fn() },
-      chats: { list: vi.fn(), getModifiedFilesList: vi.fn() },
+      chats: { list: vi.fn() },
       settings: { get: vi.fn() },
     } as any,
     chats: {
@@ -167,19 +167,37 @@ describe('chatRoutes', () => {
     });
   });
 
-  describe('GET /api/chats/:id/changes', () => {
-    it('returns modified files list', () => {
-      const files = ['src/index.ts', 'README.md'];
-      (ctx.db.chats.getModifiedFilesList as any).mockReturnValue(files);
+  describe('GET /api/chats/:id/session-diffs', () => {
+    it('returns session diffs from message history', async () => {
+      const messages = [
+        {
+          id: 'm1',
+          chatId: 'c1',
+          type: 'assistant',
+          content: [{ type: 'tool_use', id: 'tu1', name: 'Write', input: { file_path: 'src/index.ts' } }],
+          timestamp: new Date().toISOString(),
+        },
+        {
+          id: 'm2',
+          chatId: 'c1',
+          type: 'user',
+          content: [{ type: 'tool_result', toolUseId: 'tu1', content: 'ok', isError: false, modifiedFile: 'content' }],
+          timestamp: new Date().toISOString(),
+        },
+      ];
+      (ctx.chats.getMessages as any).mockResolvedValue(messages);
 
       const router = chatRoutes(ctx);
-      const handler = extractHandler(router, 'get', '/api/chats/:id/changes');
+      const handler = extractHandler(router, 'get', '/api/chats/:id/session-diffs');
       const res = mockRes();
 
       handler({ params: { id: 'c1' }, query: {} }, res, vi.fn());
+      await flushPromises();
 
-      expect(ctx.db.chats.getModifiedFilesList).toHaveBeenCalledWith('c1');
-      expect(res.json).toHaveBeenCalledWith({ files });
+      expect(ctx.chats.getMessages).toHaveBeenCalledWith('c1');
+      expect(res.json).toHaveBeenCalledWith({
+        files: [{ filePath: 'src/index.ts', original: null, modified: 'content', status: 'added' }],
+      });
     });
   });
 });
