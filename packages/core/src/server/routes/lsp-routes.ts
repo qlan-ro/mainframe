@@ -5,7 +5,7 @@ import type { LspLanguageStatus } from '@qlan-ro/mainframe-types';
 import { asyncHandler } from './async-handler.js';
 
 const LspLanguagesQuerySchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.string().min(1),
 });
 
 export function lspRoutes(manager: LspManager): Router {
