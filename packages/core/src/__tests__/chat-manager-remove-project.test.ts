@@ -12,7 +12,6 @@ function makeDb(chats: { id: string }[] = []) {
       update: vi.fn(),
       archive: vi.fn(),
       addMention: vi.fn(),
-      getModifiedFilesList: vi.fn(),
     },
     projects: {
       list: vi.fn(),

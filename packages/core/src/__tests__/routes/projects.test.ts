@@ -14,7 +14,7 @@ function createMockContext(): RouteContext {
         removeWithChats: vi.fn(),
         updateLastOpened: vi.fn(),
       },
-      chats: { list: vi.fn(), getModifiedFilesList: vi.fn() },
+      chats: { list: vi.fn() },
       settings: { get: vi.fn(), getByCategory: vi.fn(), set: vi.fn(), delete: vi.fn() },
     } as any,
     chats: { getChat: vi.fn(), on: vi.fn() } as any,

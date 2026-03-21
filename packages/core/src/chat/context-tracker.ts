@@ -1,12 +1,6 @@
 import { nanoid } from 'nanoid';
 import { relative, isAbsolute } from 'node:path';
-import type {
-  MessageContent,
-  SessionMention,
-  SessionContext,
-  ChatMessage,
-  AdapterSession,
-} from '@qlan-ro/mainframe-types';
+import type { SessionMention, SessionContext, ChatMessage, AdapterSession } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
@@ -28,36 +22,6 @@ export function extractMentionsFromText(chatId: string, text: string, db: Databa
       timestamp: new Date().toISOString(),
     };
     if (db.chats.addMention(chatId, mention)) changed = true;
-  }
-  return changed;
-}
-
-export function trackFileActivity(
-  chatId: string,
-  content: MessageContent[],
-  db: DatabaseManager,
-  projectPath: string | undefined,
-): boolean {
-  let changed = false;
-  let resolvedProjectPath = projectPath;
-  for (const block of content) {
-    if (block.type !== 'tool_use') continue;
-    let filePath = (block.input as Record<string, unknown>).file_path as string;
-
-    if (filePath && ['Write', 'Edit'].includes(block.name)) {
-      if (isAbsolute(filePath)) {
-        if (!resolvedProjectPath) {
-          const chat = db.chats.get(chatId);
-          const project = chat ? db.projects.get(chat.projectId) : null;
-          resolvedProjectPath = chat?.worktreePath ?? project?.path;
-        }
-        if (resolvedProjectPath) filePath = relative(resolvedProjectPath, filePath);
-      }
-      if (filePath.startsWith('..')) continue;
-      if (db.chats.addModifiedFile(chatId, filePath)) {
-        changed = true;
-      }
-    }
   }
   return changed;
 }
