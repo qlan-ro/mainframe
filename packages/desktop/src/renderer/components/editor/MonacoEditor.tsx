@@ -11,6 +11,7 @@ interface MonacoEditorProps {
   language?: string;
   readOnly?: boolean;
   filePath?: string;
+  initialLine?: number;
   onChange?: (value: string | undefined) => void;
   onLineComment?: (line: number, lineContent: string, comment: string) => void;
 }
@@ -20,10 +21,12 @@ export function MonacoEditor({
   language,
   readOnly = true,
   filePath,
+  initialLine,
   onChange,
   onLineComment,
 }: MonacoEditorProps): React.ReactElement {
   const decorationsRef = useRef<monacoType.editor.IEditorDecorationsCollection | null>(null);
+  const initialLineRef = useRef(initialLine);
   const editorRef = useRef<monacoType.editor.IStandaloneCodeEditor | null>(null);
   const zoneIdRef = useRef<string | null>(null);
   const [inlineComment, setInlineComment] = useState<InlineCommentState | null>(null);
@@ -45,6 +48,11 @@ export function MonacoEditor({
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
+
+      if (initialLineRef.current) {
+        editor.revealLineInCenter(initialLineRef.current);
+        editor.setPosition({ lineNumber: initialLineRef.current, column: 1 });
+      }
 
       if (filePath && language) {
         registerDefinitionProvider(monaco, language, filePath);

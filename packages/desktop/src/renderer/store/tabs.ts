@@ -276,7 +276,9 @@ export const useTabsStore = create<TabsState>((set, get) => ({
           ? null
           : state.fileView?.type === 'editor' && state.fileView.content
             ? null
-            : state.fileView;
+            : state.fileView?.type === 'editor'
+              ? { ...state.fileView, line: undefined }
+              : state.fileView;
       projectTabs.set(prevProjectId, {
         tabs: state.tabs,
         activePrimaryTabId: state.activePrimaryTabId,
@@ -313,7 +315,9 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       ? null
       : state.fileView?.type === 'editor' && state.fileView.content
         ? null
-        : state.fileView;
+        : state.fileView?.type === 'editor'
+          ? { ...state.fileView, line: undefined }
+          : state.fileView;
   projectTabs.set(projectId, {
     tabs: state.tabs,
     activePrimaryTabId: state.activePrimaryTabId,
