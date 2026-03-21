@@ -72,13 +72,15 @@ export async function getGitBranch(projectId: string, chatId?: string): Promise<
 export async function getDiff(
   projectId: string,
   file: string,
-  source: 'git' | 'session' = 'git',
+  source: 'git' = 'git',
   chatId?: string,
   oldPath?: string,
+  base?: string,
 ): Promise<{ original: string; modified: string; diff?: string; source: string }> {
   const params = new URLSearchParams({ file, source });
   if (chatId) params.set('chatId', chatId);
   if (oldPath) params.set('oldPath', oldPath);
+  if (base) params.set('base', base);
   return fetchJson(`${API_BASE}/api/projects/${projectId}/diff?${params}`);
 }
 
@@ -89,8 +91,29 @@ export async function getPendingPermission(chatId: string): Promise<ControlReque
   return json.data;
 }
 
-export async function getSessionChanges(chatId: string): Promise<{ files: string[] }> {
-  return fetchJson(`${API_BASE}/api/chats/${chatId}/changes`);
+export interface SessionFileDiff {
+  filePath: string;
+  original: string | null;
+  modified: string;
+  status: 'added' | 'modified';
+}
+
+export async function getSessionDiffs(chatId: string): Promise<{ files: SessionFileDiff[] }> {
+  return fetchJson(`${API_BASE}/api/chats/${chatId}/session-diffs`);
+}
+
+export interface BranchDiffResponse {
+  branch: string | null;
+  baseBranch: string | null;
+  mergeBase: string | null;
+  files: { path: string; status: string; oldPath?: string }[];
+}
+
+export async function getBranchDiffs(projectId: string, chatId?: string): Promise<BranchDiffResponse> {
+  const params = new URLSearchParams();
+  if (chatId) params.set('chatId', chatId);
+  const qs = params.toString();
+  return fetchJson(`${API_BASE}/api/projects/${projectId}/branch-diffs${qs ? `?${qs}` : ''}`);
 }
 
 export async function getSessionContext(chatId: string): Promise<SessionContext> {

@@ -50,6 +50,7 @@ export function FileViewContent(): React.ReactElement | null {
           original={fileView.original}
           modified={fileView.modified}
           startLine={fileView.startLine}
+          base={fileView.base}
         />
       )}
       {fileView.type === 'skill-editor' && <SkillEditorTab skillId={fileView.skillId} adapterId={fileView.adapterId} />}

@@ -10,12 +10,13 @@ export type FileView =
       type: 'diff';
       filePath: string;
       label: string;
-      source: 'git' | 'session' | 'inline';
+      source: 'git' | 'inline';
       chatId?: string;
       oldPath?: string;
       original?: string;
       modified?: string;
       startLine?: number;
+      base?: string;
     }
   | { type: 'skill-editor'; skillId: string; adapterId: string; label: string };
 
@@ -44,7 +45,7 @@ interface TabsState {
   openChatTab: (chatId: string, label?: string) => void;
   updateTabLabel: (id: string, label: string) => void;
   openEditorTab: (filePath: string, content?: string) => void;
-  openDiffTab: (filePath: string, source: 'git' | 'session', chatId?: string, oldPath?: string) => void;
+  openDiffTab: (filePath: string, source: 'git', chatId?: string, oldPath?: string, base?: string) => void;
   openInlineDiffTab: (filePath: string, original: string, modified: string, startLine?: number) => void;
   openSkillEditorTab: (skillId: string, adapterId: string, label: string) => void;
   setSidebarWidth: (w: number) => void;
@@ -152,10 +153,10 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     set({ fileView: { type: 'editor', filePath, label, content }, fileViewCollapsed: false });
   },
 
-  openDiffTab: (filePath, source, chatId, oldPath) => {
+  openDiffTab: (filePath, source, chatId, oldPath, base) => {
     const label = `${filePath.split('/').pop() || filePath} (diff)`;
     expandRightPanel();
-    set({ fileView: { type: 'diff', filePath, label, source, chatId, oldPath }, fileViewCollapsed: false });
+    set({ fileView: { type: 'diff', filePath, label, source, chatId, oldPath, base }, fileViewCollapsed: false });
   },
 
   openInlineDiffTab: (filePath, original, modified, startLine) => {
