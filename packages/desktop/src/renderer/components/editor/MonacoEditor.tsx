@@ -4,7 +4,8 @@ import type * as monacoType from 'monaco-editor';
 import { InlineCommentWidget, type InlineCommentState } from './InlineCommentWidget';
 import './setup';
 import { registerDefinitionProvider } from './navigation';
-import { useTabsStore } from '../../store/tabs';
+import { getLspLanguage, lspClientManager } from '../../lib/lsp/index.js';
+import { useProjectsStore } from '../../store';
 
 interface MonacoEditorProps {
   value: string;
@@ -33,6 +34,11 @@ export function MonacoEditor({
   const onLineCommentRef = useRef(onLineComment);
   onLineCommentRef.current = onLineComment;
 
+  const { activeProjectId, projects } = useProjectsStore();
+  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
+  const activeProjectRef = useRef(activeProject);
+  activeProjectRef.current = activeProject;
+
   const closeInlineComment = useCallback(() => {
     const editor = editorRef.current;
     const id = zoneIdRef.current;
@@ -54,13 +60,17 @@ export function MonacoEditor({
         editor.setPosition({ lineNumber: initialLineRef.current, column: 1 });
       }
 
-      // Cmd+Left / Cmd+Right for back/forward navigation (like IntelliJ).
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow, () => {
-        useTabsStore.getState().navigateBack();
-      });
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow, () => {
-        useTabsStore.getState().navigateForward();
-      });
+      if (filePath) {
+        const lspLanguage = getLspLanguage(filePath);
+        if (lspLanguage) {
+          const project = activeProjectRef.current;
+          if (project) {
+            lspClientManager.ensureClient(project.id, lspLanguage, project.path).catch((err: unknown) => {
+              console.warn('[lsp] ensureClient failed:', err);
+            });
+          }
+        }
+      }
 
       if (filePath && language) {
         registerDefinitionProvider(monaco, language, filePath);
