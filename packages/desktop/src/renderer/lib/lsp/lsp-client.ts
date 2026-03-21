@@ -50,13 +50,11 @@ export class LspClientManager {
       name: `${language}-lsp-${projectId}`,
       clientOptions: {
         documentSelector: [{ language }],
-        workspaceFolders: [
-          {
-            uri: `file://${projectPath}`,
-            name: projectPath.split('/').pop() ?? projectPath,
-            index: 0,
-          },
-        ],
+        workspaceFolder: {
+          uri: `file://${projectPath}` as any,
+          name: projectPath.split('/').pop() ?? projectPath,
+          index: 0,
+        },
       },
       messageTransports: { reader, writer },
     });
