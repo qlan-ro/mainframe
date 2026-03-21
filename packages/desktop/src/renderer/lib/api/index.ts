@@ -27,6 +27,7 @@ export {
   addMention,
   browseFilesystem,
   saveFileContent,
+  searchContent,
 } from './files-api';
 
 export type { SessionFileDiff, BranchDiffResponse } from './files-api';
