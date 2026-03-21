@@ -50,7 +50,7 @@ Three entries:
 | Python | `pyright` | Yes | `node <resolved-path> --stdio` |
 | Java | `jdtls` | No | `jdtls` (PATH lookup) |
 
-Bundled servers resolve their entry point via `require.resolve()`. External servers are located via `which`/`command -v`.
+Bundled servers resolve their entry point via `require.resolve()`. External servers are located via `execFile('command', ['-v', name])` (async, POSIX-portable).
 
 ### `lsp-manager.ts` — Lifecycle management
 
@@ -58,12 +58,13 @@ Bundled servers resolve their entry point via `require.resolve()`. External serv
 
 - Maintains `Map<string, LspServerHandle>` keyed by `${projectId}:${language}`
 - `getOrSpawn(projectId, language, projectPath): Promise<LspServerHandle>` — returns existing or spawns new
-- `shutdown(projectId, language)` — kills a specific server
-- `shutdownAll()` — called on daemon shutdown
+- `shutdown(projectId, language)` — graceful shutdown (see below), then kills
+- `shutdownAll()` — called on daemon shutdown, gracefully shuts down all servers
 - `handleUpgrade(projectId, language, request, socket, head)` — handles WS upgrade for LSP connections
 - `getAvailableLanguages()` — returns which LSP servers are installed
+- `getActiveLanguages(projectId)` — returns which LSP servers are currently running for a project
 
-`LspServerHandle` holds:
+**Types** are defined in `@qlan-ro/mainframe-types` (see Types section below). `LspServerHandle` is internal to core:
 
 ```ts
 interface LspServerHandle {
@@ -77,19 +78,32 @@ interface LspServerHandle {
 
 **Spawn race prevention:** Uses `Map<string, Promise<LspServerHandle>>` for in-flight spawns. Second concurrent caller awaits the same promise.
 
-**Idle timeout:** 10-minute timer starts when last WS client disconnects. Any new connection cancels the timer. On timeout, the process is killed and the handle removed.
+**Idle timeout:** 10-minute timer starts when last WS client disconnects. Any new connection cancels the timer. On timeout, graceful shutdown is initiated.
+
+**Graceful shutdown sequence:**
+1. Send LSP `shutdown` request to the server via stdin
+2. Wait up to 3 seconds for the response
+3. Send LSP `exit` notification
+4. If the process hasn't exited after 2 more seconds, SIGTERM
+5. Remove handle from manager
+
+This prevents data corruption in servers that persist state (e.g. jdtls workspace caches).
+
+**Single-client model:** Each LSP server accepts exactly one WebSocket client at a time. If a second client attempts to connect to the same `(projectId, language)`, the upgrade is rejected with HTTP 409 Conflict. This avoids the complexity of multi-client broadcasting and the fact that LSP servers are inherently single-client (one `initialize` handshake, one workspace state).
 
 ### `lsp-proxy.ts` — WebSocket ↔ stdio forwarding
 
 Bidirectional JSON-RPC forwarding:
 
-- **WS → stdin:** Reads JSON-RPC messages from WebSocket, wraps with `Content-Length` header, writes to process stdin
-- **stdout → WS:** Parses `Content-Length`-framed messages from process stdout, forwards raw JSON to WebSocket
+- **WS → stdin:** Reads JSON-RPC messages from WebSocket, wraps with `Content-Length: N\r\n\r\n` header, writes to process stdin
+- **stdout → WS:** Uses `vscode-jsonrpc`'s `StreamMessageReader` to parse `Content-Length`-framed messages from stdout (handles partial reads, buffering, and multi-message chunks correctly). Forwards parsed JSON to WebSocket.
 - **stderr:** Logged via pino, not forwarded
 
-On WS close: decrements client count on the handle. If zero clients remain, starts the idle timer.
+Using `StreamMessageReader`/`StreamMessageWriter` from `vscode-jsonrpc` avoids reimplementing the LSP framing protocol and its well-known edge cases (partial messages spanning `data` events, multiple messages per chunk).
 
-On process exit/error: closes all connected WebSockets, removes handle from manager, logs crash details.
+On WS close: starts the idle timer on the handle (single-client model, so zero clients remain).
+
+On process exit/error: closes the connected WebSocket, removes handle from manager, logs crash details.
 
 ### WebSocket routing
 
@@ -99,13 +113,32 @@ Changes to `websocket.ts` `setupUpgradeAuth`:
 - If path matches `/lsp/:projectId/:language` → `lspManager.handleUpgrade(projectId, language, request, socket, head)`
 - Otherwise → existing `this.wss.handleUpgrade(...)` for chat traffic
 
+LSP WebSocket connections follow the same auth rules as chat WebSocket connections: localhost connections bypass auth when `AUTH_TOKEN_SECRET` is unset, remote/tunneled connections require a valid token via `?token=` query parameter.
+
 LSP WebSocket connections are completely separate from chat WebSocket — different instances, no shared message parsing.
 
 ### REST endpoint
 
 `GET /api/lsp/languages?projectId=xxx`
 
-Returns:
+Query params validated with Zod:
+
+```ts
+const LspLanguagesQuerySchema = z.object({
+  projectId: z.string().uuid(),
+});
+```
+
+Response shape:
+
+```ts
+// Defined in @qlan-ro/mainframe-types
+interface LspLanguageStatus {
+  id: string;        // 'typescript', 'python', 'java'
+  installed: boolean; // server binary found
+  active: boolean;    // server currently running for this project
+}
+```
 
 ```json
 {
@@ -137,12 +170,12 @@ Desktop uses this to show language availability and can hint users to install mi
   2. Opens WebSocket to `ws://localhost:${DAEMON_PORT}/lsp/${projectId}/${language}`
   3. Wraps with `toSocket()` → `WebSocketMessageReader`/`WebSocketMessageWriter` (from `vscode-ws-jsonrpc`)
   4. Creates `MonacoLanguageClient` with reader/writer
-  5. Client sends LSP `initialize` with `rootUri` set to project path
+  5. Client sends LSP `initialize` with `workspaceFolders` (not deprecated `rootUri`) set to the project path
   6. Registers language feature providers with Monaco
 - `disposeClient(projectId, language)` — tears down connection and deregisters providers
 - `disposeAll()` — cleanup on app unmount
 
-On WS close/error: removes client from map silently. Next Monaco interaction triggers lazy re-creation.
+On WS close/error: removes client from map. On reconnection (next `ensureClient` call), the new client re-opens all currently visible documents via `textDocument/didOpen` so the LSP server rebuilds its workspace state. `monaco-languageclient` handles `textDocument/didOpen` and `textDocument/didChange` synchronization automatically — no custom code needed for document sync.
 
 ### `language-detection.ts` — File extension → LSP language mapping
 
@@ -178,6 +211,7 @@ New dependencies:
 - `typescript-language-server` — bundled LSP server for TS/JS
 - `typescript` — peer dependency of the above (may already exist in monorepo)
 - `pyright` — bundled LSP server for Python
+- `vscode-jsonrpc` — `StreamMessageReader`/`StreamMessageWriter` for Content-Length framing
 
 ### `packages/desktop/package.json`
 
@@ -197,8 +231,7 @@ New dependencies:
 ### Project path validation
 
 - `LspManager.handleUpgrade` validates `projectId` against DB, rejects with 404 if unknown
-- Validates project path exists on disk before spawning
-- Uses `resolveAndValidatePath()` per existing code rules
+- Validates project path exists on disk before spawning using async `stat()` from `node:fs/promises` (not the sync `resolveAndValidatePath` — upgrade handlers must not block the event loop)
 
 ### Concurrent spawn race
 
@@ -217,15 +250,90 @@ New dependencies:
 - Desktop can show a hint to the user
 - Opening `.java` files works normally, just without LSP features — no error, no broken UI
 
+## Types: `@qlan-ro/mainframe-types`
+
+New types added to the shared types package:
+
+```ts
+/** Language → server configuration (used by registry and REST responses) */
+interface LspServerConfig {
+  id: string;           // 'typescript', 'python', 'java'
+  languages: string[];  // file extensions: ['.ts', '.tsx', '.js', '.jsx']
+  command: string;      // server binary command
+  args: string[];       // ['--stdio']
+  bundled: boolean;     // true = shipped with mainframe-core
+}
+
+/** Per-language status for a project (REST response shape) */
+interface LspLanguageStatus {
+  id: string;
+  installed: boolean;
+  active: boolean;
+}
+```
+
+`LspServerHandle` remains internal to `packages/core` — it contains `ChildProcess` and other node-specific types that the desktop should not depend on.
+
+## File size considerations
+
+`lsp-manager.ts` risks exceeding 300 lines since it handles lifecycle, spawning, upgrade routing, and idle timers. To stay within limits, split into:
+
+- `lsp-manager.ts` — public API, handle map, `getOrSpawn`, `shutdown`, `getAvailableLanguages` (~150 lines)
+- `lsp-connection.ts` — upgrade handling, client tracking, idle timer logic (~100 lines)
+- `lsp-proxy.ts` — stdio ↔ WS forwarding (~80 lines)
+- `lsp-registry.ts` — config entries and binary resolution (~60 lines)
+
+## Test plan
+
+### Unit tests
+
+**`lsp-registry.test.ts`:**
+- Returns correct config for each language ID
+- Returns null/undefined for unknown language
+- Bundled server binary resolution (mock `require.resolve`)
+- External server detection (mock `execFile`)
+
+**`lsp-manager.test.ts`:**
+- `getOrSpawn` spawns new server for unknown key
+- `getOrSpawn` returns existing handle for known key
+- Concurrent `getOrSpawn` calls for same key await same promise (no double-spawn)
+- `shutdown` sends graceful shutdown sequence then kills process
+- `shutdownAll` shuts down all active servers
+- Idle timer starts on last client disconnect
+- Idle timer cancelled on new client connect
+- Idle timer fires and kills server after timeout
+- `getAvailableLanguages` returns installed status per language
+- `getActiveLanguages` returns running servers for a project
+
+**`lsp-connection.test.ts`:**
+- Upgrade accepted for valid projectId + installed language
+- Upgrade rejected with 404 for unknown projectId
+- Upgrade rejected with 409 when client already connected
+- Upgrade rejected with 404 for uninstalled language
+
+**`lsp-proxy.test.ts`:**
+- WS message forwarded to stdin with Content-Length framing
+- Stdout message parsed and forwarded to WS
+- Process exit closes WebSocket
+- WS close triggers idle timer
+
+### Integration tests
+
+**`lsp-routes.test.ts`:**
+- `GET /api/lsp/languages` returns correct installed/active status
+- Query param validation rejects missing/invalid projectId
+
 ## New files
 
 | File | Package | Purpose |
 |------|---------|---------|
 | `src/lsp/lsp-registry.ts` | core | Language → server config mapping |
 | `src/lsp/lsp-manager.ts` | core | LSP server lifecycle (spawn, cache, idle kill) |
+| `src/lsp/lsp-connection.ts` | core | Upgrade handling, client tracking, idle timers |
 | `src/lsp/lsp-proxy.ts` | core | WebSocket ↔ stdio JSON-RPC forwarding |
 | `src/lsp/index.ts` | core | Public exports |
 | `src/server/routes/lsp-routes.ts` | core | `GET /api/lsp/languages` endpoint |
+| `src/lsp.ts` | types | `LspServerConfig`, `LspLanguageStatus` types |
 | `src/renderer/lib/lsp/lsp-client.ts` | desktop | MonacoLanguageClient manager |
 | `src/renderer/lib/lsp/language-detection.ts` | desktop | File extension → LSP language mapping |
 | `src/renderer/lib/lsp/index.ts` | desktop | Public exports |
