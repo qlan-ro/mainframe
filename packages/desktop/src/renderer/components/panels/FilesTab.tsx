@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Folder, FileText, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
+import { FindInPathModal } from '../FindInPathModal';
 import { daemonClient } from '../../lib/client';
 import { createLogger } from '../../lib/logger';
 
@@ -35,7 +36,7 @@ function FileTreeNode({
   entry: FileEntry;
   depth: number;
   projectPath: string;
-  onContextMenu: (e: React.MouseEvent, entryPath: string) => void;
+  onContextMenu: (e: React.MouseEvent, entryPath: string, entryType: 'file' | 'directory') => void;
   refreshKey: number;
 }): React.ReactElement {
   const [children, setChildren] = useState<FileEntry[]>([]);
@@ -90,7 +91,7 @@ function FileTreeNode({
       <button
         ref={nodeRef}
         onClick={handleClick}
-        onContextMenu={(e) => onContextMenu(e, entry.path)}
+        onContextMenu={(e) => onContextMenu(e, entry.path, entry.type)}
         className={cn(
           'w-full flex items-center gap-1 py-1 px-2 text-mf-small rounded-mf-input text-left',
           isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
@@ -138,6 +139,7 @@ export function FilesTab(): React.ReactElement {
   const rootExpanded = useTabsStore((s) => s.expandedPaths.includes('.'));
   const toggleTreePath = useTabsStore((s) => s.toggleTreePath);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [findInPath, setFindInPath] = useState<{ scopePath: string; scopeType: 'file' | 'directory' } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -171,7 +173,7 @@ export function FilesTab(): React.ReactElement {
   }, []);
 
   const handleContextMenu = useCallback(
-    (e: React.MouseEvent, entryPath: string) => {
+    (e: React.MouseEvent, entryPath: string, entryType: 'file' | 'directory' = 'directory') => {
       e.preventDefault();
       if (!activeProject) return;
 
@@ -182,6 +184,15 @@ export function FilesTab(): React.ReactElement {
         x: e.clientX,
         y: e.clientY,
         items: [
+          {
+            label: entryType === 'directory' ? 'Find in Path...' : 'Find in File...',
+            onClick: () => {
+              setFindInPath({
+                scopePath: entryPath,
+                scopeType: entryType,
+              });
+            },
+          },
           {
             label: 'Reveal in Finder',
             onClick: () => {
@@ -211,7 +222,7 @@ export function FilesTab(): React.ReactElement {
           <div className="@container flex items-center">
             <button
               onClick={() => toggleTreePath('.')}
-              onContextMenu={(e) => handleContextMenu(e, '.')}
+              onContextMenu={(e) => handleContextMenu(e, '.', 'directory')}
               className="flex-1 flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary min-w-0"
             >
               {rootExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -248,6 +259,13 @@ export function FilesTab(): React.ReactElement {
           y={contextMenu.y}
           items={contextMenu.items}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+      {findInPath && (
+        <FindInPathModal
+          scopePath={findInPath.scopePath}
+          scopeType={findInPath.scopeType}
+          onClose={() => setFindInPath(null)}
         />
       )}
     </>
