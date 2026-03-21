@@ -127,7 +127,6 @@ export interface AdapterSession {
   loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
   extractPlanFiles(): Promise<string[]>;
   extractSkillFiles(): Promise<import('./context.js').SkillFileEntry[]>;
-  extractModifiedFiles(): Promise<string[]>;
 }
 
 export interface AdapterInfo {

@@ -73,10 +73,8 @@ function createMockDb(permissionMode = 'default') {
       addSkillFile: vi.fn().mockReturnValue(false),
       addMention: vi.fn().mockReturnValue(false),
       getMentions: vi.fn().mockReturnValue([]),
-      getModifiedFilesList: vi.fn().mockReturnValue([]),
       getPlanFiles: vi.fn().mockReturnValue([]),
       getSkillFiles: vi.fn().mockReturnValue([]),
-      addModifiedFile: vi.fn().mockReturnValue(false),
     },
     projects: {
       get: vi.fn().mockReturnValue({ id: 'proj-1', name: 'Test', path: '/tmp/test' }),

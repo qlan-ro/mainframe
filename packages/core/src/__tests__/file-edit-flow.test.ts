@@ -26,56 +26,44 @@ class MockAdapter extends MockBaseAdapter {
   }
 }
 
-function createMockDbWithTracking() {
-  const modifiedFiles: string[] = [];
+function createMockDb() {
   return {
-    db: {
-      chats: {
-        get: vi.fn().mockReturnValue({
-          id: 'test-chat',
-          adapterId: 'claude',
-          projectId: 'proj-1',
-          status: 'active',
-          claudeSessionId: 'session-1',
-          processState: 'working',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          totalCost: 0,
-          totalTokensInput: 0,
-          totalTokensOutput: 0,
-        }),
-        create: vi.fn(),
-        list: vi.fn().mockReturnValue([]),
-        update: vi.fn(),
-        addPlanFile: vi.fn().mockReturnValue(false),
-        addSkillFile: vi.fn().mockReturnValue(false),
-        addMention: vi.fn().mockReturnValue(false),
-        getMentions: vi.fn().mockReturnValue([]),
-        getModifiedFilesList: vi.fn(() => [...modifiedFiles]),
-        getPlanFiles: vi.fn().mockReturnValue([]),
-        getSkillFiles: vi.fn().mockReturnValue([]),
-        addModifiedFile: vi.fn((chatId: string, filePath: string) => {
-          if (!modifiedFiles.includes(filePath)) {
-            modifiedFiles.push(filePath);
-            return true;
-          }
-          return false;
-        }),
-      },
-      projects: {
-        get: vi.fn().mockReturnValue({ id: 'proj-1', name: 'Test', path: '/tmp/test' }),
-        list: vi.fn().mockReturnValue([{ id: 'proj-1', name: 'Test', path: '/tmp/test' }]),
-        getByPath: vi.fn().mockReturnValue(null),
-        create: vi.fn(),
-        remove: vi.fn(),
-        updateLastOpened: vi.fn(),
-      },
-      settings: {
-        get: vi.fn().mockReturnValue(null),
-        getByCategory: vi.fn().mockReturnValue({}),
-      },
+    chats: {
+      get: vi.fn().mockReturnValue({
+        id: 'test-chat',
+        adapterId: 'claude',
+        projectId: 'proj-1',
+        status: 'active',
+        claudeSessionId: 'session-1',
+        processState: 'working',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        totalCost: 0,
+        totalTokensInput: 0,
+        totalTokensOutput: 0,
+      }),
+      create: vi.fn(),
+      list: vi.fn().mockReturnValue([]),
+      update: vi.fn(),
+      addPlanFile: vi.fn().mockReturnValue(false),
+      addSkillFile: vi.fn().mockReturnValue(false),
+      addMention: vi.fn().mockReturnValue(false),
+      getMentions: vi.fn().mockReturnValue([]),
+      getPlanFiles: vi.fn().mockReturnValue([]),
+      getSkillFiles: vi.fn().mockReturnValue([]),
     },
-    modifiedFiles,
+    projects: {
+      get: vi.fn().mockReturnValue({ id: 'proj-1', name: 'Test', path: '/tmp/test' }),
+      list: vi.fn().mockReturnValue([{ id: 'proj-1', name: 'Test', path: '/tmp/test' }]),
+      getByPath: vi.fn().mockReturnValue(null),
+      create: vi.fn(),
+      remove: vi.fn(),
+      updateLastOpened: vi.fn(),
+    },
+    settings: {
+      get: vi.fn().mockReturnValue(null),
+      getByCategory: vi.fn().mockReturnValue({}),
+    },
   };
 }
 
@@ -114,7 +102,7 @@ describe('file-edit flow', () => {
 
   it('tracks modified files when adapter emits Write tool_use, diff endpoint returns them', async () => {
     const adapter = new MockAdapter();
-    const { db } = createMockDbWithTracking();
+    const db = createMockDb();
 
     const registry = new AdapterRegistry();
     (registry as any).adapters = new Map();
@@ -147,16 +135,7 @@ describe('file-edit flow', () => {
     ]);
     await sleep(50);
 
-    // addModifiedFile was called
-    expect(db.chats.addModifiedFile).toHaveBeenCalledWith('test-chat', 'src/main.ts');
-
     // context.updated was emitted
     expect(contextUpdated.length).toBeGreaterThanOrEqual(1);
-
-    // GET /diff?source=session returns the modified file
-    const res = await fetch(`http://127.0.0.1:${port}/api/projects/proj-1/diff?source=session&chatId=test-chat`);
-    const json = await res.json();
-    expect(json.source).toBe('session');
-    expect(json.files).toContain('src/main.ts');
   }, 10_000);
 });

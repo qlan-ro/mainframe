@@ -20,13 +20,16 @@ export {
   getGitBranch,
   getDiff,
   getPendingPermission,
-  getSessionChanges,
+  getSessionDiffs,
+  getBranchDiffs,
   getSessionContext,
   getSessionFile,
   addMention,
   browseFilesystem,
   saveFileContent,
 } from './files-api';
+
+export type { SessionFileDiff, BranchDiffResponse } from './files-api';
 
 export {
   getSkills,

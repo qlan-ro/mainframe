@@ -148,7 +148,7 @@ export function MonacoDiffEditor({
           lineHeight: 20,
           fontFamily: "'JetBrains Mono', monospace",
           renderSideBySide: false,
-          hideUnchangedRegions: { enabled: true },
+          hideUnchangedRegions: { enabled: false },
           renderOverviewRuler: false,
           overviewRulerBorder: false,
           overviewRulerLanes: 0,

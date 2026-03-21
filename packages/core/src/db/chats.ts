@@ -146,20 +146,6 @@ export class ChatsRepository {
     return true;
   }
 
-  getModifiedFilesList(chatId: string): string[] {
-    const stmt = this.db.prepare('SELECT modified_files FROM chats WHERE id = ?');
-    const row = stmt.get(chatId) as { modified_files: string } | undefined;
-    return parseJsonColumn(row?.modified_files, []);
-  }
-
-  addModifiedFile(chatId: string, filePath: string): boolean {
-    const existing = this.getModifiedFilesList(chatId);
-    if (existing.includes(filePath)) return false;
-    existing.push(filePath);
-    this.db.prepare('UPDATE chats SET modified_files = ? WHERE id = ?').run(JSON.stringify(existing), chatId);
-    return true;
-  }
-
   getPlanFiles(chatId: string): string[] {
     const stmt = this.db.prepare('SELECT plan_files FROM chats WHERE id = ?');
     const row = stmt.get(chatId) as { plan_files: string } | undefined;
