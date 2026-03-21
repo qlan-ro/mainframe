@@ -27,9 +27,9 @@
   "dependencies": {
     "@assistant-ui/react": "^0.12.17",
     "@assistant-ui/react-markdown": "^0.12.5",
+    "@monaco-editor/react": "^4.7.0",
     "@qlan-ro/mainframe-core": "workspace:*",
     "@qlan-ro/mainframe-types": "workspace:*",
-    "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.0.4",
@@ -40,6 +40,7 @@
     "diff": "^8.0.3",
     "lucide-react": "^0.577.0",
     "monaco-editor": "^0.55.1",
+    "monaco-languageclient": "^10.7.0",
     "nanoid": "^5.1.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -48,6 +49,7 @@
     "remark-gfm": "^4.0.1",
     "shiki": "^4.0.2",
     "tailwind-merge": "^3.5.0",
+    "vscode-ws-jsonrpc": "^3.5.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
