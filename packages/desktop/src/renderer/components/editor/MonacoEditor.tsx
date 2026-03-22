@@ -4,6 +4,7 @@ import type * as monacoType from 'monaco-editor';
 import { InlineCommentWidget, type InlineCommentState } from './InlineCommentWidget';
 import './setup';
 import { registerDefinitionProvider } from './navigation';
+import { useTabsStore } from '../../store/tabs';
 
 interface MonacoEditorProps {
   value: string;
@@ -48,6 +49,14 @@ export function MonacoEditor({
       if (filePath && language) {
         registerDefinitionProvider(monaco, language, filePath);
       }
+
+      // Cmd+Left / Cmd+Right for back/forward navigation (like IntelliJ).
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow, () => {
+        useTabsStore.getState().navigateBack();
+      });
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow, () => {
+        useTabsStore.getState().navigateForward();
+      });
 
       if (!onLineComment) return;
 
