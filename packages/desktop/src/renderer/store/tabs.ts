@@ -5,7 +5,7 @@ import { useUIStore } from './ui';
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
 
 export type FileView =
-  | { type: 'editor'; filePath: string; label: string; content?: string }
+  | { type: 'editor'; filePath: string; label: string; content?: string; line?: number; column?: number }
   | {
       type: 'diff';
       filePath: string;
@@ -44,13 +44,15 @@ interface TabsState {
   setActiveTab: (id: string) => void;
   openChatTab: (chatId: string, label?: string) => void;
   updateTabLabel: (id: string, label: string) => void;
-  openEditorTab: (filePath: string, content?: string) => void;
+  openEditorTab: (filePath: string, content?: string, line?: number, column?: number) => void;
   openDiffTab: (filePath: string, source: 'git', chatId?: string, oldPath?: string, base?: string) => void;
   openInlineDiffTab: (filePath: string, original: string, modified: string, startLine?: number) => void;
   openSkillEditorTab: (skillId: string, adapterId: string, label: string) => void;
   setSidebarWidth: (w: number) => void;
   closeFileView: () => void;
   toggleFileViewCollapsed: () => void;
+  navigateBack: () => void;
+  navigateForward: () => void;
   switchProject: (prevProjectId: string | null, nextProjectId: string) => void;
 }
 
@@ -95,6 +97,14 @@ function saveProjectTabs(map: Map<string, ProjectTabSnapshot>): void {
 }
 
 const projectTabs = loadProjectTabs();
+
+interface NavEntry {
+  filePath: string;
+  line?: number;
+  column?: number;
+}
+const navBackStack: NavEntry[] = [];
+const navForwardStack: NavEntry[] = [];
 
 function expandRightPanel(): void {
   const ui = useUIStore.getState();
@@ -147,10 +157,18 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, label } : t)),
     })),
 
-  openEditorTab: (filePath, content) => {
+  openEditorTab: (filePath, content, line, column) => {
     const label = filePath.split('/').pop() || filePath;
+    // Push current editor to back stack when navigating via Go To Definition.
+    if (line != null) {
+      const current = get().fileView;
+      if (current?.type === 'editor') {
+        navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+        navForwardStack.length = 0;
+      }
+    }
     expandRightPanel();
-    set({ fileView: { type: 'editor', filePath, label, content }, fileViewCollapsed: false });
+    set({ fileView: { type: 'editor', filePath, label, content, line, column }, fileViewCollapsed: false });
   },
 
   openDiffTab: (filePath, source, chatId, oldPath, base) => {
@@ -181,6 +199,34 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     set((state) => ({
       fileViewCollapsed: !state.fileViewCollapsed,
     })),
+
+  navigateBack: () => {
+    const entry = navBackStack.pop();
+    if (!entry) return;
+    const current = get().fileView;
+    if (current?.type === 'editor') {
+      navForwardStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+    }
+    const label = entry.filePath.split('/').pop() || entry.filePath;
+    set({
+      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
+      fileViewCollapsed: false,
+    });
+  },
+
+  navigateForward: () => {
+    const entry = navForwardStack.pop();
+    if (!entry) return;
+    const current = get().fileView;
+    if (current?.type === 'editor') {
+      navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+    }
+    const label = entry.filePath.split('/').pop() || entry.filePath;
+    set({
+      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
+      fileViewCollapsed: false,
+    });
+  },
 
   switchProject: (prevProjectId, nextProjectId) => {
     const state = get();
