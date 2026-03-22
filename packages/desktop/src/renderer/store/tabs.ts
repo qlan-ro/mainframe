@@ -118,6 +118,14 @@ const navForwardStack: NavEntry[] = [];
 const initialProjectId = localStorage.getItem('mf:activeProjectId');
 const initialSnapshot = initialProjectId ? projectTabs.get(initialProjectId) : undefined;
 
+interface NavEntry {
+  filePath: string;
+  line?: number;
+  column?: number;
+}
+const navBackStack: NavEntry[] = [];
+const navForwardStack: NavEntry[] = [];
+
 function expandRightPanel(): void {
   const ui = useUIStore.getState();
   if (ui.panelCollapsed.right) {
@@ -173,6 +181,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
   openEditorTab: (filePath, content, line, column) => {
     const label = filePath.split('/').pop() || filePath;
+    // Push current editor to back stack when navigating via Go To Definition.
     if (line != null) {
       const current = get().fileView;
       if (current?.type === 'editor') {
