@@ -11,6 +11,7 @@ import type { LaunchRegistry } from '../launch/index.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
+import { LspRegistry, LspManager, LspConnectionHandler } from '../lsp/index.js';
 
 const log = createChildLogger('server');
 
@@ -31,6 +32,10 @@ export function createServerManager(
   tunnelManager?: TunnelManager,
   port?: number,
 ): ServerManager {
+  const lspRegistry = new LspRegistry();
+  const lspManager = new LspManager(lspRegistry);
+  const lspHandler = new LspConnectionHandler(lspManager, db);
+
   const { app, pushService } = createHttpServer(
     db,
     chats,
@@ -41,6 +46,7 @@ export function createServerManager(
     getTunnelUrl,
     tunnelManager,
     port,
+    lspManager,
   );
   chats.setPushService(pushService);
   const httpServer = createServer(app);
@@ -48,7 +54,7 @@ export function createServerManager(
 
   return {
     async start(port: number): Promise<void> {
-      _wsManager = new WebSocketManager(httpServer, chats);
+      _wsManager = new WebSocketManager(httpServer, chats, lspHandler);
 
       return new Promise((resolve) => {
         httpServer.listen(port, '127.0.0.1', () => {
@@ -59,6 +65,7 @@ export function createServerManager(
     },
 
     async stop(): Promise<void> {
+      await lspManager.shutdownAll();
       _wsManager?.close();
       return new Promise((resolve, reject) => {
         httpServer.close((err) => {

@@ -4,6 +4,9 @@ import App from './App';
 import { useThemeStore } from './store/theme';
 import './index.css';
 
+// Trigger LSP auto-connect for open editor files.
+import './lib/lsp/index';
+
 // Apply persisted theme class before first paint
 useThemeStore.getState();
 

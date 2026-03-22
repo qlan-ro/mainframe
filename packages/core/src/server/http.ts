@@ -20,12 +20,14 @@ import {
   commandRoutes,
   launchRoutes,
   externalSessionRoutes,
+  lspRoutes,
 } from './routes/index.js';
 import { authRoutes } from './routes/auth.js';
 import { tunnelRoutes } from './routes/tunnel.js';
 import { PushService } from '../push/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
+import type { LspManager } from '../lsp/index.js';
 
 const log = createChildLogger('http');
 
@@ -39,6 +41,7 @@ export function createHttpServer(
   getTunnelUrl?: () => string | null,
   tunnelManager?: TunnelManager,
   port?: number,
+  lspManager?: LspManager,
 ): { app: Express; pushService: PushService } {
   const app = express();
   app.set('trust proxy', 'loopback');
@@ -109,6 +112,10 @@ export function createHttpServer(
   // Plugin routes — the PluginManager owns a parent router with listing + per-plugin sub-routers
   if (pluginManager) {
     app.use('/api/plugins', pluginManager.router);
+  }
+
+  if (lspManager) {
+    app.use(lspRoutes(lspManager));
   }
 
   // Error middleware — must be after all routes

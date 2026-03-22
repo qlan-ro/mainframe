@@ -36,9 +36,13 @@ function inferLanguage(filePath: string): string {
 export function EditorTab({
   filePath,
   content: providedContent,
+  line,
+  column,
 }: {
   filePath: string;
   content?: string;
+  line?: number;
+  column?: number;
 }): React.ReactElement {
   const { activeProjectId } = useProjectsStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
@@ -138,6 +142,8 @@ export function EditorTab({
           value={currentContent}
           language={inferLanguage(filePath)}
           filePath={filePath}
+          line={line}
+          column={column}
           readOnly={false}
           onChange={handleChange}
           onLineComment={handleLineComment}
