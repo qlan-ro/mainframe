@@ -2,6 +2,7 @@ import * as monaco from 'monaco-editor';
 
 interface LspClientEntry {
   ws: WebSocket;
+  projectPath: string;
   requestId: number;
   pending: Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>;
   disposables: monaco.IDisposable[];
@@ -16,6 +17,35 @@ function getDaemonWsUrl(): string {
   const host = env['VITE_DAEMON_HOST'] ?? '127.0.0.1';
   const port = env['VITE_DAEMON_WS_PORT'] ?? '31415';
   return `ws://${host}:${port}`;
+}
+
+function getDaemonHttpUrl(): string {
+  const env = (import.meta as { env?: Record<string, string> }).env ?? {};
+  const host = env['VITE_DAEMON_HOST'] ?? '127.0.0.1';
+  const port = env['VITE_DAEMON_HTTP_PORT'] ?? env['VITE_DAEMON_WS_PORT'] ?? '31415';
+  return `http://${host}:${port}`;
+}
+
+/** Discover tsconfig.json locations to build workspace folders for the LSP. */
+async function discoverWorkspaceFolders(
+  projectId: string,
+  projectPath: string,
+): Promise<{ uri: string; name: string }[]> {
+  const base = getDaemonHttpUrl();
+  try {
+    const res = await fetch(`${base}/api/projects/${projectId}/search/files?q=tsconfig.json&limit=20`);
+    const files: { path: string; type: string }[] = await res.json();
+    const dirs = new Set<string>();
+    for (const f of files) {
+      if (f.type !== 'file' || !f.path.endsWith('tsconfig.json')) continue;
+      const dir = f.path.substring(0, f.path.lastIndexOf('/'));
+      if (dir) dirs.add(dir);
+    }
+    if (dirs.size === 0) return [{ uri: `file://${projectPath}`, name: projectPath.split('/').pop() ?? '' }];
+    return [...dirs].map((d) => ({ uri: `file://${projectPath}/${d}`, name: d.split('/').pop() ?? d }));
+  } catch {
+    return [{ uri: `file://${projectPath}`, name: projectPath.split('/').pop() ?? '' }];
+  }
 }
 
 /**
@@ -57,12 +87,15 @@ export class LspClientManager {
       ws.onerror = () => reject(new Error(`WebSocket error connecting to ${wsUrl}`));
     });
 
-    const entry: LspClientEntry = { ws, requestId: 1, pending: new Map(), disposables: [] };
+    const entry: LspClientEntry = { ws, projectPath, requestId: 1, pending: new Map(), disposables: [] };
     this.clients.set(key, entry);
 
     ws.onmessage = (ev) => this.handleMessage(entry, ev);
     ws.onclose = () => this.removeEntry(key);
     ws.onerror = () => this.removeEntry(key);
+
+    // Discover tsconfig.json locations to help the LSP find sub-projects in monorepos.
+    const workspaceFolders = await discoverWorkspaceFolders(projectId, projectPath);
 
     // Initialize LSP
     const initResult = await this.sendRequest(entry, 'initialize', {
@@ -73,9 +106,10 @@ export class LspClientManager {
           references: { dynamicRegistration: false },
           hover: { contentFormat: ['plaintext', 'markdown'], dynamicRegistration: false },
         },
+        workspace: { workspaceFolders: true },
       },
       rootUri: `file://${projectPath}`,
-      workspaceFolders: [{ uri: `file://${projectPath}`, name: projectPath.split('/').pop() ?? '' }],
+      workspaceFolders,
     });
 
     // Send initialized notification
@@ -115,7 +149,7 @@ export class LspClientManager {
     this.ensureDocumentOpen(entry, model);
 
     const result = await this.sendRequest(entry, 'textDocument/definition', {
-      textDocument: { uri: model.uri.toString() },
+      textDocument: { uri: this.toLspUri(entry, model.uri) },
       position: { line: position.lineNumber - 1, character: position.column - 1 },
     });
 
@@ -131,7 +165,7 @@ export class LspClientManager {
     this.ensureDocumentOpen(entry, model);
 
     const result = await this.sendRequest(entry, 'textDocument/references', {
-      textDocument: { uri: model.uri.toString() },
+      textDocument: { uri: this.toLspUri(entry, model.uri) },
       position: { line: position.lineNumber - 1, character: position.column - 1 },
       context: { includeDeclaration: context.includeDeclaration },
     });
@@ -147,7 +181,7 @@ export class LspClientManager {
     this.ensureDocumentOpen(entry, model);
 
     const result = await this.sendRequest(entry, 'textDocument/hover', {
-      textDocument: { uri: model.uri.toString() },
+      textDocument: { uri: this.toLspUri(entry, model.uri) },
       position: { line: position.lineNumber - 1, character: position.column - 1 },
     });
 
@@ -162,8 +196,18 @@ export class LspClientManager {
 
   private openedUris = new Set<string>();
 
+  /** Convert a model URI to an absolute file:// URI the LSP server understands. */
+  private toLspUri(entry: LspClientEntry, modelUri: monaco.Uri): string {
+    const raw = modelUri.toString();
+    // Already an absolute file:// URI with the project path
+    if (raw.startsWith(`file://${entry.projectPath}`)) return raw;
+    // Relative or missing project prefix — reconstruct from the path component
+    const relativePath = modelUri.path.replace(/^\//, '');
+    return `file://${entry.projectPath}/${relativePath}`;
+  }
+
   private ensureDocumentOpen(entry: LspClientEntry, model: monaco.editor.ITextModel): void {
-    const uri = model.uri.toString();
+    const uri = this.toLspUri(entry, model.uri);
     if (this.openedUris.has(uri)) return;
     this.openedUris.add(uri);
 

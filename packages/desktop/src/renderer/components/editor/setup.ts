@@ -83,14 +83,19 @@ monaco.editor.registerEditorOpener({
       filePath = filePath.replace(/^\//, '');
     }
 
-    // Extract line number from the selection or position.
+    // Extract line and column from the selection or position.
     const line = selectionOrPosition
       ? 'startLineNumber' in selectionOrPosition
         ? selectionOrPosition.startLineNumber
         : selectionOrPosition.lineNumber
       : undefined;
+    const column = selectionOrPosition
+      ? 'startColumn' in selectionOrPosition
+        ? selectionOrPosition.startColumn
+        : selectionOrPosition.column
+      : undefined;
 
-    useTabsStore.getState().openEditorTab(filePath, undefined, line);
+    useTabsStore.getState().openEditorTab(filePath, undefined, line, column);
     return true;
   },
 });

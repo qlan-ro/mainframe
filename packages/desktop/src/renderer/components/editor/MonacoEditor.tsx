@@ -12,6 +12,7 @@ interface MonacoEditorProps {
   readOnly?: boolean;
   filePath?: string;
   line?: number;
+  column?: number;
   onChange?: (value: string | undefined) => void;
   onLineComment?: (line: number, lineContent: string, comment: string) => void;
 }
@@ -22,6 +23,7 @@ export function MonacoEditor({
   readOnly = true,
   filePath,
   line,
+  column,
   onChange,
   onLineComment,
 }: MonacoEditorProps): React.ReactElement {
@@ -49,16 +51,31 @@ export function MonacoEditor({
 
   useEffect(() => () => closeInlineComment(), [closeInlineComment]);
 
-  // Scroll to target line when navigating from references/definitions.
+  // Scroll to target position when navigating from references/definitions.
   useEffect(() => {
     if (!line || !editorRef.current) return;
-    editorRef.current.revealLineInCenter(line);
-    editorRef.current.setPosition({ lineNumber: line, column: 1 });
-  }, [line]);
+    const editor = editorRef.current;
+    editor.revealLineInCenter(line);
+    editor.setPosition({ lineNumber: line, column: column ?? 1 });
+    // Focus so the caret is visible — this is an intentional navigation action.
+    setTimeout(() => editor.focus(), 50);
+  }, [line, column]);
+
+  const lineRef = useRef(line);
+  lineRef.current = line;
+  const columnRef = useRef(column);
+  columnRef.current = column;
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
+
+      // Scroll to target position on mount (from Go To Definition / References).
+      if (lineRef.current) {
+        editor.revealLineInCenter(lineRef.current);
+        editor.setPosition({ lineNumber: lineRef.current, column: columnRef.current ?? 1 });
+        setTimeout(() => editor.focus(), 50);
+      }
 
       if (filePath && language) {
         registerDefinitionProvider(monaco, language, filePath);
