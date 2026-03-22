@@ -28,6 +28,7 @@ interface ProjectTabSnapshot {
   fileView: FileView | null;
   fileViewCollapsed: boolean;
   sidebarWidth: number;
+  expandedPaths: string[];
 }
 
 const DEFAULT_SIDEBAR_PX = 300;
@@ -51,8 +52,11 @@ interface TabsState {
   setSidebarWidth: (w: number) => void;
   closeFileView: () => void;
   toggleFileViewCollapsed: () => void;
-  navigateBack: () => void;
-  navigateForward: () => void;
+  expandedPaths: string[];
+  revealPath: string | null;
+  toggleTreePath: (path: string) => void;
+  revealFileInTree: (filePath: string) => void;
+  clearRevealPath: () => void;
   switchProject: (prevProjectId: string | null, nextProjectId: string) => void;
 }
 
@@ -76,6 +80,7 @@ function migrateSnapshot(raw: LegacySnapshot): ProjectTabSnapshot {
     fileView: raw.fileView ?? null,
     fileViewCollapsed: raw.fileViewCollapsed ?? false,
     sidebarWidth: (raw as Partial<ProjectTabSnapshot>).sidebarWidth ?? DEFAULT_SIDEBAR_PX,
+    expandedPaths: (raw as Partial<ProjectTabSnapshot>).expandedPaths ?? ['.'],
   };
 }
 
@@ -98,13 +103,10 @@ function saveProjectTabs(map: Map<string, ProjectTabSnapshot>): void {
 
 const projectTabs = loadProjectTabs();
 
-interface NavEntry {
-  filePath: string;
-  line?: number;
-  column?: number;
-}
-const navBackStack: NavEntry[] = [];
-const navForwardStack: NavEntry[] = [];
+// Restore initial state from localStorage so fileView/tabs are available
+// before switchProject runs (avoids the subscriber overwriting persisted data).
+const initialProjectId = localStorage.getItem('mf:activeProjectId');
+const initialSnapshot = initialProjectId ? projectTabs.get(initialProjectId) : undefined;
 
 function expandRightPanel(): void {
   const ui = useUIStore.getState();
@@ -114,11 +116,13 @@ function expandRightPanel(): void {
 }
 
 export const useTabsStore = create<TabsState>((set, get) => ({
-  tabs: [],
-  activePrimaryTabId: null,
-  fileView: null,
-  fileViewCollapsed: false,
-  sidebarWidth: DEFAULT_SIDEBAR_PX,
+  tabs: initialSnapshot?.tabs ?? [],
+  activePrimaryTabId: initialSnapshot?.activePrimaryTabId ?? null,
+  fileView: initialSnapshot?.fileView ?? null,
+  fileViewCollapsed: initialSnapshot?.fileViewCollapsed ?? false,
+  sidebarWidth: initialSnapshot?.sidebarWidth ?? DEFAULT_SIDEBAR_PX,
+  expandedPaths: initialSnapshot?.expandedPaths ?? ['.'],
+  revealPath: null,
 
   openTab: (tab) =>
     set((state) => {
@@ -159,14 +163,6 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
   openEditorTab: (filePath, content, line, column) => {
     const label = filePath.split('/').pop() || filePath;
-    // Push current editor to back stack when navigating via Go To Definition.
-    if (line != null) {
-      const current = get().fileView;
-      if (current?.type === 'editor') {
-        navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
-        navForwardStack.length = 0;
-      }
-    }
     expandRightPanel();
     set({ fileView: { type: 'editor', filePath, label, content, line, column }, fileViewCollapsed: false });
   },
@@ -200,33 +196,31 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       fileViewCollapsed: !state.fileViewCollapsed,
     })),
 
-  navigateBack: () => {
-    const entry = navBackStack.pop();
-    if (!entry) return;
-    const current = get().fileView;
-    if (current?.type === 'editor') {
-      navForwardStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+  toggleTreePath: (path) =>
+    set((state) => {
+      const has = state.expandedPaths.includes(path);
+      return {
+        expandedPaths: has ? state.expandedPaths.filter((p) => p !== path) : [...state.expandedPaths, path],
+      };
+    }),
+
+  revealFileInTree: (filePath) => {
+    const parts = filePath.split('/');
+    const ancestors: string[] = ['.'];
+    for (let i = 0; i < parts.length - 1; i++) {
+      ancestors.push(parts.slice(0, i + 1).join('/'));
     }
-    const label = entry.filePath.split('/').pop() || entry.filePath;
-    set({
-      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
-      fileViewCollapsed: false,
-    });
+    set((state) => ({
+      expandedPaths: [...new Set([...state.expandedPaths, ...ancestors])],
+      revealPath: filePath,
+    }));
+    // Auto-clear in case the file isn't found in the tree
+    setTimeout(() => {
+      if (get().revealPath === filePath) set({ revealPath: null });
+    }, 3000);
   },
 
-  navigateForward: () => {
-    const entry = navForwardStack.pop();
-    if (!entry) return;
-    const current = get().fileView;
-    if (current?.type === 'editor') {
-      navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
-    }
-    const label = entry.filePath.split('/').pop() || entry.filePath;
-    set({
-      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
-      fileViewCollapsed: false,
-    });
-  },
+  clearRevealPath: () => set({ revealPath: null }),
 
   switchProject: (prevProjectId, nextProjectId) => {
     const state = get();
@@ -244,17 +238,22 @@ export const useTabsStore = create<TabsState>((set, get) => ({
         fileView: persistedFileView,
         fileViewCollapsed: state.fileViewCollapsed,
         sidebarWidth: state.sidebarWidth,
+        expandedPaths: state.expandedPaths,
       });
     }
     const restored = projectTabs.get(nextProjectId);
     set(
-      restored ?? {
-        tabs: [],
-        activePrimaryTabId: null,
-        fileView: null,
-        fileViewCollapsed: false,
-        sidebarWidth: DEFAULT_SIDEBAR_PX,
-      },
+      restored
+        ? { ...restored, revealPath: null }
+        : {
+            tabs: [],
+            activePrimaryTabId: null,
+            fileView: null,
+            fileViewCollapsed: false,
+            sidebarWidth: DEFAULT_SIDEBAR_PX,
+            expandedPaths: ['.'],
+            revealPath: null,
+          },
     );
     saveProjectTabs(projectTabs);
   },
@@ -276,6 +275,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     fileView: persistedFileView,
     fileViewCollapsed: state.fileViewCollapsed,
     sidebarWidth: state.sidebarWidth,
+    expandedPaths: state.expandedPaths,
   });
   saveProjectTabs(projectTabs);
 });
