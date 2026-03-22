@@ -1,4 +1,4 @@
-import type { ControlRequest, SessionContext } from '@qlan-ro/mainframe-types';
+import type { ControlRequest, SessionContext, SearchContentResult } from '@qlan-ro/mainframe-types';
 import { fetchJson, postJson, putJson, API_BASE } from './http';
 
 export async function getFileTree(
@@ -140,4 +140,21 @@ export interface BrowseEntry {
 export async function browseFilesystem(dirPath?: string): Promise<{ path: string; entries: BrowseEntry[] }> {
   const params = dirPath ? `?path=${encodeURIComponent(dirPath)}` : '';
   return fetchJson(`${API_BASE}/api/filesystem/browse${params}`);
+}
+
+export async function searchContent(
+  projectId: string,
+  query: string,
+  scopePath: string,
+  includeIgnored?: boolean,
+  chatId?: string,
+  signal?: AbortSignal,
+): Promise<SearchContentResult[]> {
+  const params = new URLSearchParams({ q: query, path: scopePath });
+  if (includeIgnored) params.set('includeIgnored', 'true');
+  if (chatId) params.set('chatId', chatId);
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/search/content?${params}`, { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  return json.results;
 }

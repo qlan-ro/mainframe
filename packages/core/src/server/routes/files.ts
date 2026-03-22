@@ -9,23 +9,9 @@ import { resolveAndValidatePath, resolveClaudeConfigPath } from './path-utils.js
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
 import { BrowseFilesystemQuery, validate } from './schemas.js';
+import { IGNORED_DIRS } from '../fs-utils.js';
 
 const logger = createChildLogger('routes:files');
-
-const IGNORED_DIRS = new Set([
-  '.git',
-  'node_modules',
-  '.next',
-  'dist',
-  'build',
-  'out',
-  '.cache',
-  '__pycache__',
-  '.venv',
-  'vendor',
-  'coverage',
-  '.turbo',
-]);
 
 /** GET /api/projects/:id/tree?path=relative/dir&chatId=X */
 async function handleTree(ctx: RouteContext, req: Request, res: Response): Promise<void> {
