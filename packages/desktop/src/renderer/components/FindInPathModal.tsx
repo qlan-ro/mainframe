@@ -106,7 +106,7 @@ export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathMod
 
   const openResult = useCallback(
     (result: SearchContentResult) => {
-      useTabsStore.getState().openEditorTab(result.file, { line: result.line });
+      useTabsStore.getState().openEditorTab(result.file, undefined, result.line);
       onClose();
     },
     [onClose],

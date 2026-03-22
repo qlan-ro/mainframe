@@ -54,10 +54,6 @@ export function MonacoEditor({
         editor.setPosition({ lineNumber: initialLineRef.current, column: 1 });
       }
 
-      if (filePath && language) {
-        registerDefinitionProvider(monaco, language, filePath);
-      }
-
       // Cmd+Left / Cmd+Right for back/forward navigation (like IntelliJ).
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow, () => {
         useTabsStore.getState().navigateBack();
@@ -65,6 +61,10 @@ export function MonacoEditor({
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow, () => {
         useTabsStore.getState().navigateForward();
       });
+
+      if (filePath && language) {
+        registerDefinitionProvider(monaco, language, filePath);
+      }
 
       if (!onLineComment) return;
 
