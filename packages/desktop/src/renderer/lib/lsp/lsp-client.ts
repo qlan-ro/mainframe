@@ -1,9 +1,10 @@
-import { MonacoLanguageClient } from 'monaco-languageclient';
-import { toSocket, WebSocketMessageReader, WebSocketMessageWriter } from 'vscode-ws-jsonrpc';
+import * as monaco from 'monaco-editor';
 
 interface LspClientEntry {
-  client: MonacoLanguageClient;
-  webSocket: WebSocket;
+  ws: WebSocket;
+  requestId: number;
+  pending: Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>;
+  disposables: monaco.IDisposable[];
 }
 
 function makeKey(projectId: string, language: string): string {
@@ -18,73 +19,213 @@ function getDaemonWsUrl(): string {
 }
 
 /**
- * Manages MonacoLanguageClient instances, one per project+language pair.
- * Connects to the daemon's LSP proxy WebSocket endpoint.
+ * Minimal LSP client using raw WebSocket + JSON-RPC.
+ * Registers definition/reference/hover providers directly on monaco-editor.
  */
 export class LspClientManager {
   private readonly clients = new Map<string, LspClientEntry>();
+  private readonly pending = new Map<string, Promise<void>>();
 
-  /** Get an existing client, or null if none exists. */
-  getClient(projectId: string, language: string): MonacoLanguageClient | null {
-    return this.clients.get(makeKey(projectId, language))?.client ?? null;
+  hasClient(projectId: string, language: string): boolean {
+    return this.clients.has(makeKey(projectId, language));
   }
 
-  /** Create and start an LSP client if one doesn't already exist. */
   async ensureClient(projectId: string, language: string, projectPath: string): Promise<void> {
     const key = makeKey(projectId, language);
     if (this.clients.has(key)) return;
 
-    const wsUrl = `${getDaemonWsUrl()}/lsp/${projectId}/${language}`;
-    const webSocket = new WebSocket(wsUrl);
+    const inflight = this.pending.get(key);
+    if (inflight) return inflight;
 
-    await new Promise<void>((resolve, reject) => {
-      webSocket.onopen = () => resolve();
-      webSocket.onerror = (ev) => reject(new Error(`WebSocket error connecting to ${wsUrl}: ${String(ev)}`));
-    });
-
-    const socket = toSocket(webSocket);
-    const reader = new WebSocketMessageReader(socket);
-    const writer = new WebSocketMessageWriter(socket);
-
-    const client = new MonacoLanguageClient({
-      name: `${language}-lsp-${projectId}`,
-      clientOptions: {
-        documentSelector: [{ language }],
-        workspaceFolder: {
-          uri: `file://${projectPath}` as any,
-          name: projectPath.split('/').pop() ?? projectPath,
-          index: 0,
-        },
-      },
-      messageTransports: { reader, writer },
-    });
-
-    this.clients.set(key, { client, webSocket });
-
-    webSocket.onclose = () => {
-      console.warn(`[lsp] WebSocket closed for ${key}`);
-      this.removeEntry(key);
-    };
-    webSocket.onerror = (ev) => {
-      console.warn(`[lsp] WebSocket error for ${key}:`, ev);
-      this.removeEntry(key);
-    };
-
+    const promise = this.startClient(key, language, projectId, projectPath);
+    this.pending.set(key, promise);
     try {
-      await client.start();
-    } catch (err) {
-      console.warn(`[lsp] Failed to start client for ${key}:`, err);
-      this.removeEntry(key);
-      throw err;
+      await promise;
+    } finally {
+      this.pending.delete(key);
     }
   }
 
-  /** Tear down the client for a given project+language. */
+  private async startClient(key: string, language: string, projectId: string, projectPath: string): Promise<void> {
+    if (this.clients.has(key)) return;
+
+    const wsUrl = `${getDaemonWsUrl()}/lsp/${projectId}/${language}`;
+    const ws = new WebSocket(wsUrl);
+
+    await new Promise<void>((resolve, reject) => {
+      ws.onopen = () => resolve();
+      ws.onerror = () => reject(new Error(`WebSocket error connecting to ${wsUrl}`));
+    });
+
+    const entry: LspClientEntry = { ws, requestId: 1, pending: new Map(), disposables: [] };
+    this.clients.set(key, entry);
+
+    ws.onmessage = (ev) => this.handleMessage(entry, ev);
+    ws.onclose = () => this.removeEntry(key);
+    ws.onerror = () => this.removeEntry(key);
+
+    // Initialize LSP
+    const initResult = await this.sendRequest(entry, 'initialize', {
+      processId: null,
+      capabilities: {
+        textDocument: {
+          definition: { dynamicRegistration: false },
+          references: { dynamicRegistration: false },
+          hover: { contentFormat: ['plaintext', 'markdown'], dynamicRegistration: false },
+        },
+      },
+      rootUri: `file://${projectPath}`,
+      workspaceFolders: [{ uri: `file://${projectPath}`, name: projectPath.split('/').pop() ?? '' }],
+    });
+
+    // Send initialized notification
+    this.sendNotification(entry, 'initialized', {});
+
+    // Register Monaco providers
+    const caps = initResult?.capabilities;
+    if (caps?.definitionProvider) {
+      entry.disposables.push(
+        monaco.languages.registerDefinitionProvider(language, {
+          provideDefinition: (model, position) => this.provideDefinition(entry, model, position),
+        }),
+      );
+    }
+    if (caps?.referencesProvider) {
+      entry.disposables.push(
+        monaco.languages.registerReferenceProvider(language, {
+          provideReferences: (model, position, context) => this.provideReferences(entry, model, position, context),
+        }),
+      );
+    }
+    if (caps?.hoverProvider) {
+      entry.disposables.push(
+        monaco.languages.registerHoverProvider(language, {
+          provideHover: (model, position) => this.provideHover(entry, model, position),
+        }),
+      );
+    }
+  }
+
+  private async provideDefinition(
+    entry: LspClientEntry,
+    model: monaco.editor.ITextModel,
+    position: monaco.Position,
+  ): Promise<monaco.languages.Definition | null> {
+    // Send didOpen if not already sent
+    this.ensureDocumentOpen(entry, model);
+
+    const result = await this.sendRequest(entry, 'textDocument/definition', {
+      textDocument: { uri: model.uri.toString() },
+      position: { line: position.lineNumber - 1, character: position.column - 1 },
+    });
+
+    return this.toMonacoLocations(result);
+  }
+
+  private async provideReferences(
+    entry: LspClientEntry,
+    model: monaco.editor.ITextModel,
+    position: monaco.Position,
+    context: monaco.languages.ReferenceContext,
+  ): Promise<monaco.languages.Location[] | null> {
+    this.ensureDocumentOpen(entry, model);
+
+    const result = await this.sendRequest(entry, 'textDocument/references', {
+      textDocument: { uri: model.uri.toString() },
+      position: { line: position.lineNumber - 1, character: position.column - 1 },
+      context: { includeDeclaration: context.includeDeclaration },
+    });
+
+    return this.toMonacoLocations(result) as monaco.languages.Location[] | null;
+  }
+
+  private async provideHover(
+    entry: LspClientEntry,
+    model: monaco.editor.ITextModel,
+    position: monaco.Position,
+  ): Promise<monaco.languages.Hover | null> {
+    this.ensureDocumentOpen(entry, model);
+
+    const result = await this.sendRequest(entry, 'textDocument/hover', {
+      textDocument: { uri: model.uri.toString() },
+      position: { line: position.lineNumber - 1, character: position.column - 1 },
+    });
+
+    if (!result?.contents) return null;
+
+    const contents = Array.isArray(result.contents)
+      ? result.contents.map((c: any) => ({ value: typeof c === 'string' ? c : c.value }))
+      : [{ value: typeof result.contents === 'string' ? result.contents : result.contents.value }];
+
+    return { contents };
+  }
+
+  private openedUris = new Set<string>();
+
+  private ensureDocumentOpen(entry: LspClientEntry, model: monaco.editor.ITextModel): void {
+    const uri = model.uri.toString();
+    if (this.openedUris.has(uri)) return;
+    this.openedUris.add(uri);
+
+    this.sendNotification(entry, 'textDocument/didOpen', {
+      textDocument: {
+        uri,
+        languageId: model.getLanguageId(),
+        version: model.getVersionId(),
+        text: model.getValue(),
+      },
+    });
+  }
+
+  private toMonacoLocations(result: any): monaco.languages.Location[] | null {
+    if (!result) return null;
+    const items = Array.isArray(result) ? result : [result];
+    return items.map((loc: any) => ({
+      uri: monaco.Uri.parse(loc.uri),
+      range: new monaco.Range(
+        loc.range.start.line + 1,
+        loc.range.start.character + 1,
+        loc.range.end.line + 1,
+        loc.range.end.character + 1,
+      ),
+    }));
+  }
+
+  private sendRequest(entry: LspClientEntry, method: string, params: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const id = entry.requestId++;
+      entry.pending.set(id, { resolve, reject });
+      const msg = JSON.stringify({ jsonrpc: '2.0', id, method, params });
+      entry.ws.send(msg);
+    });
+  }
+
+  private sendNotification(entry: LspClientEntry, method: string, params: any): void {
+    const msg = JSON.stringify({ jsonrpc: '2.0', method, params });
+    entry.ws.send(msg);
+  }
+
+  private handleMessage(entry: LspClientEntry, ev: MessageEvent): void {
+    try {
+      const data = JSON.parse(ev.data as string);
+      if (data.id != null && entry.pending.has(data.id)) {
+        const handler = entry.pending.get(data.id)!;
+        entry.pending.delete(data.id);
+        if (data.error) {
+          handler.reject(new Error(data.error.message));
+        } else {
+          handler.resolve(data.result);
+        }
+      }
+    } catch {
+      // ignore malformed messages
+    }
+  }
+
   disposeClient(projectId: string, language: string): void {
     this.removeEntry(makeKey(projectId, language));
   }
 
-  /** Tear down all clients. */
   disposeAll(): void {
     for (const key of [...this.clients.keys()]) {
       this.removeEntry(key);
@@ -95,19 +236,11 @@ export class LspClientManager {
     const entry = this.clients.get(key);
     if (!entry) return;
     this.clients.delete(key);
+    for (const d of entry.disposables) d.dispose();
     try {
-      entry.client.dispose().catch((err) => {
-        console.warn(`[lsp] Error disposing client ${key}:`, err);
-      });
+      if (entry.ws.readyState === WebSocket.OPEN) entry.ws.close();
     } catch {
-      // client may already be disposed
-    }
-    try {
-      if (entry.webSocket.readyState === WebSocket.OPEN) {
-        entry.webSocket.close();
-      }
-    } catch {
-      // socket may already be closed
+      /* already closed */
     }
   }
 }

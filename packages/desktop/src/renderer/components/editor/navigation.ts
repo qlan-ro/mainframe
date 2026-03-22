@@ -1,8 +1,5 @@
 import type * as monacoNs from 'monaco-editor';
 
-// Monaco language IDs covered by LSP — skip the fallback definition provider for these.
-const LSP_COVERED_LANGUAGES = new Set(['typescript', 'javascript', 'python', 'java']);
-
 // --- Import patterns ---
 
 const JS_IMPORT_PATTERNS = [
@@ -247,9 +244,12 @@ function getLanguageConfig(language: string, currentFilePath: string): LanguageC
 
 const registeredLanguages = new Set<string>();
 
+// Languages with a built-in Monaco worker that already provides definitions.
+const BUILTIN_WORKER_LANGUAGES = new Set(['typescript', 'javascript']);
+
 export function registerDefinitionProvider(monaco: typeof monacoNs, language: string, currentFilePath: string): void {
-  // LSP provides richer definition, references, and hover — skip the fallback provider for LSP-covered languages.
-  if (LSP_COVERED_LANGUAGES.has(language)) return;
+  // Skip languages handled by Monaco's built-in TS worker to avoid duplicate definitions.
+  if (BUILTIN_WORKER_LANGUAGES.has(language)) return;
 
   const config = getLanguageConfig(language, currentFilePath);
   if (!config) return;

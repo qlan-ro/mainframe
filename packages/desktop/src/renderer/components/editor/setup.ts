@@ -6,6 +6,7 @@ import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { useTabsStore } from '../../store/tabs';
+import { useProjectsStore } from '../../store/projects';
 
 // Configure Monaco workers for Electron (no CDN access).
 self.MonacoEnvironment = {
@@ -20,6 +21,18 @@ self.MonacoEnvironment = {
 
 // Configure @monaco-editor/react to use the local bundle instead of CDN.
 loader.config({ monaco });
+
+// Disable the built-in TypeScript diagnostics — the editor displays files from
+// arbitrary projects and the TS worker has no access to node_modules, tsconfig,
+// or Node.js type definitions, so its errors are misleading.
+monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+  noSemanticValidation: true,
+  noSyntaxValidation: false,
+});
+monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+  noSemanticValidation: true,
+  noSyntaxValidation: false,
+});
 
 // Define the mainframe-dark theme once globally.
 monaco.editor.defineTheme('mainframe-dark', {
@@ -56,8 +69,21 @@ monaco.editor.defineTheme('mainframe-dark', {
 // opens the file in our editor panel instead of Monaco's inline peek.
 monaco.editor.registerEditorOpener({
   openCodeEditor(_source, resource, _selectionOrPosition) {
-    const filePath = resource.path;
+    if (resource.scheme !== 'file') return false;
+    let filePath = resource.path;
     if (!filePath) return false;
+
+    // Convert absolute filesystem paths to project-relative paths.
+    // The API expects relative paths; absolute paths cause 403 errors.
+    const { activeProjectId, projects } = useProjectsStore.getState();
+    const projectPath = projects.find((p) => p.id === activeProjectId)?.path;
+    if (projectPath && filePath.startsWith(projectPath)) {
+      filePath = filePath.slice(projectPath.length).replace(/^\//, '');
+    } else {
+      // Strip leading slash from project-relative paths (e.g. /packages/... from Uri.file)
+      filePath = filePath.replace(/^\//, '');
+    }
+
     useTabsStore.getState().openEditorTab(filePath);
     return true;
   },

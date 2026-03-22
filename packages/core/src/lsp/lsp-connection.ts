@@ -60,13 +60,15 @@ export class LspConnectionHandler {
       return;
     }
 
-    // Single-client check
+    // If there's an existing client, close it to allow the new connection.
+    // Stale connections from renderer restarts / HMR can linger as OPEN.
     const existingHandle = this.manager.getHandle(projectId, language);
     if (existingHandle?.client && existingHandle.client.readyState === WebSocket.OPEN) {
-      log.warn({ projectId, language }, 'LSP upgrade rejected: client already connected');
-      socket.write('HTTP/1.1 409 Conflict\r\n\r\n');
-      socket.destroy();
-      return;
+      log.info({ projectId, language }, 'Closing stale LSP client for new connection');
+      existingHandle.cleanup?.();
+      existingHandle.client.close(1001, 'Replaced by new client');
+      existingHandle.client = null;
+      existingHandle.cleanup = null;
     }
 
     // Spawn or get existing LSP server
