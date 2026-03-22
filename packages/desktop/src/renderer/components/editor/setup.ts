@@ -68,7 +68,7 @@ monaco.editor.defineTheme('mainframe-dark', {
 // Register a global editor opener so Ctrl+Click on resolved imports
 // opens the file in our editor panel instead of Monaco's inline peek.
 monaco.editor.registerEditorOpener({
-  openCodeEditor(_source, resource, _selectionOrPosition) {
+  openCodeEditor(_source, resource, selectionOrPosition) {
     if (resource.scheme !== 'file') return false;
     let filePath = resource.path;
     if (!filePath) return false;
@@ -80,11 +80,17 @@ monaco.editor.registerEditorOpener({
     if (projectPath && filePath.startsWith(projectPath)) {
       filePath = filePath.slice(projectPath.length).replace(/^\//, '');
     } else {
-      // Strip leading slash from project-relative paths (e.g. /packages/... from Uri.file)
       filePath = filePath.replace(/^\//, '');
     }
 
-    useTabsStore.getState().openEditorTab(filePath);
+    // Extract line number from the selection or position.
+    const line = selectionOrPosition
+      ? 'startLineNumber' in selectionOrPosition
+        ? selectionOrPosition.startLineNumber
+        : selectionOrPosition.lineNumber
+      : undefined;
+
+    useTabsStore.getState().openEditorTab(filePath, undefined, line);
     return true;
   },
 });
