@@ -22,7 +22,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
-    "dev": "tsx watch src/index.ts | pino-pretty",
+    "dev": "tsx watch src/index.ts | pino-pretty --config ../../pino-pretty.config.cjs",
     "start": "node dist/index.js",
     "lint": "eslint .",
     "test": "vitest run",
