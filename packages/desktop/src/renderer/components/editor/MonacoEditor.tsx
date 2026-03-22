@@ -4,7 +4,6 @@ import type * as monacoType from 'monaco-editor';
 import { InlineCommentWidget, type InlineCommentState } from './InlineCommentWidget';
 import './setup';
 import { registerDefinitionProvider } from './navigation';
-import { getLspLanguage, lspClientManager } from '../../lib/lsp/index.js';
 import { useProjectsStore } from '../../store';
 
 interface MonacoEditorProps {
@@ -58,22 +57,6 @@ export function MonacoEditor({
       if (initialLineRef.current) {
         editor.revealLineInCenter(initialLineRef.current);
         editor.setPosition({ lineNumber: initialLineRef.current, column: 1 });
-      }
-
-      if (filePath) {
-        const lspLanguage = getLspLanguage(filePath);
-        if (lspLanguage) {
-          const project = activeProjectRef.current;
-          if (project) {
-            lspClientManager.ensureClient(project.id, lspLanguage, project.path).catch((err: unknown) => {
-              console.warn('[lsp] ensureClient failed:', err);
-            });
-          }
-        }
-      }
-
-      if (filePath && language) {
-        registerDefinitionProvider(monaco, language, filePath);
       }
 
       if (!onLineComment) return;
@@ -137,10 +120,6 @@ export function MonacoEditor({
         if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
           openCommentAtLine(lineNumber);
         }
-        // Cmd+Click on line content
-        if (e.target.type === monaco.editor.MouseTargetType.CONTENT_TEXT && e.event.metaKey) {
-          openCommentAtLine(lineNumber);
-        }
       });
 
       editor.onDidScrollChange(() => {
@@ -156,6 +135,7 @@ export function MonacoEditor({
         height="100%"
         language={language}
         value={value}
+        path={activeProject && filePath ? `file://${activeProject.path}/${filePath}` : filePath}
         onChange={onChange}
         theme="mainframe-dark"
         onMount={handleMount}
