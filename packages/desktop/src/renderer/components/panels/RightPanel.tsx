@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Minus, PanelLeftOpen } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { ContextTab } from './ContextTab';
@@ -24,6 +24,12 @@ export function RightPanel(): React.ReactElement {
   const fileViewCollapsed = useTabsStore((s) => s.fileViewCollapsed);
   const toggleFileViewCollapsed = useTabsStore((s) => s.toggleFileViewCollapsed);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('context');
+  const revealPath = useTabsStore((s) => s.revealPath);
+
+  // Switch to files tab when reveal is triggered
+  useEffect(() => {
+    if (revealPath) setSidebarTab('files');
+  }, [revealPath]);
 
   const hasFileView = fileView != null;
   const showFileView = fileView != null && !fileViewCollapsed;
