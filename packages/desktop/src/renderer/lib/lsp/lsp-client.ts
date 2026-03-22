@@ -266,6 +266,25 @@ export class LspClientManager {
     }
   }
 
+  /** Send didOpen eagerly so tsserver starts loading the project before user interaction. */
+  preloadDocument(projectId: string, language: string, projectPath: string, filePath: string): void {
+    const entry = this.clients.get(makeKey(projectId, language));
+    if (!entry) return;
+    const uri = `file://${projectPath}/${filePath}`;
+    if (this.openedUris.has(uri)) return;
+    this.openedUris.add(uri);
+
+    const base = getDaemonHttpUrl();
+    fetch(`${base}/api/projects/${projectId}/files?path=${encodeURIComponent(filePath)}`)
+      .then((r) => r.json())
+      .then((data: { content: string }) => {
+        this.sendNotification(entry, 'textDocument/didOpen', {
+          textDocument: { uri, languageId: language, version: 1, text: data.content },
+        });
+      })
+      .catch(() => {});
+  }
+
   disposeClient(projectId: string, language: string): void {
     this.removeEntry(makeKey(projectId, language));
   }

@@ -17,6 +17,8 @@ export interface LspServerHandle {
   client: WebSocket | null;
   idleTimer: ReturnType<typeof setTimeout> | null;
   cleanup: (() => void) | null;
+  /** Cached initialize result so reconnecting clients skip re-initialization. */
+  initializeResult: unknown | null;
 }
 
 export class LspManager {
@@ -79,6 +81,7 @@ export class LspManager {
       client: null,
       idleTimer: null,
       cleanup: null,
+      initializeResult: null,
     };
 
     child.on('exit', (code, signal) => {
