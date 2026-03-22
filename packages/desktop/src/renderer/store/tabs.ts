@@ -52,6 +52,8 @@ interface TabsState {
   setSidebarWidth: (w: number) => void;
   closeFileView: () => void;
   toggleFileViewCollapsed: () => void;
+  navigateBack: () => void;
+  navigateForward: () => void;
   expandedPaths: string[];
   revealPath: string | null;
   toggleTreePath: (path: string) => void;
@@ -102,6 +104,14 @@ function saveProjectTabs(map: Map<string, ProjectTabSnapshot>): void {
 }
 
 const projectTabs = loadProjectTabs();
+
+interface NavEntry {
+  filePath: string;
+  line?: number;
+  column?: number;
+}
+const navBackStack: NavEntry[] = [];
+const navForwardStack: NavEntry[] = [];
 
 // Restore initial state from localStorage so fileView/tabs are available
 // before switchProject runs (avoids the subscriber overwriting persisted data).
@@ -163,6 +173,13 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
   openEditorTab: (filePath, content, line, column) => {
     const label = filePath.split('/').pop() || filePath;
+    if (line != null) {
+      const current = get().fileView;
+      if (current?.type === 'editor') {
+        navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+        navForwardStack.length = 0;
+      }
+    }
     expandRightPanel();
     set({ fileView: { type: 'editor', filePath, label, content, line, column }, fileViewCollapsed: false });
   },
@@ -195,6 +212,34 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     set((state) => ({
       fileViewCollapsed: !state.fileViewCollapsed,
     })),
+
+  navigateBack: () => {
+    const entry = navBackStack.pop();
+    if (!entry) return;
+    const current = get().fileView;
+    if (current?.type === 'editor') {
+      navForwardStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+    }
+    const label = entry.filePath.split('/').pop() || entry.filePath;
+    set({
+      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
+      fileViewCollapsed: false,
+    });
+  },
+
+  navigateForward: () => {
+    const entry = navForwardStack.pop();
+    if (!entry) return;
+    const current = get().fileView;
+    if (current?.type === 'editor') {
+      navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+    }
+    const label = entry.filePath.split('/').pop() || entry.filePath;
+    set({
+      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
+      fileViewCollapsed: false,
+    });
+  },
 
   toggleTreePath: (path) =>
     set((state) => {
