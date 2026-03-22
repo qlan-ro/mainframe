@@ -13,7 +13,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev | pino-pretty",
+    "dev": "electron-vite dev | pino-pretty --config ../../pino-pretty.config.cjs",
     "dev:web": "vite --config vite.web.config.ts",
     "build": "electron-vite build && node scripts/bundle-daemon.mjs",
     "clean": "rm -rf out dist",
