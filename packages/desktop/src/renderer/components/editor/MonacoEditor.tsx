@@ -11,7 +11,7 @@ interface MonacoEditorProps {
   language?: string;
   readOnly?: boolean;
   filePath?: string;
-  initialLine?: number;
+  line?: number;
   onChange?: (value: string | undefined) => void;
   onLineComment?: (line: number, lineContent: string, comment: string) => void;
 }
@@ -21,7 +21,7 @@ export function MonacoEditor({
   language,
   readOnly = true,
   filePath,
-  initialLine,
+  line,
   onChange,
   onLineComment,
 }: MonacoEditorProps): React.ReactElement {
@@ -49,6 +49,13 @@ export function MonacoEditor({
   }, []);
 
   useEffect(() => () => closeInlineComment(), [closeInlineComment]);
+
+  // Scroll to target line when navigating from references/definitions.
+  useEffect(() => {
+    if (!line || !editorRef.current) return;
+    editorRef.current.revealLineInCenter(line);
+    editorRef.current.setPosition({ lineNumber: line, column: 1 });
+  }, [line]);
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {

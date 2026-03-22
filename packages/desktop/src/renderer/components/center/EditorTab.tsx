@@ -140,6 +140,7 @@ export function EditorTab({
           value={currentContent}
           language={inferLanguage(filePath)}
           filePath={filePath}
+          line={line}
           readOnly={false}
           initialLine={line}
           onChange={handleChange}
