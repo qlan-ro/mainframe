@@ -37,10 +37,12 @@ export function EditorTab({
   filePath,
   content: providedContent,
   line,
+  column,
 }: {
   filePath: string;
   content?: string;
   line?: number;
+  column?: number;
 }): React.ReactElement {
   const { activeProjectId } = useProjectsStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
@@ -141,6 +143,7 @@ export function EditorTab({
           language={inferLanguage(filePath)}
           filePath={filePath}
           line={line}
+          column={column}
           readOnly={false}
           initialLine={line}
           onChange={handleChange}
