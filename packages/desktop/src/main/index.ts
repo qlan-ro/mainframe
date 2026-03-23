@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, session, shell, ipcMain, utilityProcess, Menu } from 'electron';
+import { app, BrowserWindow, session, shell, ipcMain, utilityProcess, Menu } from 'electron';
 import type { UtilityProcess } from 'electron';
 import { join, resolve, sep } from 'path';
 import { execFileSync } from 'child_process';
@@ -26,12 +26,8 @@ try {
     { timeout: 3000, stdio: 'ignore' },
   );
 } catch {
-  dialog.showMessageBoxSync({
-    type: 'info',
-    title: 'Mainframe',
-    message: 'Another instance is already running.',
-    detail: `The daemon port ${daemonPort} is in use. The app will now quit.`,
-  });
+  // dialog requires app.ready which hasn't fired yet — just exit.
+  // The user will see the existing instance is already open.
   process.exit(0);
 }
 
