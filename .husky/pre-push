@@ -1,0 +1,16 @@
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Skip changeset check on main and release branches
+if [ "$branch" = "main" ] || echo "$branch" | grep -q "^release/"; then
+  exit 0
+fi
+
+# Check for pending changesets against main
+if ! npx changeset status --since=origin/main > /dev/null 2>&1; then
+  echo ""
+  echo "⚠ No changeset found. Run one of:"
+  echo "  pnpm changeset          # for changes that need a changelog entry"
+  echo "  pnpm changeset --empty  # for changes that don't (CI, docs, etc.)"
+  echo ""
+  exit 1
+fi
