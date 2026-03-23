@@ -1,12 +1,9 @@
-import { app, BrowserWindow, session, shell, ipcMain, utilityProcess, Menu } from 'electron';
+import { app, BrowserWindow, dialog, session, shell, ipcMain, utilityProcess, Menu } from 'electron';
 import type { UtilityProcess } from 'electron';
 import { join, resolve, sep } from 'path';
 import { execFileSync } from 'child_process';
 import { readFile } from 'fs/promises';
 import { homedir } from 'os';
-import { createMainLogger, logFromRenderer } from './logger.js';
-
-const log = createMainLogger('electron');
 
 const APP_AUTHOR = 'Mainframe Contributors';
 
@@ -16,12 +13,22 @@ if (process.env.NODE_ENV === 'development') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
 
-// Enforce single instance. If the lock is not acquired, another instance is
-// already running — quit immediately and let it handle the activation.
-const instanceLock = app.requestSingleInstanceLock();
-if (!instanceLock) {
-  app.quit();
+// Enforce single instance — must run before pino is initialized.
+// If pino's exit handler runs before its stream is ready, it throws
+// "sonic boom is not ready yet" and shows an error dialog.
+const skipLock = process.env.NODE_ENV === 'development' || process.env.MAINFRAME_ALLOW_MULTI === '1';
+if (!skipLock) {
+  const instanceLock = app.requestSingleInstanceLock();
+  if (!instanceLock) {
+    dialog.showMessageBoxSync({ type: 'info', message: 'Mainframe is already running.' });
+    process.exit(0);
+  }
 }
+
+// Safe to initialize pino now — we are the primary instance.
+import { createMainLogger, logFromRenderer } from './logger.js';
+
+const log = createMainLogger('electron');
 
 app.on('second-instance', () => {
   if (mainWindow?.isMinimized()) mainWindow.restore();

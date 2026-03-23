@@ -35,41 +35,55 @@ function dailyDestination(prefix: string): pino.DestinationStream {
   return pino.destination({ dest: join(LOG_DIR, `${prefix}.${date}.log`), append: true, minLength: 0 });
 }
 
-ensureLogDir();
-purgeOldLogs('desktop-app');
-
 // Normalize to lowercase so LOG_LEVEL=DEBUG and LOG_LEVEL=debug are both accepted.
 const VALID_PINO_LEVELS = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal']);
 const rawLevel = process.env.LOG_LEVEL?.trim().toLowerCase() ?? 'info';
 const logLevel: pino.Level = VALID_PINO_LEVELS.has(rawLevel) ? (rawLevel as pino.Level) : 'info';
 
-// Pass level on stream entries rather than to pino() directly.
-// pino v10 reads customLevels from the multistream object during construction and
-// enables useOnlyCustomLevels, which rejects built-in level names like 'debug'.
-// Setting level post-construction bypasses that check.
-const mainStreams: pino.StreamEntry[] = [{ stream: dailyDestination('desktop-app'), level: logLevel }];
-if (isDev) mainStreams.push({ stream: process.stdout, level: logLevel });
+// Lazy initialization — pino streams (SonicBoom) must not be created at import
+// time. The single-instance check in index.ts runs before createMainLogger() is
+// called; if the second instance exits before pino is initialized, the "sonic
+// boom is not ready yet" crash is avoided.
+let baseLogger: pino.Logger | null = null;
+let baseRendererLogger: pino.Logger | null = null;
 
-const rendererStreams: pino.StreamEntry[] = [{ stream: dailyDestination('desktop-app'), level: logLevel }];
-if (isDev) rendererStreams.push({ stream: process.stdout, level: logLevel });
+function init(): void {
+  if (baseLogger) return;
 
-const pinoOpts: pino.LoggerOptions = {
-  level: logLevel,
-  timestamp: pino.stdTimeFunctions.isoTime,
-  base: { pid: process.pid },
-  formatters: { level: (label) => ({ level: label.toUpperCase() }) },
-};
-const baseLogger = pino(pinoOpts, pino.multistream(mainStreams));
-const baseRendererLogger = pino(pinoOpts, pino.multistream(rendererStreams));
+  ensureLogDir();
+  purgeOldLogs('desktop-app');
 
-baseLogger.info({ logLevel, raw: process.env.LOG_LEVEL ?? '(unset)' }, 'logger initialized');
+  const pinoOpts: pino.LoggerOptions = {
+    level: logLevel,
+    timestamp: pino.stdTimeFunctions.isoTime,
+    base: { pid: process.pid },
+    formatters: { level: (label) => ({ level: label.toUpperCase() }) },
+  };
+
+  // Pass level on stream entries rather than to pino() directly.
+  // pino v10 reads customLevels from the multistream object during construction and
+  // enables useOnlyCustomLevels, which rejects built-in level names like 'debug'.
+  // Setting level post-construction bypasses that check.
+  const mainStreams: pino.StreamEntry[] = [{ stream: dailyDestination('desktop-app'), level: logLevel }];
+  if (isDev) mainStreams.push({ stream: process.stdout, level: logLevel });
+
+  const rendererStreams: pino.StreamEntry[] = [{ stream: dailyDestination('desktop-app'), level: logLevel }];
+  if (isDev) rendererStreams.push({ stream: process.stdout, level: logLevel });
+
+  baseLogger = pino(pinoOpts, pino.multistream(mainStreams));
+  baseRendererLogger = pino(pinoOpts, pino.multistream(rendererStreams));
+
+  baseLogger.info({ logLevel, raw: process.env.LOG_LEVEL ?? '(unset)' }, 'logger initialized');
+}
 
 export function createMainLogger(module: string) {
-  return baseLogger.child({ module });
+  init();
+  return baseLogger!.child({ module });
 }
 
 export function logFromRenderer(level: string, module: string, message: string, data?: unknown): void {
-  const child = baseRendererLogger.child({ module });
+  init();
+  const child = baseRendererLogger!.child({ module });
   const lvl = VALID_PINO_LEVELS.has(level) ? (level as pino.Level) : 'info';
   if (data !== null && data !== undefined && typeof data === 'object') {
     child[lvl](data as Record<string, unknown>, message);
