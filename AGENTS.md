@@ -8,6 +8,7 @@ AI-native development environment for orchestrating agents.
 - For Claude CLI behavior, refer to [CLAUDE-JSONL-SCHEMA.md](docs/adapters/claude/CLAUDE-JSONL-SCHEMA.md), [PROTOCOL_REVERSED.md](docs/adapters/claude/PROTOCOL_REVERSED.md), and examples in `~/.claude/projects/**` and [CLAUDE-JSONL-SAMPLES](docs/adapters/claude/CLAUDE-JSONL-SAMPLES.md)
 - Be sure to typecheck when you're done making a series of code changes
 - Prefer running single tests, and not the whole test suite, for performance
+- **Changesets required.** Every PR must include a changeset file. Run `pnpm changeset` before committing, pick the affected packages and bump type (patch/minor/major). For PRs that don't need a changelog entry (CI, docs typos), run `pnpm changeset --empty`. CI will fail without one.
 
 ## Tech Stack
 
