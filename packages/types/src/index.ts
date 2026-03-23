@@ -8,6 +8,7 @@ export * from './context.js';
 export * from './settings.js';
 export * from './command.js';
 export * from './launch.js';
+export * from './search.js';
 export * from './lsp.js';
 export type {
   PluginCapability,
