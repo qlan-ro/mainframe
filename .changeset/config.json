@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.3/schema.json",
+  "changelog": ["@changesets/changelog-github", { "repo": "qlan-ro/mainframe" }],
+  "commit": false,
+  "fixed": [["@qlan-ro/mainframe-types", "@qlan-ro/mainframe-core", "@qlan-ro/mainframe-desktop"]],
+  "linked": [],
+  "access": "restricted",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": ["@qlan-ro/mainframe-e2e", "@qlan-ro/mainframe-mobile"],
+  "privatePackages": {
+    "version": true,
+    "tag": false
+  }
+}

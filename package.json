@@ -27,10 +27,14 @@
     "test:e2e": "pnpm --filter @qlan-ro/mainframe-e2e test",
     "clean": "pnpm -r run clean",
     "package": "pnpm build && pnpm --filter @qlan-ro/mainframe-desktop run package",
-    "version": "pnpm -r version --no-git-tag-version $npm_new_version && git add -A",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.30.0",
     "esbuild": "^0.27.4",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
