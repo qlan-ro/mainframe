@@ -107,14 +107,24 @@
       {
         "from": "../../node_modules/file-uri-to-path",
         "to": "node_modules/file-uri-to-path"
+      },
+      {
+        "from": "../../node_modules/typescript-language-server",
+        "to": "node_modules/typescript-language-server",
+        "filter": [
+          "**/*",
+          "!**/*.md"
+        ]
+      },
+      {
+        "from": "../../node_modules/pyright",
+        "to": "node_modules/pyright",
+        "filter": [
+          "**/*",
+          "!**/*.md"
+        ]
       }
     ],
-    "publish": {
-      "provider": "github",
-      "owner": "qlan-ro",
-      "repo": "mainframe",
-      "releaseType": "draft"
-    },
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [

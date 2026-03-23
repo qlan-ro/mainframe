@@ -19,9 +19,9 @@ describe('ConnectionOverlayView', () => {
     expect(screen.getByTestId('connection-overlay')).toBeInTheDocument();
   });
 
-  it('shows reconnecting text when disconnected', () => {
+  it('shows connecting text when disconnected', () => {
     render(<ConnectionOverlayView connected={false} />);
-    expect(screen.getByText(/Reconnecting to daemon/)).toBeInTheDocument();
+    expect(screen.getByText(/Connecting to server/)).toBeInTheDocument();
   });
 
   it('renders a spinner when disconnected', () => {

@@ -4,10 +4,6 @@ import { join, resolve, sep } from 'path';
 import { execFileSync } from 'child_process';
 import { readFile } from 'fs/promises';
 import { homedir } from 'os';
-import { createMainLogger, logFromRenderer } from './logger.js';
-
-const log = createMainLogger('electron');
-
 const APP_AUTHOR = 'Mainframe Contributors';
 
 // Enable Chrome DevTools Protocol on port 9222 for development tooling (e.g. MCP server).
@@ -16,17 +12,29 @@ if (process.env.NODE_ENV === 'development') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
 
-// Enforce single instance. If the lock is not acquired, another instance is
-// already running — quit immediately and let it handle the activation.
-const instanceLock = app.requestSingleInstanceLock();
-if (!instanceLock) {
-  app.quit();
+// Check if the daemon port is already in use — must run before pino is
+// initialized. If pino's exit handler runs before its stream is ready, it
+// throws "sonic boom is not ready yet" and shows an error dialog.
+const daemonPort = Number(process.env.DAEMON_PORT ?? 31415);
+try {
+  execFileSync(
+    process.execPath,
+    [
+      '-e',
+      `require("net").createServer().on("error",()=>process.exit(1)).listen(${daemonPort},"127.0.0.1",function(){this.close();process.exit(0)})`,
+    ],
+    { timeout: 3000, stdio: 'ignore', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } },
+  );
+} catch {
+  // dialog requires app.ready which hasn't fired yet — just exit.
+  // The user will see the existing instance is already open.
+  process.exit(0);
 }
 
-app.on('second-instance', () => {
-  if (mainWindow?.isMinimized()) mainWindow.restore();
-  mainWindow?.focus();
-});
+// Safe to initialize pino now — we are the primary instance.
+import { createMainLogger, logFromRenderer } from './logger.js';
+
+const log = createMainLogger('electron');
 
 let mainWindow: BrowserWindow | null = null;
 let daemon: UtilityProcess | null = null;
