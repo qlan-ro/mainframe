@@ -116,7 +116,7 @@ describe('LspConnectionHandler.handleUpgrade', () => {
     expect(socket.destroy).toHaveBeenCalled();
   });
 
-  it('rejects upgrade with 409 when client already connected', async () => {
+  it('closes stale client when new client connects', async () => {
     const { LspConnectionHandler } = await import('../../lsp/lsp-connection.js');
     const { LspRegistry } = await import('../../lsp/lsp-registry.js');
     const { LspManager } = await import('../../lsp/lsp-manager.js');
@@ -130,13 +130,19 @@ describe('LspConnectionHandler.handleUpgrade', () => {
 
     // Spawn a handle and simulate a connected client
     const handle = await manager.getOrSpawn('p1', 'typescript', '/tmp/test');
-    handle.client = { readyState: 1 } as any; // WebSocket.OPEN
+    const mockClose = vi.fn();
+    handle.client = { readyState: 1, close: mockClose } as any; // WebSocket.OPEN
 
+    // Verify the stale client gets closed during handleUpgrade.
+    // The upgrade itself will fail (no real HTTP socket) but the close happens first.
     const handler = new LspConnectionHandler(manager, mockDb);
-    const { socket, written } = createMockSocket();
-    await handler.handleUpgrade('p1', 'typescript', {} as any, socket, Buffer.alloc(0));
+    const { socket } = createMockSocket();
+    try {
+      await handler.handleUpgrade('p1', 'typescript', {} as any, socket, Buffer.alloc(0));
+    } catch {
+      // Expected — wss.handleUpgrade fails with mock socket
+    }
 
-    expect(written.some((w) => w.includes('409'))).toBe(true);
-    expect(socket.destroy).toHaveBeenCalled();
+    expect(mockClose).toHaveBeenCalledWith(1001, 'Replaced by new client');
   });
 });

@@ -20,6 +20,7 @@ import {
   commandRoutes,
   launchRoutes,
   externalSessionRoutes,
+  contentSearchRoutes,
   lspRoutes,
 } from './routes/index.js';
 import { authRoutes } from './routes/auth.js';
