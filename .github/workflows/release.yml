@@ -35,7 +35,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Package
-        run: pnpm --filter @qlan-ro/mainframe-desktop package -- --publish never
+        run: pnpm --filter @qlan-ro/mainframe-desktop exec electron-builder --publish never
         env:
           CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
