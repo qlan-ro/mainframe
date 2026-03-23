@@ -8,7 +8,7 @@ AI-native development environment for orchestrating agents.
 - For Claude CLI behavior, refer to [CLAUDE-JSONL-SCHEMA.md](docs/adapters/claude/CLAUDE-JSONL-SCHEMA.md), [PROTOCOL_REVERSED.md](docs/adapters/claude/PROTOCOL_REVERSED.md), and examples in `~/.claude/projects/**` and [CLAUDE-JSONL-SAMPLES](docs/adapters/claude/CLAUDE-JSONL-SAMPLES.md)
 - Be sure to typecheck when you're done making a series of code changes
 - Prefer running single tests, and not the whole test suite, for performance
-- **Changesets required.** Every PR must include a changeset file. Run `pnpm changeset` before committing, pick the affected packages and bump type (patch/minor/major). For PRs that don't need a changelog entry (CI, docs typos), run `pnpm changeset --empty`. The pre-push hook and CI will reject without one.
+- For git workflow and commit practices, see [Git](#git)
 
 ## Tech Stack
 
@@ -80,6 +80,15 @@ Invoke the listed skill **before** taking the described action. No exceptions.
 | Writing docs, commits, PRs, error messages, or UI copy | `writing-clearly-and-concisely` |
 | Creating READMEs, changelogs, ADRs, or structured docs | `documentation-templates` |
 
+## Git
+
+Git workflow and commit practices.
+
+- **Never commit to `main`.** Always work on a feature or fix branch. Run `git branch --show-current` before any commit or reset to confirm you are not on `main`.
+- **Check branch before destructive git ops.** Before `reset`, `rebase`, or `push --force`, verify the current branch with `git status` or `git branch`.
+- **Never discard unstaged changes you didn't create.** They may be in-progress work from another session. When committing, stage only your own files by name. Do not `git checkout --`, `git restore`, or `git stash` other people's changes.
+- **Changesets required.** Every PR must include a changeset file. Run `pnpm changeset` before committing, pick the affected packages and bump type (patch/minor/major). For PRs that don't need a changelog entry (CI, docs typos), run `pnpm changeset --empty`. The pre-push hook and CI will reject without one.
+
 ## Code Style
 
 - **Comments**: Omit notes about removed or missing features. Focus on *why*, not *what*.
@@ -123,10 +132,6 @@ These rules exist because every one was violated before and required cleanup. Fo
 ### Performance
 - **Lazy-load heavy components.** Large editors and visualizations must use `React.lazy()` with `Suspense`.
 - **Cascade deletes.** When deleting parent entities (projects, chats), delete child records in a transaction.
-
-### Git
-- **Never commit to `main`.** Always work on a feature or fix branch. Run `git branch --show-current` before any commit or reset to confirm you are not on `main`.
-- **Check branch before destructive git ops.** Before `reset`, `rebase`, or `push --force`, verify the current branch with `git status` or `git branch`.
 
 ### Hygiene
 - **No `@ts-ignore`.** Use `@ts-expect-error` with a reason comment.

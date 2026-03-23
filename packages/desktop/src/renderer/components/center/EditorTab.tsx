@@ -100,21 +100,22 @@ export function EditorTab({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Re-fetch file content when agent edits a file in this session
+  // Re-fetch file content when any agent edits this file
   useEffect(() => {
-    if (!activeChatId || !activeProjectId || providedContent !== undefined) return;
+    if (!activeProjectId || providedContent !== undefined) return;
     return daemonClient.onEvent((event) => {
-      if (event.type === 'context.updated' && event.chatId === activeChatId) {
-        if (dirtyRef.current) return; // don't overwrite unsaved user changes
-        getFileContent(activeProjectId, filePath, activeChatId)
-          .then((result) => {
-            setSavedContent(result.content);
-            setCurrentContent(result.content);
-          })
-          .catch(() => {
-            /* file may have been deleted; keep current content */
-          });
-      }
+      if (event.type !== 'context.updated' || !event.filePaths) return;
+      const match = event.filePaths.some((fp) => filePath.endsWith(fp) || fp.endsWith(filePath));
+      if (!match) return;
+      if (dirtyRef.current) return; // don't overwrite unsaved user changes
+      getFileContent(activeProjectId, filePath, activeChatId ?? undefined)
+        .then((result) => {
+          setSavedContent(result.content);
+          setCurrentContent(result.content);
+        })
+        .catch(() => {
+          /* file may have been deleted; keep current content */
+        });
     });
   }, [activeChatId, activeProjectId, filePath, providedContent]);
 

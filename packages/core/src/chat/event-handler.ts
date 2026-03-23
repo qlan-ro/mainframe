@@ -98,7 +98,7 @@ function buildSessionSink(
           const fp = (block.input as Record<string, unknown>)?.file_path as string | undefined;
           if (fp && !seenEditFiles.has(fp)) {
             seenEditFiles.add(fp);
-            emitEvent({ type: 'context.updated', chatId });
+            emitEvent({ type: 'context.updated', chatId, filePaths: [fp] });
           }
         }
       }

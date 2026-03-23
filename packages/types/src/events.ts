@@ -18,7 +18,7 @@ export type DaemonEvent =
   | { type: 'messages.cleared'; chatId: string }
   | { type: 'permission.requested'; chatId: string; request: ControlRequest }
   | { type: 'permission.resolved'; chatId: string; requestId: string }
-  | { type: 'context.updated'; chatId: string }
+  | { type: 'context.updated'; chatId: string; filePaths?: string[] }
   | { type: 'error'; chatId?: string; error: string }
   | {
       type: 'plugin.panel.registered';

@@ -4,16 +4,15 @@ import { useTabsStore } from '../../store/tabs';
 interface ContextFileItemProps {
   path: string;
   displayName?: string;
-  content?: string;
   badge?: string;
 }
 
-export function ContextFileItem({ path, displayName, content, badge }: ContextFileItemProps) {
+export function ContextFileItem({ path, displayName, badge }: ContextFileItemProps) {
   const fileName = displayName ?? path.split('/').pop() ?? path;
   const openEditorTab = useTabsStore((s) => s.openEditorTab);
 
   const handleClick = () => {
-    openEditorTab(path, content);
+    openEditorTab(path);
   };
 
   return (
