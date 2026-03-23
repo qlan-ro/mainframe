@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Folder, FileText, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
+import { FindInPathModal } from '../FindInPathModal';
 import { daemonClient } from '../../lib/client';
 import { createLogger } from '../../lib/logger';
 
@@ -35,52 +36,51 @@ function FileTreeNode({
   entry: FileEntry;
   depth: number;
   projectPath: string;
-  onContextMenu: (e: React.MouseEvent, entryPath: string) => void;
+  onContextMenu: (e: React.MouseEvent, entryPath: string, entryType: 'file' | 'directory') => void;
   refreshKey: number;
 }): React.ReactElement {
-  const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<FileEntry[]>([]);
   const { activeProjectId } = useProjectsStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
-  const { openEditorTab } = useTabsStore();
+  const openEditorTab = useTabsStore((s) => s.openEditorTab);
+  const expanded = useTabsStore((s) => entry.type === 'directory' && s.expandedPaths.includes(entry.path));
+  const toggleTreePath = useTabsStore((s) => s.toggleTreePath);
+  const revealPath = useTabsStore((s) => s.revealPath);
+  const clearRevealPath = useTabsStore((s) => s.clearRevealPath);
 
   const isActive = useTabsStore(
     (s) => entry.type === 'file' && s.fileView?.type === 'editor' && s.fileView.filePath === entry.path,
   );
 
-  const expandedRef = useRef(expanded);
-  expandedRef.current = expanded;
-  const childrenRef = useRef(children);
-  childrenRef.current = children;
+  const nodeRef = useRef<HTMLButtonElement>(null);
 
+  // Load/refresh children when expanded
   useEffect(() => {
-    if (refreshKey === 0) return;
-    if (entry.type !== 'directory') return;
+    if (entry.type !== 'directory' || !expanded || !activeProjectId) return;
     let cancelled = false;
-    if (expandedRef.current && activeProjectId) {
-      getFileTree(activeProjectId, entry.path, activeChatId ?? undefined)
-        .then((entries) => {
-          if (!cancelled) setChildren(entries);
-        })
-        .catch((err) => {
-          if (!cancelled) log.warn('refresh file tree failed', { err: String(err) });
-        });
-    } else if (childrenRef.current.length > 0) {
-      // Clear stale cache so next expand fetches fresh data
-      setChildren([]);
-    }
+    getFileTree(activeProjectId, entry.path, activeChatId ?? undefined)
+      .then((entries) => {
+        if (!cancelled) setChildren(entries);
+      })
+      .catch((err) => {
+        if (!cancelled) log.warn('load file tree failed', { err: String(err) });
+      });
     return () => {
       cancelled = true;
     };
-  }, [refreshKey, activeProjectId, activeChatId, entry.path, entry.type]);
+  }, [expanded, refreshKey, activeProjectId, activeChatId, entry.path, entry.type]);
 
-  const handleClick = async (): Promise<void> => {
+  // Scroll into view when this is the reveal target
+  useEffect(() => {
+    if (revealPath === entry.path && nodeRef.current) {
+      nodeRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      clearRevealPath();
+    }
+  }, [revealPath, entry.path, clearRevealPath]);
+
+  const handleClick = (): void => {
     if (entry.type === 'directory') {
-      if (!expanded && children.length === 0 && activeProjectId) {
-        const entries = await getFileTree(activeProjectId, entry.path, activeChatId ?? undefined);
-        setChildren(entries);
-      }
-      setExpanded(!expanded);
+      toggleTreePath(entry.path);
     } else {
       openEditorTab(entry.path);
     }
@@ -89,8 +89,9 @@ function FileTreeNode({
   return (
     <>
       <button
+        ref={nodeRef}
         onClick={handleClick}
-        onContextMenu={(e) => onContextMenu(e, entry.path)}
+        onContextMenu={(e) => onContextMenu(e, entry.path, entry.type)}
         className={cn(
           'w-full flex items-center gap-1 py-1 px-2 text-mf-small rounded-mf-input text-left',
           isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
@@ -135,8 +136,10 @@ export function FilesTab(): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);
-  const [expanded, setExpanded] = useState(true);
+  const rootExpanded = useTabsStore((s) => s.expandedPaths.includes('.'));
+  const toggleTreePath = useTabsStore((s) => s.toggleTreePath);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [findInPath, setFindInPath] = useState<{ scopePath: string; scopeType: 'file' | 'directory' } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -170,7 +173,7 @@ export function FilesTab(): React.ReactElement {
   }, []);
 
   const handleContextMenu = useCallback(
-    (e: React.MouseEvent, entryPath: string) => {
+    (e: React.MouseEvent, entryPath: string, entryType: 'file' | 'directory' = 'directory') => {
       e.preventDefault();
       if (!activeProject) return;
 
@@ -181,6 +184,15 @@ export function FilesTab(): React.ReactElement {
         x: e.clientX,
         y: e.clientY,
         items: [
+          {
+            label: entryType === 'directory' ? 'Find in Path...' : 'Find in File...',
+            onClick: () => {
+              setFindInPath({
+                scopePath: entryPath,
+                scopeType: entryType,
+              });
+            },
+          },
           {
             label: 'Reveal in Finder',
             onClick: () => {
@@ -209,11 +221,11 @@ export function FilesTab(): React.ReactElement {
         <div className="py-1">
           <div className="@container flex items-center">
             <button
-              onClick={() => setExpanded(!expanded)}
-              onContextMenu={(e) => handleContextMenu(e, '.')}
+              onClick={() => toggleTreePath('.')}
+              onContextMenu={(e) => handleContextMenu(e, '.', 'directory')}
               className="flex-1 flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary min-w-0"
             >
-              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              {rootExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               <Folder size={14} className="text-mf-accent shrink-0" />
               <span className="truncate" title={activeProject.path}>
                 {activeProject.path}
@@ -228,7 +240,7 @@ export function FilesTab(): React.ReactElement {
               <RefreshCw size={14} />
             </button>
           </div>
-          {expanded &&
+          {rootExpanded &&
             rootEntries.map((entry) => (
               <FileTreeNode
                 key={entry.path}
@@ -247,6 +259,13 @@ export function FilesTab(): React.ReactElement {
           y={contextMenu.y}
           items={contextMenu.items}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+      {findInPath && (
+        <FindInPathModal
+          scopePath={findInPath.scopePath}
+          scopeType={findInPath.scopeType}
+          onClose={() => setFindInPath(null)}
         />
       )}
     </>

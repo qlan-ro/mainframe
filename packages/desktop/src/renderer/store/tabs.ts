@@ -5,17 +5,18 @@ import { useUIStore } from './ui';
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
 
 export type FileView =
-  | { type: 'editor'; filePath: string; label: string; content?: string }
+  | { type: 'editor'; filePath: string; label: string; content?: string; line?: number; column?: number }
   | {
       type: 'diff';
       filePath: string;
       label: string;
-      source: 'git' | 'session' | 'inline';
+      source: 'git' | 'inline';
       chatId?: string;
       oldPath?: string;
       original?: string;
       modified?: string;
       startLine?: number;
+      base?: string;
     }
   | { type: 'skill-editor'; skillId: string; adapterId: string; label: string };
 
@@ -27,6 +28,7 @@ interface ProjectTabSnapshot {
   fileView: FileView | null;
   fileViewCollapsed: boolean;
   sidebarWidth: number;
+  expandedPaths: string[];
 }
 
 const DEFAULT_SIDEBAR_PX = 300;
@@ -43,13 +45,20 @@ interface TabsState {
   setActiveTab: (id: string) => void;
   openChatTab: (chatId: string, label?: string) => void;
   updateTabLabel: (id: string, label: string) => void;
-  openEditorTab: (filePath: string, content?: string) => void;
-  openDiffTab: (filePath: string, source: 'git' | 'session', chatId?: string, oldPath?: string) => void;
+  openEditorTab: (filePath: string, content?: string, line?: number, column?: number) => void;
+  openDiffTab: (filePath: string, source: 'git', chatId?: string, oldPath?: string, base?: string) => void;
   openInlineDiffTab: (filePath: string, original: string, modified: string, startLine?: number) => void;
   openSkillEditorTab: (skillId: string, adapterId: string, label: string) => void;
   setSidebarWidth: (w: number) => void;
   closeFileView: () => void;
   toggleFileViewCollapsed: () => void;
+  navigateBack: () => void;
+  navigateForward: () => void;
+  expandedPaths: string[];
+  revealPath: string | null;
+  toggleTreePath: (path: string) => void;
+  revealFileInTree: (filePath: string) => void;
+  clearRevealPath: () => void;
   switchProject: (prevProjectId: string | null, nextProjectId: string) => void;
 }
 
@@ -73,6 +82,7 @@ function migrateSnapshot(raw: LegacySnapshot): ProjectTabSnapshot {
     fileView: raw.fileView ?? null,
     fileViewCollapsed: raw.fileViewCollapsed ?? false,
     sidebarWidth: (raw as Partial<ProjectTabSnapshot>).sidebarWidth ?? DEFAULT_SIDEBAR_PX,
+    expandedPaths: (raw as Partial<ProjectTabSnapshot>).expandedPaths ?? ['.'],
   };
 }
 
@@ -95,6 +105,19 @@ function saveProjectTabs(map: Map<string, ProjectTabSnapshot>): void {
 
 const projectTabs = loadProjectTabs();
 
+interface NavEntry {
+  filePath: string;
+  line?: number;
+  column?: number;
+}
+const navBackStack: NavEntry[] = [];
+const navForwardStack: NavEntry[] = [];
+
+// Restore initial state from localStorage so fileView/tabs are available
+// before switchProject runs (avoids the subscriber overwriting persisted data).
+const initialProjectId = localStorage.getItem('mf:activeProjectId');
+const initialSnapshot = initialProjectId ? projectTabs.get(initialProjectId) : undefined;
+
 function expandRightPanel(): void {
   const ui = useUIStore.getState();
   if (ui.panelCollapsed.right) {
@@ -103,11 +126,13 @@ function expandRightPanel(): void {
 }
 
 export const useTabsStore = create<TabsState>((set, get) => ({
-  tabs: [],
-  activePrimaryTabId: null,
-  fileView: null,
-  fileViewCollapsed: false,
-  sidebarWidth: DEFAULT_SIDEBAR_PX,
+  tabs: initialSnapshot?.tabs ?? [],
+  activePrimaryTabId: initialSnapshot?.activePrimaryTabId ?? null,
+  fileView: initialSnapshot?.fileView ?? null,
+  fileViewCollapsed: initialSnapshot?.fileViewCollapsed ?? false,
+  sidebarWidth: initialSnapshot?.sidebarWidth ?? DEFAULT_SIDEBAR_PX,
+  expandedPaths: initialSnapshot?.expandedPaths ?? ['.'],
+  revealPath: null,
 
   openTab: (tab) =>
     set((state) => {
@@ -146,16 +171,24 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, label } : t)),
     })),
 
-  openEditorTab: (filePath, content) => {
+  openEditorTab: (filePath, content, line, column) => {
     const label = filePath.split('/').pop() || filePath;
+    // Push current editor to back stack when navigating via Go To Definition.
+    if (line != null) {
+      const current = get().fileView;
+      if (current?.type === 'editor') {
+        navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+        navForwardStack.length = 0;
+      }
+    }
     expandRightPanel();
-    set({ fileView: { type: 'editor', filePath, label, content }, fileViewCollapsed: false });
+    set({ fileView: { type: 'editor', filePath, label, content, line, column }, fileViewCollapsed: false });
   },
 
-  openDiffTab: (filePath, source, chatId, oldPath) => {
+  openDiffTab: (filePath, source, chatId, oldPath, base) => {
     const label = `${filePath.split('/').pop() || filePath} (diff)`;
     expandRightPanel();
-    set({ fileView: { type: 'diff', filePath, label, source, chatId, oldPath }, fileViewCollapsed: false });
+    set({ fileView: { type: 'diff', filePath, label, source, chatId, oldPath, base }, fileViewCollapsed: false });
   },
 
   openInlineDiffTab: (filePath, original, modified, startLine) => {
@@ -181,6 +214,60 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       fileViewCollapsed: !state.fileViewCollapsed,
     })),
 
+  navigateBack: () => {
+    const entry = navBackStack.pop();
+    if (!entry) return;
+    const current = get().fileView;
+    if (current?.type === 'editor') {
+      navForwardStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+    }
+    const label = entry.filePath.split('/').pop() || entry.filePath;
+    set({
+      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
+      fileViewCollapsed: false,
+    });
+  },
+
+  navigateForward: () => {
+    const entry = navForwardStack.pop();
+    if (!entry) return;
+    const current = get().fileView;
+    if (current?.type === 'editor') {
+      navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+    }
+    const label = entry.filePath.split('/').pop() || entry.filePath;
+    set({
+      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
+      fileViewCollapsed: false,
+    });
+  },
+
+  toggleTreePath: (path) =>
+    set((state) => {
+      const has = state.expandedPaths.includes(path);
+      return {
+        expandedPaths: has ? state.expandedPaths.filter((p) => p !== path) : [...state.expandedPaths, path],
+      };
+    }),
+
+  revealFileInTree: (filePath) => {
+    const parts = filePath.split('/');
+    const ancestors: string[] = ['.'];
+    for (let i = 0; i < parts.length - 1; i++) {
+      ancestors.push(parts.slice(0, i + 1).join('/'));
+    }
+    set((state) => ({
+      expandedPaths: [...new Set([...state.expandedPaths, ...ancestors])],
+      revealPath: filePath,
+    }));
+    // Auto-clear in case the file isn't found in the tree
+    setTimeout(() => {
+      if (get().revealPath === filePath) set({ revealPath: null });
+    }, 3000);
+  },
+
+  clearRevealPath: () => set({ revealPath: null }),
+
   switchProject: (prevProjectId, nextProjectId) => {
     const state = get();
     if (prevProjectId) {
@@ -190,24 +277,31 @@ export const useTabsStore = create<TabsState>((set, get) => ({
           ? null
           : state.fileView?.type === 'editor' && state.fileView.content
             ? null
-            : state.fileView;
+            : state.fileView?.type === 'editor'
+              ? { ...state.fileView, line: undefined }
+              : state.fileView;
       projectTabs.set(prevProjectId, {
         tabs: state.tabs,
         activePrimaryTabId: state.activePrimaryTabId,
         fileView: persistedFileView,
         fileViewCollapsed: state.fileViewCollapsed,
         sidebarWidth: state.sidebarWidth,
+        expandedPaths: state.expandedPaths,
       });
     }
     const restored = projectTabs.get(nextProjectId);
     set(
-      restored ?? {
-        tabs: [],
-        activePrimaryTabId: null,
-        fileView: null,
-        fileViewCollapsed: false,
-        sidebarWidth: DEFAULT_SIDEBAR_PX,
-      },
+      restored
+        ? { ...restored, revealPath: null }
+        : {
+            tabs: [],
+            activePrimaryTabId: null,
+            fileView: null,
+            fileViewCollapsed: false,
+            sidebarWidth: DEFAULT_SIDEBAR_PX,
+            expandedPaths: ['.'],
+            revealPath: null,
+          },
     );
     saveProjectTabs(projectTabs);
   },
@@ -222,13 +316,16 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       ? null
       : state.fileView?.type === 'editor' && state.fileView.content
         ? null
-        : state.fileView;
+        : state.fileView?.type === 'editor'
+          ? { ...state.fileView, line: undefined }
+          : state.fileView;
   projectTabs.set(projectId, {
     tabs: state.tabs,
     activePrimaryTabId: state.activePrimaryTabId,
     fileView: persistedFileView,
     fileViewCollapsed: state.fileViewCollapsed,
     sidebarWidth: state.sidebarWidth,
+    expandedPaths: state.expandedPaths,
   });
   saveProjectTabs(projectTabs);
 });

@@ -30,12 +30,13 @@ function inferLanguage(filePath: string): string {
 
 interface DiffTabProps {
   filePath: string;
-  source: 'git' | 'session' | 'inline';
+  source: 'git' | 'inline';
   chatId?: string;
   oldPath?: string;
   original?: string;
   modified?: string;
   startLine?: number;
+  base?: string;
 }
 
 export function DiffTab({
@@ -46,6 +47,7 @@ export function DiffTab({
   original: inlineOriginal,
   modified: inlineModified,
   startLine,
+  base,
 }: DiffTabProps): React.ReactElement {
   const { activeProjectId } = useProjectsStore();
   const [original, setOriginal] = useState<string | null>(inlineOriginal ?? null);
@@ -59,13 +61,13 @@ export function DiffTab({
     setModified(null);
     setError(null);
 
-    getDiff(activeProjectId, filePath, source, chatId, oldPath)
+    getDiff(activeProjectId, filePath, source, chatId, oldPath, base)
       .then((result) => {
         setOriginal(result.original);
         setModified(result.modified);
       })
       .catch(() => setError('Failed to load diff'));
-  }, [activeProjectId, filePath, source, chatId, oldPath]);
+  }, [activeProjectId, filePath, source, chatId, oldPath, base]);
 
   useEffect(() => {
     if (source === 'inline') {

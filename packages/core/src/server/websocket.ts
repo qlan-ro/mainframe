@@ -5,6 +5,7 @@ import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { ClientEventSchema } from './ws-schemas.js';
 import { createChildLogger } from '../logger.js';
 import { validateToken } from '../auth/token.js';
+import { LspConnectionHandler, parseLspUpgradePath } from '../lsp/index.js';
 
 const log = createChildLogger('ws');
 
@@ -27,6 +28,7 @@ export class WebSocketManager {
   constructor(
     server: Server,
     private chats: ChatManager,
+    private lspHandler?: LspConnectionHandler,
   ) {
     this.wss = new WebSocketServer({ noServer: true });
     this.setupUpgradeAuth(server);
@@ -56,6 +58,15 @@ export class WebSocketManager {
           socket.destroy();
           return;
         }
+      }
+
+      const lspParsed = parseLspUpgradePath(request.url ?? '');
+      if (lspParsed && this.lspHandler) {
+        this.lspHandler.handleUpgrade(lspParsed.projectId, lspParsed.language, request, socket, head).catch((err) => {
+          log.error({ err }, 'LSP upgrade error');
+          socket.destroy();
+        });
+        return;
       }
 
       this.wss.handleUpgrade(request, socket, head, (ws) => {

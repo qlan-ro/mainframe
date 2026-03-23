@@ -276,42 +276,6 @@ describe('ChatsRepository', () => {
     });
   });
 
-  describe('modified files', () => {
-    it('getModifiedFilesList returns empty array for a new chat', () => {
-      const chat = chats.create(projectId, 'claude');
-      expect(chats.getModifiedFilesList(chat.id)).toEqual([]);
-    });
-
-    it('addModifiedFile adds a file and returns true', () => {
-      const chat = chats.create(projectId, 'claude');
-
-      const added = chats.addModifiedFile(chat.id, '/src/index.ts');
-      expect(added).toBe(true);
-
-      const result = chats.getModifiedFilesList(chat.id);
-      expect(result).toEqual(['/src/index.ts']);
-    });
-
-    it('addModifiedFile returns false for duplicate path', () => {
-      const chat = chats.create(projectId, 'claude');
-
-      chats.addModifiedFile(chat.id, '/src/index.ts');
-      const second = chats.addModifiedFile(chat.id, '/src/index.ts');
-      expect(second).toBe(false);
-
-      expect(chats.getModifiedFilesList(chat.id)).toHaveLength(1);
-    });
-
-    it('addModifiedFile accumulates multiple files', () => {
-      const chat = chats.create(projectId, 'claude');
-
-      chats.addModifiedFile(chat.id, '/src/a.ts');
-      chats.addModifiedFile(chat.id, '/src/b.ts');
-
-      expect(chats.getModifiedFilesList(chat.id)).toEqual(['/src/a.ts', '/src/b.ts']);
-    });
-  });
-
   describe('plan files', () => {
     it('getPlanFiles returns empty array for a new chat', () => {
       const chat = chats.create(projectId, 'claude');

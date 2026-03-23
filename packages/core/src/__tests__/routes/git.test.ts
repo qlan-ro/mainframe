@@ -21,7 +21,6 @@ function createCtx(projectPath: string): RouteContext {
       chats: {
         list: vi.fn().mockReturnValue([]),
         get: vi.fn().mockReturnValue(null),
-        getModifiedFilesList: vi.fn().mockReturnValue([]),
       },
       settings: { get: vi.fn().mockReturnValue(null) },
     } as any,
@@ -91,21 +90,37 @@ describe('GET /api/projects/:id/git/status', () => {
   });
 });
 
-describe('GET /api/projects/:id/diff?source=session (no file)', () => {
-  it('returns modified files list from DB', async () => {
+describe('GET /api/projects/:id/branch-diffs', () => {
+  it('returns branch diff info for a real git repo', async () => {
     const ctx = createCtx(REAL_GIT_PATH);
-    (ctx.db.chats as any).getModifiedFilesList = vi.fn().mockReturnValue(['src/main.ts', 'lib/utils.ts']);
-
     const router = gitRoutes(ctx);
-    const handler = extractHandler(router, 'get', '/api/projects/:id/diff');
+    const handler = extractHandler(router, 'get', '/api/projects/:id/branch-diffs');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { source: 'session', chatId: 'chat-1' } }, res, vi.fn());
+    handler({ params: { id: 'proj-1' }, query: {} }, res, vi.fn());
     await waitForResponse(res);
 
-    expect(res.json).toHaveBeenCalledWith({
-      files: ['src/main.ts', 'lib/utils.ts'],
-      source: 'session',
-    });
+    const result = res.json.mock.calls[0][0] as {
+      branch: string | null;
+      baseBranch: string | null;
+      mergeBase: string | null;
+      files: unknown[];
+    };
+    expect(Array.isArray(result.files)).toBe(true);
+    expect(typeof result.branch === 'string' || result.branch === null).toBe(true);
+  });
+
+  it('returns empty result for non-git directory', async () => {
+    const ctx = createCtx('/tmp');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/branch-diffs');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: {} }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: null, baseBranch: null, mergeBase: null, files: [] }),
+    );
   });
 });

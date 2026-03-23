@@ -325,48 +325,6 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
   return filterSkillExpansions(messages);
 }
 
-export async function extractModifiedFiles(sessionId: string, projectPath: string): Promise<string[]> {
-  const { jsonlPath } = getSessionJsonlPath(sessionId, projectPath);
-
-  try {
-    await access(jsonlPath, constants.R_OK);
-  } catch {
-    return [];
-  }
-
-  const files = new Set<string>();
-  const stream = createReadStream(jsonlPath);
-  try {
-    const rl = createInterface({ input: stream, crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type !== 'assistant') continue;
-        const content = entry.message?.content;
-        if (!Array.isArray(content)) continue;
-        for (const block of content) {
-          if (block.type !== 'tool_use') continue;
-          if (block.name !== 'Write' && block.name !== 'Edit') continue;
-          let filePath = block.input?.file_path as string | undefined;
-          if (!filePath) continue;
-          if (path.isAbsolute(filePath)) {
-            filePath = path.relative(projectPath, filePath);
-          }
-          if (filePath.startsWith('..')) continue;
-          files.add(filePath);
-        }
-      } catch {
-        /* skip malformed */
-      }
-    }
-  } finally {
-    stream.destroy();
-  }
-
-  return [...files];
-}
-
 export async function extractPlanFilePaths(sessionId: string, projectPath: string): Promise<string[]> {
   const { jsonlPath, projectDir } = getSessionJsonlPath(sessionId, projectPath);
 

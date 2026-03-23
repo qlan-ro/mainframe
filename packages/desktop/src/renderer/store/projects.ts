@@ -17,7 +17,7 @@ interface ProjectsState {
 
 export const useProjectsStore = create<ProjectsState>((set) => ({
   projects: [],
-  activeProjectId: null,
+  activeProjectId: localStorage.getItem('mf:activeProjectId'),
   loading: false,
   error: null,
 

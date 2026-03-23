@@ -244,7 +244,13 @@ function getLanguageConfig(language: string, currentFilePath: string): LanguageC
 
 const registeredLanguages = new Set<string>();
 
+// Languages with a built-in Monaco worker that already provides definitions.
+const BUILTIN_WORKER_LANGUAGES = new Set(['typescript', 'javascript']);
+
 export function registerDefinitionProvider(monaco: typeof monacoNs, language: string, currentFilePath: string): void {
+  // Skip languages handled by Monaco's built-in TS worker to avoid duplicate definitions.
+  if (BUILTIN_WORKER_LANGUAGES.has(language)) return;
+
   const config = getLanguageConfig(language, currentFilePath);
   if (!config) return;
 

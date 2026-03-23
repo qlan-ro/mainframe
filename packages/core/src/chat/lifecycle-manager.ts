@@ -235,14 +235,9 @@ export class ChatLifecycleManager {
       }
 
       try {
-        const [planPaths, skillPaths, modifiedFiles] = await Promise.all([
-          session.extractPlanFiles(),
-          session.extractSkillFiles(),
-          session.extractModifiedFiles(),
-        ]);
+        const [planPaths, skillPaths] = await Promise.all([session.extractPlanFiles(), session.extractSkillFiles()]);
         for (const p of planPaths) this.deps.db.chats.addPlanFile(chatId, p);
         for (const p of skillPaths) this.deps.db.chats.addSkillFile(chatId, p);
-        for (const f of modifiedFiles) this.deps.db.chats.addModifiedFile(chatId, f);
       } catch {
         /* best-effort */
       }

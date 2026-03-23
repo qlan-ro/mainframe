@@ -13,7 +13,6 @@ import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
 import type { PushService } from '../push/push-service.js';
-import { trackFileActivity } from './context-tracker.js';
 import { stripMainframeCommandTags } from '../messages/message-parsing.js';
 import { emitDisplayDelta } from './display-emitter.js';
 import { createChildLogger } from '../logger.js';
@@ -81,6 +80,8 @@ function buildSessionSink(
     emitDisplayDelta(chatId, messages, displayCache, categories, emitEvent);
   }
 
+  const seenEditFiles = new Set<string>();
+
   return {
     onInit(sessionId: string) {
       const active = getActiveChat(chatId);
@@ -92,8 +93,14 @@ function buildSessionSink(
 
     onMessage(content: any[], metadata?: MessageMetadata) {
       log.debug({ chatId, blockCount: content.length }, 'assistant message received');
-      if (trackFileActivity(chatId, content, db, undefined)) {
-        emitEvent({ type: 'context.updated', chatId });
+      for (const block of content) {
+        if (block.type === 'tool_use' && (block.name === 'Write' || block.name === 'Edit')) {
+          const fp = (block.input as Record<string, unknown>)?.file_path as string | undefined;
+          if (fp && !seenEditFiles.has(fp)) {
+            seenEditFiles.add(fp);
+            emitEvent({ type: 'context.updated', chatId });
+          }
+        }
       }
       const hasEnterPlanMode = content.some((b: any) => b.type === 'tool_use' && b.name === 'EnterPlanMode');
       if (hasEnterPlanMode) {

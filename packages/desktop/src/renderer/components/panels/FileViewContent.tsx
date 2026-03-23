@@ -18,7 +18,7 @@ function EditorFallback(): React.ReactElement {
   );
 }
 
-function renderEditorView(filePath: string, content?: string): React.ReactElement {
+function renderEditorView(filePath: string, content?: string, line?: number, column?: number): React.ReactElement {
   const viewerType = getFileViewerType(filePath);
   switch (viewerType) {
     case 'image':
@@ -30,7 +30,7 @@ function renderEditorView(filePath: string, content?: string): React.ReactElemen
     case 'csv':
       return <CsvViewer filePath={filePath} />;
     case 'monaco':
-      return <EditorTab filePath={filePath} content={content} />;
+      return <EditorTab filePath={filePath} content={content} line={line} column={column} />;
   }
 }
 
@@ -40,7 +40,8 @@ export function FileViewContent(): React.ReactElement | null {
 
   return (
     <Suspense fallback={<EditorFallback />}>
-      {fileView.type === 'editor' && renderEditorView(fileView.filePath, fileView.content)}
+      {fileView.type === 'editor' &&
+        renderEditorView(fileView.filePath, fileView.content, fileView.line, fileView.column)}
       {fileView.type === 'diff' && (
         <DiffTab
           filePath={fileView.filePath}
@@ -50,6 +51,7 @@ export function FileViewContent(): React.ReactElement | null {
           original={fileView.original}
           modified={fileView.modified}
           startLine={fileView.startLine}
+          base={fileView.base}
         />
       )}
       {fileView.type === 'skill-editor' && <SkillEditorTab skillId={fileView.skillId} adapterId={fileView.adapterId} />}

@@ -1,17 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   extractMentionsFromText,
-  trackFileActivity,
   extractPlanFilePathFromText,
   extractLatestPlanFileFromMessages,
 } from '../chat/context-tracker.js';
-import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
+import type { ChatMessage } from '@qlan-ro/mainframe-types';
 
-function makeDb(addMentionReturn = true, addModifiedFileReturn = true) {
+function makeDb(addMentionReturn = true) {
   return {
     chats: {
       addMention: vi.fn().mockReturnValue(addMentionReturn),
-      addModifiedFile: vi.fn().mockReturnValue(addModifiedFileReturn),
       get: vi.fn().mockReturnValue({ projectId: 'proj-1' }),
     },
     projects: {
@@ -67,64 +65,6 @@ describe('extractMentionsFromText', () => {
     const db = makeDb(false);
     const changed = extractMentionsFromText('chat-1', '@src/file.ts', db as any);
     expect(changed).toBe(false);
-  });
-});
-
-describe('trackFileActivity', () => {
-  it('tracks Write tool_use with relative path', () => {
-    const db = makeDb();
-    const content: MessageContent[] = [
-      { type: 'tool_use', id: 'tu-1', name: 'Write', input: { file_path: 'src/main.ts' } },
-    ];
-    const changed = trackFileActivity('chat-1', content, db as any, '/project');
-    expect(changed).toBe(true);
-    expect(db.chats.addModifiedFile).toHaveBeenCalledWith('chat-1', 'src/main.ts');
-  });
-
-  it('tracks Edit tool_use', () => {
-    const db = makeDb();
-    const content: MessageContent[] = [
-      { type: 'tool_use', id: 'tu-1', name: 'Edit', input: { file_path: 'lib/utils.ts' } },
-    ];
-    trackFileActivity('chat-1', content, db as any, '/project');
-    expect(db.chats.addModifiedFile).toHaveBeenCalledWith('chat-1', 'lib/utils.ts');
-  });
-
-  it('converts absolute path to relative', () => {
-    const db = makeDb();
-    const content: MessageContent[] = [
-      {
-        type: 'tool_use',
-        id: 'tu-1',
-        name: 'Write',
-        input: { file_path: '/project/src/index.ts' },
-      },
-    ];
-    trackFileActivity('chat-1', content, db as any, '/project');
-    expect(db.chats.addModifiedFile).toHaveBeenCalledWith('chat-1', 'src/index.ts');
-  });
-
-  it('skips paths that escape the project (../outside.ts)', () => {
-    const db = makeDb();
-    const content: MessageContent[] = [
-      { type: 'tool_use', id: 'tu-1', name: 'Write', input: { file_path: '/etc/passwd' } },
-    ];
-    trackFileActivity('chat-1', content, db as any, '/project');
-    expect(db.chats.addModifiedFile).not.toHaveBeenCalled();
-  });
-
-  it('ignores non-Write/Edit tool blocks', () => {
-    const db = makeDb();
-    const content: MessageContent[] = [{ type: 'tool_use', id: 'tu-1', name: 'Bash', input: { command: 'ls' } }];
-    trackFileActivity('chat-1', content, db as any, '/project');
-    expect(db.chats.addModifiedFile).not.toHaveBeenCalled();
-  });
-
-  it('ignores non-tool_use blocks', () => {
-    const db = makeDb();
-    const content: MessageContent[] = [{ type: 'text', text: 'hello' }];
-    trackFileActivity('chat-1', content, db as any, '/project');
-    expect(db.chats.addModifiedFile).not.toHaveBeenCalled();
   });
 });
 
