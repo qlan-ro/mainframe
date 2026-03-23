@@ -75,13 +75,13 @@ export function ContextTab(): React.ReactElement {
     <div className="space-y-2">
       <ContextSection icon={Globe} title="Global" count={globalFiles.length} defaultOpen>
         {globalFiles.map((f) => (
-          <ContextFileItem key={f.path} path={f.path} content={f.content} />
+          <ContextFileItem key={f.path} path={f.path} />
         ))}
       </ContextSection>
 
       <ContextSection icon={FolderOpen} title="Project" count={projectFiles.length} defaultOpen>
         {projectFiles.map((f) => (
-          <ContextFileItem key={f.path} path={f.path} content={f.content} />
+          <ContextFileItem key={f.path} path={f.path} />
         ))}
       </ContextSection>
 

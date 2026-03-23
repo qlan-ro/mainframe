@@ -80,8 +80,6 @@ function buildSessionSink(
     emitDisplayDelta(chatId, messages, displayCache, categories, emitEvent);
   }
 
-  const seenEditFiles = new Set<string>();
-
   return {
     onInit(sessionId: string) {
       const active = getActiveChat(chatId);
@@ -93,14 +91,15 @@ function buildSessionSink(
 
     onMessage(content: any[], metadata?: MessageMetadata) {
       log.debug({ chatId, blockCount: content.length }, 'assistant message received');
+      const editedPaths: string[] = [];
       for (const block of content) {
         if (block.type === 'tool_use' && (block.name === 'Write' || block.name === 'Edit')) {
           const fp = (block.input as Record<string, unknown>)?.file_path as string | undefined;
-          if (fp && !seenEditFiles.has(fp)) {
-            seenEditFiles.add(fp);
-            emitEvent({ type: 'context.updated', chatId });
-          }
+          if (fp) editedPaths.push(fp);
         }
+      }
+      if (editedPaths.length > 0) {
+        emitEvent({ type: 'context.updated', chatId, filePaths: editedPaths });
       }
       const hasEnterPlanMode = content.some((b: any) => b.type === 'tool_use' && b.name === 'EnterPlanMode');
       if (hasEnterPlanMode) {

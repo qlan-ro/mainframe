@@ -3,6 +3,7 @@ import { Save } from 'lucide-react';
 import { useProjectsStore } from '../../store';
 import { useChatsStore } from '../../store/chats';
 import { getFileContent, saveFileContent } from '../../lib/api';
+import { daemonClient } from '../../lib/client';
 import { sendCommentMessage } from '../../lib/send-comment-message';
 import { MonacoEditor } from '../editor/MonacoEditor';
 
@@ -98,6 +99,25 @@ export function EditorTab({
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  // Re-fetch file content when any agent edits this file
+  useEffect(() => {
+    if (!activeProjectId || providedContent !== undefined) return;
+    return daemonClient.onEvent((event) => {
+      if (event.type !== 'context.updated' || !event.filePaths) return;
+      const match = event.filePaths.some((fp) => filePath.endsWith(fp) || fp.endsWith(filePath));
+      if (!match) return;
+      if (dirtyRef.current) return; // don't overwrite unsaved user changes
+      getFileContent(activeProjectId, filePath, activeChatId ?? undefined)
+        .then((result) => {
+          setSavedContent(result.content);
+          setCurrentContent(result.content);
+        })
+        .catch(() => {
+          /* file may have been deleted; keep current content */
+        });
+    });
+  }, [activeChatId, activeProjectId, filePath, providedContent]);
 
   const handleChange = useCallback((value: string | undefined) => {
     if (value !== undefined) setCurrentContent(value);
