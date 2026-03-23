@@ -173,6 +173,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
   openEditorTab: (filePath, content, line, column) => {
     const label = filePath.split('/').pop() || filePath;
+    // Push current editor to back stack when navigating via Go To Definition.
     if (line != null) {
       const current = get().fileView;
       if (current?.type === 'editor') {

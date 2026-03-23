@@ -4,6 +4,7 @@ import type * as monacoType from 'monaco-editor';
 import { InlineCommentWidget, type InlineCommentState } from './InlineCommentWidget';
 import './setup';
 import { registerDefinitionProvider } from './navigation';
+import { useProjectsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
 
 interface MonacoEditorProps {
@@ -11,7 +12,8 @@ interface MonacoEditorProps {
   language?: string;
   readOnly?: boolean;
   filePath?: string;
-  initialLine?: number;
+  line?: number;
+  column?: number;
   onChange?: (value: string | undefined) => void;
   onLineComment?: (line: number, lineContent: string, comment: string) => void;
 }
@@ -21,17 +23,22 @@ export function MonacoEditor({
   language,
   readOnly = true,
   filePath,
-  initialLine,
+  line,
+  column,
   onChange,
   onLineComment,
 }: MonacoEditorProps): React.ReactElement {
   const decorationsRef = useRef<monacoType.editor.IEditorDecorationsCollection | null>(null);
-  const initialLineRef = useRef(initialLine);
   const editorRef = useRef<monacoType.editor.IStandaloneCodeEditor | null>(null);
   const zoneIdRef = useRef<string | null>(null);
   const [inlineComment, setInlineComment] = useState<InlineCommentState | null>(null);
   const onLineCommentRef = useRef(onLineComment);
   onLineCommentRef.current = onLineComment;
+
+  const { activeProjectId, projects } = useProjectsStore();
+  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
+  const activeProjectRef = useRef(activeProject);
+  activeProjectRef.current = activeProject;
 
   const closeInlineComment = useCallback(() => {
     const editor = editorRef.current;
@@ -45,20 +52,37 @@ export function MonacoEditor({
 
   useEffect(() => () => closeInlineComment(), [closeInlineComment]);
 
+  // Scroll to target position when navigating from references/definitions.
+  useEffect(() => {
+    if (!line || !editorRef.current) return;
+    const editor = editorRef.current;
+    editor.revealLineInCenter(line);
+    editor.setPosition({ lineNumber: line, column: column ?? 1 });
+    // Focus so the caret is visible — this is an intentional navigation action.
+    setTimeout(() => editor.focus(), 50);
+  }, [line, column]);
+
+  const lineRef = useRef(line);
+  lineRef.current = line;
+  const columnRef = useRef(column);
+  columnRef.current = column;
+
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
 
-      if (initialLineRef.current) {
-        editor.revealLineInCenter(initialLineRef.current);
-        editor.setPosition({ lineNumber: initialLineRef.current, column: 1 });
+      // Scroll to target position on mount (from Go To Definition / References).
+      if (lineRef.current) {
+        editor.revealLineInCenter(lineRef.current);
+        editor.setPosition({ lineNumber: lineRef.current, column: columnRef.current ?? 1 });
+        setTimeout(() => editor.focus(), 50);
       }
 
-      // Cmd+Left / Cmd+Right for back/forward navigation (like IntelliJ).
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow, () => {
+      // Cmd+Option+Left / Cmd+Option+Right for back/forward navigation.
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.LeftArrow, () => {
         useTabsStore.getState().navigateBack();
       });
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow, () => {
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.RightArrow, () => {
         useTabsStore.getState().navigateForward();
       });
 
@@ -127,10 +151,6 @@ export function MonacoEditor({
         if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
           openCommentAtLine(lineNumber);
         }
-        // Cmd+Click on line content
-        if (e.target.type === monaco.editor.MouseTargetType.CONTENT_TEXT && e.event.metaKey) {
-          openCommentAtLine(lineNumber);
-        }
       });
 
       editor.onDidScrollChange(() => {
@@ -146,6 +166,7 @@ export function MonacoEditor({
         height="100%"
         language={language}
         value={value}
+        path={activeProject && filePath ? `file://${activeProject.path}/${filePath}` : filePath}
         onChange={onChange}
         theme="mainframe-dark"
         onMount={handleMount}

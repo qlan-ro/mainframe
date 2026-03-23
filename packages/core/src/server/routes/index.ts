@@ -13,5 +13,6 @@ export { launchRoutes } from './launch.js';
 export { externalSessionRoutes } from './external-sessions.js';
 export { tunnelRoutes } from './tunnel.js';
 export { contentSearchRoutes } from './search.js';
+export { lspRoutes } from './lsp-routes.js';
 export { asyncHandler } from './async-handler.js';
 export type { RouteContext } from './types.js';
