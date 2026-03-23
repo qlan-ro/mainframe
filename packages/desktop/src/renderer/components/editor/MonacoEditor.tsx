@@ -62,6 +62,18 @@ export function MonacoEditor({
     setTimeout(() => editor.focus(), 50);
   }, [line, column]);
 
+  // Sync external value changes into the Monaco model (e.g. agent edits).
+  // The `path` prop makes @monaco-editor/react ignore `value` after initial mount.
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const model = editor.getModel();
+    if (!model) return;
+    if (model.getValue() !== value) {
+      model.setValue(value);
+    }
+  }, [value]);
+
   const lineRef = useRef(line);
   lineRef.current = line;
   const columnRef = useRef(column);
