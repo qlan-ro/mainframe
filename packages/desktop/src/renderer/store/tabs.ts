@@ -118,14 +118,6 @@ const navForwardStack: NavEntry[] = [];
 const initialProjectId = localStorage.getItem('mf:activeProjectId');
 const initialSnapshot = initialProjectId ? projectTabs.get(initialProjectId) : undefined;
 
-interface NavEntry {
-  filePath: string;
-  line?: number;
-  column?: number;
-}
-const navBackStack: NavEntry[] = [];
-const navForwardStack: NavEntry[] = [];
-
 function expandRightPanel(): void {
   const ui = useUIStore.getState();
   if (ui.panelCollapsed.right) {
