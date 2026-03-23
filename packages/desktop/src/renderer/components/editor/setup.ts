@@ -62,6 +62,19 @@ monaco.editor.defineTheme('mainframe-dark', {
     'editorGutter.background': '#191a1c',
     'scrollbarSlider.background': '#52525b40',
     'scrollbarSlider.hoverBackground': '#71717a60',
+    // Peek view (Go To Definition / References)
+    'peekView.border': '#3b82f650',
+    'peekViewEditor.background': '#1e1f22',
+    'peekViewResult.background': '#16171a',
+    'peekViewTitle.background': '#1e1f22',
+    'peekViewTitleLabel.foreground': '#e4e4e7',
+    'peekViewTitleDescription.foreground': '#71717a',
+    'peekViewResult.selectionBackground': '#3b82f630',
+    'peekViewResult.selectionForeground': '#e4e4e7',
+    'peekViewEditor.matchHighlightBackground': '#3b82f640',
+    'peekViewResult.matchHighlightBackground': '#3b82f640',
+    'peekViewResult.fileForeground': '#a1a1aa',
+    'peekViewResult.lineForeground': '#71717a',
   },
 });
 

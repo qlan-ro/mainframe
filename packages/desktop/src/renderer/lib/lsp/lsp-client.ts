@@ -145,15 +145,22 @@ export class LspClientManager {
     model: monaco.editor.ITextModel,
     position: monaco.Position,
   ): Promise<monaco.languages.Definition | null> {
-    // Send didOpen if not already sent
     this.ensureDocumentOpen(entry, model);
 
+    const uri = this.toLspUri(entry, model.uri);
     const result = await this.sendRequest(entry, 'textDocument/definition', {
-      textDocument: { uri: this.toLspUri(entry, model.uri) },
+      textDocument: { uri },
       position: { line: position.lineNumber - 1, character: position.column - 1 },
     });
 
-    return this.toMonacoLocations(result);
+    const locations = this.toMonacoLocations(result);
+    if (!locations) return null;
+
+    // Filter out the location the user is already at.
+    const filtered = locations.filter(
+      (loc) => loc.uri.toString() !== model.uri.toString() || loc.range.startLineNumber !== position.lineNumber,
+    );
+    return filtered.length > 0 ? filtered : locations;
   }
 
   private async provideReferences(
