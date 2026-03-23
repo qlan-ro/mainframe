@@ -78,11 +78,11 @@ export function MonacoEditor({
         setTimeout(() => editor.focus(), 50);
       }
 
-      // Cmd+Left / Cmd+Right for back/forward navigation (like IntelliJ).
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow, () => {
+      // Cmd+Option+Left / Cmd+Option+Right for back/forward navigation.
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.LeftArrow, () => {
         useTabsStore.getState().navigateBack();
       });
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.RightArrow, () => {
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.RightArrow, () => {
         useTabsStore.getState().navigateForward();
       });
 
