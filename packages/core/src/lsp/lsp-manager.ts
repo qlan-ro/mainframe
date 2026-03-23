@@ -71,7 +71,7 @@ export class LspManager {
     const child = spawn(resolved.command, resolved.args, {
       cwd: projectPath,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     });
 
     const handle: LspServerHandle = {
