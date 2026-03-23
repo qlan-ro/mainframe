@@ -12,7 +12,7 @@ export function ConnectionOverlayView({ connected }: { connected: boolean }): Re
     >
       <div className="flex flex-col items-center gap-3 text-mf-text-primary">
         <Loader2 size={24} className="animate-spin text-mf-text-secondary" />
-        <span className="text-sm text-mf-text-secondary">Connecting to daemon&hellip;</span>
+        <span className="text-sm text-mf-text-secondary">Connecting to server&hellip;</span>
       </div>
     </div>
   );
