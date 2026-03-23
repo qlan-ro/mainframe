@@ -45,6 +45,8 @@ jobs:
         with:
           fetch-depth: 0
 
+      - run: git fetch origin main
+
       - uses: pnpm/action-setup@v5
         with:
           version: 10
