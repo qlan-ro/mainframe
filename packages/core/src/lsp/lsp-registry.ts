@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import type { LspServerConfig } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 
-const require = createRequire(import.meta.url);
+const require = createRequire(import.meta.url ?? __filename);
 const execFileAsync = promisify(execFile);
 const log = createChildLogger('lsp-registry');
 
