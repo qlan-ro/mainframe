@@ -29,7 +29,6 @@ export function MonacoEditor({
   onLineComment,
 }: MonacoEditorProps): React.ReactElement {
   const decorationsRef = useRef<monacoType.editor.IEditorDecorationsCollection | null>(null);
-  const initialLineRef = useRef(initialLine);
   const editorRef = useRef<monacoType.editor.IStandaloneCodeEditor | null>(null);
   const zoneIdRef = useRef<string | null>(null);
   const [inlineComment, setInlineComment] = useState<InlineCommentState | null>(null);
