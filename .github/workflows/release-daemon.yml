@@ -1,14 +1,16 @@
 name: Release Daemon
 
 on:
-  push:
-    tags: ['v*']
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
 
 permissions:
   contents: write
 
 jobs:
   build:
+    if: github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -26,6 +28,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - uses: pnpm/action-setup@v5
         with:
@@ -49,14 +53,29 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
 
+      - name: Get tag name
+        id: tag
+        run: |
+          TAG=$(git describe --tags --exact-match ${{ github.event.workflow_run.head_sha }} 2>/dev/null || echo "")
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
+
       - uses: softprops/action-gh-release@v2
+        if: steps.tag.outputs.name != ''
         with:
+          tag_name: ${{ steps.tag.outputs.name }}
           files: artifacts/*.tar.gz
           draft: true
           append_body: true
+          body: |
+            ---
+            **Full Changelog**: [`CHANGELOG.md`](https://github.com/qlan-ro/mainframe/blob/${{ steps.tag.outputs.name }}/CHANGELOG.md)
           generate_release_notes: true
