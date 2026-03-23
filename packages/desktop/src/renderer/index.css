@@ -210,6 +210,8 @@ code {
   font-size: 15px;
   line-height: 24px;
   color: var(--mf-text-primary);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* Code */
