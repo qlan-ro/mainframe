@@ -18,12 +18,12 @@ if (process.env.NODE_ENV === 'development') {
 const daemonPort = Number(process.env.DAEMON_PORT ?? 31415);
 try {
   execFileSync(
-    'node',
+    process.execPath,
     [
       '-e',
       `require("net").createServer().on("error",()=>process.exit(1)).listen(${daemonPort},"127.0.0.1",function(){this.close();process.exit(0)})`,
     ],
-    { timeout: 3000, stdio: 'ignore' },
+    { timeout: 3000, stdio: 'ignore', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } },
   );
 } catch {
   // dialog requires app.ready which hasn't fired yet — just exit.
