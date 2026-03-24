@@ -231,7 +231,7 @@ async function handleDeleteBranch(ctx: RouteContext, req: Request, res: Response
   }
   try {
     const svc = GitService.forProject(projectPath);
-    const result = await svc.deleteBranch(parsed.data.name, parsed.data.force);
+    const result = await svc.deleteBranch(parsed.data.name, parsed.data.force, parsed.data.remote);
     res.json(result);
   } catch (err: any) {
     logger.warn({ err }, 'deleteBranch failed');

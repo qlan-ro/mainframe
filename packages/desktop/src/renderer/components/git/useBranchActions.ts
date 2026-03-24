@@ -32,6 +32,7 @@ export interface BranchActions {
   branches: BranchData | null;
   conflictFiles: ConflictFile[];
   busy: boolean;
+  busyAction: string | null;
   loadBranches: () => Promise<void>;
   handleCheckout: (branch: string) => Promise<void>;
   handlePull: (branch: string) => Promise<void>;
@@ -39,7 +40,7 @@ export interface BranchActions {
   handleMerge: (branch: string) => Promise<void>;
   handleRebase: (branch: string) => Promise<void>;
   handleRename: (oldName: string, newName: string) => Promise<void>;
-  handleDelete: (branch: string) => Promise<void>;
+  handleDelete: (branch: string, isRemote?: boolean) => Promise<void>;
   handleFetch: () => Promise<void>;
   handleUpdateAll: () => Promise<void>;
   handleAbort: () => Promise<void>;
@@ -50,13 +51,16 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   const [branches, setBranches] = useState<BranchData | null>(null);
   const [conflictFiles, setConflictFiles] = useState<ConflictFile[]>([]);
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  const withBusy = useCallback(async (fn: () => Promise<void>) => {
+  const withBusy = useCallback(async (fn: () => Promise<void>, action?: string) => {
     setBusy(true);
+    setBusyAction(action ?? null);
     try {
       await fn();
     } finally {
       setBusy(false);
+      setBusyAction(null);
     }
   }, []);
 
@@ -175,17 +179,18 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   );
 
   const handleDelete = useCallback(
-    async (branch: string) => {
-      if (!window.confirm(`Delete branch '${branch}'?`)) return;
+    async (branch: string, isRemote?: boolean) => {
+      const label = isRemote ? `remote branch '${branch}'` : `branch '${branch}'`;
+      if (!window.confirm(`Delete ${label}?`)) return;
       await withBusy(async () => {
-        const result = await gitDeleteBranch(projectId, branch);
+        const result = await gitDeleteBranch(projectId, branch, false, isRemote);
         if (result.status === 'not-merged') {
           if (window.confirm(`${result.message}\nForce delete?`)) {
-            await gitDeleteBranch(projectId, branch, true);
-            toast.success(`Deleted ${branch}`);
+            await gitDeleteBranch(projectId, branch, true, isRemote);
+            toast.success(`Deleted ${label}`);
           }
         } else {
-          toast.success(`Deleted ${branch}`);
+          toast.success(`Deleted ${label}`);
         }
         await loadBranches();
       });
@@ -198,7 +203,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
       await gitFetch(projectId);
       toast.success('Fetched');
       await loadBranches();
-    });
+    }, 'fetch');
   }, [projectId, loadBranches, withBusy]);
 
   const handleUpdateAll = useCallback(async () => {
@@ -211,7 +216,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
       }
       onBranchChanged();
       await loadBranches();
-    });
+    }, 'updateAll');
   }, [projectId, loadBranches, onBranchChanged, withBusy]);
 
   const handleAbort = useCallback(async () => {
@@ -236,6 +241,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
     branches,
     conflictFiles,
     busy,
+    busyAction,
     loadBranches,
     handleCheckout,
     handlePull,

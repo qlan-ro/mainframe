@@ -93,7 +93,11 @@ export const GitPushBody = z.object({ branch: z.string().optional(), remote: z.s
 export const GitMergeBody = z.object({ branch: z.string().min(1) });
 export const GitRebaseBody = z.object({ branch: z.string().min(1) });
 export const GitRenameBranchBody = z.object({ oldName: z.string().min(1), newName: z.string().min(1) });
-export const GitDeleteBranchBody = z.object({ name: z.string().min(1), force: z.boolean().optional() });
+export const GitDeleteBranchBody = z.object({
+  name: z.string().min(1),
+  force: z.boolean().optional(),
+  remote: z.boolean().optional(),
+});
 
 // --- Validation helper ---
 

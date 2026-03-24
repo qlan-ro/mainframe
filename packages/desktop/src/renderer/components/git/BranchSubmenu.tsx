@@ -1,10 +1,11 @@
 import React from 'react';
-import { ArrowLeft, Download, Upload, GitMerge, GitPullRequest, Pencil, Trash2, Plus, Check } from 'lucide-react';
+import { Download, Upload, GitMerge, GitPullRequest, Pencil, Trash2, Plus, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface BranchSubmenuProps {
   branch: string;
   isCurrent: boolean;
+  isRemote?: boolean;
   onClose: () => void;
   onCheckout: (branch: string) => void;
   onPull: (branch: string) => void;
@@ -12,7 +13,7 @@ export interface BranchSubmenuProps {
   onMerge: (branch: string) => void;
   onRebase: (branch: string) => void;
   onRename: (branch: string) => void;
-  onDelete: (branch: string) => void;
+  onDelete: (branch: string, isRemote?: boolean) => void;
   onNewBranchFrom: (branch: string) => void;
   busy: boolean;
 }
@@ -35,7 +36,7 @@ type MenuEntry = MenuItem | SeparatorItem;
 export function BranchSubmenu({
   branch,
   isCurrent,
-  onClose,
+  isRemote,
   onCheckout,
   onPull,
   onPush,
@@ -46,67 +47,99 @@ export function BranchSubmenu({
   onNewBranchFrom,
   busy,
 }: BranchSubmenuProps): React.ReactElement {
-  const items: MenuEntry[] = [
-    {
-      label: `New Branch from '${truncate(branch, 20)}'...`,
-      icon: <Plus size={12} />,
-      action: () => onNewBranchFrom(branch),
-    },
-    { separator: true },
-    {
-      label: 'Checkout',
-      icon: <Check size={12} />,
-      action: () => onCheckout(branch),
-      disabled: isCurrent || busy,
-    },
-    {
-      label: 'Pull',
-      icon: <Download size={12} />,
-      action: () => onPull(branch),
-      disabled: busy,
-    },
-    {
-      label: 'Push',
-      icon: <Upload size={12} />,
-      action: () => onPush(branch),
-      disabled: busy,
-    },
-    { separator: true },
-    {
-      label: 'Merge into Current Branch',
-      icon: <GitMerge size={12} />,
-      action: () => onMerge(branch),
-      disabled: isCurrent || busy,
-    },
-    {
-      label: 'Rebase Current onto This',
-      icon: <GitPullRequest size={12} />,
-      action: () => onRebase(branch),
-      disabled: isCurrent || busy,
-    },
-    { separator: true },
-    {
-      label: 'Rename...',
-      icon: <Pencil size={12} />,
-      action: () => onRename(branch),
-      disabled: busy,
-    },
-    {
-      label: 'Delete Branch',
-      icon: <Trash2 size={12} />,
-      action: () => onDelete(branch),
-      disabled: isCurrent || busy,
-      destructive: true,
-    },
-  ];
+  const items: MenuEntry[] = isRemote
+    ? [
+        {
+          label: 'Checkout',
+          icon: <Check size={12} />,
+          action: () => onCheckout(branch),
+          disabled: busy,
+        },
+        {
+          label: `New Branch from '${truncate(branch, 20)}'...`,
+          icon: <Plus size={12} />,
+          action: () => onNewBranchFrom(branch),
+        },
+        { separator: true },
+        {
+          label: 'Merge into Current Branch',
+          icon: <GitMerge size={12} />,
+          action: () => onMerge(branch),
+          disabled: busy,
+        },
+        {
+          label: 'Rebase Current onto This',
+          icon: <GitPullRequest size={12} />,
+          action: () => onRebase(branch),
+          disabled: busy,
+        },
+        { separator: true },
+        {
+          label: 'Delete Remote Branch',
+          icon: <Trash2 size={12} />,
+          action: () => onDelete(branch, true),
+          disabled: busy,
+          destructive: true,
+        },
+      ]
+    : [
+        {
+          label: `New Branch from '${truncate(branch, 20)}'...`,
+          icon: <Plus size={12} />,
+          action: () => onNewBranchFrom(branch),
+        },
+        { separator: true },
+        {
+          label: 'Checkout',
+          icon: <Check size={12} />,
+          action: () => onCheckout(branch),
+          disabled: isCurrent || busy,
+        },
+        {
+          label: 'Pull',
+          icon: <Download size={12} />,
+          action: () => onPull(branch),
+          disabled: busy,
+        },
+        {
+          label: 'Push',
+          icon: <Upload size={12} />,
+          action: () => onPush(branch),
+          disabled: busy,
+        },
+        { separator: true },
+        {
+          label: 'Merge into Current Branch',
+          icon: <GitMerge size={12} />,
+          action: () => onMerge(branch),
+          disabled: isCurrent || busy,
+        },
+        {
+          label: 'Rebase Current onto This',
+          icon: <GitPullRequest size={12} />,
+          action: () => onRebase(branch),
+          disabled: isCurrent || busy,
+        },
+        { separator: true },
+        {
+          label: 'Rename...',
+          icon: <Pencil size={12} />,
+          action: () => onRename(branch),
+          disabled: busy,
+        },
+        {
+          label: 'Delete Branch',
+          icon: <Trash2 size={12} />,
+          action: () => onDelete(branch, false),
+          disabled: isCurrent || busy,
+          destructive: true,
+        },
+      ];
 
   return (
     <div className="min-w-[220px]">
       {/* Header */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-mf-border">
-        <button onClick={onClose} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
-          <ArrowLeft size={14} />
-        </button>
+      <div className="px-3 py-1.5 border-b border-mf-border">
         <span className="text-xs font-medium text-mf-text-primary truncate">{branch}</span>
       </div>
 

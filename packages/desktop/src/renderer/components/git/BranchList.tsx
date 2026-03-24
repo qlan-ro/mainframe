@@ -13,7 +13,7 @@ interface BranchListProps {
   remote: string[];
   currentBranch: string;
   search: string;
-  onSelectBranch: (branch: string, isCurrent: boolean) => void;
+  onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
 }
 
 function groupBranches(branches: BranchInfo[]): { groups: BranchGroup[]; ungrouped: BranchInfo[] } {
@@ -56,11 +56,13 @@ function BranchRow({
   name,
   isCurrent,
   isMain,
+  tracking,
   onClick,
 }: {
   name: string;
   isCurrent: boolean;
   isMain: boolean;
+  tracking?: string;
   onClick: () => void;
 }): React.ReactElement {
   const displayName = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
@@ -76,7 +78,10 @@ function BranchRow({
     >
       {isMain ? <Star size={12} className="text-mf-warning shrink-0" /> : <GitBranch size={12} className="shrink-0" />}
       <span className="truncate">{displayName}</span>
-      <ChevronRight size={12} className="ml-auto shrink-0 text-mf-text-secondary" />
+      {tracking && (
+        <span className="ml-auto shrink-0 text-[10px] text-mf-text-secondary truncate max-w-[120px]">{tracking}</span>
+      )}
+      <ChevronRight size={12} className={cn('shrink-0 text-mf-text-secondary', !tracking && 'ml-auto')} />
     </button>
   );
 }
@@ -90,7 +95,7 @@ function GroupSection({
   prefix: string;
   branches: BranchInfo[];
   currentBranch: string;
-  onSelectBranch: (branch: string, isCurrent: boolean) => void;
+  onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
 
@@ -110,7 +115,8 @@ function GroupSection({
               name={b.name}
               isCurrent={b.name === currentBranch}
               isMain={false}
-              onClick={() => onSelectBranch(b.name, b.name === currentBranch)}
+              tracking={b.tracking}
+              onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
             />
           </div>
         ))}
@@ -146,7 +152,8 @@ export function BranchList({
           name={b.name}
           isCurrent={b.name === currentBranch}
           isMain={MAIN_BRANCHES.has(b.name)}
-          onClick={() => onSelectBranch(b.name, b.name === currentBranch)}
+          tracking={b.tracking}
+          onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
         />
       ))}
 
@@ -176,9 +183,15 @@ export function BranchList({
           </button>
           {remoteExpanded &&
             filteredRemote.map((r) => (
-              <div key={r} className="px-3 py-1 text-xs text-mf-text-secondary truncate">
-                {r}
-              </div>
+              <button
+                key={r}
+                onClick={() => onSelectBranch(r, false, true)}
+                className="w-full flex items-center gap-1.5 px-3 py-1 text-left text-xs text-mf-text-secondary hover:bg-mf-hover rounded transition-colors"
+              >
+                <GitBranch size={12} className="shrink-0" />
+                <span className="truncate">{r}</span>
+                <ChevronRight size={12} className="ml-auto shrink-0" />
+              </button>
             ))}
         </>
       )}

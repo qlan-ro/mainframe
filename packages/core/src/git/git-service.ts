@@ -93,6 +93,17 @@ export class GitService {
 
   async checkout(branch: string): Promise<void> {
     return this.withLock(async () => {
+      // If it looks like a remote ref (e.g. "origin/feat/foo"), strip the
+      // remote name and checkout the local name so git creates a tracking branch.
+      const remoteRefMatch = branch.match(/^([^/]+)\/(.+)$/);
+      if (remoteRefMatch) {
+        const [, remote, localName] = remoteRefMatch;
+        const remotes = await this.git().getRemotes();
+        if (remotes.some((r) => r.name === remote)) {
+          await this.git().checkout(['-b', localName!, `${branch}`, '--track']);
+          return;
+        }
+      }
       await this.git().checkout(branch);
     });
   }
@@ -110,9 +121,9 @@ export class GitService {
   async fetch(remote?: string): Promise<FetchResult> {
     return this.withLock(async () => {
       if (remote) {
-        await this.git().fetch(remote);
+        await this.git().fetch(remote, { '--prune': null });
       } else {
-        await this.git().fetch(['--all']);
+        await this.git().fetch(['--all', '--prune']);
       }
       return { status: 'success', remote: remote ?? 'all' };
     });
@@ -227,8 +238,15 @@ export class GitService {
     });
   }
 
-  async deleteBranch(name: string, force = false): Promise<DeleteBranchResult> {
+  async deleteBranch(name: string, force = false, isRemote = false): Promise<DeleteBranchResult> {
     return this.withLock(async () => {
+      if (isRemote) {
+        const remoteMatch = name.match(/^([^/]+)\/(.+)$/);
+        if (!remoteMatch) throw new Error(`Invalid remote branch name: ${name}`);
+        const [, remote, branchName] = remoteMatch;
+        await this.git().raw(['push', remote!, '--delete', branchName!]);
+        return { status: 'success' };
+      }
       try {
         await this.git().deleteLocalBranch(name, force);
         return { status: 'success' };
@@ -245,7 +263,7 @@ export class GitService {
     return this.withLock(async () => {
       let fetched = false;
       try {
-        await this.git().fetch(['--all']);
+        await this.git().fetch(['--all', '--prune']);
         fetched = true;
       } catch (err) {
         logger.warn({ err }, 'fetch --all failed during updateAll');

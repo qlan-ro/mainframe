@@ -69,10 +69,16 @@ export async function gitRenameBranch(projectId: string, oldName: string, newNam
   });
 }
 
-export async function gitDeleteBranch(projectId: string, name: string, force?: boolean): Promise<DeleteBranchResult> {
+export async function gitDeleteBranch(
+  projectId: string,
+  name: string,
+  force?: boolean,
+  remote?: boolean,
+): Promise<DeleteBranchResult> {
   return postJson(`${API_BASE}/api/projects/${projectId}/git/delete-branch`, {
     name,
     force,
+    remote,
   });
 }
 
