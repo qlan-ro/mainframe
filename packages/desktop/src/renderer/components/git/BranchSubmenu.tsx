@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ArrowLeft, Download, Upload, GitMerge, GitPullRequest, Pencil, Trash2, Plus, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 

@@ -36,7 +36,7 @@ export function NewBranchDialog({
     return null;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const err = validate(name);
     if (err) {
