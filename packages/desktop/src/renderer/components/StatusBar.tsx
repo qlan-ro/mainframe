@@ -10,7 +10,7 @@ import { getGitBranch, getGitStatus } from '../lib/api';
 import { cn } from '../lib/utils';
 import { BranchPopover } from './git/BranchPopover';
 
-const GIT_POLL_INTERVAL = 15_000;
+const GIT_POLL_INTERVAL = 60_000;
 
 export function StatusBar(): React.ReactElement {
   const connected = useConnectionState();
