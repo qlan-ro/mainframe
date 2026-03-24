@@ -211,13 +211,31 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
             isCurrent={selectedBranch === branches.current}
             isRemote={selectedIsRemote}
             onClose={() => setView('list')}
-            onCheckout={actions.handleCheckout}
-            onPull={actions.handlePull}
-            onPush={actions.handlePush}
-            onMerge={actions.handleMerge}
-            onRebase={actions.handleRebase}
+            onCheckout={async (b) => {
+              await actions.handleCheckout(b);
+              setView('list');
+            }}
+            onPull={async (b) => {
+              await actions.handlePull(b);
+              setView('list');
+            }}
+            onPush={async (b) => {
+              await actions.handlePush(b);
+              setView('list');
+            }}
+            onMerge={async (b) => {
+              await actions.handleMerge(b);
+              setView('list');
+            }}
+            onRebase={async (b) => {
+              await actions.handleRebase(b);
+              setView('list');
+            }}
             onRename={handleRenameStart}
-            onDelete={actions.handleDelete}
+            onDelete={async (b, r) => {
+              await actions.handleDelete(b, r);
+              setView('list');
+            }}
             onNewBranchFrom={handleNewBranchFrom}
             busy={busy}
           />
