@@ -70,7 +70,8 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
       setBranches(branchData);
       const conflicts = statusData.files.filter((f) => f.status === 'U' || f.status === 'UU');
       setConflictFiles(conflicts);
-    } catch {
+    } catch (err) {
+      console.warn('[useBranchActions] loadBranches failed', err);
       toast.error('Failed to load branches');
     }
   }, [projectId]);
@@ -229,12 +230,14 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const handleCreateBranch = useCallback(
     async (name: string, startPoint: string) => {
-      await gitCreateBranch(projectId, name, startPoint);
-      toast.success(`Created ${name}`);
-      onBranchChanged();
-      await loadBranches();
+      await withBusy(async () => {
+        await gitCreateBranch(projectId, name, startPoint);
+        toast.success(`Created ${name}`);
+        onBranchChanged();
+        await loadBranches();
+      });
     },
-    [projectId, loadBranches, onBranchChanged],
+    [projectId, loadBranches, onBranchChanged, withBusy],
   );
 
   return {

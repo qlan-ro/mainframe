@@ -87,6 +87,7 @@ export class GitService {
     try {
       return (await this.git().raw(['merge-base', branch1, branch2])).trim();
     } catch {
+      /* expected — branches may share no common ancestor */
       return null;
     }
   }
@@ -95,6 +96,8 @@ export class GitService {
     return this.withLock(async () => {
       // If it looks like a remote ref (e.g. "origin/feat/foo"), strip the
       // remote name and checkout the local name so git creates a tracking branch.
+      // The regex matches any "X/Y" — we verify X is an actual remote below
+      // to avoid false positives on branches like "feat/foo".
       const remoteRefMatch = branch.match(/^([^/]+)\/(.+)$/);
       if (remoteRefMatch) {
         const [, remote, localName] = remoteRefMatch;
@@ -213,21 +216,21 @@ export class GitService {
         await this.git().merge(['--abort']);
         return;
       } catch {
-        /* not a merge */
+        /* expected — probing whether a merge is in progress */
       }
       try {
         await access(join(this.projectPath, '.git', 'rebase-merge'));
         await this.git().rebase(['--abort']);
         return;
       } catch {
-        /* not rebase-merge */
+        /* expected — probing whether an interactive rebase is in progress */
       }
       try {
         await access(join(this.projectPath, '.git', 'rebase-apply'));
         await this.git().rebase(['--abort']);
         return;
       } catch {
-        /* nothing to abort */
+        /* expected — no active merge or rebase to abort */
       }
     });
   }

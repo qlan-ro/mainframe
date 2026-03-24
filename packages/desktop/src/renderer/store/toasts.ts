@@ -13,12 +13,15 @@ interface ToastState {
   dismiss: (id: string) => void;
 }
 
+const MAX_TOASTS = 20;
+
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   add: (type, message) =>
-    set((s) => ({
-      toasts: [...s.toasts, { id: nanoid(8), type, message }],
-    })),
+    set((s) => {
+      const next = [...s.toasts, { id: nanoid(8), type, message }];
+      return { toasts: next.length > MAX_TOASTS ? next.slice(-MAX_TOASTS) : next };
+    }),
   dismiss: (id) =>
     set((s) => ({
       toasts: s.toasts.filter((t) => t.id !== id),

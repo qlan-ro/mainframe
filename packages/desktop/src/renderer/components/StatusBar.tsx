@@ -39,7 +39,10 @@ export function StatusBar(): React.ReactElement {
         const conflicts = res.files.some((f) => f.status === 'U' || f.status === 'UU');
         setHasConflicts(conflicts);
       })
-      .catch(() => setHasConflicts(false));
+      .catch((err) => {
+        console.warn('[StatusBar] git status fetch failed', err);
+        setHasConflicts(false);
+      });
   }, [activeProjectId, activeChatId]);
 
   useEffect(() => {

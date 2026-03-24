@@ -181,7 +181,7 @@ describe('POST /api/projects/:id/git/delete-branch', () => {
     handler({ params: { id: 'proj-1' }, query: {}, body: { name: 'feature/unmerged' } }, res, vi.fn());
     await waitForResponse(res);
 
-    expect(mockSvc.deleteBranch).toHaveBeenCalledWith('feature/unmerged', undefined);
+    expect(mockSvc.deleteBranch).toHaveBeenCalledWith('feature/unmerged', undefined, undefined);
     expect(res.json).toHaveBeenCalledWith(notMergedResult);
   });
 
@@ -196,7 +196,22 @@ describe('POST /api/projects/:id/git/delete-branch', () => {
     handler({ params: { id: 'proj-1' }, query: {}, body: { name: 'feature/old', force: true } }, res, vi.fn());
     await waitForResponse(res);
 
-    expect(mockSvc.deleteBranch).toHaveBeenCalledWith('feature/old', true);
+    expect(mockSvc.deleteBranch).toHaveBeenCalledWith('feature/old', true, undefined);
+    expect(res.json).toHaveBeenCalledWith({ status: 'success' });
+  });
+
+  it('passes remote=true for remote branch deletion', async () => {
+    mockSvc.deleteBranch.mockResolvedValueOnce({ status: 'success' });
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/projects/:id/git/delete-branch');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: {}, body: { name: 'origin/feature/old', remote: true } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(mockSvc.deleteBranch).toHaveBeenCalledWith('origin/feature/old', undefined, true);
     expect(res.json).toHaveBeenCalledWith({ status: 'success' });
   });
 });

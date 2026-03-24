@@ -13,6 +13,7 @@ const mockGit = {
   rebase: vi.fn(),
   raw: vi.fn(),
   deleteLocalBranch: vi.fn(),
+  getRemotes: vi.fn(),
 };
 
 vi.mock('simple-git', () => ({
@@ -61,11 +62,28 @@ describe('GitService', () => {
   });
 
   describe('checkout()', () => {
-    it('calls git checkout', async () => {
+    it('calls git checkout for a local branch', async () => {
       mockGit.checkout.mockResolvedValue(undefined);
+      mockGit.getRemotes.mockResolvedValue([{ name: 'origin' }]);
       const svc = GitService.forProject('/fake/path');
       await svc.checkout('main');
       expect(mockGit.checkout).toHaveBeenCalledWith('main');
+    });
+
+    it('creates tracking branch when checking out a remote ref', async () => {
+      mockGit.checkout.mockResolvedValue(undefined);
+      mockGit.getRemotes.mockResolvedValue([{ name: 'origin' }]);
+      const svc = GitService.forProject('/fake/path');
+      await svc.checkout('origin/feat/bar');
+      expect(mockGit.checkout).toHaveBeenCalledWith(['-b', 'feat/bar', 'origin/feat/bar', '--track']);
+    });
+
+    it('does not create tracking branch for non-remote slash branch', async () => {
+      mockGit.checkout.mockResolvedValue(undefined);
+      mockGit.getRemotes.mockResolvedValue([{ name: 'origin' }]);
+      const svc = GitService.forProject('/fake/path');
+      await svc.checkout('feat/foo');
+      expect(mockGit.checkout).toHaveBeenCalledWith('feat/foo');
     });
   });
 
