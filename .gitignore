@@ -48,4 +48,7 @@ release/
 .mainframe/
 .worktrees/
 
+# Superpowers brainstorm artifacts
+.superpowers/
+
 /packages/e2e/playwright-report/

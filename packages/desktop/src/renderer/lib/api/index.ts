@@ -16,12 +16,8 @@ export {
   searchFiles,
   getFileContent,
   getFileBinary,
-  getGitStatus,
-  getGitBranch,
-  getDiff,
   getPendingPermission,
   getSessionDiffs,
-  getBranchDiffs,
   getSessionContext,
   getSessionFile,
   addMention,
@@ -30,7 +26,28 @@ export {
   searchContent,
 } from './files-api';
 
-export type { SessionFileDiff, BranchDiffResponse } from './files-api';
+export type { SessionFileDiff } from './files-api';
+
+export {
+  getGitBranch,
+  getGitStatus,
+  getGitBranches,
+  gitCheckout,
+  gitCreateBranch,
+  gitFetch,
+  gitPull,
+  gitPush,
+  gitMerge,
+  gitRebase,
+  gitAbort,
+  gitRenameBranch,
+  gitDeleteBranch,
+  gitUpdateAll,
+  getDiff,
+  getBranchDiffs,
+} from './git-api';
+
+export type { BranchDiffResponse } from './git-api';
 
 export {
   getSkills,

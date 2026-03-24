@@ -1,15 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { GitBranch } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, GitBranch } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:statusbar');
 import { useChatsStore } from '../store';
 import { useProjectsStore } from '../store/projects';
 import { useConnectionState } from '../hooks/useConnectionState';
-import { getGitBranch } from '../lib/api';
+import { getGitBranch, getGitStatus } from '../lib/api';
 import { cn } from '../lib/utils';
+import { BranchPopover } from './git/BranchPopover';
 
-const GIT_POLL_INTERVAL = 15_000;
+const GIT_POLL_INTERVAL = 60_000;
 
 export function StatusBar(): React.ReactElement {
   const connected = useConnectionState();
@@ -17,29 +18,44 @@ export function StatusBar(): React.ReactElement {
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
+  const [hasConflicts, setHasConflicts] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
+  const fetchBranchAndStatus = useCallback(() => {
     if (!activeProjectId) {
       setGitBranch(null);
+      setHasConflicts(false);
       return;
     }
+    getGitBranch(activeProjectId, activeChatId ?? undefined)
+      .then((res) => setGitBranch(res.branch))
+      .catch((err) => {
+        log.warn('git branch fetch failed', { err: String(err) });
+        setGitBranch(null);
+      });
+    getGitStatus(activeProjectId)
+      .then((res) => {
+        const conflicts = res.files.some((f) => f.status === 'U' || f.status === 'UU');
+        setHasConflicts(conflicts);
+      })
+      .catch((err) => {
+        console.warn('[StatusBar] git status fetch failed', err);
+        setHasConflicts(false);
+      });
+  }, [activeProjectId, activeChatId]);
 
-    const fetchBranch = () => {
-      getGitBranch(activeProjectId, activeChatId ?? undefined)
-        .then((res) => setGitBranch(res.branch))
-        .catch((err) => {
-          log.warn('git branch fetch failed', { err: String(err) });
-          setGitBranch(null);
-        });
-    };
-
-    fetchBranch();
-    pollRef.current = setInterval(fetchBranch, GIT_POLL_INTERVAL);
+  useEffect(() => {
+    fetchBranchAndStatus();
+    pollRef.current = setInterval(fetchBranchAndStatus, GIT_POLL_INTERVAL);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [activeProjectId, activeChatId]);
+  }, [fetchBranchAndStatus]);
+
+  const handleBranchChanged = useCallback(() => {
+    fetchBranchAndStatus();
+  }, [fetchBranchAndStatus]);
 
   const counts = { idle: 0, working: 0, waiting: 0 };
   for (const chat of chats) {
@@ -55,11 +71,34 @@ export function StatusBar(): React.ReactElement {
           <span>{connected ? 'Connected' : 'Disconnected'}</span>
         </div>
 
-        {/* Git branch */}
+        {/* Git branch — clickable */}
         {gitBranch && (
-          <div className="flex items-center gap-1 text-mf-text-secondary">
-            <GitBranch size={14} />
-            <span>{gitBranch}</span>
+          <div className="relative">
+            <button
+              data-testid="branch-button"
+              onClick={() => {
+                if (!popoverOpen) fetchBranchAndStatus();
+                setPopoverOpen(!popoverOpen);
+              }}
+              className={cn(
+                'flex items-center gap-1 text-mf-text-secondary hover:text-mf-text-primary transition-colors',
+                popoverOpen && 'text-mf-text-primary',
+              )}
+            >
+              {hasConflicts && <AlertTriangle size={12} className="text-mf-warning" />}
+              <GitBranch size={14} />
+              <span>{gitBranch}</span>
+            </button>
+
+            {popoverOpen && activeProjectId && (
+              <div className="absolute bottom-full left-0 mb-1 z-50">
+                <BranchPopover
+                  projectId={activeProjectId}
+                  onBranchChanged={handleBranchChanged}
+                  onClose={() => setPopoverOpen(false)}
+                />
+              </div>
+            )}
           </div>
         )}
 
