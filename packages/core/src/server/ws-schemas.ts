@@ -33,23 +33,27 @@ const ChatUpdateConfig = z.object({
   permissionMode: permissionModeSchema,
 });
 
-const MessageSend = z.object({
-  type: z.literal('message.send'),
-  chatId: z.string().min(1),
-  content: z.string().min(1),
-  attachmentIds: z.array(z.string()).optional(),
-  metadata: z
-    .object({
-      command: z
-        .object({
-          name: z.string().min(1),
-          source: z.string().min(1),
-          args: z.string().optional(),
-        })
-        .optional(),
-    })
-    .optional(),
-});
+const MessageSend = z
+  .object({
+    type: z.literal('message.send'),
+    chatId: z.string().min(1),
+    content: z.string(),
+    attachmentIds: z.array(z.string()).optional(),
+    metadata: z
+      .object({
+        command: z
+          .object({
+            name: z.string().min(1),
+            source: z.string().min(1),
+            args: z.string().optional(),
+          })
+          .optional(),
+      })
+      .optional(),
+  })
+  .refine((msg) => msg.content.length > 0 || (msg.attachmentIds?.length ?? 0) > 0, {
+    message: 'Either content or attachmentIds must be non-empty',
+  });
 
 const PermissionRespond = z.object({
   type: z.literal('permission.respond'),
