@@ -10,6 +10,7 @@ export * from './command.js';
 export * from './launch.js';
 export * from './search.js';
 export * from './lsp.js';
+export * from './git.js';
 export type {
   PluginCapability,
   PluginManifest,
