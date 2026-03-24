@@ -8,6 +8,7 @@ import { SearchPalette } from './components/SearchPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { ConnectionOverlay } from './components/ConnectionOverlay';
+import { Toaster } from './components/Toaster';
 import { useAppInit } from './hooks/useAppInit';
 import { useProjectsStore, useSettingsStore } from './store';
 import { daemonClient } from './lib/client';
@@ -49,6 +50,7 @@ export default function App(): React.ReactElement {
       <SettingsModal />
       <TutorialOverlay />
       <ConnectionOverlay />
+      <Toaster />
     </ErrorBoundary>
   );
 }
