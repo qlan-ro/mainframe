@@ -1,7 +1,7 @@
 branch=$(git rev-parse --abbrev-ref HEAD)
 
 # Skip changeset check on main and release branches
-if [ "$branch" = "main" ] || echo "$branch" | grep -q "^release/"; then
+if [ "$branch" = "main" ] || echo "$branch" | grep -q "^release/" || echo "$branch" | grep -q "^changeset-release/"; then
   exit 0
 fi
 
