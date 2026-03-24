@@ -4,10 +4,17 @@ import type { RouteContext } from './types.js';
 import { getEffectivePath, param } from './types.js';
 import { resolveAndValidatePath } from './path-utils.js';
 import { asyncHandler } from './async-handler.js';
-import { execGit } from './exec-git.js';
+import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:git');
+
+function isNotGitRepo(err: unknown): boolean {
+  return (
+    typeof (err as { message?: unknown }).message === 'string' &&
+    (err as { message: string }).message.includes('not a git repository')
+  );
+}
 
 function parseStatusLines(output: string): { status: string; path: string; oldPath?: string }[] {
   return output
@@ -40,14 +47,10 @@ function parseDiffNameStatus(output: string): { status: string; path: string; ol
     .filter((f) => f.path.length > 0);
 }
 
-async function detectMergeBase(projectPath: string): Promise<{ baseBranch: string; mergeBase: string } | null> {
+async function detectMergeBase(svc: GitService): Promise<{ baseBranch: string; mergeBase: string } | null> {
   for (const base of ['main', 'master']) {
-    try {
-      const sha = (await execGit(['merge-base', base, 'HEAD'], projectPath)).trim();
-      return { baseBranch: base, mergeBase: sha };
-    } catch {
-      continue;
-    }
+    const sha = await svc.mergeBase(base, 'HEAD');
+    if (sha) return { baseBranch: base, mergeBase: sha };
   }
   return null;
 }
@@ -61,11 +64,12 @@ async function handleGitStatus(ctx: RouteContext, req: Request, res: Response): 
   }
 
   try {
-    const status = await execGit(['status', '--porcelain'], basePath);
+    const svc = GitService.forProject(basePath);
+    const status = await svc.statusRaw();
     const files = parseStatusLines(status);
     res.json({ files });
   } catch (err) {
-    if ((err as { code?: unknown }).code !== 128) {
+    if (!isNotGitRepo(err)) {
       logger.warn({ err, basePath }, 'Failed to get git status');
     }
     res.json({ files: [], error: 'Not a git repository' });
@@ -81,17 +85,18 @@ async function handleGitBranch(ctx: RouteContext, req: Request, res: Response): 
   }
 
   try {
-    const branch = (await execGit(['rev-parse', '--abbrev-ref', 'HEAD'], basePath)).trim();
+    const svc = GitService.forProject(basePath);
+    const branch = await svc.currentBranch();
     res.json({ branch });
   } catch (err) {
-    if ((err as { code?: unknown }).code !== 128) {
+    if (!isNotGitRepo(err)) {
       logger.warn({ err, basePath }, 'Failed to get git branch');
     }
     res.json({ branch: null });
   }
 }
 
-/** GET /api/projects/:id/branch-diffs?chatId=X */
+/** GET /api/projects/:id/git/branch-diffs?chatId=X */
 async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
   if (!basePath) {
@@ -100,11 +105,12 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
   }
 
   try {
-    const branch = (await execGit(['rev-parse', '--abbrev-ref', 'HEAD'], basePath)).trim();
-    const baseInfo = await detectMergeBase(basePath);
+    const svc = GitService.forProject(basePath);
+    const branch = await svc.currentBranch();
+    const baseInfo = await detectMergeBase(svc);
 
     if (!baseInfo || branch === baseInfo.baseBranch) {
-      const statusOutput = await execGit(['status', '--porcelain'], basePath);
+      const statusOutput = await svc.statusRaw();
       const files = parseStatusLines(statusOutput);
       res.json({ branch, baseBranch: null, mergeBase: null, files });
       return;
@@ -112,10 +118,10 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
 
     const { baseBranch, mergeBase } = baseInfo;
 
-    const committedOutput = await execGit(['diff', '--name-status', `${mergeBase}..HEAD`], basePath);
+    const committedOutput = await svc.diff(['--name-status', `${mergeBase}..HEAD`]);
     const committedFiles = parseDiffNameStatus(committedOutput);
 
-    const statusOutput = await execGit(['status', '--porcelain'], basePath);
+    const statusOutput = await svc.statusRaw();
     const uncommittedFiles = parseStatusLines(statusOutput);
 
     const fileMap = new Map<string, { status: string; path: string; oldPath?: string }>();
@@ -124,14 +130,14 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
 
     res.json({ branch, baseBranch, mergeBase, files: Array.from(fileMap.values()) });
   } catch (err) {
-    if ((err as { code?: unknown }).code !== 128) {
+    if (!isNotGitRepo(err)) {
       logger.warn({ err, basePath }, 'Failed to compute branch diffs');
     }
     res.json({ branch: null, baseBranch: null, mergeBase: null, files: [] });
   }
 }
 
-/** GET /api/projects/:id/diff?file=path&source=git&chatId=X&base=SHA */
+/** GET /api/projects/:id/git/diff?file=path&source=git&chatId=X&base=SHA */
 async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const chatId = req.query.chatId as string | undefined;
   const basePath = getEffectivePath(ctx, param(req, 'id'), chatId);
@@ -147,20 +153,15 @@ async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promi
 
   if (source === 'git') {
     try {
-      const diffArgs = file
-        ? base
-          ? ['diff', `${base}..HEAD`, '--', file]
-          : ['diff', '--', file]
-        : base
-          ? ['diff', `${base}..HEAD`]
-          : ['diff'];
-      const diff = await execGit(diffArgs, basePath);
+      const svc = GitService.forProject(basePath);
+      const diffArgs = file ? (base ? [`${base}..HEAD`, '--', file] : ['--', file]) : base ? [`${base}..HEAD`] : [];
+      const diff = await svc.diff(diffArgs);
       let original = '';
       if (file) {
         const headPath = oldPath || file;
         const ref = base ?? 'HEAD';
         try {
-          original = await execGit(['show', `${ref}:${headPath}`], basePath);
+          original = await svc.show(`${ref}:${headPath}`);
         } catch {
           /* new file */
         }
@@ -180,7 +181,7 @@ async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promi
       }
       res.json({ diff, original, modified, source: 'git' });
     } catch (err) {
-      if ((err as { code?: unknown }).code !== 128) {
+      if (!isNotGitRepo(err)) {
         logger.warn({ err, basePath, file }, 'Failed to compute git diff');
       }
       res.json({ diff: '', original: '', modified: '', source: 'git' });
@@ -194,7 +195,7 @@ export function gitRoutes(ctx: RouteContext): Router {
   const router = Router();
 
   router.get(
-    '/api/projects/:id/branch-diffs',
+    '/api/projects/:id/git/branch-diffs',
     asyncHandler((req, res) => handleBranchDiffs(ctx, req, res)),
   );
   router.get(
@@ -206,7 +207,7 @@ export function gitRoutes(ctx: RouteContext): Router {
     asyncHandler((req, res) => handleGitBranch(ctx, req, res)),
   );
   router.get(
-    '/api/projects/:id/diff',
+    '/api/projects/:id/git/diff',
     asyncHandler((req, res) => handleDiff(ctx, req, res)),
   );
 

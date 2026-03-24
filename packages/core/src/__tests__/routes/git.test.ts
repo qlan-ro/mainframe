@@ -90,11 +90,11 @@ describe('GET /api/projects/:id/git/status', () => {
   });
 });
 
-describe('GET /api/projects/:id/branch-diffs', () => {
+describe('GET /api/projects/:id/git/branch-diffs', () => {
   it('returns branch diff info for a real git repo', async () => {
     const ctx = createCtx(REAL_GIT_PATH);
     const router = gitRoutes(ctx);
-    const handler = extractHandler(router, 'get', '/api/projects/:id/branch-diffs');
+    const handler = extractHandler(router, 'get', '/api/projects/:id/git/branch-diffs');
     const res = mockRes();
 
     handler({ params: { id: 'proj-1' }, query: {} }, res, vi.fn());
@@ -113,7 +113,7 @@ describe('GET /api/projects/:id/branch-diffs', () => {
   it('returns empty result for non-git directory', async () => {
     const ctx = createCtx('/tmp');
     const router = gitRoutes(ctx);
-    const handler = extractHandler(router, 'get', '/api/projects/:id/branch-diffs');
+    const handler = extractHandler(router, 'get', '/api/projects/:id/git/branch-diffs');
     const res = mockRes();
 
     handler({ params: { id: 'proj-1' }, query: {} }, res, vi.fn());

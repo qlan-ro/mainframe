@@ -81,7 +81,7 @@ export async function getDiff(
   if (chatId) params.set('chatId', chatId);
   if (oldPath) params.set('oldPath', oldPath);
   if (base) params.set('base', base);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/diff?${params}`);
+  return fetchJson(`${API_BASE}/api/projects/${projectId}/git/diff?${params}`);
 }
 
 export async function getPendingPermission(chatId: string): Promise<ControlRequest | null> {
@@ -113,7 +113,7 @@ export async function getBranchDiffs(projectId: string, chatId?: string): Promis
   const params = new URLSearchParams();
   if (chatId) params.set('chatId', chatId);
   const qs = params.toString();
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/branch-diffs${qs ? `?${qs}` : ''}`);
+  return fetchJson(`${API_BASE}/api/projects/${projectId}/git/branch-diffs${qs ? `?${qs}` : ''}`);
 }
 
 export async function getSessionContext(chatId: string): Promise<SessionContext> {
