@@ -73,7 +73,10 @@ export function StatusBar(): React.ReactElement {
           <div className="relative">
             <button
               data-testid="branch-button"
-              onClick={() => setPopoverOpen(!popoverOpen)}
+              onClick={() => {
+                if (!popoverOpen) fetchBranchAndStatus();
+                setPopoverOpen(!popoverOpen);
+              }}
               className={cn(
                 'flex items-center gap-1 text-mf-text-secondary hover:text-mf-text-primary transition-colors',
                 popoverOpen && 'text-mf-text-primary',
