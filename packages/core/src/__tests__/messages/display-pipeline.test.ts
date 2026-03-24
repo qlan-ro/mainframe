@@ -149,6 +149,22 @@ describe('prepareMessagesForClient', () => {
     expect(result[0]!.content).toEqual([{ type: 'text', text: '[compact_boundary]' }]);
   });
 
+  it('deduplicates messages with the same id (keeps first occurrence)', () => {
+    const messages = [
+      rawMsg('user', [txt('hello')]),
+      rawMsg('assistant', [txt('hi')]),
+      rawMsg('system', [txt('Context compacted')], { id: 'dup-id' }),
+      rawMsg('user', [txt('more')]),
+      rawMsg('system', [txt('Context compacted')], { id: 'dup-id' }),
+    ];
+    const result = prepareMessagesForClient(messages);
+    const systemMsgs = result.filter((m) => m.type === 'system');
+    expect(systemMsgs).toHaveLength(1);
+    expect(result.map((m) => m.id)).not.toContain(undefined);
+    // Total should be 4 (user, assistant, system, user) — second system deduplicated
+    expect(result).toHaveLength(4);
+  });
+
   it('passes through error messages', () => {
     const messages = [rawMsg('error', [{ type: 'error', message: 'something broke' }])];
     const result = prepareMessagesForClient(messages);
