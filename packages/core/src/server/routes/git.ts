@@ -6,6 +6,7 @@ import { resolveAndValidatePath } from './path-utils.js';
 import { asyncHandler } from './async-handler.js';
 import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
+import { gitWriteRoutes } from './git-write.js';
 
 const logger = createChildLogger('routes:git');
 
@@ -210,6 +211,8 @@ export function gitRoutes(ctx: RouteContext): Router {
     '/api/projects/:id/git/diff',
     asyncHandler((req, res) => handleDiff(ctx, req, res)),
   );
+
+  router.use(gitWriteRoutes(ctx));
 
   return router;
 }

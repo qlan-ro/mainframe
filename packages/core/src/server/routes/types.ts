@@ -25,6 +25,12 @@ export function param(req: Request, name: string): string {
   return Array.isArray(v) ? (v[0] ?? '') : v;
 }
 
+/** Like getEffectivePath but always returns the project root, ignoring worktrees. */
+export function getProjectPath(ctx: RouteContext, projectId: string): string | null {
+  const project = ctx.db.projects.get(projectId);
+  return project?.path ?? null;
+}
+
 export function getEffectivePath(ctx: RouteContext, projectId: string, chatId?: string): string | null {
   const project = ctx.db.projects.get(projectId);
   if (!project) return null;

@@ -84,6 +84,17 @@ export const UpdateAgentBody = z.object({
   content: z.string(),
 });
 
+// Git write operations
+export const GitCheckoutBody = z.object({ branch: z.string().min(1) });
+export const GitCreateBranchBody = z.object({ name: z.string().min(1), startPoint: z.string().optional() });
+export const GitFetchBody = z.object({ remote: z.string().optional() });
+export const GitPullBody = z.object({ remote: z.string().optional(), branch: z.string().optional() });
+export const GitPushBody = z.object({ branch: z.string().optional(), remote: z.string().optional() });
+export const GitMergeBody = z.object({ branch: z.string().min(1) });
+export const GitRebaseBody = z.object({ branch: z.string().min(1) });
+export const GitRenameBranchBody = z.object({ oldName: z.string().min(1), newName: z.string().min(1) });
+export const GitDeleteBranchBody = z.object({ name: z.string().min(1), force: z.boolean().optional() });
+
 // --- Validation helper ---
 
 export function validate<T>(
