@@ -32,6 +32,7 @@ export interface Project {
   path: string;
   createdAt: string;
   lastOpenedAt: string;
+  parentProjectId?: string | null;
 }
 
 export interface ChatMessage {
