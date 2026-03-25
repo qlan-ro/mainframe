@@ -311,12 +311,16 @@ export class ClaudeSession implements AdapterSession {
     }
     const project: ContextFile[] = [];
     for (const name of ['CLAUDE.md', 'AGENTS.md']) {
-      const p = path.join(this.projectPath, name);
-      if (existsSync(p)) {
-        try {
-          project.push({ path: name, content: readFileSync(p, 'utf-8'), source: 'project' });
-        } catch {
-          /* expected */
+      // Check both project root and .claude/ subdirectory
+      for (const dir of [this.projectPath, path.join(this.projectPath, '.claude')]) {
+        const p = path.join(dir, name);
+        if (existsSync(p)) {
+          try {
+            const relPath = path.relative(this.projectPath, p);
+            project.push({ path: relPath, content: readFileSync(p, 'utf-8'), source: 'project' });
+          } catch {
+            /* expected */
+          }
         }
       }
     }

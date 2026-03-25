@@ -82,7 +82,8 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   const message = event.message as { content: Array<Record<string, unknown>> } | undefined;
   if (!message?.content) return;
 
-  const tur = event.toolUseResult as Record<string, unknown> | undefined;
+  // Stream-json uses snake_case; JSONL uses camelCase
+  const tur = (event.tool_use_result ?? event.toolUseResult) as Record<string, unknown> | undefined;
 
   // Use shared builder — same logic as convertUserEntry in claude-history.ts
   const toolResultContent: MessageContent[] = buildToolResultBlocks(message as Record<string, unknown>, tur);
