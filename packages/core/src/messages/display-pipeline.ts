@@ -27,12 +27,18 @@ export function prepareMessagesForClient(messages: ChatMessage[], categories?: T
   // handle turnDurationMs (all handled by groupMessages)
   const grouped = groupMessages(filtered);
 
-  // Steps 4–5: Convert to DisplayMessage
+  // Steps 4–5: Convert to DisplayMessage, deduplicating by id.
+  // The CLI can reuse UUIDs (e.g. for compact_boundary entries), which causes
+  // assistant-ui's MessageRepository to throw on duplicate ids.
   const result: DisplayMessage[] = [];
+  const seenIds = new Set<string>();
 
   for (const gMsg of grouped) {
     const display = convertGroupedToDisplay(gMsg, categories);
-    if (display) result.push(display);
+    if (!display) continue;
+    if (seenIds.has(display.id)) continue;
+    seenIds.add(display.id);
+    result.push(display);
   }
 
   return result;
