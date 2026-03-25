@@ -162,6 +162,34 @@ export function PreviewTab(): React.ReactElement {
   // Track whether the webview has successfully loaded (separate from process status)
   const [webviewReady, setWebviewReady] = useState(false);
 
+  // Draggable console height (when preview is active)
+  const [consoleHeight, setConsoleHeight] = useState(150);
+  const consoleDragging = useRef(false);
+  const consoleDragStartY = useRef(0);
+  const consoleDragStartH = useRef(0);
+
+  const onConsoleSeparatorDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      consoleDragging.current = true;
+      consoleDragStartY.current = e.clientY;
+      consoleDragStartH.current = consoleHeight;
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [consoleHeight],
+  );
+
+  const onConsoleSeparatorMove = useCallback((e: React.PointerEvent) => {
+    if (!consoleDragging.current) return;
+    // Dragging up → increases console height
+    const delta = consoleDragStartY.current - e.clientY;
+    setConsoleHeight(Math.max(60, consoleDragStartH.current + delta));
+  }, []);
+
+  const onConsoleSeparatorUp = useCallback(() => {
+    consoleDragging.current = false;
+  }, []);
+
   // Reset ready state when process stops
   useEffect(() => {
     if (previewStatus !== 'running') {
@@ -498,8 +526,20 @@ export function PreviewTab(): React.ReactElement {
             </div>
           ) : null}
 
+          {/* Draggable separator between preview and console */}
+          {hasPreview && (
+            <div
+              className="h-1.5 shrink-0 cursor-row-resize group flex items-center"
+              onPointerDown={onConsoleSeparatorDown}
+              onPointerMove={onConsoleSeparatorMove}
+              onPointerUp={onConsoleSeparatorUp}
+            >
+              <div className="h-px w-full bg-mf-divider group-hover:bg-mf-text-secondary group-active:bg-mf-text-secondary transition-colors" />
+            </div>
+          )}
+
           {/* Log output area — takes all space when no preview */}
-          <div className={hasPreview ? 'border-t border-mf-divider shrink-0' : 'flex-1 flex flex-col min-h-0'}>
+          <div className={hasPreview ? 'shrink-0 flex flex-col' : 'flex-1 flex flex-col min-h-0'}>
             <div className="flex items-center justify-between px-2 h-7 shrink-0">
               <span className="text-xs text-mf-text-secondary font-medium">Console</span>
               <div className="flex items-center">
@@ -530,7 +570,7 @@ export function PreviewTab(): React.ReactElement {
                   'overflow-y-auto px-2 pb-2 font-mono text-xs text-mf-text-secondary whitespace-pre-wrap select-text',
                   hasPreview ? '' : 'flex-1',
                 ].join(' ')}
-                style={hasPreview ? { height: 150 } : undefined}
+                style={hasPreview ? { height: consoleHeight } : undefined}
               >
                 {filteredLogs.length === 0 ? (
                   <span>No output yet.</span>
