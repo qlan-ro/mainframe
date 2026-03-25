@@ -1,3 +1,5 @@
+// TODO: Replace `any` SDK message types with imports from @anthropic-ai/claude-agent-sdk
+// once the SDK type contract stabilizes.
 import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 
 export function convertSessionMessages(messages: any[], chatId: string): ChatMessage[] {

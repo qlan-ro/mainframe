@@ -28,8 +28,8 @@ export class ClaudeSdkSession implements AdapterSession {
   readonly projectPath: string;
 
   private chatId: string | undefined;
-  private activeQuery: any | null = null;
-  private queryHandle: any | null = null;
+  private queryHandle: any | null = null; // TODO: type as Query from @anthropic-ai/claude-agent-sdk
+  private loopRunning = false;
   private bridge: PermissionBridge | null = null;
   private sink: SessionSink | null = null;
   private spawned = false;
@@ -53,7 +53,7 @@ export class ClaudeSdkSession implements AdapterSession {
       adapterId: this.adapterId,
       chatId: this.chatId ?? this.id,
       pid: 0, // SDK manages the subprocess internally; no direct PID access
-      status: this.activeQuery ? 'running' : 'stopped',
+      status: this.loopRunning ? 'running' : 'stopped',
       projectPath: this.projectPath,
       model: this.spawnOptions.model,
     };
@@ -74,14 +74,18 @@ export class ClaudeSdkSession implements AdapterSession {
   async sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void> {
     if (!this.sink) return;
 
-    if (!this.activeQuery) {
+    if (!this.queryHandle) {
       this.startQuery(message, images);
     } else {
       await this.streamFollowUp(message, images);
     }
   }
 
-  private startQuery(message: string, _images?: { mediaType: string; data: string }[]): void {
+  private startQuery(message: string, images?: { mediaType: string; data: string }[]): void {
+    if (images?.length) {
+      logger.warn({ count: images.length }, 'Image attachments not yet supported by SDK adapter — images dropped');
+    }
+
     const options: Record<string, any> = {
       cwd: this.projectPath,
       permissionMode: toSdkPermissionMode(this.spawnOptions.permissionMode),
@@ -106,12 +110,15 @@ export class ClaudeSdkSession implements AdapterSession {
       options.canUseTool = this.bridge.canUseTool.bind(this.bridge);
     }
 
-    this.activeQuery = query({ prompt: message, options });
-    this.queryHandle = this.activeQuery;
+    this.queryHandle = query({ prompt: message, options });
     this.runEventLoop();
   }
 
-  private async streamFollowUp(message: string, _images?: { mediaType: string; data: string }[]): Promise<void> {
+  private async streamFollowUp(message: string, images?: { mediaType: string; data: string }[]): Promise<void> {
+    if (images?.length) {
+      logger.warn({ count: images.length }, 'Image attachments not yet supported by SDK adapter — images dropped');
+    }
+
     if (!this.queryHandle || !this.chatId) return;
 
     const userMessage = {
@@ -133,10 +140,11 @@ export class ClaudeSdkSession implements AdapterSession {
   }
 
   private async runEventLoop(): Promise<void> {
-    if (!this.activeQuery || !this.sink) return;
+    if (!this.queryHandle || !this.sink) return;
+    this.loopRunning = true;
 
     try {
-      for await (const msg of this.activeQuery) {
+      for await (const msg of this.queryHandle) {
         mapSdkMessage(msg, this.sink);
 
         if (msg.type === 'system' && msg.subtype === 'init' && msg.session_id) {
@@ -149,7 +157,7 @@ export class ClaudeSdkSession implements AdapterSession {
         this.sink.onError(err instanceof Error ? err : new Error(String(err)));
       }
     } finally {
-      this.activeQuery = null;
+      this.loopRunning = false;
       this.sink.onExit(0);
       this.onExit?.();
     }
@@ -161,7 +169,7 @@ export class ClaudeSdkSession implements AdapterSession {
       this.queryHandle.close();
       this.queryHandle = null;
     }
-    this.activeQuery = null;
+    this.loopRunning = false;
     this.spawned = false;
   }
 

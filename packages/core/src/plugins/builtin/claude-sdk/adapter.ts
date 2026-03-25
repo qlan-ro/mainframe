@@ -33,6 +33,8 @@ const execFileAsync = promisify(execFile);
 const logger = createChildLogger('claude-sdk-adapter');
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
+// TODO: Use query.supportedModels() for dynamic model discovery instead of hardcoding.
+// Hardcoded for now to match the CLI plugin pattern and avoid spawning a query just for listing.
 const CLAUDE_MODELS: AdapterModel[] = [
   { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', contextWindow: DEFAULT_CONTEXT_WINDOW },
   { id: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', contextWindow: DEFAULT_CONTEXT_WINDOW },

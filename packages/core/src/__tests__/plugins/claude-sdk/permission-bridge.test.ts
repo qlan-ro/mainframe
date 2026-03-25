@@ -1,21 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PermissionBridge } from '../../../plugins/builtin/claude-sdk/permission-bridge.js';
-import type { SessionSink, ControlResponse } from '@qlan-ro/mainframe-types';
-
-function createMockSink(): SessionSink {
-  return {
-    onInit: vi.fn(),
-    onMessage: vi.fn(),
-    onToolResult: vi.fn(),
-    onPermission: vi.fn(),
-    onResult: vi.fn(),
-    onExit: vi.fn(),
-    onError: vi.fn(),
-    onCompact: vi.fn(),
-    onPlanFile: vi.fn(),
-    onSkillFile: vi.fn(),
-  };
-}
+import type { ControlResponse } from '@qlan-ro/mainframe-types';
+import { createMockSink } from './test-utils.js';
 
 describe('PermissionBridge', () => {
   it('canUseTool calls sink.onPermission and resolves on allow', async () => {

@@ -7,22 +7,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 
 import { ClaudeSdkSession } from '../../../plugins/builtin/claude-sdk/session.js';
 import { query as mockQuery } from '@anthropic-ai/claude-agent-sdk';
-import type { SessionSink } from '@qlan-ro/mainframe-types';
-
-function createMockSink(): SessionSink {
-  return {
-    onInit: vi.fn(),
-    onMessage: vi.fn(),
-    onToolResult: vi.fn(),
-    onPermission: vi.fn(),
-    onResult: vi.fn(),
-    onExit: vi.fn(),
-    onError: vi.fn(),
-    onCompact: vi.fn(),
-    onPlanFile: vi.fn(),
-    onSkillFile: vi.fn(),
-  };
-}
+import { createMockSink } from './test-utils.js';
 
 function createMockQuery(messages: any[]) {
   let index = 0;

@@ -1,3 +1,6 @@
+// TODO: Replace `any` SDK message types with imports from @anthropic-ai/claude-agent-sdk
+// once we're confident the SDK type contract is stable. Currently using `any` to avoid
+// tight coupling to SDK internals during initial integration.
 import type { MessageContent, SessionSink, MessageMetadata, SessionResult } from '@qlan-ro/mainframe-types';
 
 export function mapSdkMessage(msg: any, sink: SessionSink): void {

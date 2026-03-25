@@ -7,6 +7,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 }));
 
 import { ClaudeSdkAdapter } from '../../../plugins/builtin/claude-sdk/adapter.js';
+import { createMockSink } from './test-utils.js';
 
 describe('ClaudeSdkAdapter', () => {
   it('has correct id and name', () => {
@@ -39,18 +40,7 @@ describe('ClaudeSdkAdapter', () => {
   it('killAll kills all active sessions', async () => {
     const adapter = new ClaudeSdkAdapter();
     const session = adapter.createSession({ projectPath: '/tmp/test' });
-    const sink = {
-      onInit: vi.fn(),
-      onMessage: vi.fn(),
-      onToolResult: vi.fn(),
-      onPermission: vi.fn(),
-      onResult: vi.fn(),
-      onExit: vi.fn(),
-      onError: vi.fn(),
-      onCompact: vi.fn(),
-      onPlanFile: vi.fn(),
-      onSkillFile: vi.fn(),
-    };
+    const sink = createMockSink();
     await session.spawn({}, sink);
     adapter.killAll();
     expect(session.isSpawned).toBe(false);

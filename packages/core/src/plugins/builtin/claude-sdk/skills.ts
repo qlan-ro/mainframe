@@ -1,3 +1,5 @@
+// TODO: Add tests for skills CRUD. Currently untested because this is a copy of the CLI plugin's
+// skills module. Consider extracting to a shared module to eliminate duplication.
 import { readdir, readFile, writeFile, mkdir, rm, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';

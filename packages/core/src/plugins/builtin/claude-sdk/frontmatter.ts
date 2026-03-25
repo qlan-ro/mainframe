@@ -1,3 +1,4 @@
+// TODO: Add tests or extract to shared module. Currently a copy of the CLI plugin's frontmatter parser.
 export function parseFrontmatter(content: string): { attributes: Record<string, string>; body: string } {
   const attributes: Record<string, string> = {};
 
