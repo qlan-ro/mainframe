@@ -124,7 +124,7 @@ describe('file-edit flow', () => {
       if (e.type === 'context.updated') contextUpdated.push(e);
     });
 
-    // Emit message with Write tool_use using relative path
+    // Emit assistant message with Write tool_use (before execution)
     adapter.currentSession!.simulateMessage([
       {
         type: 'tool_use',
@@ -135,7 +135,16 @@ describe('file-edit flow', () => {
     ]);
     await sleep(50);
 
-    // context.updated was emitted
+    // context.updated should NOT fire on tool_use (tool hasn't executed yet)
+    expect(contextUpdated.length).toBe(0);
+
+    // Emit tool_result (after execution)
+    adapter.currentSession!.simulateToolResult([
+      { type: 'tool_result', toolUseId: 'tu-1', content: 'ok', isError: false },
+    ]);
+    await sleep(50);
+
+    // context.updated fires AFTER tool_result is cached
     expect(contextUpdated.length).toBeGreaterThanOrEqual(1);
   }, 10_000);
 });
