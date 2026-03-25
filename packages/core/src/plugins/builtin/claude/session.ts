@@ -11,6 +11,7 @@ import type {
   SessionOptions,
   SessionSink,
   ControlResponse,
+  ControlUpdate,
   ChatMessage,
   ContextFile,
   SkillFileEntry,
@@ -50,6 +51,16 @@ export interface ClaudeSessionState {
   child: ChildProcess | null;
   status: 'starting' | 'ready' | 'running' | 'stopped' | 'error';
   pid: number;
+}
+
+/**
+ * The CLI's permission_suggestions always use destination:"session" (in-memory only).
+ * The terminal CLI's "Always Allow" button changes destinations to "localSettings"
+ * before applying them. This function does the same: promotes every session-scoped
+ * suggestion to localSettings so the CLI persists the rule AND updates in-memory state.
+ */
+export function promoteToLocalSettings(updates: ControlUpdate[]): ControlUpdate[] {
+  return updates.map((u) => (u.destination === 'session' ? { ...u, destination: 'localSettings' as const } : u));
 }
 
 export class ClaudeSession implements AdapterSession {
@@ -247,7 +258,9 @@ export class ClaudeSession implements AdapterSession {
 
     if (response.behavior === 'allow') {
       if (response.updatedInput) innerResponse.updatedInput = response.updatedInput;
-      if (response.updatedPermissions) innerResponse.updatedPermissions = response.updatedPermissions;
+      if (response.updatedPermissions) {
+        innerResponse.updatedPermissions = promoteToLocalSettings(response.updatedPermissions);
+      }
     } else {
       if (response.toolName === 'ExitPlanMode') {
         const preamble =
