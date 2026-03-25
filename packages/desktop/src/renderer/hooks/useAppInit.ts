@@ -115,8 +115,8 @@ export function useProject(projectId: string | null) {
         const sorted = [...chatsList].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
         const mostRecent = sorted[0]!;
         useChatsStore.getState().setActiveChat(mostRecent.id);
+        useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
         if (!hasRestoredTabs) {
-          useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
           daemonClient.subscribe(mostRecent.id);
         }
       }

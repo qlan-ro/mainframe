@@ -6,7 +6,6 @@ const log = createLogger('renderer:panels');
 import { useChatsStore, useProjectsStore } from '../../store';
 import type { SessionStatus } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
-import { useProject } from '../../hooks/useAppInit';
 import { daemonClient } from '../../lib/client';
 import { archiveChat, getExternalSessions, importExternalSession } from '../../lib/api';
 import { cn } from '../../lib/utils';
@@ -42,8 +41,15 @@ export function ChatsPanel(): React.ReactElement {
   const { activeProjectId } = useProjectsStore();
   const { chats, activeChatId, setActiveChat, removeChat } = useChatsStore();
   const adapters = useAdaptersStore((s) => s.adapters);
-  const { createChat } = useProject(activeProjectId);
   const externalSessionCount = useChatsStore((s) => s.externalSessionCount);
+
+  const createChat = useCallback(
+    (adapterId: string, model?: string) => {
+      if (!activeProjectId) return;
+      daemonClient.createChat(activeProjectId, adapterId, model);
+    },
+    [activeProjectId],
+  );
 
   const [showImport, setShowImport] = useState(false);
   const [externalSessions, setExternalSessions] = useState<ExternalSession[]>([]);
