@@ -1,6 +1,13 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { daemonClient } from '../lib/client';
-import { getProjects, getAdapters, getProviderSettings, getChats, getPlugins, getExternalSessions } from '../lib/api';
+import {
+  getProjects,
+  getAdapters,
+  getProviderSettings,
+  getAllChats,
+  getPlugins,
+  getExternalSessions,
+} from '../lib/api';
 import { useProjectsStore } from '../store/projects';
 import { useChatsStore } from '../store/chats';
 import { useTabsStore } from '../store/tabs';
@@ -55,9 +62,29 @@ export function useAppInit(): void {
         } catch (err) {
           log.warn('plugin fetch failed', { err: String(err) });
         }
-        const lastId = localStorage.getItem('mf:activeProjectId');
-        if (lastId && projects.some((p) => p.id === lastId)) {
-          useProjectsStore.getState().setActiveProject(lastId);
+
+        // Fetch all chats across all projects
+        try {
+          const chatsList = await getAllChats();
+          useChatsStore.getState().setChats(chatsList);
+
+          // Restore active chat from localStorage
+          const lastChatId = localStorage.getItem('mf:activeChatId');
+          if (lastChatId && chatsList.some((c) => c.id === lastChatId)) {
+            useChatsStore.getState().setActiveChat(lastChatId);
+            daemonClient.subscribe(lastChatId);
+          } else if (chatsList.length > 0) {
+            // Fall back to most recently updated chat
+            const sorted = [...chatsList].sort(
+              (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+            );
+            const mostRecent = sorted[0]!;
+            useChatsStore.getState().setActiveChat(mostRecent.id);
+            useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
+            daemonClient.subscribe(mostRecent.id);
+          }
+        } catch (err) {
+          log.warn('chat fetch failed', { err: String(err) });
         }
       } catch {
         setError('Failed to connect to daemon');
@@ -68,7 +95,7 @@ export function useAppInit(): void {
 
     loadData();
 
-    // Re-fetch projects when daemon reconnects (e.g. daemon restart during dev)
+    // Re-fetch when daemon reconnects (e.g. daemon restart during dev)
     const unsubConnection = daemonClient.subscribeConnection(() => {
       if (daemonClient.connected) loadData();
     });
@@ -82,45 +109,10 @@ export function useAppInit(): void {
 }
 
 export function useProject(projectId: string | null) {
-  const { chats, setChats } = useChatsStore();
-  const prevProjectIdRef = useRef<string | null>(null);
+  const chats = useChatsStore((s) => s.chats);
 
   useEffect(() => {
     if (!projectId) return;
-
-    useTabsStore.getState().switchProject(prevProjectIdRef.current, projectId);
-    prevProjectIdRef.current = projectId;
-
-    const hasRestoredTabs = useTabsStore.getState().tabs.length > 0;
-
-    // Clear immediately so the sidebar doesn't show a stale highlight during fetch
-    useChatsStore.getState().setActiveChat(null);
-
-    const loadChats = async () => {
-      const chatsList = await getChats(projectId);
-      setChats(chatsList);
-
-      // Sync activeChatId AFTER chats are loaded so we can validate it exists
-      if (hasRestoredTabs) {
-        const tabState = useTabsStore.getState();
-        const activeTab = tabState.tabs.find((t) => t.id === tabState.activePrimaryTabId);
-        if (activeTab?.type === 'chat' && chatsList.some((c) => c.id === activeTab.chatId)) {
-          useChatsStore.getState().setActiveChat(activeTab.chatId);
-          return;
-        }
-      }
-
-      // Fallback: select the most recent chat
-      if (chatsList.length > 0) {
-        const sorted = [...chatsList].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-        const mostRecent = sorted[0]!;
-        useChatsStore.getState().setActiveChat(mostRecent.id);
-        useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
-        if (!hasRestoredTabs) {
-          daemonClient.subscribe(mostRecent.id);
-        }
-      }
-    };
 
     const syncLaunchStatuses = async () => {
       try {
@@ -143,7 +135,6 @@ export function useProject(projectId: string | null) {
       }
     };
 
-    loadChats();
     loadExternalSessions();
     syncLaunchStatuses();
 
@@ -155,10 +146,9 @@ export function useProject(projectId: string | null) {
       useSkillsStore.getState().fetchCommands();
     }
 
-    // Re-fetch chats and launch statuses when daemon reconnects (e.g. daemon restart during dev)
+    // Re-fetch project context when daemon reconnects
     const unsubConnection = daemonClient.subscribeConnection(() => {
       if (daemonClient.connected) {
-        loadChats();
         loadExternalSessions();
         syncLaunchStatuses();
       }
@@ -167,7 +157,7 @@ export function useProject(projectId: string | null) {
     return () => {
       unsubConnection();
     };
-  }, [projectId, setChats]);
+  }, [projectId]);
 
   const createChat = useCallback(
     (adapterId: string, model?: string) => {
