@@ -196,9 +196,15 @@ export function TitleBar({
                 return (
                   <div
                     key={project.id}
-                    className="relative flex items-center px-3 py-2 hover:bg-mf-app-bg transition-colors group"
+                    className="relative flex items-center px-3 py-2 hover:bg-mf-app-bg transition-colors group cursor-pointer"
                     onMouseEnter={() => setHoveringId(project.id)}
                     onMouseLeave={() => handleMouseLeave(project.id)}
+                    onClick={() => {
+                      if (!isConfirming) {
+                        setActiveProject(project.id);
+                        setDropdownOpen(false);
+                      }
+                    }}
                   >
                     {isConfirming ? (
                       /* Inline confirm state: ✓ / ✗ */
