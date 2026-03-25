@@ -201,16 +201,22 @@ describe('ChatsRepository', () => {
       expect(fetched!.processState).toBe('working');
     });
 
-    it('always updates updated_at', () => {
+    it('updates updated_at only when explicitly passed', () => {
       const chat = chats.create(projectId, 'claude');
 
-      // Set an old timestamp so the update is guaranteed to differ
+      // Set an old timestamp
       db.prepare('UPDATE chats SET updated_at = ? WHERE id = ?').run('2020-01-01T00:00:00.000Z', chat.id);
 
+      // update without updatedAt should NOT change it
       chats.update(chat.id, { title: 'Trigger update' });
+      const afterTitle = chats.get(chat.id);
+      expect(afterTitle!.updatedAt).toBe('2020-01-01T00:00:00.000Z');
 
-      const fetched = chats.get(chat.id);
-      expect(fetched!.updatedAt).not.toBe('2020-01-01T00:00:00.000Z');
+      // update with explicit updatedAt should change it
+      const now = new Date().toISOString();
+      chats.update(chat.id, { updatedAt: now });
+      const afterExplicit = chats.get(chat.id);
+      expect(afterExplicit!.updatedAt).toBe(now);
     });
 
     it('updates mentions as JSON', () => {

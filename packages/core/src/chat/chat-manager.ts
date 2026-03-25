@@ -212,8 +212,10 @@ export class ChatManager {
       } else {
         await postStart.session.sendCommand(name, args);
       }
+      const now = new Date().toISOString();
       postStart.chat.processState = 'working';
-      this.db.chats.update(chatId, { processState: 'working' });
+      postStart.chat.updatedAt = now;
+      this.db.chats.update(chatId, { processState: 'working', updatedAt: now });
       this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
       return;
     }
@@ -255,12 +257,13 @@ export class ChatManager {
       postStart.chat.title = title;
       this.db.chats.update(chatId, { title });
       this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
-
       this.lifecycle.doGenerateTitle(chatId, content).catch(() => {});
     }
 
+    const now = new Date().toISOString();
     postStart.chat.processState = 'working';
-    this.db.chats.update(chatId, { processState: 'working' });
+    postStart.chat.updatedAt = now;
+    this.db.chats.update(chatId, { processState: 'working', updatedAt: now });
     this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
 
     await postStart.session.sendMessage(outgoingContent, images.length > 0 ? images : undefined);
