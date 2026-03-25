@@ -37,6 +37,12 @@ export async function getChats(projectId: string): Promise<Chat[]> {
   return json.data;
 }
 
+export async function getAllChats(): Promise<Chat[]> {
+  const res = await fetch(`${API_BASE}/api/chats`);
+  const json = await res.json();
+  return json.data;
+}
+
 export async function archiveChat(chatId: string): Promise<void> {
   log.info('archiveChat', { chatId });
   await postJson(`${API_BASE}/api/chats/${chatId}/archive`);
