@@ -175,7 +175,7 @@ describe('ChatManager command routing', () => {
       command: { name: 'compact', source: 'claude' },
     });
 
-    expect(db.chats.update).toHaveBeenCalledWith('chat-1', { processState: 'working' });
+    expect(db.chats.update).toHaveBeenCalledWith('chat-1', expect.objectContaining({ processState: 'working' }));
   });
 
   it('calls plain sendMessage with raw content when no metadata is provided', async () => {

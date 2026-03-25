@@ -108,6 +108,7 @@ export class ChatsRepository {
     branchName: { column: 'branch_name', transform: (v) => v ?? null },
     mentions: { column: 'mentions', transform: (v) => JSON.stringify(v) },
     processState: { column: 'process_state' },
+    updatedAt: { column: 'updated_at' },
   };
 
   update(id: string, updates: Partial<Chat>): void {
@@ -122,8 +123,7 @@ export class ChatsRepository {
       }
     }
 
-    sets.push('updated_at = ?');
-    values.push(new Date().toISOString());
+    if (sets.length === 0) return;
     values.push(id);
 
     this.db.prepare(`UPDATE chats SET ${sets.join(', ')} WHERE id = ?`).run(...values);
