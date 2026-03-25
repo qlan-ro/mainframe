@@ -10,11 +10,9 @@ const log = createLogger('renderer:ws');
 export function routeEvent(event: DaemonEvent): void {
   const chats = useChatsStore.getState();
   const tabs = useTabsStore.getState();
-  const activeProjectId = useProjectsStore.getState().activeProjectId;
 
   switch (event.type) {
     case 'chat.created':
-      if (event.chat.projectId !== activeProjectId) break;
       log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title, source: event.source });
       chats.addChat(event.chat);
       if (event.source !== 'import') {
@@ -22,18 +20,13 @@ export function routeEvent(event: DaemonEvent): void {
         tabs.openChatTab(event.chat.id, event.chat.title);
       }
       break;
-    case 'chat.updated': {
-      // Allow updates for chats already in the store (e.g. processState changes while
-      // browsing another project). Only block chats we haven't loaded.
-      const knownChat = chats.chats.some((c) => c.id === event.chat.id);
-      if (!knownChat && event.chat.projectId !== activeProjectId) break;
+    case 'chat.updated':
       log.debug('event:chat.updated', { chatId: event.chat.id });
       chats.updateChat(event.chat);
       if (event.chat.title) {
         tabs.updateTabLabel(`chat:${event.chat.id}`, event.chat.title);
       }
       break;
-    }
     case 'chat.ended':
       log.info('event:chat.ended', { chatId: event.chatId });
       chats.removeChat(event.chatId);
@@ -93,7 +86,6 @@ export function routeEvent(event: DaemonEvent): void {
       useSandboxStore.getState().setProcessStatus(event.projectId, event.name, event.status);
       break;
     case 'launch.tunnel':
-      // Desktop uses localhost URLs, tunnel events are informational only
       log.debug('event:launch.tunnel', { projectId: event.projectId, name: event.name, url: event.url });
       break;
     case 'launch.tunnel.failed':
@@ -103,7 +95,6 @@ export function routeEvent(event: DaemonEvent): void {
       log.warn('event:launch.port.timeout', { projectId: event.projectId, name: event.name, port: event.port });
       break;
     case 'sessions.external.count':
-      if (event.projectId !== activeProjectId) break;
       log.debug('event:sessions.external.count', { projectId: event.projectId, count: event.count });
       chats.setExternalSessionCount(event.count);
       break;
