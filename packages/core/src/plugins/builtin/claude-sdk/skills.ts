@@ -4,8 +4,6 @@ import path from 'node:path';
 import type { Skill, AgentConfig, CreateSkillInput, CreateAgentInput } from '@qlan-ro/mainframe-types';
 import { parseFrontmatter, buildFrontmatter } from './frontmatter.js';
 
-// TODO rename as claude-tools.ts
-
 const ADAPTER_ID = 'claude-sdk';
 
 export async function listSkills(projectPath: string): Promise<Skill[]> {
@@ -34,7 +32,7 @@ export async function listSkills(projectPath: string): Promise<Skill[]> {
       }
     }
   } catch {
-    // No plugins file or parse error
+    /* expected — plugins file may not exist */
   }
 
   return [...skills.values()];
@@ -50,6 +48,7 @@ async function scanSkillsDir(
   try {
     entries = await readdir(dir);
   } catch {
+    /* expected — directory may not exist */
     return;
   }
 
@@ -79,7 +78,7 @@ async function scanSkillsDir(
         invocationName,
       });
     } catch {
-      // Missing SKILL.md or unresolvable symlink
+      /* expected — SKILL.md may be missing or symlink unresolvable */
     }
   }
 }
@@ -89,6 +88,7 @@ async function scanCommandsDir(dir: string, scope: 'project' | 'global', skills:
   try {
     groups = await readdir(dir);
   } catch {
+    /* expected — directory may not exist */
     return;
   }
 
@@ -98,6 +98,7 @@ async function scanCommandsDir(dir: string, scope: 'project' | 'global', skills:
     try {
       entries = await readdir(groupDir);
     } catch {
+      /* expected — group directory may not exist */
       continue;
     }
 
@@ -127,7 +128,7 @@ async function scanCommandsDir(dir: string, scope: 'project' | 'global', skills:
           invocationName,
         });
       } catch {
-        // Unreadable file
+        /* expected — command file may be unreadable */
       }
     }
   }
@@ -144,6 +145,7 @@ export async function listAgents(projectPath: string): Promise<AgentConfig[]> {
     try {
       entries = await readdir(dir);
     } catch {
+      /* expected — agents directory may not exist */
       continue;
     }
 
@@ -159,7 +161,7 @@ export async function listAgents(projectPath: string): Promise<AgentConfig[]> {
 
         agents.push({ id, adapterId: ADAPTER_ID, name, description, scope, filePath, content: raw });
       } catch {
-        // Unreadable file
+        /* expected — agent file may be unreadable */
       }
     }
   }

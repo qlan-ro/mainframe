@@ -1,11 +1,14 @@
 import { nanoid } from 'nanoid';
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { mapSdkMessage } from './event-mapper.js';
 import { PermissionBridge } from './permission-bridge.js';
+import { getContextFilesForProject } from './context.js';
+import { convertSessionMessages } from './history.js';
 import { createChildLogger } from '../../../logger.js';
 import type {
   AdapterProcess,
   AdapterSession,
+  ChatMessage,
   ControlResponse,
   SessionOptions,
   SessionSink,
@@ -49,7 +52,7 @@ export class ClaudeSdkSession implements AdapterSession {
       id: this.id,
       adapterId: this.adapterId,
       chatId: this.chatId ?? this.id,
-      pid: process.pid,
+      pid: 0, // SDK manages the subprocess internally; no direct PID access
       status: this.activeQuery ? 'running' : 'stopped',
       projectPath: this.projectPath,
       model: this.spawnOptions.model,
@@ -82,6 +85,7 @@ export class ClaudeSdkSession implements AdapterSession {
     const options: Record<string, any> = {
       cwd: this.projectPath,
       permissionMode: toSdkPermissionMode(this.spawnOptions.permissionMode),
+      // Route all permission checks through our canUseTool bridge instead of SDK's built-in prompts
       allowDangerouslySkipPermissions: true,
       env: {
         FORCE_COLOR: '0',
@@ -188,11 +192,18 @@ export class ClaudeSdkSession implements AdapterSession {
   }
 
   getContextFiles(): { global: any[]; project: any[] } {
-    return { global: [], project: [] };
+    return getContextFilesForProject(this.projectPath);
   }
 
-  async loadHistory(): Promise<any[]> {
-    return [];
+  async loadHistory(): Promise<ChatMessage[]> {
+    if (!this.chatId) return [];
+    try {
+      const messages = await getSessionMessages(this.chatId, { dir: this.projectPath });
+      return convertSessionMessages(messages, this.chatId);
+    } catch (err) {
+      logger.warn({ err }, 'Failed to load session history via SDK');
+      return [];
+    }
   }
 
   async extractPlanFiles(): Promise<string[]> {
