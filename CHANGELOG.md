@@ -1,9 +1,19 @@
 # Changelog
 
+## 0.2.4
+
+### Fixes
+
+- Fix live session diffs and context.updated timing (#100)
+- Only update session updatedAt on user message send (#99)
+- Prevent stale messages when switching projects (#98)
+- Deduplicate display messages by id to prevent assistant-ui crash (#96)
+
 ## 0.2.3
 
 ### Features
 
+- Branch management popover (#92)
 - Add LSP proxy for Monaco editor language features (#80)
 - Add Find in Path content search from file tree (#79)
 - Add reveal-in-tree for open editor files (#82)
@@ -13,11 +23,15 @@
 
 ### Fixes
 
+- Allow image-only messages by relaxing MessageSend schema (#93)
+- Auto-refresh editor when agent edits the open file (#88)
+- Prevent chat message text from overflowing container (#89)
 - Restore nav-history code lost in PR #82 merge (#85)
 - Allow Enter to send messages while response is in progress (#76)
 
 ### Chores
 
+- Set up Changesets for version management (#87)
 - Bump the dependencies group (#84)
 - Bump pnpm/action-setup from 4 to 5 (#74)
 - Add WIP disclaimer and Cloudflare Tunnel guide (#77)
