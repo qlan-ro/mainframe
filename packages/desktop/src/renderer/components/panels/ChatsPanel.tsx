@@ -4,7 +4,6 @@ import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
 import { useChatsStore, useProjectsStore } from '../../store';
-import { daemonClient } from '../../lib/client';
 import { createProject } from '../../lib/api';
 import { ContextMenu } from '../ui/context-menu';
 import type { ContextMenuItem } from '../ui/context-menu';
