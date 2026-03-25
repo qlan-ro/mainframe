@@ -8,7 +8,8 @@ export class ProjectsRepository {
 
   list(): Project[] {
     const stmt = this.db.prepare(`
-      SELECT id, name, path, created_at as createdAt, last_opened_at as lastOpenedAt
+      SELECT id, name, path, created_at as createdAt, last_opened_at as lastOpenedAt,
+             parent_project_id as parentProjectId
       FROM projects
       ORDER BY last_opened_at DESC
     `);
@@ -17,7 +18,8 @@ export class ProjectsRepository {
 
   get(id: string): Project | null {
     const stmt = this.db.prepare(`
-      SELECT id, name, path, created_at as createdAt, last_opened_at as lastOpenedAt
+      SELECT id, name, path, created_at as createdAt, last_opened_at as lastOpenedAt,
+             parent_project_id as parentProjectId
       FROM projects WHERE id = ?
     `);
     return stmt.get(id) as Project | null;
@@ -25,7 +27,8 @@ export class ProjectsRepository {
 
   getByPath(path: string): Project | null {
     const stmt = this.db.prepare(`
-      SELECT id, name, path, created_at as createdAt, last_opened_at as lastOpenedAt
+      SELECT id, name, path, created_at as createdAt, last_opened_at as lastOpenedAt,
+             parent_project_id as parentProjectId
       FROM projects WHERE path = ?
     `);
     return stmt.get(path) as Project | null;
@@ -42,7 +45,7 @@ export class ProjectsRepository {
     `);
     stmt.run(id, projectName, path, now, now);
 
-    return { id, name: projectName, path, createdAt: now, lastOpenedAt: now };
+    return { id, name: projectName, path, createdAt: now, lastOpenedAt: now, parentProjectId: null };
   }
 
   updateLastOpened(id: string): void {
@@ -63,5 +66,15 @@ export class ProjectsRepository {
       deleteProject.run(id);
     });
     tx();
+  }
+
+  setParentProject(projectId: string, parentId: string): void {
+    const stmt = this.db.prepare(`UPDATE projects SET parent_project_id = ? WHERE id = ?`);
+    stmt.run(parentId, projectId);
+  }
+
+  clearParentProject(parentId: string): void {
+    const stmt = this.db.prepare(`UPDATE projects SET parent_project_id = NULL WHERE parent_project_id = ?`);
+    stmt.run(parentId);
   }
 }
