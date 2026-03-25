@@ -229,8 +229,13 @@ describe('EventHandler context.updated timing', () => {
 
     // Step 1: assistant sends tool_use
     sink.onMessage([
-      { type: 'tool_use', id: 'toolu_1', name: 'Edit', input: { file_path: '/foo/bar.ts' } },
-      { type: 'tool_use', id: 'toolu_2', name: 'Write', input: { file_path: '/foo/baz.ts' } },
+      {
+        type: 'tool_use',
+        id: 'toolu_1',
+        name: 'Edit',
+        input: { file_path: '/foo/bar.ts', old_string: 'a', new_string: 'b' },
+      },
+      { type: 'tool_use', id: 'toolu_2', name: 'Write', input: { file_path: '/foo/baz.ts', content: 'new file' } },
     ]);
 
     // Step 2: tool results arrive

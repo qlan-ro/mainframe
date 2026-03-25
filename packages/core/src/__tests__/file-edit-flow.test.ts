@@ -130,7 +130,7 @@ describe('file-edit flow', () => {
         type: 'tool_use',
         id: 'tu-1',
         name: 'Write',
-        input: { file_path: 'src/main.ts', content: 'export const x = 1;' },
+        input: { file_path: 'src/main.ts', content: 'export const x = 42;' },
       },
     ]);
     await sleep(50);

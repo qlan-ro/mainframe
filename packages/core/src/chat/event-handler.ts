@@ -81,7 +81,7 @@ function buildSessionSink(
   }
 
   // Track tool_use id → file_path so onToolResult can emit context.updated
-  // AFTER the tool has executed and the result is cached.
+  // with the affected paths after the tool has executed.
   const pendingFilePaths = new Map<string, string>();
 
   return {
@@ -131,23 +131,21 @@ function buildSessionSink(
     },
 
     onToolResult(content: any[]) {
+      const editedPaths: string[] = [];
+      for (const block of content) {
+        if (block.type !== 'tool_result' || block.isError) continue;
+        const fp = pendingFilePaths.get(block.toolUseId);
+        if (fp) {
+          editedPaths.push(fp);
+          pendingFilePaths.delete(block.toolUseId);
+        }
+      }
+
       const message = messages.createTransientMessage(chatId, 'tool_result', content);
       messages.append(chatId, message);
       emitEvent({ type: 'message.added', chatId, message });
       emitDisplay();
 
-      // Emit context.updated AFTER the tool_result is cached so that
-      // ChangesTab (session-diffs) and EditorTab see the completed data.
-      const editedPaths: string[] = [];
-      for (const block of content) {
-        if (block.type === 'tool_result') {
-          const fp = pendingFilePaths.get(block.toolUseId);
-          if (fp) {
-            editedPaths.push(fp);
-            pendingFilePaths.delete(block.toolUseId);
-          }
-        }
-      }
       if (editedPaths.length > 0) {
         emitEvent({ type: 'context.updated', chatId, filePaths: editedPaths });
       }
