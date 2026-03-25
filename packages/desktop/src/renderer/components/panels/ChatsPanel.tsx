@@ -1,19 +1,34 @@
-import React, { useCallback, useState } from 'react';
-import { Plus, Archive, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FolderPlus } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
 import { useChatsStore, useProjectsStore } from '../../store';
-import type { SessionStatus } from '../../store/chats';
-import { useTabsStore } from '../../store/tabs';
 import { daemonClient } from '../../lib/client';
-import { archiveChat, getExternalSessions, importExternalSession } from '../../lib/api';
-import { cn } from '../../lib/utils';
-import { getAdapterLabel } from '../../lib/adapters';
-import { useAdaptersStore } from '../../store/adapters';
+import { createProject } from '../../lib/api';
 import { ContextMenu } from '../ui/context-menu';
 import type { ContextMenuItem } from '../ui/context-menu';
-import type { ExternalSession } from '@qlan-ro/mainframe-types';
+import { DirectoryPickerModal } from '../DirectoryPickerModal';
+import { ProjectGroup } from './ProjectGroup';
+import type { Chat, Project } from '@qlan-ro/mainframe-types';
+
+const STORAGE_KEY = 'mf:collapsedProjects';
+
+function loadCollapsed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return new Set(parsed as string[]);
+  } catch {
+    /* corrupted data */
+  }
+  return new Set();
+}
+
+function saveCollapsed(set: Set<string>): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
+}
 
 interface ContextMenuState {
   x: number;
@@ -21,49 +36,72 @@ interface ContextMenuState {
   items: ContextMenuItem[];
 }
 
-function SessionStatusDot({ status, worktreeMissing }: { status: SessionStatus; worktreeMissing?: boolean }) {
-  if (worktreeMissing) {
-    return <div data-testid="chat-status-missing" className="w-2 h-2 rounded-full shrink-0 bg-mf-destructive" />;
+interface ProjectGroupData {
+  project: Project;
+  chats: Chat[];
+  latestUpdate: number;
+  parentName?: string;
+}
+
+function buildGroups(projects: Project[], chats: Chat[]): ProjectGroupData[] {
+  const chatsByProject = new Map<string, Chat[]>();
+  for (const chat of chats) {
+    const list = chatsByProject.get(chat.projectId);
+    if (list) {
+      list.push(chat);
+    } else {
+      chatsByProject.set(chat.projectId, [chat]);
+    }
   }
-  const isWorking = status === 'working' || status === 'waiting';
-  return (
-    <div
-      data-testid={isWorking ? 'chat-status-working' : 'chat-status-idle'}
-      className={cn(
-        'w-2 h-2 rounded-full shrink-0',
-        isWorking ? 'bg-mf-accent animate-pulse motion-reduce:animate-none' : 'bg-mf-text-secondary opacity-40',
-      )}
-    />
-  );
+
+  const projectMap = new Map<string, Project>();
+  for (const p of projects) {
+    projectMap.set(p.id, p);
+  }
+
+  const groups: ProjectGroupData[] = projects.map((project) => {
+    const projectChats = chatsByProject.get(project.id) ?? [];
+    const latestUpdate = projectChats.reduce((max, c) => Math.max(max, new Date(c.updatedAt).getTime()), 0);
+    const parent = project.parentProjectId ? projectMap.get(project.parentProjectId) : undefined;
+    return {
+      project,
+      chats: projectChats,
+      latestUpdate,
+      parentName: parent?.name,
+    };
+  });
+
+  groups.sort((a, b) => b.latestUpdate - a.latestUpdate);
+  return groups;
 }
 
 export function ChatsPanel(): React.ReactElement {
-  const { activeProjectId } = useProjectsStore();
-  const { chats, activeChatId, setActiveChat, removeChat } = useChatsStore();
-  const adapters = useAdaptersStore((s) => s.adapters);
-  const externalSessionCount = useChatsStore((s) => s.externalSessionCount);
+  const projects = useProjectsStore((s) => s.projects);
+  const addProject = useProjectsStore((s) => s.addProject);
+  const chats = useChatsStore((s) => s.chats);
 
-  const createChat = useCallback(
-    (adapterId: string, model?: string) => {
-      if (!activeProjectId) return;
-      daemonClient.createChat(activeProjectId, adapterId, model);
-    },
-    [activeProjectId],
-  );
-
-  const [showImport, setShowImport] = useState(false);
-  const [externalSessions, setExternalSessions] = useState<ExternalSession[]>([]);
-  const [loadingImport, setLoadingImport] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [showDirPicker, setShowDirPicker] = useState(false);
 
-  const handleSelectChat = useCallback(
-    (chatId: string, title?: string) => {
-      setActiveChat(chatId);
-      useTabsStore.getState().openChatTab(chatId, title);
-      daemonClient.resumeChat(chatId);
-    },
-    [setActiveChat],
-  );
+  // Persist collapse state
+  useEffect(() => {
+    saveCollapsed(collapsed);
+  }, [collapsed]);
+
+  const groups = useMemo(() => buildGroups(projects, chats), [projects, chats]);
+
+  const toggleCollapse = useCallback((projectId: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  }, []);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string | undefined) => {
     e.preventDefault();
@@ -84,199 +122,58 @@ export function ChatsPanel(): React.ReactElement {
     });
   }, []);
 
-  const handleArchiveChat = useCallback(
-    (e: React.MouseEvent, chatId: string) => {
-      e.stopPropagation();
-      archiveChat(chatId)
-        .then(() => {
-          removeChat(chatId);
-          useTabsStore.getState().closeTab(`chat:${chatId}`);
-        })
-        .catch((err) => log.warn('archive failed', { err: String(err) }));
-    },
-    [removeChat],
-  );
-
-  const handleToggleImport = useCallback(async () => {
-    if (!activeProjectId) return;
-    if (!showImport) {
+  const handleAddProject = useCallback(
+    async (path: string) => {
+      setShowDirPicker(false);
       try {
-        const sessions = await getExternalSessions(activeProjectId);
-        setExternalSessions(sessions);
+        const { project } = await createProject(path);
+        addProject(project);
       } catch (err) {
-        log.warn('failed to fetch external sessions', { err: String(err) });
-      }
-    }
-    setShowImport((prev) => !prev);
-  }, [activeProjectId, showImport]);
-
-  const handleImportSession = useCallback(
-    async (session: ExternalSession) => {
-      if (!activeProjectId) return;
-      setLoadingImport(session.sessionId);
-      try {
-        const title = session.summary ?? session.firstPrompt ?? undefined;
-        await importExternalSession(activeProjectId, session.sessionId, session.adapterId, title);
-        setExternalSessions((prev) => prev.filter((s) => s.sessionId !== session.sessionId));
-        useChatsStore.getState().setExternalSessionCount(useChatsStore.getState().externalSessionCount - 1);
-      } catch (err) {
-        log.warn('failed to import session', { err: String(err) });
-      } finally {
-        setLoadingImport(null);
+        log.warn('failed to create project', { err: String(err) });
       }
     },
-    [activeProjectId],
+    [addProject],
   );
-
-  const formatRelativeTime = (isoString: string): string => {
-    const date = new Date(isoString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    if (date.toDateString() === now.toDateString()) return `Today ${time}`;
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
-    if (diffDays < 7) return `${date.toLocaleDateString([], { weekday: 'long' })} ${time}`;
-    if (diffDays < 14) return 'Last week';
-    if (date.getFullYear() === now.getFullYear())
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-  };
 
   return (
     <div className="h-full flex flex-col">
       <div className="h-11 px-[10px] flex items-center justify-between">
         <div className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Sessions</div>
-        <button
-          data-tutorial="step-2"
-          onClick={() => createChat('claude')}
-          disabled={!activeProjectId}
-          className="w-7 h-7 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          title="New Session"
-          aria-label="New session"
-        >
-          <Plus size={14} />
-        </button>
       </div>
 
-      {/* Chat list */}
+      {/* Project groups */}
       <div className="flex-1 overflow-y-auto px-[10px]">
-        {/* External Sessions Import Section */}
-        {activeProjectId && externalSessionCount > 0 && (
-          <div className="pb-2" data-testid="external-sessions-section">
-            <button
-              data-testid="external-sessions-toggle"
-              onClick={handleToggleImport}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label text-mf-text-secondary hover:bg-mf-hover/50 transition-colors"
-            >
-              {showImport ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              <Download size={12} />
-              <span>Import external sessions</span>
-              <span className="ml-auto text-mf-status bg-mf-accent/20 text-mf-accent px-1.5 py-0.5 rounded-full">
-                {externalSessionCount}
-              </span>
-            </button>
-            {showImport && (
-              <div className="mt-1 space-y-1">
-                {externalSessions.length === 0 ? (
-                  <div className="px-3 py-2 text-mf-status text-mf-text-secondary">Loading...</div>
-                ) : (
-                  externalSessions.map((session) => (
-                    <div
-                      key={session.sessionId}
-                      data-testid="external-session-item"
-                      className="group flex items-center gap-2 px-3 py-2 rounded-mf-input hover:bg-mf-hover/50 transition-colors"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className="text-mf-small text-mf-text-secondary truncate"
-                          title={session.summary ?? session.firstPrompt ?? 'Untitled session'}
-                        >
-                          {session.summary ?? session.firstPrompt ?? 'Untitled session'}
-                        </div>
-                        <div className="text-mf-status text-mf-text-secondary mt-0.5">
-                          {session.gitBranch && (
-                            <>
-                              {session.gitBranch}
-                              <span className="mx-0.5">•</span>
-                            </>
-                          )}
-                          {formatRelativeTime(session.modifiedAt)}
-                        </div>
-                      </div>
-                      <button
-                        data-testid="import-session-btn"
-                        onClick={() => handleImportSession(session)}
-                        disabled={loadingImport === session.sessionId}
-                        className="shrink-0 px-2 py-1 rounded text-mf-status text-mf-accent hover:bg-mf-accent/20 transition-colors disabled:opacity-40"
-                      >
-                        {loadingImport === session.sessionId ? '...' : 'Import'}
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        )}
-        {!activeProjectId ? (
-          <div className="py-4 text-center text-mf-text-secondary text-mf-label">Select a project to view sessions</div>
-        ) : chats.length === 0 ? (
-          <div className="py-4 text-center text-mf-text-secondary text-mf-label">No conversations yet</div>
+        {groups.length === 0 ? (
+          <div className="py-4 text-center text-mf-text-secondary text-mf-label">No projects yet. Add one below.</div>
         ) : (
           <div className="space-y-1">
-            {chats.map((chat) => (
-              <div
-                key={chat.id}
-                data-testid="chat-list-item"
-                onContextMenu={(e) => handleContextMenu(e, chat.claudeSessionId)}
-                title={chat.claudeSessionId ? `Session: ${chat.claudeSessionId}` : undefined}
-                className={cn(
-                  'group w-full rounded-mf-input transition-colors flex items-center gap-2',
-                  activeChatId === chat.id ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleSelectChat(chat.id, chat.title)}
-                  className="flex-1 min-w-0 px-3 py-2 text-left rounded-mf-input"
-                >
-                  <div className="flex items-center gap-2">
-                    <SessionStatusDot status={chat.displayStatus ?? 'idle'} worktreeMissing={chat.worktreeMissing} />
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className={cn(
-                          'text-mf-small truncate',
-                          activeChatId === chat.id ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                        )}
-                        title={chat.title || 'New Chat'}
-                      >
-                        {chat.title || 'New Chat'}
-                      </div>
-                      <div className="text-mf-status text-mf-text-secondary mt-0.5">
-                        {getAdapterLabel(chat.adapterId, adapters)}
-                        <span className="mx-0.5">•</span>
-                        {formatRelativeTime(chat.updatedAt)}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  onClick={(e) => handleArchiveChat(e, chat.id)}
-                  className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
-                  title="Archive session"
-                  aria-label="Archive session"
-                >
-                  <Archive size={14} />
-                </button>
-              </div>
+            {groups.map((g) => (
+              <ProjectGroup
+                key={g.project.id}
+                project={g.project}
+                chats={g.chats}
+                parentName={g.parentName}
+                collapsed={collapsed.has(g.project.id)}
+                onToggleCollapse={() => toggleCollapse(g.project.id)}
+                onContextMenu={handleContextMenu}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {/* Add project button */}
+      <div className="px-[10px] py-2 border-t border-mf-border">
+        <button
+          type="button"
+          onClick={() => setShowDirPicker(true)}
+          className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
+        >
+          <FolderPlus size={14} />
+          <span>Add Project</span>
+        </button>
+      </div>
+
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
@@ -285,6 +182,8 @@ export function ChatsPanel(): React.ReactElement {
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      <DirectoryPickerModal open={showDirPicker} onSelect={handleAddProject} onCancel={() => setShowDirPicker(false)} />
     </div>
   );
 }
