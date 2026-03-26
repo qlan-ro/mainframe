@@ -326,6 +326,7 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
 
   const messages: ChatMessage[] = [];
   const agentTools = new Map<string, MessageContent[]>();
+  const seenUuids = new Set<string>();
 
   for (const file of jsonlFiles) {
     const stream = createReadStream(file);
@@ -345,7 +346,12 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
           }
 
           const msg = convertHistoryEntry(entry, sessionId);
-          if (msg) messages.push(msg);
+          if (!msg) continue;
+
+          // Deduplicate: primary JSONL is processed first, wins on conflicts
+          if (seenUuids.has(msg.id)) continue;
+          seenUuids.add(msg.id);
+          messages.push(msg);
         } catch {
           // Skip malformed lines
         }
