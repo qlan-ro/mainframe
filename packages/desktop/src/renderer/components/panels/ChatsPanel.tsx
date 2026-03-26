@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderPlus, List, FolderOpen } from 'lucide-react';
+import { FolderPlus, List, FolderOpen, Plus } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
 import { useChatsStore, useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { createProject } from '../../lib/api';
 import { ContextMenu } from '../ui/context-menu';
 import type { ContextMenuItem } from '../ui/context-menu';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
+import { daemonClient } from '../../lib/client';
 import { ProjectGroup } from './ProjectGroup';
 import { FlatSessionRow } from './FlatSessionRow';
 import type { Chat, Project } from '@qlan-ro/mainframe-types';
@@ -90,6 +92,8 @@ export function ChatsPanel(): React.ReactElement {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showDirPicker, setShowDirPicker] = useState(false);
 
+  const activeProjectId = useActiveProjectId();
+
   const toggleViewMode = useCallback(() => {
     setViewMode((prev) => {
       const next = prev === 'grouped' ? 'flat' : 'grouped';
@@ -97,6 +101,12 @@ export function ChatsPanel(): React.ReactElement {
       return next;
     });
   }, []);
+
+  const handleNewSession = useCallback(() => {
+    const projectId = activeProjectId ?? projects[0]?.id;
+    if (!projectId) return;
+    daemonClient.createChat(projectId, 'claude');
+  }, [activeProjectId, projects]);
 
   // Persist collapse state
   useEffect(() => {
@@ -158,14 +168,25 @@ export function ChatsPanel(): React.ReactElement {
     <div className="h-full flex flex-col">
       <div className="h-11 px-[10px] flex items-center justify-between">
         <div className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Sessions</div>
-        <button
-          type="button"
-          onClick={toggleViewMode}
-          className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
-          title={viewMode === 'grouped' ? 'Switch to flat view' : 'Switch to grouped view'}
-        >
-          {viewMode === 'grouped' ? <List size={14} /> : <FolderOpen size={14} />}
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={handleNewSession}
+            disabled={projects.length === 0}
+            className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            title="New session"
+          >
+            <Plus size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={toggleViewMode}
+            className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
+            title={viewMode === 'grouped' ? 'Switch to flat view' : 'Switch to grouped view'}
+          >
+            {viewMode === 'grouped' ? <List size={14} /> : <FolderOpen size={14} />}
+          </button>
+        </div>
       </div>
 
       {/* Session list */}
