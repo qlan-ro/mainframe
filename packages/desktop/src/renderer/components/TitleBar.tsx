@@ -196,9 +196,15 @@ export function TitleBar({
                 return (
                   <div
                     key={project.id}
-                    className="relative flex items-center px-3 py-2 hover:bg-mf-app-bg transition-colors group"
+                    className="relative flex items-center px-3 py-2 hover:bg-mf-app-bg transition-colors group cursor-pointer"
                     onMouseEnter={() => setHoveringId(project.id)}
                     onMouseLeave={() => handleMouseLeave(project.id)}
+                    onClick={() => {
+                      if (!isConfirming) {
+                        setActiveProject(project.id);
+                        setDropdownOpen(false);
+                      }
+                    }}
                   >
                     {isConfirming ? (
                       /* Inline confirm state: ✓ / ✗ */
@@ -226,13 +232,7 @@ export function TitleBar({
                     ) : (
                       /* Normal project row */
                       <>
-                        <button
-                          onClick={() => {
-                            setActiveProject(project.id);
-                            setDropdownOpen(false);
-                          }}
-                          className="flex-1 flex items-center gap-2 text-left min-w-0"
-                        >
+                        <div className="flex-1 flex items-center gap-2 text-left min-w-0">
                           <div
                             className={cn(
                               'w-5 h-5 rounded flex items-center justify-center text-mf-body font-semibold shrink-0',
@@ -249,7 +249,7 @@ export function TitleBar({
                           >
                             {project.name}
                           </span>
-                        </button>
+                        </div>
 
                         {/* Hover-reveal remove button */}
                         {isHovering && (
