@@ -42,6 +42,58 @@ jobs:
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
+      - name: Consolidate changelogs
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const version = '${{ steps.version.outputs.version }}';
+
+            // Collect entries from each package changelog
+            const pkgDirs = fs.readdirSync('packages', { withFileTypes: true })
+              .filter(d => d.isDirectory())
+              .map(d => d.name);
+
+            let combined = '';
+            for (const pkg of pkgDirs) {
+              const cl = path.join('packages', pkg, 'CHANGELOG.md');
+              if (!fs.existsSync(cl)) continue;
+              const content = fs.readFileSync(cl, 'utf8');
+
+              // Extract only the section for this version
+              const versionHeader = '## ' + version;
+              const start = content.indexOf(versionHeader);
+              if (start === -1) continue;
+              const nextHeader = content.indexOf('\n## ', start + versionHeader.length);
+              const section = nextHeader === -1
+                ? content.slice(start + versionHeader.length)
+                : content.slice(start + versionHeader.length, nextHeader);
+
+              if (section.trim()) {
+                combined += section.trimEnd() + '\n';
+              }
+
+              // Delete the per-package changelog
+              fs.unlinkSync(cl);
+            }
+
+            if (!combined.trim()) {
+              console.log('No changelog entries found for version ' + version);
+              process.exit(0);
+            }
+
+            // Prepend to root CHANGELOG.md
+            const rootCl = 'CHANGELOG.md';
+            const existing = fs.existsSync(rootCl) ? fs.readFileSync(rootCl, 'utf8') : '# Changelog\n';
+            const header = '# Changelog';
+            const headerEnd = existing.indexOf('\n', existing.indexOf(header));
+            const before = existing.slice(0, headerEnd + 1);
+            const after = existing.slice(headerEnd + 1);
+            const newEntry = '\n## ' + version + '\n' + combined;
+            fs.writeFileSync(rootCl, before + newEntry + '\n' + after);
+            console.log('Consolidated changelog for ' + version);
+          "
+
       - name: Archive completed plan docs
         run: |
           mkdir -p docs/plans/completed
