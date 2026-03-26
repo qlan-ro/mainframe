@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderPlus } from 'lucide-react';
+import { FolderPlus, List, FolderOpen } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
@@ -9,9 +9,13 @@ import { ContextMenu } from '../ui/context-menu';
 import type { ContextMenuItem } from '../ui/context-menu';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
 import { ProjectGroup } from './ProjectGroup';
+import { FlatSessionRow } from './FlatSessionRow';
 import type { Chat, Project } from '@qlan-ro/mainframe-types';
 
 const STORAGE_KEY = 'mf:collapsedProjects';
+const VIEW_MODE_KEY = 'mf:sessionsViewMode';
+
+type ViewMode = 'grouped' | 'flat';
 
 function loadCollapsed(): Set<string> {
   try {
@@ -79,9 +83,20 @@ export function ChatsPanel(): React.ReactElement {
   const addProject = useProjectsStore((s) => s.addProject);
   const chats = useChatsStore((s) => s.chats);
 
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) || 'grouped',
+  );
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showDirPicker, setShowDirPicker] = useState(false);
+
+  const toggleViewMode = useCallback(() => {
+    setViewMode((prev) => {
+      const next = prev === 'grouped' ? 'flat' : 'grouped';
+      localStorage.setItem(VIEW_MODE_KEY, next);
+      return next;
+    });
+  }, []);
 
   // Persist collapse state
   useEffect(() => {
@@ -89,6 +104,11 @@ export function ChatsPanel(): React.ReactElement {
   }, [collapsed]);
 
   const groups = useMemo(() => buildGroups(projects, chats), [projects, chats]);
+  const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+  const flatChats = useMemo(
+    () => [...chats].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    [chats],
+  );
 
   const toggleCollapse = useCallback((projectId: string) => {
     setCollapsed((prev) => {
@@ -138,13 +158,21 @@ export function ChatsPanel(): React.ReactElement {
     <div className="h-full flex flex-col">
       <div className="h-11 px-[10px] flex items-center justify-between">
         <div className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Sessions</div>
+        <button
+          type="button"
+          onClick={toggleViewMode}
+          className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
+          title={viewMode === 'grouped' ? 'Switch to flat view' : 'Switch to grouped view'}
+        >
+          {viewMode === 'grouped' ? <List size={14} /> : <FolderOpen size={14} />}
+        </button>
       </div>
 
-      {/* Project groups */}
+      {/* Session list */}
       <div className="flex-1 overflow-y-auto px-[10px]">
-        {groups.length === 0 ? (
+        {projects.length === 0 ? (
           <div className="py-4 text-center text-mf-text-secondary text-mf-label">No projects yet. Add one below.</div>
-        ) : (
+        ) : viewMode === 'grouped' ? (
           <div className="space-y-1">
             {groups.map((g) => (
               <ProjectGroup
@@ -157,6 +185,21 @@ export function ChatsPanel(): React.ReactElement {
                 onContextMenu={handleContextMenu}
               />
             ))}
+          </div>
+        ) : (
+          <div className="space-y-0.5">
+            {flatChats.length === 0 ? (
+              <div className="py-4 text-center text-mf-text-secondary text-mf-label">No sessions yet.</div>
+            ) : (
+              flatChats.map((chat) => (
+                <FlatSessionRow
+                  key={chat.id}
+                  chat={chat}
+                  projectName={projectMap.get(chat.projectId)?.name}
+                  onContextMenu={handleContextMenu}
+                />
+              ))
+            )}
           </div>
         )}
       </div>
