@@ -5,7 +5,8 @@ import { createLogger } from '../../lib/logger';
 const log = createLogger('renderer:chat');
 import { useComposerRuntime } from '@assistant-ui/react';
 import { focusComposerInput } from '../../lib/focus';
-import { useSkillsStore, useProjectsStore, useChatsStore } from '../../store';
+import { useSkillsStore, useChatsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { searchFiles, addMention } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import type { Skill, CustomCommand } from '@qlan-ro/mainframe-types';
@@ -66,7 +67,7 @@ export interface ContextPickerMenuProps {
 
 export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps): React.ReactElement | null {
   const { agents, skills, commands } = useSkillsStore();
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const text = useComposerText();
   const composerRuntime = useComposerRuntime();

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Zap, MoreHorizontal, Pencil, Trash2, Globe, FolderOpen, Puzzle } from 'lucide-react';
 import { useSkillsStore, useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
 import type { Skill } from '@qlan-ro/mainframe-types';
 
@@ -104,7 +105,7 @@ function SkillItem({
 export function SkillsPanel(): React.ReactElement {
   const { skills, loading, fetchSkills, fetchCommands, deleteSkill, setPendingInvocation } = useSkillsStore();
   const projects = useProjectsStore((s) => s.projects);
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   useEffect(() => {

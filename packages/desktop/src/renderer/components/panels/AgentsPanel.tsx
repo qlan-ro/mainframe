@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import { Bot, MoreHorizontal, Pencil, Trash2, Globe, FolderOpen } from 'lucide-react';
 import { useSkillsStore, useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
 import type { AgentConfig } from '@qlan-ro/mainframe-types';
 
@@ -84,7 +85,7 @@ function AgentItem({
 export function AgentsPanel(): React.ReactElement {
   const { agents, loading, fetchAgents, deleteAgent } = useSkillsStore();
   const projects = useProjectsStore((s) => s.projects);
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   useEffect(() => {

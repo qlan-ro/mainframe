@@ -12,7 +12,7 @@ import { convertMessage } from './convert-message';
 import { daemonClient } from '../../../lib/client';
 import { archiveChat } from '../../../lib/api';
 import { useChatsStore } from '../../../store/chats';
-import { useProjectsStore } from '../../../store/projects';
+import { useActiveProjectId } from '../../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../../store/tabs';
 import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
 import { AllToolUIs } from './parts/tool-ui-registry';
@@ -250,7 +250,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
   const chats = useChatsStore((s) => s.chats);
   const setActiveChat = useChatsStore((s) => s.setActiveChat);
   const removeChat = useChatsStore((s) => s.removeChat);
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
 
   const threadListAdapter = useMemo<ExternalStoreThreadListAdapter>(
     () => ({

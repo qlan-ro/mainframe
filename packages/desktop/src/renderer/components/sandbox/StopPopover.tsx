@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { Square } from 'lucide-react';
 import { useSandboxStore } from '../../store/sandbox';
-import { useProjectsStore } from '../../store/projects';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 
@@ -10,7 +10,7 @@ interface Props {
 }
 
 export function StopPopover({ onClose }: Props): React.ReactElement {
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
   const launchConfig = useLaunchConfig();
   const projectStatuses =
     useSandboxStore((s) => (activeProjectId ? s.processStatuses[activeProjectId] : undefined)) ?? {};

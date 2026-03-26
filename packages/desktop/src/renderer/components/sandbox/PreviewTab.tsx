@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useSandboxStore } from '../../store/sandbox';
 import { useChatsStore } from '../../store/chats';
-import { useProjectsStore } from '../../store/projects';
+import { useActiveProjectId, getActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useUIStore } from '../../store/ui';
 import { daemonClient } from '../../lib/client';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
@@ -139,7 +139,7 @@ export function PreviewTab(): React.ReactElement {
   // Selected tab's config — drives UI decisions (icons, log styling)
   const selectedProcessConfig = configs.find((c) => c.name === selectedProcess);
   const hasPreview = selectedProcessConfig?.preview === true;
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
   const selectedProcessStatus = useSandboxStore((s) => {
     if (!selectedProcess || !activeProjectId) return 'stopped' as const;
     return s.processStatuses[activeProjectId]?.[selectedProcess] ?? 'stopped';
@@ -243,7 +243,7 @@ export function PreviewTab(): React.ReactElement {
       addCapture({ type: 'screenshot', imageDataUrl: dataUrl });
 
       if (!useChatsStore.getState().activeChatId) {
-        const projectId = useProjectsStore.getState().activeProjectId;
+        const projectId = getActiveProjectId();
         if (projectId) daemonClient.createChat(projectId, 'claude');
       }
     } catch (err) {
@@ -283,7 +283,7 @@ export function PreviewTab(): React.ReactElement {
 
       // Auto-create a chat session if none is active so the composer appears
       if (!useChatsStore.getState().activeChatId) {
-        const projectId = useProjectsStore.getState().activeProjectId;
+        const projectId = getActiveProjectId();
         if (projectId) daemonClient.createChat(projectId, 'claude');
       }
     } catch (err) {

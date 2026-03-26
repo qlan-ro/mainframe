@@ -1,5 +1,7 @@
 import { useTabsStore } from '../../store/tabs';
 import { useProjectsStore } from '../../store/projects';
+import { useChatsStore } from '../../store/chats';
+import { getActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { lspClientManager } from './index.js';
 import { getLspLanguage } from './language-detection.js';
 
@@ -19,9 +21,10 @@ function autoConnect(): void {
       const fileView = useTabsStore.getState().fileView;
       if (!fileView || fileView.type !== 'editor') return;
 
-      const { activeProjectId, projects } = useProjectsStore.getState();
+      const activeProjectId = getActiveProjectId();
       if (!activeProjectId) return;
 
+      const { projects } = useProjectsStore.getState();
       const project = projects.find((p) => p.id === activeProjectId);
       if (!project) return;
 
@@ -43,9 +46,12 @@ function autoConnect(): void {
   });
 
   useProjectsStore.subscribe((state, prev) => {
-    if (state.projects !== prev.projects || state.activeProjectId !== prev.activeProjectId) {
-      tryConnect();
-    }
+    if (state.projects !== prev.projects) tryConnect();
+  });
+
+  // Re-derive activeProjectId when the active chat changes.
+  useChatsStore.subscribe((state, prev) => {
+    if (state.activeChatId !== prev.activeChatId) tryConnect();
   });
 
   tryConnect();

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Search, FileText, X } from 'lucide-react';
 import type { SearchContentResult } from '@qlan-ro/mainframe-types';
-import { useProjectsStore } from '../store';
+import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../store/chats';
 import { useTabsStore } from '../store/tabs';
 import { searchContent } from '../lib/api';
@@ -15,7 +15,7 @@ interface FindInPathModalProps {
 const RESULT_LIMIT = 200;
 
 export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathModalProps): React.ReactElement {
-  const { activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
 
   const [query, setQuery] = useState('');

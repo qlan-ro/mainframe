@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTutorialStore } from '../store/tutorial';
 import { useProjectsStore, useChatsStore } from '../store';
+import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../store/tabs';
 
 interface StepConfig {
@@ -56,7 +57,7 @@ export function TutorialOverlay() {
   const stepConfig = STEPS[step - 1];
 
   const projects = useProjectsStore((s) => s.projects);
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
   const chats = useChatsStore((s) => s.chats);
   const messages = useChatsStore((s) => s.messages);
   const activePrimaryTabId = useTabsStore((s) => s.activePrimaryTabId);

@@ -5,6 +5,7 @@ import { InlineCommentWidget, type InlineCommentState } from './InlineCommentWid
 import './setup';
 import { registerDefinitionProvider } from './navigation';
 import { useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
 
 interface MonacoEditorProps {
@@ -35,7 +36,8 @@ export function MonacoEditor({
   const onLineCommentRef = useRef(onLineComment);
   onLineCommentRef.current = onLineComment;
 
-  const { activeProjectId, projects } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
+  const { projects } = useProjectsStore();
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
   const activeProjectRef = useRef(activeProject);
   activeProjectRef.current = activeProject;

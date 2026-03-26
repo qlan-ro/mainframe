@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { getFileContent } from '../../lib/api';
 
@@ -43,7 +43,7 @@ function parseCsv(text: string): string[][] {
 }
 
 export function CsvViewer({ filePath }: { filePath: string }): React.ReactElement {
-  const { activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const [rawContent, setRawContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -7,6 +7,7 @@ import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { useTabsStore } from '../../store/tabs';
 import { useProjectsStore } from '../../store/projects';
+import { getActiveProjectId } from '../../hooks/useActiveProjectId.js';
 
 // Configure Monaco workers for Electron (no CDN access).
 self.MonacoEnvironment = {
@@ -88,7 +89,8 @@ monaco.editor.registerEditorOpener({
 
     // Convert absolute filesystem paths to project-relative paths.
     // The API expects relative paths; absolute paths cause 403 errors.
-    const { activeProjectId, projects } = useProjectsStore.getState();
+    const activeProjectId = getActiveProjectId();
+    const { projects } = useProjectsStore.getState();
     const projectPath = projects.find((p) => p.id === activeProjectId)?.path;
     if (projectPath && filePath.startsWith(projectPath)) {
       filePath = filePath.slice(projectPath.length).replace(/^\//, '');

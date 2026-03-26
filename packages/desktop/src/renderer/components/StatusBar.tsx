@@ -4,7 +4,7 @@ import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:statusbar');
 import { useChatsStore } from '../store';
-import { useProjectsStore } from '../store/projects';
+import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useConnectionState } from '../hooks/useConnectionState';
 import { getGitBranch, getGitStatus } from '../lib/api';
 import { cn } from '../lib/utils';
@@ -14,7 +14,7 @@ const GIT_POLL_INTERVAL = 60_000;
 
 export function StatusBar(): React.ReactElement {
   const connected = useConnectionState();
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
