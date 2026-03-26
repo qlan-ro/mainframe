@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getActiveEditorCursorPosition } from '../components/editor/editor-state';
 import { useUIStore } from './ui';
 
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
@@ -59,6 +60,16 @@ interface NavEntry {
 const navBackStack: NavEntry[] = [];
 const navForwardStack: NavEntry[] = [];
 
+/** Build a NavEntry for the current editor, preferring the live cursor position. */
+function currentEditorNavEntry(fv: FileView & { type: 'editor' }): NavEntry {
+  const cursor = getActiveEditorCursorPosition();
+  return {
+    filePath: fv.filePath,
+    line: cursor?.line ?? fv.line,
+    column: cursor?.column ?? fv.column,
+  };
+}
+
 function expandRightPanel(): void {
   const ui = useUIStore.getState();
   if (ui.panelCollapsed.right) {
@@ -117,7 +128,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     if (line != null) {
       const current = get().fileView;
       if (current?.type === 'editor') {
-        navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+        navBackStack.push(currentEditorNavEntry(current));
         navForwardStack.length = 0;
       }
     }
@@ -159,7 +170,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     if (!entry) return;
     const current = get().fileView;
     if (current?.type === 'editor') {
-      navForwardStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+      navForwardStack.push(currentEditorNavEntry(current));
     }
     const label = entry.filePath.split('/').pop() || entry.filePath;
     set({
@@ -173,7 +184,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     if (!entry) return;
     const current = get().fileView;
     if (current?.type === 'editor') {
-      navBackStack.push({ filePath: current.filePath, line: current.line, column: current.column });
+      navBackStack.push(currentEditorNavEntry(current));
     }
     const label = entry.filePath.split('/').pop() || entry.filePath;
     set({

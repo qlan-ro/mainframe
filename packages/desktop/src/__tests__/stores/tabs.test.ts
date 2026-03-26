@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { CenterTab } from '../../renderer/store/tabs.js';
 import { useTabsStore } from '../../renderer/store/tabs.js';
+import { setActiveEditorGetter } from '../../renderer/components/editor/editor-state.js';
 
 function makeChatTab(chatId: string, label = 'Chat'): CenterTab {
   return { type: 'chat', id: `chat:${chatId}`, chatId, label };
@@ -215,6 +216,78 @@ describe('useTabsStore', () => {
       useTabsStore.getState().openTab(makeChatTab('c3'));
       const ids = useTabsStore.getState().tabs.map((t: CenterTab) => t.id);
       expect(ids).toEqual(['chat:c1', 'chat:c2', 'chat:c3']);
+    });
+  });
+
+  describe('navigation back/forward', () => {
+    afterEach(() => {
+      setActiveEditorGetter(null);
+    });
+
+    it('navigateBack uses live cursor position, not stale fileView line', () => {
+      // Open file A at line 1
+      useTabsStore.getState().openEditorTab('src/a.ts', undefined, 1, 1);
+
+      // Simulate user moving cursor to line 50, col 10 in the editor
+      setActiveEditorGetter(() => ({ line: 50, column: 10 }));
+
+      // Navigate to file B at line 20 — this pushes file A onto the back stack
+      useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
+
+      // Navigate back — should restore file A at line 50 (live cursor), not line 1 (stale)
+      useTabsStore.getState().navigateBack();
+
+      const fv = useTabsStore.getState().fileView;
+      expect(fv).not.toBeNull();
+      expect(fv!.type).toBe('editor');
+      if (fv!.type === 'editor') {
+        expect(fv!.filePath).toBe('src/a.ts');
+        expect(fv!.line).toBe(50);
+        expect(fv!.column).toBe(10);
+      }
+    });
+
+    it('navigateForward uses live cursor position from current editor', () => {
+      // Open file A at line 1, then navigate to file B at line 20
+      useTabsStore.getState().openEditorTab('src/a.ts', undefined, 1, 1);
+      setActiveEditorGetter(() => ({ line: 5, column: 3 }));
+      useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
+
+      // Navigate back to file A
+      setActiveEditorGetter(() => ({ line: 25, column: 7 }));
+      useTabsStore.getState().navigateBack();
+
+      // Now file A is open. Simulate cursor move to line 60
+      setActiveEditorGetter(() => ({ line: 60, column: 1 }));
+
+      // Navigate forward — should push file A at line 60 (live) onto back stack,
+      // and restore file B at line 25 (captured when we navigated back)
+      useTabsStore.getState().navigateForward();
+
+      const fv = useTabsStore.getState().fileView;
+      expect(fv).not.toBeNull();
+      expect(fv!.type).toBe('editor');
+      if (fv!.type === 'editor') {
+        expect(fv!.filePath).toBe('src/b.ts');
+        expect(fv!.line).toBe(25);
+        expect(fv!.column).toBe(7);
+      }
+    });
+
+    it('falls back to fileView line/column when no editor getter is registered', () => {
+      // No editor getter registered — should use stale fileView values as fallback
+      useTabsStore.getState().openEditorTab('src/a.ts', undefined, 10, 5);
+      useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
+
+      useTabsStore.getState().navigateBack();
+
+      const fv = useTabsStore.getState().fileView;
+      expect(fv!.type).toBe('editor');
+      if (fv!.type === 'editor') {
+        expect(fv!.filePath).toBe('src/a.ts');
+        expect(fv!.line).toBe(10);
+        expect(fv!.column).toBe(5);
+      }
     });
   });
 });

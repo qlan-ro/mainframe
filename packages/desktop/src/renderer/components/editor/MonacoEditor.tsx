@@ -7,6 +7,7 @@ import { registerDefinitionProvider } from './navigation';
 import { useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
+import { setActiveEditorGetter } from './editor-state';
 
 interface MonacoEditorProps {
   value: string;
@@ -81,9 +82,18 @@ export function MonacoEditor({
   const columnRef = useRef(column);
   columnRef.current = column;
 
+  // Register the active editor's cursor position getter for navigation.
+  useEffect(() => {
+    return () => setActiveEditorGetter(null);
+  }, []);
+
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
+      setActiveEditorGetter(() => {
+        const pos = editor.getPosition();
+        return pos ? { line: pos.lineNumber, column: pos.column } : null;
+      });
 
       // Scroll to target position on mount (from Go To Definition / References).
       if (lineRef.current) {
