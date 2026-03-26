@@ -14,6 +14,7 @@ function createMockContext(): RouteContext {
     chats: {
       getChat: vi.fn(),
       listChats: vi.fn(),
+      listAllChats: vi.fn(),
       archiveChat: vi.fn(),
       getMessages: vi.fn(),
       getDisplayMessages: vi.fn(),
@@ -43,6 +44,25 @@ describe('chatRoutes', () => {
 
   beforeEach(() => {
     ctx = createMockContext();
+  });
+
+  describe('GET /api/chats', () => {
+    it('returns all non-archived chats across projects', () => {
+      const mockChats = [
+        { id: 'c1', projectId: 'p1', title: 'Chat 1', status: 'active' },
+        { id: 'c2', projectId: 'p2', title: 'Chat 2', status: 'active' },
+      ];
+      (ctx.chats.listAllChats as any).mockReturnValue(mockChats);
+
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'get', '/api/chats');
+      const res = mockRes();
+
+      handler({ params: {}, query: {} }, res, vi.fn());
+
+      expect(ctx.chats.listAllChats).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: mockChats });
+    });
   });
 
   describe('GET /api/projects/:projectId/chats', () => {

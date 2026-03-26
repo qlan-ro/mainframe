@@ -41,6 +41,33 @@ export class ChatsRepository {
     }));
   }
 
+  listAll(): Chat[] {
+    const stmt = this.db.prepare(`
+      SELECT
+        id, adapter_id as adapterId, project_id as projectId,
+        title, claude_session_id as claudeSessionId, model,
+        permission_mode as permissionMode, status,
+        created_at as createdAt, updated_at as updatedAt,
+        total_cost as totalCost, total_tokens_input as totalTokensInput,
+        total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
+        mentions, modified_files as modifiedFiles,
+        worktree_path as worktreePath, branch_name as branchName,
+        process_state as processState
+      FROM chats
+      WHERE status != 'archived'
+      ORDER BY updated_at DESC, rowid DESC
+    `);
+    const rows = stmt.all() as (Chat & { mentions: string; modifiedFiles: string })[];
+    return rows.map((row) => ({
+      ...row,
+      mentions: parseJsonColumn(row.mentions, []),
+      modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
+      worktreePath: row.worktreePath || undefined,
+      branchName: row.branchName || undefined,
+      processState: (row.processState as Chat['processState']) || null,
+    }));
+  }
+
   get(id: string): Chat | null {
     const stmt = this.db.prepare(`
       SELECT

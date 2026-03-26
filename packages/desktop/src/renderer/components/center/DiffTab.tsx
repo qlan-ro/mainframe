@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { getDiff } from '../../lib/api';
 import { sendCommentMessage } from '../../lib/send-comment-message';
 import { MonacoDiffEditor } from '../editor/MonacoDiffEditor';
@@ -49,7 +49,7 @@ export function DiffTab({
   startLine,
   base,
 }: DiffTabProps): React.ReactElement {
-  const { activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
   const [original, setOriginal] = useState<string | null>(inlineOriginal ?? null);
   const [modified, setModified] = useState<string | null>(inlineModified ?? null);
   const [error, setError] = useState<string | null>(null);

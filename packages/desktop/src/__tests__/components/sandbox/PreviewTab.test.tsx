@@ -4,10 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { PreviewTab } from '../../../renderer/components/sandbox/PreviewTab';
 import { useUIStore } from '../../../renderer/store/ui';
 import { useSandboxStore } from '../../../renderer/store/sandbox';
-import { useProjectsStore } from '../../../renderer/store/projects';
+import { useChatsStore } from '../../../renderer/store/chats';
 
 vi.mock('../../../renderer/hooks/useLaunchConfig', () => ({
   useLaunchConfig: vi.fn(() => null),
+}));
+
+vi.mock('../../../renderer/hooks/useActiveProjectId.js', () => ({
+  useActiveProjectId: vi.fn(() => 'proj-1'),
+  getActiveProjectId: vi.fn(() => 'proj-1'),
 }));
 
 describe('PreviewTab', () => {
@@ -25,8 +30,9 @@ describe('PreviewTab', () => {
       processStatuses: {},
       logsOutput: [],
     });
-    useProjectsStore.setState({
-      activeProjectId: 'proj-1',
+    useChatsStore.setState({
+      activeChatId: 'chat-1',
+      chats: [{ id: 'chat-1', projectId: 'proj-1' }] as never,
     });
   });
 

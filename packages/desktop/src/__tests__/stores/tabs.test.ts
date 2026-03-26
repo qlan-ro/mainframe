@@ -217,40 +217,4 @@ describe('useTabsStore', () => {
       expect(ids).toEqual(['chat:c1', 'chat:c2', 'chat:c3']);
     });
   });
-
-  describe('switchProject', () => {
-    it('restores tabs for a previously visited project', () => {
-      // Set up tabs for project A
-      useTabsStore.getState().openTab(makeChatTab('c1', 'Chat 1'));
-      // Switch from project A to project B
-      useTabsStore.getState().switchProject('proj-a', 'proj-b');
-      // project B should have empty tabs
-      expect(useTabsStore.getState().tabs).toEqual([]);
-
-      // Add tabs for project B
-      useTabsStore.getState().openTab(makeChatTab('c2', 'Chat 2'));
-      // Switch back to project A
-      useTabsStore.getState().switchProject('proj-b', 'proj-a');
-      // Should restore project A's tabs
-      expect(useTabsStore.getState().tabs).toHaveLength(1);
-      expect(useTabsStore.getState().tabs[0]!.chatId).toBe('c1');
-    });
-
-    it('clears state when switching to a never-visited project', () => {
-      useTabsStore.getState().openTab(makeChatTab('c1'));
-      useTabsStore.getState().switchProject('proj-a', 'proj-new');
-      expect(useTabsStore.getState().tabs).toEqual([]);
-      expect(useTabsStore.getState().activePrimaryTabId).toBeNull();
-      expect(useTabsStore.getState().fileView).toBeNull();
-    });
-
-    it('does not persist inline diffs when switching projects', () => {
-      useTabsStore.getState().openInlineDiffTab('/file', 'orig', 'mod');
-      useTabsStore.getState().switchProject('proj-a', 'proj-b');
-      // Switch back to proj-a
-      useTabsStore.getState().switchProject('proj-b', 'proj-a');
-      // Inline diff should NOT have been persisted
-      expect(useTabsStore.getState().fileView).toBeNull();
-    });
-  });
 });

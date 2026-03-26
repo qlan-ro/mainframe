@@ -309,6 +309,11 @@ export class ChatManager {
     return chats.map((chat) => this.enrichChat(chat));
   }
 
+  listAllChats(): Chat[] {
+    const chats = this.db.chats.listAll();
+    return chats.map((chat) => this.enrichChat(chat));
+  }
+
   getChat(chatId: string): Chat | null {
     const active = this.activeChats.get(chatId);
     const chat = active ? active.chat : this.db.chats.get(chatId);

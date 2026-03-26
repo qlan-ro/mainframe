@@ -16,7 +16,6 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 function resetStore(): void {
   useProjectsStore.setState({
     projects: [],
-    activeProjectId: null,
     loading: false,
     error: null,
   });
@@ -31,10 +30,6 @@ describe('useProjectsStore', () => {
   describe('initial state', () => {
     it('starts with empty projects array', () => {
       expect(useProjectsStore.getState().projects).toEqual([]);
-    });
-
-    it('starts with null activeProjectId', () => {
-      expect(useProjectsStore.getState().activeProjectId).toBeNull();
     });
 
     it('starts with loading false', () => {
@@ -62,25 +57,6 @@ describe('useProjectsStore', () => {
     });
   });
 
-  describe('setActiveProject', () => {
-    it('sets the activeProjectId', () => {
-      useProjectsStore.getState().setActiveProject('proj-1');
-      expect(useProjectsStore.getState().activeProjectId).toBe('proj-1');
-    });
-
-    it('persists activeProjectId to localStorage', () => {
-      useProjectsStore.getState().setActiveProject('proj-1');
-      expect(localStorage.getItem('mf:activeProjectId')).toBe('proj-1');
-    });
-
-    it('removes localStorage entry when set to null', () => {
-      useProjectsStore.getState().setActiveProject('proj-1');
-      useProjectsStore.getState().setActiveProject(null);
-      expect(localStorage.getItem('mf:activeProjectId')).toBeNull();
-      expect(useProjectsStore.getState().activeProjectId).toBeNull();
-    });
-  });
-
   describe('addProject', () => {
     it('appends a project to the list', () => {
       const projA = makeProject({ id: 'a' });
@@ -98,20 +74,6 @@ describe('useProjectsStore', () => {
       useProjectsStore.getState().removeProject('a');
       const ids = useProjectsStore.getState().projects.map((p: Project) => p.id);
       expect(ids).toEqual(['b']);
-    });
-
-    it('clears activeProjectId when active project is removed', () => {
-      useProjectsStore.getState().setProjects([makeProject({ id: 'a' })]);
-      useProjectsStore.getState().setActiveProject('a');
-      useProjectsStore.getState().removeProject('a');
-      expect(useProjectsStore.getState().activeProjectId).toBeNull();
-    });
-
-    it('preserves activeProjectId when a different project is removed', () => {
-      useProjectsStore.getState().setProjects([makeProject({ id: 'a' }), makeProject({ id: 'b' })]);
-      useProjectsStore.getState().setActiveProject('a');
-      useProjectsStore.getState().removeProject('b');
-      expect(useProjectsStore.getState().activeProjectId).toBe('a');
     });
   });
 

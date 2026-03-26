@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Save } from 'lucide-react';
-import { useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { getFileContent, saveFileContent } from '../../lib/api';
 import { daemonClient } from '../../lib/client';
@@ -45,7 +45,7 @@ export function EditorTab({
   line?: number;
   column?: number;
 }): React.ReactElement {
-  const { activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const [savedContent, setSavedContent] = useState<string | null>(providedContent ?? null);
   const [currentContent, setCurrentContent] = useState<string | null>(providedContent ?? null);

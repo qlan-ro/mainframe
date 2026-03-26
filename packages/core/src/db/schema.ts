@@ -85,4 +85,9 @@ export function initializeSchema(db: Database.Database): void {
   if (!cols.some((c) => c.name === 'last_context_tokens_input')) {
     db.exec('ALTER TABLE chats ADD COLUMN last_context_tokens_input INTEGER DEFAULT 0');
   }
+
+  const projectCols = db.pragma('table_info(projects)') as { name: string }[];
+  if (!projectCols.some((c) => c.name === 'parent_project_id')) {
+    db.exec('ALTER TABLE projects ADD COLUMN parent_project_id TEXT REFERENCES projects(id)');
+  }
 }

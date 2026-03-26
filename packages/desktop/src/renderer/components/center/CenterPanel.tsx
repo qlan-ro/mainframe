@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTabsStore } from '../../store/tabs';
-import { useProjectsStore, useChatsStore } from '../../store';
+import { useChatsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useProject } from '../../hooks/useAppInit';
 import { ChatContainer } from '../chat/ChatContainer';
 import { cn } from '../../lib/utils';
@@ -27,7 +28,7 @@ function ChatTabDot({ chatId }: { chatId: string }): React.ReactElement {
 
 export function CenterPanel(): React.ReactElement {
   const { tabs, activePrimaryTabId } = useTabsStore();
-  const { activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
   const { activeChatId, addPendingPermission } = useChatsStore();
   const { createChat } = useProject(activeProjectId);
 

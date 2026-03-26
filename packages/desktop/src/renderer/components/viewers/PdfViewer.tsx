@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { getFileBinary } from '../../lib/api';
 
 export function PdfViewer({ filePath }: { filePath: string }): React.ReactElement {
-  const { activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

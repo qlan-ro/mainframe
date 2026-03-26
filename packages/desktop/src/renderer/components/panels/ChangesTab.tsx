@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, RefreshCw } from 'lucide-react';
-import { useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
 import { daemonClient } from '../../lib/client';
@@ -29,7 +29,7 @@ function splitPath(filePath: string): { name: string; dir: string } {
 }
 
 export function ChangesTab(): React.ReactElement {
-  const { activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const { openDiffTab, openInlineDiffTab } = useTabsStore();
   const fileView = useTabsStore((s) => s.fileView);

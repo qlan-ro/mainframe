@@ -3,7 +3,8 @@ import { Search, MessageSquare, FileText, Folder } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:search');
-import { useSearchStore, useChatsStore, useProjectsStore } from '../store';
+import { useSearchStore, useChatsStore } from '../store';
+import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../store/tabs';
 import { daemonClient } from '../lib/client';
 import { searchFiles } from '../lib/api';
@@ -25,7 +26,7 @@ export function SearchPalette(): React.ReactElement | null {
   const { isOpen, query, selectedIndex, close, setQuery, setSelectedIndex } = useSearchStore();
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 

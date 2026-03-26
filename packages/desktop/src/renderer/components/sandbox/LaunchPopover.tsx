@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Play, Square, Plus } from 'lucide-react';
 import { useSandboxStore } from '../../store/sandbox';
 import { useProjectsStore } from '../../store/projects';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { useUIStore } from '../../store/ui';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
@@ -15,8 +16,9 @@ interface Props {
 }
 
 export function LaunchPopover({ onClose }: Props): React.ReactElement {
+  const activeProjectId = useActiveProjectId();
   const activeProject = useProjectsStore((s) =>
-    s.activeProjectId ? (s.projects.find((p) => p.id === s.activeProjectId) ?? null) : null,
+    activeProjectId ? (s.projects.find((p) => p.id === activeProjectId) ?? null) : null,
   );
   const launchConfig = useLaunchConfig();
   const projectStatuses =

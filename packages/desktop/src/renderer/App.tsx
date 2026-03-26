@@ -9,8 +9,10 @@ import { SettingsModal } from './components/SettingsModal';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { ConnectionOverlay } from './components/ConnectionOverlay';
 import { Toaster } from './components/Toaster';
+import { TooltipProvider } from './components/ui/tooltip';
 import { useAppInit } from './hooks/useAppInit';
-import { useProjectsStore, useSettingsStore } from './store';
+import { useSettingsStore } from './store';
+import { getActiveProjectId } from './hooks/useActiveProjectId.js';
 import { daemonClient } from './lib/client';
 
 export default function App(): React.ReactElement {
@@ -21,7 +23,7 @@ export default function App(): React.ReactElement {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
-        const projectId = useProjectsStore.getState().activeProjectId;
+        const projectId = getActiveProjectId();
         if (projectId) {
           daemonClient.createChat(projectId, 'claude');
         }
@@ -45,12 +47,14 @@ export default function App(): React.ReactElement {
 
   return (
     <ErrorBoundary>
-      <Layout leftPanel={<LeftPanel />} centerPanel={<CenterPanel />} rightPanel={<RightPanel />} />
-      <SearchPalette />
-      <SettingsModal />
-      <TutorialOverlay />
-      <ConnectionOverlay />
-      <Toaster />
+      <TooltipProvider delayDuration={200} skipDelayDuration={100} disableHoverableContent>
+        <Layout leftPanel={<LeftPanel />} centerPanel={<CenterPanel />} rightPanel={<RightPanel />} />
+        <SearchPalette />
+        <SettingsModal />
+        <TutorialOverlay />
+        <ConnectionOverlay />
+        <Toaster />
+      </TooltipProvider>
     </ErrorBoundary>
   );
 }

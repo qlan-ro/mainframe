@@ -6,6 +6,7 @@ import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
 import { useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
 import { getFileTree } from '../../lib/api';
@@ -40,7 +41,7 @@ function FileTreeNode({
   refreshKey: number;
 }): React.ReactElement {
   const [children, setChildren] = useState<FileEntry[]>([]);
-  const { activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const openEditorTab = useTabsStore((s) => s.openEditorTab);
   const expanded = useTabsStore((s) => entry.type === 'directory' && s.expandedPaths.includes(entry.path));
@@ -132,7 +133,8 @@ function FileTreeNode({
 }
 
 export function FilesTab(): React.ReactElement {
-  const { projects, activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
+  const { projects } = useProjectsStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);

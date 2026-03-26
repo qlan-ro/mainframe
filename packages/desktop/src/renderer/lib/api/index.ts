@@ -5,6 +5,7 @@ export {
   createProject,
   removeProject,
   getChats,
+  getAllChats,
   archiveChat,
   getChatMessages,
   getAdapters,

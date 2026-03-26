@@ -6,7 +6,8 @@ const log = createLogger('renderer:todos');
 import { todosApi, type Todo, type TodoStatus, type CreateTodoInput } from '../../lib/api/todos-api';
 import { TodoCard } from './TodoCard';
 import { TodoModal } from './TodoModal';
-import { useProjectsStore, usePluginLayoutStore } from '../../store';
+import { usePluginLayoutStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useSkillsStore } from '../../store/skills';
 import { daemonClient } from '../../lib/client';
 
@@ -22,7 +23,7 @@ export function TodosPanel(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
 
   const loadTodos = useCallback(async () => {
     if (!activeProjectId) {

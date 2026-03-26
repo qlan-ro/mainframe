@@ -36,7 +36,14 @@ export const useChatsStore = create<ChatsState>((set) => ({
   externalSessionCount: 0,
 
   setChats: (chats) => set({ chats }),
-  setActiveChat: (id) => set({ activeChatId: id }),
+  setActiveChat: (id) => {
+    if (id) {
+      localStorage.setItem('mf:activeChatId', id);
+    } else {
+      localStorage.removeItem('mf:activeChatId');
+    }
+    set({ activeChatId: id });
+  },
   addChat: (chat) => set((state) => ({ chats: [chat, ...state.chats] })),
   updateChat: (chat) =>
     set((state) => {

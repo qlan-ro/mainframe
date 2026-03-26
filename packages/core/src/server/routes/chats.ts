@@ -10,6 +10,11 @@ const logger = createChildLogger('routes:chats');
 export function chatRoutes(ctx: RouteContext): Router {
   const router = Router();
 
+  router.get('/api/chats', (_req: Request, res: Response) => {
+    const chats = ctx.chats.listAllChats();
+    res.json({ success: true, data: chats });
+  });
+
   router.get('/api/projects/:projectId/chats', (req: Request, res: Response) => {
     const chatsList = ctx.chats.listChats(param(req, 'projectId'));
     res.json({ success: true, data: chatsList });

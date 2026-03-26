@@ -4,13 +4,14 @@ import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:skills');
 import { useSkillsStore, useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { Button } from '../ui/button';
 import { MonacoEditor } from '../editor/MonacoEditor';
 
 export function SkillEditorTab({ skillId, adapterId }: { skillId: string; adapterId: string }): React.ReactElement {
   const { skills, updateSkill } = useSkillsStore();
   const projects = useProjectsStore((s) => s.projects);
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const activeProjectId = useActiveProjectId();
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   const skill = skills.find((s) => s.id === skillId);

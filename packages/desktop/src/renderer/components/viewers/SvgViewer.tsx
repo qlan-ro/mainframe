@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useProjectsStore } from '../../store';
+import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { getFileContent } from '../../lib/api';
 
 export function SvgViewer({ filePath }: { filePath: string }): React.ReactElement {
-  const { activeProjectId } = useProjectsStore();
+  const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +26,9 @@ export function SvgViewer({ filePath }: { filePath: string }): React.ReactElemen
   }
 
   if (!dataUrl) {
-    return <div className="h-full flex items-center justify-center text-mf-text-secondary text-mf-body">Loading...</div>;
+    return (
+      <div className="h-full flex items-center justify-center text-mf-text-secondary text-mf-body">Loading...</div>
+    );
   }
 
   return (

@@ -1,6 +1,6 @@
 import { daemonClient } from './client';
 import { useChatsStore } from '../store/chats';
-import { useProjectsStore } from '../store/projects';
+import { getActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { createLogger } from './logger';
 
 const log = createLogger('renderer:chat');
@@ -18,7 +18,7 @@ export function sendCommentMessage(formatted: string, explicitChatId?: string): 
     return;
   }
 
-  const projectId = useProjectsStore.getState().activeProjectId;
+  const projectId = getActiveProjectId();
   if (!projectId) return;
 
   const timeout = setTimeout(() => {
