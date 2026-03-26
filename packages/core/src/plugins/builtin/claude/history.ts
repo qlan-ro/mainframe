@@ -364,73 +364,68 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
 }
 
 export async function extractPlanFilePaths(sessionId: string, projectPath: string): Promise<string[]> {
-  const { jsonlPath, projectDir } = getSessionJsonlPath(sessionId, projectPath);
+  const { allFiles: jsonlFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
+  if (jsonlFiles.length === 0) return [];
 
-  try {
-    await access(jsonlPath, constants.R_OK);
-  } catch {
-    return [];
-  }
-
+  const { projectDir } = getSessionJsonlPath(sessionId, projectPath);
   const planFiles: string[] = [];
-  const stream = createReadStream(jsonlPath);
-  try {
-    const rl = createInterface({ input: stream, crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type !== 'user') continue;
-        const tur = entry.toolUseResult as Record<string, unknown> | undefined;
-        if (typeof tur?.plan === 'string' && typeof tur?.filePath === 'string') {
-          // CLI stores relative paths (e.g. ../../../.claude/plans/foo.md) — resolve
-          // against the JSONL's directory so downstream consumers get absolute paths.
-          planFiles.push(path.resolve(projectDir, tur.filePath as string));
+
+  for (const file of jsonlFiles) {
+    const stream = createReadStream(file);
+    try {
+      const rl = createInterface({ input: stream, crlfDelay: Infinity });
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type !== 'user') continue;
+          const tur = entry.toolUseResult as Record<string, unknown> | undefined;
+          if (typeof tur?.plan === 'string' && typeof tur?.filePath === 'string') {
+            planFiles.push(path.resolve(projectDir, tur.filePath as string));
+          }
+        } catch {
+          /* skip malformed */
         }
-      } catch {
-        /* skip malformed */
       }
+    } finally {
+      stream.destroy();
     }
-  } finally {
-    stream.destroy();
   }
 
   return planFiles;
 }
 
 export async function extractSkillFilePaths(sessionId: string, projectPath: string): Promise<SkillFileEntry[]> {
-  const { jsonlPath } = getSessionJsonlPath(sessionId, projectPath);
-
-  try {
-    await access(jsonlPath, constants.R_OK);
-  } catch {
-    return [];
-  }
+  const { allFiles: jsonlFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
+  if (jsonlFiles.length === 0) return [];
 
   const skillFiles: SkillFileEntry[] = [];
-  const stream = createReadStream(jsonlPath);
-  try {
-    const rl = createInterface({ input: stream, crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type !== 'user' || entry.isMeta !== true) continue;
-        const content = entry.message?.content;
-        if (!Array.isArray(content)) continue;
-        const skillPath = extractSkillPathFromText(content);
-        if (skillPath) {
-          const segments = skillPath.split('/');
-          const file = segments.pop() ?? skillPath;
-          const displayName = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
-          skillFiles.push({ path: skillPath, displayName });
+
+  for (const file of jsonlFiles) {
+    const stream = createReadStream(file);
+    try {
+      const rl = createInterface({ input: stream, crlfDelay: Infinity });
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type !== 'user' || entry.isMeta !== true) continue;
+          const content = entry.message?.content;
+          if (!Array.isArray(content)) continue;
+          const skillPath = extractSkillPathFromText(content);
+          if (skillPath) {
+            const segments = skillPath.split('/');
+            const file = segments.pop() ?? skillPath;
+            const displayName = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
+            skillFiles.push({ path: skillPath, displayName });
+          }
+        } catch {
+          /* skip malformed */
         }
-      } catch {
-        /* skip malformed */
       }
+    } finally {
+      stream.destroy();
     }
-  } finally {
-    stream.destroy();
   }
 
   return skillFiles;
