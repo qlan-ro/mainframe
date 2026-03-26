@@ -193,6 +193,7 @@ function convertGroupedPartsToDisplay(
             }),
           };
         }),
+        ...(part.result != null && { result: part.result as ToolCallResult }),
       });
     } else if (part.toolName === '_TaskProgress') {
       result.push({

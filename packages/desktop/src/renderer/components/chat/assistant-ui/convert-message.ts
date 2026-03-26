@@ -118,7 +118,7 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
                   isError: c.result?.isError,
                 })),
               } as import('assistant-stream/utils').ReadonlyJSONObject,
-              result: calls[0]?.result,
+              result: block.result ?? calls[0]?.result,
             });
             break;
           }

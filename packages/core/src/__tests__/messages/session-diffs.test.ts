@@ -148,4 +148,77 @@ describe('extractSessionDiffs', () => {
     ];
     expect(extractSessionDiffs(messages)).toEqual([]);
   });
+
+  it('detects file changes from subagent tool calls (injected tool_use + separate tool_result)', () => {
+    const messages = [
+      msg('assistant', [
+        { type: 'tool_use', id: 'agent1', name: 'Agent', input: { prompt: 'edit files' } },
+        { type: 'tool_use', id: 'sub-tu1', name: 'Write', input: { file_path: '/src/subagent-file.ts' } },
+      ]),
+      msg('user', [
+        {
+          type: 'tool_result',
+          toolUseId: 'sub-tu1',
+          content: 'ok',
+          isError: false,
+          originalFile: '',
+          modifiedFile: 'subagent wrote this',
+        },
+      ]),
+      msg('user', [{ type: 'tool_result', toolUseId: 'agent1', content: 'Task completed', isError: false }]),
+    ];
+    const result = extractSessionDiffs(messages);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      filePath: '/src/subagent-file.ts',
+      original: '',
+      modified: 'subagent wrote this',
+      status: 'modified',
+    });
+  });
+
+  it('handles Edit tool from subagent with originalFile and modifiedFile', () => {
+    const messages = [
+      msg('assistant', [
+        { type: 'tool_use', id: 'agent1', name: 'Task', input: { description: 'refactor' } },
+        { type: 'tool_use', id: 'sub-tu1', name: 'Edit', input: { file_path: '/src/component.tsx' } },
+        { type: 'tool_use', id: 'sub-tu2', name: 'Edit', input: { file_path: '/src/utils.ts' } },
+      ]),
+      msg('user', [
+        {
+          type: 'tool_result',
+          toolUseId: 'sub-tu1',
+          content: 'ok',
+          isError: false,
+          originalFile: 'old component',
+          modifiedFile: 'new component',
+        },
+      ]),
+      msg('user', [
+        {
+          type: 'tool_result',
+          toolUseId: 'sub-tu2',
+          content: 'ok',
+          isError: false,
+          originalFile: 'old utils',
+          modifiedFile: 'new utils',
+        },
+      ]),
+      msg('user', [{ type: 'tool_result', toolUseId: 'agent1', content: 'Done', isError: false }]),
+    ];
+    const result = extractSessionDiffs(messages);
+    expect(result).toHaveLength(2);
+    expect(result.find((r) => r.filePath === '/src/component.tsx')).toEqual({
+      filePath: '/src/component.tsx',
+      original: 'old component',
+      modified: 'new component',
+      status: 'modified',
+    });
+    expect(result.find((r) => r.filePath === '/src/utils.ts')).toEqual({
+      filePath: '/src/utils.ts',
+      original: 'old utils',
+      modified: 'new utils',
+      status: 'modified',
+    });
+  });
 });
