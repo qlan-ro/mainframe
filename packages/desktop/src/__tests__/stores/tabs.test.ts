@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { CenterTab } from '../../renderer/store/tabs.js';
 import { useTabsStore } from '../../renderer/store/tabs.js';
-import { setActiveEditorGetter } from '../../renderer/components/editor/editor-state.js';
+import { updateCursorPosition, clearCursorTracking } from '../../renderer/components/editor/editor-state.js';
 
 function makeChatTab(chatId: string, label = 'Chat'): CenterTab {
   return { type: 'chat', id: `chat:${chatId}`, chatId, label };
@@ -221,20 +221,24 @@ describe('useTabsStore', () => {
 
   describe('navigation back/forward', () => {
     afterEach(() => {
-      setActiveEditorGetter(null);
+      clearCursorTracking();
     });
 
-    it('navigateBack uses live cursor position, not stale fileView line', () => {
+    it('navigateBack uses previous cursor position, not click target', () => {
       // Open file A at line 1
       useTabsStore.getState().openEditorTab('src/a.ts', undefined, 1, 1);
 
-      // Simulate user moving cursor to line 50, col 10 in the editor
-      setActiveEditorGetter(() => ({ line: 50, column: 10 }));
+      // Simulate user moving cursor to line 50, col 10
+      updateCursorPosition({ line: 1, column: 1 });
+      updateCursorPosition({ line: 50, column: 10 });
 
-      // Navigate to file B at line 20 — this pushes file A onto the back stack
+      // CMD+click moves cursor to line 43 col 32 (click target), then
+      // go-to-definition fires openEditorTab — previous position (50:10)
+      // should be saved, not the click target (43:32).
+      updateCursorPosition({ line: 43, column: 32 });
       useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
 
-      // Navigate back — should restore file A at line 50 (live cursor), not line 1 (stale)
+      // Navigate back — should restore file A at line 50 (previous), not 43 (click)
       useTabsStore.getState().navigateBack();
 
       const fv = useTabsStore.getState().fileView;
@@ -247,21 +251,26 @@ describe('useTabsStore', () => {
       }
     });
 
-    it('navigateForward uses live cursor position from current editor', () => {
-      // Open file A at line 1, then navigate to file B at line 20
+    it('navigateForward uses previous cursor position from current editor', () => {
+      // Open file A, simulate cursor moves, navigate to file B
       useTabsStore.getState().openEditorTab('src/a.ts', undefined, 1, 1);
-      setActiveEditorGetter(() => ({ line: 5, column: 3 }));
+      updateCursorPosition({ line: 1, column: 1 });
+      updateCursorPosition({ line: 5, column: 3 });
+      updateCursorPosition({ line: 8, column: 1 }); // click target before nav
       useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
 
-      // Navigate back to file A
-      setActiveEditorGetter(() => ({ line: 25, column: 7 }));
+      // Navigate back — saves B's position (previous before back)
+      updateCursorPosition({ line: 20, column: 1 });
+      updateCursorPosition({ line: 25, column: 7 });
+      updateCursorPosition({ line: 25, column: 7 }); // cursor didn't move
       useTabsStore.getState().navigateBack();
 
-      // Now file A is open. Simulate cursor move to line 60
-      setActiveEditorGetter(() => ({ line: 60, column: 1 }));
+      // Now file A is open. Simulate cursor moves.
+      updateCursorPosition({ line: 50, column: 1 });
+      updateCursorPosition({ line: 60, column: 1 });
 
-      // Navigate forward — should push file A at line 60 (live) onto back stack,
-      // and restore file B at line 25 (captured when we navigated back)
+      // Navigate forward — previous position (50:1) goes on back stack,
+      // and we restore file B at the position saved when we went back (25:7)
       useTabsStore.getState().navigateForward();
 
       const fv = useTabsStore.getState().fileView;
@@ -274,8 +283,8 @@ describe('useTabsStore', () => {
       }
     });
 
-    it('falls back to fileView line/column when no editor getter is registered', () => {
-      // No editor getter registered — should use stale fileView values as fallback
+    it('falls back to fileView line/column when no cursor tracking exists', () => {
+      // No cursor tracking — should use stale fileView values as fallback
       useTabsStore.getState().openEditorTab('src/a.ts', undefined, 10, 5);
       useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
 

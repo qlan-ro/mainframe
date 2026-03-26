@@ -7,7 +7,7 @@ import { registerDefinitionProvider } from './navigation';
 import { useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
-import { setActiveEditorGetter } from './editor-state';
+import { updateCursorPosition, clearCursorTracking } from './editor-state';
 
 interface MonacoEditorProps {
   value: string;
@@ -82,17 +82,20 @@ export function MonacoEditor({
   const columnRef = useRef(column);
   columnRef.current = column;
 
-  // Register the active editor's cursor position getter for navigation.
+  // Clear cursor tracking on unmount.
   useEffect(() => {
-    return () => setActiveEditorGetter(null);
+    return () => clearCursorTracking();
   }, []);
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
-      setActiveEditorGetter(() => {
-        const pos = editor.getPosition();
-        return pos ? { line: pos.lineNumber, column: pos.column } : null;
+
+      // Seed initial position and track cursor moves for navigation history.
+      const pos = editor.getPosition();
+      if (pos) updateCursorPosition({ line: pos.lineNumber, column: pos.column });
+      editor.onDidChangeCursorPosition((e) => {
+        updateCursorPosition({ line: e.position.lineNumber, column: e.position.column });
       });
 
       // Scroll to target position on mount (from Go To Definition / References).
