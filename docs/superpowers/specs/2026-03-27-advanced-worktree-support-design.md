@@ -117,6 +117,12 @@ When the user triggers "Fork to worktree", the server checks `GitService.status(
 
 Uncommitted changes stay in the original directory. The worktree is a fresh checkout from the base branch tip.
 
+### Fix: File Tree Header Path
+
+`FilesTab.tsx` displays `activeProject.path` in the header — always the project root, even when the active chat has a worktree. The file listing itself is already worktree-aware (passes `chatId` to the server), so the contents are correct but the displayed path is wrong.
+
+Fix: when the active chat has a `worktreePath`, display that path in the file tree header instead of `activeProject.path`. Any other UI element that displays the project path in a chat-scoped context should apply the same logic.
+
 ### Existing Behavior Preserved
 
 - `getEffectivePath` continues to route file browsing, search, git reads, and context to the worktree.
