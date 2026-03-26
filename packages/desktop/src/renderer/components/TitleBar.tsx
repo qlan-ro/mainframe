@@ -27,6 +27,7 @@ export function TitleBar({
   const activeProjectId = useActiveProjectId();
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const activeProjectName = activeProject?.name ?? 'Mainframe';
+  const activeChatId = useChatsStore((s) => s.activeChatId);
   const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
   const worktreeBranch = activeChat?.branchName;
 
@@ -66,13 +67,13 @@ export function TitleBar({
       const store = useSandboxStore.getState();
       store.clearLogsForName(selectedConfig.name);
       store.setLastStartedProcess(selectedConfig.name);
-      await startLaunchConfig(projectId, selectedConfig.name);
+      await startLaunchConfig(projectId, selectedConfig.name, activeChatId ?? undefined);
       setPanelVisible(true);
       if (panelCollapsed.bottom) togglePanel('bottom');
     } catch (err) {
       console.warn('[sandbox] start failed', err);
     }
-  }, [activeProjectId, selectedConfig, panelCollapsed, togglePanel, setPanelVisible]);
+  }, [activeProjectId, activeChatId, selectedConfig, panelCollapsed, togglePanel, setPanelVisible]);
 
   const handleCloseLaunchPopover = useCallback(() => setLaunchPopoverOpen(false), []);
   const handleCloseStopPopover = useCallback(() => setStopPopoverOpen(false), []);

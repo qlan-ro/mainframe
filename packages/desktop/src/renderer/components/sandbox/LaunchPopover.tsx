@@ -17,6 +17,7 @@ interface Props {
 
 export function LaunchPopover({ onClose }: Props): React.ReactElement {
   const activeProjectId = useActiveProjectId();
+  const activeChatId = useChatsStore((s) => s.activeChatId);
   const activeProject = useProjectsStore((s) =>
     activeProjectId ? (s.projects.find((p) => p.id === activeProjectId) ?? null) : null,
   );
@@ -53,11 +54,11 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
     if (status === 'starting') return;
     try {
       if (status === 'running') {
-        await stopLaunchConfig(activeProject.id, config.name);
+        await stopLaunchConfig(activeProject.id, config.name, activeChatId ?? undefined);
       } else {
         clearLogsForName(config.name);
         setLastStartedProcess(config.name);
-        await startLaunchConfig(activeProject.id, config.name);
+        await startLaunchConfig(activeProject.id, config.name, activeChatId ?? undefined);
         setPanelVisible(true);
         if (panelCollapsed.bottom) togglePanel('bottom');
       }
