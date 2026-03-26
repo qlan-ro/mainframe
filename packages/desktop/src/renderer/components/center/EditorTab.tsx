@@ -39,11 +39,13 @@ export function EditorTab({
   content: providedContent,
   line,
   column,
+  viewState,
 }: {
   filePath: string;
   content?: string;
   line?: number;
   column?: number;
+  viewState?: unknown;
 }): React.ReactElement {
   const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
@@ -164,8 +166,8 @@ export function EditorTab({
           filePath={filePath}
           line={line}
           column={column}
+          viewState={viewState}
           readOnly={false}
-          initialLine={line}
           onChange={handleChange}
           onLineComment={handleLineComment}
         />

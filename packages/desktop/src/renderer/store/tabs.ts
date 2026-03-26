@@ -1,11 +1,20 @@
 import { create } from 'zustand';
-import { getActiveEditorCursorPosition } from '../components/editor/editor-state';
+import { getEditorViewStateForNav } from '../components/editor/editor-state';
 import { useUIStore } from './ui';
 
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
 
 export type FileView =
-  | { type: 'editor'; filePath: string; label: string; content?: string; line?: number; column?: number }
+  | {
+      type: 'editor';
+      filePath: string;
+      label: string;
+      content?: string;
+      line?: number;
+      column?: number;
+      /** Opaque Monaco ICodeEditorViewState for restoring scroll + cursor + folds. */
+      viewState?: unknown;
+    }
   | {
       type: 'diff';
       filePath: string;
@@ -56,17 +65,19 @@ interface NavEntry {
   filePath: string;
   line?: number;
   column?: number;
+  viewState?: unknown;
 }
 const navBackStack: NavEntry[] = [];
 const navForwardStack: NavEntry[] = [];
 
-/** Build a NavEntry for the current editor, preferring the live cursor position. */
+/** Build a NavEntry for the current editor, capturing the full view state. */
 function currentEditorNavEntry(fv: FileView & { type: 'editor' }): NavEntry {
-  const cursor = getActiveEditorCursorPosition();
+  const viewState = getEditorViewStateForNav();
   return {
     filePath: fv.filePath,
-    line: cursor?.line ?? fv.line,
-    column: cursor?.column ?? fv.column,
+    line: fv.line,
+    column: fv.column,
+    viewState: viewState ?? undefined,
   };
 }
 
@@ -174,7 +185,14 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     }
     const label = entry.filePath.split('/').pop() || entry.filePath;
     set({
-      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
+      fileView: {
+        type: 'editor',
+        filePath: entry.filePath,
+        label,
+        line: entry.line,
+        column: entry.column,
+        viewState: entry.viewState,
+      },
       fileViewCollapsed: false,
     });
   },
@@ -188,7 +206,14 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     }
     const label = entry.filePath.split('/').pop() || entry.filePath;
     set({
-      fileView: { type: 'editor', filePath: entry.filePath, label, line: entry.line, column: entry.column },
+      fileView: {
+        type: 'editor',
+        filePath: entry.filePath,
+        label,
+        line: entry.line,
+        column: entry.column,
+        viewState: entry.viewState,
+      },
       fileViewCollapsed: false,
     });
   },

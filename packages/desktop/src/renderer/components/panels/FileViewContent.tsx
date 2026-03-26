@@ -18,7 +18,13 @@ function EditorFallback(): React.ReactElement {
   );
 }
 
-function renderEditorView(filePath: string, content?: string, line?: number, column?: number): React.ReactElement {
+function renderEditorView(
+  filePath: string,
+  content?: string,
+  line?: number,
+  column?: number,
+  viewState?: unknown,
+): React.ReactElement {
   const viewerType = getFileViewerType(filePath);
   switch (viewerType) {
     case 'image':
@@ -30,7 +36,7 @@ function renderEditorView(filePath: string, content?: string, line?: number, col
     case 'csv':
       return <CsvViewer filePath={filePath} />;
     case 'monaco':
-      return <EditorTab filePath={filePath} content={content} line={line} column={column} />;
+      return <EditorTab filePath={filePath} content={content} line={line} column={column} viewState={viewState} />;
   }
 }
 
@@ -41,7 +47,7 @@ export function FileViewContent(): React.ReactElement | null {
   return (
     <Suspense fallback={<EditorFallback />}>
       {fileView.type === 'editor' &&
-        renderEditorView(fileView.filePath, fileView.content, fileView.line, fileView.column)}
+        renderEditorView(fileView.filePath, fileView.content, fileView.line, fileView.column, fileView.viewState)}
       {fileView.type === 'diff' && (
         <DiffTab
           filePath={fileView.filePath}

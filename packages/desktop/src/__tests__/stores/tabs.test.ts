@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { CenterTab } from '../../renderer/store/tabs.js';
 import { useTabsStore } from '../../renderer/store/tabs.js';
-import { updateCursorPosition, clearCursorTracking } from '../../renderer/components/editor/editor-state.js';
+import { updateEditorViewState, clearEditorViewState } from '../../renderer/components/editor/editor-state.js';
 
 function makeChatTab(chatId: string, label = 'Chat'): CenterTab {
   return { type: 'chat', id: `chat:${chatId}`, chatId, label };
@@ -221,24 +221,26 @@ describe('useTabsStore', () => {
 
   describe('navigation back/forward', () => {
     afterEach(() => {
-      clearCursorTracking();
+      clearEditorViewState();
     });
 
-    it('navigateBack uses previous cursor position, not click target', () => {
-      // Open file A at line 1
+    it('navigateBack captures and restores the previous view state', () => {
       useTabsStore.getState().openEditorTab('src/a.ts', undefined, 1, 1);
 
-      // Simulate user moving cursor to line 50, col 10
-      updateCursorPosition({ line: 1, column: 1 });
-      updateCursorPosition({ line: 50, column: 10 });
+      // Simulate editor state changes (cursor moves, scrolls).
+      // Each call rolls: previous = old current, current = new snapshot.
+      const stateAtLine1 = { cursor: '1:1', scrollTop: 0 };
+      const stateAtLine50 = { cursor: '50:10', scrollTop: 400 };
+      const clickTarget = { cursor: '43:32', scrollTop: 400 };
 
-      // CMD+click moves cursor to line 43 col 32 (click target), then
-      // go-to-definition fires openEditorTab — previous position (50:10)
-      // should be saved, not the click target (43:32).
-      updateCursorPosition({ line: 43, column: 32 });
+      updateEditorViewState(stateAtLine1);
+      updateEditorViewState(stateAtLine50);
+      // CMD+click moves cursor — fires one more update before go-to-definition
+      updateEditorViewState(clickTarget);
+
+      // go-to-definition opens file B — should save previous (stateAtLine50)
       useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
 
-      // Navigate back — should restore file A at line 50 (previous), not 43 (click)
       useTabsStore.getState().navigateBack();
 
       const fv = useTabsStore.getState().fileView;
@@ -246,31 +248,32 @@ describe('useTabsStore', () => {
       expect(fv!.type).toBe('editor');
       if (fv!.type === 'editor') {
         expect(fv!.filePath).toBe('src/a.ts');
-        expect(fv!.line).toBe(50);
-        expect(fv!.column).toBe(10);
+        expect(fv!.viewState).toEqual(stateAtLine50);
       }
     });
 
-    it('navigateForward uses previous cursor position from current editor', () => {
-      // Open file A, simulate cursor moves, navigate to file B
+    it('navigateForward captures and restores view state', () => {
       useTabsStore.getState().openEditorTab('src/a.ts', undefined, 1, 1);
-      updateCursorPosition({ line: 1, column: 1 });
-      updateCursorPosition({ line: 5, column: 3 });
-      updateCursorPosition({ line: 8, column: 1 }); // click target before nav
+
+      const stateA = { cursor: '5:3', scrollTop: 100 };
+      const clickA = { cursor: '8:1', scrollTop: 100 };
+      updateEditorViewState(stateA);
+      updateEditorViewState(clickA);
       useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
 
-      // Navigate back — saves B's position (previous before back)
-      updateCursorPosition({ line: 20, column: 1 });
-      updateCursorPosition({ line: 25, column: 7 });
-      updateCursorPosition({ line: 25, column: 7 }); // cursor didn't move
+      // Simulate editor in file B
+      const stateB = { cursor: '25:7', scrollTop: 200 };
+      const clickB = { cursor: '25:7', scrollTop: 200 };
+      updateEditorViewState(stateB);
+      updateEditorViewState(clickB);
       useTabsStore.getState().navigateBack();
 
-      // Now file A is open. Simulate cursor moves.
-      updateCursorPosition({ line: 50, column: 1 });
-      updateCursorPosition({ line: 60, column: 1 });
+      // Simulate cursor in file A after returning
+      const stateA2 = { cursor: '50:1', scrollTop: 500 };
+      const stateA3 = { cursor: '60:1', scrollTop: 600 };
+      updateEditorViewState(stateA2);
+      updateEditorViewState(stateA3);
 
-      // Navigate forward — previous position (50:1) goes on back stack,
-      // and we restore file B at the position saved when we went back (25:7)
       useTabsStore.getState().navigateForward();
 
       const fv = useTabsStore.getState().fileView;
@@ -278,13 +281,12 @@ describe('useTabsStore', () => {
       expect(fv!.type).toBe('editor');
       if (fv!.type === 'editor') {
         expect(fv!.filePath).toBe('src/b.ts');
-        expect(fv!.line).toBe(25);
-        expect(fv!.column).toBe(7);
+        // Should be the view state captured when we navigated back from B
+        expect(fv!.viewState).toEqual(stateB);
       }
     });
 
-    it('falls back to fileView line/column when no cursor tracking exists', () => {
-      // No cursor tracking — should use stale fileView values as fallback
+    it('falls back to no viewState when no tracking exists', () => {
       useTabsStore.getState().openEditorTab('src/a.ts', undefined, 10, 5);
       useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
 
@@ -296,6 +298,7 @@ describe('useTabsStore', () => {
         expect(fv!.filePath).toBe('src/a.ts');
         expect(fv!.line).toBe(10);
         expect(fv!.column).toBe(5);
+        expect(fv!.viewState).toBeUndefined();
       }
     });
   });
