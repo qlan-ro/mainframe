@@ -1,40 +1,54 @@
 /**
  * Bridge between the active Monaco editor instance and the tabs store.
  *
- * Tracks the *previous* editor view state (scroll + cursor + selections + folds)
- * so that when CMD+click triggers go-to-definition, we save the state from
- * before the click moved the cursor — not the click-target state.
+ * Uses a debounced "stable" state so that rapid events from a CMD+click
+ * (cursor move + scroll + highlight) don't overwrite the pre-click state
+ * before go-to-definition reads it.
  *
- * View states are typed as `unknown` here to avoid leaking Monaco types into
+ * View states are typed as `unknown` to avoid leaking Monaco types into
  * the store layer. MonacoEditor casts them back on restore.
  */
 
-let previousState: unknown = null;
-let currentState: unknown = null;
+/** The last confirmed-stable view state (updated after 150ms of idle). */
+let stableState: unknown = null;
+/** The most recent view state snapshot (may reflect a mid-action state). */
+let latestState: unknown = null;
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+const DEBOUNCE_MS = 150;
 
 /**
  * Called by MonacoEditor on cursor or scroll changes.
- * Rolls the window: old current becomes previous, new snapshot becomes current.
+ * The latest snapshot is stored immediately; it only promotes to "stable"
+ * after the editor is idle for DEBOUNCE_MS.
  */
 export function updateEditorViewState(viewState: unknown): void {
-  previousState = currentState;
-  currentState = viewState;
+  latestState = viewState;
+  if (debounceTimer != null) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    stableState = latestState;
+    debounceTimer = null;
+  }, DEBOUNCE_MS);
 }
 
 /** Called by MonacoEditor on unmount. */
 export function clearEditorViewState(): void {
-  previousState = null;
-  currentState = null;
+  stableState = null;
+  latestState = null;
+  if (debounceTimer != null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
 }
 
 /**
  * Returns the view state to save for navigation history.
  *
- * Prefers `previousState` because CMD+click moves the cursor (firing an
- * onDidChangeCursorPosition event that updates currentState) *before*
- * go-to-definition calls openEditorTab. The previous state is the one
- * the user actually saw.
+ * Prefers the debounced stable state — this is where the user was before
+ * the CMD+click burst of events. Falls back to the latest snapshot if
+ * no stable state has been recorded yet.
  */
 export function getEditorViewStateForNav(): unknown {
-  return previousState ?? currentState;
+  return stableState ?? latestState;
 }
