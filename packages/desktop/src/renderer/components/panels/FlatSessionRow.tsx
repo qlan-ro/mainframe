@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Archive } from 'lucide-react';
+import { Archive, FolderOpen, GitBranch, Clock } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
@@ -94,12 +94,23 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1">
               {projectName && (
                 <>
+                  <FolderOpen size={10} className="shrink-0" />
                   <span className="truncate max-w-[100px]" title={projectName}>
                     {projectName}
                   </span>
                   <span>{'·'}</span>
                 </>
               )}
+              {chat.worktreePath && (
+                <>
+                  <GitBranch size={10} className="shrink-0" />
+                  <span className="truncate max-w-[100px]" title={chat.worktreePath}>
+                    {chat.worktreePath.split('/').pop()}
+                  </span>
+                  <span>{'·'}</span>
+                </>
+              )}
+              <Clock size={10} className="shrink-0" />
               <span>{formatRelativeTime(chat.updatedAt)}</span>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Plus, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Archive, ChevronDown, ChevronRight, Bot, GitBranch, Clock } from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
 import type { SessionStatus } from '../../store/chats';
 import { useChatsStore } from '../../store';
@@ -164,10 +164,21 @@ export function ProjectGroup({
                       >
                         {chat.title || 'New Chat'}
                       </div>
-                      <div className="text-mf-status text-mf-text-secondary mt-0.5">
-                        {getAdapterLabel(chat.adapterId, adapters)}
-                        <span className="mx-0.5">{'·'}</span>
-                        {formatRelativeTime(chat.updatedAt)}
+                      <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1">
+                        <Bot size={10} className="shrink-0" />
+                        <span>{getAdapterLabel(chat.adapterId, adapters)}</span>
+                        {chat.worktreePath && (
+                          <>
+                            <span>{'·'}</span>
+                            <GitBranch size={10} className="shrink-0" />
+                            <span className="truncate max-w-[100px]" title={chat.worktreePath}>
+                              {chat.worktreePath.split('/').pop()}
+                            </span>
+                          </>
+                        )}
+                        <span>{'·'}</span>
+                        <Clock size={10} className="shrink-0" />
+                        <span>{formatRelativeTime(chat.updatedAt)}</span>
                       </div>
                     </div>
                   </div>
