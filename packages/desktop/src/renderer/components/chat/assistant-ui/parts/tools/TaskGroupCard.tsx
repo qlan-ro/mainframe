@@ -49,10 +49,20 @@ function buildSummary(children: TaskGroupChild[]): string {
     .join(' · ');
 }
 
-export function TaskGroupCard({ args, isError }: ToolCardProps) {
+export function TaskGroupCard({ args, result, isError }: ToolCardProps) {
   const [open, setOpen] = useState(false);
   const taskArgs = (args.taskArgs as Record<string, unknown>) || {};
   const children = (args.children as TaskGroupChild[]) || [];
+  const rawResult =
+    typeof result === 'object' && result !== null && 'content' in result
+      ? (result as { content: string }).content
+      : undefined;
+  // Strip CLI metadata: <usage> block and agentId continuation hint
+  const resultText =
+    rawResult
+      ?.replace(/<usage>[\s\S]*<\/usage>\s*$/m, '')
+      .replace(/agentId:.*\(use SendMessage.*?\)\s*$/m, '')
+      .trimEnd() || undefined;
 
   const agentType = (taskArgs.subagent_type as string) || 'Task';
   const model = taskArgs.model as string | undefined;
@@ -81,12 +91,18 @@ export function TaskGroupCard({ args, isError }: ToolCardProps) {
         {summary && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{summary}</span>}
         <ErrorDot isError={isError} />
       </button>
-      {open &&
-        children.map((child) => (
-          <React.Fragment key={child.toolCallId}>
-            {renderToolCard(child.toolName, child.args, '', child.result, child.isError)}
-          </React.Fragment>
-        ))}
+      {open && (
+        <>
+          {children.map((child) => (
+            <React.Fragment key={child.toolCallId}>
+              {renderToolCard(child.toolName, child.args, '', child.result, child.isError)}
+            </React.Fragment>
+          ))}
+          {resultText && (
+            <div className="pl-6 text-mf-small text-mf-text-secondary whitespace-pre-wrap">{resultText}</div>
+          )}
+        </>
+      )}
     </div>
   );
 }

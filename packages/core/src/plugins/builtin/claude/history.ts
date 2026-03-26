@@ -245,6 +245,44 @@ function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: M
   }
 }
 
+/** Extract tool_result blocks from subagent JSONL user entries. */
+function collectSubagentToolResults(
+  entry: Record<string, unknown>,
+  results: Map<string, MessageContent & { type: 'tool_result' }>,
+): void {
+  if (entry.type !== 'user') return;
+  const message = entry.message as Record<string, unknown> | undefined;
+  if (!message) return;
+  const rawContent = message.content;
+  if (!Array.isArray(rawContent)) return;
+  const toolUseResult = entry.toolUseResult as Record<string, unknown> | undefined;
+  const blocks = buildToolResultBlocks(message, toolUseResult);
+  for (const block of blocks) {
+    if (block.type === 'tool_result') {
+      results.set(block.toolUseId, block);
+    }
+  }
+}
+
+/** Attach subagent tool_result data to injected tool_use blocks within assistant messages. */
+function attachSubagentToolResults(
+  messages: ChatMessage[],
+  results: Map<string, MessageContent & { type: 'tool_result' }>,
+): void {
+  for (const msg of messages) {
+    if (msg.type !== 'assistant') continue;
+    // Build a synthetic _toolResults map for any injected subagent tool_use blocks
+    for (const block of msg.content) {
+      if (block.type !== 'tool_use') continue;
+      const toolResult = results.get(block.id);
+      if (!toolResult) continue;
+      const grouped = msg as { _toolResults?: Map<string, MessageContent & { type: 'tool_result' }> };
+      if (!grouped._toolResults) grouped._toolResults = new Map();
+      grouped._toolResults.set(block.id, toolResult);
+    }
+  }
+}
+
 function injectAgentChildren(messages: ChatMessage[], agentTools: Map<string, MessageContent[]>): void {
   for (const msg of messages) {
     if (msg.type !== 'assistant') continue;
@@ -269,16 +307,17 @@ function getSessionJsonlPath(sessionId: string, projectPath: string): { jsonlPat
 export async function discoverSessionJsonlFiles(
   sessionId: string,
   projectPath: string,
-): Promise<{ primaryPath: string; allFiles: string[] }> {
+): Promise<{ primaryPath: string; allFiles: string[]; subagentFiles: Set<string> }> {
   const { jsonlPath, projectDir } = getSessionJsonlPath(sessionId, projectPath);
 
   try {
     await access(jsonlPath, constants.R_OK);
   } catch {
-    return { primaryPath: jsonlPath, allFiles: [] };
+    return { primaryPath: jsonlPath, allFiles: [], subagentFiles: new Set() };
   }
 
   const jsonlFiles = [jsonlPath];
+  const subagentFiles = new Set<string>();
 
   // Scan sibling .jsonl files (sidechains) with matching sessionId
   try {
@@ -311,24 +350,29 @@ export async function discoverSessionJsonlFiles(
     const subEntries = await readdir(subagentDir);
     for (const entry of subEntries) {
       if (!entry.endsWith('.jsonl')) continue;
-      jsonlFiles.push(path.join(subagentDir, entry));
+      const filePath = path.join(subagentDir, entry);
+      jsonlFiles.push(filePath);
+      subagentFiles.add(filePath);
     }
   } catch {
     /* no subagents directory or unreadable */
   }
 
-  return { primaryPath: jsonlPath, allFiles: jsonlFiles };
+  return { primaryPath: jsonlPath, allFiles: jsonlFiles, subagentFiles };
 }
 
 export async function loadHistory(sessionId: string, projectPath: string): Promise<ChatMessage[]> {
-  const { allFiles: jsonlFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
+  const { allFiles: jsonlFiles, subagentFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
   if (jsonlFiles.length === 0) return [];
 
   const messages: ChatMessage[] = [];
   const agentTools = new Map<string, MessageContent[]>();
+  // Map of toolUseId → tool_result block, populated from subagent JONLs
+  const subagentToolResults = new Map<string, MessageContent & { type: 'tool_result' }>();
   const seenUuids = new Set<string>();
 
   for (const file of jsonlFiles) {
+    const isSubagentFile = subagentFiles.has(file);
     const stream = createReadStream(file);
     try {
       const rl = createInterface({ input: stream, crlfDelay: Infinity });
@@ -342,6 +386,14 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
           // Collect tool_use blocks from agent_progress events
           if (entry.type === 'progress' && entry.data?.type === 'agent_progress') {
             collectAgentProgressTools(entry, agentTools);
+            continue;
+          }
+
+          // Subagent JSONL files: only extract tool_result data to populate
+          // the tool_use blocks injected via agent_progress. The subagent's own
+          // assistant/user messages must NOT appear as top-level chat messages.
+          if (isSubagentFile) {
+            collectSubagentToolResults(entry, subagentToolResults);
             continue;
           }
 
@@ -364,6 +416,11 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
   // Inject collected subagent tool calls after their parent Agent tool_use blocks
   if (agentTools.size > 0) {
     injectAgentChildren(messages, agentTools);
+  }
+
+  // Attach tool_result data from subagent JONLs to the injected tool_use blocks
+  if (subagentToolResults.size > 0) {
+    attachSubagentToolResults(messages, subagentToolResults);
   }
 
   return filterSkillExpansions(messages);
