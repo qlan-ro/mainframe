@@ -8,6 +8,7 @@ import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { createProject } from '../../lib/api';
 import { ContextMenu } from '../ui/context-menu';
 import type { ContextMenuItem } from '../ui/context-menu';
+import { cn } from '../../lib/utils';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
 import { daemonClient } from '../../lib/client';
 import { ProjectGroup } from './ProjectGroup';
@@ -80,6 +81,55 @@ function buildGroups(projects: Project[], chats: Chat[]): ProjectGroupData[] {
   return groups;
 }
 
+function NewSessionPopover({
+  projects,
+  activeProjectId,
+  onSelect,
+  onClose,
+}: {
+  projects: Project[];
+  activeProjectId: string | null;
+  onSelect: (projectId: string) => void;
+  onClose: () => void;
+}): React.ReactElement {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-new-session-popover]')) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  // Sort: active project first, then alphabetical
+  const sorted = useMemo(() => {
+    return [...projects].sort((a, b) => {
+      if (a.id === activeProjectId) return -1;
+      if (b.id === activeProjectId) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [projects, activeProjectId]);
+
+  return (
+    <div className="absolute right-0 top-full mt-1 z-50 min-w-[200px] max-w-[280px] bg-mf-panel border border-mf-border rounded-mf-panel shadow-lg py-1">
+      <div className="px-3 py-1.5 text-mf-status text-mf-text-secondary uppercase tracking-wider">Select project</div>
+      {sorted.map((project) => (
+        <button
+          key={project.id}
+          type="button"
+          onClick={() => onSelect(project.id)}
+          className={cn(
+            'w-full text-left px-3 py-1.5 text-mf-small truncate hover:bg-mf-hover transition-colors',
+            project.id === activeProjectId ? 'text-mf-accent' : 'text-mf-text-primary',
+          )}
+          title={project.path}
+        >
+          {project.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ChatsPanel(): React.ReactElement {
   const projects = useProjectsStore((s) => s.projects);
   const addProject = useProjectsStore((s) => s.addProject);
@@ -91,6 +141,7 @@ export function ChatsPanel(): React.ReactElement {
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showDirPicker, setShowDirPicker] = useState(false);
+  const [showNewSessionPopover, setShowNewSessionPopover] = useState(false);
 
   const activeProjectId = useActiveProjectId();
 
@@ -102,11 +153,19 @@ export function ChatsPanel(): React.ReactElement {
     });
   }, []);
 
-  const handleNewSession = useCallback(() => {
-    const projectId = activeProjectId ?? projects[0]?.id;
-    if (!projectId) return;
+  const handleNewSessionClick = useCallback(() => {
+    if (projects.length === 0) return;
+    if (projects.length === 1) {
+      daemonClient.createChat(projects[0]!.id, 'claude');
+      return;
+    }
+    setShowNewSessionPopover((prev) => !prev);
+  }, [projects]);
+
+  const handleNewSessionInProject = useCallback((projectId: string) => {
     daemonClient.createChat(projectId, 'claude');
-  }, [activeProjectId, projects]);
+    setShowNewSessionPopover(false);
+  }, []);
 
   // Persist collapse state
   useEffect(() => {
@@ -169,15 +228,25 @@ export function ChatsPanel(): React.ReactElement {
       <div className="h-11 px-[10px] flex items-center justify-between">
         <div className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Sessions</div>
         <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            onClick={handleNewSession}
-            disabled={projects.length === 0}
-            className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-            title="New session"
-          >
-            <Plus size={14} />
-          </button>
+          <div className="relative" data-new-session-popover>
+            <button
+              type="button"
+              onClick={handleNewSessionClick}
+              disabled={projects.length === 0}
+              className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              title="New session"
+            >
+              <Plus size={14} />
+            </button>
+            {showNewSessionPopover && (
+              <NewSessionPopover
+                projects={projects}
+                activeProjectId={activeProjectId}
+                onSelect={handleNewSessionInProject}
+                onClose={() => setShowNewSessionPopover(false)}
+              />
+            )}
+          </div>
           <button
             type="button"
             onClick={toggleViewMode}
