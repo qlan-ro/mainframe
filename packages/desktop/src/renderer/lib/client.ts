@@ -179,16 +179,6 @@ export class DaemonClient {
     });
   }
 
-  enableWorktree(chatId: string, baseBranch: string, branchName: string): void {
-    this.send({ type: 'chat.enableWorktree', chatId, baseBranch, branchName });
-    log.info('enableWorktree', { chatId });
-  }
-
-  disableWorktree(chatId: string): void {
-    this.send({ type: 'chat.disableWorktree', chatId });
-    log.info('disableWorktree', { chatId });
-  }
-
   subscribe(chatId: string): void {
     this.send({ type: 'subscribe', chatId });
   }

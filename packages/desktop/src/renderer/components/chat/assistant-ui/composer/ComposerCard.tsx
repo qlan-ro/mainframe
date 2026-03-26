@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { ArrowUp, Square, Paperclip, Shield, GitBranch, X, AlertTriangle } from 'lucide-react';
+import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:composer');
@@ -323,30 +323,6 @@ export function ComposerCard() {
               currentMode === 'yolo' ? 'text-mf-destructive' : currentMode === 'plan' ? 'text-mf-accent' : undefined
             }
           />
-          {!hasMessages && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!chatId) return;
-                if (chat?.worktreePath) {
-                  daemonClient.disableWorktree(chatId);
-                } else {
-                  daemonClient.enableWorktree(chatId, 'HEAD', `session/${chatId.slice(0, 8)}`);
-                }
-              }}
-              className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
-                chat?.worktreePath
-                  ? 'text-mf-accent bg-mf-hover'
-                  : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
-              }`}
-              title={chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Enable worktree isolation'}
-              aria-label={
-                chat?.worktreePath ? `Worktree enabled on branch ${chat.branchName}` : 'Enable worktree isolation'
-              }
-            >
-              <GitBranch size={12} />
-            </button>
-          )}
         </div>
         <div className="flex items-center gap-1">
           <StopButton />
