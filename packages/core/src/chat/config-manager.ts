@@ -103,7 +103,8 @@ export class ChatConfigManager {
     if (!project) throw new Error('Project not found');
 
     const worktreeDir = this.deps.db.settings.get('general', 'worktreeDir') ?? GENERAL_DEFAULTS.worktreeDir;
-    const info = createWorktree(project.path, chatId, worktreeDir);
+    const shortId = chatId.slice(0, 8);
+    const info = createWorktree(project.path, chatId, worktreeDir, 'HEAD', `session/${shortId}`);
     active.chat.worktreePath = info.worktreePath;
     active.chat.branchName = info.branchName;
     this.deps.db.chats.update(chatId, { worktreePath: info.worktreePath, branchName: info.branchName });
