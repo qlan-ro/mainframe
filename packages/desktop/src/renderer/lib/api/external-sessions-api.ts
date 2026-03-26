@@ -13,10 +13,12 @@ export async function importExternalSession(
   sessionId: string,
   adapterId: string,
   title?: string,
+  createdAt?: string,
+  modifiedAt?: string,
 ): Promise<Chat> {
   const json = await postJson<{ success: boolean; data: Chat }>(
     `${API_BASE}/api/projects/${projectId}/external-sessions/import`,
-    { sessionId, adapterId, title },
+    { sessionId, adapterId, title, createdAt, modifiedAt },
   );
   return json.data;
 }

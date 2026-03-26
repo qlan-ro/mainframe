@@ -107,7 +107,14 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   const handlePull = useCallback(
     async (branch: string) => {
       await withBusy(async () => {
-        const result = await gitPull(projectId, undefined, branch);
+        // Resolve the tracking remote (e.g. "origin/main" → remote="origin")
+        const info = branches?.local.find((b) => b.name === branch);
+        const remote = info?.tracking?.split('/')[0];
+        if (!remote) {
+          toast.error(`No tracking remote for ${branch}`);
+          return;
+        }
+        const result = await gitPull(projectId, remote, branch);
         if (result.status === 'conflict') {
           toast.error('Pull resulted in conflicts');
         } else if (result.status === 'up-to-date') {
@@ -119,7 +126,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
         await loadBranches();
       });
     },
-    [projectId, loadBranches, onBranchChanged, withBusy],
+    [projectId, branches, loadBranches, onBranchChanged, withBusy],
   );
 
   const handlePush = useCallback(

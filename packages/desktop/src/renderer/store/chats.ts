@@ -23,8 +23,6 @@ interface ChatsState {
   setProcess: (chatId: string, process: AdapterProcess) => void;
   updateProcessStatus: (processId: string, status: AdapterProcess['status']) => void;
   removeProcess: (chatId: string) => void;
-  externalSessionCount: number;
-  setExternalSessionCount: (count: number) => void;
 }
 
 export const useChatsStore = create<ChatsState>((set) => ({
@@ -33,7 +31,6 @@ export const useChatsStore = create<ChatsState>((set) => ({
   messages: new Map(),
   pendingPermissions: new Map(),
   processes: new Map(),
-  externalSessionCount: 0,
 
   setChats: (chats) => set({ chats }),
   setActiveChat: (id) => {
@@ -44,7 +41,15 @@ export const useChatsStore = create<ChatsState>((set) => ({
     }
     set({ activeChatId: id });
   },
-  addChat: (chat) => set((state) => ({ chats: [chat, ...state.chats] })),
+  addChat: (chat) =>
+    set((state) => {
+      const chatTime = new Date(chat.updatedAt ?? chat.createdAt).getTime();
+      const idx = state.chats.findIndex((c) => new Date(c.updatedAt ?? c.createdAt).getTime() <= chatTime);
+      if (idx === -1) return { chats: [...state.chats, chat] };
+      const next = [...state.chats];
+      next.splice(idx, 0, chat);
+      return { chats: next };
+    }),
   updateChat: (chat) =>
     set((state) => {
       const idx = state.chats.findIndex((c) => c.id === chat.id);
@@ -126,5 +131,4 @@ export const useChatsStore = create<ChatsState>((set) => ({
       newProcesses.delete(chatId);
       return { processes: newProcesses };
     }),
-  setExternalSessionCount: (count) => set({ externalSessionCount: count }),
 }));
