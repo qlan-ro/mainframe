@@ -1,0 +1,79 @@
+name: Prepare Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  prepare:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.title == 'chore: version packages'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./packages/core/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION"
+
+      - name: Check tag does not already exist
+        run: |
+          if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "::error::Tag ${{ steps.version.outputs.tag }} already exists"
+            exit 1
+          fi
+
+      - name: Sync root package.json version
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '${{ steps.version.outputs.version }}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Archive completed plan docs
+        run: |
+          mkdir -p docs/plans/completed
+          moved=0
+          for f in docs/plans/*.md; do
+            [ -f "$f" ] || continue
+            basename=$(basename "$f")
+            # Skip files without a date prefix
+            if ! echo "$basename" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-'; then
+              continue
+            fi
+            mv "$f" docs/plans/completed/
+            moved=$((moved + 1))
+          done
+          echo "Archived $moved plan docs"
+
+      - name: Commit release prep
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No cleanup changes to commit"
+          else
+            git commit -m "chore: prepare release ${{ steps.version.outputs.tag }}"
+            git push
+          fi
+
+      - name: Create and push tag
+        run: |
+          # Re-fetch in case we just pushed a commit
+          git fetch origin main
+          git tag "${{ steps.version.outputs.tag }}" origin/main
+          git push origin "${{ steps.version.outputs.tag }}"
+          echo "::notice::Tagged ${{ steps.version.outputs.tag }} — Release workflow will start"
