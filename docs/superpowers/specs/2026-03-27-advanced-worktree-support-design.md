@@ -117,11 +117,16 @@ When the user triggers "Fork to worktree", the server checks `GitService.status(
 
 Uncommitted changes stay in the original directory. The worktree is a fresh checkout from the base branch tip.
 
-### Fix: File Tree Header Path
+### Worktree Awareness Indicators
 
-`FilesTab.tsx` displays `activeProject.path` in the header — always the project root, even when the active chat has a worktree. The file listing itself is already worktree-aware (passes `chatId` to the server), so the contents are correct but the displayed path is wrong.
+Several UI areas lack visual cues that the user is working in a worktree session. These changes make the worktree state visible throughout the interface.
 
-Fix: when the active chat has a `worktreePath`, display that path in the file tree header instead of `activeProject.path`. Any other UI element that displays the project path in a chat-scoped context should apply the same logic.
+| Location | File | Change |
+|----------|------|--------|
+| **File tree header** | `FilesTab.tsx` | Show `worktreePath` instead of `activeProject.path` when active chat has a worktree. The file listing is already worktree-aware (passes `chatId`), only the displayed path is wrong. |
+| **Changes tab** | `ChangesTab.tsx` | Add a small badge or label like "Worktree: `feat/auth-worktree`" when active chat has a worktree. |
+| **Branch popover** | `BranchPopover.tsx` | Add a banner at top: "Working in worktree isolation" with the worktree path when active. |
+| **Title bar** | `TitleBar.tsx` | Append the worktree branch name: e.g. `Mainframe — ProjectName / feat/auth-worktree`. |
 
 ### Existing Behavior Preserved
 
