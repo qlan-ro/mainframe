@@ -31,6 +31,7 @@ function splitPath(filePath: string): { name: string; dir: string } {
 export function ChangesTab(): React.ReactElement {
   const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
+  const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
   const { openDiffTab, openInlineDiffTab } = useTabsStore();
   const fileView = useTabsStore((s) => s.fileView);
   const [mode, setMode] = useState<Mode>('session');
@@ -120,6 +121,11 @@ export function ChangesTab(): React.ReactElement {
             ? 'No active session'
             : `${fileCount} changed file${fileCount !== 1 ? 's' : ''}`}
         </span>
+        {activeChat?.branchName && activeChat?.worktreePath && (
+          <span className="text-mf-label text-mf-accent" title={activeChat.worktreePath}>
+            Worktree: {activeChat.branchName}
+          </span>
+        )}
         <Button
           variant="ghost"
           size="icon"

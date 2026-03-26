@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Download, Loader2, Plus, RefreshCw, Search, Upload } from 'lucide-react';
+import { ArrowLeft, Download, GitBranch, Loader2, Plus, RefreshCw, Search, Upload } from 'lucide-react';
+import { useChatsStore } from '../../store/chats';
 import { cn } from '../../lib/utils';
 import { BranchList } from './BranchList';
 import { BranchSubmenu } from './BranchSubmenu';
@@ -16,6 +17,7 @@ interface BranchPopoverProps {
 }
 
 export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPopoverProps): React.ReactElement {
+  const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
   const actions = useBranchActions(projectId, onBranchChanged, onClose);
   const { branches, conflictFiles, busy, busyAction } = actions;
 
@@ -119,6 +121,12 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
     <div ref={popoverRef} className="flex items-start gap-1">
       {/* Main panel */}
       <div className="bg-mf-app-bg border border-mf-border rounded-lg shadow-xl min-w-[300px] max-w-[360px]">
+        {activeChat?.worktreePath && (
+          <div className="flex items-center gap-2 px-3 py-2 mb-1 text-mf-label text-mf-accent bg-mf-accent/10 rounded-mf-input">
+            <GitBranch size={12} />
+            <span>Working in worktree isolation</span>
+          </div>
+        )}
         {view === 'conflict' && (
           <ConflictView conflictFiles={conflictFiles} onAbort={handleAbortAndReset} aborting={busy} />
         )}

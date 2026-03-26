@@ -10,6 +10,7 @@ import { StopPopover } from './sandbox/StopPopover';
 import { useLaunchConfig } from '../hooks/useLaunchConfig';
 import { startLaunchConfig } from '../lib/launch';
 import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
+import { useChatsStore } from '../store/chats';
 
 type PanelId = 'left' | 'right' | 'bottom';
 
@@ -26,6 +27,8 @@ export function TitleBar({
   const activeProjectId = useActiveProjectId();
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const activeProjectName = activeProject?.name ?? 'Mainframe';
+  const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
+  const worktreeBranch = activeChat?.branchName;
 
   // Launch / Preview
   const [launchPopoverOpen, setLaunchPopoverOpen] = useState(false);
@@ -78,7 +81,10 @@ export function TitleBar({
     <div className="h-11 bg-mf-app-bg flex items-center app-drag relative">
       {/* Traffic lights area + active project name */}
       <div className="flex items-center pl-[84px] pr-4 z-10 app-no-drag">
-        <span className="text-mf-body font-medium text-mf-text-primary">{activeProjectName}</span>
+        <span className="text-mf-body font-medium text-mf-text-primary">
+          {activeProjectName}
+          {worktreeBranch && <span className="text-mf-text-secondary font-normal"> / {worktreeBranch}</span>}
+        </span>
       </div>
 
       {/* Search box — centered in the title bar */}

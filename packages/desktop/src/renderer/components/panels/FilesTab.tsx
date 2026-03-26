@@ -137,6 +137,7 @@ export function FilesTab(): React.ReactElement {
   const { projects } = useProjectsStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const activeProject = projects.find((p) => p.id === activeProjectId);
+  const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
   const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);
   const rootExpanded = useTabsStore((s) => s.expandedPaths.includes('.'));
   const toggleTreePath = useTabsStore((s) => s.toggleTreePath);
@@ -217,6 +218,8 @@ export function FilesTab(): React.ReactElement {
     return <div className="text-mf-small text-mf-text-secondary text-center py-4">No project selected</div>;
   }
 
+  const displayPath = activeChat?.worktreePath ?? activeProject.path;
+
   return (
     <>
       <ScrollArea className="h-full">
@@ -229,8 +232,8 @@ export function FilesTab(): React.ReactElement {
             >
               {rootExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               <Folder size={14} className="text-mf-accent shrink-0" />
-              <span className="truncate" title={activeProject.path}>
-                {activeProject.path}
+              <span className="truncate" title={displayPath}>
+                {displayPath}
               </span>
             </button>
             <button
