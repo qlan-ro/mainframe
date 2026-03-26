@@ -58,6 +58,9 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
     setBusyAction(action ?? null);
     try {
       await fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(msg);
     } finally {
       setBusy(false);
       setBusyAction(null);
