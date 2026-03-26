@@ -34,6 +34,20 @@ function extractSkillPathFromText(content: Array<Record<string, unknown>>): stri
   return null;
 }
 
+function extractToolResultContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const texts: string[] = [];
+    for (const block of content) {
+      if (typeof block === 'object' && block !== null && 'text' in block && typeof block.text === 'string') {
+        texts.push(block.text);
+      }
+    }
+    if (texts.length > 0) return texts.join('\n');
+  }
+  return JSON.stringify(content ?? '');
+}
+
 export function buildToolResultBlocks(
   message: Record<string, unknown>,
   tur: Record<string, unknown> | undefined,
@@ -51,7 +65,7 @@ export function buildToolResultBlocks(
     blocks.push({
       type: 'tool_result',
       toolUseId: (block.tool_use_id as string) || '',
-      content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? ''),
+      content: extractToolResultContent(block.content),
       isError: !!block.is_error,
       ...(sp?.length ? { structuredPatch: sp } : {}),
       ...(originalFile != null ? { originalFile } : {}),
