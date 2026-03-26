@@ -31,6 +31,12 @@ export function useAppInit(): void {
   const setAdapters = useAdaptersStore((s) => s.setAdapters);
 
   useEffect(() => {
+    // One-time cleanup of removed localStorage keys from unified session view migration
+    if (localStorage.getItem('mf:activeProjectId') !== null) {
+      localStorage.removeItem('mf:activeProjectId');
+      localStorage.removeItem('mf:projectTabs');
+    }
+
     daemonClient.connect();
     const unsubscribe = daemonClient.onEvent(routeEvent);
 
