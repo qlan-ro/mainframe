@@ -44,7 +44,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   addChat: (chat) =>
     set((state) => {
       const chatTime = new Date(chat.updatedAt ?? chat.createdAt).getTime();
-      const idx = state.chats.findIndex((c) => new Date(c.updatedAt ?? c.createdAt).getTime() < chatTime);
+      const idx = state.chats.findIndex((c) => new Date(c.updatedAt ?? c.createdAt).getTime() <= chatTime);
       if (idx === -1) return { chats: [...state.chats, chat] };
       const next = [...state.chats];
       next.splice(idx, 0, chat);

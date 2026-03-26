@@ -118,7 +118,16 @@ describe('useChatsStore', () => {
   });
 
   describe('addChat', () => {
-    it('prepends a chat to the list', () => {
+    it('inserts chat at correct chronological position', () => {
+      const chatA = makeChat({ id: 'a', updatedAt: '2026-01-02T00:00:00Z' });
+      const chatB = makeChat({ id: 'b', updatedAt: '2026-01-01T00:00:00Z' });
+      useChatsStore.getState().addChat(chatA);
+      useChatsStore.getState().addChat(chatB);
+      const ids = useChatsStore.getState().chats.map((c: Chat) => c.id);
+      expect(ids).toEqual(['a', 'b']);
+    });
+
+    it('prepends when timestamps are equal', () => {
       const chatA = makeChat({ id: 'a' });
       const chatB = makeChat({ id: 'b' });
       useChatsStore.getState().addChat(chatA);
