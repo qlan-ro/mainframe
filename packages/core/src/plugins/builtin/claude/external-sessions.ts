@@ -73,7 +73,12 @@ async function listFromIndex(
     return null;
   }
 
-  const candidates = index.entries.filter((e) => e.sessionId && !excludeSet.has(e.sessionId) && !e.isSidechain);
+  // Empty index — fall through to JSONL scan
+  if (index.entries.length === 0) return null;
+
+  const candidates = index.entries.filter(
+    (e) => e.sessionId && !excludeSet.has(e.sessionId) && !e.isSidechain && e.firstPrompt,
+  );
 
   // Verify JSONL files exist on disk — the index can reference deleted sessions
   const verified: ExternalSession[] = [];
@@ -166,17 +171,13 @@ async function extractSessionMeta(
         if (!gitBranch && entry.gitBranch) gitBranch = entry.gitBranch;
 
         if (!firstPrompt && entry.type === 'user' && entry.message?.content) {
+          // Skip entries from parent sessions (subagent JSONLs interleave parent entries)
+          if (entry.sessionId && entry.sessionId !== sessionId) continue;
+
           const content = entry.message.content;
-          if (Array.isArray(content)) {
-            for (const block of content) {
-              if (block?.type === 'text' && block.text) {
-                firstPrompt = block.text.slice(0, 200);
-                break;
-              }
-            }
-          } else if (typeof content === 'string') {
-            firstPrompt = content.slice(0, 200);
-          }
+          const raw = extractRawText(content, 2000);
+          const cleaned = raw ? stripCommandBoilerplate(raw) : undefined;
+          if (cleaned) firstPrompt = cleaned.slice(0, 500);
         }
 
         if (firstPrompt && createdAt && gitBranch) break;
@@ -190,6 +191,10 @@ async function extractSessionMeta(
 
   if (isSidechain) return null;
 
+  // Non-session JSONL files (progress, queue-operation, file-history-snapshot)
+  // don't contain user messages — skip them.
+  if (!firstPrompt) return null;
+
   return {
     sessionId,
     adapterId: 'claude',
@@ -199,4 +204,29 @@ async function extractSessionMeta(
     modifiedAt,
     gitBranch: gitBranch || undefined,
   };
+}
+
+function extractRawText(content: unknown, limit = 200): string | undefined {
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (block?.type === 'text' && block.text) return (block.text as string).slice(0, limit);
+    }
+    return undefined;
+  }
+  if (typeof content === 'string') return content.slice(0, limit);
+  return undefined;
+}
+
+/**
+ * Strip Claude CLI command boilerplate from message text.
+ * Sessions that start with /clear, /model, etc. embed XML tags like
+ * `<local-command-caveat>`, `<command-name>`, `<command-message>`,
+ * `<command-args>`, `<local-command-stdout>` before the real user text.
+ */
+function stripCommandBoilerplate(text: string): string {
+  return text
+    .replace(/<[^>]+>[^<]*<\/[^>]+>/g, '') // matched open/close tags with content
+    .replace(/<[^>]+>/g, '') // self-closing or orphan tags
+    .replace(/\s+/g, ' ')
+    .trim();
 }

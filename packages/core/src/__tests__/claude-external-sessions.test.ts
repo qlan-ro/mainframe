@@ -9,9 +9,13 @@ vi.mock('node:fs/promises', () => ({
   constants: { R_OK: 4 },
 }));
 
-vi.mock('node:fs', () => ({
-  createReadStream: vi.fn(),
-}));
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    createReadStream: vi.fn(),
+  };
+});
 
 vi.mock('node:readline', () => ({
   createInterface: vi.fn(),
@@ -83,8 +87,8 @@ describe('listExternalSessions', () => {
       const index = {
         version: 1,
         entries: [
-          { sessionId: 'keep-me', created: '2026-01-01T00:00:00Z' },
-          { sessionId: 'exclude-me', created: '2026-01-01T00:00:00Z' },
+          { sessionId: 'keep-me', firstPrompt: 'Keep', created: '2026-01-01T00:00:00Z' },
+          { sessionId: 'exclude-me', firstPrompt: 'Exclude', created: '2026-01-01T00:00:00Z' },
         ],
       };
       mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
@@ -98,8 +102,8 @@ describe('listExternalSessions', () => {
       const index = {
         version: 1,
         entries: [
-          { sessionId: 'main-session', created: '2026-01-01T00:00:00Z', isSidechain: false },
-          { sessionId: 'sidechain', created: '2026-01-01T00:00:00Z', isSidechain: true },
+          { sessionId: 'main-session', firstPrompt: 'Real', created: '2026-01-01T00:00:00Z', isSidechain: false },
+          { sessionId: 'sidechain', firstPrompt: 'Side', created: '2026-01-01T00:00:00Z', isSidechain: true },
         ],
       };
       mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
@@ -113,8 +117,8 @@ describe('listExternalSessions', () => {
       const index = {
         version: 1,
         entries: [
-          { sessionId: 'older', created: '2026-01-01T00:00:00Z', modified: '2026-01-01T00:00:00Z' },
-          { sessionId: 'newer', created: '2026-01-02T00:00:00Z', modified: '2026-01-03T00:00:00Z' },
+          { sessionId: 'older', firstPrompt: 'Old', created: '2026-01-01T00:00:00Z', modified: '2026-01-01T00:00:00Z' },
+          { sessionId: 'newer', firstPrompt: 'New', created: '2026-01-02T00:00:00Z', modified: '2026-01-03T00:00:00Z' },
         ],
       };
       mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
@@ -122,6 +126,21 @@ describe('listExternalSessions', () => {
       const result = await listExternalSessions('/test/project', []);
       expect(result[0]!.sessionId).toBe('newer');
       expect(result[1]!.sessionId).toBe('older');
+    });
+
+    it('filters out entries without firstPrompt', async () => {
+      const index = {
+        version: 1,
+        entries: [
+          { sessionId: 'with-prompt', firstPrompt: 'Hello', created: '2026-01-01T00:00:00Z' },
+          { sessionId: 'no-prompt', created: '2026-01-01T00:00:00Z' },
+        ],
+      };
+      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
+
+      const result = await listExternalSessions('/test/project', []);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.sessionId).toBe('with-prompt');
     });
   });
 
@@ -167,6 +186,20 @@ describe('listExternalSessions', () => {
       mockStat.mockResolvedValue({ mtime: new Date('2026-01-01T00:00:00Z') } as Awaited<ReturnType<typeof stat>>);
 
       const lines = [JSON.stringify({ type: 'user', isSidechain: true, timestamp: '2026-01-01T00:00:00Z' })];
+      mockJsonlFile(lines);
+
+      const result = await listExternalSessions('/test/project', []);
+      expect(result).toEqual([]);
+    });
+
+    it('filters out non-session JSONL files (progress, queue-operation)', async () => {
+      mockReaddir.mockResolvedValue(['progress.jsonl'] as unknown as Awaited<ReturnType<typeof readdir>>);
+      mockStat.mockResolvedValue({ mtime: new Date('2026-01-01T00:00:00Z') } as Awaited<ReturnType<typeof stat>>);
+
+      const lines = [
+        JSON.stringify({ type: 'progress', timestamp: '2026-01-01T00:00:00Z' }),
+        JSON.stringify({ type: 'progress', timestamp: '2026-01-01T00:01:00Z' }),
+      ];
       mockJsonlFile(lines);
 
       const result = await listExternalSessions('/test/project', []);

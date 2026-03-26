@@ -135,6 +135,7 @@ export class ChatsRepository {
     branchName: { column: 'branch_name', transform: (v) => v ?? null },
     mentions: { column: 'mentions', transform: (v) => JSON.stringify(v) },
     processState: { column: 'process_state' },
+    createdAt: { column: 'created_at' },
     updatedAt: { column: 'updated_at' },
   };
 

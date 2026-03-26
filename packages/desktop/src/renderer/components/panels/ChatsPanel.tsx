@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderPlus, List, LayoutList, Plus } from 'lucide-react';
+import { FolderPlus, List, LayoutList, Plus, Download } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
@@ -15,6 +15,7 @@ import { DirectoryPickerModal } from '../DirectoryPickerModal';
 import { daemonClient } from '../../lib/client';
 import { ProjectGroup } from './ProjectGroup';
 import { FlatSessionRow } from './FlatSessionRow';
+import { ImportSessionsPopover } from './ImportSessionsPopover';
 import type { Chat, Project } from '@qlan-ro/mainframe-types';
 
 const STORAGE_KEY = 'mf:collapsedProjects';
@@ -141,6 +142,7 @@ export function ChatsPanel(): React.ReactElement {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showDirPicker, setShowDirPicker] = useState(false);
   const [showNewSessionPopover, setShowNewSessionPopover] = useState(false);
+  const [showImportPopover, setShowImportPopover] = useState(false);
   const [filterProjectId, _setFilterProjectId] = useState<string | null>(null);
   const setActiveChat = useChatsStore((s) => s.setActiveChat);
   const filterScrollRef = useRef<HTMLDivElement>(null);
@@ -297,6 +299,30 @@ export function ChatsPanel(): React.ReactElement {
                 activeProjectId={activeProjectId}
                 onSelect={handleNewSessionInProject}
                 onClose={() => setShowNewSessionPopover(false)}
+              />
+            )}
+          </div>
+          <div className="relative" data-import-popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setShowImportPopover((prev) => !prev)}
+                  disabled={projects.length === 0}
+                  className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                  data-testid="import-sessions-btn"
+                >
+                  <Download size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Import external sessions</TooltipContent>
+            </Tooltip>
+            {showImportPopover && (
+              <ImportSessionsPopover
+                projects={projects}
+                activeProjectId={activeProjectId}
+                filterProjectId={filterProjectId}
+                onClose={() => setShowImportPopover(false)}
               />
             )}
           </div>
