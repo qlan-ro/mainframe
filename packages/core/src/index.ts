@@ -19,6 +19,7 @@ import todosManifest from './plugins/builtin/todos/manifest.json' with { type: '
 import { activate as activateTodos } from './plugins/builtin/todos/index.js';
 import { logger } from './logger.js';
 import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
+import { backfillWorktreeRelationships } from './workspace/worktree.js';
 
 function enrichPath(): void {
   try {
@@ -106,6 +107,12 @@ async function main(): Promise<void> {
 
   await server.start(config.port);
   broadcastEvent = (event) => server.broadcastEvent(event);
+
+  // Non-blocking: backfill worktree parent relationships for existing projects.
+  // Failure here must not prevent the daemon from serving requests.
+  backfillWorktreeRelationships(db.projects).catch((err) => {
+    logger.warn({ err }, 'Worktree relationship backfill failed');
+  });
 
   if (config.tunnel === true) {
     try {
