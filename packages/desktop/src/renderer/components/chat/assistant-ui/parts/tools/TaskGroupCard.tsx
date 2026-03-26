@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bot, Maximize2, Minimize2 } from 'lucide-react';
 import { ErrorDot, type ToolCardProps } from './shared';
 import { renderToolCard } from './render-tool-card';
 
@@ -77,11 +77,6 @@ export function TaskGroupCard({ args, result, isError }: ToolCardProps) {
         className="w-full flex items-center gap-2 py-0.5 text-mf-body hover:bg-mf-hover/20 transition-colors"
       >
         <Bot size={14} className="text-mf-accent shrink-0" />
-        {open ? (
-          <ChevronUp size={14} className="text-mf-text-secondary/40 shrink-0" />
-        ) : (
-          <ChevronDown size={14} className="text-mf-text-secondary/40 shrink-0" />
-        )}
         <span className="text-mf-body text-mf-accent font-medium">{agentType}</span>
         {model && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{model}</span>}
         <span className="text-mf-small text-mf-text-secondary/70 truncate" title={description}>
@@ -90,6 +85,17 @@ export function TaskGroupCard({ args, result, isError }: ToolCardProps) {
         <span className="flex-1" />
         {summary && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{summary}</span>}
         <ErrorDot isError={isError} />
+        {open ? (
+          <Minimize2
+            size={14}
+            className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors shrink-0"
+          />
+        ) : (
+          <Maximize2
+            size={14}
+            className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors shrink-0"
+          />
+        )}
       </button>
       {open && (
         <>
