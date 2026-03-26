@@ -1133,7 +1133,149 @@ git commit -m "feat: show worktree isolation banner in branch popover"
 
 ---
 
-## Task 13: Final Integration Check
+## Task 13: Make Launch Configurations Worktree-Aware
+
+**Files:**
+- Modify: `packages/core/src/launch/launch-registry.ts`
+- Modify: `packages/core/src/server/routes/launch.ts`
+- Modify: `packages/desktop/src/renderer/lib/launch.ts`
+- Modify: `packages/desktop/src/renderer/components/TitleBar.tsx` (launch button)
+- Modify: `packages/desktop/src/renderer/hooks/useLaunchConfig.ts` (if it exists)
+
+- [ ] **Step 1: Update `LaunchRegistry` to key by path**
+
+In `packages/core/src/launch/launch-registry.ts`, change the map key from `projectId` to `projectId:path` so that different paths (project root vs worktree) get independent managers:
+
+```ts
+getOrCreate(projectId: string, projectPath: string): LaunchManager {
+  const key = `${projectId}:${projectPath}`;
+  let manager = this.managers.get(key);
+  if (!manager) {
+    manager = new LaunchManager(projectId, projectPath, this.onEvent, this.tunnelManager);
+    this.managers.set(key, manager);
+  }
+  return manager;
+}
+```
+
+- [ ] **Step 2: Update launch routes to accept `chatId` and resolve effective path**
+
+In `packages/core/src/server/routes/launch.ts`, add import:
+
+```ts
+import { getEffectivePath } from './types.js';
+```
+
+Create a helper at the top of the `launchRoutes` function:
+
+```ts
+function resolveLaunchPath(ctx: RouteContext, req: Request): { projectId: string; path: string } | null {
+  const projectId = param(req, 'id');
+  const chatId = req.query.chatId as string | undefined;
+  const effectivePath = getEffectivePath(ctx, projectId, chatId);
+  if (!effectivePath) return null;
+  return { projectId, path: effectivePath };
+}
+```
+
+Then update each route handler to use `resolveLaunchPath` instead of `ctx.db.projects.get(...)`:
+
+For the **configs** endpoint (`GET /api/projects/:id/launch/configs`):
+```ts
+const resolved = resolveLaunchPath(ctx, req);
+if (!resolved) { res.status(404).json({ success: false, error: 'Project not found' }); return; }
+const configPath = join(resolved.path, '.mainframe', 'launch.json');
+```
+
+For the **start** endpoint (`POST /api/projects/:id/launch/:name/start`):
+```ts
+const resolved = resolveLaunchPath(ctx, req);
+if (!resolved) { res.status(404).json({ success: false, error: 'Project not found' }); return; }
+// ... read launch.json from resolved.path ...
+const raw = await readFile(join(resolved.path, '.mainframe', 'launch.json'), 'utf-8');
+// ... create manager with resolved.path ...
+const manager = ctx.launchRegistry?.getOrCreate(resolved.projectId, resolved.path);
+```
+
+For the **stop** endpoint (`POST /api/projects/:id/launch/:name/stop`):
+```ts
+const resolved = resolveLaunchPath(ctx, req);
+if (!resolved) { res.status(404).json({ success: false, error: 'Project not found' }); return; }
+const manager = ctx.launchRegistry?.getOrCreate(resolved.projectId, resolved.path);
+```
+
+For the **status** endpoint (`GET /api/projects/:id/launch/status`):
+```ts
+const resolved = resolveLaunchPath(ctx, req);
+if (!resolved) { res.status(404).json({ success: false, error: 'Project not found' }); return; }
+const manager = ctx.launchRegistry?.getOrCreate(resolved.projectId, resolved.path);
+```
+
+- [ ] **Step 3: Update client launch helpers to pass `chatId`**
+
+In `packages/desktop/src/renderer/lib/launch.ts`, update all three functions to accept an optional `chatId`:
+
+```ts
+export async function fetchLaunchStatuses(
+  projectId: string,
+  chatId?: string,
+): Promise<{ statuses: Record<string, string>; tunnelUrls: Record<string, string> }> {
+  const params = chatId ? `?chatId=${chatId}` : '';
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/launch/status${params}`);
+  if (!res.ok) return { statuses: {}, tunnelUrls: {} };
+  const json = (await res.json()) as LaunchStatusResponse;
+  return json.success ? json.data : { statuses: {}, tunnelUrls: {} };
+}
+
+export async function startLaunchConfig(projectId: string, name: string, chatId?: string): Promise<void> {
+  const params = chatId ? `?chatId=${chatId}` : '';
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/launch/${encodeURIComponent(name)}/start${params}`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`Failed to start ${name}: ${res.status}`);
+}
+
+export async function stopLaunchConfig(projectId: string, name: string, chatId?: string): Promise<void> {
+  const params = chatId ? `?chatId=${chatId}` : '';
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/launch/${encodeURIComponent(name)}/stop${params}`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`Failed to stop ${name}: ${res.status}`);
+}
+```
+
+- [ ] **Step 4: Pass `chatId` from UI callers**
+
+Find all places that call `startLaunchConfig`, `stopLaunchConfig`, and `fetchLaunchStatuses` in the desktop package. These are likely in:
+- `TitleBar.tsx` — the play/stop buttons
+- `useLaunchConfig.ts` or similar hook
+- `SandboxPanel` or similar component
+
+Add the active `chatId` from `useChatsStore((s) => s.activeChatId)` and pass it through. For example in `TitleBar.tsx`, the `handleStart` callback already has access to the component scope — add `activeChatId` and pass it:
+
+```ts
+const activeChatId = useChatsStore((s) => s.activeChatId);
+// ... in handleStart:
+await startLaunchConfig(projectId, selectedConfig.name, activeChatId ?? undefined);
+```
+
+Apply the same pattern to all callers. Search for `startLaunchConfig\|stopLaunchConfig\|fetchLaunchStatuses` in the desktop package to find all call sites.
+
+- [ ] **Step 5: Typecheck**
+
+Run: `pnpm build`
+Expected: PASS
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/core/src/launch/launch-registry.ts packages/core/src/server/routes/launch.ts packages/desktop/src/renderer/lib/launch.ts packages/desktop/src/renderer/components/TitleBar.tsx
+git commit -m "feat: make launch configurations worktree-aware"
+```
+
+---
+
+## Task 14: Final Integration Check
 
 - [ ] **Step 1: Full build**
 

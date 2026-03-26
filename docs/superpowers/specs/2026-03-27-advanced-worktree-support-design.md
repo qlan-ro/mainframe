@@ -128,6 +128,18 @@ Several UI areas lack visual cues that the user is working in a worktree session
 | **Branch popover** | `BranchPopover.tsx` | Add a banner at top: "Working in worktree isolation" with the worktree path when active. |
 | **Title bar** | `TitleBar.tsx` | Append the worktree branch name: e.g. `Mainframe — ProjectName / feat/auth-worktree`. |
 
+### Launch Configurations — Worktree-Aware
+
+Launch routes (`/api/projects/:id/launch/...`) currently use `project.path` directly, so launch processes always run in the project root even when a worktree session is active. This means dev servers serve the wrong branch's code.
+
+**Fix:** Launch start/stop/status/configs endpoints accept an optional `chatId` query parameter. When provided, the route resolves the effective path via `getEffectivePath` (returns `worktreePath` if the chat has one). This path is passed to `LaunchRegistry.getOrCreate`.
+
+**LaunchRegistry change:** Currently keyed by `projectId` alone. Change to key by `projectId:path` so that a worktree session gets its own `LaunchManager` instance with the worktree path as `cwd`. The project root and each worktree can run independent launch processes.
+
+**Client change:** `startLaunchConfig`, `stopLaunchConfig`, and `fetchLaunchStatuses` gain an optional `chatId` parameter, appended as `?chatId=X`. The title bar's launch button and `useLaunchConfig` hook pass the active `chatId`.
+
+**`launch.json` resolution:** Read from the effective path (worktree), not always project root. Git worktrees inherit the file from the repo, so it's available in both locations.
+
 ### Existing Behavior Preserved
 
 - `getEffectivePath` continues to route file browsing, search, git reads, and context to the worktree.
