@@ -122,8 +122,9 @@ describe('subagent session diffs integration', () => {
     expect(diffs[0]!.modified).toBe('export const hello = "world";');
   });
 
-  it('deduplicates messages from parent and subagent JSONLs', async () => {
-    // The subagent assistant message has the same UUID as one referenced in agent_progress
+  it('excludes subagent messages from top-level chat messages', async () => {
+    // Subagent JSONL messages must NOT appear as top-level ChatMessage entries —
+    // they are internal to the subagent and only tool_result data is extracted.
     const parentLines = [
       JSON.stringify({
         type: 'assistant',
@@ -158,9 +159,8 @@ describe('subagent session diffs integration', () => {
     );
 
     const messages = await loadHistory(sessionId, projectPath);
-    // Parent assistant + subagent assistant = 2 unique messages
-    expect(messages).toHaveLength(2);
-    expect(messages.map((m) => m.id)).toContain('a1');
-    expect(messages.map((m) => m.id)).toContain('sub-unique-1');
+    // Only the parent assistant message — subagent messages are filtered out
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.id).toBe('a1');
   });
 });

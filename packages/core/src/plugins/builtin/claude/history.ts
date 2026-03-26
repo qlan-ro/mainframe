@@ -264,22 +264,22 @@ function collectSubagentToolResults(
   }
 }
 
-/** Attach subagent tool_result data to injected tool_use blocks within assistant messages. */
+/** Inject subagent tool_result blocks after their matching tool_use in assistant messages. */
 function attachSubagentToolResults(
   messages: ChatMessage[],
   results: Map<string, MessageContent & { type: 'tool_result' }>,
 ): void {
   for (const msg of messages) {
     if (msg.type !== 'assistant') continue;
-    // Build a synthetic _toolResults map for any injected subagent tool_use blocks
+    const newContent: MessageContent[] = [];
     for (const block of msg.content) {
-      if (block.type !== 'tool_use') continue;
-      const toolResult = results.get(block.id);
-      if (!toolResult) continue;
-      const grouped = msg as { _toolResults?: Map<string, MessageContent & { type: 'tool_result' }> };
-      if (!grouped._toolResults) grouped._toolResults = new Map();
-      grouped._toolResults.set(block.id, toolResult);
+      newContent.push(block);
+      if (block.type === 'tool_use') {
+        const toolResult = results.get(block.id);
+        if (toolResult) newContent.push(toolResult);
+      }
     }
+    msg.content = newContent;
   }
 }
 
