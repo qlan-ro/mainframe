@@ -143,7 +143,8 @@ export function ChatsPanel(): React.ReactElement {
   const [showDirPicker, setShowDirPicker] = useState(false);
   const [showNewSessionPopover, setShowNewSessionPopover] = useState(false);
   const [showImportPopover, setShowImportPopover] = useState(false);
-  const [filterProjectId, _setFilterProjectId] = useState<string | null>(null);
+  const filterProjectId = useChatsStore((s) => s.filterProjectId);
+  const _setFilterProjectId = useChatsStore((s) => s.setFilterProjectId);
   const setActiveChat = useChatsStore((s) => s.setActiveChat);
   const filterScrollRef = useRef<HTMLDivElement>(null);
 
@@ -163,7 +164,7 @@ export function ChatsPanel(): React.ReactElement {
         daemonClient.resumeChat(mostRecent.id);
       }
     },
-    [chats, setActiveChat],
+    [chats, setActiveChat, _setFilterProjectId],
   );
 
   const handleFilterWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
