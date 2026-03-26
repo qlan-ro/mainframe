@@ -252,16 +252,21 @@ function getSessionJsonlPath(sessionId: string, projectPath: string): { jsonlPat
   return { jsonlPath: path.join(projectDir, sessionId + '.jsonl'), projectDir };
 }
 
-export async function loadHistory(sessionId: string, projectPath: string): Promise<ChatMessage[]> {
+export async function discoverSessionJsonlFiles(
+  sessionId: string,
+  projectPath: string,
+): Promise<{ primaryPath: string; allFiles: string[] }> {
   const { jsonlPath, projectDir } = getSessionJsonlPath(sessionId, projectPath);
 
   try {
     await access(jsonlPath, constants.R_OK);
   } catch {
-    return [];
+    return { primaryPath: jsonlPath, allFiles: [] };
   }
 
   const jsonlFiles = [jsonlPath];
+
+  // Scan sibling .jsonl files (sidechains) with matching sessionId
   try {
     const entries = await readdir(projectDir);
     for (const entry of entries) {
@@ -285,6 +290,25 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
   } catch {
     /* directory read failed, proceed with primary only */
   }
+
+  // Scan subagent JSONL files
+  const subagentDir = path.join(projectDir, sessionId, 'subagents');
+  try {
+    const subEntries = await readdir(subagentDir);
+    for (const entry of subEntries) {
+      if (!entry.endsWith('.jsonl')) continue;
+      jsonlFiles.push(path.join(subagentDir, entry));
+    }
+  } catch {
+    /* no subagents directory or unreadable */
+  }
+
+  return { primaryPath: jsonlPath, allFiles: jsonlFiles };
+}
+
+export async function loadHistory(sessionId: string, projectPath: string): Promise<ChatMessage[]> {
+  const { allFiles: jsonlFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
+  if (jsonlFiles.length === 0) return [];
 
   const messages: ChatMessage[] = [];
   const agentTools = new Map<string, MessageContent[]>();
