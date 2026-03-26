@@ -162,7 +162,7 @@ export class WebSocketManager {
       }
 
       case 'chat.enableWorktree': {
-        await this.chats.enableWorktree(event.chatId);
+        await this.chats.enableWorktree(event.chatId, event.baseBranch, event.branchName);
         break;
       }
 

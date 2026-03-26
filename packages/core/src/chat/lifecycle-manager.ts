@@ -4,6 +4,8 @@ import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';
 import { removeWorktree } from '../workspace/index.js';
 import { existsSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createChildLogger } from '../logger.js';
 import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
@@ -162,6 +164,44 @@ export class ChatLifecycleManager {
     this.deps.db.chats.update(chatId, { status: 'ended' });
     this.deps.activeChats.delete(chatId);
     this.deps.emitEvent({ type: 'chat.ended', chatId });
+  }
+
+  private async isWorkingTreeDirty(projectPath: string): Promise<boolean> {
+    const exec = promisify(execFile);
+    const { stdout } = await exec('git', ['status', '--porcelain'], {
+      cwd: projectPath,
+      encoding: 'utf-8',
+    });
+    return stdout.trim().length > 0;
+  }
+
+  async forkToWorktree(
+    chatId: string,
+    baseBranch: string,
+    branchName: string,
+    enableWorktreeFn: (chatId: string, baseBranch: string, branchName: string) => Promise<void>,
+  ): Promise<{ chatId: string }> {
+    const sourceActive = this.deps.activeChats.get(chatId);
+    const sourceChat = sourceActive?.chat ?? this.deps.db.chats.get(chatId);
+    if (!sourceChat) throw new Error(`Chat ${chatId} not found`);
+
+    const project = this.deps.db.projects.get(sourceChat.projectId);
+    if (!project) throw new Error('Project not found');
+
+    if (await this.isWorkingTreeDirty(project.path)) {
+      const err = new Error('Commit or stash your changes before forking');
+      (err as Error & { statusCode: number }).statusCode = 409;
+      throw err;
+    }
+
+    const newChat = await this.createChat(
+      sourceChat.projectId,
+      sourceChat.adapterId,
+      sourceChat.model,
+      sourceChat.permissionMode,
+    );
+    await enableWorktreeFn(newChat.id, baseBranch, branchName);
+    return { chatId: newChat.id };
   }
 
   async doGenerateTitle(chatId: string, content: string): Promise<void> {

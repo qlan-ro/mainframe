@@ -74,6 +74,8 @@ const PermissionRespond = z.object({
 const ChatEnableWorktree = z.object({
   type: z.literal('chat.enableWorktree'),
   chatId: z.string().min(1),
+  baseBranch: z.string().min(1),
+  branchName: z.string().min(1),
 });
 
 const ChatDisableWorktree = z.object({

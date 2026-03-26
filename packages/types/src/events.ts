@@ -52,7 +52,7 @@ export type ClientEvent =
   | { type: 'permission.respond'; chatId: string; response: import('./adapter.js').ControlResponse }
   | { type: 'chat.updateConfig'; chatId: string; adapterId?: string; model?: string; permissionMode?: PermissionMode }
   | { type: 'chat.interrupt'; chatId: string }
-  | { type: 'chat.enableWorktree'; chatId: string }
+  | { type: 'chat.enableWorktree'; chatId: string; baseBranch: string; branchName: string }
   | { type: 'chat.disableWorktree'; chatId: string }
   | { type: 'subscribe'; chatId: string }
   | { type: 'unsubscribe'; chatId: string };

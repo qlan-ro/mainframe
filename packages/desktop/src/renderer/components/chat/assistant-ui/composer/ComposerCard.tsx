@@ -331,7 +331,7 @@ export function ComposerCard() {
                 if (chat?.worktreePath) {
                   daemonClient.disableWorktree(chatId);
                 } else {
-                  daemonClient.enableWorktree(chatId);
+                  daemonClient.enableWorktree(chatId, 'HEAD', `session/${chatId.slice(0, 8)}`);
                 }
               }}
               className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${

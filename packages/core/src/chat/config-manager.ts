@@ -88,7 +88,7 @@ export class ChatConfigManager {
     }
   }
 
-  async enableWorktree(chatId: string): Promise<void> {
+  async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
     if (!active) throw new Error(`Chat ${chatId} not found`);
     if (active.chat.claudeSessionId) throw new Error('Cannot enable worktree after session has started');
@@ -103,8 +103,7 @@ export class ChatConfigManager {
     if (!project) throw new Error('Project not found');
 
     const worktreeDir = this.deps.db.settings.get('general', 'worktreeDir') ?? GENERAL_DEFAULTS.worktreeDir;
-    const shortId = chatId.slice(0, 8);
-    const info = createWorktree(project.path, chatId, worktreeDir, 'HEAD', `session/${shortId}`);
+    const info = createWorktree(project.path, chatId, worktreeDir, baseBranch, branchName);
     active.chat.worktreePath = info.worktreePath;
     active.chat.branchName = info.branchName;
     this.deps.db.chats.update(chatId, { worktreePath: info.worktreePath, branchName: info.branchName });
