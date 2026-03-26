@@ -110,7 +110,7 @@ function NewSessionPopover({
   }, [projects, activeProjectId]);
 
   return (
-    <div className="absolute right-0 top-full mt-1 z-50 min-w-[200px] max-w-[280px] bg-mf-panel border border-mf-border rounded-mf-panel shadow-lg py-1">
+    <div className="absolute right-0 top-full mt-1 z-50 min-w-[200px] max-w-[280px] bg-mf-panel-bg border border-mf-border rounded-mf-input shadow-lg py-1">
       <div className="px-3 py-1.5 text-mf-status text-mf-text-secondary uppercase tracking-wider">Select project</div>
       {sorted.map((project) => (
         <button
