@@ -94,7 +94,7 @@ describe('ChatsRepository', () => {
       const c2 = chats.create(projectId, 'claude');
 
       // Update c1 to make it the most recently updated
-      chats.update(c1.id, { title: 'Updated Chat' });
+      chats.update(c1.id, { title: 'Updated Chat', updatedAt: new Date(Date.now() + 1000).toISOString() });
 
       const all = chats.list(projectId);
       expect(all).toHaveLength(2);
