@@ -50,13 +50,19 @@ export function CollapsibleToolCard({
         {statusDot}
         {header}
         <span className="flex-1" />
+        {trailing}
         {!disabled &&
           (open ? (
-            <Minimize2 size={14} className="text-mf-text-secondary/40 shrink-0" />
+            <Minimize2
+              size={14}
+              className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors shrink-0"
+            />
           ) : (
-            <Maximize2 size={14} className="text-mf-text-secondary/40 shrink-0" />
+            <Maximize2
+              size={14}
+              className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors shrink-0"
+            />
           ))}
-        {trailing}
       </button>
       {!open && subHeader}
       {open && children}

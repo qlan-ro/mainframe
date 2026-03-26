@@ -34,6 +34,20 @@ function extractSkillPathFromText(content: Array<Record<string, unknown>>): stri
   return null;
 }
 
+function extractToolResultContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const texts: string[] = [];
+    for (const block of content) {
+      if (typeof block === 'object' && block !== null && 'text' in block && typeof block.text === 'string') {
+        texts.push(block.text);
+      }
+    }
+    if (texts.length > 0) return texts.join('\n');
+  }
+  return JSON.stringify(content ?? '');
+}
+
 export function buildToolResultBlocks(
   message: Record<string, unknown>,
   tur: Record<string, unknown> | undefined,
@@ -51,7 +65,7 @@ export function buildToolResultBlocks(
     blocks.push({
       type: 'tool_result',
       toolUseId: (block.tool_use_id as string) || '',
-      content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? ''),
+      content: extractToolResultContent(block.content),
       isError: !!block.is_error,
       ...(sp?.length ? { structuredPatch: sp } : {}),
       ...(originalFile != null ? { originalFile } : {}),
@@ -231,6 +245,44 @@ function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: M
   }
 }
 
+/** Extract tool_result blocks from subagent JSONL user entries. */
+function collectSubagentToolResults(
+  entry: Record<string, unknown>,
+  results: Map<string, MessageContent & { type: 'tool_result' }>,
+): void {
+  if (entry.type !== 'user') return;
+  const message = entry.message as Record<string, unknown> | undefined;
+  if (!message) return;
+  const rawContent = message.content;
+  if (!Array.isArray(rawContent)) return;
+  const toolUseResult = entry.toolUseResult as Record<string, unknown> | undefined;
+  const blocks = buildToolResultBlocks(message, toolUseResult);
+  for (const block of blocks) {
+    if (block.type === 'tool_result') {
+      results.set(block.toolUseId, block);
+    }
+  }
+}
+
+/** Inject subagent tool_result blocks after their matching tool_use in assistant messages. */
+function attachSubagentToolResults(
+  messages: ChatMessage[],
+  results: Map<string, MessageContent & { type: 'tool_result' }>,
+): void {
+  for (const msg of messages) {
+    if (msg.type !== 'assistant') continue;
+    const newContent: MessageContent[] = [];
+    for (const block of msg.content) {
+      newContent.push(block);
+      if (block.type === 'tool_use') {
+        const toolResult = results.get(block.id);
+        if (toolResult) newContent.push(toolResult);
+      }
+    }
+    msg.content = newContent;
+  }
+}
+
 function injectAgentChildren(messages: ChatMessage[], agentTools: Map<string, MessageContent[]>): void {
   for (const msg of messages) {
     if (msg.type !== 'assistant') continue;
@@ -252,16 +304,22 @@ function getSessionJsonlPath(sessionId: string, projectPath: string): { jsonlPat
   return { jsonlPath: path.join(projectDir, sessionId + '.jsonl'), projectDir };
 }
 
-export async function loadHistory(sessionId: string, projectPath: string): Promise<ChatMessage[]> {
+export async function discoverSessionJsonlFiles(
+  sessionId: string,
+  projectPath: string,
+): Promise<{ primaryPath: string; allFiles: string[]; subagentFiles: Set<string> }> {
   const { jsonlPath, projectDir } = getSessionJsonlPath(sessionId, projectPath);
 
   try {
     await access(jsonlPath, constants.R_OK);
   } catch {
-    return [];
+    return { primaryPath: jsonlPath, allFiles: [], subagentFiles: new Set() };
   }
 
   const jsonlFiles = [jsonlPath];
+  const subagentFiles = new Set<string>();
+
+  // Scan sibling .jsonl files (sidechains) with matching sessionId
   try {
     const entries = await readdir(projectDir);
     for (const entry of entries) {
@@ -286,10 +344,35 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
     /* directory read failed, proceed with primary only */
   }
 
+  // Scan subagent JSONL files
+  const subagentDir = path.join(projectDir, sessionId, 'subagents');
+  try {
+    const subEntries = await readdir(subagentDir);
+    for (const entry of subEntries) {
+      if (!entry.endsWith('.jsonl')) continue;
+      const filePath = path.join(subagentDir, entry);
+      jsonlFiles.push(filePath);
+      subagentFiles.add(filePath);
+    }
+  } catch {
+    /* no subagents directory or unreadable */
+  }
+
+  return { primaryPath: jsonlPath, allFiles: jsonlFiles, subagentFiles };
+}
+
+export async function loadHistory(sessionId: string, projectPath: string): Promise<ChatMessage[]> {
+  const { allFiles: jsonlFiles, subagentFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
+  if (jsonlFiles.length === 0) return [];
+
   const messages: ChatMessage[] = [];
   const agentTools = new Map<string, MessageContent[]>();
+  // Map of toolUseId → tool_result block, populated from subagent JONLs
+  const subagentToolResults = new Map<string, MessageContent & { type: 'tool_result' }>();
+  const seenUuids = new Set<string>();
 
   for (const file of jsonlFiles) {
+    const isSubagentFile = subagentFiles.has(file);
     const stream = createReadStream(file);
     try {
       const rl = createInterface({ input: stream, crlfDelay: Infinity });
@@ -306,8 +389,21 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
             continue;
           }
 
+          // Subagent JSONL files: only extract tool_result data to populate
+          // the tool_use blocks injected via agent_progress. The subagent's own
+          // assistant/user messages must NOT appear as top-level chat messages.
+          if (isSubagentFile) {
+            collectSubagentToolResults(entry, subagentToolResults);
+            continue;
+          }
+
           const msg = convertHistoryEntry(entry, sessionId);
-          if (msg) messages.push(msg);
+          if (!msg) continue;
+
+          // Deduplicate: primary JSONL is processed first, wins on conflicts
+          if (seenUuids.has(msg.id)) continue;
+          seenUuids.add(msg.id);
+          messages.push(msg);
         } catch {
           // Skip malformed lines
         }
@@ -322,77 +418,77 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
     injectAgentChildren(messages, agentTools);
   }
 
+  // Attach tool_result data from subagent JONLs to the injected tool_use blocks
+  if (subagentToolResults.size > 0) {
+    attachSubagentToolResults(messages, subagentToolResults);
+  }
+
   return filterSkillExpansions(messages);
 }
 
 export async function extractPlanFilePaths(sessionId: string, projectPath: string): Promise<string[]> {
-  const { jsonlPath, projectDir } = getSessionJsonlPath(sessionId, projectPath);
+  const { allFiles: jsonlFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
+  if (jsonlFiles.length === 0) return [];
 
-  try {
-    await access(jsonlPath, constants.R_OK);
-  } catch {
-    return [];
-  }
-
+  const { projectDir } = getSessionJsonlPath(sessionId, projectPath);
   const planFiles: string[] = [];
-  const stream = createReadStream(jsonlPath);
-  try {
-    const rl = createInterface({ input: stream, crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type !== 'user') continue;
-        const tur = entry.toolUseResult as Record<string, unknown> | undefined;
-        if (typeof tur?.plan === 'string' && typeof tur?.filePath === 'string') {
-          // CLI stores relative paths (e.g. ../../../.claude/plans/foo.md) — resolve
-          // against the JSONL's directory so downstream consumers get absolute paths.
-          planFiles.push(path.resolve(projectDir, tur.filePath as string));
+
+  for (const file of jsonlFiles) {
+    const stream = createReadStream(file);
+    try {
+      const rl = createInterface({ input: stream, crlfDelay: Infinity });
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type !== 'user') continue;
+          const tur = entry.toolUseResult as Record<string, unknown> | undefined;
+          if (typeof tur?.plan === 'string' && typeof tur?.filePath === 'string') {
+            planFiles.push(path.resolve(projectDir, tur.filePath as string));
+          }
+        } catch {
+          /* skip malformed */
         }
-      } catch {
-        /* skip malformed */
       }
+    } finally {
+      stream.destroy();
     }
-  } finally {
-    stream.destroy();
   }
 
   return planFiles;
 }
 
 export async function extractSkillFilePaths(sessionId: string, projectPath: string): Promise<SkillFileEntry[]> {
-  const { jsonlPath } = getSessionJsonlPath(sessionId, projectPath);
-
-  try {
-    await access(jsonlPath, constants.R_OK);
-  } catch {
-    return [];
-  }
+  const { allFiles: jsonlFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
+  if (jsonlFiles.length === 0) return [];
 
   const skillFiles: SkillFileEntry[] = [];
-  const stream = createReadStream(jsonlPath);
-  try {
-    const rl = createInterface({ input: stream, crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type !== 'user' || entry.isMeta !== true) continue;
-        const content = entry.message?.content;
-        if (!Array.isArray(content)) continue;
-        const skillPath = extractSkillPathFromText(content);
-        if (skillPath) {
-          const segments = skillPath.split('/');
-          const file = segments.pop() ?? skillPath;
-          const displayName = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
-          skillFiles.push({ path: skillPath, displayName });
+
+  for (const file of jsonlFiles) {
+    const stream = createReadStream(file);
+    try {
+      const rl = createInterface({ input: stream, crlfDelay: Infinity });
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type !== 'user' || entry.isMeta !== true) continue;
+          const content = entry.message?.content;
+          if (!Array.isArray(content)) continue;
+          const skillPath = extractSkillPathFromText(content);
+          if (skillPath) {
+            const segments = skillPath.split('/');
+            const file = segments.pop() ?? skillPath;
+            const displayName = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
+            skillFiles.push({ path: skillPath, displayName });
+          }
+        } catch {
+          /* skip malformed */
         }
-      } catch {
-        /* skip malformed */
       }
+    } finally {
+      stream.destroy();
     }
-  } finally {
-    stream.destroy();
   }
 
   return skillFiles;

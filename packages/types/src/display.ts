@@ -28,7 +28,13 @@ export type DisplayContent =
       result?: ToolCallResult;
     }
   | { type: 'tool_group'; calls: DisplayContent[] }
-  | { type: 'task_group'; agentId: string; taskArgs: Record<string, unknown>; calls: DisplayContent[] }
+  | {
+      type: 'task_group';
+      agentId: string;
+      taskArgs: Record<string, unknown>;
+      calls: DisplayContent[];
+      result?: ToolCallResult;
+    }
   | { type: 'permission_request'; request: unknown }
   | { type: 'error'; message: string };
 
