@@ -1,14 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderPlus, List, FolderOpen, Plus } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FolderPlus, List, LayoutList, Plus } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
 import { useChatsStore, useProjectsStore } from '../../store';
+import { useTabsStore } from '../../store/tabs';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { createProject } from '../../lib/api';
 import { ContextMenu } from '../ui/context-menu';
 import type { ContextMenuItem } from '../ui/context-menu';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
 import { daemonClient } from '../../lib/client';
 import { ProjectGroup } from './ProjectGroup';
@@ -117,10 +119,7 @@ function NewSessionPopover({
           key={project.id}
           type="button"
           onClick={() => onSelect(project.id)}
-          className={cn(
-            'w-full text-left px-3 py-1.5 text-mf-small truncate hover:bg-mf-hover transition-colors',
-            project.id === activeProjectId ? 'text-mf-accent' : 'text-mf-text-primary',
-          )}
+          className="w-full text-left px-3 py-1.5 text-mf-small truncate hover:bg-mf-hover transition-colors text-mf-text-primary"
           title={project.path}
         >
           {project.name}
@@ -142,8 +141,34 @@ export function ChatsPanel(): React.ReactElement {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showDirPicker, setShowDirPicker] = useState(false);
   const [showNewSessionPopover, setShowNewSessionPopover] = useState(false);
+  const [filterProjectId, _setFilterProjectId] = useState<string | null>(null);
+  const setActiveChat = useChatsStore((s) => s.setActiveChat);
+  const filterScrollRef = useRef<HTMLDivElement>(null);
 
   const activeProjectId = useActiveProjectId();
+
+  const handleFilterSelect = useCallback(
+    (projectId: string | null) => {
+      _setFilterProjectId(projectId);
+      if (!projectId) return;
+      const projectChats = chats
+        .filter((c) => c.projectId === projectId)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      const mostRecent = projectChats[0];
+      if (mostRecent) {
+        setActiveChat(mostRecent.id);
+        useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
+        daemonClient.resumeChat(mostRecent.id);
+      }
+    },
+    [chats, setActiveChat],
+  );
+
+  const handleFilterWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+    }
+  }, []);
 
   const toggleViewMode = useCallback(() => {
     setViewMode((prev) => {
@@ -178,6 +203,18 @@ export function ChatsPanel(): React.ReactElement {
     () => [...chats].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [chats],
   );
+
+  const filteredGroups = useMemo(
+    () => (filterProjectId ? groups.filter((g) => g.project.id === filterProjectId) : groups),
+    [groups, filterProjectId],
+  );
+  const filteredFlatChats = useMemo(
+    () => (filterProjectId ? flatChats.filter((c) => c.projectId === filterProjectId) : flatChats),
+    [flatChats, filterProjectId],
+  );
+
+  // Sorted project list for filter badges (alphabetical)
+  const sortedProjects = useMemo(() => [...projects].sort((a, b) => a.name.localeCompare(b.name)), [projects]);
 
   const toggleCollapse = useCallback((projectId: string) => {
     setCollapsed((prev) => {
@@ -228,16 +265,32 @@ export function ChatsPanel(): React.ReactElement {
       <div className="h-11 px-[10px] flex items-center justify-between">
         <div className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Sessions</div>
         <div className="flex items-center gap-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setShowDirPicker(true)}
+                className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
+              >
+                <FolderPlus size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Add project</TooltipContent>
+          </Tooltip>
           <div className="relative" data-new-session-popover>
-            <button
-              type="button"
-              onClick={handleNewSessionClick}
-              disabled={projects.length === 0}
-              className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-              title="New session"
-            >
-              <Plus size={14} />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleNewSessionClick}
+                  disabled={projects.length === 0}
+                  className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <Plus size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">New session</TooltipContent>
+            </Tooltip>
             {showNewSessionPopover && (
               <NewSessionPopover
                 projects={projects}
@@ -247,24 +300,69 @@ export function ChatsPanel(): React.ReactElement {
               />
             )}
           </div>
-          <button
-            type="button"
-            onClick={toggleViewMode}
-            className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
-            title={viewMode === 'grouped' ? 'Switch to flat view' : 'Switch to grouped view'}
-          >
-            {viewMode === 'grouped' ? <List size={14} /> : <FolderOpen size={14} />}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={toggleViewMode}
+                className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
+              >
+                {viewMode === 'grouped' ? <List size={14} /> : <LayoutList size={14} />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {viewMode === 'grouped' ? 'Switch to flat view' : 'Switch to grouped view'}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
+
+      {/* Project filter badges */}
+      {projects.length > 1 && (
+        <div
+          ref={filterScrollRef}
+          onWheel={handleFilterWheel}
+          className="flex gap-1.5 pl-[10px] pr-[10px] py-1.5 overflow-x-auto scrollbar-none"
+        >
+          <button
+            type="button"
+            onClick={() => handleFilterSelect(null)}
+            className={cn(
+              'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status transition-colors',
+              filterProjectId === null
+                ? 'bg-mf-accent text-white'
+                : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+            )}
+          >
+            All
+          </button>
+          {sortedProjects.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
+              className={cn(
+                'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status truncate max-w-[160px] transition-colors',
+                filterProjectId === p.id
+                  ? 'bg-mf-accent text-white'
+                  : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+              )}
+              title={p.name}
+            >
+              {p.name}
+            </button>
+          ))}
+          <div className="shrink-0 w-px" aria-hidden />
+        </div>
+      )}
 
       {/* Session list */}
       <div className="flex-1 overflow-y-auto px-[10px]">
         {projects.length === 0 ? (
-          <div className="py-4 text-center text-mf-text-secondary text-mf-label">No projects yet. Add one below.</div>
+          <div className="py-4 text-center text-mf-text-secondary text-mf-label">No projects yet.</div>
         ) : viewMode === 'grouped' ? (
           <div className="space-y-1">
-            {groups.map((g) => (
+            {filteredGroups.map((g) => (
               <ProjectGroup
                 key={g.project.id}
                 project={g.project}
@@ -278,10 +376,10 @@ export function ChatsPanel(): React.ReactElement {
           </div>
         ) : (
           <div className="space-y-0.5">
-            {flatChats.length === 0 ? (
+            {filteredFlatChats.length === 0 ? (
               <div className="py-4 text-center text-mf-text-secondary text-mf-label">No sessions yet.</div>
             ) : (
-              flatChats.map((chat) => (
+              filteredFlatChats.map((chat) => (
                 <FlatSessionRow
                   key={chat.id}
                   chat={chat}
@@ -292,18 +390,6 @@ export function ChatsPanel(): React.ReactElement {
             )}
           </div>
         )}
-      </div>
-
-      {/* Add project button */}
-      <div className="px-[10px] py-2 border-t border-mf-border">
-        <button
-          type="button"
-          onClick={() => setShowDirPicker(true)}
-          className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
-        >
-          <FolderPlus size={14} />
-          <span>Add Project</span>
-        </button>
       </div>
 
       {contextMenu && (

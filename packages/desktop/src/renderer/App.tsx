@@ -9,6 +9,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { ConnectionOverlay } from './components/ConnectionOverlay';
 import { Toaster } from './components/Toaster';
+import { TooltipProvider } from './components/ui/tooltip';
 import { useAppInit } from './hooks/useAppInit';
 import { useSettingsStore } from './store';
 import { getActiveProjectId } from './hooks/useActiveProjectId.js';
@@ -46,12 +47,14 @@ export default function App(): React.ReactElement {
 
   return (
     <ErrorBoundary>
-      <Layout leftPanel={<LeftPanel />} centerPanel={<CenterPanel />} rightPanel={<RightPanel />} />
-      <SearchPalette />
-      <SettingsModal />
-      <TutorialOverlay />
-      <ConnectionOverlay />
-      <Toaster />
+      <TooltipProvider delayDuration={200} skipDelayDuration={100} disableHoverableContent>
+        <Layout leftPanel={<LeftPanel />} centerPanel={<CenterPanel />} rightPanel={<RightPanel />} />
+        <SearchPalette />
+        <SettingsModal />
+        <TutorialOverlay />
+        <ConnectionOverlay />
+        <Toaster />
+      </TooltipProvider>
     </ErrorBoundary>
   );
 }
