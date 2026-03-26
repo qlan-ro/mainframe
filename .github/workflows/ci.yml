@@ -38,7 +38,7 @@ jobs:
         continue-on-error: true
 
   changeset-check:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
