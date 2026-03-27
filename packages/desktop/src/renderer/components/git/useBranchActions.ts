@@ -21,6 +21,7 @@ interface BranchData {
   current: string;
   local: BranchInfo[];
   remote: string[];
+  worktrees: string[];
 }
 
 interface ConflictFile {

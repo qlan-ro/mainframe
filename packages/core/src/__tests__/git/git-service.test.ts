@@ -42,7 +42,9 @@ describe('GitService', () => {
           },
         },
       });
-      mockGit.raw.mockResolvedValue('origin/main\n');
+      mockGit.raw
+        .mockResolvedValueOnce('') // worktree list
+        .mockResolvedValue('origin/main\n');
 
       const svc = GitService.forProject('/fake/path');
       const result = await svc.branches();
@@ -50,6 +52,38 @@ describe('GitService', () => {
       expect(result.current).toBe('main');
       expect(result.local).toHaveLength(2);
       expect(result.remote).toContain('origin/main');
+      expect(result.worktrees).toEqual([]);
+    });
+
+    it('tags branches with their worktree directory name', async () => {
+      mockGit.branch.mockResolvedValue({
+        current: 'main',
+        all: ['main', 'session/abc123'],
+        branches: {},
+      });
+      mockGit.raw
+        .mockResolvedValueOnce(
+          [
+            'worktree /project',
+            'HEAD aaa',
+            'branch refs/heads/main',
+            '',
+            'worktree /project/.worktrees/my-feature',
+            'HEAD bbb',
+            'branch refs/heads/session/abc123',
+            '',
+          ].join('\n'),
+        )
+        .mockResolvedValue('origin/main\n');
+
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.branches();
+
+      expect(result.worktrees).toEqual(['my-feature']);
+      const wtBranch = result.local.find((b) => b.name === 'session/abc123');
+      expect(wtBranch?.worktree).toBe('my-feature');
+      const mainBranch = result.local.find((b) => b.name === 'main');
+      expect(mainBranch?.worktree).toBeUndefined();
     });
   });
 

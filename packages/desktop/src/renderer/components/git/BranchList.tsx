@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown, GitBranch, Star } from 'lucide-react';
+import { ChevronRight, ChevronDown, GitBranch, GitFork, Star } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -12,6 +12,7 @@ interface BranchGroup {
 interface BranchListProps {
   local: BranchInfo[];
   remote: string[];
+  worktrees: string[];
   currentBranch: string;
   search: string;
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
@@ -132,18 +133,81 @@ function GroupSection({
   );
 }
 
+function WorktreeSection({
+  name,
+  branches,
+  currentBranch,
+  onSelectBranch,
+}: {
+  name: string;
+  branches: BranchInfo[];
+  currentBranch: string;
+  onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
+}): React.ReactElement {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <>
+      <div className="border-t border-mf-border my-1" />
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider"
+      >
+        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        <GitFork size={10} className="shrink-0" />
+        {name}
+      </button>
+      {expanded &&
+        branches.map((b) => (
+          <BranchRow
+            key={b.name}
+            name={b.name}
+            isCurrent={b.name === currentBranch}
+            isMain={false}
+            tracking={b.tracking}
+            onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
+          />
+        ))}
+    </>
+  );
+}
+
 const MAIN_BRANCHES = new Set(['main', 'master', 'develop']);
 
 export function BranchList({
   local,
   remote,
+  worktrees,
   currentBranch,
   search,
   onSelectBranch,
 }: BranchListProps): React.ReactElement {
-  const filtered = useMemo(() => filterBranches(local, search), [local, search]);
+  const mainBranches = useMemo(
+    () =>
+      filterBranches(
+        local.filter((b) => !b.worktree),
+        search,
+      ),
+    [local, search],
+  );
   const filteredRemote = useMemo(() => filterRemote(remote, search), [remote, search]);
-  const { groups, ungrouped } = useMemo(() => groupBranches(filtered), [filtered]);
+  const { groups, ungrouped } = useMemo(() => groupBranches(mainBranches), [mainBranches]);
+
+  const worktreeGroups = useMemo(() => {
+    const filtered = filterBranches(
+      local.filter((b) => b.worktree),
+      search,
+    );
+    const map = new Map<string, BranchInfo[]>();
+    for (const b of filtered) {
+      const list = map.get(b.worktree!) ?? [];
+      list.push(b);
+      map.set(b.worktree!, list);
+    }
+    // Preserve the order from the worktrees array
+    return worktrees.filter((w) => map.has(w)).map((w) => ({ name: w, branches: map.get(w)! }));
+  }, [local, worktrees, search]);
+
   const [remoteExpanded, setRemoteExpanded] = useState(false);
 
   return (
@@ -176,7 +240,20 @@ export function BranchList({
         />
       ))}
 
-      {filtered.length === 0 && <div className="px-3 py-2 text-xs text-mf-text-secondary">No matching branches</div>}
+      {mainBranches.length === 0 && worktreeGroups.length === 0 && (
+        <div className="px-3 py-2 text-xs text-mf-text-secondary">No matching branches</div>
+      )}
+
+      {/* Worktree sections */}
+      {worktreeGroups.map((wt) => (
+        <WorktreeSection
+          key={wt.name}
+          name={wt.name}
+          branches={wt.branches}
+          currentBranch={currentBranch}
+          onSelectBranch={onSelectBranch}
+        />
+      ))}
 
       {/* Remote branches */}
       {filteredRemote.length > 0 && (

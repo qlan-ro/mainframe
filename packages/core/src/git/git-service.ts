@@ -1,8 +1,9 @@
 import { simpleGit } from 'simple-git';
 import { access } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { createChildLogger } from '../logger.js';
 import { acquireProjectLock } from './project-lock.js';
+import { parseWorktreeList } from '../workspace/worktree.js';
 import type {
   BranchListResult,
   BranchInfo,
@@ -56,6 +57,25 @@ export class GitService {
     const local: BranchInfo[] = [];
     const remote: string[] = [];
 
+    // Build branch → worktree dirname map from `git worktree list`
+    const branchToWorktree = new Map<string, string>();
+    const worktreeNames: string[] = [];
+    try {
+      const wtOutput = await this.git().raw(['worktree', 'list', '--porcelain']);
+      const entries = parseWorktreeList(wtOutput);
+      for (const entry of entries) {
+        // Skip the main worktree (the project directory itself — always first entry)
+        if (entry === entries[0]) continue;
+        if (!entry.branch) continue;
+        const branchName = entry.branch.replace(/^refs\/heads\//, '');
+        const dirName = basename(entry.path);
+        branchToWorktree.set(branchName, dirName);
+        if (!worktreeNames.includes(dirName)) worktreeNames.push(dirName);
+      }
+    } catch {
+      // Not a git repo or worktree command unavailable — proceed without worktree info
+    }
+
     for (const name of result.all) {
       if (name.startsWith('remotes/')) {
         const remoteName = name.replace(/^remotes\//, '');
@@ -68,11 +88,11 @@ export class GitService {
         } catch {
           // No tracking branch — expected for local-only branches
         }
-        local.push({ name, current: name === result.current, tracking });
+        local.push({ name, current: name === result.current, tracking, worktree: branchToWorktree.get(name) });
       }
     }
 
-    return { current: result.current, local, remote };
+    return { current: result.current, local, remote, worktrees: worktreeNames };
   }
 
   async diff(args: string[]): Promise<string> {

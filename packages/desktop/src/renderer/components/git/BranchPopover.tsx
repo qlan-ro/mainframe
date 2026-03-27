@@ -195,6 +195,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
             <BranchList
               local={branches.local}
               remote={branches.remote}
+              worktrees={branches.worktrees}
               currentBranch={branches.current}
               search={search}
               onSelectBranch={handleSelectBranch}
