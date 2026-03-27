@@ -92,6 +92,7 @@ export class ClaudeSdkSession implements AdapterSession {
       // Route all permission checks through our canUseTool bridge instead of SDK's built-in prompts
       allowDangerouslySkipPermissions: true,
       env: {
+        ...process.env,
         FORCE_COLOR: '0',
         NO_COLOR: '1',
         CLAUDECODE: undefined,
