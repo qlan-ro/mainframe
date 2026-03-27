@@ -123,7 +123,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
     return (
       <div
         ref={popoverRef}
-        className="absolute bottom-full left-0 mb-2 w-72 rounded-mf-card border border-mf-border bg-mf-surface p-3 shadow-lg z-50"
+        className="absolute bottom-full left-0 mb-2 w-72 rounded-mf-card border border-mf-border bg-mf-app-bg p-3 shadow-lg z-50"
       >
         <div className="flex items-center gap-2 mb-2">
           <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
@@ -150,7 +150,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
     return (
       <div
         ref={popoverRef}
-        className="absolute bottom-full left-0 mb-2 w-72 rounded-mf-card border border-mf-border bg-mf-surface p-4 shadow-lg z-50 flex items-center justify-center"
+        className="absolute bottom-full left-0 mb-2 w-72 rounded-mf-card border border-mf-border bg-mf-app-bg p-4 shadow-lg z-50 flex items-center justify-center"
       >
         <Loader2 size={16} className="animate-spin text-mf-text-secondary" />
       </div>
@@ -163,7 +163,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
   return (
     <div
       ref={popoverRef}
-      className="absolute bottom-full left-0 mb-2 w-80 rounded-mf-card border border-mf-border bg-mf-surface p-3 shadow-lg z-50"
+      className="absolute bottom-full left-0 mb-2 w-80 rounded-mf-card border border-mf-border bg-mf-app-bg p-3 shadow-lg z-50"
     >
       {/* Mid-session warning */}
       {isMidSession && (
