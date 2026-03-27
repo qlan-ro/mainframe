@@ -33,19 +33,19 @@ export interface JsonRpcServerRequest {
 
 export type JsonRpcMessage = JsonRpcResponse | JsonRpcErrorResponse | JsonRpcNotification | JsonRpcServerRequest;
 
-export function isJsonRpcResponse(msg: Record<string, unknown>): msg is JsonRpcResponse {
+export function isJsonRpcResponse(msg: object): msg is JsonRpcResponse {
   return 'id' in msg && 'result' in msg;
 }
 
-export function isJsonRpcError(msg: Record<string, unknown>): msg is JsonRpcErrorResponse {
+export function isJsonRpcError(msg: object): msg is JsonRpcErrorResponse {
   return 'id' in msg && 'error' in msg;
 }
 
-export function isJsonRpcNotification(msg: Record<string, unknown>): msg is JsonRpcNotification {
+export function isJsonRpcNotification(msg: object): msg is JsonRpcNotification {
   return 'method' in msg && !('id' in msg);
 }
 
-export function isJsonRpcServerRequest(msg: Record<string, unknown>): msg is JsonRpcServerRequest {
+export function isJsonRpcServerRequest(msg: object): msg is JsonRpcServerRequest {
   return 'method' in msg && 'id' in msg;
 }
 
