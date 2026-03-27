@@ -180,6 +180,8 @@ Authentication is handled by the Codex CLI itself (`~/.codex/config.toml` or `co
 
 Note: `plan` is a session/collaboration mode, not a permission mode. In Codex it maps to a separate `collaborationMode` field on `TurnStartParams` (orthogonal to `approvalPolicy` and `sandbox`). The `collaborationMode` is passed on `turn/start` and is sticky for subsequent turns. Setting `developer_instructions: null` in the settings uses Codex's built-in plan mode system prompt.
 
+**Plan mode transition:** Unlike Claude (which sends an `ExitPlanMode` control_request for the user to approve), Codex plan mode produces a plan via `turn/plan/updated` notifications and completes the turn. The user then decides to proceed by sending a follow-up message. The adapter handles the mode transition by switching `collaborationMode` to `{ mode: 'default' }` on the next `turn/start` when the permission mode changes from `plan` to `default`. The existing `PlanModeHandler` in Mainframe is Claude-specific and does not apply to Codex sessions.
+
 ### `JsonRpcClient` (`jsonrpc.ts`)
 
 Thin JSON-RPC 2.0 client over a child process stdio.
