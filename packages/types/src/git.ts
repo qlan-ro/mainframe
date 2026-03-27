@@ -2,12 +2,14 @@ export interface BranchInfo {
   name: string;
   current: boolean;
   tracking?: string;
+  worktree?: string;
 }
 
 export interface BranchListResult {
   current: string;
   local: BranchInfo[];
   remote: string[];
+  worktrees: string[];
 }
 
 export type FetchResult = {
