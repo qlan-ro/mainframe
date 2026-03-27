@@ -67,9 +67,10 @@ describe('createWorktree', () => {
     removeWorktree(repoDir, info.worktreePath, info.branchName);
   });
 
-  it('uses chatId prefix for worktree directory name', () => {
+  it('uses sanitized branch name for worktree directory name', () => {
     const info = createWorktree(repoDir, 'abcdef12rest', '.worktrees', defaultBranch, 'session/abcdef12');
-    expect(info.worktreePath).toContain('abcdef12');
+    expect(info.worktreePath).toContain('session-abcdef12');
+    expect(info.worktreePath).not.toContain('abcdef12rest');
     removeWorktree(repoDir, info.worktreePath, info.branchName);
   });
 });

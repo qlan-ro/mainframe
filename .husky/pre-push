@@ -1,3 +1,5 @@
+unset GIT_DIR
+
 branch=$(git rev-parse --abbrev-ref HEAD)
 
 # Skip changeset check on main and release branches
@@ -14,3 +16,4 @@ if ! npx changeset status --since=origin/main > /dev/null 2>&1; then
   echo ""
   exit 1
 fi
+exit 0
