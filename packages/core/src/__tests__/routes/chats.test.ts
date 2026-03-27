@@ -121,7 +121,7 @@ describe('chatRoutes', () => {
       handler({ params: { id: 'c1' }, query: {}, body: {} }, res, vi.fn());
       await flushPromises();
 
-      expect(ctx.chats.archiveChat).toHaveBeenCalledWith('c1');
+      expect(ctx.chats.archiveChat).toHaveBeenCalledWith('c1', true);
       expect(res.json).toHaveBeenCalledWith({ success: true });
     });
 

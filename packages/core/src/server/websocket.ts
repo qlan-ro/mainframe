@@ -161,16 +161,6 @@ export class WebSocketManager {
         break;
       }
 
-      case 'chat.enableWorktree': {
-        await this.chats.enableWorktree(event.chatId);
-        break;
-      }
-
-      case 'chat.disableWorktree': {
-        await this.chats.disableWorktree(event.chatId);
-        break;
-      }
-
       case 'subscribe': {
         client.subscriptions.add(event.chatId);
         break;

@@ -71,16 +71,6 @@ const PermissionRespond = z.object({
   }),
 });
 
-const ChatEnableWorktree = z.object({
-  type: z.literal('chat.enableWorktree'),
-  chatId: z.string().min(1),
-});
-
-const ChatDisableWorktree = z.object({
-  type: z.literal('chat.disableWorktree'),
-  chatId: z.string().min(1),
-});
-
 const Subscribe = z.object({
   type: z.literal('subscribe'),
   chatId: z.string().min(1),
@@ -99,8 +89,6 @@ export const ClientEventSchema = z.discriminatedUnion('type', [
   ChatUpdateConfig,
   MessageSend,
   PermissionRespond,
-  ChatEnableWorktree,
-  ChatDisableWorktree,
   Subscribe,
   Unsubscribe,
 ]);

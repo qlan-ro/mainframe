@@ -88,7 +88,7 @@ export class ChatConfigManager {
     }
   }
 
-  async enableWorktree(chatId: string): Promise<void> {
+  async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
     if (!active) throw new Error(`Chat ${chatId} not found`);
     if (active.chat.claudeSessionId) throw new Error('Cannot enable worktree after session has started');
@@ -103,10 +103,27 @@ export class ChatConfigManager {
     if (!project) throw new Error('Project not found');
 
     const worktreeDir = this.deps.db.settings.get('general', 'worktreeDir') ?? GENERAL_DEFAULTS.worktreeDir;
-    const info = createWorktree(project.path, chatId, worktreeDir);
+    const info = createWorktree(project.path, chatId, worktreeDir, baseBranch, branchName);
     active.chat.worktreePath = info.worktreePath;
     active.chat.branchName = info.branchName;
     this.deps.db.chats.update(chatId, { worktreePath: info.worktreePath, branchName: info.branchName });
+    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+  }
+
+  async attachWorktree(chatId: string, worktreePath: string, branchName: string): Promise<void> {
+    const active = this.deps.getActiveChat(chatId);
+    if (!active) throw new Error(`Chat ${chatId} not found`);
+    if (active.chat.claudeSessionId) throw new Error('Cannot attach worktree after session has started');
+    if (active.chat.worktreePath) return;
+
+    if (active.session?.isSpawned) {
+      await active.session.kill();
+      active.session = null;
+    }
+
+    active.chat.worktreePath = worktreePath;
+    active.chat.branchName = branchName;
+    this.deps.db.chats.update(chatId, { worktreePath, branchName });
     this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
   }
 

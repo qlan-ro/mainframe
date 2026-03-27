@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { Square } from 'lucide-react';
 import { useSandboxStore } from '../../store/sandbox';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
+import { useChatsStore } from '../../store/chats';
 import { stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 
@@ -11,6 +12,7 @@ interface Props {
 
 export function StopPopover({ onClose }: Props): React.ReactElement {
   const activeProjectId = useActiveProjectId();
+  const activeChatId = useChatsStore((s) => s.activeChatId);
   const launchConfig = useLaunchConfig();
   const projectStatuses =
     useSandboxStore((s) => (activeProjectId ? s.processStatuses[activeProjectId] : undefined)) ?? {};
@@ -36,7 +38,7 @@ export function StopPopover({ onClose }: Props): React.ReactElement {
   const handleStop = async (name: string) => {
     if (!activeProjectId) return;
     try {
-      await stopLaunchConfig(activeProjectId, name);
+      await stopLaunchConfig(activeProjectId, name, activeChatId ?? undefined);
     } catch (err) {
       console.warn('[sandbox] stop failed', err);
     }
@@ -45,7 +47,9 @@ export function StopPopover({ onClose }: Props): React.ReactElement {
   const handleStopAll = async () => {
     if (!activeProjectId) return;
     try {
-      await Promise.all(runningConfigs.map((c) => stopLaunchConfig(activeProjectId, c.name)));
+      await Promise.all(
+        runningConfigs.map((c) => stopLaunchConfig(activeProjectId, c.name, activeChatId ?? undefined)),
+      );
     } catch (err) {
       console.warn('[sandbox] stop all failed', err);
     }

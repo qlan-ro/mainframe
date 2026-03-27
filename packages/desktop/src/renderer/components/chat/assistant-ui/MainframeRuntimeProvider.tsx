@@ -271,7 +271,14 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
         daemonClient.createChat(activeProjectId, 'claude');
       },
       onArchive: async (threadId: string) => {
-        await archiveChat(threadId);
+        const chat = chats.find((c) => c.id === threadId);
+        let deleteWorktree = true;
+        if (chat?.worktreePath) {
+          deleteWorktree = window.confirm(
+            `This session has a worktree at:\n${chat.worktreePath}\n\nOK = Archive and delete worktree\nCancel = Archive only (keep worktree)`,
+          );
+        }
+        await archiveChat(threadId, deleteWorktree);
         removeChat(threadId);
         useTabsStore.getState().closeTab(`chat:${threadId}`);
       },

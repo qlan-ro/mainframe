@@ -47,14 +47,21 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
   const handleArchive = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      archiveChat(chat.id)
+      let deleteWorktree = true;
+      if (chat.worktreePath) {
+        const choice = window.confirm(
+          `This session has a worktree at:\n${chat.worktreePath}\n\nOK = Archive and delete worktree\nCancel = Archive only (keep worktree)`,
+        );
+        deleteWorktree = choice;
+      }
+      archiveChat(chat.id, deleteWorktree)
         .then(() => {
           removeChat(chat.id);
           useTabsStore.getState().closeTab(`chat:${chat.id}`);
         })
         .catch((err) => log.warn('archive failed', { err: String(err) }));
     },
-    [chat.id, removeChat],
+    [chat.id, chat.worktreePath, removeChat],
   );
 
   const isActive = activeChatId === chat.id;
