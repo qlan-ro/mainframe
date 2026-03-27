@@ -170,7 +170,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                   >
                     <ArrowDownLeft
                       size={12}
-                      className={busyAction === 'fetch' ? 'animate-spin' : ''}
+                      className={busyAction === 'fetch' ? 'animate-pulse' : ''}
                       style={{ strokeDasharray: '2 2' }}
                     />
                   </button>
