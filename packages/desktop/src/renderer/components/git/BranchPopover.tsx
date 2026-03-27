@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Download, Loader2, Plus, RefreshCw, Search, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowDownLeft, Loader2, Plus, RefreshCw, Search, Upload } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
 import { BranchList } from './BranchList';
@@ -168,7 +168,11 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                       busy && 'opacity-40 cursor-not-allowed',
                     )}
                   >
-                    <Download size={12} className={busyAction === 'fetch' ? 'animate-spin' : ''} />
+                    <ArrowDownLeft
+                      size={12}
+                      className={busyAction === 'fetch' ? 'animate-spin' : ''}
+                      style={{ strokeDasharray: '2 2' }}
+                    />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Fetch from all remotes</TooltipContent>
