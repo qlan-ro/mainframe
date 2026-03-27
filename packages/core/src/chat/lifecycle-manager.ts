@@ -134,14 +134,14 @@ export class ChatLifecycleManager {
     await active.session.interrupt();
   }
 
-  async archiveChat(chatId: string): Promise<void> {
+  async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
     const active = this.deps.activeChats.get(chatId);
     if (active?.session) {
       await active.session.kill();
     }
 
     const chat = active?.chat ?? this.deps.db.chats.get(chatId);
-    if (chat?.worktreePath && chat?.branchName) {
+    if (deleteWorktree && chat?.worktreePath && chat?.branchName) {
       const project = this.deps.db.projects.get(chat.projectId);
       if (project) removeWorktree(project.path, chat.worktreePath, chat.branchName);
     }

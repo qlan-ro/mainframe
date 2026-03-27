@@ -33,7 +33,8 @@ export function chatRoutes(ctx: RouteContext): Router {
     '/api/chats/:id/archive',
     asyncHandler(async (req: Request, res: Response) => {
       try {
-        await ctx.chats.archiveChat(param(req, 'id'));
+        const deleteWorktree = req.query.deleteWorktree !== 'false';
+        await ctx.chats.archiveChat(param(req, 'id'), deleteWorktree);
         res.json({ success: true });
       } catch (err) {
         logger.warn({ err, chatId: param(req, 'id') }, 'Failed to archive chat');

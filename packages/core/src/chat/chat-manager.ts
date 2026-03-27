@@ -280,8 +280,8 @@ export class ChatManager {
     return this.permissionHandler.respondToPermission(chatId, response);
   }
 
-  async archiveChat(chatId: string): Promise<void> {
-    await this.lifecycle.archiveChat(chatId);
+  async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
+    await this.lifecycle.archiveChat(chatId, deleteWorktree);
     this.eventHandler.clearDisplayCache(chatId);
   }
 

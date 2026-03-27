@@ -80,14 +80,22 @@ export function ProjectGroup({
   const handleArchiveChat = useCallback(
     (e: React.MouseEvent, chatId: string) => {
       e.stopPropagation();
-      archiveChat(chatId)
+      const chat = chats.find((c) => c.id === chatId);
+      let deleteWorktree = true;
+      if (chat?.worktreePath) {
+        const choice = window.confirm(
+          `This session has a worktree at:\n${chat.worktreePath}\n\nOK = Archive and delete worktree\nCancel = Archive only (keep worktree)`,
+        );
+        deleteWorktree = choice;
+      }
+      archiveChat(chatId, deleteWorktree)
         .then(() => {
           removeChat(chatId);
           useTabsStore.getState().closeTab(`chat:${chatId}`);
         })
         .catch((err) => log.warn('archive failed', { err: String(err) }));
     },
-    [removeChat],
+    [chats, removeChat],
   );
 
   const handleNewSession = useCallback(

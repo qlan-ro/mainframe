@@ -190,10 +190,10 @@ Returns display messages from daemon memory. Messages are ephemeral — they onl
 #### Archive Chat
 
 ```
-POST /api/chats/:id/archive
+POST /api/chats/:id/archive?deleteWorktree=true|false
 ```
 
-Kills the CLI process (if running) and sets status to `archived`.
+Kills the CLI process (if running) and sets status to `archived`. When `deleteWorktree=false`, the git worktree is preserved on disk. Defaults to `true`.
 
 **Response**: `ApiResponse<void>`
 
