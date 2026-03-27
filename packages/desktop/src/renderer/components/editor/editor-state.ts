@@ -1,54 +1,52 @@
 /**
  * Bridge between the active Monaco editor instance and the tabs store.
  *
- * Uses a debounced "stable" state so that rapid events from a CMD+click
- * (cursor move + scroll + highlight) don't overwrite the pre-click state
- * before go-to-definition reads it.
+ * Tracks two things independently:
+ * 1. Full view state (scroll + cursor + folds) — rolling 2-slot window
+ * 2. Cursor position — rolling 2-slot window
  *
- * View states are typed as `unknown` to avoid leaking Monaco types into
- * the store layer. MonacoEditor casts them back on restore.
+ * On restore: apply view state first (gets scroll right), then override
+ * the cursor with the previous cursor position (CMD+click moves cursor
+ * before go-to-definition fires, so the view state's cursor is wrong).
+ *
+ * Types are `unknown` to avoid leaking Monaco types into the store layer.
  */
 
-/** The last confirmed-stable view state (updated after 150ms of idle). */
-let stableState: unknown = null;
-/** The most recent view state snapshot (may reflect a mid-action state). */
-let latestState: unknown = null;
+export interface CursorPosition {
+  line: number;
+  column: number;
+}
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+// --- View state tracking (scroll + folds) ---
+let previousViewState: unknown = null;
+let currentViewState: unknown = null;
 
-const DEBOUNCE_MS = 150;
-
-/**
- * Called by MonacoEditor on cursor or scroll changes.
- * The latest snapshot is stored immediately; it only promotes to "stable"
- * after the editor is idle for DEBOUNCE_MS.
- */
 export function updateEditorViewState(viewState: unknown): void {
-  latestState = viewState;
-  if (debounceTimer != null) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    stableState = latestState;
-    debounceTimer = null;
-  }, DEBOUNCE_MS);
+  previousViewState = currentViewState;
+  currentViewState = viewState;
 }
 
-/** Called by MonacoEditor on unmount. */
-export function clearEditorViewState(): void {
-  stableState = null;
-  latestState = null;
-  if (debounceTimer != null) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
-}
-
-/**
- * Returns the view state to save for navigation history.
- *
- * Prefers the debounced stable state — this is where the user was before
- * the CMD+click burst of events. Falls back to the latest snapshot if
- * no stable state has been recorded yet.
- */
 export function getEditorViewStateForNav(): unknown {
-  return stableState ?? latestState;
+  return previousViewState ?? currentViewState;
+}
+
+// --- Cursor position tracking ---
+let previousCursor: CursorPosition | null = null;
+let currentCursor: CursorPosition | null = null;
+
+export function updateCursorPosition(pos: CursorPosition): void {
+  previousCursor = currentCursor;
+  currentCursor = pos;
+}
+
+export function getCursorPositionForNav(): CursorPosition | null {
+  return previousCursor ?? currentCursor;
+}
+
+// --- Cleanup ---
+export function clearEditorViewState(): void {
+  previousViewState = null;
+  currentViewState = null;
+  previousCursor = null;
+  currentCursor = null;
 }

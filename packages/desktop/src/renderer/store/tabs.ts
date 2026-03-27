@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getEditorViewStateForNav } from '../components/editor/editor-state';
+import { getEditorViewStateForNav, getCursorPositionForNav } from '../components/editor/editor-state';
 import { useUIStore } from './ui';
 
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
@@ -12,8 +12,11 @@ export type FileView =
       content?: string;
       line?: number;
       column?: number;
-      /** Opaque Monaco ICodeEditorViewState for restoring scroll + cursor + folds. */
+      /** Opaque Monaco ICodeEditorViewState for restoring scroll + folds. */
       viewState?: unknown;
+      /** Cursor position tracked separately — applied after viewState restore. */
+      cursorLine?: number;
+      cursorColumn?: number;
     }
   | {
       type: 'diff';
@@ -66,18 +69,23 @@ interface NavEntry {
   line?: number;
   column?: number;
   viewState?: unknown;
+  cursorLine?: number;
+  cursorColumn?: number;
 }
 const navBackStack: NavEntry[] = [];
 const navForwardStack: NavEntry[] = [];
 
-/** Build a NavEntry for the current editor, capturing the full view state. */
+/** Build a NavEntry for the current editor, capturing view state + cursor. */
 function currentEditorNavEntry(fv: FileView & { type: 'editor' }): NavEntry {
   const viewState = getEditorViewStateForNav();
+  const cursor = getCursorPositionForNav();
   return {
     filePath: fv.filePath,
     line: fv.line,
     column: fv.column,
     viewState: viewState ?? undefined,
+    cursorLine: cursor?.line,
+    cursorColumn: cursor?.column,
   };
 }
 
@@ -192,6 +200,8 @@ export const useTabsStore = create<TabsState>((set, get) => ({
         line: entry.line,
         column: entry.column,
         viewState: entry.viewState,
+        cursorLine: entry.cursorLine,
+        cursorColumn: entry.cursorColumn,
       },
       fileViewCollapsed: false,
     });
@@ -213,6 +223,8 @@ export const useTabsStore = create<TabsState>((set, get) => ({
         line: entry.line,
         column: entry.column,
         viewState: entry.viewState,
+        cursorLine: entry.cursorLine,
+        cursorColumn: entry.cursorColumn,
       },
       fileViewCollapsed: false,
     });

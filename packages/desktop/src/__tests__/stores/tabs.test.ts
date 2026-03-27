@@ -1,7 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { CenterTab } from '../../renderer/store/tabs.js';
 import { useTabsStore } from '../../renderer/store/tabs.js';
-import { updateEditorViewState, clearEditorViewState } from '../../renderer/components/editor/editor-state.js';
+import {
+  updateEditorViewState,
+  updateCursorPosition,
+  clearEditorViewState,
+} from '../../renderer/components/editor/editor-state.js';
 
 function makeChatTab(chatId: string, label = 'Chat'): CenterTab {
   return { type: 'chat', id: `chat:${chatId}`, chatId, label };
@@ -220,29 +224,22 @@ describe('useTabsStore', () => {
   });
 
   describe('navigation back/forward', () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
     afterEach(() => {
       clearEditorViewState();
-      vi.useRealTimers();
     });
 
-    it('navigateBack saves the debounced stable state, not the click target', () => {
+    it('navigateBack saves previous view state and previous cursor position', () => {
       useTabsStore.getState().openEditorTab('src/a.ts', undefined, 1, 1);
 
-      // User moves cursor to line 50 — state settles after debounce
-      const stateAtLine50 = { cursor: '50:10', scrollTop: 400 };
-      updateEditorViewState(stateAtLine50);
-      vi.advanceTimersByTime(200); // debounce fires → stableState = stateAtLine50
+      // Simulate editor: user at line 50, scrolled to 400px
+      const viewAtLine50 = { scrollTop: 400 };
+      const viewAtClick = { scrollTop: 400 };
+      updateEditorViewState(viewAtLine50);
+      updateCursorPosition({ line: 50, column: 10 });
 
-      // CMD+click fires a burst of events (cursor move + scroll) within <150ms
-      const clickCursor = { cursor: '43:32', scrollTop: 400 };
-      const clickScroll = { cursor: '43:32', scrollTop: 410 };
-      updateEditorViewState(clickCursor);
-      updateEditorViewState(clickScroll);
-      // go-to-definition resolves immediately — no time for debounce to fire
+      // CMD+click: cursor moves to 43:32, then go-to-definition fires
+      updateEditorViewState(viewAtClick);
+      updateCursorPosition({ line: 43, column: 32 });
 
       useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
       useTabsStore.getState().navigateBack();
@@ -252,47 +249,49 @@ describe('useTabsStore', () => {
       expect(fv!.type).toBe('editor');
       if (fv!.type === 'editor') {
         expect(fv!.filePath).toBe('src/a.ts');
-        expect(fv!.viewState).toEqual(stateAtLine50);
+        // View state is previous (scroll position before click)
+        expect(fv!.viewState).toEqual(viewAtLine50);
+        // Cursor is previous (where user was, not click target)
+        expect(fv!.cursorLine).toBe(50);
+        expect(fv!.cursorColumn).toBe(10);
       }
     });
 
-    it('navigateForward saves the debounced stable state', () => {
+    it('navigateForward saves previous view state and cursor', () => {
       useTabsStore.getState().openEditorTab('src/a.ts', undefined, 1, 1);
-
-      const stateA = { cursor: '5:3', scrollTop: 100 };
-      updateEditorViewState(stateA);
-      vi.advanceTimersByTime(200);
-      // CMD+click burst
-      updateEditorViewState({ cursor: '8:1', scrollTop: 100 });
+      updateEditorViewState({ scrollTop: 100 });
+      updateCursorPosition({ line: 5, column: 3 });
+      updateEditorViewState({ scrollTop: 100 });
+      updateCursorPosition({ line: 8, column: 1 });
       useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
 
-      // In file B — let state settle
-      const stateB = { cursor: '25:7', scrollTop: 200 };
-      updateEditorViewState(stateB);
-      vi.advanceTimersByTime(200);
-      // CMD+click burst in B
-      updateEditorViewState({ cursor: '25:7', scrollTop: 205 });
+      // In file B
+      const viewB = { scrollTop: 200 };
+      updateEditorViewState(viewB);
+      updateCursorPosition({ line: 25, column: 7 });
+      updateEditorViewState({ scrollTop: 200 });
+      updateCursorPosition({ line: 30, column: 1 });
       useTabsStore.getState().navigateBack();
 
-      // In file A — let state settle
-      const stateA2 = { cursor: '50:1', scrollTop: 500 };
-      updateEditorViewState(stateA2);
-      vi.advanceTimersByTime(200);
-      // CMD+click burst
-      updateEditorViewState({ cursor: '60:1', scrollTop: 600 });
+      // In file A again
+      updateEditorViewState({ scrollTop: 500 });
+      updateCursorPosition({ line: 50, column: 1 });
+      updateEditorViewState({ scrollTop: 600 });
+      updateCursorPosition({ line: 60, column: 1 });
 
       useTabsStore.getState().navigateForward();
 
       const fv = useTabsStore.getState().fileView;
-      expect(fv).not.toBeNull();
       expect(fv!.type).toBe('editor');
       if (fv!.type === 'editor') {
         expect(fv!.filePath).toBe('src/b.ts');
-        expect(fv!.viewState).toEqual(stateB);
+        expect(fv!.viewState).toEqual(viewB);
+        expect(fv!.cursorLine).toBe(25);
+        expect(fv!.cursorColumn).toBe(7);
       }
     });
 
-    it('falls back to no viewState when no tracking exists', () => {
+    it('falls back gracefully when no tracking exists', () => {
       useTabsStore.getState().openEditorTab('src/a.ts', undefined, 10, 5);
       useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
 
@@ -305,23 +304,8 @@ describe('useTabsStore', () => {
         expect(fv!.line).toBe(10);
         expect(fv!.column).toBe(5);
         expect(fv!.viewState).toBeUndefined();
-      }
-    });
-
-    it('falls back to latest state when no stable state has settled yet', () => {
-      useTabsStore.getState().openEditorTab('src/a.ts', undefined, 1, 1);
-
-      // State updates but debounce hasn't fired yet
-      const latest = { cursor: '10:1', scrollTop: 50 };
-      updateEditorViewState(latest);
-      // No vi.advanceTimersByTime — stableState is still null
-
-      useTabsStore.getState().openEditorTab('src/b.ts', undefined, 20, 1);
-      useTabsStore.getState().navigateBack();
-
-      const fv = useTabsStore.getState().fileView;
-      if (fv!.type === 'editor') {
-        expect(fv!.viewState).toEqual(latest);
+        expect(fv!.cursorLine).toBeUndefined();
+        expect(fv!.cursorColumn).toBeUndefined();
       }
     });
   });
