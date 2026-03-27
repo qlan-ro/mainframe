@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ChevronRight, ChevronDown, GitBranch, Star } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 
 interface BranchGroup {
   prefix: string;
@@ -11,6 +12,7 @@ interface BranchGroup {
 interface BranchListProps {
   local: BranchInfo[];
   remote: string[];
+  worktrees: string[];
   currentBranch: string;
   search: string;
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
@@ -79,7 +81,14 @@ function BranchRow({
       {isMain ? <Star size={12} className="text-mf-warning shrink-0" /> : <GitBranch size={12} className="shrink-0" />}
       <span className="truncate">{displayName}</span>
       {tracking && (
-        <span className="ml-auto shrink-0 text-[10px] text-mf-text-secondary truncate max-w-[120px]">{tracking}</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="ml-auto shrink-0 text-[10px] text-mf-text-secondary truncate max-w-[120px]">
+              {tracking}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{tracking}</TooltipContent>
+        </Tooltip>
       )}
       <ChevronRight size={12} className={cn('shrink-0 text-mf-text-secondary', !tracking && 'ml-auto')} />
     </button>
@@ -124,51 +133,135 @@ function GroupSection({
   );
 }
 
+function WorktreeSection({
+  name,
+  branches,
+  currentBranch,
+  onSelectBranch,
+}: {
+  name: string;
+  branches: BranchInfo[];
+  currentBranch: string;
+  onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
+}): React.ReactElement {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <>
+      <div className="border-t border-mf-border my-1" />
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider"
+      >
+        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        {name}
+      </button>
+      {expanded &&
+        branches.map((b) => (
+          <BranchRow
+            key={b.name}
+            name={b.name}
+            isCurrent={b.name === currentBranch}
+            isMain={false}
+            tracking={b.tracking}
+            onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
+          />
+        ))}
+    </>
+  );
+}
+
 const MAIN_BRANCHES = new Set(['main', 'master', 'develop']);
 
 export function BranchList({
   local,
   remote,
+  worktrees,
   currentBranch,
   search,
   onSelectBranch,
 }: BranchListProps): React.ReactElement {
-  const filtered = useMemo(() => filterBranches(local, search), [local, search]);
+  const mainBranches = useMemo(
+    () =>
+      filterBranches(
+        local.filter((b) => !b.worktree),
+        search,
+      ),
+    [local, search],
+  );
   const filteredRemote = useMemo(() => filterRemote(remote, search), [remote, search]);
-  const { groups, ungrouped } = useMemo(() => groupBranches(filtered), [filtered]);
+  const { groups, ungrouped } = useMemo(() => groupBranches(mainBranches), [mainBranches]);
+
+  const worktreeGroups = useMemo(() => {
+    const filtered = filterBranches(
+      local.filter((b) => b.worktree),
+      search,
+    );
+    const map = new Map<string, BranchInfo[]>();
+    for (const b of filtered) {
+      const list = map.get(b.worktree!) ?? [];
+      list.push(b);
+      map.set(b.worktree!, list);
+    }
+    // Preserve the order from the worktrees array
+    return worktrees.filter((w) => map.has(w)).map((w) => ({ name: w, branches: map.get(w)! }));
+  }, [local, worktrees, search]);
+
+  const [localExpanded, setLocalExpanded] = useState(true);
   const [remoteExpanded, setRemoteExpanded] = useState(false);
 
   return (
     <div className="max-h-60 overflow-y-auto">
       {/* Local branches */}
-      <div className="px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider">
+      <button
+        onClick={() => setLocalExpanded(!localExpanded)}
+        className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider"
+      >
+        {localExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
         Local Branches
-      </div>
+      </button>
 
-      {/* Ungrouped (including main/master) */}
-      {ungrouped.map((b) => (
-        <BranchRow
-          key={b.name}
-          name={b.name}
-          isCurrent={b.name === currentBranch}
-          isMain={MAIN_BRANCHES.has(b.name)}
-          tracking={b.tracking}
-          onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
-        />
-      ))}
+      {localExpanded && (
+        <>
+          {/* Ungrouped (including main/master) */}
+          {ungrouped.map((b) => (
+            <BranchRow
+              key={b.name}
+              name={b.name}
+              isCurrent={b.name === currentBranch}
+              isMain={MAIN_BRANCHES.has(b.name)}
+              tracking={b.tracking}
+              onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
+            />
+          ))}
 
-      {/* Grouped */}
-      {groups.map((g) => (
-        <GroupSection
-          key={g.prefix}
-          prefix={g.prefix}
-          branches={g.branches}
+          {/* Grouped */}
+          {groups.map((g) => (
+            <GroupSection
+              key={g.prefix}
+              prefix={g.prefix}
+              branches={g.branches}
+              currentBranch={currentBranch}
+              onSelectBranch={onSelectBranch}
+            />
+          ))}
+        </>
+      )}
+
+      {mainBranches.length === 0 && worktreeGroups.length === 0 && (
+        <div className="px-3 py-2 text-xs text-mf-text-secondary">No matching branches</div>
+      )}
+
+      {/* Worktree sections */}
+      {worktreeGroups.map((wt) => (
+        <WorktreeSection
+          key={wt.name}
+          name={wt.name}
+          branches={wt.branches}
           currentBranch={currentBranch}
           onSelectBranch={onSelectBranch}
         />
       ))}
-
-      {filtered.length === 0 && <div className="px-3 py-2 text-xs text-mf-text-secondary">No matching branches</div>}
 
       {/* Remote branches */}
       {filteredRemote.length > 0 && (
