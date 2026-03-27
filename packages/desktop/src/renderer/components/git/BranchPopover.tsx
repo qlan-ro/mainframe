@@ -160,11 +160,16 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <IconButton
-                    icon={<Download size={12} className={busyAction === 'fetch' ? 'animate-spin' : ''} />}
+                  <button
                     onClick={actions.handleFetch}
                     disabled={busy}
-                  />
+                    className={cn(
+                      'p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary',
+                      busy && 'opacity-40 cursor-not-allowed',
+                    )}
+                  >
+                    <Download size={12} className={busyAction === 'fetch' ? 'animate-spin' : ''} />
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Fetch from all remotes</TooltipContent>
               </Tooltip>
