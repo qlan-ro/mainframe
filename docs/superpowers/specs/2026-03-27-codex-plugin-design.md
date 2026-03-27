@@ -40,6 +40,7 @@ Builtin adapter plugin for the OpenAI Codex CLI, using the `codex app-server` JS
 - `turn/diff/updated` — cumulative git diff of changes per turn. Related to our file change tracking / `context.updated` event. Could power a "changes this turn" diff view.
 - `turn/plan/updated` — structured plan/todo data from the agent. Related to our Plans panel. Could feed structured plan state directly.
 - `sendCommand()` — needs investigation into Codex skills/apps as potential equivalents to Claude slash commands
+- `plan` mode — needs investigation into whether Codex has an equivalent session mode to Claude's `--permission-mode plan`
 
 `thread/compacted` is wired to `sink.onCompact()` since we already support it.
 
@@ -175,10 +176,9 @@ Authentication is handled by the Codex CLI itself (`~/.codex/config.toml` or `co
 | Mainframe | `approvalPolicy` | `sandbox` |
 |-----------|-------------------|-----------|
 | `default` | `on-request` | `workspace-write` |
-| `plan` | `on-request` | `workspace-write` |
 | `yolo` | `never` | `danger-full-access` |
 
-Note: `plan` is a session mode, not a distinct permission configuration — it maps to the same Codex settings as `default`. In Claude, `plan` is a CLI-level `--permission-mode` that changes agent behavior (plan before executing). Codex has no equivalent protocol-level plan mode, so from a permissions standpoint we treat it identically to `default`.
+`plan` mode is not supported in v1. It's a Claude-specific session mode (`--permission-mode plan`) with no Codex protocol equivalent. If selected, the adapter should reject or fall through to `default` with a warning log. Added to deferred list for investigation.
 
 ### `JsonRpcClient` (`jsonrpc.ts`)
 
