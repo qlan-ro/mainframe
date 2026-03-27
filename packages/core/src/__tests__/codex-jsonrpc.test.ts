@@ -1,5 +1,5 @@
 // packages/core/src/__tests__/codex-jsonrpc.test.ts
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EventEmitter, Readable, Writable } from 'node:stream';
 import { JsonRpcClient } from '../plugins/builtin/codex/jsonrpc.js';
 import type { ChildProcess } from 'node:child_process';
@@ -23,7 +23,7 @@ function createMockProcess(): ChildProcess {
 
 function createClient(
   proc: ChildProcess,
-  overrides: Partial<Parameters<(typeof JsonRpcClient)['prototype']['constructor']>[1]> = {},
+  overrides: Partial<import('../plugins/builtin/codex/jsonrpc.js').JsonRpcHandlers> = {},
 ) {
   return new JsonRpcClient(proc, {
     onNotification: vi.fn(),
