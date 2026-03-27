@@ -126,10 +126,10 @@ describe('BranchPopover', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTitle('Fetch')).toBeInTheDocument();
+      expect(screen.getByLabelText('Fetch')).toBeInTheDocument();
     });
 
-    const fetchButton = screen.getByTitle('Fetch');
+    const fetchButton = screen.getByLabelText('Fetch');
 
     await act(async () => {
       await user.click(fetchButton);

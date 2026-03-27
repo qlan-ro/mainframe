@@ -163,6 +163,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                   <button
                     onClick={actions.handleFetch}
                     disabled={busy}
+                    aria-label="Fetch"
                     className={cn(
                       'p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary',
                       busy && 'opacity-40 cursor-not-allowed',
