@@ -1,5 +1,25 @@
 # @qlan-ro/mainframe-desktop
 
+## 0.4.0
+
+### Minor Changes
+
+- [#117](https://github.com/qlan-ro/mainframe/pull/117) [`572a492`](https://github.com/qlan-ro/mainframe/commit/572a4924b4016d395b71b119073959cb6d6985d8) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix push/pull using wrong remote ref when local branch name differs from tracking branch. Group worktree branches into separate collapsible sections in the branch popover. Add tooltip on tracking label for truncated names.
+
+- [#118](https://github.com/qlan-ro/mainframe/pull/118) [`ab58314`](https://github.com/qlan-ro/mainframe/commit/ab58314573f510ff4566048db028eed3ff29b488) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add base branch selector, custom branch naming, fork-to-worktree, worktree awareness indicators, and worktree-aware launch configurations
+
+### Patch Changes
+
+- [#112](https://github.com/qlan-ro/mainframe/pull/112) [`c872527`](https://github.com/qlan-ro/mainframe/commit/c872527f26bfbd7ee51d9523e7069db425c5e8d2) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Close file editor when switching projects to prevent stale files from another project
+
+- [#113](https://github.com/qlan-ro/mainframe/pull/113) [`879c701`](https://github.com/qlan-ro/mainframe/commit/879c7017b1b7e452ab9060f7a14cafd81affd6f1) Thanks [@doruchiulan](https://github.com/doruchiulan)! - fix(desktop): remember live cursor position on editor back/forward navigation
+
+- [#114](https://github.com/qlan-ro/mainframe/pull/114) [`6729d91`](https://github.com/qlan-ro/mainframe/commit/6729d91d5bd2964382ac2982f94309db7302d424) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix project filter lost after closing todos view
+
+- Updated dependencies [[`572a492`](https://github.com/qlan-ro/mainframe/commit/572a4924b4016d395b71b119073959cb6d6985d8), [`ab58314`](https://github.com/qlan-ro/mainframe/commit/ab58314573f510ff4566048db028eed3ff29b488)]:
+  - @qlan-ro/mainframe-core@0.4.0
+  - @qlan-ro/mainframe-types@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes
