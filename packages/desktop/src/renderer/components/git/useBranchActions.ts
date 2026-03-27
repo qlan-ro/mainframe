@@ -107,14 +107,16 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   const handlePull = useCallback(
     async (branch: string) => {
       await withBusy(async () => {
-        // Resolve the tracking remote (e.g. "origin/main" → remote="origin")
+        // Resolve tracking remote and branch (e.g. "origin/feat/foo" → remote="origin", remoteBranch="feat/foo")
         const info = branches?.local.find((b) => b.name === branch);
-        const remote = info?.tracking?.split('/')[0];
-        if (!remote) {
+        const slashIdx = info?.tracking?.indexOf('/') ?? -1;
+        const remote = slashIdx > 0 ? info!.tracking!.slice(0, slashIdx) : undefined;
+        const remoteBranch = slashIdx > 0 ? info!.tracking!.slice(slashIdx + 1) : undefined;
+        if (!remote || !remoteBranch) {
           toast.error(`No tracking remote for ${branch}`);
           return;
         }
-        const result = await gitPull(projectId, remote, branch);
+        const result = await gitPull(projectId, remote, remoteBranch);
         if (result.status === 'conflict') {
           toast.error('Pull resulted in conflicts');
         } else if (result.status === 'up-to-date') {
@@ -132,7 +134,10 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   const handlePush = useCallback(
     async (branch: string) => {
       await withBusy(async () => {
-        const result = await gitPush(projectId, branch);
+        const info = branches?.local.find((b) => b.name === branch);
+        const slashIdx = info?.tracking?.indexOf('/') ?? -1;
+        const remote = slashIdx > 0 ? info!.tracking!.slice(0, slashIdx) : undefined;
+        const result = await gitPush(projectId, branch, remote);
         if (result.status === 'rejected') {
           toast.error(`Push rejected: ${result.message}`);
         } else {
@@ -140,7 +145,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
         }
       });
     },
-    [projectId, withBusy],
+    [projectId, branches, withBusy],
   );
 
   const handleMerge = useCallback(

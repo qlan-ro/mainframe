@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ChevronRight, ChevronDown, GitBranch, Star } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 
 interface BranchGroup {
   prefix: string;
@@ -79,7 +80,14 @@ function BranchRow({
       {isMain ? <Star size={12} className="text-mf-warning shrink-0" /> : <GitBranch size={12} className="shrink-0" />}
       <span className="truncate">{displayName}</span>
       {tracking && (
-        <span className="ml-auto shrink-0 text-[10px] text-mf-text-secondary truncate max-w-[120px]">{tracking}</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="ml-auto shrink-0 text-[10px] text-mf-text-secondary truncate max-w-[120px]">
+              {tracking}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{tracking}</TooltipContent>
+        </Tooltip>
       )}
       <ChevronRight size={12} className={cn('shrink-0 text-mf-text-secondary', !tracking && 'ml-auto')} />
     </button>

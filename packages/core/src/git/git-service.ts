@@ -160,8 +160,23 @@ export class GitService {
     return this.withLock(async () => {
       try {
         const currentBranch = branch ?? (await this.git().branch()).current;
-        await this.git().push(remote ?? 'origin', currentBranch);
-        return { status: 'success', branch: currentBranch, remote: remote ?? 'origin' };
+        const pushRemote = remote ?? 'origin';
+
+        // Look up the tracking branch to build a correct refspec when the
+        // local and remote branch names differ.
+        let remoteBranch = currentBranch;
+        try {
+          const upstream = (await this.git().raw(['rev-parse', '--abbrev-ref', `${currentBranch}@{upstream}`])).trim();
+          if (upstream) {
+            const idx = upstream.indexOf('/');
+            if (idx > 0) remoteBranch = upstream.slice(idx + 1);
+          }
+        } catch {
+          // No upstream configured — push local name (may create new remote branch)
+        }
+
+        await this.git().push(pushRemote, `${currentBranch}:${remoteBranch}`);
+        return { status: 'success', branch: currentBranch, remote: pushRemote };
       } catch (err: any) {
         if (err?.message?.includes('non-fast-forward') || err?.message?.includes('rejected')) {
           return { status: 'rejected', message: err.message };

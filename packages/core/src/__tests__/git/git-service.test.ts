@@ -117,12 +117,33 @@ describe('GitService', () => {
   });
 
   describe('push()', () => {
-    it('returns success', async () => {
+    it('returns success with matching local/remote branch', async () => {
       mockGit.push.mockResolvedValue({ pushed: [{}] });
       mockGit.branch.mockResolvedValue({ current: 'main' });
+      mockGit.raw.mockResolvedValue('origin/main\n');
       const svc = GitService.forProject('/fake/path');
       const result = await svc.push();
       expect(result.status).toBe('success');
+      expect(mockGit.push).toHaveBeenCalledWith('origin', 'main:main');
+    });
+
+    it('uses correct refspec when remote branch name differs', async () => {
+      mockGit.push.mockResolvedValue({ pushed: [{}] });
+      mockGit.raw.mockResolvedValue('origin/session/imhoQVRy\n');
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.push('session/imhoQVRy-2');
+      expect(result.status).toBe('success');
+      expect(mockGit.push).toHaveBeenCalledWith('origin', 'session/imhoQVRy-2:session/imhoQVRy');
+    });
+
+    it('falls back to local branch name when no upstream configured', async () => {
+      mockGit.push.mockResolvedValue({ pushed: [{}] });
+      mockGit.branch.mockResolvedValue({ current: 'new-branch' });
+      mockGit.raw.mockRejectedValue(new Error('no upstream'));
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.push();
+      expect(result.status).toBe('success');
+      expect(mockGit.push).toHaveBeenCalledWith('origin', 'new-branch:new-branch');
     });
   });
 
