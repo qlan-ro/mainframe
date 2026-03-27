@@ -178,6 +178,8 @@ Authentication is handled by the Codex CLI itself (`~/.codex/config.toml` or `co
 | `plan` | `on-request` | `workspace-write` |
 | `yolo` | `never` | `danger-full-access` |
 
+Note: `plan` is a session mode, not a distinct permission configuration — it maps to the same Codex settings as `default`. In Claude, `plan` is a CLI-level `--permission-mode` that changes agent behavior (plan before executing). Codex has no equivalent protocol-level plan mode, so from a permissions standpoint we treat it identically to `default`.
+
 ### `JsonRpcClient` (`jsonrpc.ts`)
 
 Thin JSON-RPC 2.0 client over a child process stdio.
