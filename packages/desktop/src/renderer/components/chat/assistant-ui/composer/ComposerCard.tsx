@@ -10,6 +10,7 @@ import { useSkillsStore } from '../../../../store/skills';
 import { useAdaptersStore } from '../../../../store/adapters';
 import { getAdapterOptions, getModelOptions } from '../../../../lib/adapters';
 import { daemonClient } from '../../../../lib/client';
+import { getGitBranch } from '../../../../lib/api';
 import { focusComposerInput } from '../../../../lib/focus';
 import { ContextPickerMenu } from '../../ContextPickerMenu';
 import { ComposerDropdown } from './ComposerDropdown';
@@ -139,6 +140,7 @@ export function ComposerCard() {
   const composerRuntime = useComposerRuntime();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [worktreePopoverOpen, setWorktreePopoverOpen] = useState(false);
+  const [isGitProject, setIsGitProject] = useState(false);
   const captures = useSandboxStore((s) => s.captures);
   const removeCapture = useSandboxStore((s) => s.removeCapture);
 
@@ -160,6 +162,17 @@ export function ComposerCard() {
       useSkillsStore.getState().setPendingInvocation(null);
     }
   }, [pendingInvocation, composerRuntime]);
+
+  useEffect(() => {
+    const projectId = chat?.projectId;
+    if (!projectId) {
+      setIsGitProject(false);
+      return;
+    }
+    getGitBranch(projectId)
+      .then((res) => setIsGitProject(!!res.branch))
+      .catch(() => setIsGitProject(false));
+  }, [chat?.projectId]);
 
   const currentAdapter = chat?.adapterId ?? 'claude';
   const adapterOptions = getAdapterOptions(adapters);
@@ -325,28 +338,30 @@ export function ComposerCard() {
               currentMode === 'yolo' ? 'text-mf-destructive' : currentMode === 'plan' ? 'text-mf-accent' : undefined
             }
           />
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setWorktreePopoverOpen((o) => !o)}
-              className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
-                chat?.worktreePath
-                  ? 'text-mf-accent bg-mf-hover'
-                  : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
-              }`}
-              title={chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
-              aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
-            >
-              <GitBranch size={12} />
-            </button>
-            {worktreePopoverOpen && chatId && (
-              <WorktreePopover
-                chatId={chatId}
-                hasMessages={hasMessages}
-                onClose={() => setWorktreePopoverOpen(false)}
-              />
-            )}
-          </div>
+          {isGitProject && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setWorktreePopoverOpen((o) => !o)}
+                className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
+                  chat?.worktreePath
+                    ? 'text-mf-accent bg-mf-hover'
+                    : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
+                }`}
+                title={chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
+                aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
+              >
+                <GitBranch size={12} />
+              </button>
+              {worktreePopoverOpen && chatId && (
+                <WorktreePopover
+                  chatId={chatId}
+                  hasMessages={hasMessages}
+                  onClose={() => setWorktreePopoverOpen(false)}
+                />
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <StopButton />
