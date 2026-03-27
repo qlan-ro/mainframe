@@ -1,5 +1,15 @@
 # @qlan-ro/mainframe-types
 
+## 0.4.0
+
+### Minor Changes
+
+- [#118](https://github.com/qlan-ro/mainframe/pull/118) [`ab58314`](https://github.com/qlan-ro/mainframe/commit/ab58314573f510ff4566048db028eed3ff29b488) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add base branch selector, custom branch naming, fork-to-worktree, worktree awareness indicators, and worktree-aware launch configurations
+
+### Patch Changes
+
+- [#117](https://github.com/qlan-ro/mainframe/pull/117) [`572a492`](https://github.com/qlan-ro/mainframe/commit/572a4924b4016d395b71b119073959cb6d6985d8) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix push/pull using wrong remote ref when local branch name differs from tracking branch. Group worktree branches into separate collapsible sections in the branch popover. Add tooltip on tracking label for truncated names.
+
 ## 0.3.0
 
 ### Minor Changes
