@@ -110,6 +110,23 @@ export class ChatConfigManager {
     this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
   }
 
+  async attachWorktree(chatId: string, worktreePath: string, branchName: string): Promise<void> {
+    const active = this.deps.getActiveChat(chatId);
+    if (!active) throw new Error(`Chat ${chatId} not found`);
+    if (active.chat.claudeSessionId) throw new Error('Cannot attach worktree after session has started');
+    if (active.chat.worktreePath) return;
+
+    if (active.session?.isSpawned) {
+      await active.session.kill();
+      active.session = null;
+    }
+
+    active.chat.worktreePath = worktreePath;
+    active.chat.branchName = branchName;
+    this.deps.db.chats.update(chatId, { worktreePath, branchName });
+    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+  }
+
   async disableWorktree(chatId: string): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
     if (!active?.chat.worktreePath) return;

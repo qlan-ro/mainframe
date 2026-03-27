@@ -150,6 +150,10 @@ export class ChatManager {
     return this.configManager.enableWorktree(chatId, baseBranch, branchName);
   }
 
+  async attachWorktree(chatId: string, worktreePath: string, branchName: string): Promise<void> {
+    return this.configManager.attachWorktree(chatId, worktreePath, branchName);
+  }
+
   async disableWorktree(chatId: string): Promise<void> {
     return this.configManager.disableWorktree(chatId);
   }

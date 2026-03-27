@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, Loader2 } from 'lucide-react';
 import { useChatsStore } from '../../../../store/chats';
 import { useActiveProjectId } from '../../../../hooks/useActiveProjectId';
-import { getGitBranches, enableWorktree, forkToWorktree } from '../../../../lib/api';
+import {
+  getGitBranches,
+  enableWorktree,
+  forkToWorktree,
+  getProjectWorktrees,
+  attachWorktree,
+} from '../../../../lib/api';
 import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:worktree-popover');
@@ -103,6 +109,8 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
   const [branchName, setBranchName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [tab, setTab] = useState<'existing' | 'new'>('existing');
+  const [worktrees, setWorktrees] = useState<{ path: string; branch: string | null }[]>([]);
 
   const worktreePath = chat?.worktreePath;
 
@@ -117,30 +125,41 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, [onClose]);
 
-  // Fetch branches on mount
+  // Fetch branches (and worktrees for pre-session mode) on mount
   useEffect(() => {
     if (!projectId || worktreePath) return;
     let cancelled = false;
     setLoading(true);
-    getGitBranches(projectId)
-      .then((result) => {
-        if (cancelled) return;
-        const localNames = result.local.map((b) => b.name);
-        setBranches(localNames);
-        setCurrentBranch(result.current);
-        setBaseBranch(result.current || localNames[0] || '');
-        if (!hasMessages) {
-          setBranchName(`session/${chatId.slice(0, 8)}`);
-        }
-      })
+
+    const fetchBranches = getGitBranches(projectId).then((result) => {
+      if (cancelled) return;
+      const localNames = result.local.map((b) => b.name);
+      setBranches(localNames);
+      setCurrentBranch(result.current);
+      setBaseBranch(result.current || localNames[0] || '');
+      if (!hasMessages) {
+        setBranchName(`session/${chatId.slice(0, 8)}`);
+      }
+    });
+
+    const fetchWorktreeList = !hasMessages
+      ? getProjectWorktrees(projectId).then((result) => {
+          if (cancelled) return;
+          setWorktrees(result.worktrees);
+          if (result.worktrees.length === 0) setTab('new');
+        })
+      : Promise.resolve();
+
+    Promise.all([fetchBranches, fetchWorktreeList])
       .catch((err) => {
         if (cancelled) return;
-        log.warn('failed to fetch branches', { err: String(err) });
+        log.warn('failed to fetch branches or worktrees', { err: String(err) });
         setError('Failed to load branches');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
@@ -184,6 +203,24 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
       setSubmitting(false);
     }
   }, [chatId, baseBranch, branchName, setActiveChat, onClose]);
+
+  const handleAttach = useCallback(
+    async (wt: { path: string; branch: string | null }) => {
+      setError(null);
+      setSubmitting(true);
+      try {
+        const branch = wt.branch ? wt.branch.replace('refs/heads/', '') : 'detached';
+        await attachWorktree(chatId, wt.path, branch);
+        onClose();
+      } catch (err) {
+        log.warn('failed to attach worktree', { err: String(err) });
+        setError(err instanceof Error ? err.message : 'Failed to attach worktree');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [chatId, onClose],
+  );
 
   // State 3: Active worktree info
   if (worktreePath) {
@@ -243,53 +280,111 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
         </div>
       )}
 
-      {/* Base branch selector */}
-      <BranchSelect
-        label="Base branch"
-        value={baseBranch}
-        options={branches}
-        currentBranch={currentBranch}
-        onChange={setBaseBranch}
-      />
+      {/* Tab toggle for pre-session mode */}
+      {!isMidSession && (
+        <div className="flex items-center gap-0.5 mb-3 p-0.5 rounded-md bg-mf-input">
+          <button
+            type="button"
+            onClick={() => setTab('existing')}
+            className={`flex-1 text-mf-small px-2 py-0.5 rounded transition-colors ${
+              tab === 'existing'
+                ? 'bg-mf-app-bg text-mf-text-primary shadow-sm'
+                : 'text-mf-text-secondary hover:text-mf-text-primary'
+            }`}
+          >
+            Existing
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('new')}
+            className={`flex-1 text-mf-small px-2 py-0.5 rounded transition-colors ${
+              tab === 'new'
+                ? 'bg-mf-app-bg text-mf-text-primary shadow-sm'
+                : 'text-mf-text-secondary hover:text-mf-text-primary'
+            }`}
+          >
+            New
+          </button>
+        </div>
+      )}
 
-      {/* Branch name input */}
-      <label className="block mb-2">
-        <span className="text-mf-small text-mf-text-secondary mb-1 block">Branch name</span>
-        <input
-          type="text"
-          value={branchName}
-          onChange={(e) => {
-            setBranchName(e.target.value);
-            setError(null);
-          }}
-          placeholder={isMidSession ? 'feature/my-branch' : `session/${chatId.slice(0, 8)}`}
-          className="w-full rounded-mf-input border border-mf-border bg-mf-panel-bg px-2 py-1.5 text-mf-small text-mf-text-primary font-mono outline-none placeholder:text-mf-text-secondary"
-        />
-        {validationError && <span className="text-mf-small text-mf-destructive mt-1 block">{validationError}</span>}
-      </label>
+      {/* Existing worktree list (pre-session only) */}
+      {tab === 'existing' && !isMidSession && (
+        <div className="max-h-48 overflow-y-auto">
+          {worktrees.length === 0 ? (
+            <div className="text-mf-small text-mf-text-secondary text-center py-4">No worktrees found</div>
+          ) : (
+            worktrees.map((wt) => (
+              <button
+                key={wt.path}
+                type="button"
+                disabled={submitting}
+                onClick={() => void handleAttach(wt)}
+                className="w-full text-left px-2 py-2 rounded-mf-input text-mf-small hover:bg-mf-hover transition-colors"
+              >
+                <div className="font-mono text-mf-text-primary">
+                  {wt.branch ? wt.branch.replace('refs/heads/', '') : 'detached'}
+                </div>
+                <div className="text-mf-label text-mf-text-secondary truncate">{wt.path}</div>
+              </button>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Error from API */}
-      {error && !validationError && <div className="text-mf-small text-mf-destructive mb-2">{error}</div>}
+      {error && tab === 'existing' && !isMidSession && (
+        <div className="text-mf-small text-mf-destructive mb-2">{error}</div>
+      )}
 
-      {/* Action buttons */}
-      <div className="flex items-center justify-end gap-2 mt-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="px-3 py-1.5 rounded-mf-input text-mf-small text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={submitting || !!validationError || !branchName}
-          onClick={isMidSession ? handleFork : handleEnable}
-          className="px-3 py-1.5 rounded-mf-input text-mf-small bg-mf-accent text-mf-panel-bg hover:opacity-90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-        >
-          {submitting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-          {isMidSession ? 'Fork' : 'Enable'}
-        </button>
-      </div>
+      {/* New worktree form */}
+      {(tab === 'new' || isMidSession) && (
+        <>
+          <BranchSelect
+            label="Base branch"
+            value={baseBranch}
+            options={branches}
+            currentBranch={currentBranch}
+            onChange={setBaseBranch}
+          />
+
+          <label className="block mb-2">
+            <span className="text-mf-small text-mf-text-secondary mb-1 block">Branch name</span>
+            <input
+              type="text"
+              value={branchName}
+              onChange={(e) => {
+                setBranchName(e.target.value);
+                setError(null);
+              }}
+              placeholder={isMidSession ? 'feature/my-branch' : `session/${chatId.slice(0, 8)}`}
+              className="w-full rounded-mf-input border border-mf-border bg-mf-panel-bg px-2 py-1.5 text-mf-small text-mf-text-primary font-mono outline-none placeholder:text-mf-text-secondary"
+            />
+            {validationError && <span className="text-mf-small text-mf-destructive mt-1 block">{validationError}</span>}
+          </label>
+
+          {error && !validationError && <div className="text-mf-small text-mf-destructive mb-2">{error}</div>}
+
+          <div className="flex items-center justify-end gap-2 mt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-mf-input text-mf-small text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={submitting || !!validationError || !branchName}
+              onClick={isMidSession ? handleFork : handleEnable}
+              className="px-3 py-1.5 rounded-mf-input text-mf-small bg-mf-accent text-mf-panel-bg hover:opacity-90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {submitting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              {isMidSession ? 'Fork' : 'Enable'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
