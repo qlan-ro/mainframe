@@ -163,11 +163,12 @@ interface CodexSessionState {
 
 ```ts
 {
-  CODEX_API_KEY: process.env.CODEX_API_KEY,  // or OPENAI_API_KEY
   FORCE_COLOR: '0',
   NO_COLOR: '1',
 }
 ```
+
+Authentication is handled by the Codex CLI itself (`~/.codex/config.toml` or `codex login`). The app-server inherits the CLI's auth config — Mainframe does not manage API keys.
 
 **Permission mode mapping:**
 
