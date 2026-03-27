@@ -7,6 +7,7 @@ import { registerDefinitionProvider } from './navigation';
 import { useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
+import { updateEditorViewState, updateCursorPosition, clearEditorViewState } from './editor-state';
 
 interface MonacoEditorProps {
   value: string;
@@ -15,6 +16,11 @@ interface MonacoEditorProps {
   filePath?: string;
   line?: number;
   column?: number;
+  /** Opaque Monaco view state for restoring scroll + folds. */
+  viewState?: unknown;
+  /** Cursor position tracked separately — applied after viewState restore. */
+  cursorLine?: number;
+  cursorColumn?: number;
   onChange?: (value: string | undefined) => void;
   onLineComment?: (line: number, lineContent: string, comment: string) => void;
 }
@@ -26,6 +32,9 @@ export function MonacoEditor({
   filePath,
   line,
   column,
+  viewState,
+  cursorLine,
+  cursorColumn,
   onChange,
   onLineComment,
 }: MonacoEditorProps): React.ReactElement {
@@ -54,15 +63,31 @@ export function MonacoEditor({
 
   useEffect(() => () => closeInlineComment(), [closeInlineComment]);
 
-  // Scroll to target position when navigating from references/definitions.
+  // Restore view state (scroll + folds) then override cursor position.
+  // Falls back to line/column positioning for non-view-state navigation (e.g. file tree).
+  const viewStateRef = useRef(viewState);
+  viewStateRef.current = viewState;
+  const cursorLineRef = useRef(cursorLine);
+  cursorLineRef.current = cursorLine;
+  const cursorColumnRef = useRef(cursorColumn);
+  cursorColumnRef.current = cursorColumn;
+
   useEffect(() => {
-    if (!line || !editorRef.current) return;
     const editor = editorRef.current;
-    editor.revealLineInCenter(line);
-    editor.setPosition({ lineNumber: line, column: column ?? 1 });
-    // Focus so the caret is visible — this is an intentional navigation action.
-    setTimeout(() => editor.focus(), 50);
-  }, [line, column]);
+    if (!editor) return;
+    if (viewState) {
+      editor.restoreViewState(viewState as monacoType.editor.ICodeEditorViewState);
+      // Override cursor — viewState's cursor is the click target, not where user was.
+      if (cursorLine) {
+        editor.setPosition({ lineNumber: cursorLine, column: cursorColumn ?? 1 });
+      }
+      setTimeout(() => editor.focus(), 50);
+    } else if (line) {
+      editor.revealLineInCenter(line);
+      editor.setPosition({ lineNumber: line, column: column ?? 1 });
+      setTimeout(() => editor.focus(), 50);
+    }
+  }, [viewState, cursorLine, cursorColumn, line, column]);
 
   // Sync external value changes into the Monaco model (e.g. agent edits).
   // The `path` prop makes @monaco-editor/react ignore `value` after initial mount.
@@ -81,12 +106,35 @@ export function MonacoEditor({
   const columnRef = useRef(column);
   columnRef.current = column;
 
+  // Clear view state tracking on unmount.
+  useEffect(() => {
+    return () => clearEditorViewState();
+  }, []);
+
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
 
-      // Scroll to target position on mount (from Go To Definition / References).
-      if (lineRef.current) {
+      // Track view state (scroll + folds) and cursor position separately.
+      const snapshotViewState = () => updateEditorViewState(editor.saveViewState());
+      snapshotViewState();
+      editor.onDidScrollChange(snapshotViewState);
+      editor.onDidChangeCursorPosition((e) => {
+        snapshotViewState();
+        updateCursorPosition({ line: e.position.lineNumber, column: e.position.column });
+      });
+      // Seed cursor position
+      const pos = editor.getPosition();
+      if (pos) updateCursorPosition({ line: pos.lineNumber, column: pos.column });
+
+      // Restore view state + cursor override, or fall back to line/column on mount.
+      if (viewStateRef.current) {
+        editor.restoreViewState(viewStateRef.current as monacoType.editor.ICodeEditorViewState);
+        if (cursorLineRef.current) {
+          editor.setPosition({ lineNumber: cursorLineRef.current, column: cursorColumnRef.current ?? 1 });
+        }
+        setTimeout(() => editor.focus(), 50);
+      } else if (lineRef.current) {
         editor.revealLineInCenter(lineRef.current);
         editor.setPosition({ lineNumber: lineRef.current, column: columnRef.current ?? 1 });
         setTimeout(() => editor.focus(), 50);
