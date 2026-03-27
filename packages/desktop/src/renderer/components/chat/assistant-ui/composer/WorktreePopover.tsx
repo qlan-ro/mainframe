@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Loader2 } from 'lucide-react';
 import { useChatsStore } from '../../../../store/chats';
 import { useActiveProjectId } from '../../../../hooks/useActiveProjectId';
 import { getGitBranches, enableWorktree, forkToWorktree } from '../../../../lib/api';
@@ -14,6 +14,73 @@ function validateBranchName(name: string): string | null {
   if (!BRANCH_RE.test(name)) return 'Invalid characters in branch name';
   if (name.includes('..')) return 'Branch name must not contain ".."';
   return null;
+}
+
+function BranchSelect({
+  label,
+  value,
+  options,
+  currentBranch,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  currentBranch: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return (
+    <div className="block mb-2">
+      <span className="text-mf-small text-mf-text-secondary mb-1 block">{label}</span>
+      <div className="relative" ref={ref}>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="w-full flex items-center justify-between rounded-mf-input border border-mf-border bg-mf-panel-bg px-2 py-1.5 text-mf-small text-mf-text-primary outline-none hover:border-mf-accent cursor-pointer transition-colors"
+        >
+          <span className="truncate">
+            {value}
+            {value === currentBranch ? ' (current)' : ''}
+          </span>
+          <ChevronDown size={12} className="shrink-0 text-mf-text-secondary" />
+        </button>
+        {open && (
+          <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-mf-app-bg border border-mf-border rounded-mf-input shadow-lg z-50">
+            {options.map((b) => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => {
+                  onChange(b);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-2 py-1.5 text-mf-small transition-colors ${
+                  b === value
+                    ? 'text-mf-text-primary bg-mf-hover'
+                    : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
+                }`}
+              >
+                {b}
+                {b === currentBranch ? ' (current)' : ''}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 interface WorktreePopoverProps {
@@ -177,21 +244,13 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
       )}
 
       {/* Base branch selector */}
-      <label className="block mb-2">
-        <span className="text-mf-small text-mf-text-secondary mb-1 block">Base branch</span>
-        <select
-          value={baseBranch}
-          onChange={(e) => setBaseBranch(e.target.value)}
-          className="w-full rounded-mf-input border border-mf-border bg-mf-panel-bg px-2 py-1.5 text-mf-small text-mf-text-primary focus:outline-none focus:border-mf-accent"
-        >
-          {branches.map((b) => (
-            <option key={b} value={b}>
-              {b}
-              {b === currentBranch ? ' (current)' : ''}
-            </option>
-          ))}
-        </select>
-      </label>
+      <BranchSelect
+        label="Base branch"
+        value={baseBranch}
+        options={branches}
+        currentBranch={currentBranch}
+        onChange={setBaseBranch}
+      />
 
       {/* Branch name input */}
       <label className="block mb-2">
@@ -204,7 +263,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
             setError(null);
           }}
           placeholder={isMidSession ? 'feature/my-branch' : `session/${chatId.slice(0, 8)}`}
-          className="w-full rounded-mf-input border border-mf-border bg-mf-panel-bg px-2 py-1.5 text-mf-small text-mf-text-primary font-mono focus:outline-none focus:border-mf-accent placeholder:text-mf-text-secondary"
+          className="w-full rounded-mf-input border border-mf-border bg-mf-panel-bg px-2 py-1.5 text-mf-small text-mf-text-primary font-mono outline-none placeholder:text-mf-text-secondary"
         />
         {validationError && <span className="text-mf-small text-mf-destructive mt-1 block">{validationError}</span>}
       </label>
