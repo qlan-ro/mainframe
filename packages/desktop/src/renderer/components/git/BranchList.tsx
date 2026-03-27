@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown, FolderGit2, GitBranch, Star } from 'lucide-react';
+import { ChevronRight, ChevronDown, GitBranch, Star } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -154,7 +154,6 @@ function WorktreeSection({
         className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider"
       >
         {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-        <FolderGit2 size={10} className="shrink-0" />
         {name}
       </button>
       {expanded &&
@@ -208,38 +207,46 @@ export function BranchList({
     return worktrees.filter((w) => map.has(w)).map((w) => ({ name: w, branches: map.get(w)! }));
   }, [local, worktrees, search]);
 
+  const [localExpanded, setLocalExpanded] = useState(true);
   const [remoteExpanded, setRemoteExpanded] = useState(false);
 
   return (
     <div className="max-h-60 overflow-y-auto">
       {/* Local branches */}
-      <div className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider">
-        <GitBranch size={10} className="shrink-0" />
+      <button
+        onClick={() => setLocalExpanded(!localExpanded)}
+        className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider"
+      >
+        {localExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
         Local Branches
-      </div>
+      </button>
 
-      {/* Ungrouped (including main/master) */}
-      {ungrouped.map((b) => (
-        <BranchRow
-          key={b.name}
-          name={b.name}
-          isCurrent={b.name === currentBranch}
-          isMain={MAIN_BRANCHES.has(b.name)}
-          tracking={b.tracking}
-          onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
-        />
-      ))}
+      {localExpanded && (
+        <>
+          {/* Ungrouped (including main/master) */}
+          {ungrouped.map((b) => (
+            <BranchRow
+              key={b.name}
+              name={b.name}
+              isCurrent={b.name === currentBranch}
+              isMain={MAIN_BRANCHES.has(b.name)}
+              tracking={b.tracking}
+              onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
+            />
+          ))}
 
-      {/* Grouped */}
-      {groups.map((g) => (
-        <GroupSection
-          key={g.prefix}
-          prefix={g.prefix}
-          branches={g.branches}
-          currentBranch={currentBranch}
-          onSelectBranch={onSelectBranch}
-        />
-      ))}
+          {/* Grouped */}
+          {groups.map((g) => (
+            <GroupSection
+              key={g.prefix}
+              prefix={g.prefix}
+              branches={g.branches}
+              currentBranch={currentBranch}
+              onSelectBranch={onSelectBranch}
+            />
+          ))}
+        </>
+      )}
 
       {mainBranches.length === 0 && worktreeGroups.length === 0 && (
         <div className="px-3 py-2 text-xs text-mf-text-secondary">No matching branches</div>
