@@ -18,19 +18,29 @@ function EditorFallback(): React.ReactElement {
   );
 }
 
-function renderEditorView(filePath: string, content?: string, line?: number, column?: number): React.ReactElement {
-  const viewerType = getFileViewerType(filePath);
+interface EditorViewProps {
+  filePath: string;
+  content?: string;
+  line?: number;
+  column?: number;
+  viewState?: unknown;
+  cursorLine?: number;
+  cursorColumn?: number;
+}
+
+function renderEditorView(props: EditorViewProps): React.ReactElement {
+  const viewerType = getFileViewerType(props.filePath);
   switch (viewerType) {
     case 'image':
-      return <ImageViewer filePath={filePath} />;
+      return <ImageViewer filePath={props.filePath} />;
     case 'svg':
-      return <SvgViewer filePath={filePath} />;
+      return <SvgViewer filePath={props.filePath} />;
     case 'pdf':
-      return <PdfViewer filePath={filePath} />;
+      return <PdfViewer filePath={props.filePath} />;
     case 'csv':
-      return <CsvViewer filePath={filePath} />;
+      return <CsvViewer filePath={props.filePath} />;
     case 'monaco':
-      return <EditorTab filePath={filePath} content={content} line={line} column={column} />;
+      return <EditorTab {...props} />;
   }
 }
 
@@ -41,7 +51,15 @@ export function FileViewContent(): React.ReactElement | null {
   return (
     <Suspense fallback={<EditorFallback />}>
       {fileView.type === 'editor' &&
-        renderEditorView(fileView.filePath, fileView.content, fileView.line, fileView.column)}
+        renderEditorView({
+          filePath: fileView.filePath,
+          content: fileView.content,
+          line: fileView.line,
+          column: fileView.column,
+          viewState: fileView.viewState,
+          cursorLine: fileView.cursorLine,
+          cursorColumn: fileView.cursorColumn,
+        })}
       {fileView.type === 'diff' && (
         <DiffTab
           filePath={fileView.filePath}
