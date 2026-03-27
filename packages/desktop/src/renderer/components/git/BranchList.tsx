@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown, GitBranch, GitFork, Star } from 'lucide-react';
+import { ChevronRight, ChevronDown, FolderGit2, GitBranch, Star } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -154,7 +154,7 @@ function WorktreeSection({
         className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider"
       >
         {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-        <GitFork size={10} className="shrink-0" />
+        <FolderGit2 size={10} className="shrink-0" />
         {name}
       </button>
       {expanded &&
@@ -213,7 +213,8 @@ export function BranchList({
   return (
     <div className="max-h-60 overflow-y-auto">
       {/* Local branches */}
-      <div className="px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider">
+      <div className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider">
+        <GitBranch size={10} className="shrink-0" />
         Local Branches
       </div>
 
