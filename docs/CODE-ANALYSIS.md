@@ -505,3 +505,36 @@ Event routers, chat stores, and init hooks are structurally duplicated between d
 - **`packages/mobile/package.json:39`** — Mobile uses Tailwind v3 (`^3.4.19`), desktop uses v4 (`^4.2.2`). **Fix:** Evaluate upgrade when nativewind supports v4.
 
 - **`packages/core/src/config.ts:55`** — Empty catch on JSON parse. **Fix:** Add `logger.warn`.
+
+---
+
+## Previous Tech Debt (from 2026-02-15 report)
+
+Items from the previous `TECH-DEBT-REPORT.md` that are still open or have regressed.
+
+### Regressions (previously resolved, now reappeared)
+
+| Item | Feb 2026 Status | Current Status |
+|------|----------------|----------------|
+| **Silent `.catch(() => {})`** | "1 remaining" | 8+ instances in core and mobile |
+| **Files > 300 lines** | "4 files (339, 313, 307, 301)" | 16 files exceed limit (worst: 592) |
+| **Sync I/O in routes** | "All converted to async" | Back in `path-utils.ts`, `worktree.ts`, `session.ts`, `manager.ts`, `config.ts` |
+| **`noUncheckedIndexedAccess`** | "Enabled with all type errors fixed" | Disabled in `packages/core/tsconfig.json` |
+
+### Never Resolved
+
+#### 1. Desktop React Component Tests
+Store tests (165) and core tests (332) provide good coverage. Desktop React component tests with `@testing-library/react` require jsdom DOM mocking for Electron which is fragile.
+
+**Recommendation:** Implement E2E tests with Playwright as a separate initiative.
+
+#### 2. Test Coverage Gaps
+
+| Module | Coverage (Feb 2026) | Priority |
+|--------|---------------------|----------|
+| `src/attachment/` | 0% | High |
+| `src/workspace/` | 0% | Medium |
+| `src/adapters/` | ~28% | Medium |
+
+#### 3. Large React Components (93 function-size violations)
+`SearchPalette` (229 lines), `MainframeRuntimeProvider` (334), `AtMentionMenu` (173), `ChangesTab` (173), `AskUserQuestionCard` (164), `ComposerCard` (377), `PlanApprovalCard` (157), `MonacoEditor` (148). Several of these have grown since the original report.
