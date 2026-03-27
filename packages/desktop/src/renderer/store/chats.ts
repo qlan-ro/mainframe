@@ -6,12 +6,14 @@ export type SessionStatus = 'idle' | 'working' | 'waiting';
 interface ChatsState {
   chats: Chat[];
   activeChatId: string | null;
+  filterProjectId: string | null;
   messages: Map<string, DisplayMessage[]>;
   pendingPermissions: Map<string, ControlRequest>;
   processes: Map<string, AdapterProcess>;
 
   setChats: (chats: Chat[]) => void;
   setActiveChat: (id: string | null) => void;
+  setFilterProjectId: (id: string | null) => void;
   addChat: (chat: Chat) => void;
   updateChat: (chat: Chat) => void;
   removeChat: (id: string) => void;
@@ -28,11 +30,20 @@ interface ChatsState {
 export const useChatsStore = create<ChatsState>((set) => ({
   chats: [],
   activeChatId: null,
+  filterProjectId: localStorage.getItem('mf:filterProjectId'),
   messages: new Map(),
   pendingPermissions: new Map(),
   processes: new Map(),
 
   setChats: (chats) => set({ chats }),
+  setFilterProjectId: (id) => {
+    if (id) {
+      localStorage.setItem('mf:filterProjectId', id);
+    } else {
+      localStorage.removeItem('mf:filterProjectId');
+    }
+    set({ filterProjectId: id });
+  },
   setActiveChat: (id) => {
     if (id) {
       localStorage.setItem('mf:activeChatId', id);

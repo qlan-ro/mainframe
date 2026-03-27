@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { getEditorViewStateForNav, getCursorPositionForNav } from '../components/editor/editor-state';
 import { useUIStore } from './ui';
+import { useChatsStore } from './chats';
 
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
 
@@ -255,3 +256,26 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
   clearRevealPath: () => set({ revealPath: null }),
 }));
+
+/** Close file view when the active project changes (e.g. switching chats across projects). */
+function deriveProjectId(state: {
+  activeChatId: string | null;
+  chats: { id: string; projectId: string }[];
+}): string | null {
+  if (!state.activeChatId) return null;
+  return state.chats.find((c) => c.id === state.activeChatId)?.projectId ?? null;
+}
+
+let lastProjectId: string | null = null;
+useChatsStore.subscribe((state, prev) => {
+  if (state.activeChatId === prev.activeChatId && state.chats === prev.chats) return;
+  const projectId = deriveProjectId(state);
+  if (projectId !== lastProjectId) {
+    if (lastProjectId !== null) {
+      useTabsStore.getState().closeFileView();
+      navBackStack.length = 0;
+      navForwardStack.length = 0;
+    }
+    lastProjectId = projectId;
+  }
+});

@@ -55,6 +55,7 @@ function resetStore(): void {
   useChatsStore.setState({
     chats: [],
     activeChatId: null,
+    filterProjectId: null,
     messages: new Map(),
     pendingPermissions: new Map(),
     processes: new Map(),
@@ -85,6 +86,30 @@ describe('useChatsStore', () => {
 
     it('starts with empty processes map', () => {
       expect(useChatsStore.getState().processes.size).toBe(0);
+    });
+
+    it('starts with null filterProjectId', () => {
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
+    });
+  });
+
+  describe('setFilterProjectId', () => {
+    it('sets the filter project id', () => {
+      useChatsStore.getState().setFilterProjectId('proj-1');
+      expect(useChatsStore.getState().filterProjectId).toBe('proj-1');
+    });
+
+    it('clears the filter project id with null', () => {
+      useChatsStore.getState().setFilterProjectId('proj-1');
+      useChatsStore.getState().setFilterProjectId(null);
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
+    });
+
+    it('persists across store reads (survives component unmount)', () => {
+      useChatsStore.getState().setFilterProjectId('proj-2');
+      // Simulate what happens when ChatsPanel remounts: read from store
+      const retrieved = useChatsStore.getState().filterProjectId;
+      expect(retrieved).toBe('proj-2');
     });
   });
 
