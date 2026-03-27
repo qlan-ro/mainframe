@@ -40,7 +40,6 @@ Builtin adapter plugin for the OpenAI Codex CLI, using the `codex app-server` JS
 - `turn/diff/updated` — cumulative git diff of changes per turn. Related to our file change tracking / `context.updated` event. Could power a "changes this turn" diff view.
 - `turn/plan/updated` — structured plan/todo data from the agent. Related to our Plans panel. Could feed structured plan state directly.
 - `sendCommand()` — needs investigation into Codex skills/apps as potential equivalents to Claude slash commands
-- `plan` mode — needs investigation into whether Codex has an equivalent session mode to Claude's `--permission-mode plan`
 
 `thread/compacted` is wired to `sink.onCompact()` since we already support it.
 
@@ -173,12 +172,13 @@ Authentication is handled by the Codex CLI itself (`~/.codex/config.toml` or `co
 
 **Permission mode mapping:**
 
-| Mainframe | `approvalPolicy` | `sandbox` |
-|-----------|-------------------|-----------|
-| `default` | `on-request` | `workspace-write` |
-| `yolo` | `never` | `danger-full-access` |
+| Mainframe | `approvalPolicy` | `sandbox` | `collaborationMode` |
+|-----------|-------------------|-----------|---------------------|
+| `default` | `on-request` | `workspace-write` | `{ mode: 'default', settings: { ... } }` |
+| `plan` | `on-request` | `workspace-write` | `{ mode: 'plan', settings: { ... } }` |
+| `yolo` | `never` | `danger-full-access` | `{ mode: 'default', settings: { ... } }` |
 
-`plan` mode is not supported in v1. It's a Claude-specific session mode (`--permission-mode plan`) with no Codex protocol equivalent. If selected, the adapter should reject or fall through to `default` with a warning log. Added to deferred list for investigation.
+Note: `plan` is a session/collaboration mode, not a permission mode. In Codex it maps to a separate `collaborationMode` field on `TurnStartParams` (orthogonal to `approvalPolicy` and `sandbox`). The `collaborationMode` is passed on `turn/start` and is sticky for subsequent turns. Setting `developer_instructions: null` in the settings uses Codex's built-in plan mode system prompt.
 
 ### `JsonRpcClient` (`jsonrpc.ts`)
 
@@ -349,6 +349,8 @@ Hand-written subset:
 **Config:**
 - `ApprovalPolicy = 'never' | 'on-request' | 'untrusted'`
 - `SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'`
+- `CollaborationMode = { mode: 'plan' | 'default', settings: CollaborationModeSettings }`
+- `CollaborationModeSettings = { model: string, reasoning_effort?: string | null, developer_instructions?: string | null }`
 - `ModelInfo = { id: string, name?: string }`
 - `ModelListResult = { models: ModelInfo[] }`
 
