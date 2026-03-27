@@ -162,7 +162,6 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                 <TooltipTrigger asChild>
                   <IconButton
                     icon={<Download size={12} className={busyAction === 'fetch' ? 'animate-spin' : ''} />}
-                    title="Fetch"
                     onClick={actions.handleFetch}
                     disabled={busy}
                   />
@@ -269,7 +268,7 @@ function IconButton({
   disabled,
 }: {
   icon: React.ReactNode;
-  title: string;
+  title?: string;
   onClick: () => void;
   disabled: boolean;
 }): React.ReactElement {
