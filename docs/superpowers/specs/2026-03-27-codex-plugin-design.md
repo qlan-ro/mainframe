@@ -39,6 +39,7 @@ Builtin adapter plugin for the OpenAI Codex CLI, using the `codex app-server` JS
 - `thread/compact/start` (trigger compaction)
 - `turn/diff/updated` — cumulative git diff of changes per turn. Related to our file change tracking / `context.updated` event. Could power a "changes this turn" diff view.
 - `turn/plan/updated` — structured plan/todo data from the agent. Related to our Plans panel. Could feed structured plan state directly.
+- `sendCommand()` — needs investigation into Codex skills/apps as potential equivalents to Claude slash commands
 
 `thread/compacted` is wired to `sink.onCompact()` since we already support it.
 
@@ -152,11 +153,11 @@ interface CodexSessionState {
 
 6. `setModel(model)` — stores model, applied on next `turn/start`
 
-7. `setPermissionMode(mode)` — stores mode, applied on next `thread/start`
+7. `setPermissionMode(mode)` — stores mode, applied on next `turn/start` (the `approvalPolicy` and `sandboxPolicy` fields on `turn/start` override for that turn and all subsequent turns)
 
 8. `loadHistory()` — spawns temporary app-server, `thread/read` with `includeTurns: true`, converts via `history.ts`, closes server
 
-9. `sendCommand()` — no-op for v1 (Codex has no equivalent slash command protocol)
+9. `sendCommand()` — no-op for v1 (needs investigation — Codex may have equivalent functionality via skills or apps)
 
 **Process env:**
 
