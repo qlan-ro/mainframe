@@ -504,8 +504,6 @@ starting → ready → running → stopped
 | `chat.end` | `{ chatId }` | End chat session |
 | `chat.updateConfig` | `{ chatId, adapterId?, model?, permissionMode? }` | Change chat settings |
 | `chat.interrupt` | `{ chatId }` | Send SIGINT to CLI |
-| `chat.enableWorktree` | `{ chatId }` | Create git worktree |
-| `chat.disableWorktree` | `{ chatId }` | Remove git worktree |
 | `message.send` | `{ chatId, content, attachmentIds? }` | Send user message |
 | `permission.respond` | `{ chatId, response }` | Approve/deny permission |
 | `subscribe` | `{ chatId }` | Subscribe to chat events |

@@ -115,7 +115,8 @@ export function useProject(projectId: string | null) {
 
     const syncLaunchStatuses = async () => {
       try {
-        const { statuses } = await fetchLaunchStatuses(projectId);
+        const activeChatId = useChatsStore.getState().activeChatId ?? undefined;
+        const { statuses } = await fetchLaunchStatuses(projectId, activeChatId);
         const { setProcessStatus } = useSandboxStore.getState();
         for (const [name, status] of Object.entries(statuses)) {
           setProcessStatus(projectId, name, status as LaunchProcessStatus);

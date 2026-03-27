@@ -4,8 +4,10 @@ import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';
 import { removeWorktree } from '../workspace/index.js';
 import { existsSync } from 'node:fs';
-import { execFile } from 'node:child_process';
+import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFileCb);
 import { createChildLogger } from '../logger.js';
 import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
@@ -167,8 +169,7 @@ export class ChatLifecycleManager {
   }
 
   private async isWorkingTreeDirty(projectPath: string): Promise<boolean> {
-    const exec = promisify(execFile);
-    const { stdout } = await exec('git', ['status', '--porcelain'], {
+    const { stdout } = await execFileAsync('git', ['status', '--porcelain'], {
       cwd: projectPath,
       encoding: 'utf-8',
     });
