@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Download, Loader2, Plus, RefreshCw, Search, Upload } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
 import { BranchList } from './BranchList';
 import { BranchSubmenu } from './BranchSubmenu';
@@ -157,13 +158,17 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                   className="flex-1 bg-transparent text-xs text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none"
                 />
               </div>
-              <IconButton
-                icon={<Download size={12} className={busyAction === 'fetch' ? 'animate-spin' : ''} />}
-                title="Fetch"
-                onClick={actions.handleFetch}
-                disabled={busy}
-              />
-              <IconButton icon={<Upload size={12} />} title="Push" onClick={handleGlobalPush} disabled={busy} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <IconButton
+                    icon={<Download size={12} className={busyAction === 'fetch' ? 'animate-spin' : ''} />}
+                    title="Fetch"
+                    onClick={actions.handleFetch}
+                    disabled={busy}
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Fetch from all remotes</TooltipContent>
+              </Tooltip>
             </div>
 
             {/* Quick actions */}
@@ -188,6 +193,17 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
               >
                 <RefreshCw size={12} className={busyAction === 'updateAll' ? 'animate-spin' : ''} />
                 <span>Update All</span>
+              </button>
+              <button
+                onClick={handleGlobalPush}
+                disabled={busy}
+                className={cn(
+                  'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-primary hover:bg-mf-hover',
+                  busy && 'opacity-40 cursor-not-allowed',
+                )}
+              >
+                <Upload size={12} />
+                <span>Push</span>
               </button>
             </div>
 
