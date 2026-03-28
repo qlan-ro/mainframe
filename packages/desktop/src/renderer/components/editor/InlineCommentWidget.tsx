@@ -40,7 +40,7 @@ export function InlineCommentWidget({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSubmit();
           }
@@ -50,9 +50,7 @@ export function InlineCommentWidget({
         className="w-full h-[54px] resize-none bg-mf-input-bg border border-mf-divider rounded-md px-3 py-2 text-[13px] font-mono text-mf-text-primary focus:outline-none focus:border-mf-accent/50"
       />
       <div className="flex items-center justify-between mt-1">
-        <span className="text-[11px] text-mf-text-secondary opacity-40">
-          {navigator.platform.includes('Mac') ? '\u2318' : 'Ctrl'}+Enter to send
-        </span>
+        <span className="text-[11px] text-mf-text-secondary opacity-40">Enter to send · Shift+Enter for newline</span>
         <button
           onClick={handleSubmit}
           disabled={!text.trim()}
