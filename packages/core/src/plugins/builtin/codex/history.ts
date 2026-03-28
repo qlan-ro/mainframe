@@ -13,7 +13,11 @@ export function convertThreadItems(items: ThreadItem[], chatId: string): ChatMes
         break;
 
       case 'reasoning':
-        messages.push(makeMessage(chatId, 'assistant', [{ type: 'thinking', thinking: item.text }]));
+        messages.push(
+          makeMessage(chatId, 'assistant', [
+            { type: 'thinking', thinking: item.summary.join('\n') || item.content.join('\n') },
+          ]),
+        );
         break;
 
       case 'commandExecution':
@@ -32,8 +36,8 @@ export function convertThreadItems(items: ThreadItem[], chatId: string): ChatMes
             {
               type: 'tool_result',
               toolUseId: item.id,
-              content: item.aggregated_output,
-              isError: (item.exit_code ?? 0) !== 0,
+              content: item.aggregatedOutput,
+              isError: (item.exitCode ?? 0) !== 0,
             },
           ]),
         );
@@ -78,7 +82,11 @@ export function convertThreadItems(items: ThreadItem[], chatId: string): ChatMes
             {
               type: 'tool_result',
               toolUseId: item.id,
-              content: item.result ?? item.error ?? '',
+              content: item.error
+                ? typeof item.error === 'string'
+                  ? item.error
+                  : ((item.error as unknown as { message: string }).message ?? '')
+                : JSON.stringify(item.result?.content ?? ''),
               isError: !!item.error,
             },
           ]),
