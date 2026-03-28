@@ -225,9 +225,6 @@ app.whenReady().then(() => {
     callback(ALLOWED_PERMISSIONS.has(permission));
   };
   session.defaultSession.setPermissionRequestHandler(denyUnneededPermissions);
-  // The sandbox webview uses a persistent partition for session/cookie persistence
-  // across app restarts. Apply the same permission restrictions.
-  session.fromPartition('persist:sandbox').setPermissionRequestHandler(denyUnneededPermissions);
 
   setupIPC();
   startDaemon();
@@ -238,8 +235,18 @@ app.whenReady().then(() => {
 
   createWindow();
 
+  const configuredPartitions = new Set<string>();
   app.on('web-contents-created', (_event, contents) => {
     if (contents.getType() !== 'webview') return;
+
+    // Each project gets its own persist:sandbox-{id} partition.
+    // Apply permission restrictions on first encounter.
+    const partition = contents.session.storagePath;
+    const partitionId = partition ?? '';
+    if (!configuredPartitions.has(partitionId)) {
+      configuredPartitions.add(partitionId);
+      contents.session.setPermissionRequestHandler(denyUnneededPermissions);
+    }
 
     // Allow all navigations inside webviews — the sandbox loads user dev servers
     // that legitimately redirect cross-origin (OAuth flows, SSO, etc.).

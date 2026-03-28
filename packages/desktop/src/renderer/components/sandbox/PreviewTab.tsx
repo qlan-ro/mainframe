@@ -490,7 +490,7 @@ export function PreviewTab(): React.ReactElement {
                 <webview
                   ref={webviewRef}
                   src="about:blank"
-                  partition="persist:sandbox"
+                  partition={`persist:sandbox-${activeProjectId}`}
                   className={
                     webviewReady ? (mobileView ? 'h-full rounded border border-mf-border' : 'w-full h-full') : ''
                   }
