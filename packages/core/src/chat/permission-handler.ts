@@ -70,9 +70,6 @@ export class ChatPermissionHandler {
   }
 
   async getPendingPermission(chatId: string): Promise<ControlRequest | null> {
-    const chat = this.deps.getChat(chatId);
-    if (chat?.permissionMode === 'yolo') return null;
-
     if (!this.deps.permissions.hasPending(chatId)) {
       await this.deps.getMessages(chatId);
     }
@@ -129,6 +126,9 @@ export class ChatPermissionHandler {
     if (nextRequest) {
       this.deps.emitEvent({ type: 'permission.requested', chatId, request: nextRequest });
     }
+
+    // Emit chat.updated so displayStatus reflects the new permission state
+    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
 
     if (response.behavior === 'allow' && response.toolName === 'ExitPlanMode') {
       await this.deps.planMode.handleEscalation(chatId, active, response);
