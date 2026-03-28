@@ -16,6 +16,7 @@ export class DaemonClient {
   private intentionalClose = false;
   private pendingMessages: ClientEvent[] = [];
   private connectionListeners = new Set<() => void>();
+  readonly visitedChats = new Set<string>();
 
   get connected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
@@ -47,6 +48,7 @@ export class DaemonClient {
       log.info('connected');
       this.reconnectAttempts = 0;
       this.flushPendingMessages();
+      this.resubscribeVisitedChats();
       this.notifyConnectionListeners();
     };
 
@@ -123,6 +125,12 @@ export class DaemonClient {
     }
   }
 
+  private resubscribeVisitedChats(): void {
+    for (const chatId of this.visitedChats) {
+      this.send({ type: 'subscribe', chatId });
+    }
+  }
+
   // WebSocket commands
   createChat(
     projectId: string,
@@ -145,6 +153,7 @@ export class DaemonClient {
   }
 
   resumeChat(chatId: string): void {
+    this.visitedChats.add(chatId);
     this.send({ type: 'chat.resume', chatId });
     log.debug('resumeChat', { chatId });
   }
@@ -184,6 +193,7 @@ export class DaemonClient {
   }
 
   unsubscribe(chatId: string): void {
+    this.visitedChats.delete(chatId);
     this.send({ type: 'unsubscribe', chatId });
   }
 }
