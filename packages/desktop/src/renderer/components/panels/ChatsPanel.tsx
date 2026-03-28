@@ -183,12 +183,16 @@ export function ChatsPanel(): React.ReactElement {
 
   const handleNewSessionClick = useCallback(() => {
     if (projects.length === 0) return;
+    if (filterProjectId) {
+      daemonClient.createChat(filterProjectId, 'claude');
+      return;
+    }
     if (projects.length === 1) {
       daemonClient.createChat(projects[0]!.id, 'claude');
       return;
     }
     setShowNewSessionPopover((prev) => !prev);
-  }, [projects]);
+  }, [projects, filterProjectId]);
 
   const handleNewSessionInProject = useCallback((projectId: string) => {
     daemonClient.createChat(projectId, 'claude');
