@@ -1,0 +1,11 @@
+{
+  "id": "codex",
+  "name": "Codex",
+  "version": "1.0.0",
+  "description": "OpenAI Codex adapter via app-server protocol",
+  "capabilities": ["adapters", "process:exec"],
+  "adapter": {
+    "binaryName": "codex",
+    "displayName": "Codex"
+  }
+}
