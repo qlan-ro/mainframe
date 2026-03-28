@@ -191,6 +191,11 @@ export class ClaudeSession implements AdapterSession {
       request: { subtype: 'interrupt' },
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
+    // Also send SIGINT: the CLI's stdin message loop blocks while background
+    // agents are running (agent-wait loop), so the protocol interrupt above
+    // may sit unread in the buffer. SIGINT triggers the CLI's signal handler
+    // which calls abort() on the current turn's AbortController directly.
+    child.kill('SIGINT');
   }
 
   async setPermissionMode(mode: string): Promise<void> {

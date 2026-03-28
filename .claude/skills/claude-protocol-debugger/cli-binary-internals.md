@@ -139,6 +139,36 @@ The `result` event variable `J` is set during API turn processing but **not imme
 
 The REPL bridge handles interrupts via a separate WebSocket message handler that runs concurrently with the message loop. The `onInterrupt` callback can fire at any time, calling `X?.abort()` even while the agent wait loop is running. Only the stdio path has this blocking issue.
 
+### Terminal Escape is NOT Affected
+
+The Ink terminal UI handles Escape via a keypress listener (`sK8` function) that calls `onCancel` (`PYH`), which calls `ZT?.abort("user-cancel")` directly on the AbortController — an in-process call that bypasses the message loop entirely.
+
+### SIGINT Workaround
+
+The print-mode message loop runner (`DvK`) registers a SIGINT handler:
+
+```js
+let G = () => {
+    i_("info", "shutdown_signal", { signal: "SIGINT" });
+    if (X && !X.signal.aborted) X.abort();
+    W9(0);  // process.exit(0) with cleanup
+};
+process.on("SIGINT", G);
+```
+
+This calls `X.abort()` on the current turn's AbortController — same effect as Escape — then exits. Since SIGINT is delivered as an OS signal, it fires even while the agent-wait loop blocks the message loop.
+
+**Mainframe fix:** Send `child.kill('SIGINT')` in addition to the stdin `control_request` interrupt. The stdin path handles normal cases; SIGINT is the fallback for the blocked-by-agents case. The CLI exits after SIGINT, which the daemon handles as a normal session end.
+
+### Three Interrupt Paths Summary
+
+| Path | Mechanism | Blocked by agent-wait? | Process survives? |
+|------|-----------|----------------------|-------------------|
+| Terminal (Escape) | `ZT?.abort("user-cancel")` in Ink keypress | No — in-process | Yes |
+| WebSocket bridge | `onInterrupt` callback via WS | No — async handler | Yes |
+| Stdio (Mainframe) | `control_request` on stdin | **Yes** — loop blocked | Yes (if read) |
+| SIGINT (workaround) | OS signal → `X.abort()` | **No** — signal handler | No (exits) |
+
 ## Abort Controller Chain
 
 ```
@@ -174,6 +204,11 @@ These appear in the binary and are stable across versions (search by these, not 
 | `onInterrupt` | Bridge interrupt callback |
 | `"error_during_execution"` | Result subtype for interrupted/failed sessions |
 | `"control_cancel_request"` | Sent when aborting a pending control_request |
+| `"tengu_cancel"` | Telemetry event for cancel actions (escape, kill_agents, interrupt_on_submit) |
+| `"user-cancel"` | Abort reason passed to AbortController from Escape/cancel |
+| `"shutdown_signal"` | Log event for SIGINT/SIGTERM/SIGHUP handlers |
+| `"chat:cancel"` | Keybinding action for Escape key in Chat context |
+| `"app:interrupt"` | Keybinding action for Ctrl+C (global interrupt) |
 
 ## Permission Persistence (v2.1.83)
 
