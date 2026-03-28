@@ -2,12 +2,20 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Router, type Request, type Response } from 'express';
 import type { RouteContext } from './types.js';
-import { param } from './types.js';
+import { param, getEffectivePath } from './types.js';
 import { asyncHandler } from './async-handler.js';
 import { parseLaunchConfig } from '../../launch/launch-config.js';
 import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:launch');
+
+function resolveLaunchPath(ctx: RouteContext, req: Request): { projectId: string; path: string } | null {
+  const projectId = param(req, 'id');
+  const chatId = req.query.chatId as string | undefined;
+  const effectivePath = getEffectivePath(ctx, projectId, chatId);
+  if (!effectivePath) return null;
+  return { projectId, path: effectivePath };
+}
 
 export function launchRoutes(ctx: RouteContext): Router {
   const router = Router();
@@ -15,12 +23,12 @@ export function launchRoutes(ctx: RouteContext): Router {
   router.get(
     '/api/projects/:id/launch/status',
     asyncHandler(async (req: Request, res: Response) => {
-      const project = ctx.db.projects.get(param(req, 'id'));
-      if (!project) {
+      const resolved = resolveLaunchPath(ctx, req);
+      if (!resolved) {
         res.status(404).json({ success: false, error: 'Project not found' });
         return;
       }
-      const manager = ctx.launchRegistry?.getOrCreate(project.id, project.path);
+      const manager = ctx.launchRegistry?.getOrCreate(resolved.projectId, resolved.path);
       const statuses = manager?.getAllStatuses() ?? {};
 
       // Include tunnel URLs for running processes
@@ -40,12 +48,12 @@ export function launchRoutes(ctx: RouteContext): Router {
   router.get(
     '/api/projects/:id/launch/configs',
     asyncHandler(async (req: Request, res: Response) => {
-      const project = ctx.db.projects.get(param(req, 'id'));
-      if (!project) {
+      const resolved = resolveLaunchPath(ctx, req);
+      if (!resolved) {
         res.status(404).json({ success: false, error: 'Project not found' });
         return;
       }
-      const configPath = join(project.path, '.mainframe', 'launch.json');
+      const configPath = join(resolved.path, '.mainframe', 'launch.json');
       try {
         const raw = await readFile(configPath, 'utf-8');
         const result = parseLaunchConfig(JSON.parse(raw));
@@ -63,8 +71,8 @@ export function launchRoutes(ctx: RouteContext): Router {
   router.post(
     '/api/projects/:id/launch/:name/start',
     asyncHandler(async (req: Request, res: Response) => {
-      const project = ctx.db.projects.get(param(req, 'id'));
-      if (!project) {
+      const resolved = resolveLaunchPath(ctx, req);
+      if (!resolved) {
         res.status(404).json({ success: false, error: 'Project not found' });
         return;
       }
@@ -73,7 +81,7 @@ export function launchRoutes(ctx: RouteContext): Router {
       // Read and validate launch config from disk — never trust the client body
       let raw: string;
       try {
-        raw = await readFile(join(project.path, '.mainframe', 'launch.json'), 'utf-8');
+        raw = await readFile(join(resolved.path, '.mainframe', 'launch.json'), 'utf-8');
       } catch {
         res.status(404).json({ success: false, error: 'No launch.json found for project' });
         return;
@@ -94,7 +102,7 @@ export function launchRoutes(ctx: RouteContext): Router {
         res.status(404).json({ success: false, error: `Configuration "${name}" not found in launch.json` });
         return;
       }
-      const manager = ctx.launchRegistry?.getOrCreate(project.id, project.path);
+      const manager = ctx.launchRegistry?.getOrCreate(resolved.projectId, resolved.path);
       if (!manager) {
         res.status(500).json({ success: false, error: 'LaunchRegistry not available' });
         return;
@@ -103,7 +111,7 @@ export function launchRoutes(ctx: RouteContext): Router {
         await manager.start(config);
         res.json({ success: true });
       } catch (err) {
-        logger.error({ err, projectId: project.id, name }, 'failed to start launch process');
+        logger.error({ err, projectId: resolved.projectId, name }, 'failed to start launch process');
         res.status(500).json({ success: false, error: 'Failed to start process' });
       }
     }),
@@ -112,13 +120,13 @@ export function launchRoutes(ctx: RouteContext): Router {
   router.post(
     '/api/projects/:id/launch/:name/stop',
     asyncHandler(async (req: Request, res: Response) => {
-      const project = ctx.db.projects.get(param(req, 'id'));
-      if (!project) {
+      const resolved = resolveLaunchPath(ctx, req);
+      if (!resolved) {
         res.status(404).json({ success: false, error: 'Project not found' });
         return;
       }
       const name = param(req, 'name');
-      const manager = ctx.launchRegistry?.getOrCreate(project.id, project.path);
+      const manager = ctx.launchRegistry?.getOrCreate(resolved.projectId, resolved.path);
       await manager?.stop(name);
       res.json({ success: true });
     }),

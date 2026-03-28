@@ -11,12 +11,11 @@ export class LaunchRegistry {
   ) {}
 
   getOrCreate(projectId: string, projectPath: string): LaunchManager {
-    let manager = this.managers.get(projectId);
-    // projectPath is only used when creating a new manager; subsequent calls
-    // with the same projectId return the existing manager regardless of path.
+    const key = `${projectId}:${projectPath}`;
+    let manager = this.managers.get(key);
     if (!manager) {
       manager = new LaunchManager(projectId, projectPath, this.onEvent, this.tunnelManager);
-      this.managers.set(projectId, manager);
+      this.managers.set(key, manager);
     }
     return manager;
   }

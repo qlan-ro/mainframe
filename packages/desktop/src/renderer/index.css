@@ -81,7 +81,7 @@
 
     /* Semantic */
     --mf-success: oklch(0.723 0.192 150);
-    --mf-warning: oklch(0.795 0.162 86);
+    --mf-warning: oklch(0.720 0.130 70);
     --mf-destructive: oklch(0.637 0.208 25);
     --mf-scrollbar: oklch(0.442 0.015 286);
 

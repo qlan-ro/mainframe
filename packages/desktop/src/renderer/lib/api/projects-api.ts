@@ -43,9 +43,10 @@ export async function getAllChats(): Promise<Chat[]> {
   return json.data;
 }
 
-export async function archiveChat(chatId: string): Promise<void> {
-  log.info('archiveChat', { chatId });
-  await postJson(`${API_BASE}/api/chats/${chatId}/archive`);
+export async function archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
+  log.info('archiveChat', { chatId, deleteWorktree });
+  const params = deleteWorktree ? '' : '?deleteWorktree=false';
+  await postJson(`${API_BASE}/api/chats/${chatId}/archive${params}`);
 }
 
 export async function getChatMessages(chatId: string): Promise<DisplayMessage[]> {

@@ -146,12 +146,22 @@ export class ChatManager {
     return this.configManager.updateChatConfig(chatId, adapterId, model, permissionMode);
   }
 
-  async enableWorktree(chatId: string): Promise<void> {
-    return this.configManager.enableWorktree(chatId);
+  async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
+    return this.configManager.enableWorktree(chatId, baseBranch, branchName);
+  }
+
+  async attachWorktree(chatId: string, worktreePath: string, branchName: string): Promise<void> {
+    return this.configManager.attachWorktree(chatId, worktreePath, branchName);
   }
 
   async disableWorktree(chatId: string): Promise<void> {
     return this.configManager.disableWorktree(chatId);
+  }
+
+  async forkToWorktree(chatId: string, baseBranch: string, branchName: string): Promise<{ chatId: string }> {
+    return this.lifecycle.forkToWorktree(chatId, baseBranch, branchName, (newChatId, base, branch) =>
+      this.configManager.enableWorktree(newChatId, base, branch),
+    );
   }
 
   async loadChat(chatId: string): Promise<void> {
@@ -274,8 +284,8 @@ export class ChatManager {
     return this.permissionHandler.respondToPermission(chatId, response);
   }
 
-  async archiveChat(chatId: string): Promise<void> {
-    await this.lifecycle.archiveChat(chatId);
+  async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
+    await this.lifecycle.archiveChat(chatId, deleteWorktree);
     this.eventHandler.clearDisplayCache(chatId);
   }
 

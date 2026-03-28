@@ -25,7 +25,7 @@ function createMockContext(): RouteContext {
         get: vi.fn().mockReturnValue({ id: 'proj-1', path: '/tmp/proj' }),
       },
     } as any,
-    chats: {} as any,
+    chats: { getChat: vi.fn().mockReturnValue(null) } as any,
     adapters: {} as any,
     launchRegistry: {
       getOrCreate: vi.fn().mockReturnValue({
@@ -65,7 +65,7 @@ describe('launchRoutes', () => {
       getAllStatuses: vi.fn().mockReturnValue({ server: 'running' }),
     });
     const handler = extractHandler(launchRoutes(ctx), 'get', '/api/projects/:id/launch/status');
-    const req: any = { params: { id: 'proj-1' } };
+    const req: any = { params: { id: 'proj-1' }, query: {} };
     const res = mockRes();
     await handler(req, res);
     expect(res.json).toHaveBeenCalledWith({
@@ -77,7 +77,7 @@ describe('launchRoutes', () => {
   it('POST start returns 404 when project not found', async () => {
     (ctx.db.projects.get as any).mockReturnValue(undefined);
     const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/start');
-    const req: any = { params: { id: 'missing', name: 'server' } };
+    const req: any = { params: { id: 'missing', name: 'server' }, query: {} };
     const res = mockRes();
     await handler(req, res);
     expect(res.status).toHaveBeenCalledWith(404);
@@ -88,7 +88,7 @@ describe('launchRoutes', () => {
     const mockStart = vi.fn().mockResolvedValue(undefined);
     (ctx.launchRegistry!.getOrCreate as any).mockReturnValue({ start: mockStart });
     const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/start');
-    const req: any = { params: { id: 'proj-1', name: 'server' } };
+    const req: any = { params: { id: 'proj-1', name: 'server' }, query: {} };
     const res = mockRes();
     handler(req, res, vi.fn());
     await tick();
@@ -100,7 +100,7 @@ describe('launchRoutes', () => {
   it('POST start returns 404 when launch.json does not exist', async () => {
     mockReadFile.mockRejectedValue(new Error('ENOENT'));
     const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/start');
-    const req: any = { params: { id: 'proj-1', name: 'server' } };
+    const req: any = { params: { id: 'proj-1', name: 'server' }, query: {} };
     const res = mockRes();
     await handler(req, res);
     expect(res.status).toHaveBeenCalledWith(404);
@@ -110,7 +110,7 @@ describe('launchRoutes', () => {
   it('POST start returns 404 when config name not found in launch.json', async () => {
     mockReadFile.mockResolvedValue(VALID_LAUNCH_JSON);
     const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/start');
-    const req: any = { params: { id: 'proj-1', name: 'nonexistent' } };
+    const req: any = { params: { id: 'proj-1', name: 'nonexistent' }, query: {} };
     const res = mockRes();
     await handler(req, res);
     expect(res.status).toHaveBeenCalledWith(404);
@@ -120,7 +120,7 @@ describe('launchRoutes', () => {
   it('POST start returns 400 when launch.json is invalid', async () => {
     mockReadFile.mockResolvedValue(JSON.stringify({ version: '0.1.0', configurations: [] }));
     const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/start');
-    const req: any = { params: { id: 'proj-1', name: 'server' } };
+    const req: any = { params: { id: 'proj-1', name: 'server' }, query: {} };
     const res = mockRes();
     await handler(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
@@ -130,7 +130,7 @@ describe('launchRoutes', () => {
     const mockStop = vi.fn();
     (ctx.launchRegistry!.getOrCreate as any).mockReturnValue({ stop: mockStop });
     const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/stop');
-    const req: any = { params: { id: 'proj-1', name: 'server' } };
+    const req: any = { params: { id: 'proj-1', name: 'server' }, query: {} };
     const res = mockRes();
     await handler(req, res);
     expect(mockStop).toHaveBeenCalledWith('server');

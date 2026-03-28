@@ -86,3 +86,11 @@ export {
   getDevices,
   removeDevice,
 } from './remote-access-api';
+
+export {
+  enableWorktree,
+  disableWorktree,
+  forkToWorktree,
+  getWorktrees as getProjectWorktrees,
+  attachWorktree,
+} from './worktree-api';

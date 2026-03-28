@@ -4,6 +4,10 @@ import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';
 import { removeWorktree } from '../workspace/index.js';
 import { existsSync } from 'node:fs';
+import { execFile as execFileCb } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFileCb);
 import { createChildLogger } from '../logger.js';
 import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
@@ -76,7 +80,6 @@ export class ChatLifecycleManager {
 
     if (chat.processState === 'working') {
       if (chat.permissionMode === 'yolo') {
-        this.deps.permissions.clear(chatId);
         await this.startChat(chatId);
       } else if (!this.deps.permissions.hasPending(chatId)) {
         await this.startChat(chatId);
@@ -130,14 +133,14 @@ export class ChatLifecycleManager {
     await active.session.interrupt();
   }
 
-  async archiveChat(chatId: string): Promise<void> {
+  async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
     const active = this.deps.activeChats.get(chatId);
     if (active?.session) {
       await active.session.kill();
     }
 
     const chat = active?.chat ?? this.deps.db.chats.get(chatId);
-    if (chat?.worktreePath && chat?.branchName) {
+    if (deleteWorktree && chat?.worktreePath && chat?.branchName) {
       const project = this.deps.db.projects.get(chat.projectId);
       if (project) removeWorktree(project.path, chat.worktreePath, chat.branchName);
     }
@@ -162,6 +165,43 @@ export class ChatLifecycleManager {
     this.deps.db.chats.update(chatId, { status: 'ended' });
     this.deps.activeChats.delete(chatId);
     this.deps.emitEvent({ type: 'chat.ended', chatId });
+  }
+
+  private async isWorkingTreeDirty(projectPath: string): Promise<boolean> {
+    const { stdout } = await execFileAsync('git', ['status', '--porcelain'], {
+      cwd: projectPath,
+      encoding: 'utf-8',
+    });
+    return stdout.trim().length > 0;
+  }
+
+  async forkToWorktree(
+    chatId: string,
+    baseBranch: string,
+    branchName: string,
+    enableWorktreeFn: (chatId: string, baseBranch: string, branchName: string) => Promise<void>,
+  ): Promise<{ chatId: string }> {
+    const sourceActive = this.deps.activeChats.get(chatId);
+    const sourceChat = sourceActive?.chat ?? this.deps.db.chats.get(chatId);
+    if (!sourceChat) throw new Error(`Chat ${chatId} not found`);
+
+    const project = this.deps.db.projects.get(sourceChat.projectId);
+    if (!project) throw new Error('Project not found');
+
+    if (await this.isWorkingTreeDirty(project.path)) {
+      const err = new Error('Commit or stash your changes before forking');
+      (err as Error & { statusCode: number }).statusCode = 409;
+      throw err;
+    }
+
+    const newChat = await this.createChat(
+      sourceChat.projectId,
+      sourceChat.adapterId,
+      sourceChat.model,
+      sourceChat.permissionMode,
+    );
+    await enableWorktreeFn(newChat.id, baseBranch, branchName);
+    return { chatId: newChat.id };
   }
 
   async doGenerateTitle(chatId: string, content: string): Promise<void> {

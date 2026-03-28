@@ -63,14 +63,19 @@ export function isGitRepo(projectPath: string): boolean {
   }
 }
 
-export function createWorktree(projectPath: string, chatId: string, dirName = '.worktrees'): WorktreeInfo {
-  const shortId = chatId.slice(0, 8);
-  const branchName = `session/${shortId}`;
+export function createWorktree(
+  projectPath: string,
+  chatId: string,
+  dirName: string,
+  baseBranch: string,
+  branchName: string,
+): WorktreeInfo {
+  const sanitizedBranch = branchName.replace(/\//g, '-');
   const worktreeDir = path.join(projectPath, dirName);
-  const worktreePath = path.join(worktreeDir, shortId);
+  const worktreePath = path.join(worktreeDir, sanitizedBranch);
 
   mkdirSync(worktreeDir, { recursive: true });
-  execFileSync('git', ['worktree', 'add', '-b', branchName, worktreePath], {
+  execFileSync('git', ['worktree', 'add', '-b', branchName, worktreePath, baseBranch], {
     cwd: projectPath,
     encoding: 'utf-8',
     stdio: 'pipe',

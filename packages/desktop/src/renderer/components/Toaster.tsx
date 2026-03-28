@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { X } from 'lucide-react';
 import { useToastStore, type Toast } from '../store/toasts';
 import { cn } from '../lib/utils';
 
@@ -28,12 +29,13 @@ function ToastItem({ toast, onDismiss }: ToastItemProps): React.ReactElement {
       role="alert"
       className={cn(
         'cursor-pointer rounded-md px-4 py-3 text-sm font-medium shadow-lg',
-        'transition-opacity duration-200',
+        'transition-opacity duration-200 flex items-start gap-2',
         TYPE_STYLES[toast.type],
       )}
       onClick={() => onDismiss(toast.id)}
     >
-      {toast.message}
+      <span className="flex-1">{toast.message}</span>
+      {toast.type === 'error' && <X size={14} className="shrink-0 mt-0.5 opacity-60 hover:opacity-100" />}
     </div>
   );
 }

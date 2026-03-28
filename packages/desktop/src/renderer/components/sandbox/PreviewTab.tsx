@@ -140,6 +140,7 @@ export function PreviewTab(): React.ReactElement {
   const selectedProcessConfig = configs.find((c) => c.name === selectedProcess);
   const hasPreview = selectedProcessConfig?.preview === true;
   const activeProjectId = useActiveProjectId();
+  const activeChatId = useChatsStore((s) => s.activeChatId);
   const selectedProcessStatus = useSandboxStore((s) => {
     if (!selectedProcess || !activeProjectId) return 'stopped' as const;
     return s.processStatuses[activeProjectId]?.[selectedProcess] ?? 'stopped';
@@ -331,33 +332,33 @@ export function PreviewTab(): React.ReactElement {
   const handleStop = useCallback(async () => {
     if (!activeProjectId || !selectedProcess) return;
     try {
-      await stopLaunchConfig(activeProjectId, selectedProcess);
+      await stopLaunchConfig(activeProjectId, selectedProcess, activeChatId ?? undefined);
     } catch (err) {
       console.warn('[sandbox] stop failed', err);
     }
-  }, [activeProjectId, selectedProcess]);
+  }, [activeProjectId, activeChatId, selectedProcess]);
 
   const handleStart = useCallback(async () => {
     if (!activeProjectId || !selectedProcessConfig) return;
     try {
       clearLogsForName(selectedProcessConfig.name);
       setLastStartedProcess(selectedProcessConfig.name);
-      await startLaunchConfig(activeProjectId, selectedProcessConfig.name);
+      await startLaunchConfig(activeProjectId, selectedProcessConfig.name, activeChatId ?? undefined);
     } catch (err) {
       console.warn('[sandbox] start failed', err);
     }
-  }, [activeProjectId, selectedProcessConfig, clearLogsForName, setLastStartedProcess]);
+  }, [activeProjectId, activeChatId, selectedProcessConfig, clearLogsForName, setLastStartedProcess]);
 
   const handleRestart = useCallback(async () => {
     if (!activeProjectId || !selectedProcessConfig) return;
     try {
-      await stopLaunchConfig(activeProjectId, selectedProcessConfig.name);
+      await stopLaunchConfig(activeProjectId, selectedProcessConfig.name, activeChatId ?? undefined);
       clearLogsForName(selectedProcessConfig.name);
-      await startLaunchConfig(activeProjectId, selectedProcessConfig.name);
+      await startLaunchConfig(activeProjectId, selectedProcessConfig.name, activeChatId ?? undefined);
     } catch (err) {
       console.warn('[sandbox] restart failed', err);
     }
-  }, [activeProjectId, selectedProcessConfig, clearLogsForName]);
+  }, [activeProjectId, activeChatId, selectedProcessConfig, clearLogsForName]);
 
   const isElectron = typeof window !== 'undefined' && 'mainframe' in window;
 

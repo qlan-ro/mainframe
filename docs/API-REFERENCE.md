@@ -190,10 +190,10 @@ Returns display messages from daemon memory. Messages are ephemeral — they onl
 #### Archive Chat
 
 ```
-POST /api/chats/:id/archive
+POST /api/chats/:id/archive?deleteWorktree=true|false
 ```
 
-Kills the CLI process (if running) and sets status to `archived`.
+Kills the CLI process (if running) and sets status to `archived`. When `deleteWorktree=false`, the git worktree is preserved on disk. Defaults to `true`.
 
 **Response**: `ApiResponse<void>`
 
@@ -263,6 +263,42 @@ Returns the full session context including context files, mentions, attachments,
   }
 }
 ```
+
+#### Enable Worktree
+
+```
+POST /api/chats/:id/enable-worktree
+Content-Type: application/json
+```
+
+Creates a git worktree for the chat. Must be called before the session starts (before first message).
+
+**Body**: `{ "baseBranch": "main", "branchName": "feat/my-feature" }`
+
+**Response**: `{ "success": true }`
+
+#### Disable Worktree
+
+```
+POST /api/chats/:id/disable-worktree
+```
+
+Removes the git worktree. Must be called before the session starts.
+
+**Response**: `{ "success": true }`
+
+#### Fork to Worktree
+
+```
+POST /api/chats/:id/fork-worktree
+Content-Type: application/json
+```
+
+Creates a new chat with worktree isolation. Returns 409 if working tree has uncommitted changes.
+
+**Body**: `{ "baseBranch": "main", "branchName": "feat/isolated-work" }`
+
+**Response**: `{ "success": true, "chatId": "new_chat_id" }`
 
 #### Add Mention
 
@@ -950,10 +986,6 @@ Send JSON messages to perform actions:
 
 // Update chat configuration
 { "type": "chat.updateConfig", "chatId": "chat_xyz", "model": "claude-opus-4-6" }
-
-// Git worktree management
-{ "type": "chat.enableWorktree", "chatId": "chat_xyz" }
-{ "type": "chat.disableWorktree", "chatId": "chat_xyz" }
 
 // Subscribe/unsubscribe to chat events
 { "type": "subscribe", "chatId": "chat_xyz" }

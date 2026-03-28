@@ -13,17 +13,19 @@ export function useLaunchConfig(): LaunchConfig | null {
   const projects = useProjectsStore((s) => s.projects);
   const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null;
   const activeChatId = useChatsStore((s) => s.activeChatId);
+  const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
+  const effectivePath = activeChat?.worktreePath ?? activeProject?.path;
   const [config, setConfig] = useState<LaunchConfig | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!activeProject) {
+    if (!effectivePath) {
       setConfig(null);
       return;
     }
     void window.mainframe
-      ?.readFile(`${activeProject.path}/.mainframe/launch.json`)
+      ?.readFile(`${effectivePath}/.mainframe/launch.json`)
       .then((content) => {
         if (!content) {
           setConfig(null);
@@ -35,7 +37,7 @@ export function useLaunchConfig(): LaunchConfig | null {
         log.warn('failed to read launch.json', { err: String(err) });
         setConfig(null);
       });
-  }, [activeProject?.id, refreshKey]);
+  }, [effectivePath, refreshKey]);
 
   useEffect(() => {
     if (!activeChatId) return;

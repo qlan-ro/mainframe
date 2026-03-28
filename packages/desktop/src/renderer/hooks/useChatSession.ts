@@ -70,7 +70,6 @@ export function useChatSession(chatId: string | null) {
     return () => {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (verifyPermissionTimerRef.current) clearTimeout(verifyPermissionTimerRef.current);
-      daemonClient.unsubscribe(chatId);
       unsubConnection();
     };
   }, [chatId]);

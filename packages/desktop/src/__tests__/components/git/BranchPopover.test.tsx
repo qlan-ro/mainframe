@@ -30,6 +30,7 @@ vi.mock('../../../renderer/lib/api', () => ({
   gitDeleteBranch: vi.fn(),
 }));
 
+import { TooltipProvider } from '../../../renderer/components/ui/tooltip';
 import { BranchPopover } from '../../../renderer/components/git/BranchPopover';
 import * as api from '../../../renderer/lib/api';
 import { useToastStore } from '../../../renderer/store/toasts';
@@ -42,6 +43,7 @@ const mockBranches = {
     { name: 'fix/bug', current: false },
   ],
   remote: ['origin/main', 'origin/feat/popover'],
+  worktrees: [],
 };
 
 const mockStatus = { files: [] };
@@ -63,7 +65,11 @@ beforeEach(() => {
 describe('BranchPopover', () => {
   it('renders branch list from mocked API response', async () => {
     await act(async () => {
-      render(<BranchPopover {...defaultProps} />);
+      render(
+        <TooltipProvider>
+          <BranchPopover {...defaultProps} />
+        </TooltipProvider>,
+      );
     });
 
     // Wait for the async loadBranches call triggered by useEffect to settle.
@@ -81,7 +87,11 @@ describe('BranchPopover', () => {
     const user = userEvent.setup();
 
     await act(async () => {
-      render(<BranchPopover {...defaultProps} />);
+      render(
+        <TooltipProvider>
+          <BranchPopover {...defaultProps} />
+        </TooltipProvider>,
+      );
     });
 
     await waitFor(() => {
@@ -108,14 +118,18 @@ describe('BranchPopover', () => {
     vi.mocked(api.gitFetch).mockResolvedValue({ fetched: true } as never);
 
     await act(async () => {
-      render(<BranchPopover {...defaultProps} />);
+      render(
+        <TooltipProvider>
+          <BranchPopover {...defaultProps} />
+        </TooltipProvider>,
+      );
     });
 
     await waitFor(() => {
-      expect(screen.getByTitle('Fetch')).toBeInTheDocument();
+      expect(screen.getByLabelText('Fetch')).toBeInTheDocument();
     });
 
-    const fetchButton = screen.getByTitle('Fetch');
+    const fetchButton = screen.getByLabelText('Fetch');
 
     await act(async () => {
       await user.click(fetchButton);
@@ -130,7 +144,11 @@ describe('BranchPopover', () => {
     const user = userEvent.setup();
 
     await act(async () => {
-      render(<BranchPopover {...defaultProps} />);
+      render(
+        <TooltipProvider>
+          <BranchPopover {...defaultProps} />
+        </TooltipProvider>,
+      );
     });
 
     await waitFor(() => {
