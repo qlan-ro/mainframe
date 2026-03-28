@@ -100,10 +100,6 @@ export function MonacoDiffEditor({
           }
         }
       });
-
-      inner.onDidScrollChange(() => {
-        closeInlineComment();
-      });
     },
     [onLineComment, closeInlineComment],
   );

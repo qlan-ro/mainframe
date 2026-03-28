@@ -214,10 +214,6 @@ export function MonacoEditor({
           openCommentAtLine(lineNumber);
         }
       });
-
-      editor.onDidScrollChange(() => {
-        closeInlineComment();
-      });
     },
     [filePath, language, onLineComment, closeInlineComment],
   );
