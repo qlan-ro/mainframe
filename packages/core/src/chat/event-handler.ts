@@ -206,6 +206,10 @@ function buildSessionSink(
       active.chat.totalTokensOutput = newOutput;
       active.chat.lastContextTokensInput = tokensInput;
       active.chat.processState = 'idle';
+      // CLI process ended — clear any stale permissions before emitting so
+      // displayStatus correctly reflects 'idle'. Permission state is
+      // reconstructed from JSONL by restorePendingPermission on next loadChat.
+      permissions.clear(chatId);
       emitEvent({ type: 'chat.updated', chat: active.chat });
 
       if (data.subtype === 'error_during_execution' && data.is_error !== false) {

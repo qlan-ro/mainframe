@@ -70,9 +70,6 @@ export class ChatPermissionHandler {
   }
 
   async getPendingPermission(chatId: string): Promise<ControlRequest | null> {
-    const chat = this.deps.getChat(chatId);
-    if (chat?.permissionMode === 'yolo') return null;
-
     if (!this.deps.permissions.hasPending(chatId)) {
       await this.deps.getMessages(chatId);
     }

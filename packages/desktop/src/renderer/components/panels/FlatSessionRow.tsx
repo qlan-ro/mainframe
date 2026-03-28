@@ -124,7 +124,7 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
         </div>
       </button>
       {chat.displayStatus === 'waiting' && (
-        <span className="shrink-0 mr-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium leading-none bg-mf-warning text-mf-bg">
+        <span className="shrink-0 mr-2 px-2 py-1 rounded-full text-xs font-medium border border-mf-warning text-mf-warning">
           Waiting
         </span>
       )}
