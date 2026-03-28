@@ -46,18 +46,16 @@ The migration function:
 
 #### `packages/core/src/chat/config-manager.ts`
 
-Lift the `claudeSessionId` guard on `enableWorktree`. When a session exists:
+Lift the `claudeSessionId` guard on both `enableWorktree` and `attachWorktree`. When a session exists:
 
 ```
 async enableWorktree(chatId, baseBranch, branchName):
-  // ... existing validation ...
   // Remove: if (active.chat.claudeSessionId) throw ...
 
   if (active.chat.claudeSessionId) {
-    // Mid-session path
     kill session
-    move session files (original project path -> worktree path)
     create worktree
+    move session files (original project path -> worktree path)
     update DB
     respawn
   } else {
@@ -65,9 +63,20 @@ async enableWorktree(chatId, baseBranch, branchName):
     create worktree
     update DB
   }
-```
 
-Order matters: create the worktree first so the directory exists for the respawned process, but compute the encoded paths before creating it.
+async attachWorktree(chatId, worktreePath, branchName):
+  // Remove: if (active.chat.claudeSessionId) throw ...
+
+  if (active.chat.claudeSessionId) {
+    kill session
+    move session files (original project path -> worktree path)
+    update DB
+    respawn
+  } else {
+    // Pre-session path (existing logic)
+    update DB
+  }
+```
 
 #### `packages/core/src/workspace/worktree.ts` (or new file)
 
@@ -101,4 +110,3 @@ The `WorktreePopover` currently disables the "Enable worktree" button when a ses
 ## Out of Scope
 
 - Mid-session `disableWorktree` (moving files back from worktree path to original)
-- Mid-session `attachWorktree` (attaching an existing worktree mid-session — same pattern, can be added later)
