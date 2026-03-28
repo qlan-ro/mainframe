@@ -43,6 +43,7 @@ export function InlineCommentWidget({
             e.preventDefault();
             handleSubmit();
           }
+          if (e.key === 'Escape') onClose();
         }}
         placeholder="Add context about this line..."
         className="w-full h-[54px] resize-none bg-mf-input-bg border border-mf-divider rounded-md px-3 py-2 text-[13px] font-mono text-mf-text-primary focus:outline-none focus:border-mf-accent/50"
