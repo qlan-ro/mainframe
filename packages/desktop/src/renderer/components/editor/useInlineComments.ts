@@ -42,12 +42,12 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       let startLine: number;
       let endLine: number;
 
-      if (targetLine !== undefined) {
-        startLine = targetLine;
-        endLine = targetLine;
-      } else if (selection && !selection.isEmpty()) {
+      if (selection && !selection.isEmpty()) {
         startLine = selection.startLineNumber;
         endLine = selection.endLineNumber;
+      } else if (targetLine !== undefined) {
+        startLine = targetLine;
+        endLine = targetLine;
       } else {
         const pos = editor.getPosition();
         if (!pos) return;
@@ -64,7 +64,7 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       changeViewZones((accessor) => {
         zoneId = accessor.addZone({
           afterLineNumber: endLine,
-          heightInPx: 120,
+          heightInPx: 100,
           domNode,
         });
       });

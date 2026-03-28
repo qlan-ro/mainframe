@@ -24,6 +24,7 @@ interface MonacoEditorProps {
   cursorColumn?: number;
   onChange?: (value: string | undefined) => void;
   onLineComment?: (startLine: number, endLine: number, lineContent: string, comment: string) => void;
+  onSubmitReview?: (comments: { startLine: number; endLine: number; lineContent: string; comment: string }[]) => void;
 }
 
 export function MonacoEditor({
@@ -38,11 +39,14 @@ export function MonacoEditor({
   cursorColumn,
   onChange,
   onLineComment,
+  onSubmitReview,
 }: MonacoEditorProps): React.ReactElement {
   const decorationsRef = useRef<monacoType.editor.IEditorDecorationsCollection | null>(null);
   const editorRef = useRef<monacoType.editor.IStandaloneCodeEditor | null>(null);
   const onLineCommentRef = useRef(onLineComment);
   onLineCommentRef.current = onLineComment;
+  const onSubmitReviewRef = useRef(onSubmitReview);
+  onSubmitReviewRef.current = onSubmitReview;
 
   const [changeViewZones, setChangeViewZones] = useState<
     ((cb: (a: monacoType.editor.IViewZoneChangeAccessor) => void) => void) | null
@@ -108,10 +112,11 @@ export function MonacoEditor({
   );
 
   const handleSubmitReview = useCallback(() => {
-    for (const c of comments) {
-      if (c.text.trim()) {
-        onLineCommentRef.current?.(c.startLine, c.endLine, c.lineContent, c.text.trim());
-      }
+    const nonEmpty = comments
+      .filter((c) => c.text.trim())
+      .map((c) => ({ startLine: c.startLine, endLine: c.endLine, lineContent: c.lineContent, comment: c.text.trim() }));
+    if (nonEmpty.length > 0) {
+      onSubmitReviewRef.current?.(nonEmpty);
     }
     closeAll();
   }, [comments, closeAll]);
@@ -164,21 +169,15 @@ export function MonacoEditor({
       editor.onMouseMove((e) => {
         const collection = decorationsRef.current;
         if (!collection) return;
-        if (
-          e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
-          e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS ||
-          e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_DECORATIONS
-        ) {
-          const lineNumber = e.target.position?.lineNumber;
-          if (lineNumber) {
-            collection.set([
-              {
-                range: new monaco.Range(lineNumber, 1, lineNumber, 1),
-                options: { glyphMarginClassName: 'mf-line-comment-glyph' },
-              },
-            ]);
-            return;
-          }
+        const lineNumber = e.target.position?.lineNumber;
+        if (lineNumber) {
+          collection.set([
+            {
+              range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+              options: { glyphMarginClassName: 'mf-line-comment-glyph' },
+            },
+          ]);
+          return;
         }
         collection.set([]);
       });
@@ -190,13 +189,13 @@ export function MonacoEditor({
       editor.onMouseDown((e) => {
         if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
           const lineNumber = e.target.position?.lineNumber;
-          if (lineNumber) openComment(editor, lineNumber);
+          if (lineNumber) openCommentRef.current(editor, lineNumber);
         }
       });
 
       editor.addAction({
         id: 'mainframe.addComment',
-        label: 'Add Comment',
+        label: 'Add Agent Context',
         contextMenuGroupId: '0_ai',
         contextMenuOrder: 1,
         run: () => openCommentRef.current(editor),
@@ -253,11 +252,8 @@ export function MonacoEditor({
         />
         {comments.map((c) =>
           createPortal(
-            <div key={c.id} data-testid="line-comment-widget" className="px-14 h-full">
+            <div key={c.id} data-testid="line-comment-widget" className="h-full">
               <InlineCommentWidget
-                startLine={c.startLine}
-                endLine={c.endLine}
-                lineContent={c.lineContent}
                 text={c.text}
                 onTextChange={(t) => updateText(c.id, t)}
                 onSubmit={() => handleSubmitComment(c.id, c.startLine, c.endLine, c.lineContent, c.text.trim())}
