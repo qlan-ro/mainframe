@@ -157,6 +157,11 @@ export class CodexSession implements AdapterSession {
       'codex session spawned',
     );
 
+    // Fire onInit immediately so the UI transitions from 'starting' to 'idle'.
+    // For Codex, thread/started only fires after thread/start (first message),
+    // but the UI needs to know the session is ready after spawn.
+    this.sink.onInit(this.id);
+
     return this.getProcessInfo()!;
   }
 
@@ -176,6 +181,7 @@ export class CodexSession implements AdapterSession {
           threadId: this.resumeThreadId,
           model: this.pendingModel,
           cwd: this.projectPath,
+          persistExtendedHistory: true,
         });
         this.state.threadId = resumeResult.thread.id;
       } else {
@@ -185,6 +191,8 @@ export class CodexSession implements AdapterSession {
           cwd: this.projectPath,
           approvalPolicy,
           sandbox,
+          experimentalRawEvents: true,
+          persistExtendedHistory: true,
         });
         this.state.threadId = startResult.thread.id;
       }
@@ -311,17 +319,15 @@ export class CodexSession implements AdapterSession {
     }
   }
 
-  private buildCollaborationMode(): CollaborationMode | undefined {
-    if (this.pendingPermissionMode === 'plan') {
-      return {
-        mode: 'plan',
-        settings: {
-          model: this.pendingModel ?? '',
-          reasoning_effort: null,
-          developer_instructions: null,
-        },
-      };
-    }
-    return undefined;
+  private buildCollaborationMode(): CollaborationMode {
+    const mode = this.pendingPermissionMode === 'plan' ? 'plan' : 'default';
+    return {
+      mode,
+      settings: {
+        model: this.pendingModel ?? '',
+        reasoning_effort: null,
+        developer_instructions: null,
+      },
+    };
   }
 }

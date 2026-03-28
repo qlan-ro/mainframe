@@ -109,10 +109,17 @@ export function ProjectGroup({
   return (
     <div data-testid={`project-group-${project.id}`}>
       {/* Group header */}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggleCollapse}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleCollapse();
+          }
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors cursor-pointer"
       >
         {collapsed ? <ChevronRight size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
         <div className="flex-1 min-w-0 text-left">
@@ -136,7 +143,7 @@ export function ProjectGroup({
         >
           <Plus size={12} />
         </button>
-      </button>
+      </div>
 
       {/* Chat list */}
       {!collapsed && (

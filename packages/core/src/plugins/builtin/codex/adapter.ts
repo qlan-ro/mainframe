@@ -41,9 +41,9 @@ export class CodexAdapter implements Adapter {
     try {
       client = await this.spawnTempAppServer();
       const result = await client.request<ModelListResult>('model/list');
-      return (result.models ?? []).map((m) => ({
+      return result.data.map((m) => ({
         id: m.id,
-        label: m.name ?? m.id,
+        label: m.displayName ?? m.id,
       }));
     } catch (err) {
       log.warn({ err }, 'codex: failed to list models');
@@ -88,14 +88,14 @@ export class CodexAdapter implements Adapter {
         cwd: projectPath,
         archived: false,
       });
-      return result.threads.map((t) => ({
+      return result.data.map((t) => ({
         sessionId: t.id,
         adapterId: this.id,
         projectPath,
-        firstPrompt: t.name,
-        summary: t.name,
-        createdAt: t.createdAt ?? new Date().toISOString(),
-        modifiedAt: t.modifiedAt ?? new Date().toISOString(),
+        firstPrompt: t.name ?? t.preview,
+        summary: t.name ?? t.preview,
+        createdAt: new Date(t.createdAt).toISOString(),
+        modifiedAt: new Date(t.updatedAt).toISOString(),
         model: t.model,
       }));
     } catch (err) {
