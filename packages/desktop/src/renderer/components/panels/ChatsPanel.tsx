@@ -216,8 +216,16 @@ export function ChatsPanel(): React.ReactElement {
     [flatChats, filterProjectId],
   );
 
-  // Sorted project list for filter badges (alphabetical)
-  const sortedProjects = useMemo(() => [...projects].sort((a, b) => a.name.localeCompare(b.name)), [projects]);
+  // Sorted project list for filter badges (most recently used first)
+  const sortedProjects = useMemo(() => {
+    const latestByProject = new Map<string, number>();
+    for (const c of chats) {
+      const ts = new Date(c.updatedAt).getTime();
+      const prev = latestByProject.get(c.projectId) ?? 0;
+      if (ts > prev) latestByProject.set(c.projectId, ts);
+    }
+    return [...projects].sort((a, b) => (latestByProject.get(b.id) ?? 0) - (latestByProject.get(a.id) ?? 0));
+  }, [projects, chats]);
 
   const toggleCollapse = useCallback((projectId: string) => {
     setCollapsed((prev) => {
@@ -349,7 +357,7 @@ export function ChatsPanel(): React.ReactElement {
         <div
           ref={filterScrollRef}
           onWheel={handleFilterWheel}
-          className="flex gap-1.5 pl-[10px] pr-[10px] py-1.5 overflow-x-auto scrollbar-none"
+          className="flex gap-1.5 px-3.5 py-1.5 overflow-x-auto scrollbar-none"
         >
           <button
             type="button"
