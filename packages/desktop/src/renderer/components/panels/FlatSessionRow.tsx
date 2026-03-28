@@ -35,6 +35,7 @@ interface FlatSessionRowProps {
 
 export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSessionRowProps): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
+  const chats = useChatsStore((s) => s.chats);
   const setActiveChat = useChatsStore((s) => s.setActiveChat);
   const removeChat = useChatsStore((s) => s.removeChat);
 
@@ -60,15 +61,25 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
       setArchiving(true);
       archiveChat(chat.id, deleteWorktree)
         .then(() => {
+          const wasActive = activeChatId === chat.id;
           removeChat(chat.id);
           useTabsStore.getState().closeTab(`chat:${chat.id}`);
+          if (wasActive) {
+            const next = chats
+              .filter((c) => c.id !== chat.id && c.projectId === chat.projectId)
+              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+            if (next) {
+              setActiveChat(next.id);
+              useTabsStore.getState().openChatTab(next.id, next.title);
+            }
+          }
         })
         .catch((err) => {
           log.warn('archive failed', { err: String(err) });
           setArchiving(false);
         });
     },
-    [chat.id, chat.worktreePath, removeChat, archiving],
+    [chat.id, chat.projectId, chat.worktreePath, chats, removeChat, setActiveChat, activeChatId, archiving],
   );
 
   const isActive = activeChatId === chat.id;

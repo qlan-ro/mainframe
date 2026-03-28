@@ -94,8 +94,18 @@ export function ProjectGroup({
       setArchivingIds((prev) => new Set(prev).add(chatId));
       archiveChat(chatId, deleteWorktree)
         .then(() => {
+          const wasActive = activeChatId === chatId;
           removeChat(chatId);
           useTabsStore.getState().closeTab(`chat:${chatId}`);
+          if (wasActive) {
+            const next = chats
+              .filter((c) => c.id !== chatId)
+              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+            if (next) {
+              setActiveChat(next.id);
+              useTabsStore.getState().openChatTab(next.id, next.title);
+            }
+          }
         })
         .catch((err) => {
           log.warn('archive failed', { err: String(err) });
@@ -106,7 +116,7 @@ export function ProjectGroup({
           });
         });
     },
-    [chats, removeChat, archivingIds],
+    [chats, removeChat, archivingIds, activeChatId, setActiveChat],
   );
 
   const handleNewSession = useCallback(
