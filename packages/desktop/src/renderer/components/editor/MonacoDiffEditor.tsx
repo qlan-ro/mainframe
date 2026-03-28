@@ -95,7 +95,8 @@ export function MonacoDiffEditor({
 
       inner.onMouseDown((e) => {
         if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-          openComment(inner);
+          const lineNumber = e.target.position?.lineNumber;
+          if (lineNumber) openComment(inner, lineNumber);
         }
       });
 

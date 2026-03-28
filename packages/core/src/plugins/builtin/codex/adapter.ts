@@ -41,7 +41,7 @@ export class CodexAdapter implements Adapter {
     try {
       client = await this.spawnTempAppServer();
       const result = await client.request<ModelListResult>('model/list');
-      return result.models.map((m) => ({
+      return (result.models ?? []).map((m) => ({
         id: m.id,
         label: m.name ?? m.id,
       }));

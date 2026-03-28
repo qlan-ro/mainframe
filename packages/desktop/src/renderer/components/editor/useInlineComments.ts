@@ -33,7 +33,7 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
   commentsRef.current = comments;
 
   const openComment = useCallback(
-    (editor: monacoType.editor.ICodeEditor) => {
+    (editor: monacoType.editor.ICodeEditor, targetLine?: number) => {
       if (!changeViewZones || !getModel) return;
       const model = getModel();
       if (!model) return;
@@ -42,7 +42,10 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       let startLine: number;
       let endLine: number;
 
-      if (selection && !selection.isEmpty()) {
+      if (targetLine !== undefined) {
+        startLine = targetLine;
+        endLine = targetLine;
+      } else if (selection && !selection.isEmpty()) {
         startLine = selection.startLineNumber;
         endLine = selection.endLineNumber;
       } else {
