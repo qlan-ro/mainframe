@@ -67,8 +67,7 @@ export class JsonRpcClient {
     if (this.closed) return Promise.reject(new Error('Client closed'));
 
     const id = this.nextId++;
-    const msg: Record<string, unknown> = { id, method };
-    if (params !== undefined) msg.params = params;
+    const msg: Record<string, unknown> = { id, method, params: params ?? {} };
     this.write(msg);
 
     return new Promise<T>((resolve, reject) => {
@@ -87,8 +86,7 @@ export class JsonRpcClient {
 
   notify(method: string, params?: unknown): void {
     if (this.closed) return;
-    const msg: Record<string, unknown> = { method };
-    if (params !== undefined) msg.params = params;
+    const msg: Record<string, unknown> = { method, params: params ?? {} };
     this.write(msg);
   }
 
