@@ -123,6 +123,11 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
           </div>
         </div>
       </button>
+      {chat.displayStatus === 'waiting' && (
+        <span className="shrink-0 mr-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium leading-none bg-mf-warning text-mf-bg">
+          Waiting
+        </span>
+      )}
       <button
         onClick={handleArchive}
         className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
