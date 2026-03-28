@@ -15,6 +15,8 @@ import { LaunchRegistry } from './launch/index.js';
 import { TunnelManager } from './tunnel/index.js';
 import claudeManifest from './plugins/builtin/claude/manifest.json' with { type: 'json' };
 import { activate as activateClaude } from './plugins/builtin/claude/index.js';
+import claudeSdkManifest from './plugins/builtin/claude-sdk/manifest.json' with { type: 'json' };
+import { activate as activateClaudeSdk } from './plugins/builtin/claude-sdk/index.js';
 import todosManifest from './plugins/builtin/todos/manifest.json' with { type: 'json' };
 import { activate as activateTodos } from './plugins/builtin/todos/index.js';
 import { logger } from './logger.js';
@@ -83,6 +85,7 @@ async function main(): Promise<void> {
 
   // Load builtin plugins first (always trusted, no consent dialog)
   await pluginManager.loadBuiltin(claudeManifest as PluginManifest, activateClaude);
+  await pluginManager.loadBuiltin(claudeSdkManifest as PluginManifest, activateClaudeSdk);
 
   const todosPluginDir = join(getDataDir(), 'plugins', 'todos');
   mkdirSync(todosPluginDir, { recursive: true });
