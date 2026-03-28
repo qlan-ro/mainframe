@@ -160,6 +160,12 @@ function buildSessionSink(
         );
         emitEvent({ type: 'permission.requested', chatId, request });
 
+        // Emit chat.updated so displayStatus flips to 'waiting' on clients
+        const active = getActiveChat(chatId);
+        if (active) {
+          emitEvent({ type: 'chat.updated', chat: active.chat });
+        }
+
         pushService
           ?.sendPush({
             title: 'Permission Required',

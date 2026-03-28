@@ -130,6 +130,9 @@ export class ChatPermissionHandler {
       this.deps.emitEvent({ type: 'permission.requested', chatId, request: nextRequest });
     }
 
+    // Emit chat.updated so displayStatus reflects the new permission state
+    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+
     if (response.behavior === 'allow' && response.toolName === 'ExitPlanMode') {
       await this.deps.planMode.handleEscalation(chatId, active, response);
     }
