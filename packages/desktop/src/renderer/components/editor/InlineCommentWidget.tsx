@@ -4,7 +4,6 @@ import { Send } from 'lucide-react';
 export interface InlineCommentState {
   line: number;
   lineContent: string;
-  top: number;
 }
 
 export function InlineCommentWidget({

@@ -1,4 +1,5 @@
 import React, { useRef, useLayoutEffect, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
 import type * as monacoType from 'monaco-editor';
 import { InlineCommentWidget, type InlineCommentState } from './InlineCommentWidget';
@@ -23,6 +24,7 @@ export function MonacoDiffEditor({
   const editorRef = useRef<monacoType.editor.IStandaloneDiffEditor | null>(null);
   const decorationsRef = useRef<monacoType.editor.IEditorDecorationsCollection | null>(null);
   const zoneIdRef = useRef<string | null>(null);
+  const zoneDomRef = useRef<HTMLDivElement | null>(null);
   const [inlineComment, setInlineComment] = useState<InlineCommentState | null>(null);
   const onLineCommentRef = useRef(onLineComment);
   onLineCommentRef.current = onLineComment;
@@ -35,6 +37,7 @@ export function MonacoDiffEditor({
       inner.changeViewZones((accessor) => accessor.removeZone(id));
     }
     zoneIdRef.current = null;
+    zoneDomRef.current = null;
     setInlineComment(null);
   }, []);
 
@@ -82,10 +85,8 @@ export function MonacoDiffEditor({
 
             closeInlineComment();
 
-            const pos = inner.getScrolledVisiblePosition({ lineNumber, column: 1 });
-            if (!pos) return;
-
             const domNode = document.createElement('div');
+            domNode.style.zIndex = '10';
             inner.changeViewZones((accessor) => {
               zoneIdRef.current = accessor.addZone({
                 afterLineNumber: lineNumber,
@@ -94,11 +95,8 @@ export function MonacoDiffEditor({
               });
             });
 
-            setInlineComment({
-              line: lineNumber,
-              lineContent,
-              top: pos.top + pos.height,
-            });
+            zoneDomRef.current = domNode;
+            setInlineComment({ line: lineNumber, lineContent });
           }
         }
       });
@@ -161,19 +159,22 @@ export function MonacoDiffEditor({
           ...(lineOffset > 0 ? { lineNumbers: (n: number) => String(n + lineOffset) } : {}),
         }}
       />
-      {inlineComment && (
-        <div className="absolute left-0 right-0 z-50 px-14" style={{ top: inlineComment.top }}>
-          <InlineCommentWidget
-            line={inlineComment.line + lineOffset}
-            lineContent={inlineComment.lineContent}
-            onSubmit={(comment) => {
-              onLineCommentRef.current?.(inlineComment.line + lineOffset, inlineComment.lineContent, comment);
-              closeInlineComment();
-            }}
-            onClose={closeInlineComment}
-          />
-        </div>
-      )}
+      {inlineComment &&
+        zoneDomRef.current &&
+        createPortal(
+          <div data-testid="line-comment-widget" className="px-14 h-full">
+            <InlineCommentWidget
+              line={inlineComment.line + lineOffset}
+              lineContent={inlineComment.lineContent}
+              onSubmit={(comment) => {
+                onLineCommentRef.current?.(inlineComment.line + lineOffset, inlineComment.lineContent, comment);
+                closeInlineComment();
+              }}
+              onClose={closeInlineComment}
+            />
+          </div>,
+          zoneDomRef.current,
+        )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type * as monacoType from 'monaco-editor';
 import { InlineCommentWidget, type InlineCommentState } from './InlineCommentWidget';
@@ -41,6 +42,7 @@ export function MonacoEditor({
   const decorationsRef = useRef<monacoType.editor.IEditorDecorationsCollection | null>(null);
   const editorRef = useRef<monacoType.editor.IStandaloneCodeEditor | null>(null);
   const zoneIdRef = useRef<string | null>(null);
+  const zoneDomRef = useRef<HTMLDivElement | null>(null);
   const [inlineComment, setInlineComment] = useState<InlineCommentState | null>(null);
   const onLineCommentRef = useRef(onLineComment);
   onLineCommentRef.current = onLineComment;
@@ -58,6 +60,7 @@ export function MonacoEditor({
       editor.changeViewZones((accessor) => accessor.removeZone(id));
     }
     zoneIdRef.current = null;
+    zoneDomRef.current = null;
     setInlineComment(null);
   }, []);
 
@@ -188,12 +191,8 @@ export function MonacoEditor({
 
         closeInlineComment();
 
-        // Get line position before adding the zone
-        const pos = editor.getScrolledVisiblePosition({ lineNumber, column: 1 });
-        if (!pos) return;
-
-        // Empty ViewZone just for spacing (pushes lines down)
         const domNode = document.createElement('div');
+        domNode.style.zIndex = '10';
         editor.changeViewZones((accessor) => {
           zoneIdRef.current = accessor.addZone({
             afterLineNumber: lineNumber,
@@ -202,7 +201,8 @@ export function MonacoEditor({
           });
         });
 
-        setInlineComment({ line: lineNumber, lineContent, top: pos.top + pos.height });
+        zoneDomRef.current = domNode;
+        setInlineComment({ line: lineNumber, lineContent });
       };
 
       editor.onMouseDown((e) => {
@@ -252,23 +252,22 @@ export function MonacoEditor({
           renderLineHighlight: 'gutter',
         }}
       />
-      {inlineComment && (
-        <div
-          data-testid="line-comment-popover"
-          className="absolute left-0 right-0 z-50 px-14"
-          style={{ top: inlineComment.top }}
-        >
-          <InlineCommentWidget
-            line={inlineComment.line}
-            lineContent={inlineComment.lineContent}
-            onSubmit={(comment) => {
-              onLineCommentRef.current?.(inlineComment.line, inlineComment.lineContent, comment);
-              closeInlineComment();
-            }}
-            onClose={closeInlineComment}
-          />
-        </div>
-      )}
+      {inlineComment &&
+        zoneDomRef.current &&
+        createPortal(
+          <div data-testid="line-comment-widget" className="px-14 h-full">
+            <InlineCommentWidget
+              line={inlineComment.line}
+              lineContent={inlineComment.lineContent}
+              onSubmit={(comment) => {
+                onLineCommentRef.current?.(inlineComment.line, inlineComment.lineContent, comment);
+                closeInlineComment();
+              }}
+              onClose={closeInlineComment}
+            />
+          </div>,
+          zoneDomRef.current,
+        )}
     </div>
   );
 }
