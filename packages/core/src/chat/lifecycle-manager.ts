@@ -80,7 +80,6 @@ export class ChatLifecycleManager {
 
     if (chat.processState === 'working') {
       if (chat.permissionMode === 'yolo') {
-        this.deps.permissions.clear(chatId);
         await this.startChat(chatId);
       } else if (!this.deps.permissions.hasPending(chatId)) {
         await this.startChat(chatId);

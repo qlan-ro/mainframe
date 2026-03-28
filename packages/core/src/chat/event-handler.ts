@@ -160,6 +160,12 @@ function buildSessionSink(
         );
         emitEvent({ type: 'permission.requested', chatId, request });
 
+        // Emit chat.updated so displayStatus flips to 'waiting' on clients
+        const active = getActiveChat(chatId);
+        if (active) {
+          emitEvent({ type: 'chat.updated', chat: active.chat });
+        }
+
         pushService
           ?.sendPush({
             title: 'Permission Required',
@@ -200,10 +206,14 @@ function buildSessionSink(
       active.chat.totalTokensOutput = newOutput;
       active.chat.lastContextTokensInput = tokensInput;
       active.chat.processState = 'idle';
+      // Check interrupted flag before clearing permissions (clear() wipes both).
+      const wasInterrupted = permissions.clearInterrupted(chatId);
+      // CLI process ended — clear stale permissions so displayStatus reflects
+      // 'idle'. Permission state is reconstructed from JSONL on next loadChat.
+      permissions.clear(chatId);
       emitEvent({ type: 'chat.updated', chat: active.chat });
 
       if (data.subtype === 'error_during_execution' && data.is_error !== false) {
-        const wasInterrupted = permissions.clearInterrupted(chatId);
         if (!wasInterrupted) {
           const message = messages.createTransientMessage(chatId, 'error', [
             { type: 'error', message: 'Session ended unexpectedly' },
@@ -222,8 +232,6 @@ function buildSessionSink(
             .catch((err) => log.warn({ err }, 'push notification failed'));
         }
       } else {
-        permissions.clearInterrupted(chatId);
-
         pushService
           ?.sendPush({
             title: 'Task Complete',
