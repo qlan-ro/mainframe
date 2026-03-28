@@ -217,9 +217,17 @@ app.whenReady().then(() => {
   // Prevents macOS from prompting for Apple Music, microphone, or camera access
   // when user projects loaded in the preview webview request these APIs.
   const ALLOWED_PERMISSIONS = new Set(['clipboard-read', 'clipboard-sanitized-write', 'notifications']);
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+  const denyUnneededPermissions = (
+    _wc: Electron.WebContents,
+    permission: string,
+    callback: (granted: boolean) => void,
+  ): void => {
     callback(ALLOWED_PERMISSIONS.has(permission));
-  });
+  };
+  session.defaultSession.setPermissionRequestHandler(denyUnneededPermissions);
+  // The sandbox webview uses a persistent partition for session/cookie persistence
+  // across app restarts. Apply the same permission restrictions.
+  session.fromPartition('persist:sandbox').setPermissionRequestHandler(denyUnneededPermissions);
 
   setupIPC();
   startDaemon();
@@ -233,14 +241,9 @@ app.whenReady().then(() => {
   app.on('web-contents-created', (_event, contents) => {
     if (contents.getType() !== 'webview') return;
 
-    contents.on('will-navigate', (event, url) => {
-      const currentOrigin = new URL(contents.getURL()).origin;
-      if (new URL(url).origin !== currentOrigin) {
-        event.preventDefault();
-        shell.openExternal(url);
-      }
-    });
-
+    // Allow all navigations inside webviews — the sandbox loads user dev servers
+    // that legitimately redirect cross-origin (OAuth flows, SSO, etc.).
+    // Only intercept window.open for truly external links (target="_blank").
     contents.setWindowOpenHandler((details) => {
       shell.openExternal(details.url);
       return { action: 'deny' };
