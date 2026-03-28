@@ -55,7 +55,7 @@ describe('JsonRpcClient', () => {
 
     // Simulate server response
     const response = JSON.stringify({ id: sent.id, result: { thread: { id: 'thr_1' } } }) + '\n';
-    proc.stdout!.push(response);
+    proc.stdout!.emit('data', Buffer.from(response));
 
     const result = await promise;
     expect(result).toEqual({ thread: { id: 'thr_1' } });
@@ -74,7 +74,10 @@ describe('JsonRpcClient', () => {
     const promise = client.request('model/list');
 
     const sent = JSON.parse(written[0]!.trim());
-    proc.stdout!.push(JSON.stringify({ id: sent.id, error: { code: -32600, message: 'Bad request' } }) + '\n');
+    proc.stdout!.emit(
+      'data',
+      Buffer.from(JSON.stringify({ id: sent.id, error: { code: -32600, message: 'Bad request' } }) + '\n'),
+    );
 
     await expect(promise).rejects.toThrow('Bad request');
   });
@@ -84,7 +87,10 @@ describe('JsonRpcClient', () => {
     const proc = createMockProcess();
     createClient(proc, { onNotification });
 
-    proc.stdout!.push(JSON.stringify({ method: 'thread/started', params: { thread: { id: 'thr_1' } } }) + '\n');
+    proc.stdout!.emit(
+      'data',
+      Buffer.from(JSON.stringify({ method: 'thread/started', params: { thread: { id: 'thr_1' } } }) + '\n'),
+    );
 
     expect(onNotification).toHaveBeenCalledWith('thread/started', { thread: { id: 'thr_1' } });
   });
@@ -94,12 +100,15 @@ describe('JsonRpcClient', () => {
     const proc = createMockProcess();
     createClient(proc, { onRequest });
 
-    proc.stdout!.push(
-      JSON.stringify({
-        id: 99,
-        method: 'item/commandExecution/requestApproval',
-        params: { threadId: 't1', turnId: 'turn1', itemId: 'i1', command: 'rm -rf /' },
-      }) + '\n',
+    proc.stdout!.emit(
+      'data',
+      Buffer.from(
+        JSON.stringify({
+          id: 99,
+          method: 'item/commandExecution/requestApproval',
+          params: { threadId: 't1', turnId: 'turn1', itemId: 'i1', command: 'rm -rf /' },
+        }) + '\n',
+      ),
     );
 
     expect(onRequest).toHaveBeenCalledWith(
@@ -131,10 +140,10 @@ describe('JsonRpcClient', () => {
     createClient(proc, { onNotification });
 
     const full = JSON.stringify({ method: 'turn/started', params: { threadId: 't1', turn: { id: 'turn1' } } });
-    proc.stdout!.push(full.slice(0, 20));
+    proc.stdout!.emit('data', Buffer.from(full.slice(0, 20)));
     expect(onNotification).not.toHaveBeenCalled();
 
-    proc.stdout!.push(full.slice(20) + '\n');
+    proc.stdout!.emit('data', Buffer.from(full.slice(20) + '\n'));
     expect(onNotification).toHaveBeenCalledOnce();
   });
 
@@ -161,8 +170,8 @@ describe('JsonRpcClient', () => {
     const proc = createMockProcess();
     createClient(proc, { onNotification, onError });
 
-    proc.stdout!.push('not valid json\n');
-    proc.stdout!.push(JSON.stringify({ method: 'turn/started', params: {} }) + '\n');
+    proc.stdout!.emit('data', Buffer.from('not valid json\n'));
+    proc.stdout!.emit('data', Buffer.from(JSON.stringify({ method: 'turn/started', params: {} }) + '\n'));
 
     expect(onNotification).toHaveBeenCalledOnce();
   });
