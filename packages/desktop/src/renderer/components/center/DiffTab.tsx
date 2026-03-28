@@ -77,11 +77,12 @@ export function DiffTab({
   }, [source, inlineOriginal, inlineModified]);
 
   const handleLineComment = useCallback(
-    (line: number, lineContent: string, comment: string) => {
+    (startLine: number, endLine: number, lineContent: string, comment: string) => {
       const shortPath = filePath.split('/').slice(-3).join('/');
-      const trimmedLine = lineContent.trim();
-      const quote = trimmedLine ? `\n> ${trimmedLine}` : '';
-      const formatted = `In diff of \`${shortPath}\` at line ${line}:${quote}\n\n${comment}`;
+      const lineRef = startLine === endLine ? `line ${startLine}` : `lines ${startLine}-${endLine}`;
+      const trimmed = lineContent.trim();
+      const quote = trimmed ? `\n\`\`\`\n${trimmed}\n\`\`\`` : '';
+      const formatted = `In diff of \`${shortPath}\` at ${lineRef}:${quote}\n\n${comment}`;
       sendCommentMessage(formatted, chatId);
     },
     [filePath, chatId],

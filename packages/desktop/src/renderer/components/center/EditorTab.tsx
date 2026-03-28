@@ -130,10 +130,12 @@ export function EditorTab({
   }, []);
 
   const handleLineComment = useCallback(
-    (line: number, lineContent: string, comment: string) => {
+    (startLine: number, endLine: number, lineContent: string, comment: string) => {
       const shortPath = filePath.split('/').slice(-3).join('/');
-      const trimmedLine = lineContent.trim();
-      const formatted = `In \`${shortPath}\` at line ${line}:\n> ${trimmedLine}\n\n${comment}`;
+      const lineRef = startLine === endLine ? `line ${startLine}` : `lines ${startLine}-${endLine}`;
+      const trimmed = lineContent.trim();
+      const quote = trimmed ? `\n\`\`\`\n${trimmed}\n\`\`\`` : '';
+      const formatted = `In \`${shortPath}\` at ${lineRef}:${quote}\n\n${comment}`;
       sendCommentMessage(formatted);
     },
     [filePath],

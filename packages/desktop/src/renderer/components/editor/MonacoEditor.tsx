@@ -23,7 +23,7 @@ interface MonacoEditorProps {
   cursorLine?: number;
   cursorColumn?: number;
   onChange?: (value: string | undefined) => void;
-  onLineComment?: (line: number, lineContent: string, comment: string) => void;
+  onLineComment?: (startLine: number, endLine: number, lineContent: string, comment: string) => void;
 }
 
 export function MonacoEditor({
@@ -47,7 +47,8 @@ export function MonacoEditor({
   const [changeViewZones, setChangeViewZones] = useState<
     ((cb: (a: monacoType.editor.IViewZoneChangeAccessor) => void) => void) | null
   >(null);
-  const { comments, openComment, closeComment, closeAll, updateText } = useInlineComments(changeViewZones);
+  const [getModel, setGetModel] = useState<(() => monacoType.editor.ITextModel | null) | null>(null);
+  const { comments, openComment, closeComment, closeAll, updateText } = useInlineComments(changeViewZones, getModel);
 
   const activeProjectId = useActiveProjectId();
   const { projects } = useProjectsStore();
@@ -97,8 +98,8 @@ export function MonacoEditor({
   }, []);
 
   const handleSubmitComment = useCallback(
-    (id: string, commentLine: number, lineContent: string, text: string) => {
-      onLineCommentRef.current?.(commentLine, lineContent, text);
+    (id: string, start: number, end: number, lineContent: string, text: string) => {
+      onLineCommentRef.current?.(start, end, lineContent, text);
       closeComment(id);
     },
     [closeComment],
@@ -107,7 +108,7 @@ export function MonacoEditor({
   const handleSubmitReview = useCallback(() => {
     for (const c of comments) {
       if (c.text.trim()) {
-        onLineCommentRef.current?.(c.line, c.lineContent, c.text.trim());
+        onLineCommentRef.current?.(c.startLine, c.endLine, c.lineContent, c.text.trim());
       }
     }
     closeAll();
@@ -119,6 +120,7 @@ export function MonacoEditor({
       setChangeViewZones(() => (cb: (a: monacoType.editor.IViewZoneChangeAccessor) => void) => {
         editor.changeViewZones(cb);
       });
+      setGetModel(() => () => editor.getModel());
 
       const snapshotViewState = () => updateEditorViewState(editor.saveViewState());
       snapshotViewState();
@@ -184,12 +186,8 @@ export function MonacoEditor({
       });
 
       editor.onMouseDown((e) => {
-        const lineNumber = e.target.position?.lineNumber;
-        if (!lineNumber) return;
         if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-          const model = editor.getModel();
-          const lineContent = model?.getLineContent(lineNumber) ?? '';
-          openComment(lineNumber, lineContent);
+          openComment(editor);
         }
       });
     },
@@ -246,11 +244,12 @@ export function MonacoEditor({
           createPortal(
             <div key={c.id} data-testid="line-comment-widget" className="px-14 h-full">
               <InlineCommentWidget
-                line={c.line}
+                startLine={c.startLine}
+                endLine={c.endLine}
                 lineContent={c.lineContent}
                 text={c.text}
                 onTextChange={(t) => updateText(c.id, t)}
-                onSubmit={() => handleSubmitComment(c.id, c.line, c.lineContent, c.text.trim())}
+                onSubmit={() => handleSubmitComment(c.id, c.startLine, c.endLine, c.lineContent, c.text.trim())}
                 onClose={() => closeComment(c.id)}
               />
             </div>,

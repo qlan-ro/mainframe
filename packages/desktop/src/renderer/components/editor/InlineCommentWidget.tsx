@@ -2,7 +2,8 @@ import { useRef, useEffect } from 'react';
 import { Send } from 'lucide-react';
 
 interface InlineCommentWidgetProps {
-  line: number;
+  startLine: number;
+  endLine: number;
   lineContent: string;
   text: string;
   onTextChange: (text: string) => void;
@@ -11,7 +12,8 @@ interface InlineCommentWidgetProps {
 }
 
 export function InlineCommentWidget({
-  line,
+  startLine,
+  endLine,
   lineContent,
   text,
   onTextChange,
@@ -29,10 +31,21 @@ export function InlineCommentWidget({
     onSubmit();
   };
 
+  const isRange = startLine !== endLine;
+  const label = isRange ? `L${startLine}-L${endLine}` : `L${startLine}`;
+  const preview = lineContent.trim();
+
   return (
     <div className="pl-2 pr-4 py-1">
-      <div className="text-mf-small font-mono text-mf-text-secondary truncate opacity-60 mb-1">
-        L{line}: {lineContent.trim()}
+      <div className="text-mf-small font-mono text-mf-text-secondary opacity-60 mb-1">
+        <span>{label}</span>
+        {preview && (
+          <span
+            className={`ml-1 ${isRange ? 'block mt-0.5 whitespace-pre-wrap max-h-24 overflow-y-auto' : 'truncate'}`}
+          >
+            {isRange ? preview : `: ${preview}`}
+          </span>
+        )}
       </div>
       <textarea
         ref={ref}

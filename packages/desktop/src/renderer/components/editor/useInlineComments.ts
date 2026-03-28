@@ -1,9 +1,12 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import type * as monacoType from 'monaco-editor';
 
+const MAX_PREVIEW_LINES = 50;
+
 export interface CommentEntry {
   id: string;
-  line: number;
+  startLine: number;
+  endLine: number;
   lineContent: string;
   zoneId: string;
   domNode: HTMLDivElement;
@@ -11,17 +14,45 @@ export interface CommentEntry {
 }
 
 type ChangeViewZones = (cb: (accessor: monacoType.editor.IViewZoneChangeAccessor) => void) => void;
+type GetModel = () => monacoType.editor.ITextModel | null;
 
 let nextId = 0;
 
-export function useInlineComments(changeViewZones: ChangeViewZones | null) {
+function extractContent(model: monacoType.editor.ITextModel, startLine: number, endLine: number): string {
+  if (endLine - startLine + 1 > MAX_PREVIEW_LINES) return '';
+  const lines: string[] = [];
+  for (let i = startLine; i <= endLine; i++) {
+    lines.push(model.getLineContent(i));
+  }
+  return lines.join('\n');
+}
+
+export function useInlineComments(changeViewZones: ChangeViewZones | null, getModel: GetModel | null) {
   const [comments, setComments] = useState<CommentEntry[]>([]);
   const commentsRef = useRef(comments);
   commentsRef.current = comments;
 
   const openComment = useCallback(
-    (lineNumber: number, lineContent: string) => {
-      if (!changeViewZones) return;
+    (editor: monacoType.editor.ICodeEditor) => {
+      if (!changeViewZones || !getModel) return;
+      const model = getModel();
+      if (!model) return;
+
+      const selection = editor.getSelection();
+      let startLine: number;
+      let endLine: number;
+
+      if (selection && !selection.isEmpty()) {
+        startLine = selection.startLineNumber;
+        endLine = selection.endLineNumber;
+      } else {
+        const pos = editor.getPosition();
+        if (!pos) return;
+        startLine = pos.lineNumber;
+        endLine = pos.lineNumber;
+      }
+
+      const lineContent = extractContent(model, startLine, endLine);
 
       const domNode = document.createElement('div');
       domNode.style.zIndex = '10';
@@ -29,16 +60,16 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null) {
       let zoneId = '';
       changeViewZones((accessor) => {
         zoneId = accessor.addZone({
-          afterLineNumber: lineNumber,
+          afterLineNumber: endLine,
           heightInPx: 120,
           domNode,
         });
       });
 
       const id = `comment-${++nextId}`;
-      setComments((prev) => [...prev, { id, line: lineNumber, lineContent, zoneId, domNode, text: '' }]);
+      setComments((prev) => [...prev, { id, startLine, endLine, lineContent, zoneId, domNode, text: '' }]);
     },
-    [changeViewZones],
+    [changeViewZones, getModel],
   );
 
   const closeComment = useCallback(

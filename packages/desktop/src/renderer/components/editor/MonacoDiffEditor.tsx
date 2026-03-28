@@ -12,7 +12,7 @@ interface MonacoDiffEditorProps {
   modified: string;
   language?: string;
   startLine?: number;
-  onLineComment?: (line: number, lineContent: string, comment: string) => void;
+  onLineComment?: (startLine: number, endLine: number, lineContent: string, comment: string) => void;
 }
 
 export function MonacoDiffEditor({
@@ -31,11 +31,12 @@ export function MonacoDiffEditor({
   const [changeViewZones, setChangeViewZones] = useState<
     ((cb: (a: monacoType.editor.IViewZoneChangeAccessor) => void) => void) | null
   >(null);
-  const { comments, openComment, closeComment, closeAll, updateText } = useInlineComments(changeViewZones);
+  const [getModel, setGetModel] = useState<(() => monacoType.editor.ITextModel | null) | null>(null);
+  const { comments, openComment, closeComment, closeAll, updateText } = useInlineComments(changeViewZones, getModel);
 
   const handleSubmitComment = useCallback(
-    (id: string, commentLine: number, lineContent: string, text: string) => {
-      onLineCommentRef.current?.(commentLine + lineOffset, lineContent, text);
+    (id: string, start: number, end: number, lineContent: string, text: string) => {
+      onLineCommentRef.current?.(start + lineOffset, end + lineOffset, lineContent, text);
       closeComment(id);
     },
     [closeComment, lineOffset],
@@ -44,7 +45,7 @@ export function MonacoDiffEditor({
   const handleSubmitReview = useCallback(() => {
     for (const c of comments) {
       if (c.text.trim()) {
-        onLineCommentRef.current?.(c.line + lineOffset, c.lineContent, c.text.trim());
+        onLineCommentRef.current?.(c.startLine + lineOffset, c.endLine + lineOffset, c.lineContent, c.text.trim());
       }
     }
     closeAll();
@@ -58,6 +59,7 @@ export function MonacoDiffEditor({
       setChangeViewZones(() => (cb: (a: monacoType.editor.IViewZoneChangeAccessor) => void) => {
         inner.changeViewZones(cb);
       });
+      setGetModel(() => () => inner.getModel());
 
       if (!onLineComment) return;
 
@@ -91,12 +93,7 @@ export function MonacoDiffEditor({
 
       inner.onMouseDown((e) => {
         if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-          const lineNumber = e.target.position?.lineNumber;
-          if (lineNumber) {
-            const model = inner.getModel();
-            const lineContent = model?.getLineContent(lineNumber) ?? '';
-            openComment(lineNumber, lineContent);
-          }
+          openComment(inner);
         }
       });
     },
@@ -170,11 +167,12 @@ export function MonacoDiffEditor({
           createPortal(
             <div key={c.id} data-testid="line-comment-widget" className="px-14 h-full">
               <InlineCommentWidget
-                line={c.line + lineOffset}
+                startLine={c.startLine + lineOffset}
+                endLine={c.endLine + lineOffset}
                 lineContent={c.lineContent}
                 text={c.text}
                 onTextChange={(t) => updateText(c.id, t)}
-                onSubmit={() => handleSubmitComment(c.id, c.line, c.lineContent, c.text.trim())}
+                onSubmit={() => handleSubmitComment(c.id, c.startLine, c.endLine, c.lineContent, c.text.trim())}
                 onClose={() => closeComment(c.id)}
               />
             </div>,
