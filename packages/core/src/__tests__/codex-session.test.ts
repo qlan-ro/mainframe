@@ -15,7 +15,7 @@ vi.mock('node:child_process', async () => {
 
   return {
     spawn: vi.fn(() => {
-      const proc = new EventEmitter();
+      const proc = new EventEmitter() as InstanceType<typeof EventEmitter> & Record<string, unknown>;
       proc.stdin = new Writable({
         write(_chunk: unknown, _enc: unknown, cb: () => void) {
           cb();
