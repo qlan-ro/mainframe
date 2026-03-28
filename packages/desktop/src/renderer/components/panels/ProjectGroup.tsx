@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { Plus, Archive, ChevronDown, ChevronRight, Bot, GitBranch, Clock } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { Plus, Archive, ChevronDown, ChevronRight, Bot, GitBranch, Clock, Loader2 } from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
 import type { SessionStatus } from '../../store/chats';
 import { useChatsStore } from '../../store';
@@ -77,9 +77,12 @@ export function ProjectGroup({
     [setActiveChat],
   );
 
+  const [archivingIds, setArchivingIds] = useState<Set<string>>(new Set());
+
   const handleArchiveChat = useCallback(
     (e: React.MouseEvent, chatId: string) => {
       e.stopPropagation();
+      if (archivingIds.has(chatId)) return;
       const chat = chats.find((c) => c.id === chatId);
       let deleteWorktree = true;
       if (chat?.worktreePath) {
@@ -88,14 +91,22 @@ export function ProjectGroup({
         );
         deleteWorktree = choice;
       }
+      setArchivingIds((prev) => new Set(prev).add(chatId));
       archiveChat(chatId, deleteWorktree)
         .then(() => {
           removeChat(chatId);
           useTabsStore.getState().closeTab(`chat:${chatId}`);
         })
-        .catch((err) => log.warn('archive failed', { err: String(err) }));
+        .catch((err) => {
+          log.warn('archive failed', { err: String(err) });
+          setArchivingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(chatId);
+            return next;
+          });
+        });
     },
-    [chats, removeChat],
+    [chats, removeChat, archivingIds],
   );
 
   const handleNewSession = useCallback(
@@ -198,11 +209,17 @@ export function ProjectGroup({
                 )}
                 <button
                   onClick={(e) => handleArchiveChat(e, chat.id)}
-                  className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
+                  disabled={archivingIds.has(chat.id)}
+                  className={cn(
+                    'mr-2 p-1 rounded text-mf-text-secondary transition-all shrink-0',
+                    archivingIds.has(chat.id)
+                      ? 'opacity-100'
+                      : 'opacity-0 group-hover:opacity-100 hover:bg-mf-hover hover:text-mf-text-primary',
+                  )}
                   title="Archive session"
                   aria-label="Archive session"
                 >
-                  <Archive size={14} />
+                  {archivingIds.has(chat.id) ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
                 </button>
               </div>
             ))

@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { Archive, FolderOpen, GitBranch, Clock } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { Archive, FolderOpen, GitBranch, Clock, Loader2 } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
@@ -44,9 +44,12 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
     daemonClient.resumeChat(chat.id);
   }, [chat.id, chat.title, setActiveChat]);
 
+  const [archiving, setArchiving] = useState(false);
+
   const handleArchive = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (archiving) return;
       let deleteWorktree = true;
       if (chat.worktreePath) {
         const choice = window.confirm(
@@ -54,14 +57,18 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
         );
         deleteWorktree = choice;
       }
+      setArchiving(true);
       archiveChat(chat.id, deleteWorktree)
         .then(() => {
           removeChat(chat.id);
           useTabsStore.getState().closeTab(`chat:${chat.id}`);
         })
-        .catch((err) => log.warn('archive failed', { err: String(err) }));
+        .catch((err) => {
+          log.warn('archive failed', { err: String(err) });
+          setArchiving(false);
+        });
     },
-    [chat.id, chat.worktreePath, removeChat],
+    [chat.id, chat.worktreePath, removeChat, archiving],
   );
 
   const isActive = activeChatId === chat.id;
@@ -130,11 +137,15 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
       )}
       <button
         onClick={handleArchive}
-        className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
+        disabled={archiving}
+        className={cn(
+          'mr-2 p-1 rounded text-mf-text-secondary transition-all shrink-0',
+          archiving ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 hover:bg-mf-hover hover:text-mf-text-primary',
+        )}
         title="Archive session"
         aria-label="Archive session"
       >
-        <Archive size={14} />
+        {archiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
       </button>
     </div>
   );
