@@ -284,6 +284,12 @@ export class ChatManager {
     return this.permissionHandler.respondToPermission(chatId, response);
   }
 
+  renameChat(chatId: string, title: string): void {
+    this.db.chats.update(chatId, { title });
+    const chat = this.getChat(chatId);
+    if (chat) this.emitEvent({ type: 'chat.updated', chat });
+  }
+
   async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
     await this.lifecycle.archiveChat(chatId, deleteWorktree);
     this.eventHandler.clearDisplayCache(chatId);
