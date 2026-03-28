@@ -2,7 +2,9 @@ import React, { useRef, useLayoutEffect, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
 import type * as monacoType from 'monaco-editor';
-import { InlineCommentWidget, type InlineCommentState } from './InlineCommentWidget';
+import { Send } from 'lucide-react';
+import { InlineCommentWidget } from './InlineCommentWidget';
+import { useInlineComments } from './useInlineComments';
 import './setup';
 
 interface MonacoDiffEditorProps {
@@ -23,31 +25,42 @@ export function MonacoDiffEditor({
   const lineOffset = startLine && startLine > 1 ? startLine - 1 : 0;
   const editorRef = useRef<monacoType.editor.IStandaloneDiffEditor | null>(null);
   const decorationsRef = useRef<monacoType.editor.IEditorDecorationsCollection | null>(null);
-  const zoneIdRef = useRef<string | null>(null);
-  const zoneDomRef = useRef<HTMLDivElement | null>(null);
-  const [inlineComment, setInlineComment] = useState<InlineCommentState | null>(null);
   const onLineCommentRef = useRef(onLineComment);
   onLineCommentRef.current = onLineComment;
 
-  const closeInlineComment = useCallback(() => {
-    const diffEditor = editorRef.current;
-    const id = zoneIdRef.current;
-    if (diffEditor && id) {
-      const inner = diffEditor.getModifiedEditor();
-      inner.changeViewZones((accessor) => accessor.removeZone(id));
+  const [changeViewZones, setChangeViewZones] = useState<
+    ((cb: (a: monacoType.editor.IViewZoneChangeAccessor) => void) => void) | null
+  >(null);
+  const { comments, openComment, closeComment, closeAll, updateText } = useInlineComments(changeViewZones);
+
+  const handleSubmitComment = useCallback(
+    (id: string, commentLine: number, lineContent: string, text: string) => {
+      onLineCommentRef.current?.(commentLine + lineOffset, lineContent, text);
+      closeComment(id);
+    },
+    [closeComment, lineOffset],
+  );
+
+  const handleSubmitReview = useCallback(() => {
+    for (const c of comments) {
+      if (c.text.trim()) {
+        onLineCommentRef.current?.(c.line + lineOffset, c.lineContent, c.text.trim());
+      }
     }
-    zoneIdRef.current = null;
-    zoneDomRef.current = null;
-    setInlineComment(null);
-  }, []);
+    closeAll();
+  }, [comments, closeAll, lineOffset]);
 
   const handleMount: DiffOnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
+      const inner = editor.getModifiedEditor();
+
+      setChangeViewZones(() => (cb: (a: monacoType.editor.IViewZoneChangeAccessor) => void) => {
+        inner.changeViewZones(cb);
+      });
 
       if (!onLineComment) return;
 
-      const inner = editor.getModifiedEditor();
       decorationsRef.current = inner.createDecorationsCollection([]);
 
       inner.onMouseMove((e) => {
@@ -82,32 +95,14 @@ export function MonacoDiffEditor({
           if (lineNumber) {
             const model = inner.getModel();
             const lineContent = model?.getLineContent(lineNumber) ?? '';
-
-            closeInlineComment();
-
-            const domNode = document.createElement('div');
-            domNode.style.zIndex = '10';
-            inner.changeViewZones((accessor) => {
-              zoneIdRef.current = accessor.addZone({
-                afterLineNumber: lineNumber,
-                heightInPx: 120,
-                domNode,
-              });
-            });
-
-            zoneDomRef.current = domNode;
-            setInlineComment({ line: lineNumber, lineContent });
+            openComment(lineNumber, lineContent);
           }
         }
       });
     },
-    [onLineComment, closeInlineComment],
+    [onLineComment, openComment],
   );
 
-  // The library's disposeEditor() disposes models BEFORE the editor widget,
-  // triggering "TextModel got disposed before DiffEditorWidget model got reset".
-  // Fix: tell the library to skip model disposal (keepCurrent*Model), and handle
-  // it ourselves in the correct order via useLayoutEffect (runs before passive effects).
   useLayoutEffect(() => {
     return () => {
       const editor = editorRef.current;
@@ -121,56 +116,72 @@ export function MonacoDiffEditor({
     };
   }, []);
 
+  const hasComments = comments.length > 0;
+  const hasNonEmpty = comments.some((c) => c.text.trim());
+
   return (
-    <div className="h-full relative overflow-hidden">
-      <DiffEditor
-        height="100%"
-        language={language}
-        original={original}
-        modified={modified}
-        theme="mainframe-dark"
-        onMount={handleMount}
-        keepCurrentOriginalModel
-        keepCurrentModifiedModel
-        options={{
-          readOnly: true,
-          minimap: { enabled: false },
-          lineNumbersMinChars: 5,
-          lineDecorationsWidth: 4,
-          scrollBeyondLastLine: false,
-          fontSize: 13,
-          lineHeight: 20,
-          fontFamily: "'JetBrains Mono', monospace",
-          renderSideBySide: false,
-          hideUnchangedRegions: { enabled: false },
-          renderOverviewRuler: false,
-          overviewRulerBorder: false,
-          overviewRulerLanes: 0,
-          glyphMargin: !!onLineComment,
-          folding: false,
-          renderIndicators: false,
-          ignoreTrimWhitespace: true,
-          scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
-          padding: { top: 4, bottom: 4 },
-          ...(lineOffset > 0 ? { lineNumbers: (n: number) => String(n + lineOffset) } : {}),
-        }}
-      />
-      {inlineComment &&
-        zoneDomRef.current &&
-        createPortal(
-          <div data-testid="line-comment-widget" className="px-14 h-full">
-            <InlineCommentWidget
-              line={inlineComment.line + lineOffset}
-              lineContent={inlineComment.lineContent}
-              onSubmit={(comment) => {
-                onLineCommentRef.current?.(inlineComment.line + lineOffset, inlineComment.lineContent, comment);
-                closeInlineComment();
-              }}
-              onClose={closeInlineComment}
-            />
-          </div>,
-          zoneDomRef.current,
+    <div className="h-full flex flex-col overflow-hidden">
+      {hasComments && (
+        <div className="flex items-center justify-end px-3 py-1 shrink-0 border-b border-mf-divider">
+          <button
+            onClick={handleSubmitReview}
+            disabled={!hasNonEmpty}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-mf-small font-medium text-mf-accent hover:bg-mf-accent/10 disabled:opacity-30 transition-colors"
+          >
+            <Send size={12} />
+            Submit review ({comments.length})
+          </button>
+        </div>
+      )}
+      <div className="flex-1 min-h-0 relative">
+        <DiffEditor
+          height="100%"
+          language={language}
+          original={original}
+          modified={modified}
+          theme="mainframe-dark"
+          onMount={handleMount}
+          keepCurrentOriginalModel
+          keepCurrentModifiedModel
+          options={{
+            readOnly: true,
+            minimap: { enabled: false },
+            lineNumbersMinChars: 5,
+            lineDecorationsWidth: 4,
+            scrollBeyondLastLine: false,
+            fontSize: 13,
+            lineHeight: 20,
+            fontFamily: "'JetBrains Mono', monospace",
+            renderSideBySide: false,
+            hideUnchangedRegions: { enabled: false },
+            renderOverviewRuler: false,
+            overviewRulerBorder: false,
+            overviewRulerLanes: 0,
+            glyphMargin: !!onLineComment,
+            folding: false,
+            renderIndicators: false,
+            ignoreTrimWhitespace: true,
+            scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
+            padding: { top: 4, bottom: 4 },
+            ...(lineOffset > 0 ? { lineNumbers: (n: number) => String(n + lineOffset) } : {}),
+          }}
+        />
+        {comments.map((c) =>
+          createPortal(
+            <div key={c.id} data-testid="line-comment-widget" className="px-14 h-full">
+              <InlineCommentWidget
+                line={c.line + lineOffset}
+                lineContent={c.lineContent}
+                text={c.text}
+                onTextChange={(t) => updateText(c.id, t)}
+                onSubmit={() => handleSubmitComment(c.id, c.line, c.lineContent, c.text.trim())}
+                onClose={() => closeComment(c.id)}
+              />
+            </div>,
+            c.domNode,
+          ),
         )}
+      </div>
     </div>
   );
 }

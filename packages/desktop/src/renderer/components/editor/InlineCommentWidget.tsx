@@ -1,23 +1,23 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { Send } from 'lucide-react';
 
-export interface InlineCommentState {
+interface InlineCommentWidgetProps {
   line: number;
   lineContent: string;
+  text: string;
+  onTextChange: (text: string) => void;
+  onSubmit: () => void;
+  onClose: () => void;
 }
 
 export function InlineCommentWidget({
   line,
   lineContent,
+  text,
+  onTextChange,
   onSubmit,
   onClose,
-}: {
-  line: number;
-  lineContent: string;
-  onSubmit: (comment: string) => void;
-  onClose: () => void;
-}) {
-  const [text, setText] = useState('');
+}: InlineCommentWidgetProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export function InlineCommentWidget({
 
   const handleSubmit = () => {
     if (!text.trim()) return;
-    onSubmit(text.trim());
+    onSubmit();
   };
 
   return (
@@ -37,7 +37,7 @@ export function InlineCommentWidget({
       <textarea
         ref={ref}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => onTextChange(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
