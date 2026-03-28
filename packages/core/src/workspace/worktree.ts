@@ -70,9 +70,9 @@ export function createWorktree(
   baseBranch: string,
   branchName: string,
 ): WorktreeInfo {
-  const shortId = chatId.slice(0, 8);
+  const sanitizedBranch = branchName.replace(/\//g, '-');
   const worktreeDir = path.join(projectPath, dirName);
-  const worktreePath = path.join(worktreeDir, shortId);
+  const worktreePath = path.join(worktreeDir, sanitizedBranch);
 
   mkdirSync(worktreeDir, { recursive: true });
   execFileSync('git', ['worktree', 'add', '-b', branchName, worktreePath, baseBranch], {
