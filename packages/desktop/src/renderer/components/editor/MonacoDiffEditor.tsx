@@ -33,6 +33,8 @@ export function MonacoDiffEditor({
   >(null);
   const [getModel, setGetModel] = useState<(() => monacoType.editor.ITextModel | null) | null>(null);
   const { comments, openComment, closeComment, closeAll, updateText } = useInlineComments(changeViewZones, getModel);
+  const openCommentRef = useRef(openComment);
+  openCommentRef.current = openComment;
 
   const handleSubmitComment = useCallback(
     (id: string, start: number, end: number, lineContent: string, text: string) => {
@@ -95,6 +97,14 @@ export function MonacoDiffEditor({
         if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
           openComment(inner);
         }
+      });
+
+      inner.addAction({
+        id: 'mainframe.addComment',
+        label: 'Add Comment',
+        contextMenuGroupId: '0_ai',
+        contextMenuOrder: 1,
+        run: () => openCommentRef.current(inner),
       });
     },
     [onLineComment, openComment],
