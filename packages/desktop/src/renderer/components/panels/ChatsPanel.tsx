@@ -358,40 +358,41 @@ export function ChatsPanel(): React.ReactElement {
 
       {/* Project filter badges */}
       {projects.length > 1 && (
-        <div
-          ref={filterScrollRef}
-          onWheel={handleFilterWheel}
-          className="flex gap-1.5 px-3.5 py-1.5 overflow-x-auto scrollbar-none"
-        >
-          <button
-            type="button"
-            onClick={() => handleFilterSelect(null)}
-            className={cn(
-              'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status transition-colors',
-              filterProjectId === null
-                ? 'bg-mf-accent text-white'
-                : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-            )}
+        <div className="px-2.5 py-1.5 overflow-hidden">
+          <div
+            ref={filterScrollRef}
+            onWheel={handleFilterWheel}
+            className="flex gap-1.5 overflow-x-auto scrollbar-none"
           >
-            All
-          </button>
-          {sortedProjects.map((p) => (
             <button
-              key={p.id}
               type="button"
-              onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
+              onClick={() => handleFilterSelect(null)}
               className={cn(
-                'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status truncate max-w-[160px] transition-colors',
-                filterProjectId === p.id
+                'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status transition-colors',
+                filterProjectId === null
                   ? 'bg-mf-accent text-white'
                   : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
               )}
-              title={p.name}
             >
-              {p.name}
+              All
             </button>
-          ))}
-          <div className="shrink-0 w-px" aria-hidden />
+            {sortedProjects.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
+                className={cn(
+                  'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status truncate max-w-[160px] transition-colors',
+                  filterProjectId === p.id
+                    ? 'bg-mf-accent text-white'
+                    : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                )}
+                title={p.name}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
