@@ -131,7 +131,8 @@ export class DaemonClient {
     }
   }
 
-  // WebSocket commands
+  // TODO: Migrate request-response actions (chat.create, chat.interrupt, etc.) to REST endpoints.
+  // Reserve WS for event-based streaming (subscribe, message.send).
   createChat(
     projectId: string,
     adapterId: string,
