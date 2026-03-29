@@ -1,0 +1,11 @@
+{
+  "id": "claude-sdk",
+  "name": "Claude Agent SDK",
+  "version": "1.0.0",
+  "description": "Claude adapter via official Agent SDK",
+  "capabilities": ["adapters"],
+  "adapter": {
+    "binaryName": "claude",
+    "displayName": "Claude Agent SDK"
+  }
+}

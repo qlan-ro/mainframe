@@ -43,6 +43,15 @@ export async function getAllChats(): Promise<Chat[]> {
   return json.data;
 }
 
+export async function renameChat(chatId: string, title: string): Promise<void> {
+  log.info('renameChat', { chatId, title });
+  await fetch(`${API_BASE}/api/chats/${chatId}/title`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+}
+
 export async function archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
   log.info('archiveChat', { chatId, deleteWorktree });
   const params = deleteWorktree ? '' : '?deleteWorktree=false';

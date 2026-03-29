@@ -6,6 +6,7 @@ export {
   removeProject,
   getChats,
   getAllChats,
+  renameChat,
   archiveChat,
   getChatMessages,
   getAdapters,

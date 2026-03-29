@@ -183,12 +183,16 @@ export function ChatsPanel(): React.ReactElement {
 
   const handleNewSessionClick = useCallback(() => {
     if (projects.length === 0) return;
+    if (filterProjectId) {
+      daemonClient.createChat(filterProjectId, 'claude');
+      return;
+    }
     if (projects.length === 1) {
       daemonClient.createChat(projects[0]!.id, 'claude');
       return;
     }
     setShowNewSessionPopover((prev) => !prev);
-  }, [projects]);
+  }, [projects, filterProjectId]);
 
   const handleNewSessionInProject = useCallback((projectId: string) => {
     daemonClient.createChat(projectId, 'claude');
@@ -216,8 +220,16 @@ export function ChatsPanel(): React.ReactElement {
     [flatChats, filterProjectId],
   );
 
-  // Sorted project list for filter badges (alphabetical)
-  const sortedProjects = useMemo(() => [...projects].sort((a, b) => a.name.localeCompare(b.name)), [projects]);
+  // Sorted project list for filter badges (most recently used first)
+  const sortedProjects = useMemo(() => {
+    const latestByProject = new Map<string, number>();
+    for (const c of chats) {
+      const ts = new Date(c.updatedAt).getTime();
+      const prev = latestByProject.get(c.projectId) ?? 0;
+      if (ts > prev) latestByProject.set(c.projectId, ts);
+    }
+    return [...projects].sort((a, b) => (latestByProject.get(b.id) ?? 0) - (latestByProject.get(a.id) ?? 0));
+  }, [projects, chats]);
 
   const toggleCollapse = useCallback((projectId: string) => {
     setCollapsed((prev) => {
@@ -346,40 +358,41 @@ export function ChatsPanel(): React.ReactElement {
 
       {/* Project filter badges */}
       {projects.length > 1 && (
-        <div
-          ref={filterScrollRef}
-          onWheel={handleFilterWheel}
-          className="flex gap-1.5 pl-[10px] pr-[10px] py-1.5 overflow-x-auto scrollbar-none"
-        >
-          <button
-            type="button"
-            onClick={() => handleFilterSelect(null)}
-            className={cn(
-              'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status transition-colors',
-              filterProjectId === null
-                ? 'bg-mf-accent text-white'
-                : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-            )}
+        <div className="px-2.5 py-1.5 overflow-hidden">
+          <div
+            ref={filterScrollRef}
+            onWheel={handleFilterWheel}
+            className="flex gap-1.5 overflow-x-auto scrollbar-none"
           >
-            All
-          </button>
-          {sortedProjects.map((p) => (
             <button
-              key={p.id}
               type="button"
-              onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
+              onClick={() => handleFilterSelect(null)}
               className={cn(
-                'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status truncate max-w-[160px] transition-colors',
-                filterProjectId === p.id
+                'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status transition-colors',
+                filterProjectId === null
                   ? 'bg-mf-accent text-white'
                   : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
               )}
-              title={p.name}
             >
-              {p.name}
+              All
             </button>
-          ))}
-          <div className="shrink-0 w-px" aria-hidden />
+            {sortedProjects.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
+                className={cn(
+                  'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status truncate max-w-[160px] transition-colors',
+                  filterProjectId === p.id
+                    ? 'bg-mf-accent text-white'
+                    : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                )}
+                title={p.name}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

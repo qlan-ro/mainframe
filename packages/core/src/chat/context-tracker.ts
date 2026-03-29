@@ -5,7 +5,8 @@ import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 
-export function extractMentionsFromText(chatId: string, text: string, db: DatabaseManager): boolean {
+export function extractMentionsFromText(chatId: string, text: string | undefined, db: DatabaseManager): boolean {
+  if (!text) return false;
   const matches = text.matchAll(/(?:^|\s)@(\S+)/g);
   let changed = false;
   for (const m of matches) {
