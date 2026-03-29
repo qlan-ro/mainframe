@@ -1,12 +1,12 @@
-import React, { useCallback } from 'react';
-import { Plus, Archive, ChevronDown, ChevronRight, Bot, GitBranch, Clock } from 'lucide-react';
+import React, { useCallback, useRef, useState } from 'react';
+import { Plus, Archive, Pencil, ChevronDown, ChevronRight, Bot, GitBranch, Clock, Loader2 } from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
 import type { SessionStatus } from '../../store/chats';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
 import { useAdaptersStore } from '../../store/adapters';
 import { daemonClient } from '../../lib/client';
-import { archiveChat } from '../../lib/api';
+import { archiveChat, renameChat } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { getAdapterLabel } from '../../lib/adapters';
 import { createLogger } from '../../lib/logger';
@@ -46,6 +46,140 @@ function formatRelativeTime(isoString: string): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+interface ChatRowProps {
+  chat: Chat;
+  isActive: boolean;
+  adapters: import('@qlan-ro/mainframe-types').AdapterInfo[];
+  onSelect: (chatId: string, title?: string) => void;
+  isArchiving?: boolean;
+  onArchive: (e: React.MouseEvent, chatId: string) => void;
+  onContextMenu?: (e: React.MouseEvent, sessionId: string | undefined) => void;
+}
+
+function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, onContextMenu }: ChatRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleStartRename = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setEditTitle(chat.title || '');
+      setEditing(true);
+      requestAnimationFrame(() => inputRef.current?.select());
+    },
+    [chat.title],
+  );
+
+  const updateChat = useChatsStore((s) => s.updateChat);
+
+  const handleCommitRename = useCallback(() => {
+    setEditing(false);
+    const trimmed = editTitle.trim();
+    if (trimmed && trimmed !== chat.title) {
+      updateChat({ ...chat, title: trimmed });
+      useTabsStore.getState().updateTabLabel(`chat:${chat.id}`, trimmed);
+      renameChat(chat.id, trimmed).catch((err) => log.warn('rename failed', { err: String(err) }));
+    }
+  }, [chat, editTitle, updateChat]);
+
+  const handleRenameKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') handleCommitRename();
+      if (e.key === 'Escape') setEditing(false);
+    },
+    [handleCommitRename],
+  );
+
+  return (
+    <div
+      data-testid="chat-list-item"
+      onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId)}
+      title={chat.claudeSessionId ? `Session: ${chat.claudeSessionId}` : undefined}
+      className={cn(
+        'group w-full rounded-mf-input transition-colors flex items-center gap-2 ml-2',
+        isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onSelect(chat.id, chat.title)}
+        className="flex-1 min-w-0 px-3 py-1.5 text-left rounded-mf-input"
+      >
+        <div className="flex items-center gap-2">
+          <SessionStatusDot status={chat.displayStatus ?? 'idle'} worktreeMissing={chat.worktreeMissing} />
+          <div className="flex-1 min-w-0">
+            {editing ? (
+              <input
+                ref={inputRef}
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onBlur={handleCommitRename}
+                onKeyDown={handleRenameKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
+              />
+            ) : (
+              <div
+                className={cn(
+                  'text-mf-small truncate',
+                  isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                )}
+                title={chat.title || 'New Chat'}
+              >
+                {chat.title || 'New Chat'}
+              </div>
+            )}
+            <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1">
+              <Bot size={10} className="shrink-0" />
+              <span>{getAdapterLabel(chat.adapterId, adapters)}</span>
+              {chat.worktreePath && (
+                <>
+                  <span>{'·'}</span>
+                  <GitBranch size={10} className="shrink-0" />
+                  <span className="truncate max-w-[100px]" title={chat.worktreePath}>
+                    {chat.worktreePath.split('/').pop()}
+                  </span>
+                </>
+              )}
+              <span>{'·'}</span>
+              <Clock size={10} className="shrink-0" />
+              <span>{formatRelativeTime(chat.updatedAt)}</span>
+            </div>
+          </div>
+        </div>
+      </button>
+      {chat.displayStatus === 'waiting' && (
+        <span className="shrink-0 mr-2 px-2 py-1 rounded-full text-xs font-medium border border-mf-warning text-mf-warning">
+          Waiting
+        </span>
+      )}
+      <button
+        onClick={handleStartRename}
+        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
+        title="Rename session"
+        aria-label="Rename session"
+      >
+        <Pencil size={14} />
+      </button>
+      <button
+        onClick={(e) => onArchive(e, chat.id)}
+        disabled={isArchiving}
+        className={cn(
+          'mr-2 p-1 rounded text-mf-text-secondary transition-all shrink-0',
+          isArchiving
+            ? 'opacity-100'
+            : 'opacity-0 group-hover:opacity-100 hover:bg-mf-hover hover:text-mf-text-primary',
+        )}
+        title="Archive session"
+        aria-label="Archive session"
+      >
+        {isArchiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
+      </button>
+    </div>
+  );
+}
+
 interface ProjectGroupProps {
   project: Project;
   chats: Chat[];
@@ -77,9 +211,12 @@ export function ProjectGroup({
     [setActiveChat],
   );
 
+  const [archivingIds, setArchivingIds] = useState<Set<string>>(new Set());
+
   const handleArchiveChat = useCallback(
     (e: React.MouseEvent, chatId: string) => {
       e.stopPropagation();
+      if (archivingIds.has(chatId)) return;
       const chat = chats.find((c) => c.id === chatId);
       let deleteWorktree = true;
       if (chat?.worktreePath) {
@@ -88,14 +225,32 @@ export function ProjectGroup({
         );
         deleteWorktree = choice;
       }
+      setArchivingIds((prev) => new Set(prev).add(chatId));
       archiveChat(chatId, deleteWorktree)
         .then(() => {
+          const wasActive = activeChatId === chatId;
           removeChat(chatId);
           useTabsStore.getState().closeTab(`chat:${chatId}`);
+          if (wasActive) {
+            const next = chats
+              .filter((c) => c.id !== chatId)
+              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+            if (next) {
+              setActiveChat(next.id);
+              useTabsStore.getState().openChatTab(next.id, next.title);
+            }
+          }
         })
-        .catch((err) => log.warn('archive failed', { err: String(err) }));
+        .catch((err) => {
+          log.warn('archive failed', { err: String(err) });
+          setArchivingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(chatId);
+            return next;
+          });
+        });
     },
-    [chats, removeChat],
+    [chats, removeChat, archivingIds, activeChatId, setActiveChat],
   );
 
   const handleNewSession = useCallback(
@@ -109,10 +264,17 @@ export function ProjectGroup({
   return (
     <div data-testid={`project-group-${project.id}`}>
       {/* Group header */}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggleCollapse}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleCollapse();
+          }
+        }}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors cursor-pointer"
       >
         {collapsed ? <ChevronRight size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
         <div className="flex-1 min-w-0 text-left">
@@ -136,7 +298,7 @@ export function ProjectGroup({
         >
           <Plus size={12} />
         </button>
-      </button>
+      </div>
 
       {/* Chat list */}
       {!collapsed && (
@@ -145,66 +307,16 @@ export function ProjectGroup({
             <div className="pl-6 py-1 text-mf-status text-mf-text-secondary">No sessions</div>
           ) : (
             chats.map((chat) => (
-              <div
+              <ChatRow
                 key={chat.id}
-                data-testid="chat-list-item"
-                onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId)}
-                title={chat.claudeSessionId ? `Session: ${chat.claudeSessionId}` : undefined}
-                className={cn(
-                  'group w-full rounded-mf-input transition-colors flex items-center gap-2 ml-2',
-                  activeChatId === chat.id ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleSelectChat(chat.id, chat.title)}
-                  className="flex-1 min-w-0 px-3 py-1.5 text-left rounded-mf-input"
-                >
-                  <div className="flex items-center gap-2">
-                    <SessionStatusDot status={chat.displayStatus ?? 'idle'} worktreeMissing={chat.worktreeMissing} />
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className={cn(
-                          'text-mf-small truncate',
-                          activeChatId === chat.id ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                        )}
-                        title={chat.title || 'New Chat'}
-                      >
-                        {chat.title || 'New Chat'}
-                      </div>
-                      <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1">
-                        <Bot size={10} className="shrink-0" />
-                        <span>{getAdapterLabel(chat.adapterId, adapters)}</span>
-                        {chat.worktreePath && (
-                          <>
-                            <span>{'·'}</span>
-                            <GitBranch size={10} className="shrink-0" />
-                            <span className="truncate max-w-[100px]" title={chat.worktreePath}>
-                              {chat.worktreePath.split('/').pop()}
-                            </span>
-                          </>
-                        )}
-                        <span>{'·'}</span>
-                        <Clock size={10} className="shrink-0" />
-                        <span>{formatRelativeTime(chat.updatedAt)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </button>
-                {chat.displayStatus === 'waiting' && (
-                  <span className="shrink-0 mr-2 px-2 py-1 rounded-full text-xs font-medium border border-mf-warning text-mf-warning">
-                    Waiting
-                  </span>
-                )}
-                <button
-                  onClick={(e) => handleArchiveChat(e, chat.id)}
-                  className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
-                  title="Archive session"
-                  aria-label="Archive session"
-                >
-                  <Archive size={14} />
-                </button>
-              </div>
+                chat={chat}
+                isActive={activeChatId === chat.id}
+                isArchiving={archivingIds.has(chat.id)}
+                adapters={adapters}
+                onSelect={handleSelectChat}
+                onArchive={handleArchiveChat}
+                onContextMenu={onContextMenu}
+              />
             ))
           )}
         </div>

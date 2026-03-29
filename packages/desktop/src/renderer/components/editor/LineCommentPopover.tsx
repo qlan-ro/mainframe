@@ -87,7 +87,7 @@ export function LineCommentPopover({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               handleSubmit();
             }
@@ -96,9 +96,7 @@ export function LineCommentPopover({
           className="w-full h-20 resize-none rounded-md border border-mf-divider bg-mf-input-bg px-2.5 py-2 text-mf-body font-mono text-mf-text-primary placeholder-mf-text-secondary/40 focus:outline-none focus:border-mf-accent/50"
         />
         <div className="flex items-center justify-between mt-2">
-          <span className="text-[11px] text-mf-text-secondary opacity-40">
-            {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to submit
-          </span>
+          <span className="text-[11px] text-mf-text-secondary opacity-40">Enter to send · Shift+Enter for newline</span>
           <button
             onClick={handleSubmit}
             disabled={!text.trim()}
