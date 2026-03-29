@@ -1,6 +1,9 @@
 import type React from 'react';
+import { QuickTodoDialog } from '../todos/QuickTodoDialog';
 
-const BUILTIN_GLOBAL_COMPONENTS: Record<string, React.ComponentType> = {};
+const BUILTIN_GLOBAL_COMPONENTS: Record<string, React.ComponentType> = {
+  todos: QuickTodoDialog,
+};
 
 export function registerBuiltinGlobalComponent(pluginId: string, Component: React.ComponentType): void {
   BUILTIN_GLOBAL_COMPONENTS[pluginId] = Component;
