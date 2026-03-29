@@ -30,11 +30,6 @@ export function usePluginShortcuts(): void {
     if (actions.length === 0) return;
 
     const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
       const modKey = toModKey(e);
       if (!modKey) return;
 
