@@ -27,6 +27,7 @@ export interface PluginManagerDeps {
 }
 
 type PanelRegisteredEvent = Extract<DaemonEvent, { type: 'plugin.panel.registered' }>;
+type ActionRegisteredEvent = Extract<DaemonEvent, { type: 'plugin.action.registered' }>;
 
 export class PluginManager {
   /** Parent router mounted at /api/plugins by the HTTP server. */
@@ -34,6 +35,7 @@ export class PluginManager {
 
   private loaded = new Map<string, LoadedPlugin>();
   private panelEvents = new Map<string, PanelRegisteredEvent>();
+  private actionEvents = new Map<string, ActionRegisteredEvent[]>();
   // In CJS bundles (esbuild daemon), import.meta.url becomes undefined — cast to handle both.
   // Absolute plugin paths don't rely on the base URL for resolution.
   private _require = createRequire((import.meta.url as string | undefined) ?? `file://${process.cwd()}/index.js`);
@@ -47,12 +49,20 @@ export class PluginManager {
     this.router.get('/', (_req, res) => {
       const plugins = this.getAll().map((p) => {
         const panel = this.panelEvents.get(p.id);
+        const actions = this.actionEvents.get(p.id) ?? [];
         return {
           id: p.id,
           name: p.ctx.manifest.name,
           version: p.ctx.manifest.version,
           capabilities: p.ctx.manifest.capabilities,
           panel: panel ? { zone: panel.zone, label: panel.label, icon: panel.icon } : undefined,
+          actions: actions.map((a) => ({
+            id: a.actionId,
+            pluginId: a.pluginId,
+            label: a.label,
+            shortcut: a.shortcut,
+            icon: a.icon,
+          })),
         };
       });
       res.json({ plugins });
@@ -80,6 +90,20 @@ export class PluginManager {
         this.panelEvents.set(pluginId, event as PanelRegisteredEvent);
       } else if (event.type === 'plugin.panel.unregistered') {
         this.panelEvents.delete(pluginId);
+      } else if (event.type === 'plugin.action.registered') {
+        const existing = this.actionEvents.get(pluginId) ?? [];
+        existing.push(event as ActionRegisteredEvent);
+        this.actionEvents.set(pluginId, existing);
+      } else if (event.type === 'plugin.action.unregistered') {
+        const existing = this.actionEvents.get(pluginId);
+        if (existing) {
+          const filtered = existing.filter((e) => e.actionId !== event.actionId);
+          if (filtered.length > 0) {
+            this.actionEvents.set(pluginId, filtered);
+          } else {
+            this.actionEvents.delete(pluginId);
+          }
+        }
       }
       emit(event);
     };
@@ -88,6 +112,10 @@ export class PluginManager {
   /** Returns panel registration events for all currently loaded plugins that called addPanel(). */
   getRegisteredPanelEvents(): PanelRegisteredEvent[] {
     return [...this.panelEvents.values()];
+  }
+
+  getRegisteredActionEvents(): ActionRegisteredEvent[] {
+    return [...this.actionEvents.values()].flat();
   }
 
   /**
@@ -193,6 +221,7 @@ export class PluginManager {
     }
     this.loaded.clear();
     this.panelEvents.clear();
+    this.actionEvents.clear();
   }
 
   getPlugin(id: string): LoadedPlugin | undefined {

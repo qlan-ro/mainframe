@@ -16,6 +16,7 @@ export class DaemonClient {
   private intentionalClose = false;
   private pendingMessages: ClientEvent[] = [];
   private connectionListeners = new Set<() => void>();
+  readonly visitedChats = new Set<string>();
 
   get connected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
@@ -47,6 +48,7 @@ export class DaemonClient {
       log.info('connected');
       this.reconnectAttempts = 0;
       this.flushPendingMessages();
+      this.resubscribeVisitedChats();
       this.notifyConnectionListeners();
     };
 
@@ -123,7 +125,14 @@ export class DaemonClient {
     }
   }
 
-  // WebSocket commands
+  private resubscribeVisitedChats(): void {
+    for (const chatId of this.visitedChats) {
+      this.send({ type: 'subscribe', chatId });
+    }
+  }
+
+  // TODO: Migrate request-response actions (chat.create, chat.interrupt, etc.) to REST endpoints.
+  // Reserve WS for event-based streaming (subscribe, message.send).
   createChat(
     projectId: string,
     adapterId: string,
@@ -145,6 +154,7 @@ export class DaemonClient {
   }
 
   resumeChat(chatId: string): void {
+    this.visitedChats.add(chatId);
     this.send({ type: 'chat.resume', chatId });
     log.debug('resumeChat', { chatId });
   }
@@ -184,6 +194,7 @@ export class DaemonClient {
   }
 
   unsubscribe(chatId: string): void {
+    this.visitedChats.delete(chatId);
     this.send({ type: 'unsubscribe', chatId });
   }
 }

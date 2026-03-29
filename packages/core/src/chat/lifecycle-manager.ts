@@ -81,7 +81,6 @@ export class ChatLifecycleManager {
 
     if (chat.processState === 'working') {
       if (chat.permissionMode === 'yolo') {
-        this.deps.permissions.clear(chatId);
         await this.startChat(chatId);
       } else if (!this.deps.permissions.hasPending(chatId)) {
         await this.startChat(chatId);
@@ -185,6 +184,17 @@ export class ChatLifecycleManager {
     this.deps.db.chats.update(chatId, { status: 'archived' });
     log.info({ chatId }, 'chat archived');
     this.deps.emitEvent({ type: 'chat.ended', chatId });
+  }
+
+  /** Stop a running session without ending the chat. Used for mid-session reconfiguration. */
+  async stopChat(chatId: string): Promise<void> {
+    const active = this.deps.activeChats.get(chatId);
+    if (!active?.session) return;
+
+    if (active.session.isSpawned) {
+      await active.session.kill();
+    }
+    active.session = null;
   }
 
   async endChat(chatId: string): Promise<void> {

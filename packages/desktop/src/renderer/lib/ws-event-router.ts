@@ -2,6 +2,7 @@ import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../store/chats';
 import { useTabsStore } from '../store/tabs';
 import { useProjectsStore } from '../store/projects';
+import { usePluginLayoutStore } from '../store/plugins';
 import { useSandboxStore } from '../store/sandbox';
 import { createLogger } from './logger';
 
@@ -95,6 +96,18 @@ export function routeEvent(event: DaemonEvent): void {
       log.warn('event:launch.port.timeout', { projectId: event.projectId, name: event.name, port: event.port });
       break;
     case 'sessions.external.count':
+      break;
+    case 'plugin.action.registered':
+      usePluginLayoutStore.getState().registerAction({
+        id: event.actionId,
+        pluginId: event.pluginId,
+        label: event.label,
+        shortcut: event.shortcut,
+        icon: event.icon,
+      });
+      break;
+    case 'plugin.action.unregistered':
+      usePluginLayoutStore.getState().unregisterAction(event.pluginId, event.actionId);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });

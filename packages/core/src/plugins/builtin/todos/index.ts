@@ -290,6 +290,10 @@ export function activate(ctx: PluginContext): void {
   registerSessionRoute(ctx);
   registerAttachmentRoutes(ctx);
   ctx.ui.addPanel({ zone: 'fullview', label: 'Tasks', icon: 'square-check' });
-  ctx.onUnload(() => ctx.ui.removePanel());
+  ctx.ui.addAction({ id: 'quick-create', label: 'New Task', shortcut: 'mod+t', icon: 'plus' });
+  ctx.onUnload(() => {
+    ctx.ui.removePanel();
+    ctx.ui.removeAction('quick-create');
+  });
   ctx.logger.info('TODO Kanban plugin activated');
 }

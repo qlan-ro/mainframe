@@ -28,6 +28,14 @@ export interface PluginUIContribution {
   icon?: string;
 }
 
+export interface PluginAction {
+  id: string;
+  pluginId: string;
+  label: string;
+  shortcut: string;
+  icon?: string;
+}
+
 export interface PluginManifest {
   id: string;
   name: string;
@@ -137,6 +145,8 @@ export interface PluginEventBus {
 export interface PluginUIContext {
   addPanel(opts: { zone: UIZone; label: string; icon?: string }): void;
   removePanel(): void;
+  addAction(opts: { id: string; label: string; shortcut: string; icon?: string }): void;
+  removeAction(id: string): void;
   notify(options: { title: string; body: string; level?: 'info' | 'warning' | 'error' }): void;
 }
 

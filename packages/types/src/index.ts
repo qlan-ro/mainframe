@@ -30,6 +30,7 @@ export type {
   PluginDatabaseContext,
   PluginDatabaseStatement,
   PluginEventBus,
+  PluginAction,
   PluginUIContext,
   PluginConfig,
   PluginContext,

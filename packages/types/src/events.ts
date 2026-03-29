@@ -28,6 +28,15 @@ export type DaemonEvent =
       icon?: string;
     }
   | { type: 'plugin.panel.unregistered'; pluginId: string }
+  | {
+      type: 'plugin.action.registered';
+      pluginId: string;
+      actionId: string;
+      label: string;
+      shortcut: string;
+      icon?: string;
+    }
+  | { type: 'plugin.action.unregistered'; pluginId: string; actionId: string }
   | { type: 'plugin.notification'; pluginId: string; title: string; body: string; level?: string }
   | { type: 'launch.output'; projectId: string; name: string; data: string; stream: 'stdout' | 'stderr' }
   | { type: 'launch.status'; projectId: string; name: string; status: LaunchProcessStatus }
