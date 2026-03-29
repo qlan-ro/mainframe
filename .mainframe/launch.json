@@ -2,28 +2,35 @@
   "version": "1",
   "configurations": [
     {
+      "name": "Setup Ports",
+      "runtimeExecutable": "./scripts/setup-ports.sh",
+      "runtimeArgs": [],
+      "port": null,
+      "url": null
+    },
+    {
       "name": "Core Daemon",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@qlan-ro/mainframe-core", "run", "dev"],
-      "port": 31416,
+      "port": "${DAEMON_PORT:-31416}",
       "url": null,
       "env": {
-        "MAINFRAME_DATA_DIR": "~/.mainframe_dev",
-        "DAEMON_PORT": 31416
+        "DAEMON_PORT": "${DAEMON_PORT:-31416}",
+        "MAINFRAME_DATA_DIR": "${MAINFRAME_DATA_DIR:-~/.mainframe_dev}"
       }
     },
     {
       "name": "Desktop App",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@qlan-ro/mainframe-desktop", "run", "dev:web"],
-      "port": 5174,
+      "port": "${VITE_PORT:-5174}",
       "url": null,
       "preview": true,
       "env": {
-        "MAINFRAME_DATA_DIR": "~/.mainframe_dev",
-        "VITE_DAEMON_HTTP_PORT": "31416",
-        "VITE_DAEMON_WS_PORT": "31416",
-        "VITE_PORT": 5174
+        "VITE_PORT": "${VITE_PORT:-5174}",
+        "VITE_DAEMON_HTTP_PORT": "${DAEMON_PORT:-31416}",
+        "VITE_DAEMON_WS_PORT": "${DAEMON_PORT:-31416}",
+        "MAINFRAME_DATA_DIR": "${MAINFRAME_DATA_DIR:-~/.mainframe_dev}"
       }
     }
   ]

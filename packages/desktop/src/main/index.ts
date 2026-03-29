@@ -11,27 +11,6 @@ const APP_AUTHOR = 'Mainframe Contributors';
 if (process.env.NODE_ENV === 'development') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
-
-// Check if the daemon port is already in use — must run before pino is
-// initialized. If pino's exit handler runs before its stream is ready, it
-// throws "sonic boom is not ready yet" and shows an error dialog.
-const daemonPort = Number(process.env.DAEMON_PORT ?? 31415);
-try {
-  execFileSync(
-    process.execPath,
-    [
-      '-e',
-      `require("net").createServer().on("error",()=>process.exit(1)).listen(${daemonPort},"127.0.0.1",function(){this.close();process.exit(0)})`,
-    ],
-    { timeout: 3000, stdio: 'ignore', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } },
-  );
-} catch {
-  // dialog requires app.ready which hasn't fired yet — just exit.
-  // The user will see the existing instance is already open.
-  process.exit(0);
-}
-
-// Safe to initialize pino now — we are the primary instance.
 import { createMainLogger, logFromRenderer } from './logger.js';
 
 const log = createMainLogger('electron');

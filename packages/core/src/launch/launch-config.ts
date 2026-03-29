@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { LaunchConfig, LaunchConfiguration } from '@qlan-ro/mainframe-types';
+import { expandVariables } from './expand-variables.js';
 
 // Allowed executables: common package managers + node. No shell operators.
 const SAFE_EXECUTABLE = /^(node|pnpm|npm|yarn|bun|python|python3|[a-zA-Z0-9_\-./]+)$/;
@@ -13,7 +14,18 @@ const LaunchConfigurationSchema = z.object({
       message: 'runtimeExecutable must be a safe executable name (no shell operators)',
     }),
   runtimeArgs: z.array(z.string()).optional().default([]),
-  port: z.number().int().positive().nullable().optional().default(null),
+  port: z
+    .union([z.number(), z.string(), z.null()])
+    .optional()
+    .default(null)
+    .transform((v) => {
+      if (v === null || typeof v === 'number') return v;
+      const parsed = parseInt(v, 10);
+      if (Number.isNaN(parsed) || parsed <= 0) return undefined;
+      return parsed;
+    })
+    .refine((v) => v !== undefined, { message: 'port must be a positive integer or null' })
+    .transform((v) => v as number | null),
   url: z.string().url().nullable().optional().default(null),
   preview: z.boolean().optional(),
   env: z
@@ -35,8 +47,16 @@ const LaunchConfigSchema = z
 
 export function parseLaunchConfig(
   data: unknown,
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
 ): { success: true; data: LaunchConfig } | { success: false; error: string } {
-  const result = LaunchConfigSchema.safeParse(data);
+  let expanded: unknown;
+  try {
+    expanded = expandVariables(data, env);
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  const result = LaunchConfigSchema.safeParse(expanded);
   if (!result.success) {
     return { success: false, error: result.error.issues.map((i) => i.message).join(', ') };
   }
