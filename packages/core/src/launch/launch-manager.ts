@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { resolve } from 'node:path';
-import { homedir } from 'node:os';
 import type { DaemonEvent, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
@@ -10,15 +9,6 @@ const log = createChildLogger('launch');
 
 const PORT_POLL_MS = 1_000;
 const PORT_TIMEOUT_MS = 60_000;
-
-function expandEnvValues(env: Record<string, string>): Record<string, string> {
-  const home = homedir();
-  const result: Record<string, string> = {};
-  for (const [k, v] of Object.entries(env)) {
-    result[k] = v.startsWith('~/') || v === '~' ? home + v.slice(1) : v;
-  }
-  return result;
-}
 
 /**
  * Allowlisted env var names and prefixes passed to launched processes.
@@ -117,7 +107,7 @@ export class LaunchManager {
       env: {
         ...cleanEnv(),
         ...(config.port != null ? { PORT: String(config.port) } : {}),
-        ...(config.env ? expandEnvValues(config.env) : {}),
+        ...(config.env ?? {}),
       },
     });
 
