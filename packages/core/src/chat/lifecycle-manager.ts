@@ -31,6 +31,7 @@ export interface LifecycleManagerDeps {
 export class ChatLifecycleManager {
   private loadingChats = new Map<string, Promise<void>>();
   private startingChats = new Map<string, Promise<void>>();
+  private interruptingChats = new Map<string, Promise<void>>();
 
   constructor(private deps: LifecycleManagerDeps) {}
 
@@ -130,7 +131,38 @@ export class ChatLifecycleManager {
 
     this.deps.permissions.clear(chatId);
     this.deps.permissions.markInterrupted(chatId);
+
+    // SIGINT causes the CLI to exit. Track the exit so sendMessage can wait
+    // for it before respawning — without this, a fast follow-up message would
+    // write to the dying process's stdin and be silently lost.
+    if (!this.interruptingChats.has(chatId)) {
+      this.interruptingChats.set(
+        chatId,
+        new Promise<void>((resolve) => {
+          const poll = setInterval(() => {
+            if (!active.session?.isSpawned) {
+              clearInterval(poll);
+              this.interruptingChats.delete(chatId);
+              resolve();
+            }
+          }, 50);
+          // Safety: don't block forever if something goes wrong
+          setTimeout(() => {
+            clearInterval(poll);
+            this.interruptingChats.delete(chatId);
+            resolve();
+          }, 5000);
+        }),
+      );
+    }
+
     await active.session.interrupt();
+  }
+
+  /** Wait for any in-flight interrupt to finish (process exit). */
+  async waitForInterrupt(chatId: string): Promise<void> {
+    const pending = this.interruptingChats.get(chatId);
+    if (pending) await pending;
   }
 
   async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {

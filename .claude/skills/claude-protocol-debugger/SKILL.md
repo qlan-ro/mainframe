@@ -23,179 +23,68 @@ The Claude CLI communicates via a JSON-RPC-like protocol over stdio. This skill 
 
 ## Technique 1: Live Event Inspection
 
-### Key Insight: snake_case vs camelCase
-
-Stream-json (live) uses **snake_case**. JSONL (history) uses **camelCase**.
-
-| Stream-JSON (live) | JSONL (history) |
-|---------------------|-----------------|
-| `tool_use_result` | `toolUseResult` |
-| `request_id` | `requestId` |
-| `tool_use_id` | `toolUseId` |
-| `tool_name` | `toolName` |
-| `permission_suggestions` | `permissionSuggestions` |
-
-Always check both casings when reading event fields.
-
-### Add debug logging
-
-The entry point is `packages/core/src/plugins/builtin/claude/events.ts`. Each event type has a handler: `handleAssistantEvent`, `handleUserEvent`, `handleControlRequestEvent`, `handleResultEvent`.
-
-Add `log.warn` (not debug/trace — dev daemon default is INFO) with:
-- `Object.keys(event)` to discover available fields
-- Raw values (truncated with `.slice(0, 200)`)
-- Both snake_case and camelCase variants
-
-```typescript
-log.warn(
-  {
-    eventKeys: Object.keys(event),
-    hasTurCamel: !!event.toolUseResult,
-    hasTurSnake: !!event.tool_use_result,
-    turSnakeKeys: event.tool_use_result ? Object.keys(event.tool_use_result) : [],
-  },
-  'DEBUG raw event data',
-);
-```
-
-### Trigger and read logs
-
-The dev daemon (`tsx watch`) auto-restarts on file changes. Trigger the action in the dev app (port 31416).
-
-```bash
-# Dev app logs
-grep "DEBUG" ~/.mainframe_dev/logs/server.$(date +%Y-%m-%d).log | tail -5
-
-# Production app logs
-grep "DEBUG" ~/.mainframe/logs/server.$(date +%Y-%m-%d).log | tail -5
-```
-
-Remove all debug logging before committing.
+For snake_case vs camelCase field mappings, debug logging patterns, and daemon log analysis techniques, see [`protocol-findings.md`](protocol-findings.md). Read it before starting any event debugging.
 
 ## Technique 2: Daemon Log Analysis
 
-The daemon logs every `control_response` payload at INFO level in `session.ts:respondToPermission`. Extract and analyze them:
-
-```bash
-# See all permission responses sent today
-grep "writing permission response" ~/.mainframe/logs/server.$(date +%Y-%m-%d).log
-
-# Extract structured data from payloads
-python3 -c "
-import json
-with open('$HOME/.mainframe/logs/server.$(date +%Y-%m-%d).log') as f:
-    for line in f:
-        if 'writing permission response' in line:
-            try:
-                obj = json.loads(line)
-                payload = json.loads(obj['payload'])
-                inner = payload['response']['response']
-                tool = obj.get('toolName','?')
-                perms = inner.get('updatedPermissions')
-                print(f'Tool: {tool}, behavior: {inner.get(\"behavior\")}')
-                if perms:
-                    for p in perms:
-                        print(f'  dest={p.get(\"destination\")}, type={p.get(\"type\")}')
-                else:
-                    print('  NO updatedPermissions')
-            except: pass
-"
-```
+See [`protocol-findings.md`](protocol-findings.md) for grep patterns and Python extraction scripts.
 
 ## Technique 3: Binary Reverse-Engineering
 
 The Claude CLI binary is a bundled Node.js SEA (Single Executable Application) with **readable minified JS** embedded in it. Use this when docs are incomplete or you need to verify what the CLI actually does with a protocol field.
 
+> **Before re-reversing the binary**, read [`cli-binary-internals.md`](cli-binary-internals.md) in this directory. It contains previously reverse-engineered findings (v2.1.85) including the stdio message loop, interrupt handling, REPL bridge, abort controller chain, and background agent wait loop. Read it first to avoid duplicate work.
+
 ### Locate the binary
 
 ```bash
 # Find the CLI version and binary
-claude --version  # e.g. 2.1.83
+claude --version  # e.g. 2.1.85
 ls ~/.local/share/claude/versions/
-# Binary is at: ~/.local/share/claude/versions/<version>/claude
+# Binary is at: ~/.local/share/claude/versions/<version> (the version IS the binary, not a directory)
 ```
 
 ### Extract and search the JS source
 
-The binary contains minified JS that can be searched with grep/ripgrep:
+**Prefer Python `re.finditer` over `strings | grep`** — the binary contains enormous minified JS lines, and `strings | grep` returns megabytes of irrelevant context. Use offset-based extraction:
+
+```python
+import re
+CLI_BIN = "~/.local/share/claude/versions/2.1.85"  # adjust version
+
+with open(CLI_BIN, 'rb') as f:
+    data = f.read()
+
+# Search for exact byte pattern
+pattern = b'case"interrupt"'
+for m in re.finditer(pattern, data):
+    start = max(0, m.start() - 300)
+    end = min(len(data), m.end() + 500)
+    chunk = data[start:end].decode('ascii', errors='replace')
+    print(f'=== offset {m.start()} ===')
+    print(chunk)
+```
+
+For broader searches, `strings` still works but pipe through `wc -l` first to gauge volume:
 
 ```bash
-CLI_BIN=~/.local/share/claude/versions/$(claude --version | head -1)/claude
-
-# Search for a specific function or field name
-strings "$CLI_BIN" | grep -i "updatedPermissions" | head -20
-
-# Search for specific protocol handling
-strings "$CLI_BIN" | grep -i "addRules" | head -20
-
-# Extract larger JS chunks around a match
-strings "$CLI_BIN" | grep -B2 -A5 "persistPermissions" | head -30
+CLI_BIN=~/.local/share/claude/versions/$(claude --version | head -1)
+strings "$CLI_BIN" | grep -c "your_pattern"  # check count first
 ```
 
-### Trace execution chains
+### Previous findings
 
-When you find a function, trace its callers and callees through the minified source:
+All previously reverse-engineered details (string literals, minified function tables, call chains, two code paths for control_request, permission persistence, interrupt handling, background agent wait loop) are in [`cli-binary-internals.md`](cli-binary-internals.md). **Read it before starting any new reverse-engineering session.**
 
-```bash
-# Find the function that processes permission updates
-strings "$CLI_BIN" | grep "updatedPermissions" | grep "function\|=>"
+## Maintaining Reference Files
 
-# Check what destinations are considered "permanent" (written to disk)
-strings "$CLI_BIN" | grep "localSettings\|userSettings\|projectSettings" | grep "function\|return"
-```
+This skill has two reference files that accumulate findings across debugging sessions. **Update them when you discover something surprising** — behavior that contradicts expectations, undocumented protocol quirks, or anything that would save time if known upfront next time.
 
-### Known internal structure (v2.1.83)
+| File | Contents |
+|------|----------|
+| [`protocol-findings.md`](protocol-findings.md) | Protocol-level knowledge: event pipeline, field casing, daemon log analysis, debug logging patterns, common pitfalls |
+| [`cli-binary-internals.md`](cli-binary-internals.md) | Binary reverse-engineering: minified JS structure, code paths, abort chains, agent wait loops, permission persistence |
 
-Key functions discovered via reverse-engineering:
+**What to record:** Things we didn't expect — behavior that surprised us, fields that don't match docs, race conditions, blocking issues. Don't record things that are obvious from reading the code.
 
-| Minified name | Purpose |
-|---------------|---------|
-| `Nu(updates)` | Iterates `updatedPermissions`, calls `Rc()` per update |
-| `Rc(update)` | Routes by `update.type` (`addRules`, `setMode`, etc.) after checking `e_8(destination)` |
-| `e_8(dest)` | Returns `true` for `localSettings`, `projectSettings`, `userSettings`; `false` for `session`, `cliArg` |
-| `du6({rules, behavior}, dest)` | Merges rules into settings, calls `f8()` to write |
-| `f8(dest, settings)` | Resolves path via `Vj()` and writes settings JSON to disk |
-| `Vj(dest)` | Maps destination to file path (e.g. `localSettings` -> `.claude/settings.local.json`) |
-
-**Note:** Minified names change between CLI versions. Search by behavior, not name.
-
-### Example: verifying permission persistence
-
-This chain was traced to confirm that `addRules` with `destination: "localSettings"` writes to `.claude/settings.local.json`:
-
-```
-control_response (stdin)
-  -> onResponse handler checks updatedPermissions
-  -> persistPermissions(updatedPermissions)
-  -> Nu(updates): iterates each update
-  -> Rc(update): checks e_8(destination)
-     - "session" -> e_8 returns false -> skip (in-memory only)
-     - "localSettings" -> e_8 returns true -> proceed
-  -> du6({rules, behavior}, destination): merge into settings
-  -> f8(destination, merged): write to .claude/settings.local.json
-```
-
-## Event Pipeline Reference
-
-```
-CLI stdout (stream-json, snake_case)
-  -> events.ts: handleEvent() dispatches by event.type
-    -> handleAssistantEvent: sink.onMessage(content)
-    -> handleUserEvent: sink.onToolResult(content) via buildToolResultBlocks()
-    -> handleControlRequestEvent: sink.onPermission(request)
-    -> handleResultEvent: sink.onResult(data)
-  -> event-handler.ts: buildSessionSink() processes sink callbacks
-    -> Caches messages, emits DaemonEvents to WebSocket clients
-
-CLI JSONL files (camelCase, includes toolUseResult)
-  -> history.ts: loadHistory() reads on daemon restart / --resume
-    -> convertUserEntry() via buildToolResultBlocks() (same function, different input casing)
-```
-
-## Common Pitfalls
-
-- **Logging at debug/trace level**: Dev daemon default is INFO. Use `log.warn` for temporary debug output.
-- **Assuming stream-json matches JSONL**: Always verify field names empirically.
-- **Forgetting nested object casing**: Top-level key might exist but inner fields may differ (e.g. `tool_use_result.oldString` vs `toolUseResult.oldString`).
-- **Trusting docs over binary**: Protocol docs may be incomplete or outdated. When in doubt, verify against the binary source.
-- **Minified names are version-specific**: Search by behavior patterns (string literals, field names) not by minified function names.
+**What NOT to record:** Routine findings that match documentation, expected behavior, or things derivable from reading source files.
