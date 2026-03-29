@@ -76,15 +76,31 @@ export function DiffTab({
     }
   }, [source, inlineOriginal, inlineModified]);
 
-  const handleLineComment = useCallback(
-    (line: number, lineContent: string, comment: string) => {
-      const shortPath = filePath.split('/').slice(-3).join('/');
-      const trimmedLine = lineContent.trim();
-      const quote = trimmedLine ? `\n> ${trimmedLine}` : '';
-      const formatted = `In diff of \`${shortPath}\` at line ${line}:${quote}\n\n${comment}`;
-      sendCommentMessage(formatted, chatId);
+  const formatComment = useCallback(
+    (item: { startLine: number; endLine: number; lineContent: string; comment: string }) => {
+      const lineRef =
+        item.startLine === item.endLine ? `line ${item.startLine}` : `lines ${item.startLine}-${item.endLine}`;
+      const trimmed = item.lineContent.trim();
+      const quote = trimmed ? `\n\`\`\`\n${trimmed}\n\`\`\`` : '';
+      return `At ${lineRef}:${quote}\n${item.comment}`;
     },
-    [filePath, chatId],
+    [],
+  );
+
+  const handleLineComment = useCallback(
+    (startLine: number, endLine: number, lineContent: string, comment: string) => {
+      const body = formatComment({ startLine, endLine, lineContent, comment });
+      sendCommentMessage(`Diff of \`${filePath}\`\n\n${body}`, chatId);
+    },
+    [filePath, chatId, formatComment],
+  );
+
+  const handleSubmitReview = useCallback(
+    (items: { startLine: number; endLine: number; lineContent: string; comment: string }[]) => {
+      const parts = items.map(formatComment);
+      sendCommentMessage(`Diff of \`${filePath}\`\n\n${parts.join('\n\n---\n\n')}`, chatId);
+    },
+    [filePath, chatId, formatComment],
   );
 
   if (error) {
@@ -105,6 +121,7 @@ export function DiffTab({
       language={inferLanguage(filePath)}
       startLine={startLine}
       onLineComment={handleLineComment}
+      onSubmitReview={handleSubmitReview}
     />
   );
 }

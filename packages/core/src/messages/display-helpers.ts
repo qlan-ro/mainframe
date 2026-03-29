@@ -76,7 +76,7 @@ export function convertUserContent(content: MessageContent[]): {
 
   for (const block of content) {
     if (block.type === 'text') {
-      if (block.text.startsWith('[Request interrupted')) continue;
+      if (!block.text || block.text.startsWith('[Request interrupted')) continue;
 
       const cmdInfo = parseCommandMessage(block.text);
       if (cmdInfo) metadata.command = { name: cmdInfo.commandName, userText: cmdInfo.userText };
