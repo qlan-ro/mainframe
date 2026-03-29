@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LaunchConfig } from '@qlan-ro/mainframe-types';
-import { useProjectsStore } from '../store/projects';
 import { useChatsStore } from '../store/chats';
 import { useActiveProjectId } from './useActiveProjectId.js';
+import { fetchLaunchConfigs } from '../lib/launch';
 import { daemonClient } from '../lib/client';
 import { createLogger } from '../lib/logger';
 
@@ -10,34 +10,29 @@ const log = createLogger('renderer:launch-config');
 
 export function useLaunchConfig(): LaunchConfig | null {
   const activeProjectId = useActiveProjectId();
-  const projects = useProjectsStore((s) => s.projects);
-  const activeProject = activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null;
   const activeChatId = useChatsStore((s) => s.activeChatId);
-  const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
-  const effectivePath = activeChat?.worktreePath ?? activeProject?.path;
   const [config, setConfig] = useState<LaunchConfig | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!effectivePath) {
+    if (!activeProjectId) {
       setConfig(null);
       return;
     }
-    void window.mainframe
-      ?.readFile(`${effectivePath}/.mainframe/launch.json`)
-      .then((content) => {
-        if (!content) {
+    fetchLaunchConfigs(activeProjectId, activeChatId ?? undefined)
+      .then((configurations) => {
+        if (configurations.length === 0) {
           setConfig(null);
           return;
         }
-        setConfig(JSON.parse(content) as LaunchConfig);
+        setConfig({ version: '1', configurations });
       })
       .catch((err) => {
-        log.warn('failed to read launch.json', { err: String(err) });
+        log.warn('failed to fetch launch configs', { err: String(err) });
         setConfig(null);
       });
-  }, [effectivePath, refreshKey]);
+  }, [activeProjectId, activeChatId, refreshKey]);
 
   useEffect(() => {
     if (!activeChatId) return;

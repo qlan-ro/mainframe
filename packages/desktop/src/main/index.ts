@@ -11,7 +11,6 @@ const APP_AUTHOR = 'Mainframe Contributors';
 if (process.env.NODE_ENV === 'development') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
-
 import { createMainLogger, logFromRenderer } from './logger.js';
 
 const log = createMainLogger('electron');
