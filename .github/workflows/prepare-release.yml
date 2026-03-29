@@ -162,11 +162,14 @@ jobs:
           echo "Tagging: $TAG"
 
       - name: Create and push tag
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
             echo "::error::Tag ${{ steps.version.outputs.tag }} already exists"
             exit 1
           fi
           git tag "${{ steps.version.outputs.tag }}" origin/main
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git push origin "${{ steps.version.outputs.tag }}"
           echo "::notice::Tagged ${{ steps.version.outputs.tag }} — Release workflow will start"
