@@ -129,14 +129,31 @@ export function EditorTab({
     if (value !== undefined) setCurrentContent(value);
   }, []);
 
-  const handleLineComment = useCallback(
-    (line: number, lineContent: string, comment: string) => {
-      const shortPath = filePath.split('/').slice(-3).join('/');
-      const trimmedLine = lineContent.trim();
-      const formatted = `In \`${shortPath}\` at line ${line}:\n> ${trimmedLine}\n\n${comment}`;
-      sendCommentMessage(formatted);
+  const formatComment = useCallback(
+    (item: { startLine: number; endLine: number; lineContent: string; comment: string }) => {
+      const lineRef =
+        item.startLine === item.endLine ? `line ${item.startLine}` : `lines ${item.startLine}-${item.endLine}`;
+      const trimmed = item.lineContent.trim();
+      const quote = trimmed ? `\n\`\`\`\n${trimmed}\n\`\`\`` : '';
+      return `At ${lineRef}:${quote}\n${item.comment}`;
     },
-    [filePath],
+    [],
+  );
+
+  const handleLineComment = useCallback(
+    (startLine: number, endLine: number, lineContent: string, comment: string) => {
+      const body = formatComment({ startLine, endLine, lineContent, comment });
+      sendCommentMessage(`File: \`${filePath}\`\n\n${body}`);
+    },
+    [filePath, formatComment],
+  );
+
+  const handleSubmitReview = useCallback(
+    (items: { startLine: number; endLine: number; lineContent: string; comment: string }[]) => {
+      const parts = items.map(formatComment);
+      sendCommentMessage(`File: \`${filePath}\`\n\n${parts.join('\n\n---\n\n')}`);
+    },
+    [filePath, formatComment],
   );
 
   if (error) {
@@ -176,6 +193,7 @@ export function EditorTab({
           readOnly={false}
           onChange={handleChange}
           onLineComment={handleLineComment}
+          onSubmitReview={handleSubmitReview}
         />
       </div>
     </div>
