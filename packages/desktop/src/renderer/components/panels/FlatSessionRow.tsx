@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Archive, FolderOpen, GitBranch, Clock, Pencil } from 'lucide-react';
+import { Archive, FolderOpen, GitBranch, Clock, Loader2, Pencil } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
@@ -35,6 +35,7 @@ interface FlatSessionRowProps {
 
 export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSessionRowProps): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
+  const chats = useChatsStore((s) => s.chats);
   const setActiveChat = useChatsStore((s) => s.setActiveChat);
   const removeChat = useChatsStore((s) => s.removeChat);
 
@@ -44,9 +45,12 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
     daemonClient.resumeChat(chat.id);
   }, [chat.id, chat.title, setActiveChat]);
 
+  const [archiving, setArchiving] = useState(false);
+
   const handleArchive = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (archiving) return;
       let deleteWorktree = true;
       if (chat.worktreePath) {
         const choice = window.confirm(
@@ -54,14 +58,28 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
         );
         deleteWorktree = choice;
       }
+      setArchiving(true);
       archiveChat(chat.id, deleteWorktree)
         .then(() => {
+          const wasActive = activeChatId === chat.id;
           removeChat(chat.id);
           useTabsStore.getState().closeTab(`chat:${chat.id}`);
+          if (wasActive) {
+            const next = chats
+              .filter((c) => c.id !== chat.id && c.projectId === chat.projectId)
+              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+            if (next) {
+              setActiveChat(next.id);
+              useTabsStore.getState().openChatTab(next.id, next.title);
+            }
+          }
         })
-        .catch((err) => log.warn('archive failed', { err: String(err) }));
+        .catch((err) => {
+          log.warn('archive failed', { err: String(err) });
+          setArchiving(false);
+        });
     },
-    [chat.id, chat.worktreePath, removeChat],
+    [chat.id, chat.projectId, chat.worktreePath, chats, removeChat, setActiveChat, activeChatId, archiving],
   );
 
   const [editing, setEditing] = useState(false);
@@ -184,11 +202,15 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
       </button>
       <button
         onClick={handleArchive}
-        className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
+        disabled={archiving}
+        className={cn(
+          'mr-2 p-1 rounded text-mf-text-secondary transition-all shrink-0',
+          archiving ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 hover:bg-mf-hover hover:text-mf-text-primary',
+        )}
         title="Archive session"
         aria-label="Archive session"
       >
-        <Archive size={14} />
+        {archiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
       </button>
     </div>
   );

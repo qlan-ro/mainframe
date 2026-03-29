@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Plus, Archive, Pencil, ChevronDown, ChevronRight, Bot, GitBranch, Clock } from 'lucide-react';
+import { Plus, Archive, Pencil, ChevronDown, ChevronRight, Bot, GitBranch, Clock, Loader2 } from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
 import type { SessionStatus } from '../../store/chats';
 import { useChatsStore } from '../../store';
@@ -51,11 +51,12 @@ interface ChatRowProps {
   isActive: boolean;
   adapters: import('@qlan-ro/mainframe-types').AdapterInfo[];
   onSelect: (chatId: string, title?: string) => void;
+  isArchiving?: boolean;
   onArchive: (e: React.MouseEvent, chatId: string) => void;
   onContextMenu?: (e: React.MouseEvent, sessionId: string | undefined) => void;
 }
 
-function ChatRow({ chat, isActive, adapters, onSelect, onArchive, onContextMenu }: ChatRowProps) {
+function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, onContextMenu }: ChatRowProps) {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -163,11 +164,17 @@ function ChatRow({ chat, isActive, adapters, onSelect, onArchive, onContextMenu 
       </button>
       <button
         onClick={(e) => onArchive(e, chat.id)}
-        className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
+        disabled={isArchiving}
+        className={cn(
+          'mr-2 p-1 rounded text-mf-text-secondary transition-all shrink-0',
+          isArchiving
+            ? 'opacity-100'
+            : 'opacity-0 group-hover:opacity-100 hover:bg-mf-hover hover:text-mf-text-primary',
+        )}
         title="Archive session"
         aria-label="Archive session"
       >
-        <Archive size={14} />
+        {isArchiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
       </button>
     </div>
   );
@@ -204,9 +211,12 @@ export function ProjectGroup({
     [setActiveChat],
   );
 
+  const [archivingIds, setArchivingIds] = useState<Set<string>>(new Set());
+
   const handleArchiveChat = useCallback(
     (e: React.MouseEvent, chatId: string) => {
       e.stopPropagation();
+      if (archivingIds.has(chatId)) return;
       const chat = chats.find((c) => c.id === chatId);
       let deleteWorktree = true;
       if (chat?.worktreePath) {
@@ -215,14 +225,32 @@ export function ProjectGroup({
         );
         deleteWorktree = choice;
       }
+      setArchivingIds((prev) => new Set(prev).add(chatId));
       archiveChat(chatId, deleteWorktree)
         .then(() => {
+          const wasActive = activeChatId === chatId;
           removeChat(chatId);
           useTabsStore.getState().closeTab(`chat:${chatId}`);
+          if (wasActive) {
+            const next = chats
+              .filter((c) => c.id !== chatId)
+              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+            if (next) {
+              setActiveChat(next.id);
+              useTabsStore.getState().openChatTab(next.id, next.title);
+            }
+          }
         })
-        .catch((err) => log.warn('archive failed', { err: String(err) }));
+        .catch((err) => {
+          log.warn('archive failed', { err: String(err) });
+          setArchivingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(chatId);
+            return next;
+          });
+        });
     },
-    [chats, removeChat],
+    [chats, removeChat, archivingIds, activeChatId, setActiveChat],
   );
 
   const handleNewSession = useCallback(
@@ -283,6 +311,7 @@ export function ProjectGroup({
                 key={chat.id}
                 chat={chat}
                 isActive={activeChatId === chat.id}
+                isArchiving={archivingIds.has(chat.id)}
                 adapters={adapters}
                 onSelect={handleSelectChat}
                 onArchive={handleArchiveChat}
