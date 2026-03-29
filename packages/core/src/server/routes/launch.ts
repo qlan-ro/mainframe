@@ -9,12 +9,24 @@ import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:launch');
 
-/** Try launch.local.json first (worktree-specific override), fall back to launch.json. */
-async function readLaunchFile(projectPath: string): Promise<string> {
+/** Parse a .env file into key-value pairs. Ignores comments and blank lines. */
+function parseDotenv(content: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const line of content.split('\n')) {
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)/);
+    if (match) env[match[1]!] = match[2]!;
+  }
+  return env;
+}
+
+/** Load the project's .env file and merge with process.env (project .env takes precedence). */
+async function loadProjectEnv(projectPath: string): Promise<Record<string, string | undefined>> {
+  const base = process.env as Record<string, string | undefined>;
   try {
-    return await readFile(join(projectPath, '.mainframe', 'launch.local.json'), 'utf-8');
+    const content = await readFile(join(projectPath, '.env'), 'utf-8');
+    return { ...base, ...parseDotenv(content) };
   } catch {
-    return readFile(join(projectPath, '.mainframe', 'launch.json'), 'utf-8');
+    return base;
   }
 }
 
@@ -63,8 +75,9 @@ export function launchRoutes(ctx: RouteContext): Router {
         return;
       }
       try {
-        const raw = await readLaunchFile(resolved.path);
-        const result = parseLaunchConfig(JSON.parse(raw));
+        const raw = await readFile(join(resolved.path, '.mainframe', 'launch.json'), 'utf-8');
+        const env = await loadProjectEnv(resolved.path);
+        const result = parseLaunchConfig(JSON.parse(raw), env);
         if (!result.success) {
           res.status(400).json({ success: false, error: result.error });
           return;
@@ -89,14 +102,15 @@ export function launchRoutes(ctx: RouteContext): Router {
       // Read and validate launch config from disk — never trust the client body
       let raw: string;
       try {
-        raw = await readLaunchFile(resolved.path);
+        raw = await readFile(join(resolved.path, '.mainframe', 'launch.json'), 'utf-8');
       } catch {
         res.status(404).json({ success: false, error: 'No launch.json found for project' });
         return;
       }
       let parsed: ReturnType<typeof parseLaunchConfig>;
       try {
-        parsed = parseLaunchConfig(JSON.parse(raw));
+        const env = await loadProjectEnv(resolved.path);
+        parsed = parseLaunchConfig(JSON.parse(raw), env);
       } catch {
         res.status(400).json({ success: false, error: 'Invalid launch.json' });
         return;

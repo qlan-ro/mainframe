@@ -47,7 +47,6 @@ release/
 # Mainframe worktrees
 .mainframe/
 .worktrees/
-.mainframe_dev/
 
 # Superpowers brainstorm artifacts
 .superpowers/
