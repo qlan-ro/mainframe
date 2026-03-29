@@ -1,10 +1,10 @@
-import React, { useCallback } from 'react';
-import { Archive, FolderOpen, GitBranch, Clock } from 'lucide-react';
+import React, { useCallback, useRef, useState } from 'react';
+import { Archive, FolderOpen, GitBranch, Clock, Loader2, Pencil } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
 import { daemonClient } from '../../lib/client';
-import { archiveChat } from '../../lib/api';
+import { archiveChat, renameChat } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { createLogger } from '../../lib/logger';
 
@@ -35,6 +35,7 @@ interface FlatSessionRowProps {
 
 export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSessionRowProps): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
+  const chats = useChatsStore((s) => s.chats);
   const setActiveChat = useChatsStore((s) => s.setActiveChat);
   const removeChat = useChatsStore((s) => s.removeChat);
 
@@ -44,9 +45,12 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
     daemonClient.resumeChat(chat.id);
   }, [chat.id, chat.title, setActiveChat]);
 
+  const [archiving, setArchiving] = useState(false);
+
   const handleArchive = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (archiving) return;
       let deleteWorktree = true;
       if (chat.worktreePath) {
         const choice = window.confirm(
@@ -54,14 +58,62 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
         );
         deleteWorktree = choice;
       }
+      setArchiving(true);
       archiveChat(chat.id, deleteWorktree)
         .then(() => {
+          const wasActive = activeChatId === chat.id;
           removeChat(chat.id);
           useTabsStore.getState().closeTab(`chat:${chat.id}`);
+          if (wasActive) {
+            const next = chats
+              .filter((c) => c.id !== chat.id && c.projectId === chat.projectId)
+              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+            if (next) {
+              setActiveChat(next.id);
+              useTabsStore.getState().openChatTab(next.id, next.title);
+            }
+          }
         })
-        .catch((err) => log.warn('archive failed', { err: String(err) }));
+        .catch((err) => {
+          log.warn('archive failed', { err: String(err) });
+          setArchiving(false);
+        });
     },
-    [chat.id, chat.worktreePath, removeChat],
+    [chat.id, chat.projectId, chat.worktreePath, chats, removeChat, setActiveChat, activeChatId, archiving],
+  );
+
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleStartRename = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setEditTitle(chat.title || '');
+      setEditing(true);
+      requestAnimationFrame(() => inputRef.current?.select());
+    },
+    [chat.title],
+  );
+
+  const updateChat = useChatsStore((s) => s.updateChat);
+
+  const handleCommitRename = useCallback(() => {
+    setEditing(false);
+    const trimmed = editTitle.trim();
+    if (trimmed && trimmed !== chat.title) {
+      updateChat({ ...chat, title: trimmed });
+      useTabsStore.getState().updateTabLabel(`chat:${chat.id}`, trimmed);
+      renameChat(chat.id, trimmed).catch((err) => log.warn('rename failed', { err: String(err) }));
+    }
+  }, [chat, editTitle, updateChat]);
+
+  const handleRenameKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') handleCommitRename();
+      if (e.key === 'Escape') setEditing(false);
+    },
+    [handleCommitRename],
   );
 
   const isActive = activeChatId === chat.id;
@@ -90,14 +142,26 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
             )}
           />
           <div className="flex-1 min-w-0">
-            <div
-              className={cn(
-                'text-mf-small truncate',
-                isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-              )}
-            >
-              {chat.title || 'New Chat'}
-            </div>
+            {editing ? (
+              <input
+                ref={inputRef}
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onBlur={handleCommitRename}
+                onKeyDown={handleRenameKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
+              />
+            ) : (
+              <div
+                className={cn(
+                  'text-mf-small truncate',
+                  isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                )}
+              >
+                {chat.title || 'New Chat'}
+              </div>
+            )}
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1">
               {projectName && (
                 <>
@@ -129,12 +193,24 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
         </span>
       )}
       <button
+        onClick={handleStartRename}
+        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
+        title="Rename session"
+        aria-label="Rename session"
+      >
+        <Pencil size={14} />
+      </button>
+      <button
         onClick={handleArchive}
-        className="opacity-0 group-hover:opacity-100 mr-2 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
+        disabled={archiving}
+        className={cn(
+          'mr-2 p-1 rounded text-mf-text-secondary transition-all shrink-0',
+          archiving ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 hover:bg-mf-hover hover:text-mf-text-primary',
+        )}
         title="Archive session"
         aria-label="Archive session"
       >
-        <Archive size={14} />
+        {archiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
       </button>
     </div>
   );
