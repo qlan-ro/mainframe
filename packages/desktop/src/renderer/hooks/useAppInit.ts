@@ -57,6 +57,11 @@ export function useAppInit(): void {
             if (plugin.panel) {
               store.registerContribution({ pluginId: plugin.id, ...plugin.panel });
             }
+            if (plugin.actions) {
+              for (const action of plugin.actions) {
+                store.registerAction(action);
+              }
+            }
           }
         } catch (err) {
           log.warn('plugin fetch failed', { err: String(err) });

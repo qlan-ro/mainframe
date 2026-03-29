@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createPluginUIContext } from '../../plugins/ui-context.js';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 
 describe('PluginUIContext', () => {
   it('calls emit on addPanel', () => {
@@ -41,5 +42,36 @@ describe('PluginUIContext', () => {
     expect(emitEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'plugin.notification', pluginId: 'my-plugin', title: 'Hello' }),
     );
+  });
+});
+
+describe('createPluginUIContext', () => {
+  it('addAction emits plugin.action.registered event', () => {
+    const emitEvent = vi.fn<(event: DaemonEvent) => void>();
+    const ui = createPluginUIContext('todos', emitEvent);
+
+    ui.addAction({ id: 'quick-create', label: 'New Task', shortcut: 'mod+t', icon: 'plus' });
+
+    expect(emitEvent).toHaveBeenCalledWith({
+      type: 'plugin.action.registered',
+      pluginId: 'todos',
+      actionId: 'quick-create',
+      label: 'New Task',
+      shortcut: 'mod+t',
+      icon: 'plus',
+    });
+  });
+
+  it('removeAction emits plugin.action.unregistered event', () => {
+    const emitEvent = vi.fn<(event: DaemonEvent) => void>();
+    const ui = createPluginUIContext('todos', emitEvent);
+
+    ui.removeAction('quick-create');
+
+    expect(emitEvent).toHaveBeenCalledWith({
+      type: 'plugin.action.unregistered',
+      pluginId: 'todos',
+      actionId: 'quick-create',
+    });
   });
 });

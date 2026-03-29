@@ -7,12 +7,21 @@ interface PluginPanel {
   icon?: string;
 }
 
+interface PluginActionInfo {
+  id: string;
+  pluginId: string;
+  label: string;
+  shortcut: string;
+  icon?: string;
+}
+
 interface PluginInfo {
   id: string;
   name: string;
   version: string;
   capabilities: string[];
   panel?: PluginPanel;
+  actions?: PluginActionInfo[];
 }
 
 interface GetPluginsResponse {

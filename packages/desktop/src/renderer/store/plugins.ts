@@ -1,14 +1,25 @@
 import { create } from 'zustand';
-import type { PluginUIContribution } from '@qlan-ro/mainframe-types';
+import type { PluginAction, PluginUIContribution } from '@qlan-ro/mainframe-types';
+
+interface TriggeredAction {
+  pluginId: string;
+  actionId: string;
+}
 
 interface PluginLayoutState {
   contributions: PluginUIContribution[];
+  actions: PluginAction[];
+  triggeredAction: TriggeredAction | null;
   activeFullviewId: string | null;
   activeLeftPanelId: string | null;
   activeRightPanelId: string | null;
 
   registerContribution(c: PluginUIContribution): void;
   unregisterContribution(pluginId: string): void;
+  registerAction(action: PluginAction): void;
+  unregisterAction(pluginId: string, actionId: string): void;
+  triggerAction(pluginId: string, actionId: string): void;
+  clearTriggeredAction(): void;
   activateFullview(pluginId: string): void;
   setActiveLeftPanel(pluginId: string | null): void;
   setActiveRightPanel(pluginId: string | null): void;
@@ -16,26 +27,42 @@ interface PluginLayoutState {
 
 export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
   contributions: [],
+  actions: [],
+  triggeredAction: null,
   activeFullviewId: null,
   activeLeftPanelId: null,
   activeRightPanelId: null,
 
   registerContribution: (c) =>
-    set((state) => ({
-      contributions: [...state.contributions.filter((x) => x.pluginId !== c.pluginId), c],
+    set((s) => ({
+      contributions: [...s.contributions.filter((x) => x.pluginId !== c.pluginId), c],
     })),
 
   unregisterContribution: (pluginId) =>
-    set((state) => ({
-      contributions: state.contributions.filter((c) => c.pluginId !== pluginId),
-      activeFullviewId: state.activeFullviewId === pluginId ? null : state.activeFullviewId,
-      activeLeftPanelId: state.activeLeftPanelId === pluginId ? null : state.activeLeftPanelId,
-      activeRightPanelId: state.activeRightPanelId === pluginId ? null : state.activeRightPanelId,
+    set((s) => ({
+      contributions: s.contributions.filter((c) => c.pluginId !== pluginId),
+      activeFullviewId: s.activeFullviewId === pluginId ? null : s.activeFullviewId,
+      activeLeftPanelId: s.activeLeftPanelId === pluginId ? null : s.activeLeftPanelId,
+      activeRightPanelId: s.activeRightPanelId === pluginId ? null : s.activeRightPanelId,
     })),
 
+  registerAction: (action) =>
+    set((s) => ({
+      actions: [...s.actions.filter((a) => !(a.pluginId === action.pluginId && a.id === action.id)), action],
+    })),
+
+  unregisterAction: (pluginId, actionId) =>
+    set((s) => ({
+      actions: s.actions.filter((a) => !(a.pluginId === pluginId && a.id === actionId)),
+    })),
+
+  triggerAction: (pluginId, actionId) => set({ triggeredAction: { pluginId, actionId } }),
+
+  clearTriggeredAction: () => set({ triggeredAction: null }),
+
   activateFullview: (pluginId) =>
-    set((state) => ({
-      activeFullviewId: state.activeFullviewId === pluginId ? null : pluginId,
+    set((s) => ({
+      activeFullviewId: s.activeFullviewId === pluginId ? null : pluginId,
     })),
 
   setActiveLeftPanel: (pluginId) => set({ activeLeftPanelId: pluginId, activeFullviewId: null }),

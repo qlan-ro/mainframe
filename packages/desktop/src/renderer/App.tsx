@@ -11,12 +11,15 @@ import { ConnectionOverlay } from './components/ConnectionOverlay';
 import { Toaster } from './components/Toaster';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useAppInit } from './hooks/useAppInit';
+import { usePluginShortcuts } from './hooks/usePluginShortcuts';
 import { useSettingsStore } from './store';
 import { getActiveProjectId } from './hooks/useActiveProjectId.js';
 import { daemonClient } from './lib/client';
+import { PluginGlobalComponents } from './components/plugins/PluginGlobalComponents';
 
 export default function App(): React.ReactElement {
   useAppInit();
+  usePluginShortcuts();
 
   // Global ⌘N / Ctrl+N — new chat
   useEffect(() => {
@@ -54,6 +57,7 @@ export default function App(): React.ReactElement {
         <TutorialOverlay />
         <ConnectionOverlay />
         <Toaster />
+        <PluginGlobalComponents />
       </TooltipProvider>
     </ErrorBoundary>
   );
