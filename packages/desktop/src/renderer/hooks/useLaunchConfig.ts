@@ -24,8 +24,10 @@ export function useLaunchConfig(): LaunchConfig | null {
       setConfig(null);
       return;
     }
+    // Try launch.local.json first (worktree-specific override), fall back to launch.json
     void window.mainframe
-      ?.readFile(`${effectivePath}/.mainframe/launch.json`)
+      ?.readFile(`${effectivePath}/.mainframe/launch.local.json`)
+      .then((content) => content ?? window.mainframe?.readFile(`${effectivePath}/.mainframe/launch.json`))
       .then((content) => {
         if (!content) {
           setConfig(null);
@@ -34,7 +36,7 @@ export function useLaunchConfig(): LaunchConfig | null {
         setConfig(JSON.parse(content) as LaunchConfig);
       })
       .catch((err) => {
-        log.warn('failed to read launch.json', { err: String(err) });
+        log.warn('failed to read launch config', { err: String(err) });
         setConfig(null);
       });
   }, [effectivePath, refreshKey]);

@@ -9,6 +9,15 @@ import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:launch');
 
+/** Try launch.local.json first (worktree-specific override), fall back to launch.json. */
+async function readLaunchFile(projectPath: string): Promise<string> {
+  try {
+    return await readFile(join(projectPath, '.mainframe', 'launch.local.json'), 'utf-8');
+  } catch {
+    return readFile(join(projectPath, '.mainframe', 'launch.json'), 'utf-8');
+  }
+}
+
 function resolveLaunchPath(ctx: RouteContext, req: Request): { projectId: string; path: string } | null {
   const projectId = param(req, 'id');
   const chatId = req.query.chatId as string | undefined;
@@ -53,9 +62,8 @@ export function launchRoutes(ctx: RouteContext): Router {
         res.status(404).json({ success: false, error: 'Project not found' });
         return;
       }
-      const configPath = join(resolved.path, '.mainframe', 'launch.json');
       try {
-        const raw = await readFile(configPath, 'utf-8');
+        const raw = await readLaunchFile(resolved.path);
         const result = parseLaunchConfig(JSON.parse(raw));
         if (!result.success) {
           res.status(400).json({ success: false, error: result.error });
@@ -81,7 +89,7 @@ export function launchRoutes(ctx: RouteContext): Router {
       // Read and validate launch config from disk — never trust the client body
       let raw: string;
       try {
-        raw = await readFile(join(resolved.path, '.mainframe', 'launch.json'), 'utf-8');
+        raw = await readLaunchFile(resolved.path);
       } catch {
         res.status(404).json({ success: false, error: 'No launch.json found for project' });
         return;
