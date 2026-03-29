@@ -196,6 +196,9 @@ export class CodexSession implements AdapterSession {
         });
         this.state.threadId = startResult.thread.id;
       }
+      // Persist the real Codex thread ID immediately — don't rely on the
+      // thread/started push notification which may arrive late or be lost.
+      this.sink.onInit(this.state.threadId);
     }
 
     // Start turn

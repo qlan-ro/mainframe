@@ -99,6 +99,7 @@ export class ChatManager {
       startingChats: this.lifecycle.getStartingChats(),
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       startChat: (chatId) => this.lifecycle.startChat(chatId),
+      stopChat: (chatId) => this.lifecycle.stopChat(chatId),
       emitEvent: (event) => this.emitEvent(event),
     });
     this.externalSessions = new ExternalSessionService(this.db, this.adapters, (e) => this.emitEvent(e));
@@ -282,6 +283,12 @@ export class ChatManager {
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
     logger.info({ chatId, behavior: response.behavior, toolName: response.toolName }, 'permission answered');
     return this.permissionHandler.respondToPermission(chatId, response);
+  }
+
+  renameChat(chatId: string, title: string): void {
+    this.db.chats.update(chatId, { title });
+    const active = this.activeChats.get(chatId);
+    if (active) active.chat.title = title;
   }
 
   async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
