@@ -196,6 +196,11 @@ export class ChatManager {
       return;
     }
 
+    // Wait for any in-flight interrupt to finish before checking spawn state.
+    // SIGINT kills the CLI process; without this wait a fast follow-up message
+    // could write to the dying process's stdin and be silently lost.
+    await this.lifecycle.waitForInterrupt(chatId);
+
     const active = this.activeChats.get(chatId);
     if (!active?.session?.isSpawned) {
       await this.lifecycle.startChat(chatId);
