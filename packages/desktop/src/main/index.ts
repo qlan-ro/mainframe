@@ -130,6 +130,14 @@ function setupIPC(): void {
     }
   });
 
+  ipcMain.handle('sandbox:clearSession', async (_event, projectId: string) => {
+    const partition = `persist:sandbox-${projectId}`;
+    const ses = session.fromPartition(partition);
+    await ses.clearStorageData();
+    await ses.clearCache();
+    log.info({ partition }, 'sandbox session cleared');
+  });
+
   ipcMain.on('log', (_event, level: string, module: string, message: string, data?: unknown) => {
     logFromRenderer(level, module, message, data);
   });
@@ -196,9 +204,14 @@ app.whenReady().then(() => {
   // Prevents macOS from prompting for Apple Music, microphone, or camera access
   // when user projects loaded in the preview webview request these APIs.
   const ALLOWED_PERMISSIONS = new Set(['clipboard-read', 'clipboard-sanitized-write', 'notifications']);
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+  const denyUnneededPermissions = (
+    _wc: Electron.WebContents,
+    permission: string,
+    callback: (granted: boolean) => void,
+  ): void => {
     callback(ALLOWED_PERMISSIONS.has(permission));
-  });
+  };
+  session.defaultSession.setPermissionRequestHandler(denyUnneededPermissions);
 
   setupIPC();
   startDaemon();
@@ -209,17 +222,35 @@ app.whenReady().then(() => {
 
   createWindow();
 
+  const configuredPartitions = new Set<string>();
   app.on('web-contents-created', (_event, contents) => {
     if (contents.getType() !== 'webview') return;
 
-    contents.on('will-navigate', (event, url) => {
-      const currentOrigin = new URL(contents.getURL()).origin;
-      if (new URL(url).origin !== currentOrigin) {
-        event.preventDefault();
-        shell.openExternal(url);
-      }
-    });
+    // Each project gets its own persist:sandbox-{id} partition.
+    // Apply permission restrictions on first encounter.
+    const partition = contents.session.storagePath;
+    const partitionId = partition ?? '';
+    if (!configuredPartitions.has(partitionId)) {
+      configuredPartitions.add(partitionId);
+      contents.session.setPermissionRequestHandler(denyUnneededPermissions);
+      // Strip Electron markers from user-agent and client hints so OAuth/SSO
+      // providers with Conditional Access policies (e.g. Microsoft Entra ID)
+      // see a standard Chrome browser instead of rejecting the webview.
+      contents.session.setUserAgent(contents.session.getUserAgent().replace(/Electron\/\S+ /, ''));
+      contents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+        const headers = { ...details.requestHeaders };
+        for (const key of Object.keys(headers)) {
+          if (key.toLowerCase() === 'sec-ch-ua') {
+            headers[key] = headers[key]!.replace(/, ?"Electron";v="[^"]*"/g, '');
+          }
+        }
+        callback({ requestHeaders: headers });
+      });
+    }
 
+    // Allow all navigations inside webviews — the sandbox loads user dev servers
+    // that legitimately redirect cross-origin (OAuth flows, SSO, etc.).
+    // Only intercept window.open for truly external links (target="_blank").
     contents.setWindowOpenHandler((details) => {
       shell.openExternal(details.url);
       return { action: 'deny' };
