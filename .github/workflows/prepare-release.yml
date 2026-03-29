@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -110,22 +111,62 @@ jobs:
           done
           echo "Archived $moved plan docs"
 
-      - name: Commit release prep
+      - name: Create release prep PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          BRANCH="release/${{ steps.version.outputs.tag }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
           git add -A
           if git diff --cached --quiet; then
-            echo "No cleanup changes to commit"
+            echo "No cleanup changes — tagging main directly"
+            git tag "${{ steps.version.outputs.tag }}" origin/main
+            git push origin "${{ steps.version.outputs.tag }}"
+            echo "::notice::Tagged ${{ steps.version.outputs.tag }} — Release workflow will start"
           else
             git commit -m "chore: prepare release ${{ steps.version.outputs.tag }}"
-            git push
+            git push origin "$BRANCH"
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore: prepare release ${{ steps.version.outputs.tag }}" \
+              --body "Automated release prep for **${{ steps.version.outputs.tag }}**.
+
+          - Syncs root \`package.json\` version
+          - Consolidates per-package changelogs into root \`CHANGELOG.md\`
+          - Archives completed plan docs
+
+          Merging this PR will create the \`${{ steps.version.outputs.tag }}\` tag and trigger the release build."
+            echo "::notice::Created release prep PR for ${{ steps.version.outputs.tag }}"
           fi
+
+  tag:
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.title, 'chore: prepare release v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Extract tag from PR title
+        id: version
+        run: |
+          TAG=$(echo "${{ github.event.pull_request.title }}" | sed 's/^chore: prepare release //')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Tagging: $TAG"
 
       - name: Create and push tag
         run: |
-          # Re-fetch in case we just pushed a commit
-          git fetch origin main
+          if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "::error::Tag ${{ steps.version.outputs.tag }} already exists"
+            exit 1
+          fi
           git tag "${{ steps.version.outputs.tag }}" origin/main
           git push origin "${{ steps.version.outputs.tag }}"
           echo "::notice::Tagged ${{ steps.version.outputs.tag }} — Release workflow will start"

@@ -2,7 +2,7 @@ import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { DatabaseManager } from '../db/index.js';
-import { createWorktree, removeWorktree } from '../workspace/index.js';
+import { createWorktree, removeWorktree, moveSessionFiles, getClaudeProjectDir } from '../workspace/index.js';
 import type { ActiveChat } from './types.js';
 
 export interface ConfigManagerDeps {
@@ -11,6 +11,7 @@ export interface ConfigManagerDeps {
   startingChats: Map<string, Promise<void>>;
   getActiveChat: (chatId: string) => ActiveChat | undefined;
   startChat: (chatId: string) => Promise<void>;
+  stopChat: (chatId: string) => Promise<void>;
   emitEvent: (event: DaemonEvent) => void;
 }
 
@@ -91,16 +92,35 @@ export class ChatConfigManager {
   async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
     if (!active) throw new Error(`Chat ${chatId} not found`);
-    if (active.chat.claudeSessionId) throw new Error('Cannot enable worktree after session has started');
     if (active.chat.worktreePath) return;
 
+    const project = this.deps.db.projects.get(active.chat.projectId);
+    if (!project) throw new Error('Project not found');
+
+    if (active.chat.claudeSessionId) {
+      // Mid-session path: stop, create worktree, move session files, restart
+      await this.deps.stopChat(chatId);
+
+      const worktreeDir = this.deps.db.settings.get('general', 'worktreeDir') ?? GENERAL_DEFAULTS.worktreeDir;
+      const info = createWorktree(project.path, chatId, worktreeDir, baseBranch, branchName);
+
+      const oldProjectDir = getClaudeProjectDir(project.path);
+      const newProjectDir = getClaudeProjectDir(info.worktreePath);
+      await moveSessionFiles(active.chat.claudeSessionId, oldProjectDir, newProjectDir);
+
+      active.chat.worktreePath = info.worktreePath;
+      active.chat.branchName = info.branchName;
+      this.deps.db.chats.update(chatId, { worktreePath: info.worktreePath, branchName: info.branchName });
+      this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+      await this.deps.startChat(chatId);
+      return;
+    }
+
+    // Pre-session path: kill any untracked process and create worktree
     if (active.session?.isSpawned) {
       await active.session.kill();
       active.session = null;
     }
-
-    const project = this.deps.db.projects.get(active.chat.projectId);
-    if (!project) throw new Error('Project not found');
 
     const worktreeDir = this.deps.db.settings.get('general', 'worktreeDir') ?? GENERAL_DEFAULTS.worktreeDir;
     const info = createWorktree(project.path, chatId, worktreeDir, baseBranch, branchName);
@@ -113,9 +133,28 @@ export class ChatConfigManager {
   async attachWorktree(chatId: string, worktreePath: string, branchName: string): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
     if (!active) throw new Error(`Chat ${chatId} not found`);
-    if (active.chat.claudeSessionId) throw new Error('Cannot attach worktree after session has started');
     if (active.chat.worktreePath) return;
 
+    if (active.chat.claudeSessionId) {
+      // Mid-session path: stop, move session files to attached worktree, restart
+      const project = this.deps.db.projects.get(active.chat.projectId);
+      if (!project) throw new Error('Project not found');
+
+      await this.deps.stopChat(chatId);
+
+      const oldProjectDir = getClaudeProjectDir(project.path);
+      const newProjectDir = getClaudeProjectDir(worktreePath);
+      await moveSessionFiles(active.chat.claudeSessionId, oldProjectDir, newProjectDir);
+
+      active.chat.worktreePath = worktreePath;
+      active.chat.branchName = branchName;
+      this.deps.db.chats.update(chatId, { worktreePath, branchName });
+      this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+      await this.deps.startChat(chatId);
+      return;
+    }
+
+    // Pre-session path
     if (active.session?.isSpawned) {
       await active.session.kill();
       active.session = null;

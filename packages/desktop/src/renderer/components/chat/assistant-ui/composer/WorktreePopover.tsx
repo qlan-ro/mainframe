@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, Loader2 } from 'lucide-react';
 import { useChatsStore } from '../../../../store/chats';
 import { useActiveProjectId } from '../../../../hooks/useActiveProjectId';
 import {
   getGitBranches,
   enableWorktree,
-  forkToWorktree,
   getProjectWorktrees,
   attachWorktree,
 } from '../../../../lib/api';
@@ -98,7 +97,6 @@ interface WorktreePopoverProps {
 /** Popover for worktree configuration: pre-session, mid-session fork, or active info. */
 export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopoverProps) {
   const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
-  const setActiveChat = useChatsStore((s) => s.setActiveChat);
   const projectId = useActiveProjectId();
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -125,7 +123,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, [onClose]);
 
-  // Fetch branches (and worktrees for pre-session mode) on mount
+  // Fetch branches and worktrees on mount
   useEffect(() => {
     if (!projectId || worktreePath) return;
     let cancelled = false;
@@ -137,18 +135,14 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
       setBranches(localNames);
       setCurrentBranch(result.current);
       setBaseBranch(result.current || localNames[0] || '');
-      if (!hasMessages) {
-        setBranchName(`session/${chatId.slice(0, 8)}`);
-      }
+      setBranchName(`session/${chatId.slice(0, 8)}`);
     });
 
-    const fetchWorktreeList = !hasMessages
-      ? getProjectWorktrees(projectId).then((result) => {
-          if (cancelled) return;
-          setWorktrees(result.worktrees);
-          if (result.worktrees.length === 0) setTab('new');
-        })
-      : Promise.resolve();
+    const fetchWorktreeList = getProjectWorktrees(projectId).then((result) => {
+      if (cancelled) return;
+      setWorktrees(result.worktrees);
+      if (result.worktrees.length === 0) setTab('new');
+    });
 
     Promise.all([fetchBranches, fetchWorktreeList])
       .catch((err) => {
@@ -163,7 +157,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
     return () => {
       cancelled = true;
     };
-  }, [projectId, worktreePath, chatId, hasMessages]);
+  }, [projectId, worktreePath, chatId]);
 
   const handleEnable = useCallback(async () => {
     const validationError = validateBranchName(branchName);
@@ -183,26 +177,6 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
       setSubmitting(false);
     }
   }, [chatId, baseBranch, branchName, onClose]);
-
-  const handleFork = useCallback(async () => {
-    const validationError = validateBranchName(branchName);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-    setError(null);
-    setSubmitting(true);
-    try {
-      const result = await forkToWorktree(chatId, baseBranch, branchName);
-      setActiveChat(result.chatId);
-      onClose();
-    } catch (err) {
-      log.warn('failed to fork to worktree', { err: String(err) });
-      setError(err instanceof Error ? err.message : 'Failed to fork to worktree');
-    } finally {
-      setSubmitting(false);
-    }
-  }, [chatId, baseBranch, branchName, setActiveChat, onClose]);
 
   const handleAttach = useCallback(
     async (wt: { path: string; branch: string | null }) => {
@@ -269,20 +243,16 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
       ref={popoverRef}
       className="absolute bottom-full left-0 mb-2 w-80 rounded-mf-card border border-mf-border bg-mf-app-bg p-3 shadow-lg z-50"
     >
-      {/* Mid-session warning */}
+      {/* Mid-session info */}
       {isMidSession && (
-        <div className="flex items-start gap-2 mb-3 rounded-md bg-mf-warning/15 px-3 py-2 text-mf-small text-mf-warning">
+        <div className="flex items-start gap-2 mb-3 rounded-md bg-mf-accent/15 px-3 py-2 text-mf-small text-mf-text-secondary">
           <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-          <span>
-            This will create a new chat with worktree isolation. Uncommitted changes and conversation context from this
-            session will not be carried over.
-          </span>
+          <span>Session will be paused and resumed in the worktree.</span>
         </div>
       )}
 
-      {/* Tab toggle for pre-session mode */}
-      {!isMidSession && (
-        <div className="flex items-center gap-0.5 mb-3 p-0.5 rounded-md bg-mf-input">
+      {/* Tab toggle */}
+      <div className="flex items-center gap-0.5 mb-3 p-0.5 rounded-md bg-mf-input">
           <button
             type="button"
             onClick={() => setTab('existing')}
@@ -305,11 +275,10 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
           >
             New
           </button>
-        </div>
-      )}
+      </div>
 
-      {/* Existing worktree list (pre-session only) */}
-      {tab === 'existing' && !isMidSession && (
+      {/* Existing worktree list */}
+      {tab === 'existing' && (
         <div className="max-h-48 overflow-y-auto">
           {worktrees.length === 0 ? (
             <div className="text-mf-small text-mf-text-secondary text-center py-4">No worktrees found</div>
@@ -333,12 +302,12 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
       )}
 
       {/* Error from API */}
-      {error && tab === 'existing' && !isMidSession && (
+      {error && tab === 'existing' && (
         <div className="text-mf-small text-mf-destructive mb-2">{error}</div>
       )}
 
       {/* New worktree form */}
-      {(tab === 'new' || isMidSession) && (
+      {tab === 'new' && (
         <>
           <BranchSelect
             label="Base branch"
@@ -376,11 +345,11 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
             <button
               type="button"
               disabled={submitting || !!validationError || !branchName}
-              onClick={isMidSession ? handleFork : handleEnable}
+              onClick={handleEnable}
               className="px-3 py-1.5 rounded-mf-input text-mf-small bg-mf-accent text-mf-panel-bg hover:opacity-90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
             >
               {submitting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-              {isMidSession ? 'Fork' : 'Enable'}
+              Enable
             </button>
           </div>
         </>

@@ -84,7 +84,9 @@ describe('launchRoutes', () => {
   });
 
   it('POST start reads launch.json from disk and calls manager.start', async () => {
-    mockReadFile.mockResolvedValue(VALID_LAUNCH_JSON);
+    mockReadFile
+      .mockResolvedValueOnce(VALID_LAUNCH_JSON) // launch.json
+      .mockRejectedValueOnce(new Error('ENOENT')); // .env (not found — fine)
     const mockStart = vi.fn().mockResolvedValue(undefined);
     (ctx.launchRegistry!.getOrCreate as any).mockReturnValue({ start: mockStart });
     const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/start');
@@ -108,21 +110,27 @@ describe('launchRoutes', () => {
   });
 
   it('POST start returns 404 when config name not found in launch.json', async () => {
-    mockReadFile.mockResolvedValue(VALID_LAUNCH_JSON);
+    mockReadFile
+      .mockResolvedValueOnce(VALID_LAUNCH_JSON) // launch.json
+      .mockRejectedValueOnce(new Error('ENOENT')); // .env (not found — fine)
     const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/start');
     const req: any = { params: { id: 'proj-1', name: 'nonexistent' }, query: {} };
     const res = mockRes();
-    await handler(req, res);
+    handler(req, res, vi.fn());
+    await tick();
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
   });
 
   it('POST start returns 400 when launch.json is invalid', async () => {
-    mockReadFile.mockResolvedValue(JSON.stringify({ version: '0.1.0', configurations: [] }));
+    mockReadFile
+      .mockResolvedValueOnce(JSON.stringify({ version: '0.1.0', configurations: [] })) // launch.json
+      .mockRejectedValueOnce(new Error('ENOENT')); // .env
     const handler = extractHandler(launchRoutes(ctx), 'post', '/api/projects/:id/launch/:name/start');
     const req: any = { params: { id: 'proj-1', name: 'server' }, query: {} };
     const res = mockRes();
-    await handler(req, res);
+    handler(req, res, vi.fn());
+    await tick();
     expect(res.status).toHaveBeenCalledWith(400);
   });
 

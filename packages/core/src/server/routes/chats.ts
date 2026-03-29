@@ -59,6 +59,27 @@ export function chatRoutes(ctx: RouteContext): Router {
     }),
   );
 
+  router.patch('/api/chats/:id/title', (req: Request, res: Response) => {
+    const chatId = param(req, 'id');
+    const { title } = req.body as { title?: string };
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      res.status(400).json({ success: false, error: 'Title is required' });
+      return;
+    }
+    try {
+      ctx.chats.renameChat(chatId, title.trim());
+      const chat = ctx.chats.getChat(chatId);
+      if (!chat) {
+        res.status(404).json({ success: false, error: 'Chat not found' });
+        return;
+      }
+      res.json({ success: true, data: chat });
+    } catch (err) {
+      logger.warn({ err, chatId }, 'Failed to rename chat');
+      res.status(500).json({ success: false, error: 'Operation failed' });
+    }
+  });
+
   router.post('/api/chats/:id/unarchive', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
     try {
