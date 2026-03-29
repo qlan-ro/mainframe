@@ -99,6 +99,7 @@ export class ChatManager {
       startingChats: this.lifecycle.getStartingChats(),
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       startChat: (chatId) => this.lifecycle.startChat(chatId),
+      stopChat: (chatId) => this.lifecycle.stopChat(chatId),
       emitEvent: (event) => this.emitEvent(event),
     });
     this.externalSessions = new ExternalSessionService(this.db, this.adapters, (e) => this.emitEvent(e));
