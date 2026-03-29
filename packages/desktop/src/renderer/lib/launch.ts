@@ -16,6 +16,20 @@ export async function fetchLaunchStatuses(
   return json.success ? json.data : { statuses: {}, tunnelUrls: {} };
 }
 
+export async function fetchLaunchConfigs(
+  projectId: string,
+  chatId?: string,
+): Promise<import('@qlan-ro/mainframe-types').LaunchConfiguration[]> {
+  const params = chatId ? `?chatId=${chatId}` : '';
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/launch/configs${params}`);
+  if (!res.ok) return [];
+  const json = (await res.json()) as {
+    success: boolean;
+    data: import('@qlan-ro/mainframe-types').LaunchConfiguration[];
+  };
+  return json.success ? json.data : [];
+}
+
 export async function startLaunchConfig(projectId: string, name: string, chatId?: string): Promise<void> {
   const params = chatId ? `?chatId=${chatId}` : '';
   const res = await fetch(`${API_BASE}/api/projects/${projectId}/launch/${encodeURIComponent(name)}/start${params}`, {
