@@ -9,6 +9,7 @@ export interface MainframeAPI {
   readFile: (filePath: string) => Promise<string | null>;
   showItemInFolder: (fullPath: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
+  clearSandboxSession: (projectId: string) => Promise<void>;
   log: (level: string, module: string, message: string, data?: unknown) => void;
 }
 

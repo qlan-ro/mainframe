@@ -453,6 +453,17 @@ export function PreviewTab(): React.ReactElement {
               >
                 <Smartphone size={14} />
               </button>
+              {isElectron && activeProjectId && (
+                <button
+                  onClick={() => {
+                    window.mainframe.clearSandboxSession(activeProjectId).then(() => handleReload());
+                  }}
+                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                  title="Clear cookies & session data"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
               <div className="w-px h-3.5 bg-mf-border mx-0.5" />
             </>
           )}
@@ -488,9 +499,10 @@ export function PreviewTab(): React.ReactElement {
                 // Electron webviews render in a separate GPU process and paint OVER regular DOM,
                 // so visibility:hidden doesn't help. Use zero dimensions to truly hide until ready.
                 <webview
+                  key={activeProjectId ?? 'default'}
                   ref={webviewRef}
                   src="about:blank"
-                  partition={`persist:sandbox-${activeProjectId}`}
+                  partition={`persist:sandbox-${activeProjectId ?? 'default'}`}
                   className={
                     webviewReady ? (mobileView ? 'h-full rounded border border-mf-border' : 'w-full h-full') : ''
                   }

@@ -11,6 +11,7 @@ export interface MainframeAPI {
   readFile: (filePath: string) => Promise<string | null>;
   showItemInFolder: (fullPath: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
+  clearSandboxSession: (projectId: string) => Promise<void>;
   log: (level: string, module: string, message: string, data?: unknown) => void;
 }
 
@@ -25,6 +26,7 @@ const api: MainframeAPI = {
   readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
   showItemInFolder: (fullPath: string) => ipcRenderer.invoke('shell:showItemInFolder', fullPath),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  clearSandboxSession: (projectId: string) => ipcRenderer.invoke('sandbox:clearSession', projectId),
   log: (level: string, module: string, message: string, data?: unknown) =>
     ipcRenderer.send('log', level, module, message, data),
 };
