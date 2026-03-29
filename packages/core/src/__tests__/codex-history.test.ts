@@ -4,14 +4,17 @@ import { convertThreadItems } from '../plugins/builtin/codex/history.js';
 
 describe('convertThreadItems', () => {
   it('converts agentMessage to assistant text', () => {
-    const messages = convertThreadItems([{ id: 'i1', type: 'agentMessage', text: 'Hello' }], 'chat-1');
+    const messages = convertThreadItems([{ id: 'i1', type: 'agentMessage', text: 'Hello', phase: null }], 'chat-1');
     expect(messages).toHaveLength(1);
     expect(messages[0]!.type).toBe('assistant');
     expect(messages[0]!.content).toEqual([{ type: 'text', text: 'Hello' }]);
   });
 
   it('converts reasoning to assistant thinking', () => {
-    const messages = convertThreadItems([{ id: 'i1', type: 'reasoning', text: 'Let me think...' }], 'chat-1');
+    const messages = convertThreadItems(
+      [{ id: 'i1', type: 'reasoning', summary: ['Let me think...'], content: ['details'] }],
+      'chat-1',
+    );
     expect(messages[0]!.content).toEqual([{ type: 'thinking', thinking: 'Let me think...' }]);
   });
 
@@ -22,8 +25,8 @@ describe('convertThreadItems', () => {
           id: 'i1',
           type: 'commandExecution',
           command: 'ls',
-          aggregated_output: 'file.txt',
-          exit_code: 0,
+          aggregatedOutput: 'file.txt',
+          exitCode: 0,
           status: 'completed' as const,
         },
       ],
@@ -69,7 +72,8 @@ describe('convertThreadItems', () => {
           server: 'mcp',
           tool: 'search',
           arguments: { q: 'foo' },
-          result: 'found',
+          result: { content: [{ found: true }], structuredContent: null },
+          error: null,
           status: 'completed' as const,
         },
       ],
@@ -80,7 +84,7 @@ describe('convertThreadItems', () => {
   });
 
   it('sets chatId on all messages', () => {
-    const messages = convertThreadItems([{ id: 'i1', type: 'agentMessage', text: 'Hi' }], 'my-chat');
+    const messages = convertThreadItems([{ id: 'i1', type: 'agentMessage', text: 'Hi', phase: null }], 'my-chat');
     expect(messages[0]!.chatId).toBe('my-chat');
   });
 });

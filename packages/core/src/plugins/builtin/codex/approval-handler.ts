@@ -12,6 +12,7 @@ interface PendingApproval {
   mainframeRequestId: string;
   jsonRpcId: RequestId;
   respond: RespondFn;
+  method: string;
 }
 
 export class ApprovalHandler {
@@ -36,8 +37,19 @@ export class ApprovalHandler {
       toolName = 'file_change';
       toolUseId = p.itemId;
       input = { reason: p.reason };
+    } else if (method === 'item/tool/requestUserInput') {
+      const p = params as {
+        threadId: string;
+        turnId: string;
+        itemId: string;
+        questions: Array<{ id: string; question: string }>;
+      };
+      toolName = 'AskUserQuestion';
+      toolUseId = p.itemId;
+      const questionText = p.questions.map((q) => q.question).join('\n');
+      input = { question: questionText, questions: p.questions };
     } else {
-      log.warn({ method }, 'codex: unknown approval method');
+      log.warn({ method }, 'codex: unknown server request method');
       respond(jsonRpcId, { decision: 'decline' as ApprovalDecision });
       return;
     }
@@ -50,7 +62,7 @@ export class ApprovalHandler {
       suggestions: [],
     };
 
-    this.pending.set(mainframeRequestId, { mainframeRequestId, jsonRpcId, respond });
+    this.pending.set(mainframeRequestId, { mainframeRequestId, jsonRpcId, respond, method });
 
     log.info({ mainframeRequestId, jsonRpcId, toolName, toolUseId }, 'codex approval request');
     this.sink.onPermission(request);
@@ -65,6 +77,19 @@ export class ApprovalHandler {
 
     this.pending.delete(response.requestId);
 
+    // requestUserInput expects { answers: { [questionId]: { answers: string[] } } }
+    if (entry.method === 'item/tool/requestUserInput') {
+      const userMessage = response.message ?? '';
+      const questions = (response.updatedInput?.questions as Array<{ id: string }>) ?? [];
+      const answers: Record<string, { answers: string[] }> = {};
+      for (const q of questions) {
+        answers[q.id] = { answers: [userMessage] };
+      }
+      log.info({ requestId: response.requestId, behavior: response.behavior }, 'codex user input resolved');
+      entry.respond(entry.jsonRpcId, { answers });
+      return;
+    }
+
     let decision: ApprovalDecision;
     if (response.behavior === 'allow') {
       decision = 'accept';
@@ -78,7 +103,11 @@ export class ApprovalHandler {
 
   rejectAll(): void {
     for (const [id, entry] of this.pending) {
-      entry.respond(entry.jsonRpcId, { decision: 'decline' as ApprovalDecision });
+      if (entry.method === 'item/tool/requestUserInput') {
+        entry.respond(entry.jsonRpcId, { answers: {} });
+      } else {
+        entry.respond(entry.jsonRpcId, { decision: 'decline' as ApprovalDecision });
+      }
       this.pending.delete(id);
     }
   }

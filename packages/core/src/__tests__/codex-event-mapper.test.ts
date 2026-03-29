@@ -63,7 +63,7 @@ describe('handleNotification', () => {
       {
         threadId: 't1',
         turnId: 'turn_1',
-        item: { id: 'item_1', type: 'reasoning', text: 'Let me think...' },
+        item: { id: 'item_1', type: 'reasoning', summary: ['Let me think...'], content: ['details'] },
       },
       sink,
       state,
@@ -83,8 +83,8 @@ describe('handleNotification', () => {
           id: 'item_1',
           type: 'commandExecution',
           command: 'ls -la',
-          aggregated_output: 'file.txt\n',
-          exit_code: 0,
+          aggregatedOutput: 'file.txt\n',
+          exitCode: 0,
           status: 'completed',
         },
       },
@@ -121,8 +121,8 @@ describe('handleNotification', () => {
           id: 'item_1',
           type: 'commandExecution',
           command: 'false',
-          aggregated_output: '',
-          exit_code: 1,
+          aggregatedOutput: '',
+          exitCode: 1,
           status: 'failed',
         },
       },
@@ -182,7 +182,8 @@ describe('handleNotification', () => {
           server: 'my-mcp',
           tool: 'search',
           arguments: { query: 'foo' },
-          result: '{"found": true}',
+          result: { content: [{ found: true }], structuredContent: null },
+          error: null,
           status: 'completed',
         },
       },
@@ -201,28 +202,35 @@ describe('handleNotification', () => {
       {
         type: 'tool_result',
         toolUseId: 'item_3',
-        content: '{"found": true}',
+        content: JSON.stringify([{ found: true }]),
         isError: false,
       },
     ]);
   });
 
-  it('turn/completed calls onResult and clears currentTurnId', () => {
+  it('turn/completed calls onResult with usage from prior tokenUsage event', () => {
     const sink = createSink();
     const state = createState();
     state.currentTurnId = 'turn_1';
+    // Simulate token usage arriving before turn/completed
+    handleNotification(
+      'thread/tokenUsage/updated',
+      { threadId: 't1', usage: { input_tokens: 100, output_tokens: 50 } },
+      sink,
+      state,
+    );
     handleNotification(
       'turn/completed',
       {
         threadId: 't1',
-        turn: { id: 'turn_1', status: 'completed', items: [], usage: { input_tokens: 100, output_tokens: 50 } },
+        turn: { id: 'turn_1', status: 'completed', items: [], error: null },
       },
       sink,
       state,
     );
     expect(sink.onResult).toHaveBeenCalledWith({
       total_cost_usd: 0,
-      usage: { input_tokens: 100, output_tokens: 50 },
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: undefined },
       subtype: undefined,
       is_error: false,
     });
@@ -236,7 +244,7 @@ describe('handleNotification', () => {
       'turn/completed',
       {
         threadId: 't1',
-        turn: { id: 'turn_1', status: 'failed', items: [] },
+        turn: { id: 'turn_1', status: 'failed', items: [], error: { message: 'something went wrong' } },
       },
       sink,
       state,

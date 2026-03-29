@@ -32,28 +32,8 @@ export class JsonRpcClient {
     private readonly handlers: JsonRpcHandlers,
     private readonly requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   ) {
-    if (process.stdout) {
-      const stdout = process.stdout;
-      const origPush = stdout.push.bind(stdout);
-      stdout.push = (chunk: unknown, encoding?: BufferEncoding): boolean => {
-        if (chunk !== null && chunk !== undefined) {
-          const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string, encoding ?? 'utf8');
-          this.handleStdout(buf);
-        }
-        return origPush(chunk as Buffer, encoding);
-      };
-    }
-    if (process.stderr) {
-      const stderr = process.stderr;
-      const origPush = stderr.push.bind(stderr);
-      stderr.push = (chunk: unknown, encoding?: BufferEncoding): boolean => {
-        if (chunk !== null && chunk !== undefined) {
-          const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string, encoding ?? 'utf8');
-          this.handleStderr(buf);
-        }
-        return origPush(chunk as Buffer, encoding);
-      };
-    }
+    process.stdout?.on('data', (chunk: Buffer) => this.handleStdout(chunk));
+    process.stderr?.on('data', (chunk: Buffer) => this.handleStderr(chunk));
     process.on('close', (code: number | null) => {
       this.rejectAllPending(new Error(`Process exited with code ${code}`));
       this.handlers.onExit(code);
