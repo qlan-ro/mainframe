@@ -70,13 +70,17 @@ function ChatRow({ chat, isActive, adapters, onSelect, onArchive, onContextMenu 
     [chat.title],
   );
 
+  const updateChat = useChatsStore((s) => s.updateChat);
+
   const handleCommitRename = useCallback(() => {
     setEditing(false);
     const trimmed = editTitle.trim();
     if (trimmed && trimmed !== chat.title) {
+      updateChat({ ...chat, title: trimmed });
+      useTabsStore.getState().updateTabLabel(`chat:${chat.id}`, trimmed);
       renameChat(chat.id, trimmed).catch((err) => log.warn('rename failed', { err: String(err) }));
     }
-  }, [chat.id, chat.title, editTitle]);
+  }, [chat, editTitle, updateChat]);
 
   const handleRenameKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

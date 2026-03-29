@@ -286,8 +286,8 @@ export class ChatManager {
 
   renameChat(chatId: string, title: string): void {
     this.db.chats.update(chatId, { title });
-    const chat = this.getChat(chatId);
-    if (chat) this.emitEvent({ type: 'chat.updated', chat });
+    const active = this.activeChats.get(chatId);
+    if (active) active.chat.title = title;
   }
 
   async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
