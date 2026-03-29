@@ -19,6 +19,25 @@ export function createPluginUIContext(pluginId: string, emitEvent: (event: Daemo
       });
     },
 
+    addAction({ id, label, shortcut, icon }: { id: string; label: string; shortcut: string; icon?: string }): void {
+      emitEvent({
+        type: 'plugin.action.registered',
+        pluginId,
+        actionId: id,
+        label,
+        shortcut,
+        icon,
+      });
+    },
+
+    removeAction(id: string): void {
+      emitEvent({
+        type: 'plugin.action.unregistered',
+        pluginId,
+        actionId: id,
+      });
+    },
+
     notify(options): void {
       emitEvent({
         type: 'plugin.notification',
