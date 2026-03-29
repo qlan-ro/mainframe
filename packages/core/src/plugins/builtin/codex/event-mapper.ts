@@ -1,6 +1,12 @@
 // packages/core/src/plugins/builtin/codex/event-mapper.ts
 import type { SessionSink } from '@qlan-ro/mainframe-types';
-import type { ItemCompletedParams, TurnCompletedParams, TurnStartedParams, ThreadStartedParams } from './types.js';
+import type {
+  ItemCompletedParams,
+  TurnCompletedParams,
+  TurnStartedParams,
+  ThreadStartedParams,
+  TokenUsageUpdatedParams,
+} from './types.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:events');
@@ -8,6 +14,11 @@ const log = createChildLogger('codex:events');
 export interface CodexSessionState {
   threadId: string | null;
   currentTurnId: string | null;
+  lastUsage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens?: number;
+  };
 }
 
 export function handleNotification(method: string, params: unknown, sink: SessionSink, state: CodexSessionState): void {
@@ -22,6 +33,8 @@ export function handleNotification(method: string, params: unknown, sink: Sessio
       return handleItemCompleted(params as ItemCompletedParams, sink);
     case 'turn/completed':
       return handleTurnCompleted(params as TurnCompletedParams, sink, state);
+    case 'thread/tokenUsage/updated':
+      return handleTokenUsage(params as TokenUsageUpdatedParams, sink, state);
     case 'thread/compacted':
       sink.onCompact();
       return;
@@ -38,8 +51,11 @@ export function handleNotification(method: string, params: unknown, sink: Sessio
     case 'item/reasoning/summaryTextDelta':
     case 'item/reasoning/textDelta':
     case 'item/plan/delta':
+    case 'account/rateLimits/updated':
+    case 'thread/name/updated':
       return; // silently ignore known-but-unhandled notifications
     default:
+      if (method.startsWith('codex/event/')) return;
       log.debug({ method }, 'codex: unhandled notification');
   }
 }
@@ -62,7 +78,7 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink): vo
       return;
 
     case 'reasoning':
-      sink.onMessage([{ type: 'thinking', thinking: item.text }]);
+      sink.onMessage([{ type: 'thinking', thinking: item.summary.join('\n') || item.content.join('\n') }]);
       return;
 
     case 'commandExecution':
@@ -78,8 +94,8 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink): vo
         {
           type: 'tool_result',
           toolUseId: item.id,
-          content: item.aggregated_output,
-          isError: (item.exit_code ?? 0) !== 0,
+          content: item.aggregatedOutput,
+          isError: (item.exitCode ?? 0) !== 0,
         },
       ]);
       return;
@@ -116,7 +132,11 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink): vo
         {
           type: 'tool_result',
           toolUseId: item.id,
-          content: item.result ?? item.error ?? '',
+          content: item.error
+            ? typeof item.error === 'string'
+              ? item.error
+              : ((item.error as unknown as { message: string }).message ?? '')
+            : JSON.stringify(item.result?.content ?? ''),
           isError: !!item.error,
         },
       ]);
@@ -134,14 +154,17 @@ function handleTurnCompleted(params: TurnCompletedParams, sink: SessionSink, sta
 
   sink.onResult({
     total_cost_usd: 0,
-    usage: turn.usage
-      ? {
-          input_tokens: turn.usage.input_tokens,
-          output_tokens: turn.usage.output_tokens,
-          cache_read_input_tokens: turn.usage.cached_input_tokens,
-        }
-      : undefined,
+    usage: state.lastUsage,
     subtype: isError ? 'error_during_execution' : undefined,
     is_error: isError,
   });
+  state.lastUsage = undefined;
+}
+
+function handleTokenUsage(params: TokenUsageUpdatedParams, _sink: SessionSink, state: CodexSessionState): void {
+  state.lastUsage = {
+    input_tokens: params.usage.input_tokens,
+    output_tokens: params.usage.output_tokens,
+    cache_read_input_tokens: params.usage.cached_input_tokens,
+  };
 }

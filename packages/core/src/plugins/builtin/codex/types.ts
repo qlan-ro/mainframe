@@ -68,6 +68,8 @@ export interface ThreadStartParams {
   cwd?: string;
   approvalPolicy?: ApprovalPolicy;
   sandbox?: SandboxMode;
+  experimentalRawEvents?: boolean;
+  persistExtendedHistory?: boolean;
 }
 
 export interface ThreadStartResult {
@@ -78,6 +80,7 @@ export interface ThreadResumeParams {
   threadId: string;
   model?: string;
   cwd?: string;
+  persistExtendedHistory?: boolean;
 }
 
 export interface ThreadResumeResult {
@@ -103,15 +106,17 @@ export interface ThreadListParams {
 
 export interface ThreadSummary {
   id: string;
-  name?: string;
-  cwd?: string;
-  model?: string;
-  createdAt?: string;
-  modifiedAt?: string;
+  name: string | null;
+  preview: string;
+  cwd: string;
+  modelProvider: string;
+  model: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ThreadListResult {
-  threads: ThreadSummary[];
+  data: ThreadSummary[];
 }
 
 // --- Turn ---
@@ -134,7 +139,7 @@ export interface TurnInterruptParams {
   turnId: string;
 }
 
-export type TurnStatus = 'running' | 'completed' | 'interrupted' | 'failed';
+export type TurnStatus = 'inProgress' | 'completed' | 'interrupted' | 'failed';
 
 // --- Items ---
 
@@ -145,27 +150,28 @@ export type ThreadItem =
   | FileChangeItem
   | McpToolCallItem
   | WebSearchItem
-  | TodoListItem
   | UserMessageItem;
 
 export interface AgentMessageItem {
   id: string;
   type: 'agentMessage';
   text: string;
+  phase: string | null;
 }
 
 export interface ReasoningItem {
   id: string;
   type: 'reasoning';
-  text: string;
+  summary: string[];
+  content: string[];
 }
 
 export interface CommandExecutionItem {
   id: string;
   type: 'commandExecution';
   command: string;
-  aggregated_output: string;
-  exit_code?: number;
+  aggregatedOutput: string;
+  exitCode?: number;
   status: 'in_progress' | 'completed' | 'failed';
 }
 
@@ -182,8 +188,8 @@ export interface McpToolCallItem {
   server: string;
   tool: string;
   arguments: Record<string, unknown>;
-  result?: string;
-  error?: string;
+  result?: { content: unknown[]; structuredContent: unknown | null };
+  error: string | null;
   status: 'in_progress' | 'completed' | 'failed';
 }
 
@@ -261,8 +267,13 @@ export interface TurnCompletedParams {
     id: string;
     status: TurnStatus;
     items: ThreadItem[];
-    usage?: Usage;
+    error: { message: string } | null;
   };
+}
+
+export interface TokenUsageUpdatedParams {
+  threadId: string;
+  usage: Usage;
 }
 
 export interface TurnFailedParams {
@@ -290,11 +301,11 @@ export interface CollaborationModeSettings {
 
 export interface ModelInfo {
   id: string;
-  name?: string;
+  displayName?: string;
 }
 
 export interface ModelListResult {
-  models: ModelInfo[];
+  data: ModelInfo[];
 }
 
 // --- User input ---
