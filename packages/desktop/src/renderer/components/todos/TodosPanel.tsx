@@ -48,6 +48,13 @@ export function TodosPanel(): React.ReactElement {
     void loadTodos();
   }, [loadTodos]);
 
+  // Re-fetch when a todo is created externally (e.g. QuickTodoDialog)
+  useEffect(() => {
+    const handler = () => void loadTodos();
+    window.addEventListener('todos:changed', handler);
+    return () => window.removeEventListener('todos:changed', handler);
+  }, [loadTodos]);
+
   const handleCreate = useCallback(
     async (data: CreateTodoInput) => {
       if (!activeProjectId) return;

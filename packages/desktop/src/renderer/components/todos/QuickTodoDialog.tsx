@@ -102,6 +102,7 @@ export function QuickTodoDialog() {
       });
 
       toast.success(`Task #${todo.number} created`);
+      window.dispatchEvent(new CustomEvent('todos:changed'));
       setOpen(false);
     } catch {
       toast.error('Failed to create task');
