@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { Router } from 'express';
 import type { EventEmitter } from 'node:events';
 import type { PluginContext, PluginManifest, PluginModule, DaemonEvent } from '@qlan-ro/mainframe-types';
+import { normalizeManifestUI } from '@qlan-ro/mainframe-types';
 import { validateManifest } from './security/manifest-validator.js';
 import { buildPluginContext } from './context.js';
 import type { DatabaseManager } from '../db/index.js';
@@ -34,7 +35,7 @@ export class PluginManager {
   readonly router: Router;
 
   private loaded = new Map<string, LoadedPlugin>();
-  private panelEvents = new Map<string, PanelRegisteredEvent>();
+  private panelEvents = new Map<string, PanelRegisteredEvent[]>();
   private actionEvents = new Map<string, ActionRegisteredEvent[]>();
   // In CJS bundles (esbuild daemon), import.meta.url becomes undefined — cast to handle both.
   // Absolute plugin paths don't rely on the base URL for resolution.
@@ -48,14 +49,21 @@ export class PluginManager {
   private setupListingRoutes(): void {
     this.router.get('/', (_req, res) => {
       const plugins = this.getAll().map((p) => {
-        const panel = this.panelEvents.get(p.id);
+        const panels = this.panelEvents.get(p.id) ?? [];
         const actions = this.actionEvents.get(p.id) ?? [];
         return {
           id: p.id,
           name: p.ctx.manifest.name,
           version: p.ctx.manifest.version,
           capabilities: p.ctx.manifest.capabilities,
-          panel: panel ? { zone: panel.zone, label: panel.label, icon: panel.icon } : undefined,
+          panels: panels.map((e) => ({
+            panelId: e.panelId,
+            zone: e.zone,
+            label: e.label,
+            icon: e.icon,
+          })),
+          // Legacy single-panel field for backwards compat with older desktop builds
+          panel: panels[0] ? { zone: panels[0].zone, label: panels[0].label, icon: panels[0].icon } : undefined,
           actions: actions.map((a) => ({
             id: a.actionId,
             pluginId: a.pluginId,
@@ -87,9 +95,25 @@ export class PluginManager {
   private trackingEmitEvent(pluginId: string, emit: (event: DaemonEvent) => void): (event: DaemonEvent) => void {
     return (event: DaemonEvent) => {
       if (event.type === 'plugin.panel.registered') {
-        this.panelEvents.set(pluginId, event as PanelRegisteredEvent);
+        const existing = this.panelEvents.get(pluginId) ?? [];
+        // Replace if same panelId already tracked, otherwise append
+        const filtered = existing.filter((e) => e.panelId !== event.panelId);
+        filtered.push(event as PanelRegisteredEvent);
+        this.panelEvents.set(pluginId, filtered);
       } else if (event.type === 'plugin.panel.unregistered') {
-        this.panelEvents.delete(pluginId);
+        if (event.panelId) {
+          const existing = this.panelEvents.get(pluginId);
+          if (existing) {
+            const filtered = existing.filter((e) => e.panelId !== event.panelId);
+            if (filtered.length > 0) {
+              this.panelEvents.set(pluginId, filtered);
+            } else {
+              this.panelEvents.delete(pluginId);
+            }
+          }
+        } else {
+          this.panelEvents.delete(pluginId);
+        }
       } else if (event.type === 'plugin.action.registered') {
         const existing = this.actionEvents.get(pluginId) ?? [];
         existing.push(event as ActionRegisteredEvent);
@@ -111,7 +135,7 @@ export class PluginManager {
 
   /** Returns panel registration events for all currently loaded plugins that called addPanel(). */
   getRegisteredPanelEvents(): PanelRegisteredEvent[] {
-    return [...this.panelEvents.values()];
+    return [...this.panelEvents.values()].flat();
   }
 
   getRegisteredActionEvents(): ActionRegisteredEvent[] {

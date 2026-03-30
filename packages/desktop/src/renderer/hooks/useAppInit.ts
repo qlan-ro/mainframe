@@ -54,8 +54,14 @@ export function useAppInit(): void {
           const plugins = await getPlugins();
           const store = usePluginLayoutStore.getState();
           for (const plugin of plugins) {
-            if (plugin.panel) {
-              store.registerContribution({ pluginId: plugin.id, ...plugin.panel });
+            if (plugin.panels && plugin.panels.length > 0) {
+              for (const panel of plugin.panels) {
+                store.registerContribution({ pluginId: plugin.id, ...panel });
+              }
+            } else if (plugin.panel) {
+              // Legacy fallback: server returned only single-panel field
+              const panelId = `${plugin.id}:${plugin.panel.zone}`;
+              store.registerContribution({ pluginId: plugin.id, panelId, ...plugin.panel });
             }
             if (plugin.actions) {
               for (const action of plugin.actions) {

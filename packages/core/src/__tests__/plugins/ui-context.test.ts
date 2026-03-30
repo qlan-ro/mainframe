@@ -3,36 +3,53 @@ import { createPluginUIContext } from '../../plugins/ui-context.js';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 
 describe('PluginUIContext', () => {
-  it('calls emit on addPanel', () => {
+  it('returns a panelId from addPanel', () => {
     const emitEvent = vi.fn();
     const ui = createPluginUIContext('my-plugin', emitEvent);
-    ui.addPanel({ zone: 'left-panel', label: 'My Panel' });
-    expect(emitEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'plugin.panel.registered', pluginId: 'my-plugin' }),
-    );
+    const panelId = ui.addPanel({ zone: 'left-panel', label: 'My Panel' });
+    expect(panelId).toBe('my-plugin:left-panel');
   });
 
-  it('emits correct zone and label on addPanel', () => {
+  it('emits correct zone, label, and panelId on addPanel', () => {
     const emitEvent = vi.fn();
     const ui = createPluginUIContext('my-plugin', emitEvent);
     ui.addPanel({ zone: 'right-panel', label: 'My Panel', icon: 'star' });
     expect(emitEvent).toHaveBeenCalledWith({
       type: 'plugin.panel.registered',
       pluginId: 'my-plugin',
+      panelId: 'my-plugin:right-panel',
       zone: 'right-panel',
       label: 'My Panel',
       icon: 'star',
     });
   });
 
-  it('emits panel.unregistered on removePanel', () => {
+  it('emits panel.unregistered with panelId when specific panel removed', () => {
     const emitEvent = vi.fn();
     const ui = createPluginUIContext('my-plugin', emitEvent);
-    ui.removePanel();
-    expect(emitEvent).toHaveBeenCalledWith({
+    const panelId = ui.addPanel({ zone: 'left-panel', label: 'LP' });
+    ui.removePanel(panelId);
+    expect(emitEvent).toHaveBeenLastCalledWith({
       type: 'plugin.panel.unregistered',
       pluginId: 'my-plugin',
+      panelId: 'my-plugin:left-panel',
     });
+  });
+
+  it('emits unregistered for all panels when removePanel called without id', () => {
+    const emitEvent = vi.fn();
+    const ui = createPluginUIContext('my-plugin', emitEvent);
+    ui.addPanel({ zone: 'left-panel', label: 'LP' });
+    ui.addPanel({ zone: 'right-panel', label: 'RP' });
+    emitEvent.mockClear();
+    ui.removePanel();
+    expect(emitEvent).toHaveBeenCalledTimes(2);
+    expect(emitEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'plugin.panel.unregistered', panelId: 'my-plugin:left-panel' }),
+    );
+    expect(emitEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'plugin.panel.unregistered', panelId: 'my-plugin:right-panel' }),
+    );
   });
 
   it('emits notification on notify', () => {

@@ -23,6 +23,7 @@ export type UIZone =
 
 export interface PluginUIContribution {
   pluginId: string;
+  panelId: string;
   zone: UIZone;
   label: string;
   icon?: string;
@@ -36,6 +37,13 @@ export interface PluginAction {
   icon?: string;
 }
 
+/** Single UI zone declaration used inside a manifest. */
+export interface PluginUIZoneEntry {
+  zone: UIZone;
+  label: string; // tooltip for rail icons; tab text for tab zones
+  icon?: string; // Lucide icon name; required for fullview/left-panel/right-panel
+}
+
 export interface PluginManifest {
   id: string;
   name: string;
@@ -44,12 +52,8 @@ export interface PluginManifest {
   author?: string;
   license?: string;
   capabilities: PluginCapability[];
-  /** UI contribution — required when plugin adds a panel or fullview */
-  ui?: {
-    zone: UIZone;
-    label: string; // tooltip for rail icons; tab text for tab zones
-    icon?: string; // Lucide icon name; required for fullview/left-panel/right-panel
-  };
+  /** UI contributions — accepts a single entry or an array for multi-zone plugins. */
+  ui?: PluginUIZoneEntry | PluginUIZoneEntry[];
   /** Adapter plugins only */
   adapter?: {
     binaryName: string;
@@ -57,6 +61,12 @@ export interface PluginManifest {
   };
   /** Custom commands this adapter exposes */
   commands?: Array<{ name: string; description: string }>;
+}
+
+/** Normalize the manifest `ui` field to always be an array (handles legacy single-object format). */
+export function normalizeManifestUI(ui: PluginManifest['ui']): PluginUIZoneEntry[] {
+  if (!ui) return [];
+  return Array.isArray(ui) ? ui : [ui];
 }
 
 // ─── Public daemon events (never contain message content) ────────────────────
@@ -143,8 +153,10 @@ export interface PluginEventBus {
 }
 
 export interface PluginUIContext {
-  addPanel(opts: { zone: UIZone; label: string; icon?: string }): void;
-  removePanel(): void;
+  /** Register a panel in a UI zone. Returns a unique panelId for later removal. */
+  addPanel(opts: { zone: UIZone; label: string; icon?: string }): string;
+  /** Remove a specific panel by panelId, or all panels for this plugin when omitted. */
+  removePanel(panelId?: string): void;
   addAction(opts: { id: string; label: string; shortcut: string; icon?: string }): void;
   removeAction(id: string): void;
   notify(options: { title: string; body: string; level?: 'info' | 'warning' | 'error' }): void;

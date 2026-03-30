@@ -66,6 +66,31 @@ describe('validateManifest', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts ui as an array of zone entries', () => {
+    const result = validateManifest({
+      id: 'multi-zone',
+      name: 'Multi Zone',
+      version: '1.0.0',
+      capabilities: ['ui:panels'],
+      ui: [
+        { zone: 'fullview', label: 'Overview', icon: 'Layout' },
+        { zone: 'right-panel', label: 'Details', icon: 'Info' },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects empty ui array', () => {
+    const result = validateManifest({
+      id: 'empty-ui',
+      name: 'Empty UI',
+      version: '1.0.0',
+      capabilities: ['ui:panels'],
+      ui: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects manifest with ui.zone but without ui:panels capability', () => {
     const result = validateManifest({
       id: 'test',

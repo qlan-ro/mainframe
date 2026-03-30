@@ -15,7 +15,8 @@ interface PluginLayoutState {
   activeRightPanelId: string | null;
 
   registerContribution(c: PluginUIContribution): void;
-  unregisterContribution(pluginId: string): void;
+  /** Remove a specific panel by panelId, or all panels for a plugin when panelId is omitted. */
+  unregisterContribution(pluginId: string, panelId?: string): void;
   registerAction(action: PluginAction): void;
   unregisterAction(pluginId: string, actionId: string): void;
   triggerAction(pluginId: string, actionId: string): void;
@@ -35,16 +36,22 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
 
   registerContribution: (c) =>
     set((s) => ({
-      contributions: [...s.contributions.filter((x) => x.pluginId !== c.pluginId), c],
+      contributions: [...s.contributions.filter((x) => x.panelId !== c.panelId), c],
     })),
 
-  unregisterContribution: (pluginId) =>
-    set((s) => ({
-      contributions: s.contributions.filter((c) => c.pluginId !== pluginId),
-      activeFullviewId: s.activeFullviewId === pluginId ? null : s.activeFullviewId,
-      activeLeftPanelId: s.activeLeftPanelId === pluginId ? null : s.activeLeftPanelId,
-      activeRightPanelId: s.activeRightPanelId === pluginId ? null : s.activeRightPanelId,
-    })),
+  unregisterContribution: (pluginId, panelId?) =>
+    set((s) => {
+      const contributions = panelId
+        ? s.contributions.filter((c) => c.panelId !== panelId)
+        : s.contributions.filter((c) => c.pluginId !== pluginId);
+      const hasPlugin = contributions.some((c) => c.pluginId === pluginId);
+      return {
+        contributions,
+        activeFullviewId: s.activeFullviewId === pluginId && !hasPlugin ? null : s.activeFullviewId,
+        activeLeftPanelId: s.activeLeftPanelId === pluginId && !hasPlugin ? null : s.activeLeftPanelId,
+        activeRightPanelId: s.activeRightPanelId === pluginId && !hasPlugin ? null : s.activeRightPanelId,
+      };
+    }),
 
   registerAction: (action) =>
     set((s) => ({

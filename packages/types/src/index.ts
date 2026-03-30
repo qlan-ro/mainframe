@@ -11,9 +11,11 @@ export * from './launch.js';
 export * from './search.js';
 export * from './lsp.js';
 export * from './git.js';
+export { normalizeManifestUI } from './plugin.js';
 export type {
   PluginCapability,
   PluginManifest,
+  PluginUIZoneEntry,
   UIZone,
   PluginUIContribution,
   PublicDaemonEventName,

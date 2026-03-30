@@ -23,11 +23,12 @@ export type DaemonEvent =
   | {
       type: 'plugin.panel.registered';
       pluginId: string;
+      panelId: string;
       zone: UIZone;
       label: string;
       icon?: string;
     }
-  | { type: 'plugin.panel.unregistered'; pluginId: string }
+  | { type: 'plugin.panel.unregistered'; pluginId: string; panelId?: string }
   | {
       type: 'plugin.action.registered';
       pluginId: string;
