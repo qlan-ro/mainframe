@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, GitBranch } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
@@ -86,6 +86,9 @@ function useComposerEmpty(composerRuntime: ComposerRuntime) {
   );
 }
 
+/** Per-chat draft storage so composer text survives chat switches */
+const drafts = new Map<string, string>();
+
 function StopButton() {
   const thread = useThread();
   if (!thread.isRunning) return null;
@@ -104,10 +107,12 @@ function SendButton({
   composerRuntime,
   hasCaptures,
   disabled: externalDisabled,
+  chatId,
 }: {
   composerRuntime: ComposerRuntime;
   hasCaptures: boolean;
   disabled?: boolean;
+  chatId: string;
 }) {
   const composerEmpty = useComposerEmpty(composerRuntime);
   const disabled = externalDisabled || (composerEmpty && !hasCaptures);
@@ -118,6 +123,7 @@ function SendButton({
       onClick={() => {
         try {
           composerRuntime.send();
+          drafts.delete(chatId);
         } catch (err) {
           log.warn('failed to send from composer', { err: String(err) });
         }
@@ -144,11 +150,35 @@ export function ComposerCard() {
   const captures = useSandboxStore((s) => s.captures);
   const removeCapture = useSandboxStore((s) => s.removeCapture);
 
+  const prevChatIdRef = useRef(chatId);
   useEffect(() => {
-    requestAnimationFrame(() => {
-      focusComposerInput();
-    });
-  }, [chatId]);
+    if (prevChatIdRef.current !== chatId) {
+      // Save draft for the chat we're leaving
+      try {
+        const text = composerRuntime.getState()?.text ?? '';
+        if (text.trim()) drafts.set(prevChatIdRef.current, text);
+        else drafts.delete(prevChatIdRef.current);
+      } catch {
+        /* composer not ready */
+      }
+
+      // Restore draft for the chat we're switching to
+      const draft = drafts.get(chatId);
+      requestAnimationFrame(() => {
+        try {
+          composerRuntime.setText(draft ?? '');
+        } catch {
+          /* composer not ready */
+        }
+        focusComposerInput();
+      });
+      prevChatIdRef.current = chatId;
+    } else {
+      requestAnimationFrame(() => {
+        focusComposerInput();
+      });
+    }
+  }, [chatId, composerRuntime]);
 
   const pendingInvocation = useSkillsStore((s) => s.pendingInvocation);
   useEffect(() => {
@@ -311,6 +341,7 @@ export function ComposerCard() {
               e.preventDefault();
               try {
                 composerRuntime.send();
+                drafts.delete(chatId);
               } catch (err) {
                 log.warn('failed to send from composer', { err: String(err) });
               }
@@ -369,6 +400,7 @@ export function ComposerCard() {
             composerRuntime={composerRuntime}
             hasCaptures={captures.length > 0}
             disabled={chat?.worktreeMissing}
+            chatId={chatId}
           />
         </div>
       </div>
