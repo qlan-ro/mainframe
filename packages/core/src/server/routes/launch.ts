@@ -62,7 +62,7 @@ export function launchRoutes(ctx: RouteContext): Router {
         }
       }
 
-      res.json({ success: true, data: { statuses, tunnelUrls } });
+      res.json({ success: true, data: { statuses, tunnelUrls, effectivePath: resolved.path } });
     }),
   );
 
