@@ -93,7 +93,13 @@ const gitBranchName = z
 export const GitCheckoutBody = z.object({ branch: z.string().min(1) });
 export const GitCreateBranchBody = z.object({ name: gitBranchName, startPoint: z.string().optional() });
 export const GitFetchBody = z.object({ remote: z.string().optional() });
-export const GitPullBody = z.object({ remote: z.string().optional(), branch: z.string().optional() });
+export const GitPullBody = z
+  .object({
+    remote: z.string().optional(),
+    branch: z.string().optional(),
+    localBranch: z.string().optional(),
+  })
+  .refine((d) => !d.localBranch || d.branch, { message: 'branch is required when localBranch is set' });
 export const GitPushBody = z.object({ branch: z.string().optional(), remote: z.string().optional() });
 export const GitMergeBody = z.object({ branch: z.string().min(1) });
 export const GitRebaseBody = z.object({ branch: z.string().min(1) });

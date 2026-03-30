@@ -86,31 +86,16 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
 
   const handleRenameSubmit = useCallback(async () => {
     if (!renameTarget || !renameValue.trim()) return;
-    try {
-      await actions.handleRename(renameTarget, renameValue.trim());
-      setView('list');
-    } catch {
-      /* toast already shown */
-    }
+    if (await actions.handleRename(renameTarget, renameValue.trim())) setView('list');
   }, [renameTarget, renameValue, actions]);
 
   const handleAbortAndReset = useCallback(async () => {
-    try {
-      await actions.handleAbort();
-      setView('list');
-    } catch {
-      /* toast already shown */
-    }
+    if (await actions.handleAbort()) setView('list');
   }, [actions]);
 
   const handleCreateAndReset = useCallback(
     async (name: string, startPoint: string) => {
-      try {
-        await actions.handleCreateBranch(name, startPoint);
-        setView('list');
-      } catch {
-        /* toast already shown */
-      }
+      if (await actions.handleCreateBranch(name, startPoint)) setView('list');
     },
     [actions],
   );
@@ -259,52 +244,21 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
             isRemote={selectedIsRemote}
             onClose={() => setView('list')}
             onCheckout={async (b) => {
-              try {
-                await actions.handleCheckout(b);
-                setView('list');
-              } catch {
-                /* toast already shown */
-              }
+              if (await actions.handleCheckout(b)) setView('list');
             }}
             onPull={async (b) => {
-              try {
-                await actions.handlePull(b);
-                setView('list');
-              } catch {
-                /* toast already shown */
-              }
+              if (await actions.handlePull(b)) setView('list');
             }}
-            onPush={async (b) => {
-              try {
-                await actions.handlePush(b);
-              } catch {
-                /* toast already shown */
-              }
-            }}
+            onPush={(b) => actions.handlePush(b)}
             onMerge={async (b) => {
-              try {
-                await actions.handleMerge(b);
-                setView('list');
-              } catch {
-                /* toast already shown */
-              }
+              if (await actions.handleMerge(b)) setView('list');
             }}
             onRebase={async (b) => {
-              try {
-                await actions.handleRebase(b);
-                setView('list');
-              } catch {
-                /* toast already shown */
-              }
+              if (await actions.handleRebase(b)) setView('list');
             }}
             onRename={handleRenameStart}
             onDelete={async (b, r) => {
-              try {
-                await actions.handleDelete(b, r);
-                setView('list');
-              } catch {
-                /* toast already shown */
-              }
+              if (await actions.handleDelete(b, r)) setView('list');
             }}
             onNewBranchFrom={handleNewBranchFrom}
             busy={busy}

@@ -36,17 +36,17 @@ export interface BranchActions {
   busy: boolean;
   busyAction: string | null;
   loadBranches: () => Promise<void>;
-  handleCheckout: (branch: string) => Promise<void>;
-  handlePull: (branch: string) => Promise<void>;
-  handlePush: (branch: string) => Promise<void>;
-  handleMerge: (branch: string) => Promise<void>;
-  handleRebase: (branch: string) => Promise<void>;
-  handleRename: (oldName: string, newName: string) => Promise<void>;
-  handleDelete: (branch: string, isRemote?: boolean) => Promise<void>;
-  handleFetch: () => Promise<void>;
-  handleUpdateAll: () => Promise<void>;
-  handleAbort: () => Promise<void>;
-  handleCreateBranch: (name: string, startPoint: string) => Promise<void>;
+  handleCheckout: (branch: string) => Promise<boolean>;
+  handlePull: (branch: string) => Promise<boolean>;
+  handlePush: (branch: string) => Promise<boolean>;
+  handleMerge: (branch: string) => Promise<boolean>;
+  handleRebase: (branch: string) => Promise<boolean>;
+  handleRename: (oldName: string, newName: string) => Promise<boolean>;
+  handleDelete: (branch: string, isRemote?: boolean) => Promise<boolean>;
+  handleFetch: () => Promise<boolean>;
+  handleUpdateAll: () => Promise<boolean>;
+  handleAbort: () => Promise<boolean>;
+  handleCreateBranch: (name: string, startPoint: string) => Promise<boolean>;
 }
 
 export function useBranchActions(projectId: string, onBranchChanged: () => void, onClose: () => void): BranchActions {
@@ -55,15 +55,16 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  const withBusy = useCallback(async (fn: () => Promise<void>, action?: string) => {
+  const withBusy = useCallback(async (fn: () => Promise<void>, action?: string): Promise<boolean> => {
     setBusy(true);
     setBusyAction(action ?? null);
     try {
       await fn();
+      return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       toast.error(msg);
-      throw err;
+      return false;
     } finally {
       setBusy(false);
       setBusyAction(null);
@@ -96,7 +97,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const handleCheckout = useCallback(
     async (branch: string) => {
-      await withBusy(async () => {
+      return withBusy(async () => {
         if (!(await confirmDirtyTree())) return;
         await gitCheckout(projectId, branch);
         toast.success(`Switched to ${branch}`);
@@ -109,7 +110,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const handlePull = useCallback(
     async (branch: string) => {
-      await withBusy(async () => {
+      return withBusy(async () => {
         // Resolve tracking remote and branch (e.g. "origin/feat/foo" → remote="origin", remoteBranch="feat/foo")
         const info = branches?.local.find((b) => b.name === branch);
         const slashIdx = info?.tracking?.indexOf('/') ?? -1;
@@ -136,7 +137,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const handlePush = useCallback(
     async (branch: string) => {
-      await withBusy(async () => {
+      return withBusy(async () => {
         const info = branches?.local.find((b) => b.name === branch);
         const slashIdx = info?.tracking?.indexOf('/') ?? -1;
         const remote = slashIdx > 0 ? info!.tracking!.slice(0, slashIdx) : undefined;
@@ -153,7 +154,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const handleMerge = useCallback(
     async (branch: string) => {
-      await withBusy(async () => {
+      return withBusy(async () => {
         if (!(await confirmDirtyTree())) return;
         const result = await gitMerge(projectId, branch);
         if (result.status === 'conflict') {
@@ -170,7 +171,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const handleRebase = useCallback(
     async (branch: string) => {
-      await withBusy(async () => {
+      return withBusy(async () => {
         if (!(await confirmDirtyTree())) return;
         const result = await gitRebase(projectId, branch);
         if (result.status === 'conflict') {
@@ -187,7 +188,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const handleRename = useCallback(
     async (oldName: string, newName: string) => {
-      await withBusy(async () => {
+      return withBusy(async () => {
         await gitRenameBranch(projectId, oldName, newName);
         toast.success(`Renamed to ${newName}`);
         onBranchChanged();
@@ -200,8 +201,8 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   const handleDelete = useCallback(
     async (branch: string, isRemote?: boolean) => {
       const label = isRemote ? `remote branch '${branch}'` : `branch '${branch}'`;
-      if (!window.confirm(`Delete ${label}?`)) return;
-      await withBusy(async () => {
+      if (!window.confirm(`Delete ${label}?`)) return false;
+      return withBusy(async () => {
         const result = await gitDeleteBranch(projectId, branch, false, isRemote);
         if (result.status === 'not-merged') {
           if (window.confirm(`${result.message}\nForce delete?`)) {
@@ -218,7 +219,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   );
 
   const handleFetch = useCallback(async () => {
-    await withBusy(async () => {
+    return withBusy(async () => {
       await gitFetch(projectId);
       toast.success('Fetched');
       await loadBranches();
@@ -226,7 +227,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   }, [projectId, loadBranches, withBusy]);
 
   const handleUpdateAll = useCallback(async () => {
-    await withBusy(async () => {
+    return withBusy(async () => {
       const result = await gitUpdateAll(projectId);
       if (result.pull.status === 'conflict') {
         toast.error('Conflicts during update');
@@ -239,7 +240,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
   }, [projectId, loadBranches, onBranchChanged, withBusy]);
 
   const handleAbort = useCallback(async () => {
-    await withBusy(async () => {
+    return withBusy(async () => {
       const result = await gitAbort(projectId);
       if (result?.aborted === false) {
         toast.info('No active merge or rebase to abort');
@@ -252,7 +253,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const handleCreateBranch = useCallback(
     async (name: string, startPoint: string) => {
-      await withBusy(async () => {
+      return withBusy(async () => {
         await gitCreateBranch(projectId, name, startPoint);
         toast.success(`Created ${name}`);
         onBranchChanged();

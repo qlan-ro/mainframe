@@ -127,9 +127,12 @@ export class GitService {
         if (remotes.some((r) => r.name === remote)) {
           try {
             await this.git().checkout(['-b', localName!, `${branch}`, '--track']);
-          } catch {
-            // Local branch already exists — just switch to it
-            await this.git().checkout(localName!);
+          } catch (err: any) {
+            if (err?.message?.includes('already exists')) {
+              await this.git().checkout(localName!);
+            } else {
+              throw err;
+            }
           }
           return;
         }
@@ -159,8 +162,23 @@ export class GitService {
     });
   }
 
-  async pull(remote?: string, branch?: string): Promise<PullResult> {
+  async pull(remote?: string, branch?: string, localBranch?: string): Promise<PullResult> {
     return this.withLock(async () => {
+      // When a local branch is specified and it differs from the current branch,
+      // use `git fetch remote remoteBranch:localBranch` to fast-forward the target
+      // ref without switching the working tree.
+      if (localBranch && branch) {
+        const currentBranch = (await this.git().branch()).current;
+        if (currentBranch !== localBranch) {
+          const pullRemote = remote ?? 'origin';
+          const refBefore = (await this.git().raw(['rev-parse', localBranch])).trim();
+          await this.git().fetch(pullRemote, `${branch}:${localBranch}`);
+          const refAfter = (await this.git().raw(['rev-parse', localBranch])).trim();
+          if (refBefore === refAfter) return { status: 'up-to-date' };
+          return { status: 'success', summary: { changes: 0, insertions: 0, deletions: 0 } };
+        }
+      }
+
       try {
         const result = await this.git().pull(remote, branch);
         if (result.summary.changes === 0 && result.summary.insertions === 0 && result.summary.deletions === 0) {
