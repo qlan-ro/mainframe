@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 
 interface LineCommentPopoverProps {
   filePath: string;
@@ -65,9 +66,14 @@ export function LineCommentPopover({
       style={{ top, left }}
     >
       <div className="flex items-center justify-between px-3 py-2 border-b border-mf-divider">
-        <span className="font-mono text-mf-small text-mf-text-secondary" title={filePath}>
-          {shortPath}:{line}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="font-mono text-mf-small text-mf-text-secondary" tabIndex={0}>
+              {shortPath}:{line}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{filePath}</TooltipContent>
+        </Tooltip>
         <button onClick={onClose} className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary">
           <X size={14} />
         </button>
@@ -75,9 +81,14 @@ export function LineCommentPopover({
 
       {trimmedLine && (
         <div className="px-3 py-1.5 border-b border-mf-divider bg-mf-input-bg/30">
-          <code className="text-mf-small text-mf-text-secondary font-mono block truncate" title={trimmedLine}>
-            {trimmedLine}
-          </code>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <code className="text-mf-small text-mf-text-secondary font-mono block truncate" tabIndex={0}>
+                {trimmedLine}
+              </code>
+            </TooltipTrigger>
+            <TooltipContent>{trimmedLine}</TooltipContent>
+          </Tooltip>
         </div>
       )}
 

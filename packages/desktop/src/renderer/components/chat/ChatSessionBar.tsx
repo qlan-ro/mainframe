@@ -3,6 +3,7 @@ import { GitBranch, Loader2, CircleDot, AlertTriangle } from 'lucide-react';
 import { useChatsStore } from '../../store/chats';
 import { useAdaptersStore } from '../../store/adapters';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel, getModelContextWindow, getModelLabel } from '../../lib/adapters';
 
 const ADAPTER_ACCENT: Record<string, string> = {
@@ -117,9 +118,14 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
             <Divider />
             <div className="flex items-center gap-1 text-mf-text-secondary min-w-0">
               <GitBranch size={11} className="shrink-0" />
-              <span className="font-mono truncate max-w-[120px]" title={chat.branchName}>
-                {chat.branchName}
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="font-mono truncate max-w-[120px]" tabIndex={0}>
+                    {chat.branchName}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{chat.branchName}</TooltipContent>
+              </Tooltip>
             </div>
           </>
         )}

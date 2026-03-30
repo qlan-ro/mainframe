@@ -1,6 +1,7 @@
 import React from 'react';
 import { ExternalLink } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { useTabsStore } from '../../../../../store/tabs';
 import { FileTypeIcon } from '../FileTypeIcon';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
@@ -48,9 +49,14 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
       header={
         <>
           <FileTypeIcon filePath={filePath} />
-          <span className="font-mono text-mf-accent truncate text-mf-body" title={filePath}>
-            {shortFilename(filePath)}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="font-mono text-mf-accent truncate text-mf-body" tabIndex={0}>
+                {shortFilename(filePath)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{filePath}</TooltipContent>
+          </Tooltip>
         </>
       }
       statusDot={<StatusDot result={result} isError={isError} />}
@@ -68,13 +74,19 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
               ) : null}
             </span>
           )}
-          <span
-            onClick={handleOpenDiff}
-            className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors"
-            title="Open in diff editor"
-          >
-            <ExternalLink size={14} />
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                onClick={handleOpenDiff}
+                className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors"
+                tabIndex={0}
+                role="button"
+              >
+                <ExternalLink size={14} />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Open in diff editor</TooltipContent>
+          </Tooltip>
         </>
       }
     >

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
@@ -67,12 +68,17 @@ export function SessionAttachmentsGrid({ chatId, attachments }: SessionAttachmen
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-1 px-1 text-mf-text-secondary">
                   <FileText size={16} />
-                  <span
-                    className="text-[9px] leading-tight w-full h-7 overflow-hidden text-center break-all"
-                    title={attachment.name}
-                  >
-                    {attachment.name}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className="text-[9px] leading-tight w-full h-7 overflow-hidden text-center break-all"
+                        tabIndex={0}
+                      >
+                        {attachment.name}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{attachment.name}</TooltipContent>
+                  </Tooltip>
                 </div>
               )}
             </button>

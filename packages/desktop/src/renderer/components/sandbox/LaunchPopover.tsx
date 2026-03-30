@@ -7,6 +7,7 @@ import { useChatsStore } from '../../store/chats';
 import { useUIStore } from '../../store/ui';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { daemonClient } from '../../lib/client';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
@@ -95,17 +96,21 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
                 )}
               >
                 <span>{c.name}</span>
-                <button
-                  onClick={(e) => void handleToggleProcess(e, c)}
-                  disabled={status === 'starting'}
-                  className={cn(
-                    'w-5 h-5 flex items-center justify-center rounded transition-colors disabled:opacity-40',
-                    isRunning ? 'text-red-400 hover:text-red-300' : 'text-mf-accent hover:text-mf-accent',
-                  )}
-                  title={isRunning ? 'Stop' : 'Start'}
-                >
-                  {isRunning ? <Square size={10} /> : <Play size={10} />}
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={(e) => void handleToggleProcess(e, c)}
+                      disabled={status === 'starting'}
+                      className={cn(
+                        'w-5 h-5 flex items-center justify-center rounded transition-colors disabled:opacity-40',
+                        isRunning ? 'text-red-400 hover:text-red-300' : 'text-mf-accent hover:text-mf-accent',
+                      )}
+                    >
+                      {isRunning ? <Square size={10} /> : <Play size={10} />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{isRunning ? 'Stop' : 'Start'}</TooltipContent>
+                </Tooltip>
               </div>
             );
           })}

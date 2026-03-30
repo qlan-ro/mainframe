@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Search, Play, Square, ChevronDown } from 'lucide-react';
 import type { Layout } from 'react-resizable-panels';
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { useProjectsStore, useSearchStore } from '../store';
 import { useUIStore } from '../store/ui';
 import { useSandboxStore } from '../store/sandbox';
@@ -103,55 +104,67 @@ export function TitleBar({
       <div className="absolute right-11 flex items-center gap-1 app-no-drag z-10">
         {/* Preview / Launch button */}
         <div className="relative flex items-center" data-launch-popover>
-          <button
-            data-testid="launch-config-selector"
-            onClick={() => {
-              setLaunchPopoverOpen((o) => !o);
-              setStopPopoverOpen(false);
-            }}
-            className={cn(
-              'flex items-center gap-1.5 px-2 py-1 text-mf-body rounded-mf-card hover:bg-mf-panel-bg transition-colors',
-              selectedConfig
-                ? 'text-mf-text-secondary hover:text-mf-text-primary'
-                : 'text-mf-text-secondary opacity-60 hover:opacity-100',
-            )}
-            title="Launch configurations"
-          >
-            <span>{selectedConfig?.name ?? 'No launch configurations'}</span>
-            <ChevronDown size={12} />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                data-testid="launch-config-selector"
+                onClick={() => {
+                  setLaunchPopoverOpen((o) => !o);
+                  setStopPopoverOpen(false);
+                }}
+                className={cn(
+                  'flex items-center gap-1.5 px-2 py-1 text-mf-body rounded-mf-card hover:bg-mf-panel-bg transition-colors',
+                  selectedConfig
+                    ? 'text-mf-text-secondary hover:text-mf-text-primary'
+                    : 'text-mf-text-secondary opacity-60 hover:opacity-100',
+                )}
+              >
+                <span>{selectedConfig?.name ?? 'No launch configurations'}</span>
+                <ChevronDown size={12} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Launch configurations</TooltipContent>
+          </Tooltip>
           {launchPopoverOpen && <LaunchPopover onClose={handleCloseLaunchPopover} />}
         </div>
 
         {/* Play button — only when a config is selected and nothing is running */}
         {selectedConfig && !anyRunning && (
-          <button
-            data-testid="launch-start-btn"
-            onClick={() => void handleStart()}
-            className="w-7 h-7 flex items-center justify-center rounded-mf-card text-mf-accent hover:text-mf-accent hover:bg-mf-panel-bg transition-colors"
-            title="Start"
-          >
-            <Play size={12} />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                data-testid="launch-start-btn"
+                onClick={() => void handleStart()}
+                className="w-7 h-7 flex items-center justify-center rounded-mf-card text-mf-accent hover:text-mf-accent hover:bg-mf-panel-bg transition-colors"
+              >
+                <Play size={12} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Start</TooltipContent>
+          </Tooltip>
         )}
 
         {/* Stop button with badge — when any process is running */}
         {anyRunning && (
           <div className="relative" data-stop-popover>
-            <button
-              data-testid="launch-stop-btn"
-              onClick={() => {
-                setStopPopoverOpen((o) => !o);
-                setLaunchPopoverOpen(false);
-              }}
-              className="relative w-7 h-7 flex items-center justify-center rounded-mf-card hover:bg-mf-panel-bg transition-colors"
-              title="Stop"
-            >
-              <Square size={12} className="text-red-400" />
-              <span className="absolute bottom-0 right-0.5 text-[9px] font-bold leading-none text-mf-text-primary">
-                {runningCount}
-              </span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  data-testid="launch-stop-btn"
+                  onClick={() => {
+                    setStopPopoverOpen((o) => !o);
+                    setLaunchPopoverOpen(false);
+                  }}
+                  className="relative w-7 h-7 flex items-center justify-center rounded-mf-card hover:bg-mf-panel-bg transition-colors"
+                >
+                  <Square size={12} className="text-red-400" />
+                  <span className="absolute bottom-0 right-0.5 text-[9px] font-bold leading-none text-mf-text-primary">
+                    {runningCount}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Stop</TooltipContent>
+            </Tooltip>
             {stopPopoverOpen && <StopPopover onClose={handleCloseStopPopover} />}
           </div>
         )}

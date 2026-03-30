@@ -4,6 +4,7 @@ import type { SearchContentResult } from '@qlan-ro/mainframe-types';
 import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../store/chats';
 import { useTabsStore } from '../store/tabs';
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { searchContent } from '../lib/api';
 
 interface FindInPathModalProps {
@@ -147,9 +148,14 @@ export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathMod
         <div className="flex items-start justify-between px-4 py-3 border-b border-mf-border shrink-0">
           <div>
             <h2 className="text-mf-body font-semibold text-mf-text-primary">{title}</h2>
-            <p className="text-mf-small text-mf-text-secondary truncate max-w-[420px]" title={scopePath}>
-              {scopePath}
-            </p>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p className="text-mf-small text-mf-text-secondary truncate max-w-[420px]" tabIndex={0}>
+                  {scopePath}
+                </p>
+              </TooltipTrigger>
+              <TooltipContent>{scopePath}</TooltipContent>
+            </Tooltip>
           </div>
           <button
             onClick={onClose}

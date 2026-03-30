@@ -3,6 +3,7 @@ import { Zap, MoreHorizontal, Pencil, Trash2, Globe, FolderOpen, Puzzle } from '
 import { useSkillsStore, useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { Skill } from '@qlan-ro/mainframe-types';
 
 const SCOPE_ICON: Record<string, React.ReactNode> = {
@@ -38,21 +39,28 @@ function SkillItem({
       <Zap size={14} className="text-mf-accent mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span
-            className="text-mf-body text-mf-text-primary truncate font-medium"
-            title={skill.invocationName || skill.displayName || skill.name}
-          >
-            {skill.invocationName || skill.displayName || skill.name}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-mf-body text-mf-text-primary truncate font-medium" tabIndex={0}>
+                {skill.invocationName || skill.displayName || skill.name}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{skill.invocationName || skill.displayName || skill.name}</TooltipContent>
+          </Tooltip>
           <span className="flex items-center gap-0.5 px-1.5 py-0 rounded-full bg-mf-hover text-mf-status text-mf-text-secondary shrink-0">
             {SCOPE_ICON[skill.scope]}
             {SCOPE_LABEL[skill.scope]}
           </span>
         </div>
         {skill.description && (
-          <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" title={skill.description}>
-            {skill.description}
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
+                {skill.description}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>{skill.description}</TooltipContent>
+          </Tooltip>
         )}
         <div className="text-mf-status text-mf-text-secondary mt-0.5 font-mono">
           /{skill.invocationName || skill.name}

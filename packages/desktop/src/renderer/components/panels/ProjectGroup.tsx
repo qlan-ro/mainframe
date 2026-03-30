@@ -8,6 +8,7 @@ import { useAdaptersStore } from '../../store/adapters';
 import { daemonClient } from '../../lib/client';
 import { archiveChat, renameChat } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel } from '../../lib/adapters';
 import { createLogger } from '../../lib/logger';
 
@@ -95,7 +96,6 @@ function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, o
     <div
       data-testid="chat-list-item"
       onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId)}
-      title={chat.claudeSessionId ? `Session: ${chat.claudeSessionId}` : undefined}
       className={cn(
         'group w-full rounded-mf-input transition-colors flex items-center gap-2 ml-2',
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
@@ -120,15 +120,20 @@ function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, o
                 className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
               />
             ) : (
-              <div
-                className={cn(
-                  'text-mf-small truncate',
-                  isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                )}
-                title={chat.title || 'New Chat'}
-              >
-                {chat.title || 'New Chat'}
-              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={cn(
+                      'text-mf-small truncate',
+                      isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                    )}
+                    tabIndex={0}
+                  >
+                    {chat.title || 'New Chat'}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>{chat.title || 'New Chat'}</TooltipContent>
+              </Tooltip>
             )}
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1">
               <Bot size={10} className="shrink-0" />
@@ -137,9 +142,14 @@ function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, o
                 <>
                   <span>{'·'}</span>
                   <GitBranch size={10} className="shrink-0" />
-                  <span className="truncate max-w-[100px]" title={chat.worktreePath}>
-                    {chat.worktreePath.split('/').pop()}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="truncate max-w-[100px]" tabIndex={0}>
+                        {chat.worktreePath.split('/').pop()}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{chat.worktreePath}</TooltipContent>
+                  </Tooltip>
                 </>
               )}
               <span>{'·'}</span>
@@ -154,28 +164,36 @@ function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, o
           Waiting
         </span>
       )}
-      <button
-        onClick={handleStartRename}
-        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
-        title="Rename session"
-        aria-label="Rename session"
-      >
-        <Pencil size={14} />
-      </button>
-      <button
-        onClick={(e) => onArchive(e, chat.id)}
-        disabled={isArchiving}
-        className={cn(
-          'mr-2 p-1 rounded text-mf-text-secondary transition-all shrink-0',
-          isArchiving
-            ? 'opacity-100'
-            : 'opacity-0 group-hover:opacity-100 hover:bg-mf-hover hover:text-mf-text-primary',
-        )}
-        title="Archive session"
-        aria-label="Archive session"
-      >
-        {isArchiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={handleStartRename}
+            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
+            aria-label="Rename session"
+          >
+            <Pencil size={14} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Rename session</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={(e) => onArchive(e, chat.id)}
+            disabled={isArchiving}
+            className={cn(
+              'mr-2 p-1 rounded text-mf-text-secondary transition-all shrink-0',
+              isArchiving
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100 hover:bg-mf-hover hover:text-mf-text-primary',
+            )}
+            aria-label="Archive session"
+          >
+            {isArchiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>Archive session</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -289,15 +307,19 @@ export function ProjectGroup({
         <span className="text-mf-status bg-mf-hover text-mf-text-secondary px-1.5 py-0.5 rounded-full shrink-0">
           {chats.length}
         </span>
-        <button
-          type="button"
-          onClick={handleNewSession}
-          className="w-6 h-6 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors shrink-0"
-          title="New Session"
-          aria-label={`New session in ${project.name}`}
-        >
-          <Plus size={12} />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleNewSession}
+              className="w-6 h-6 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors shrink-0"
+              aria-label={`New session in ${project.name}`}
+            >
+              <Plus size={12} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>New Session</TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Chat list */}

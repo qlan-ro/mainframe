@@ -116,15 +116,18 @@ function NewSessionPopover({
     <div className="absolute right-0 top-full mt-1 z-50 min-w-[200px] max-w-[280px] bg-mf-panel-bg border border-mf-border rounded-mf-input shadow-lg py-1">
       <div className="px-3 py-1.5 text-mf-status text-mf-text-secondary uppercase tracking-wider">Select project</div>
       {sorted.map((project) => (
-        <button
-          key={project.id}
-          type="button"
-          onClick={() => onSelect(project.id)}
-          className="w-full text-left px-3 py-1.5 text-mf-small truncate hover:bg-mf-hover transition-colors text-mf-text-primary"
-          title={project.path}
-        >
-          {project.name}
-        </button>
+        <Tooltip key={project.id}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => onSelect(project.id)}
+              className="w-full text-left px-3 py-1.5 text-mf-small truncate hover:bg-mf-hover transition-colors text-mf-text-primary"
+            >
+              {project.name}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{project.path}</TooltipContent>
+        </Tooltip>
       ))}
     </div>
   );
@@ -377,20 +380,23 @@ export function ChatsPanel(): React.ReactElement {
               All
             </button>
             {sortedProjects.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
-                className={cn(
-                  'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status truncate max-w-[160px] transition-colors',
-                  filterProjectId === p.id
-                    ? 'bg-mf-accent text-white'
-                    : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-                )}
-                title={p.name}
-              >
-                {p.name}
-              </button>
+              <Tooltip key={p.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
+                    className={cn(
+                      'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status truncate max-w-[160px] transition-colors',
+                      filterProjectId === p.id
+                        ? 'bg-mf-accent text-white'
+                        : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                    )}
+                  >
+                    {p.name}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{p.name}</TooltipContent>
+              </Tooltip>
             ))}
           </div>
         </div>

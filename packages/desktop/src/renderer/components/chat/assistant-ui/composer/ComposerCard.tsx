@@ -4,6 +4,7 @@ import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:composer');
 import { ComposerPrimitive, useThread, useComposerRuntime, type ComposerRuntime } from '@assistant-ui/react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useChatsStore } from '../../../../store/chats';
 import { useSkillsStore } from '../../../../store/skills';
@@ -90,13 +91,17 @@ function StopButton() {
   const thread = useThread();
   if (!thread.isRunning) return null;
   return (
-    <ComposerPrimitive.Cancel
-      className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-destructive transition-colors"
-      title="Stop response"
-      aria-label="Stop response"
-    >
-      <Square size={12} />
-    </ComposerPrimitive.Cancel>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <ComposerPrimitive.Cancel
+          className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-destructive transition-colors"
+          aria-label="Stop response"
+        >
+          <Square size={12} />
+        </ComposerPrimitive.Cancel>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Stop response</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -112,22 +117,26 @@ function SendButton({
   const composerEmpty = useComposerEmpty(composerRuntime);
   const disabled = externalDisabled || (composerEmpty && !hasCaptures);
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => {
-        try {
-          composerRuntime.send();
-        } catch (err) {
-          log.warn('failed to send from composer', { err: String(err) });
-        }
-      }}
-      className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-      title="Send message"
-      aria-label="Send message"
-    >
-      <ArrowUp size={16} />
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            try {
+              composerRuntime.send();
+            } catch (err) {
+              log.warn('failed to send from composer', { err: String(err) });
+            }
+          }}
+          className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label="Send message"
+        >
+          <ArrowUp size={16} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Send message</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -213,26 +222,34 @@ export function ComposerCard() {
     >
       <ContextPickerMenu forceOpen={pickerOpen} onClose={() => setPickerOpen(false)} />
       <div className="flex items-center gap-1 px-2 pt-2">
-        <button
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            setPickerOpen((p) => !p);
-            focusComposerInput();
-          }}
-          className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
-          title="Open context picker (agents, files, skills)"
-          aria-label="Open context picker"
-        >
-          <ContextPickerIcon />
-        </button>
-        <ComposerPrimitive.AddAttachment
-          className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
-          title="Add attachment"
-          aria-label="Add attachment"
-        >
-          <Paperclip size={14} />
-        </ComposerPrimitive.AddAttachment>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setPickerOpen((p) => !p);
+                focusComposerInput();
+              }}
+              className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
+              aria-label="Open context picker"
+            >
+              <ContextPickerIcon />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Open context picker (agents, files, skills)</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ComposerPrimitive.AddAttachment
+              className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
+              aria-label="Add attachment"
+            >
+              <Paperclip size={14} />
+            </ComposerPrimitive.AddAttachment>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Add attachment</TooltipContent>
+        </Tooltip>
       </div>
 
       <div data-testid="composer-attachments" className="flex gap-2 px-3 pt-1 flex-wrap">
@@ -340,19 +357,25 @@ export function ComposerCard() {
           />
           {isGitProject && (
             <div className="relative">
-              <button
-                type="button"
-                onClick={() => setWorktreePopoverOpen((o) => !o)}
-                className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
-                  chat?.worktreePath
-                    ? 'text-mf-accent bg-mf-hover'
-                    : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
-                }`}
-                title={chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
-                aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
-              >
-                <GitBranch size={12} />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setWorktreePopoverOpen((o) => !o)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
+                      chat?.worktreePath
+                        ? 'text-mf-accent bg-mf-hover'
+                        : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
+                    }`}
+                    aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
+                  >
+                    <GitBranch size={12} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
+                </TooltipContent>
+              </Tooltip>
               {worktreePopoverOpen && chatId && (
                 <WorktreePopover
                   chatId={chatId}

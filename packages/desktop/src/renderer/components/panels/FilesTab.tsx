@@ -11,6 +11,7 @@ import { useChatsStore } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
 import { getFileTree } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { ScrollArea } from '../ui/scroll-area';
 import { ContextMenu } from '../ui/context-menu';
 import type { ContextMenuItem } from '../ui/context-menu';
@@ -110,12 +111,17 @@ function FileTreeNode({
             <FileText size={14} className="text-mf-text-secondary shrink-0" />
           </>
         )}
-        <span
-          className={cn('truncate', entry.type === 'file' ? 'text-mf-text-secondary' : 'text-mf-text-primary')}
-          title={entry.name}
-        >
-          {entry.name}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={cn('truncate', entry.type === 'file' ? 'text-mf-text-secondary' : 'text-mf-text-primary')}
+              tabIndex={0}
+            >
+              {entry.name}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{entry.name}</TooltipContent>
+        </Tooltip>
       </button>
       {expanded &&
         children.map((child) => (
@@ -232,18 +238,27 @@ export function FilesTab(): React.ReactElement {
             >
               {rootExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               <Folder size={14} className="text-mf-accent shrink-0" />
-              <span className="truncate" title={displayPath}>
-                {displayPath}
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="truncate" tabIndex={0}>
+                    {displayPath}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{displayPath}</TooltipContent>
+              </Tooltip>
             </button>
-            <button
-              onClick={() => setRefreshKey((k) => k + 1)}
-              className="hidden @min-[160px]:block p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
-              title="Refresh file tree"
-              aria-label="Refresh file tree"
-            >
-              <RefreshCw size={14} />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setRefreshKey((k) => k + 1)}
+                  className="hidden @min-[160px]:block p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
+                  aria-label="Refresh file tree"
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Refresh file tree</TooltipContent>
+            </Tooltip>
           </div>
           {rootExpanded &&
             rootEntries.map((entry) => (

@@ -1,5 +1,5 @@
-import React from 'react';
 import { Layers, Eye, Search } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
 import { ErrorDot, shortFilename } from './shared';
 import type { ToolGroupItem } from '../../convert-message';
@@ -54,9 +54,14 @@ export function ToolGroupCard({ args }: { args: Record<string, unknown> }) {
         {items.map((item) => (
           <div key={item.toolCallId} className="flex items-center gap-2 px-3 py-0.5 text-mf-small hover:bg-mf-hover/20">
             {groupItemIcon(item)}
-            <span className="font-mono text-mf-text-secondary/60 truncate" title={groupItemFullPath(item)}>
-              {groupItemLabel(item)}
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="font-mono text-mf-text-secondary/60 truncate" tabIndex={0}>
+                  {groupItemLabel(item)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{groupItemFullPath(item)}</TooltipContent>
+            </Tooltip>
             <span className="flex-1" />
             <ErrorDot isError={item.isError} />
           </div>

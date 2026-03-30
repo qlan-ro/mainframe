@@ -13,6 +13,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useSandboxStore } from '../../store/sandbox';
 import { useChatsStore } from '../../store/chats';
@@ -387,94 +388,130 @@ export function PreviewTab(): React.ReactElement {
           {selectedProcess &&
             (isSelectedRunning ? (
               <>
-                <button
-                  onClick={() => void handleRestart()}
-                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                  title="Restart"
-                >
-                  <RotateCw size={14} />
-                </button>
-                <button
-                  onClick={() => void handleStop()}
-                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-red-400 transition-colors"
-                  title="Stop"
-                >
-                  <Square size={14} />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => void handleRestart()}
+                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                    >
+                      <RotateCw size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Restart</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => void handleStop()}
+                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-red-400 transition-colors"
+                    >
+                      <Square size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Stop</TooltipContent>
+                </Tooltip>
               </>
             ) : (
-              <button
-                onClick={() => void handleStart()}
-                className="p-1.5 rounded hover:bg-mf-hover text-mf-accent transition-colors"
-                title="Start"
-              >
-                <Play size={14} />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => void handleStart()}
+                    className="p-1.5 rounded hover:bg-mf-hover text-mf-accent transition-colors"
+                  >
+                    <Play size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Start</TooltipContent>
+              </Tooltip>
             ))}
           {selectedProcess && <div className="w-px h-3.5 bg-mf-border mx-0.5" />}
           {/* Preview controls: reload, inspect, screenshot */}
           {hasPreview && (
             <>
-              <button
-                onClick={handleReload}
-                className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                title="Reload"
-              >
-                <RefreshCw size={14} />
-              </button>
-              <button
-                onClick={() => void handleInspect()}
-                className={[
-                  'p-1.5 rounded transition-colors',
-                  inspecting
-                    ? 'bg-mf-hover text-mf-accent'
-                    : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-                ].join(' ')}
-                title="Pick element"
-              >
-                <Crosshair size={14} />
-              </button>
-              <button
-                onClick={() => void handleFullScreenshot()}
-                className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                title="Screenshot"
-              >
-                <Camera size={14} />
-              </button>
-              <button
-                onClick={() => setMobileView((v) => !v)}
-                className={[
-                  'p-1.5 rounded transition-colors',
-                  mobileView
-                    ? 'bg-mf-hover text-mf-accent'
-                    : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-                ].join(' ')}
-                title="Mobile view (390×844)"
-              >
-                <Smartphone size={14} />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleReload}
+                    className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                  >
+                    <RefreshCw size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Reload</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => void handleInspect()}
+                    className={[
+                      'p-1.5 rounded transition-colors',
+                      inspecting
+                        ? 'bg-mf-hover text-mf-accent'
+                        : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                    ].join(' ')}
+                  >
+                    <Crosshair size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Pick element</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => void handleFullScreenshot()}
+                    className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                  >
+                    <Camera size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Screenshot</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setMobileView((v) => !v)}
+                    className={[
+                      'p-1.5 rounded transition-colors',
+                      mobileView
+                        ? 'bg-mf-hover text-mf-accent'
+                        : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                    ].join(' ')}
+                  >
+                    <Smartphone size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Mobile view (390x844)</TooltipContent>
+              </Tooltip>
               {isElectron && activeProjectId && (
-                <button
-                  onClick={() => {
-                    window.mainframe.clearSandboxSession(activeProjectId).then(() => handleReload());
-                  }}
-                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                  title="Clear cookies & session data"
-                >
-                  <Trash2 size={14} />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        window.mainframe.clearSandboxSession(activeProjectId).then(() => handleReload());
+                      }}
+                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Clear cookies & session data</TooltipContent>
+                </Tooltip>
               )}
               <div className="w-px h-3.5 bg-mf-border mx-0.5" />
             </>
           )}
           {/* Window controls: minimize */}
-          <button
-            onClick={() => setPanelVisible(false)}
-            className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-            title="Minimize"
-          >
-            <Minus size={14} />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setPanelVisible(false)}
+                className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+              >
+                <Minus size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Minimize</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -557,23 +594,31 @@ export function PreviewTab(): React.ReactElement {
             <div className="flex items-center justify-between px-2 h-7 shrink-0">
               <span className="text-xs text-mf-text-secondary font-medium">Console</span>
               <div className="flex items-center">
-                <button
-                  onClick={() => {
-                    if (selectedProcess) clearLogsForName(selectedProcess);
-                  }}
-                  disabled={!selectedProcess}
-                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40"
-                  title="Clear logs"
-                >
-                  <Trash2 size={14} />
-                </button>
-                <button
-                  onClick={() => setLogExpanded(!logExpanded)}
-                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                  title={logExpanded ? 'Collapse logs' : 'Expand logs'}
-                >
-                  {logExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        if (selectedProcess) clearLogsForName(selectedProcess);
+                      }}
+                      disabled={!selectedProcess}
+                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Clear logs</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setLogExpanded(!logExpanded)}
+                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                    >
+                      {logExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{logExpanded ? 'Collapse logs' : 'Expand logs'}</TooltipContent>
+                </Tooltip>
               </div>
             </div>
             {logExpanded && (

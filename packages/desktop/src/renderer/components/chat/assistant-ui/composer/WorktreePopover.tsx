@@ -2,12 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, Loader2 } from 'lucide-react';
 import { useChatsStore } from '../../../../store/chats';
 import { useActiveProjectId } from '../../../../hooks/useActiveProjectId';
-import {
-  getGitBranches,
-  enableWorktree,
-  getProjectWorktrees,
-  attachWorktree,
-} from '../../../../lib/api';
+import { getGitBranches, enableWorktree, getProjectWorktrees, attachWorktree } from '../../../../lib/api';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
 import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:worktree-popover');
@@ -214,9 +210,14 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
           </div>
           <div className="flex items-center gap-2">
             <span className="text-mf-text-secondary">Path:</span>
-            <span className="font-mono text-mf-text-primary truncate" title={worktreePath}>
-              {worktreePath}
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="font-mono text-mf-text-primary truncate" tabIndex={0}>
+                  {worktreePath}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{worktreePath}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -253,28 +254,28 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
 
       {/* Tab toggle */}
       <div className="flex items-center gap-0.5 mb-3 p-0.5 rounded-md bg-mf-input">
-          <button
-            type="button"
-            onClick={() => setTab('existing')}
-            className={`flex-1 text-mf-small px-2 py-0.5 rounded transition-colors ${
-              tab === 'existing'
-                ? 'bg-mf-app-bg text-mf-text-primary shadow-sm'
-                : 'text-mf-text-secondary hover:text-mf-text-primary'
-            }`}
-          >
-            Existing
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('new')}
-            className={`flex-1 text-mf-small px-2 py-0.5 rounded transition-colors ${
-              tab === 'new'
-                ? 'bg-mf-app-bg text-mf-text-primary shadow-sm'
-                : 'text-mf-text-secondary hover:text-mf-text-primary'
-            }`}
-          >
-            New
-          </button>
+        <button
+          type="button"
+          onClick={() => setTab('existing')}
+          className={`flex-1 text-mf-small px-2 py-0.5 rounded transition-colors ${
+            tab === 'existing'
+              ? 'bg-mf-app-bg text-mf-text-primary shadow-sm'
+              : 'text-mf-text-secondary hover:text-mf-text-primary'
+          }`}
+        >
+          Existing
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('new')}
+          className={`flex-1 text-mf-small px-2 py-0.5 rounded transition-colors ${
+            tab === 'new'
+              ? 'bg-mf-app-bg text-mf-text-primary shadow-sm'
+              : 'text-mf-text-secondary hover:text-mf-text-primary'
+          }`}
+        >
+          New
+        </button>
       </div>
 
       {/* Existing worktree list */}
@@ -302,9 +303,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
       )}
 
       {/* Error from API */}
-      {error && tab === 'existing' && (
-        <div className="text-mf-small text-mf-destructive mb-2">{error}</div>
-      )}
+      {error && tab === 'existing' && <div className="text-mf-small text-mf-destructive mb-2">{error}</div>}
 
       {/* New worktree form */}
       {tab === 'new' && (

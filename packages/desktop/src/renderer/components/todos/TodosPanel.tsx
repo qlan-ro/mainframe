@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:todos');
@@ -172,18 +173,22 @@ export function TodosPanel(): React.ReactElement {
       {/* Header */}
       <div className="h-11 px-4 flex items-center justify-between shrink-0 bg-mf-panel-bg">
         <span className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Tasks</span>
-        <button
-          onClick={() => {
-            setEditingTodo(null);
-            setModalOpen(true);
-          }}
-          className="flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
-          title="New Task"
-          aria-label="Create new task"
-        >
-          <Plus size={13} />
-          New
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => {
+                setEditingTodo(null);
+                setModalOpen(true);
+              }}
+              className="flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
+              aria-label="Create new task"
+            >
+              <Plus size={13} />
+              New
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>New Task</TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Columns */}
