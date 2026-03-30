@@ -150,35 +150,37 @@ export function ComposerCard() {
   const captures = useSandboxStore((s) => s.captures);
   const removeCapture = useSandboxStore((s) => s.removeCapture);
 
-  const prevChatIdRef = useRef(chatId);
-  useEffect(() => {
-    if (prevChatIdRef.current !== chatId) {
-      // Save draft for the chat we're leaving
-      try {
-        const text = composerRuntime.getState()?.text ?? '';
-        if (text.trim()) drafts.set(prevChatIdRef.current, text);
-        else drafts.delete(prevChatIdRef.current);
-      } catch {
-        /* composer not ready */
-      }
+  // Save draft on unmount (key-based remount means this fires on every chat switch)
+  const composerRuntimeRef = useRef(composerRuntime);
+  composerRuntimeRef.current = composerRuntime;
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
 
-      // Restore draft for the chat we're switching to
-      const draft = drafts.get(chatId);
+  useEffect(() => {
+    // Restore draft on mount
+    const draft = drafts.get(chatId);
+    if (draft) {
       requestAnimationFrame(() => {
         try {
-          composerRuntime.setText(draft ?? '');
+          composerRuntime.setText(draft);
         } catch {
           /* composer not ready */
         }
-        focusComposerInput();
-      });
-      prevChatIdRef.current = chatId;
-    } else {
-      requestAnimationFrame(() => {
-        focusComposerInput();
       });
     }
-  }, [chatId, composerRuntime]);
+    requestAnimationFrame(() => focusComposerInput());
+
+    return () => {
+      // Save draft on unmount
+      try {
+        const text = composerRuntimeRef.current.getState()?.text ?? '';
+        if (text.trim()) drafts.set(chatIdRef.current, text);
+        else drafts.delete(chatIdRef.current);
+      } catch {
+        /* composer not ready */
+      }
+    };
+  }, []);
 
   const pendingInvocation = useSkillsStore((s) => s.pendingInvocation);
   useEffect(() => {
