@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, GitBranch } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
@@ -18,7 +18,7 @@ import { ComposerDropdown } from './ComposerDropdown';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
-import { useSandboxStore } from '../../../../store/sandbox';
+import { useSandboxStore, type Capture } from '../../../../store/sandbox';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
@@ -87,6 +87,14 @@ function useComposerEmpty(composerRuntime: ComposerRuntime) {
   );
 }
 
+/** Per-chat draft storage so composer text and attachments survive chat switches */
+interface Draft {
+  text: string;
+  attachments: Array<{ type: string; name: string; contentType?: string; content: unknown[] }>;
+  captures: Array<Omit<Capture, 'id'>>;
+}
+const drafts = new Map<string, Draft>();
+
 function StopButton() {
   const thread = useThread();
   if (!thread.isRunning) return null;
@@ -109,10 +117,12 @@ function SendButton({
   composerRuntime,
   hasCaptures,
   disabled: externalDisabled,
+  chatId,
 }: {
   composerRuntime: ComposerRuntime;
   hasCaptures: boolean;
   disabled?: boolean;
+  chatId: string;
 }) {
   const composerEmpty = useComposerEmpty(composerRuntime);
   const disabled = externalDisabled || (composerEmpty && !hasCaptures);
@@ -125,6 +135,7 @@ function SendButton({
           onClick={() => {
             try {
               composerRuntime.send();
+              drafts.delete(chatId);
             } catch (err) {
               log.warn('failed to send from composer', { err: String(err) });
             }
@@ -153,11 +164,58 @@ export function ComposerCard() {
   const captures = useSandboxStore((s) => s.captures);
   const removeCapture = useSandboxStore((s) => s.removeCapture);
 
+  // Save draft on unmount (key-based remount means this fires on every chat switch)
+  const composerRuntimeRef = useRef(composerRuntime);
+  composerRuntimeRef.current = composerRuntime;
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
+
   useEffect(() => {
-    requestAnimationFrame(() => {
-      focusComposerInput();
-    });
-  }, [chatId]);
+    // Restore draft on mount
+    const draft = drafts.get(chatId);
+    if (draft) {
+      requestAnimationFrame(() => {
+        try {
+          composerRuntime.setText(draft.text);
+          for (const att of draft.attachments) {
+            void composerRuntime.addAttachment(att as Parameters<typeof composerRuntime.addAttachment>[0]);
+          }
+        } catch {
+          /* composer not ready */
+        }
+        // Restore captures to sandbox store
+        if (draft.captures.length > 0) {
+          const store = useSandboxStore.getState();
+          for (const cap of draft.captures) store.addCapture(cap);
+        }
+      });
+    }
+    requestAnimationFrame(() => focusComposerInput());
+
+    return () => {
+      // Save draft on unmount
+      try {
+        const state = composerRuntimeRef.current.getState();
+        const text = state?.text ?? '';
+        const attachments = (state?.attachments ?? []).map((a) => ({
+          type: a.type,
+          name: a.name,
+          contentType: a.contentType,
+          content: ('content' in a ? a.content : []) as unknown[],
+        }));
+        const caps = useSandboxStore.getState().captures.map(({ id: _, ...rest }) => rest);
+        if (text.trim() || attachments.length > 0 || caps.length > 0) {
+          drafts.set(chatIdRef.current, { text, attachments, captures: caps });
+          // Clear captures so they don't appear in the next chat
+          useSandboxStore.getState().clearCaptures();
+        } else {
+          drafts.delete(chatIdRef.current);
+        }
+      } catch {
+        /* composer not ready */
+      }
+    };
+  }, []);
 
   const pendingInvocation = useSkillsStore((s) => s.pendingInvocation);
   useEffect(() => {
@@ -328,6 +386,7 @@ export function ComposerCard() {
               e.preventDefault();
               try {
                 composerRuntime.send();
+                drafts.delete(chatId);
               } catch (err) {
                 log.warn('failed to send from composer', { err: String(err) });
               }
@@ -392,6 +451,7 @@ export function ComposerCard() {
             composerRuntime={composerRuntime}
             hasCaptures={captures.length > 0}
             disabled={chat?.worktreeMissing}
+            chatId={chatId}
           />
         </div>
       </div>

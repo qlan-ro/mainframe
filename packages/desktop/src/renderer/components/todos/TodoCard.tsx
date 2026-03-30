@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Edit, Trash2 } from 'lucide-react';
+import { Play, Edit, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { Todo } from '../../lib/api/todos-api';
@@ -24,12 +24,13 @@ const PRIORITY_PILL: Record<string, string> = {
 
 interface Props {
   todo: Todo;
+  attachmentCount?: number;
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
   onStartSession: (todo: Todo) => void;
 }
 
-export function TodoCard({ todo, onEdit, onDelete, onStartSession }: Props): React.ReactElement {
+export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSession }: Props): React.ReactElement {
   return (
     <div
       data-testid="todo-card"
@@ -64,14 +65,20 @@ export function TodoCard({ todo, onEdit, onDelete, onStartSession }: Props): Rea
         </span>
       </div>
 
-      {/* Row 3: labels + actions on hover */}
+      {/* Row 3: labels + attachments + actions on hover */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-1 min-w-0">
           {todo.labels.map((l) => (
             <span key={l} className="text-mf-status bg-mf-hover px-1.5 py-0.5 rounded text-mf-text-secondary">
               {l}
             </span>
           ))}
+          {attachmentCount != null && attachmentCount > 0 && (
+            <span className="flex items-center gap-0.5 text-mf-status text-mf-text-secondary">
+              <Paperclip size={10} />
+              {attachmentCount}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           {(todo.status === 'open' || todo.status === 'in_progress') && (

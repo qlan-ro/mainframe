@@ -214,6 +214,12 @@ export function FilesTab(): React.ReactElement {
               navigator.clipboard.writeText(fullPath);
             },
           },
+          {
+            label: 'Copy Relative Path',
+            onClick: () => {
+              navigator.clipboard.writeText(entryPath);
+            },
+          },
         ],
       });
     },

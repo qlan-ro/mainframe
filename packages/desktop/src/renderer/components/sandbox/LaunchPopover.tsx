@@ -8,6 +8,7 @@ import { useUIStore } from '../../store/ui';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import { useLaunchScopeKey } from '../../hooks/useLaunchScopeKey.js';
 import { daemonClient } from '../../lib/client';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
@@ -23,8 +24,8 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
     activeProjectId ? (s.projects.find((p) => p.id === activeProjectId) ?? null) : null,
   );
   const launchConfig = useLaunchConfig();
-  const projectStatuses =
-    useSandboxStore((s) => (activeProject ? s.processStatuses[activeProject.id] : undefined)) ?? {};
+  const scopeKey = useLaunchScopeKey();
+  const scopeStatuses = useSandboxStore((s) => (scopeKey ? s.processStatuses[scopeKey] : undefined)) ?? {};
   const selectedConfigName = useSandboxStore((s) => s.selectedConfigName);
   const setSelectedConfigName = useSandboxStore((s) => s.setSelectedConfigName);
   const togglePanel = useUIStore((s) => s.togglePanel);
@@ -44,20 +45,20 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
     onClose();
   };
 
-  const clearLogsForName = useSandboxStore((s) => s.clearLogsForName);
+  const clearLogsForProcess = useSandboxStore((s) => s.clearLogsForProcess);
   const setLastStartedProcess = useSandboxStore((s) => s.setLastStartedProcess);
 
   const handleToggleProcess = async (e: React.MouseEvent, config: LaunchConfiguration) => {
     e.stopPropagation();
     setSelectedConfigName(config.name);
     if (!activeProject) return;
-    const status = projectStatuses[config.name] ?? 'stopped';
+    const status = scopeStatuses[config.name] ?? 'stopped';
     if (status === 'starting') return;
     try {
       if (status === 'running') {
         await stopLaunchConfig(activeProject.id, config.name, activeChatId ?? undefined);
       } else {
-        clearLogsForName(config.name);
+        if (scopeKey) clearLogsForProcess(scopeKey, config.name);
         setLastStartedProcess(config.name);
         await startLaunchConfig(activeProject.id, config.name, activeChatId ?? undefined);
         setPanelVisible(true);
@@ -79,7 +80,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
       {configs.length > 0 && (
         <>
           {configs.map((c) => {
-            const status = projectStatuses[c.name] ?? 'stopped';
+            const status = scopeStatuses[c.name] ?? 'stopped';
             const isSelected = c.name === selectedConfigName;
             const isRunning = status === 'running' || status === 'starting';
 

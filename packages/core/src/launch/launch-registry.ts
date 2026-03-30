@@ -10,6 +10,10 @@ export class LaunchRegistry {
     public tunnelManager?: TunnelManager,
   ) {}
 
+  get(projectId: string, projectPath: string): LaunchManager | undefined {
+    return this.managers.get(`${projectId}:${projectPath}`);
+  }
+
   getOrCreate(projectId: string, projectPath: string): LaunchManager {
     const key = `${projectId}:${projectPath}`;
     let manager = this.managers.get(key);

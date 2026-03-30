@@ -12,6 +12,7 @@ import { useLaunchConfig } from '../hooks/useLaunchConfig';
 import { startLaunchConfig } from '../lib/launch';
 import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../store/chats';
+import { useLaunchScopeKey } from '../hooks/useLaunchScopeKey.js';
 
 type PanelId = 'left' | 'right' | 'bottom';
 
@@ -39,8 +40,8 @@ export function TitleBar({
   const togglePanel = useUIStore((s) => s.togglePanel);
   const setPanelVisible = useUIStore((s) => s.setPanelVisible);
   const panelCollapsed = useUIStore((s) => s.panelCollapsed);
-  const projectStatuses =
-    useSandboxStore((s) => (activeProjectId ? s.processStatuses[activeProjectId] : undefined)) ?? {};
+  const scopeKey = useLaunchScopeKey();
+  const scopeStatuses = useSandboxStore((s) => (scopeKey ? s.processStatuses[scopeKey] : undefined)) ?? {};
 
   const selectedConfigName = useSandboxStore((s) => s.selectedConfigName);
   // Resolve selected config: explicit selection > preview flag > first config
@@ -51,7 +52,7 @@ export function TitleBar({
     null;
   const [stopPopoverOpen, setStopPopoverOpen] = useState(false);
   const runningCount = configs.filter((c) => {
-    const s = projectStatuses[c.name] ?? 'stopped';
+    const s = scopeStatuses[c.name] ?? 'stopped';
     return s === 'running' || s === 'starting';
   }).length;
   const anyRunning = runningCount > 0;
@@ -66,7 +67,7 @@ export function TitleBar({
     if (!projectId || !selectedConfig) return;
     try {
       const store = useSandboxStore.getState();
-      store.clearLogsForName(selectedConfig.name);
+      if (scopeKey) store.clearLogsForProcess(scopeKey, selectedConfig.name);
       store.setLastStartedProcess(selectedConfig.name);
       await startLaunchConfig(projectId, selectedConfig.name, activeChatId ?? undefined);
       setPanelVisible(true);
@@ -74,7 +75,7 @@ export function TitleBar({
     } catch (err) {
       console.warn('[sandbox] start failed', err);
     }
-  }, [activeProjectId, activeChatId, selectedConfig, panelCollapsed, togglePanel, setPanelVisible]);
+  }, [activeProjectId, activeChatId, selectedConfig, scopeKey, panelCollapsed, togglePanel, setPanelVisible]);
 
   const handleCloseLaunchPopover = useCallback(() => setLaunchPopoverOpen(false), []);
   const handleCloseStopPopover = useCallback(() => setStopPopoverOpen(false), []);

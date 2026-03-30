@@ -26,6 +26,8 @@ export interface LifecycleManagerDeps {
   permissions: PermissionManager;
   emitEvent: (event: DaemonEvent) => void;
   buildSink: (chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>) => SessionSink;
+  /** Stop launch processes for a project+path pair (e.g. before worktree removal) */
+  stopLaunchProcesses?: (projectId: string, projectPath: string) => Promise<void>;
 }
 
 export class ChatLifecycleManager {
@@ -34,6 +36,10 @@ export class ChatLifecycleManager {
   private interruptingChats = new Map<string, Promise<void>>();
 
   constructor(private deps: LifecycleManagerDeps) {}
+
+  setStopLaunchProcesses(fn: (projectId: string, projectPath: string) => Promise<void>): void {
+    this.deps.stopLaunchProcesses = fn;
+  }
 
   /** Expose startingChats for ConfigManager's inflight check */
   getStartingChats(): Map<string, Promise<void>> {
@@ -173,6 +179,7 @@ export class ChatLifecycleManager {
 
     const chat = active?.chat ?? this.deps.db.chats.get(chatId);
     if (deleteWorktree && chat?.worktreePath && chat?.branchName) {
+      await this.deps.stopLaunchProcesses?.(chat.projectId, chat.worktreePath);
       const project = this.deps.db.projects.get(chat.projectId);
       if (project) removeWorktree(project.path, chat.worktreePath, chat.branchName);
     }

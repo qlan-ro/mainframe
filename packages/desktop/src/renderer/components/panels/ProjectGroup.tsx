@@ -135,12 +135,12 @@ function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, o
                 <TooltipContent>{chat.title || 'New Chat'}</TooltipContent>
               </Tooltip>
             )}
-            <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1">
+            <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
               <Bot size={10} className="shrink-0" />
-              <span>{getAdapterLabel(chat.adapterId, adapters)}</span>
+              <span className="truncate">{getAdapterLabel(chat.adapterId, adapters)}</span>
               {chat.worktreePath && (
                 <>
-                  <span>{'·'}</span>
+                  <span className="shrink-0">{'·'}</span>
                   <GitBranch size={10} className="shrink-0" />
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -152,9 +152,9 @@ function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, o
                   </Tooltip>
                 </>
               )}
-              <span>{'·'}</span>
+              <span className="shrink-0">{'·'}</span>
               <Clock size={10} className="shrink-0" />
-              <span>{formatRelativeTime(chat.updatedAt)}</span>
+              <span className="shrink-0">{formatRelativeTime(chat.updatedAt)}</span>
             </div>
           </div>
         </div>
@@ -164,36 +164,36 @@ function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, o
           Waiting
         </span>
       )}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={handleStartRename}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-all shrink-0"
-            aria-label="Rename session"
-          >
-            <Pencil size={14} />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>Rename session</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={(e) => onArchive(e, chat.id)}
-            disabled={isArchiving}
-            className={cn(
-              'mr-2 p-1 rounded text-mf-text-secondary transition-all shrink-0',
-              isArchiving
-                ? 'opacity-100'
-                : 'opacity-0 group-hover:opacity-100 hover:bg-mf-hover hover:text-mf-text-primary',
-            )}
-            aria-label="Archive session"
-          >
-            {isArchiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>Archive session</TooltipContent>
-      </Tooltip>
+      <div className={cn('shrink-0 mr-1 flex items-center gap-0.5', isArchiving ? 'flex' : 'hidden group-hover:flex')}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleStartRename}
+              className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
+              aria-label="Rename session"
+            >
+              <Pencil size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Rename session</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={(e) => onArchive(e, chat.id)}
+              disabled={isArchiving}
+              className={cn(
+                'w-6 h-6 rounded flex items-center justify-center text-mf-text-secondary transition-colors shrink-0',
+                isArchiving ? '' : 'hover:bg-mf-hover hover:text-mf-text-primary',
+              )}
+              aria-label="Archive session"
+            >
+              {isArchiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Archive session</TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   );
 }

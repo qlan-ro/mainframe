@@ -58,12 +58,13 @@ describe('useProject', () => {
     vi.mocked(fetchLaunchStatuses).mockResolvedValue({
       statuses: { 'Desktop App': 'running', api: 'stopped' },
       tunnelUrls: {},
+      effectivePath: '/tmp/proj',
     });
 
     renderHook(() => useProject('proj-1'));
 
     await waitFor(() => {
-      const statuses = useSandboxStore.getState().processStatuses['proj-1'];
+      const statuses = useSandboxStore.getState().processStatuses['proj-1:/tmp/proj'];
       expect(statuses?.['Desktop App']).toBe('running');
       expect(statuses?.['api']).toBe('stopped');
     });

@@ -73,6 +73,11 @@ async function main(): Promise<void> {
   const tunnelManager = new TunnelManager();
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 
+  chats.setStopLaunchProcesses(async (projectId, projectPath) => {
+    const manager = launchRegistry.get(projectId, projectPath);
+    if (manager) await manager.stopAll();
+  });
+
   // PluginManager owns its own Express Router; no circular dep on the Express app
   const daemonBus = new EventEmitter();
   const emitEvent = (event: DaemonEvent) => broadcastEvent(event);

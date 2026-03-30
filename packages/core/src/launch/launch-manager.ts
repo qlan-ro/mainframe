@@ -91,7 +91,13 @@ export class LaunchManager {
       return;
     }
 
-    this.emit({ type: 'launch.status', projectId: this.projectId, name: config.name, status: 'starting' });
+    this.emit({
+      type: 'launch.status',
+      projectId: this.projectId,
+      effectivePath: this.projectPath,
+      name: config.name,
+      status: 'starting',
+    });
 
     // Resolve relative executables (./gradlew, ../bin/foo) against the project directory.
     // Node's spawn only searches PATH, not cwd, for the executable.
@@ -121,6 +127,7 @@ export class LaunchManager {
       this.emit({
         type: 'launch.output',
         projectId: this.projectId,
+        effectivePath: this.projectPath,
         name: config.name,
         data: chunk.toString('utf-8'),
         stream: 'stdout',
@@ -138,6 +145,7 @@ export class LaunchManager {
       this.emit({
         type: 'launch.output',
         projectId: this.projectId,
+        effectivePath: this.projectPath,
         name: config.name,
         data: text,
         stream: 'stderr',
@@ -155,6 +163,7 @@ export class LaunchManager {
         this.emit({
           type: 'launch.status',
           projectId: this.projectId,
+          effectivePath: this.projectPath,
           name: config.name,
           status: managed.status,
         });
@@ -185,7 +194,13 @@ export class LaunchManager {
         log.error({ err, name: config.name }, 'process error');
         managed.status = 'failed';
         this.processes.delete(config.name);
-        this.emit({ type: 'launch.status', projectId: this.projectId, name: config.name, status: 'failed' });
+        this.emit({
+          type: 'launch.status',
+          projectId: this.projectId,
+          effectivePath: this.projectPath,
+          name: config.name,
+          status: 'failed',
+        });
         if (this.tunnelManager) {
           this.tunnelManager.stop(`preview:${config.name}`);
         }
@@ -199,13 +214,25 @@ export class LaunchManager {
       log.info({ name: config.name, port: config.port }, 'waiting for port to become ready…');
       const timedOut = await this.waitForPort(config.port, managed);
       if (timedOut) {
-        this.emit({ type: 'launch.port.timeout', projectId: this.projectId, name: config.name, port: config.port });
+        this.emit({
+          type: 'launch.port.timeout',
+          projectId: this.projectId,
+          effectivePath: this.projectPath,
+          name: config.name,
+          port: config.port,
+        });
       }
     }
 
     if (managed.status === 'starting') {
       managed.status = 'running';
-      this.emit({ type: 'launch.status', projectId: this.projectId, name: config.name, status: 'running' });
+      this.emit({
+        type: 'launch.status',
+        projectId: this.projectId,
+        effectivePath: this.projectPath,
+        name: config.name,
+        status: 'running',
+      });
       log.info({ name: config.name, port: config.port }, 'launch process ready');
     }
 
@@ -213,12 +240,24 @@ export class LaunchManager {
       const label = `preview:${config.name}`;
       this.tunnelManager.start(config.port, label).then(
         (url) => {
-          this.emit({ type: 'launch.tunnel', projectId: this.projectId, name: config.name, url });
+          this.emit({
+            type: 'launch.tunnel',
+            projectId: this.projectId,
+            effectivePath: this.projectPath,
+            name: config.name,
+            url,
+          });
         },
         (err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
           log.warn({ err, name: config.name }, 'tunnel failed to start');
-          this.emit({ type: 'launch.tunnel.failed', projectId: this.projectId, name: config.name, error: message });
+          this.emit({
+            type: 'launch.tunnel.failed',
+            projectId: this.projectId,
+            effectivePath: this.projectPath,
+            name: config.name,
+            error: message,
+          });
         },
       );
     }
@@ -228,7 +267,13 @@ export class LaunchManager {
     const managed = this.processes.get(name);
     if (!managed) return;
     managed.status = 'stopped';
-    this.emit({ type: 'launch.status', projectId: this.projectId, name, status: 'stopped' });
+    this.emit({
+      type: 'launch.status',
+      projectId: this.projectId,
+      effectivePath: this.projectPath,
+      name,
+      status: 'stopped',
+    });
 
     if (this.tunnelManager) {
       this.tunnelManager.stop(`preview:${name}`);
