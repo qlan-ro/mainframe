@@ -3,6 +3,8 @@ import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { usePluginLayoutStore } from '../../store/plugins';
 import { todosApi } from '../../lib/api/todos-api';
+import { extractAllLabels } from './TodoFilterBar';
+import { LabelInput } from './LabelInput';
 import { getActiveProjectId } from '../../hooks/useActiveProjectId';
 import { toast } from '../../lib/toast';
 import { createLogger } from '../../lib/logger';
@@ -69,6 +71,7 @@ export function QuickTodoDialog() {
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [allLabels, setAllLabels] = useState<string[]>([]);
 
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -84,6 +87,14 @@ export function QuickTodoDialog() {
       setSubmitting(false);
       setPendingFiles([]);
       clearTriggeredAction();
+      // Load existing labels for autocomplete
+      const projectId = getActiveProjectId();
+      if (projectId) {
+        todosApi
+          .list(projectId)
+          .then((todos) => setAllLabels(extractAllLabels(todos)))
+          .catch(() => setAllLabels([]));
+      }
       requestAnimationFrame(() => titleRef.current?.focus());
     }
   }, [isTriggered, clearTriggeredAction]);
@@ -265,10 +276,10 @@ export function QuickTodoDialog() {
           </div>
 
           {/* Labels */}
-          <input
-            type="text"
+          <LabelInput
             value={labels}
-            onChange={(e) => setLabels(e.target.value)}
+            onChange={setLabels}
+            allLabels={allLabels}
             placeholder="Labels (comma-separated)"
             className={cn(input, 'w-full')}
             onKeyDown={handleModEnter}

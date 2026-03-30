@@ -287,6 +287,7 @@ export function TodosPanel(): React.ReactElement {
       {modalOpen && (
         <TodoModal
           todo={editingTodo}
+          allLabels={extractAllLabels(todos)}
           onClose={() => {
             setModalOpen(false);
             setEditingTodo(null);

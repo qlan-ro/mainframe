@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 import type { Todo, CreateTodoInput, TodoStatus, TodoType, TodoPriority } from '../../lib/api/todos-api';
 import { todosApi } from '../../lib/api/todos-api';
 import { TodoAttachments } from './TodoAttachments';
+import { LabelInput } from './LabelInput';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:todo-modal');
@@ -31,6 +32,7 @@ export interface PendingAttachment {
 
 interface Props {
   todo?: Todo | null;
+  allLabels?: string[];
   onClose: () => void;
   onSave: (data: CreateTodoInput, pendingAttachments?: PendingAttachment[]) => void;
   onStartSession?: (todo: Todo) => void;
@@ -54,7 +56,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): React.ReactElement {
+export function TodoModal({ todo, allLabels = [], onClose, onSave, onStartSession }: Props): React.ReactElement {
   const [title, setTitle] = useState(todo?.title ?? '');
   const [body, setBody] = useState(todo?.body ?? '');
   const [status, setStatus] = useState<TodoStatus>(todo?.status ?? 'open');
@@ -330,10 +332,11 @@ export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): Rea
 
           <div className="flex flex-col gap-1">
             <label className="text-mf-small text-mf-text-secondary">Labels (comma-separated)</label>
-            <input
+            <LabelInput
               className={input}
               value={labels}
-              onChange={(e) => setLabels(e.target.value)}
+              onChange={setLabels}
+              allLabels={allLabels}
               placeholder="e.g. ui, backend, urgent"
             />
           </div>
