@@ -7,6 +7,7 @@ import { useChatsStore } from '../store';
 import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useConnectionState } from '../hooks/useConnectionState';
 import { getGitBranch, getGitStatus } from '../lib/api';
+import { isConflictStatus } from '../lib/git-utils';
 import { cn } from '../lib/utils';
 import { BranchPopover } from './git/BranchPopover';
 
@@ -36,7 +37,7 @@ export function StatusBar(): React.ReactElement {
       });
     getGitStatus(activeProjectId)
       .then((res) => {
-        const conflicts = res.files.some((f) => f.status === 'U' || f.status === 'UU');
+        const conflicts = res.files.some((f) => isConflictStatus(f.status));
         setHasConflicts(conflicts);
       })
       .catch((err) => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { toast } from '../../lib/toast';
+import { isConflictStatus } from '../../lib/git-utils';
 import {
   getGitBranches,
   getGitStatus,
@@ -72,7 +73,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
     try {
       const [branchData, statusData] = await Promise.all([getGitBranches(projectId), getGitStatus(projectId)]);
       setBranches(branchData);
-      const conflicts = statusData.files.filter((f) => f.status === 'U' || f.status === 'UU');
+      const conflicts = statusData.files.filter((f) => isConflictStatus(f.status));
       setConflictFiles(conflicts);
     } catch (err) {
       console.warn('[useBranchActions] loadBranches failed', err);
@@ -123,7 +124,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
         } else if (result.status === 'up-to-date') {
           toast.info('Already up to date');
         } else {
-          toast.success(`Pulled ${result.summary.changes} changes`);
+          toast.success(result.summary.changes > 0 ? `Pulled ${result.summary.changes} changes` : `Updated ${branch}`);
         }
         onBranchChanged();
         await loadBranches();
