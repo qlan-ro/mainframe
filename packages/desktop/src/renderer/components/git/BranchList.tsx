@@ -248,7 +248,7 @@ export function BranchList({
         </>
       )}
 
-      {mainBranches.length === 0 && worktreeGroups.length === 0 && (
+      {mainBranches.length === 0 && worktreeGroups.length === 0 && filteredRemote.length === 0 && (
         <div className="px-3 py-2 text-xs text-mf-text-secondary">No matching branches</div>
       )}
 
