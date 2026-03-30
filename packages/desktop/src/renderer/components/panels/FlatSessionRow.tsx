@@ -166,14 +166,7 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
               {projectName && (
                 <>
                   <FolderOpen size={10} className="shrink-0" />
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="truncate max-w-[100px]" tabIndex={0}>
-                        {projectName}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>{projectName}</TooltipContent>
-                  </Tooltip>
+                  <span className="truncate">{projectName}</span>
                   <span className="shrink-0">{'·'}</span>
                 </>
               )}
