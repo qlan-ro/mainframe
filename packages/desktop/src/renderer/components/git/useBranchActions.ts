@@ -49,7 +49,12 @@ export interface BranchActions {
   handleCreateBranch: (name: string, startPoint: string) => Promise<boolean>;
 }
 
-export function useBranchActions(projectId: string, onBranchChanged: () => void, onClose: () => void): BranchActions {
+export function useBranchActions(
+  projectId: string,
+  chatId: string | undefined,
+  onBranchChanged: () => void,
+  onClose: () => void,
+): BranchActions {
   const [branches, setBranches] = useState<BranchData | null>(null);
   const [conflictFiles, setConflictFiles] = useState<ConflictFile[]>([]);
   const [busy, setBusy] = useState(false);
@@ -73,7 +78,10 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const loadBranches = useCallback(async () => {
     try {
-      const [branchData, statusData] = await Promise.all([getGitBranches(projectId), getGitStatus(projectId)]);
+      const [branchData, statusData] = await Promise.all([
+        getGitBranches(projectId, chatId),
+        getGitStatus(projectId, chatId),
+      ]);
       setBranches(branchData);
       const conflicts = statusData.files.filter((f) => isConflictStatus(f.status));
       setConflictFiles(conflicts);
@@ -81,31 +89,31 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
       console.warn('[useBranchActions] loadBranches failed', err);
       toast.error('Failed to load branches');
     }
-  }, [projectId]);
+  }, [projectId, chatId]);
 
   useEffect(() => {
     loadBranches();
   }, [loadBranches]);
 
   const confirmDirtyTree = useCallback(async (): Promise<boolean> => {
-    const status = await getGitStatus(projectId);
+    const status = await getGitStatus(projectId, chatId);
     if (status.files.length > 0) {
       return window.confirm('You have uncommitted changes. Continue?');
     }
     return true;
-  }, [projectId]);
+  }, [projectId, chatId]);
 
   const handleCheckout = useCallback(
     async (branch: string) => {
       return withBusy(async () => {
         if (!(await confirmDirtyTree())) return;
-        await gitCheckout(projectId, branch);
+        await gitCheckout(projectId, branch, chatId);
         toast.success(`Switched to ${branch}`);
         onBranchChanged();
         onClose();
       });
     },
-    [projectId, onBranchChanged, onClose, confirmDirtyTree, withBusy],
+    [projectId, chatId, onBranchChanged, onClose, confirmDirtyTree, withBusy],
   );
 
   const handlePull = useCallback(
@@ -120,7 +128,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
           toast.error(`No tracking remote for ${branch}`);
           return;
         }
-        const result = await gitPull(projectId, remote, remoteBranch);
+        const result = await gitPull(projectId, remote, remoteBranch, branch, chatId);
         if (result.status === 'conflict') {
           toast.error('Pull resulted in conflicts');
         } else if (result.status === 'up-to-date') {
@@ -132,7 +140,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
         await loadBranches();
       });
     },
-    [projectId, branches, loadBranches, onBranchChanged, withBusy],
+    [projectId, chatId, branches, loadBranches, onBranchChanged, withBusy],
   );
 
   const handlePush = useCallback(
@@ -141,7 +149,7 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
         const info = branches?.local.find((b) => b.name === branch);
         const slashIdx = info?.tracking?.indexOf('/') ?? -1;
         const remote = slashIdx > 0 ? info!.tracking!.slice(0, slashIdx) : undefined;
-        const result = await gitPush(projectId, branch, remote);
+        const result = await gitPush(projectId, branch, remote, chatId);
         if (result.status === 'rejected') {
           toast.error(`Push rejected: ${result.message}`);
         } else {
@@ -149,14 +157,14 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
         }
       });
     },
-    [projectId, branches, withBusy],
+    [projectId, chatId, branches, withBusy],
   );
 
   const handleMerge = useCallback(
     async (branch: string) => {
       return withBusy(async () => {
         if (!(await confirmDirtyTree())) return;
-        const result = await gitMerge(projectId, branch);
+        const result = await gitMerge(projectId, branch, chatId);
         if (result.status === 'conflict') {
           toast.error('Merge conflicts');
         } else {
@@ -166,14 +174,14 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
         await loadBranches();
       });
     },
-    [projectId, loadBranches, onBranchChanged, confirmDirtyTree, withBusy],
+    [projectId, chatId, loadBranches, onBranchChanged, confirmDirtyTree, withBusy],
   );
 
   const handleRebase = useCallback(
     async (branch: string) => {
       return withBusy(async () => {
         if (!(await confirmDirtyTree())) return;
-        const result = await gitRebase(projectId, branch);
+        const result = await gitRebase(projectId, branch, chatId);
         if (result.status === 'conflict') {
           toast.error('Rebase conflicts');
         } else {
@@ -183,19 +191,19 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
         await loadBranches();
       });
     },
-    [projectId, loadBranches, onBranchChanged, confirmDirtyTree, withBusy],
+    [projectId, chatId, loadBranches, onBranchChanged, confirmDirtyTree, withBusy],
   );
 
   const handleRename = useCallback(
     async (oldName: string, newName: string) => {
       return withBusy(async () => {
-        await gitRenameBranch(projectId, oldName, newName);
+        await gitRenameBranch(projectId, oldName, newName, chatId);
         toast.success(`Renamed to ${newName}`);
         onBranchChanged();
         await loadBranches();
       });
     },
-    [projectId, loadBranches, onBranchChanged, withBusy],
+    [projectId, chatId, loadBranches, onBranchChanged, withBusy],
   );
 
   const handleDelete = useCallback(
@@ -203,10 +211,10 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
       const label = isRemote ? `remote branch '${branch}'` : `branch '${branch}'`;
       if (!window.confirm(`Delete ${label}?`)) return false;
       return withBusy(async () => {
-        const result = await gitDeleteBranch(projectId, branch, false, isRemote);
+        const result = await gitDeleteBranch(projectId, branch, false, isRemote, chatId);
         if (result.status === 'not-merged') {
           if (window.confirm(`${result.message}\nForce delete?`)) {
-            await gitDeleteBranch(projectId, branch, true, isRemote);
+            await gitDeleteBranch(projectId, branch, true, isRemote, chatId);
             toast.success(`Deleted ${label}`);
           }
         } else {
@@ -215,33 +223,37 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
         await loadBranches();
       });
     },
-    [projectId, loadBranches, withBusy],
+    [projectId, chatId, loadBranches, withBusy],
   );
 
   const handleFetch = useCallback(async () => {
     return withBusy(async () => {
-      await gitFetch(projectId);
+      await gitFetch(projectId, undefined, chatId);
       toast.success('Fetched');
       await loadBranches();
     }, 'fetch');
-  }, [projectId, loadBranches, withBusy]);
+  }, [projectId, chatId, loadBranches, withBusy]);
 
   const handleUpdateAll = useCallback(async () => {
     return withBusy(async () => {
-      const result = await gitUpdateAll(projectId);
+      const result = await gitUpdateAll(projectId, chatId);
+      const updated = result.branches.filter((b) => b.status === 'updated').length;
       if (result.pull.status === 'conflict') {
         toast.error('Conflicts during update');
       } else {
-        toast.success('Updated');
+        const parts: string[] = [];
+        if (result.pull.status === 'success') parts.push('current branch pulled');
+        if (updated > 0) parts.push(`${updated} branches updated`);
+        toast.success(parts.length > 0 ? parts.join(', ') : 'All up to date');
       }
       onBranchChanged();
       await loadBranches();
     }, 'updateAll');
-  }, [projectId, loadBranches, onBranchChanged, withBusy]);
+  }, [projectId, chatId, loadBranches, onBranchChanged, withBusy]);
 
   const handleAbort = useCallback(async () => {
     return withBusy(async () => {
-      const result = await gitAbort(projectId);
+      const result = await gitAbort(projectId, chatId);
       if (result?.aborted === false) {
         toast.info('No active merge or rebase to abort');
       } else {
@@ -249,18 +261,18 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
       }
       await loadBranches();
     });
-  }, [projectId, loadBranches, withBusy]);
+  }, [projectId, chatId, loadBranches, withBusy]);
 
   const handleCreateBranch = useCallback(
     async (name: string, startPoint: string) => {
       return withBusy(async () => {
-        await gitCreateBranch(projectId, name, startPoint);
+        await gitCreateBranch(projectId, name, startPoint, chatId);
         toast.success(`Created ${name}`);
         onBranchChanged();
         await loadBranches();
       });
     },
-    [projectId, loadBranches, onBranchChanged, withBusy],
+    [projectId, chatId, loadBranches, onBranchChanged, withBusy],
   );
 
   return {

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { ZodType } from 'zod';
 import type { RouteContext } from './types.js';
-import { getProjectPath, param } from './types.js';
+import { getEffectivePath, param } from './types.js';
 import { asyncHandler } from './async-handler.js';
 import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
@@ -20,7 +20,8 @@ import {
 const logger = createChildLogger('routes:git-write');
 
 function resolveProject(ctx: RouteContext, req: Request, res: Response): string | null {
-  const projectPath = getProjectPath(ctx, param(req, 'id'));
+  const chatId = (req.query.chatId as string | undefined) ?? (req.body?.chatId as string | undefined);
+  const projectPath = getEffectivePath(ctx, param(req, 'id'), chatId);
   if (!projectPath) res.status(404).json({ error: 'Project not found' });
   return projectPath;
 }

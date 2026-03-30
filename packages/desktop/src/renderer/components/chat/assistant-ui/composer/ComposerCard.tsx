@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, GitBranch } from 'lucide-react';
+import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, CopySlash, FolderGit, GitBranch } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:composer');
 import { ComposerPrimitive, useThread, useComposerRuntime, type ComposerRuntime } from '@assistant-ui/react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useChatsStore } from '../../../../store/chats';
 import { useSkillsStore } from '../../../../store/skills';
@@ -18,7 +17,7 @@ import { ComposerDropdown } from './ComposerDropdown';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
-import { useSandboxStore, type Capture } from '../../../../store/sandbox';
+import { useSandboxStore } from '../../../../store/sandbox';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
@@ -29,43 +28,7 @@ const PERMISSION_MODES = [
 
 // Two overlapping circles: back circle = /, front circle = @
 function ContextPickerIcon() {
-  const bg = 'var(--color-mf-panel-bg)';
-  return (
-    <svg viewBox="0 0 17 13" width="17" height="13" aria-hidden="true">
-      {/* Back circle (/) */}
-      <circle cx="5" cy="6.5" r="5" fill="currentColor" opacity="0.38" />
-      {/* Front circle (@) */}
-      <circle cx="11.5" cy="6.5" r="5" fill="currentColor" />
-      {/* / as diagonal line */}
-      <line
-        x1="3"
-        y1="9"
-        x2="7"
-        y2="4"
-        style={{ stroke: bg, strokeWidth: 1.5, strokeLinecap: 'round' } as React.CSSProperties}
-      />
-      {/* @ — Lucide AtSign paths scaled to 7×7, centered on right circle */}
-      <svg
-        x="8"
-        y="3"
-        width="7"
-        height="7"
-        viewBox="0 0 24 24"
-        style={
-          {
-            fill: 'none',
-            stroke: bg,
-            strokeWidth: 2.4,
-            strokeLinecap: 'round',
-            strokeLinejoin: 'round',
-          } as React.CSSProperties
-        }
-      >
-        <circle cx="12" cy="12" r="4" />
-        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
-      </svg>
-    </svg>
-  );
+  return <CopySlash size={14} />;
 }
 
 function useComposerEmpty(composerRuntime: ComposerRuntime) {
@@ -87,20 +50,13 @@ function useComposerEmpty(composerRuntime: ComposerRuntime) {
   );
 }
 
-/** Per-chat draft storage so composer text and attachments survive chat switches */
-interface Draft {
-  text: string;
-  attachments: Array<{ type: string; name: string; contentType?: string; content: unknown[] }>;
-  captures: Array<Omit<Capture, 'id'>>;
-}
-const drafts = new Map<string, Draft>();
-
 function StopButton() {
   const thread = useThread();
   if (!thread.isRunning) return null;
   return (
     <ComposerPrimitive.Cancel
       className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-destructive transition-colors"
+      title="Stop response"
       aria-label="Stop response"
     >
       <Square size={12} />
@@ -112,12 +68,10 @@ function SendButton({
   composerRuntime,
   hasCaptures,
   disabled: externalDisabled,
-  chatId,
 }: {
   composerRuntime: ComposerRuntime;
   hasCaptures: boolean;
   disabled?: boolean;
-  chatId: string;
 }) {
   const composerEmpty = useComposerEmpty(composerRuntime);
   const disabled = externalDisabled || (composerEmpty && !hasCaptures);
@@ -128,12 +82,12 @@ function SendButton({
       onClick={() => {
         try {
           composerRuntime.send();
-          drafts.delete(chatId);
         } catch (err) {
           log.warn('failed to send from composer', { err: String(err) });
         }
       }}
       className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      title="Send message"
       aria-label="Send message"
     >
       <ArrowUp size={16} />
@@ -154,58 +108,11 @@ export function ComposerCard() {
   const captures = useSandboxStore((s) => s.captures);
   const removeCapture = useSandboxStore((s) => s.removeCapture);
 
-  // Save draft on unmount (key-based remount means this fires on every chat switch)
-  const composerRuntimeRef = useRef(composerRuntime);
-  composerRuntimeRef.current = composerRuntime;
-  const chatIdRef = useRef(chatId);
-  chatIdRef.current = chatId;
-
   useEffect(() => {
-    // Restore draft on mount
-    const draft = drafts.get(chatId);
-    if (draft) {
-      requestAnimationFrame(() => {
-        try {
-          composerRuntime.setText(draft.text);
-          for (const att of draft.attachments) {
-            void composerRuntime.addAttachment(att as Parameters<typeof composerRuntime.addAttachment>[0]);
-          }
-        } catch {
-          /* composer not ready */
-        }
-        // Restore captures to sandbox store
-        if (draft.captures.length > 0) {
-          const store = useSandboxStore.getState();
-          for (const cap of draft.captures) store.addCapture(cap);
-        }
-      });
-    }
-    requestAnimationFrame(() => focusComposerInput());
-
-    return () => {
-      // Save draft on unmount
-      try {
-        const state = composerRuntimeRef.current.getState();
-        const text = state?.text ?? '';
-        const attachments = (state?.attachments ?? []).map((a) => ({
-          type: a.type,
-          name: a.name,
-          contentType: a.contentType,
-          content: ('content' in a ? a.content : []) as unknown[],
-        }));
-        const caps = useSandboxStore.getState().captures.map(({ id: _, ...rest }) => rest);
-        if (text.trim() || attachments.length > 0 || caps.length > 0) {
-          drafts.set(chatIdRef.current, { text, attachments, captures: caps });
-          // Clear captures so they don't appear in the next chat
-          useSandboxStore.getState().clearCaptures();
-        } else {
-          drafts.delete(chatIdRef.current);
-        }
-      } catch {
-        /* composer not ready */
-      }
-    };
-  }, []);
+    requestAnimationFrame(() => {
+      focusComposerInput();
+    });
+  }, [chatId]);
 
   const pendingInvocation = useSkillsStore((s) => s.pendingInvocation);
   useEffect(() => {
@@ -270,34 +177,26 @@ export function ComposerCard() {
     >
       <ContextPickerMenu forceOpen={pickerOpen} onClose={() => setPickerOpen(false)} />
       <div className="flex items-center gap-1 px-2 pt-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                setPickerOpen((p) => !p);
-                focusComposerInput();
-              }}
-              className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
-              aria-label="Open context picker"
-            >
-              <ContextPickerIcon />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Open context picker (agents, files, skills)</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <ComposerPrimitive.AddAttachment
-              className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
-              aria-label="Add attachment"
-            >
-              <Paperclip size={14} />
-            </ComposerPrimitive.AddAttachment>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Add attachment</TooltipContent>
-        </Tooltip>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            setPickerOpen((p) => !p);
+            focusComposerInput();
+          }}
+          className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
+          title="Open context picker (agents, files, skills)"
+          aria-label="Open context picker"
+        >
+          <ContextPickerIcon />
+        </button>
+        <ComposerPrimitive.AddAttachment
+          className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
+          title="Add attachment"
+          aria-label="Add attachment"
+        >
+          <Paperclip size={14} />
+        </ComposerPrimitive.AddAttachment>
       </div>
 
       <div data-testid="composer-attachments" className="flex gap-2 px-3 pt-1 flex-wrap">
@@ -376,7 +275,6 @@ export function ComposerCard() {
               e.preventDefault();
               try {
                 composerRuntime.send();
-                drafts.delete(chatId);
               } catch (err) {
                 log.warn('failed to send from composer', { err: String(err) });
               }
@@ -399,32 +297,26 @@ export function ComposerCard() {
             items={PERMISSION_MODES}
             value={currentMode}
             onChange={handleModeChange}
-            icon={<Shield size={12} />}
+            icon={<Shield size={14} />}
             className={
               currentMode === 'yolo' ? 'text-mf-destructive' : currentMode === 'plan' ? 'text-mf-accent' : undefined
             }
           />
           {isGitProject && (
             <div className="relative">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setWorktreePopoverOpen((o) => !o)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
-                      chat?.worktreePath
-                        ? 'text-mf-accent bg-mf-hover'
-                        : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
-                    }`}
-                    aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
-                  >
-                    <GitBranch size={12} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
-                </TooltipContent>
-              </Tooltip>
+              <button
+                type="button"
+                onClick={() => setWorktreePopoverOpen((o) => !o)}
+                className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
+                  chat?.worktreePath
+                    ? 'text-mf-accent bg-mf-hover'
+                    : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
+                }`}
+                title={chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
+                aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
+              >
+                {chat?.worktreePath ? <FolderGit size={14} /> : <GitBranch size={14} />}
+              </button>
               {worktreePopoverOpen && chatId && (
                 <WorktreePopover
                   chatId={chatId}
@@ -441,7 +333,6 @@ export function ComposerCard() {
             composerRuntime={composerRuntime}
             hasCaptures={captures.length > 0}
             disabled={chat?.worktreeMissing}
-            chatId={chatId}
           />
         </div>
       </div>

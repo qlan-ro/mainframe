@@ -18,8 +18,9 @@ interface BranchPopoverProps {
 }
 
 export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPopoverProps): React.ReactElement {
+  const activeChatId = useChatsStore((s) => s.activeChatId);
   const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
-  const actions = useBranchActions(projectId, onBranchChanged, onClose);
+  const actions = useBranchActions(projectId, activeChatId ?? undefined, onBranchChanged, onClose);
   const { branches, conflictFiles, busy, busyAction } = actions;
 
   const [view, setView] = useState<View>('list');
@@ -242,6 +243,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
             branch={selectedBranch}
             isCurrent={selectedBranch === branches.current}
             isRemote={selectedIsRemote}
+            isWorktree={!!branches.local.find((b) => b.name === selectedBranch)?.worktree}
             onClose={() => setView('list')}
             onCheckout={async (b) => {
               if (await actions.handleCheckout(b)) setView('list');

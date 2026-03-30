@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, GitBranch } from 'lucide-react';
+import { AlertTriangle, FolderGit, GitBranch } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:statusbar');
@@ -18,6 +18,7 @@ export function StatusBar(): React.ReactElement {
   const activeProjectId = useActiveProjectId();
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
+  const inWorktree = useChatsStore((s) => !!s.chats.find((c) => c.id === s.activeChatId)?.worktreePath);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [hasConflicts, setHasConflicts] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -87,7 +88,7 @@ export function StatusBar(): React.ReactElement {
               )}
             >
               {hasConflicts && <AlertTriangle size={12} className="text-mf-warning" />}
-              <GitBranch size={14} />
+              {inWorktree ? <FolderGit size={14} className="text-mf-accent" /> : <GitBranch size={14} />}
               <span>{gitBranch}</span>
             </button>
 

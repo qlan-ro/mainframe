@@ -7,6 +7,7 @@ import { parseWorktreeList } from '../workspace/worktree.js';
 import type {
   BranchListResult,
   BranchInfo,
+  BranchUpdateStatus,
   FetchResult,
   PullResult,
   PushResult,
@@ -333,6 +334,7 @@ export class GitService {
         logger.warn({ err }, 'fetch --all failed during updateAll');
       }
 
+      // Pull current branch
       let pull: PullResult;
       try {
         const result = await this.git().pull();
@@ -352,11 +354,43 @@ export class GitService {
         if (err?.git?.conflicts?.length > 0) {
           pull = { status: 'conflict', conflicts: err.git.conflicts, message: err.message };
         } else {
-          throw err;
+          logger.warn({ err }, 'pull failed during updateAll');
+          pull = { status: 'up-to-date' };
         }
       }
 
-      return { fetched, pull };
+      // Fast-forward all non-current local branches that have tracking remotes
+      const branches: BranchUpdateStatus[] = [];
+      try {
+        const branchResult = await this.git().branch(['-a']);
+        const currentBranch = branchResult.current;
+
+        for (const name of branchResult.all) {
+          if (name.startsWith('remotes/') || name === currentBranch) continue;
+          let upstream: string;
+          try {
+            upstream = (await this.git().raw(['rev-parse', '--abbrev-ref', `${name}@{upstream}`])).trim();
+          } catch {
+            continue; // no tracking remote
+          }
+          const idx = upstream.indexOf('/');
+          if (idx <= 0) continue;
+          const remote = upstream.slice(0, idx);
+          const remoteBranch = upstream.slice(idx + 1);
+          try {
+            const refBefore = (await this.git().raw(['rev-parse', name])).trim();
+            await this.git().fetch(remote, `${remoteBranch}:${name}`);
+            const refAfter = (await this.git().raw(['rev-parse', name])).trim();
+            branches.push({ branch: name, status: refBefore === refAfter ? 'up-to-date' : 'updated' });
+          } catch (err: any) {
+            branches.push({ branch: name, status: 'error', error: err.message });
+          }
+        }
+      } catch (err) {
+        logger.warn({ err }, 'branch enumeration failed during updateAll');
+      }
+
+      return { fetched, pull, branches };
     });
   }
 }

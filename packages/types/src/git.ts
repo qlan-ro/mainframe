@@ -34,7 +34,14 @@ export type PushResult =
 
 export type DeleteBranchResult = { status: 'success' } | { status: 'not-merged'; message: string };
 
+export interface BranchUpdateStatus {
+  branch: string;
+  status: 'updated' | 'up-to-date' | 'error';
+  error?: string;
+}
+
 export interface UpdateAllResult {
   fetched: boolean;
   pull: PullResult;
+  branches: BranchUpdateStatus[];
 }
