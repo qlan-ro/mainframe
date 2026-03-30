@@ -1,5 +1,6 @@
-import React from 'react';
-import { Search, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Search, X, ChevronDown, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Todo, TodoType, TodoPriority } from '../../lib/api/todos-api';
 
@@ -74,23 +75,154 @@ function ChipGroup<T extends string>({
   );
 }
 
+function LabelsPopover({
+  allLabels,
+  selected,
+  onToggle,
+}: {
+  allLabels: string[];
+  selected: string[];
+  onToggle: (label: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (btnRef.current?.contains(e.target as Node) || panelRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen((v) => !v);
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggle}
+        className={cn(
+          'flex items-center gap-1 px-1.5 py-0.5 rounded text-mf-status cursor-pointer select-none transition-colors',
+          selected.length > 0
+            ? 'bg-mf-accent/20 text-mf-accent'
+            : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+        )}
+      >
+        Labels{selected.length > 0 && ` (${selected.length})`}
+        <ChevronDown size={10} />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            style={{ position: 'fixed', top: pos.top, left: pos.left }}
+            className="z-50 min-w-[140px] max-h-48 overflow-y-auto bg-mf-panel-bg border border-mf-border rounded-mf-input shadow-lg py-1"
+          >
+            {allLabels.map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => onToggle(label)}
+                className="w-full flex items-center gap-2 px-2.5 py-1 text-mf-small text-mf-text-primary hover:bg-mf-hover transition-colors text-left"
+              >
+                <span
+                  className={cn(
+                    'w-3 h-3 rounded-sm border flex items-center justify-center shrink-0',
+                    selected.includes(label) ? 'bg-mf-accent border-mf-accent' : 'border-mf-border',
+                  )}
+                >
+                  {selected.includes(label) && <Check size={8} className="text-white" />}
+                </span>
+                {label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+const divider = 'w-px h-4 bg-mf-border shrink-0';
+
 export function TodoFilterBar({ filters, onChange, allLabels }: Props): React.ReactElement {
   const active = hasActiveFilters(filters);
-
   const clearAll = () => onChange({ types: [], priorities: [], labels: [], search: '' });
 
   return (
-    <div className="px-3 py-2 bg-mf-panel-bg border-b border-mf-border space-y-1.5 shrink-0">
-      {/* Search + clear */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1 flex-1 bg-mf-app-bg border border-mf-border rounded-mf-input px-2 py-1">
+    <div className="px-3 py-1.5 bg-mf-panel-bg border-b border-mf-border shrink-0 overflow-visible">
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Type chips */}
+        <span className="text-mf-status text-mf-text-secondary shrink-0">Type:</span>
+        <ChipGroup
+          items={TYPES}
+          selected={filters.types}
+          onToggle={(t) => onChange({ ...filters, types: toggleItem(filters.types, t) })}
+        />
+
+        <div className={divider} />
+
+        {/* Priority chips */}
+        <span className="text-mf-status text-mf-text-secondary shrink-0">Priority:</span>
+        <ChipGroup
+          items={PRIORITIES}
+          selected={filters.priorities}
+          onToggle={(p) => onChange({ ...filters, priorities: toggleItem(filters.priorities, p) })}
+        />
+
+        {/* Labels popover (only if labels exist) */}
+        {allLabels.length > 0 && (
+          <>
+            <div className={divider} />
+            <LabelsPopover
+              allLabels={allLabels}
+              selected={filters.labels}
+              onToggle={(l) => onChange({ ...filters, labels: toggleItem(filters.labels, l) })}
+            />
+          </>
+        )}
+
+        {/* Clear filters */}
+        {active && (
+          <>
+            <div className={divider} />
+            <button
+              onClick={clearAll}
+              className="text-mf-status text-mf-accent hover:underline whitespace-nowrap shrink-0"
+            >
+              Clear
+            </button>
+          </>
+        )}
+
+        {/* Search — right-aligned */}
+        <div className="ml-auto flex items-center gap-1 w-40 shrink-0 bg-mf-app-bg border border-mf-border rounded-mf-input px-2 py-0.5">
           <Search size={12} className="text-mf-text-secondary shrink-0" />
           <input
             type="text"
             value={filters.search}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
             placeholder="Filter by title..."
-            className="flex-1 bg-transparent text-mf-small text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none"
+            className="flex-1 bg-transparent text-mf-small text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none min-w-0"
           />
           {filters.search && (
             <button onClick={() => onChange({ ...filters, search: '' })} className="text-mf-text-secondary">
@@ -98,44 +230,7 @@ export function TodoFilterBar({ filters, onChange, allLabels }: Props): React.Re
             </button>
           )}
         </div>
-        {active && (
-          <button onClick={clearAll} className="text-mf-status text-mf-accent hover:underline whitespace-nowrap">
-            Clear filters
-          </button>
-        )}
       </div>
-
-      {/* Type chips */}
-      <div className="flex items-center gap-1.5">
-        <span className="text-mf-status text-mf-text-secondary shrink-0">Type:</span>
-        <ChipGroup
-          items={TYPES}
-          selected={filters.types}
-          onToggle={(t) => onChange({ ...filters, types: toggleItem(filters.types, t) })}
-        />
-      </div>
-
-      {/* Priority chips */}
-      <div className="flex items-center gap-1.5">
-        <span className="text-mf-status text-mf-text-secondary shrink-0">Priority:</span>
-        <ChipGroup
-          items={PRIORITIES}
-          selected={filters.priorities}
-          onToggle={(p) => onChange({ ...filters, priorities: toggleItem(filters.priorities, p) })}
-        />
-      </div>
-
-      {/* Label chips (only if labels exist) */}
-      {allLabels.length > 0 && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-mf-status text-mf-text-secondary shrink-0">Labels:</span>
-          <ChipGroup
-            items={allLabels}
-            selected={filters.labels}
-            onToggle={(l) => onChange({ ...filters, labels: toggleItem(filters.labels, l) })}
-          />
-        </div>
-      )}
     </div>
   );
 }

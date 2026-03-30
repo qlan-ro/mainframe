@@ -4,12 +4,14 @@ import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:todos');
 import { todosApi, type Todo, type TodoStatus, type CreateTodoInput } from '../../lib/api/todos-api';
+import type { PendingAttachment } from './TodoModal';
 import { TodoFilterBar, type TodoFilters, matchesFilters, extractAllLabels } from './TodoFilterBar';
 import { TodoCard } from './TodoCard';
 import { TodoModal } from './TodoModal';
 import { usePluginLayoutStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useSkillsStore } from '../../store/skills';
+import { useSandboxStore } from '../../store/sandbox';
 import { daemonClient } from '../../lib/client';
 
 const COLUMNS: { status: TodoStatus; label: string }[] = [
@@ -80,17 +82,30 @@ export function TodosPanel(): React.ReactElement {
   }, [loadTodos]);
 
   const handleCreate = useCallback(
-    async (data: CreateTodoInput) => {
+    async (data: CreateTodoInput, pendingAttachments?: PendingAttachment[]) => {
       if (!activeProjectId) return;
       try {
         const todo = await todosApi.create({ ...data, projectId: activeProjectId });
+        if (pendingAttachments?.length) {
+          await Promise.all(
+            pendingAttachments.map((f) =>
+              todosApi.uploadAttachment(todo.id, {
+                filename: f.filename,
+                mimeType: f.mimeType,
+                data: f.data,
+                sizeBytes: f.sizeBytes,
+              }),
+            ),
+          );
+          void loadAttachmentCounts([todo.id]);
+        }
         setTodos((prev) => [...prev, todo]);
         setModalOpen(false);
       } catch (err) {
         log.warn('create failed', { err: String(err) });
       }
     },
-    [activeProjectId],
+    [activeProjectId, loadAttachmentCounts],
   );
 
   const handleCreateAndStart = useCallback(
@@ -152,12 +167,27 @@ export function TodosPanel(): React.ReactElement {
           const moved = await todosApi.move(todo.id, 'in_progress');
           setTodos((prev) => prev.map((t) => (t.id === moved.id ? moved : t)));
         }
+
+        // Load todo attachments and add them as composer captures
+        const metas = await todosApi.listAttachments(todo.id);
+        if (metas.length > 0) {
+          const { addCapture } = useSandboxStore.getState();
+          const attachments = await Promise.all(
+            metas.map((m) => todosApi.getAttachment(todo.id, m.id).catch(() => null)),
+          );
+          for (const att of attachments) {
+            if (!att?.data) continue;
+            addCapture({
+              type: 'element',
+              imageDataUrl: `data:${att.mimeType};base64,${att.data}`,
+              selector: att.filename,
+            });
+          }
+        }
+
         const { chatId, initialMessage } = await todosApi.startSession(todo.id, activeProjectId);
-        // Pre-fill the composer using the existing pendingInvocation mechanism
         useSkillsStore.getState().setPendingInvocation(initialMessage);
-        // Close the todos fullview so the sessions panel becomes visible
         usePluginLayoutStore.getState().activateFullview('todos');
-        // chat.created WS event will open the tab automatically
         daemonClient.subscribe(chatId);
       } catch (err) {
         log.warn('start-session failed', { err: String(err) });

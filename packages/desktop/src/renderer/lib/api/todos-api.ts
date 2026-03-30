@@ -88,7 +88,10 @@ export const todosApi = {
     api<{ attachments: AttachmentMeta[] }>(`/todos/${id}/attachments`).then((r) => r.attachments),
 
   getAttachment: (id: string, attachmentId: string) =>
-    api<AttachmentMeta & { data: string }>(`/todos/${id}/attachments/${attachmentId}`),
+    api<{ data: string; meta: AttachmentMeta }>(`/todos/${id}/attachments/${attachmentId}`).then((r) => ({
+      ...r.meta,
+      data: r.data,
+    })),
 
   uploadAttachment: (id: string, file: { filename: string; mimeType: string; data: string; sizeBytes: number }) =>
     api<{ attachment: AttachmentMeta }>(`/todos/${id}/attachments`, {
