@@ -507,6 +507,7 @@ export function PreviewTab(): React.ReactElement {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setPanelVisible(false)}
+                aria-label="Minimize"
                 className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
               >
                 <Minus size={14} />

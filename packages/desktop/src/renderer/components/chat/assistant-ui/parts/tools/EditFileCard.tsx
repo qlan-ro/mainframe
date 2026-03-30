@@ -82,6 +82,7 @@ export function EditFileCard({ args, result, isError }: ToolCardProps) {
             <TooltipTrigger asChild>
               <span
                 onClick={handleOpenDiff}
+                aria-label="Open in diff editor"
                 className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors"
                 tabIndex={0}
                 role="button"
