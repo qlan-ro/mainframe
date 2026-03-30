@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Search, MessageSquare, FileText, Folder } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:search');
@@ -170,13 +171,23 @@ export function SearchPalette(): React.ReactElement | null {
           onClick={() => handleSelect(item)}
         >
           <MessageSquare size={14} className="shrink-0 opacity-60" />
-          <span className="truncate text-mf-body" title={item.label}>
-            {item.label}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="truncate text-mf-body" tabIndex={0}>
+                {item.label}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{item.label}</TooltipContent>
+          </Tooltip>
           {item.detail && (
-            <span className="ml-auto text-mf-status opacity-50 shrink-0" title={item.detail}>
-              {item.detail}
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="ml-auto text-mf-status opacity-50 shrink-0" tabIndex={0}>
+                  {item.detail}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{item.detail}</TooltipContent>
+            </Tooltip>
           )}
         </button>,
       );
@@ -204,13 +215,23 @@ export function SearchPalette(): React.ReactElement | null {
           onClick={() => handleSelect(item)}
         >
           <Icon size={14} className="shrink-0 opacity-60" />
-          <span className="truncate text-mf-body" title={item.label}>
-            {item.label}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="truncate text-mf-body" tabIndex={0}>
+                {item.label}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{item.label}</TooltipContent>
+          </Tooltip>
           {item.detail && item.detail !== item.label && (
-            <span className="ml-auto text-mf-status opacity-50 truncate max-w-[200px] shrink-0" title={item.detail}>
-              {item.detail}
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="ml-auto text-mf-status opacity-50 truncate max-w-[200px] shrink-0" tabIndex={0}>
+                  {item.detail}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{item.detail}</TooltipContent>
+            </Tooltip>
           )}
         </button>,
       );

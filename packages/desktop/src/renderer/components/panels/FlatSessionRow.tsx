@@ -6,6 +6,7 @@ import { useTabsStore } from '../../store/tabs';
 import { daemonClient } from '../../lib/client';
 import { archiveChat, renameChat } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:flat-session-row');
@@ -123,7 +124,6 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
     <div
       data-testid="chat-list-item"
       onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId)}
-      title={chat.claudeSessionId ? `Session: ${chat.claudeSessionId}` : undefined}
       className={cn(
         'group w-full rounded-mf-input transition-colors flex items-center gap-2',
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
@@ -166,18 +166,21 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
               {projectName && (
                 <>
                   <FolderOpen size={10} className="shrink-0" />
-                  <span className="truncate" title={projectName}>
-                    {projectName}
-                  </span>
+                  <span className="truncate">{projectName}</span>
                   <span className="shrink-0">{'·'}</span>
                 </>
               )}
               {chat.worktreePath && (
                 <>
                   <GitBranch size={10} className="shrink-0" />
-                  <span className="truncate" title={chat.worktreePath}>
-                    {chat.worktreePath.split('/').pop()}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="truncate max-w-[100px]" tabIndex={0}>
+                        {chat.worktreePath.split('/').pop()}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{chat.worktreePath}</TooltipContent>
+                  </Tooltip>
                   <span className="shrink-0">{'·'}</span>
                 </>
               )}
@@ -193,26 +196,34 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
         </span>
       )}
       <div className={cn('shrink-0 mr-1 flex items-center gap-0.5', archiving ? 'flex' : 'hidden group-hover:flex')}>
-        <button
-          onClick={handleStartRename}
-          className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
-          title="Rename session"
-          aria-label="Rename session"
-        >
-          <Pencil size={14} />
-        </button>
-        <button
-          onClick={handleArchive}
-          disabled={archiving}
-          className={cn(
-            'w-6 h-6 rounded flex items-center justify-center text-mf-text-secondary transition-colors shrink-0',
-            archiving ? '' : 'hover:bg-mf-hover hover:text-mf-text-primary',
-          )}
-          title="Archive session"
-          aria-label="Archive session"
-        >
-          {archiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleStartRename}
+              className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
+              aria-label="Rename session"
+            >
+              <Pencil size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Rename session</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleArchive}
+              disabled={archiving}
+              className={cn(
+                'w-6 h-6 rounded flex items-center justify-center text-mf-text-secondary transition-colors shrink-0',
+                archiving ? '' : 'hover:bg-mf-hover hover:text-mf-text-primary',
+              )}
+              aria-label="Archive session"
+            >
+              {archiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Archive session</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
-import React from 'react';
 import { Terminal } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
 import { StatusDot, cardStyle, stripErrorXml, type ToolCardProps } from './shared';
 
@@ -18,20 +18,27 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
       header={
         <>
           <Terminal size={15} className="text-mf-text-secondary shrink-0" />
-          <span className="font-mono text-mf-body text-mf-text-primary truncate" title={command}>
-            {truncatedCmd}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="font-mono text-mf-body text-mf-text-primary truncate" tabIndex={0}>
+                {truncatedCmd}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{command}</TooltipContent>
+          </Tooltip>
         </>
       }
       statusDot={<StatusDot result={result} isError={isError} />}
       subHeader={
         description ? (
-          <div
-            className="px-3 pb-1.5 -mt-0.5 text-mf-small text-mf-text-secondary truncate pl-[52px]"
-            title={description}
-          >
-            {description}
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="px-3 pb-1.5 -mt-0.5 text-mf-small text-mf-text-secondary truncate pl-[52px]" tabIndex={0}>
+                {description}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>{description}</TooltipContent>
+          </Tooltip>
         ) : undefined
       }
     >

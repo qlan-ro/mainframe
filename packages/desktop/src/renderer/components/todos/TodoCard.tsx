@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Edit, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { Todo } from '../../lib/api/todos-api';
 
 const TYPE_COLORS: Record<string, string> = {
@@ -81,40 +82,52 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
         </div>
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           {(todo.status === 'open' || todo.status === 'in_progress') && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onStartSession(todo);
-              }}
-              className="p-1 rounded text-mf-accent hover:bg-mf-accent/10 transition-colors"
-              title="Start session"
-              aria-label="Start in new session"
-            >
-              <Play size={12} />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStartSession(todo);
+                  }}
+                  className="p-1 rounded text-mf-accent hover:bg-mf-accent/10 transition-colors"
+                  aria-label="Start in new session"
+                >
+                  <Play size={12} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Start session</TooltipContent>
+            </Tooltip>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(todo);
-            }}
-            className="p-1 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
-            title="Edit"
-            aria-label="Edit task"
-          >
-            <Edit size={12} />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(todo.id);
-            }}
-            className="p-1 rounded text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors"
-            title="Delete"
-            aria-label="Delete task"
-          >
-            <Trash2 size={12} />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(todo);
+                }}
+                className="p-1 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
+                aria-label="Edit task"
+              >
+                <Edit size={12} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Edit</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(todo.id);
+                }}
+                className="p-1 rounded text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors"
+                aria-label="Delete task"
+              >
+                <Trash2 size={12} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Delete</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </div>

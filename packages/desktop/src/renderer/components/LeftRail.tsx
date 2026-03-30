@@ -1,6 +1,7 @@
 import React from 'react';
 import { Settings, HelpCircle, MessageSquare, Play } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { usePluginLayoutStore, useSettingsStore, useUIStore } from '../store';
 import { PluginIcon } from './plugins/PluginIcon';
 
@@ -13,18 +14,22 @@ interface RailButtonProps {
 
 function RailButton({ active, onClick, title, children }: RailButtonProps): React.ReactElement {
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={cn(
-        'w-8 h-8 mx-auto flex items-center justify-center rounded-mf-card transition-colors',
-        active
-          ? 'bg-mf-panel-bg text-mf-text-primary'
-          : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
-      )}
-    >
-      {children}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={onClick}
+          className={cn(
+            'w-8 h-8 mx-auto flex items-center justify-center rounded-mf-card transition-colors',
+            active
+              ? 'bg-mf-panel-bg text-mf-text-primary'
+              : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
+          )}
+        >
+          {children}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{title}</TooltipContent>
+    </Tooltip>
   );
 }
 

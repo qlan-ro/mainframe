@@ -9,6 +9,7 @@ import { useSkillsStore, useChatsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { searchFiles, addMention } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { Skill, CustomCommand } from '@qlan-ro/mainframe-types';
 
 type FilterMode = 'all' | 'agents-files' | 'skills';
@@ -87,7 +88,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
 
   // In all mode (button-triggered, no @ or / trigger), use the trailing word as query
   const allModeQuery = filterMode === 'all' ? (text.match(/(\S+)$/)?.[1] ?? '') : '';
-  const query = atMatch?.[1] ?? slashMatch?.[1] ?? allModeQuery;
+  const query = atMatch?.[1] ?? (slashMatch !== false ? slashMatch?.[1] : undefined) ?? allModeQuery;
   const isOpen = forceOpen || atMatch !== null || slashMatch !== null;
 
   // Auto-close when user typed then deleted everything (forceOpen mode only)
@@ -282,12 +283,14 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
                 ) : item.type === 'command' ? (
                   <span className="font-mono text-mf-small text-mf-text-primary truncate">/{item.command.name}</span>
                 ) : (
-                  <span
-                    className="text-mf-body text-mf-text-primary font-medium font-mono truncate"
-                    title={item.type === 'agent' ? item.name : item.path}
-                  >
-                    {item.type === 'agent' ? item.name : item.path}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-mf-body text-mf-text-primary font-medium font-mono truncate" tabIndex={0}>
+                        {item.type === 'agent' ? item.name : item.path}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{item.type === 'agent' ? item.name : item.path}</TooltipContent>
+                  </Tooltip>
                 )}
                 <span className="flex items-center gap-0.5 px-1.5 py-0 rounded-full bg-mf-hover text-mf-status text-mf-text-secondary shrink-0">
                   {item.type === 'agent' && (
@@ -306,19 +309,34 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
                 </span>
               </div>
               {item.type === 'agent' && item.description && (
-                <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" title={item.description}>
-                  {item.description}
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
+                      {item.description}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{item.description}</TooltipContent>
+                </Tooltip>
               )}
               {item.type === 'skill' && item.skill.description && (
-                <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" title={item.skill.description}>
-                  {item.skill.description}
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
+                      {item.skill.description}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{item.skill.description}</TooltipContent>
+                </Tooltip>
               )}
               {item.type === 'command' && item.command.description && (
-                <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" title={item.command.description}>
-                  {item.command.description}
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
+                      {item.command.description}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{item.command.description}</TooltipContent>
+                </Tooltip>
               )}
             </div>
           </button>

@@ -5,6 +5,7 @@ import { PreviewTab } from '../../../renderer/components/sandbox/PreviewTab';
 import { useUIStore } from '../../../renderer/store/ui';
 import { useSandboxStore } from '../../../renderer/store/sandbox';
 import { useChatsStore } from '../../../renderer/store/chats';
+import { TooltipProvider } from '../../../renderer/components/ui/tooltip.js';
 
 vi.mock('../../../renderer/hooks/useLaunchConfig', () => ({
   useLaunchConfig: vi.fn(() => null),
@@ -38,10 +39,14 @@ describe('PreviewTab', () => {
 
   it('minimize button calls setPanelVisible(false)', async () => {
     const user = userEvent.setup();
-    render(<PreviewTab />);
+    render(
+      <TooltipProvider>
+        <PreviewTab />
+      </TooltipProvider>,
+    );
 
-    // Find the minimize button by its title attribute
-    const minimizeButton = screen.getByTitle('Minimize');
+    // Find the minimize button by its aria-label
+    const minimizeButton = screen.getByRole('button', { name: 'Minimize' });
     expect(minimizeButton).toBeInTheDocument();
 
     // Click the minimize button

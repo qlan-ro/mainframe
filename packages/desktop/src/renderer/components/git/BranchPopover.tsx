@@ -279,32 +279,6 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
   );
 }
 
-function IconButton({
-  icon,
-  title,
-  onClick,
-  disabled,
-}: {
-  icon: React.ReactNode;
-  title?: string;
-  onClick: () => void;
-  disabled: boolean;
-}): React.ReactElement {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={cn(
-        'p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary',
-        disabled && 'opacity-40 cursor-not-allowed',
-      )}
-    >
-      {icon}
-    </button>
-  );
-}
-
 function RenameView({
   value,
   onChange,

@@ -101,15 +101,18 @@ export function ImportSessionsPopover({
       <div className="absolute right-0 top-full mt-1 z-50 min-w-[200px] max-w-[280px] bg-mf-panel-bg border border-mf-border rounded-mf-input shadow-lg py-1">
         <div className="px-3 py-1.5 text-mf-status text-mf-text-secondary uppercase tracking-wider">Select project</div>
         {sortedProjects.map((project) => (
-          <button
-            key={project.id}
-            type="button"
-            onClick={() => setSelectedProjectId(project.id)}
-            className="w-full text-left px-3 py-1.5 text-mf-small truncate hover:bg-mf-hover transition-colors text-mf-text-primary"
-            title={project.path}
-          >
-            {project.name}
-          </button>
+          <Tooltip key={project.id}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setSelectedProjectId(project.id)}
+                className="w-full text-left px-3 py-1.5 text-mf-small truncate hover:bg-mf-hover transition-colors text-mf-text-primary"
+              >
+                {project.name}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{project.path}</TooltipContent>
+          </Tooltip>
         ))}
       </div>
     );

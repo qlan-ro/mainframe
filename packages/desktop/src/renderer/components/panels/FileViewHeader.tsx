@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Crosshair, FileText, GitBranch, PanelLeftClose } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { useTabsStore, type FileView } from '../../store/tabs';
 
 function computeInlineDiffStats(original?: string, modified?: string): { added: number; removed: number } | null {
@@ -57,13 +58,23 @@ export function FileViewHeader(): React.ReactElement | null {
   return (
     <div className="h-11 flex items-center gap-2 px-3 shrink-0 min-w-0">
       <FileIcon fileView={fileView} />
-      <span className="font-mono text-mf-small text-mf-text-primary truncate shrink-0" title={name}>
-        {name}
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="font-mono text-mf-small text-mf-text-primary truncate shrink-0" tabIndex={0}>
+            {name}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{name}</TooltipContent>
+      </Tooltip>
       {dir && (
-        <span className="font-mono text-mf-small text-mf-text-secondary truncate min-w-0" title={dir}>
-          {dir}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="font-mono text-mf-small text-mf-text-secondary truncate min-w-0" tabIndex={0}>
+              {dir}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{dir}</TooltipContent>
+        </Tooltip>
       )}
 
       <div className="flex-1" />
@@ -76,23 +87,31 @@ export function FileViewHeader(): React.ReactElement | null {
       )}
 
       {filePath && (
-        <button
-          onClick={() => revealFileInTree(filePath)}
-          className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
-          title="Select in file tree"
-          aria-label="Select in file tree"
-        >
-          <Crosshair size={14} />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => revealFileInTree(filePath)}
+              className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
+              aria-label="Select in file tree"
+            >
+              <Crosshair size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Select in file tree</TooltipContent>
+        </Tooltip>
       )}
-      <button
-        onClick={toggleFileViewCollapsed}
-        className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
-        title="Collapse file view"
-        aria-label="Collapse file view"
-      >
-        <PanelLeftClose size={14} />
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={toggleFileViewCollapsed}
+            className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
+            aria-label="Collapse file view"
+          >
+            <PanelLeftClose size={14} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Collapse file view</TooltipContent>
+      </Tooltip>
     </div>
   );
 }

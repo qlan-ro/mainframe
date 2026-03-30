@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Play, Square, Plus } from 'lucide-react';
+import { Play, Square, Sparkles } from 'lucide-react';
 import { useSandboxStore } from '../../store/sandbox';
 import { useProjectsStore } from '../../store/projects';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
@@ -7,6 +7,7 @@ import { useChatsStore } from '../../store/chats';
 import { useUIStore } from '../../store/ui';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { useLaunchScopeKey } from '../../hooks/useLaunchScopeKey.js';
 import { daemonClient } from '../../lib/client';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
@@ -96,17 +97,21 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
                 )}
               >
                 <span>{c.name}</span>
-                <button
-                  onClick={(e) => void handleToggleProcess(e, c)}
-                  disabled={status === 'starting'}
-                  className={cn(
-                    'w-5 h-5 flex items-center justify-center rounded transition-colors disabled:opacity-40',
-                    isRunning ? 'text-red-400 hover:text-red-300' : 'text-mf-accent hover:text-mf-accent',
-                  )}
-                  title={isRunning ? 'Stop' : 'Start'}
-                >
-                  {isRunning ? <Square size={10} /> : <Play size={10} />}
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={(e) => void handleToggleProcess(e, c)}
+                      disabled={status === 'starting'}
+                      className={cn(
+                        'w-5 h-5 flex items-center justify-center rounded transition-colors disabled:opacity-40',
+                        isRunning ? 'text-red-400 hover:text-red-300' : 'text-mf-accent hover:text-mf-accent',
+                      )}
+                    >
+                      {isRunning ? <Square size={10} /> : <Play size={10} />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{isRunning ? 'Stop' : 'Start'}</TooltipContent>
+                </Tooltip>
               </div>
             );
           })}
@@ -121,7 +126,6 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
             daemonClient.sendMessage(chatId, '/launch-config');
           } else {
             daemonClient.createChat(activeProject.id, 'claude');
-            // Chat creation is async; wait for it to appear, then send
             const unsub = useChatsStore.subscribe((state) => {
               if (state.activeChatId) {
                 daemonClient.sendMessage(state.activeChatId, '/launch-config');
@@ -133,8 +137,8 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
         }}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
       >
-        <Plus size={12} />
-        <span>Add configuration</span>
+        <Sparkles size={12} />
+        <span>Generate with Agent</span>
       </button>
     </div>
   );

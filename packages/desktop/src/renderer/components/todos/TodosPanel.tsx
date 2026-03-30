@@ -232,7 +232,6 @@ export function TodosPanel(): React.ReactElement {
             setModalOpen(true);
           }}
           className="flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
-          title="New Task"
           aria-label="Create new task"
         >
           <Plus size={13} />
