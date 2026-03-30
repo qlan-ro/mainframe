@@ -66,8 +66,6 @@ function buildInitialMessage(todo: Todo): string {
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const labels = todo.labels.length > 0 ? todo.labels.join(', ') : 'none';
   const lines = [
-    `I'm working on this task from the kanban board:`,
-    ``,
     `**#${todo.number} ${todo.title}**`,
     `Type: ${cap(todo.type)} | Priority: ${cap(todo.priority)} | Labels: ${labels}`,
   ];
