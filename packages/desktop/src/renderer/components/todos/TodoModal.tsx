@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Todo, CreateTodoInput, TodoStatus, TodoType, TodoPriority } from '../../lib/api/todos-api';
+import { TodoAttachments } from './TodoAttachments';
 
 const TYPES: TodoType[] = [
   'bug',
@@ -159,6 +160,8 @@ export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): Rea
               placeholder="Describe the task..."
             />
           </div>
+
+          {todo && <TodoAttachments todoId={todo.id} />}
 
           <div className="flex flex-col gap-1">
             <label className="text-mf-small text-mf-text-secondary">Labels (comma-separated)</label>

@@ -4,6 +4,7 @@ import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:todos');
 import { todosApi, type Todo, type TodoStatus, type CreateTodoInput } from '../../lib/api/todos-api';
+import { TodoFilterBar, type TodoFilters, matchesFilters, extractAllLabels } from './TodoFilterBar';
 import { TodoCard } from './TodoCard';
 import { TodoModal } from './TodoModal';
 import { usePluginLayoutStore } from '../../store';
@@ -23,7 +24,29 @@ export function TodosPanel(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
+  const [filters, setFilters] = useState<TodoFilters>({
+    types: [],
+    priorities: [],
+    labels: [],
+    search: '',
+  });
   const activeProjectId = useActiveProjectId();
+
+  const loadAttachmentCounts = useCallback(async (todoIds: string[]) => {
+    const counts: Record<string, number> = {};
+    await Promise.all(
+      todoIds.map(async (id) => {
+        try {
+          const list = await todosApi.listAttachments(id);
+          counts[id] = list.length;
+        } catch {
+          /* expected — no attachments table yet or network hiccup */
+        }
+      }),
+    );
+    setAttachmentCounts(counts);
+  }, []);
 
   const loadTodos = useCallback(async () => {
     if (!activeProjectId) {
@@ -35,13 +58,14 @@ export function TodosPanel(): React.ReactElement {
       setError(null);
       const list = await todosApi.list(activeProjectId);
       setTodos(list);
+      void loadAttachmentCounts(list.map((t) => t.id));
     } catch (err) {
       setError('Failed to load tasks. Is the daemon running?');
       log.warn('load failed', { err: String(err) });
     } finally {
       setLoading(false);
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, loadAttachmentCounts]);
 
   useEffect(() => {
     setLoading(true);
@@ -186,10 +210,13 @@ export function TodosPanel(): React.ReactElement {
         </button>
       </div>
 
+      {/* Filters */}
+      <TodoFilterBar filters={filters} onChange={setFilters} allLabels={extractAllLabels(todos)} />
+
       {/* Columns */}
       <div className="flex-1 flex gap-px overflow-hidden">
         {COLUMNS.map(({ status, label }) => {
-          const colTodos = todos.filter((t) => t.status === status);
+          const colTodos = todos.filter((t) => t.status === status && matchesFilters(t, filters));
           return (
             <div
               key={status}
@@ -211,6 +238,7 @@ export function TodosPanel(): React.ReactElement {
                   <TodoCard
                     key={todo.id}
                     todo={todo}
+                    attachmentCount={attachmentCounts[todo.id]}
                     onEdit={(t) => {
                       setEditingTodo(t);
                       setModalOpen(true);
