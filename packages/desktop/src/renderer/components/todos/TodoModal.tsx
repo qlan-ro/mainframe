@@ -1,7 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Upload } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Todo, CreateTodoInput, TodoStatus, TodoType, TodoPriority } from '../../lib/api/todos-api';
+import { todosApi } from '../../lib/api/todos-api';
+import { TodoAttachments } from './TodoAttachments';
+import { createLogger } from '../../lib/logger';
+
+const log = createLogger('renderer:todo-modal');
 
 const TYPES: TodoType[] = [
   'bug',
@@ -16,10 +21,18 @@ const TYPES: TodoType[] = [
 const PRIORITIES: TodoPriority[] = ['low', 'medium', 'high', 'critical'];
 const STATUSES: TodoStatus[] = ['open', 'in_progress', 'done'];
 
+export interface PendingAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  data: string;
+  sizeBytes: number;
+}
+
 interface Props {
   todo?: Todo | null;
   onClose: () => void;
-  onSave: (data: CreateTodoInput) => void;
+  onSave: (data: CreateTodoInput, pendingAttachments?: PendingAttachment[]) => void;
   onStartSession?: (todo: Todo) => void;
   onSaveAndStartSession?: (data: CreateTodoInput) => void;
 }
@@ -28,6 +41,18 @@ const input = cn(
   'bg-mf-app-bg border border-mf-border rounded-mf-input px-2 py-1.5',
   'text-mf-small text-mf-text-primary focus:outline-none focus:border-mf-accent',
 );
+
+const MAX_SIZE = 10 * 1024 * 1024;
+const IMAGE_ACCEPT = '.jpg,.jpeg,.png,.gif,.webp';
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '');
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
 
 export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): React.ReactElement {
   const [title, setTitle] = useState(todo?.title ?? '');
@@ -38,6 +63,14 @@ export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): Rea
   const [labels, setLabels] = useState((todo?.labels ?? []).join(', '));
   const [assignees, setAssignees] = useState((todo?.assignees ?? []).join(', '));
   const [milestone, setMilestone] = useState(todo?.milestone ?? '');
+  const [size, setSize] = useState({ width: 512, height: 600 });
+  const resizing = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
+
+  // Attachments for new todos (buffered locally)
+  const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
+  // Key to force-refresh TodoAttachments after paste-upload on existing todo
+  const [attachRefresh, setAttachRefresh] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -47,34 +80,110 @@ export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): Rea
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
+  const onResizeStart = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      resizing.current = { startX: e.clientX, startY: e.clientY, startW: size.width, startH: size.height };
+    },
+    [size],
+  );
+
+  const onResizeMove = useCallback((e: React.PointerEvent) => {
+    if (!resizing.current) return;
+    const w = Math.max(400, resizing.current.startW + (e.clientX - resizing.current.startX));
+    const h = Math.max(300, resizing.current.startH + (e.clientY - resizing.current.startY));
+    setSize({ width: w, height: h });
+  }, []);
+
+  const onResizeEnd = useCallback(() => {
+    resizing.current = null;
+  }, []);
+
+  const addImageFile = useCallback(
+    async (file: File) => {
+      if (file.size > MAX_SIZE) return;
+      if (!file.type.startsWith('image/')) return;
+      try {
+        const data = await fileToBase64(file);
+        if (todo) {
+          await todosApi.uploadAttachment(todo.id, {
+            filename: file.name,
+            mimeType: file.type,
+            data,
+            sizeBytes: file.size,
+          });
+          setAttachRefresh((n) => n + 1);
+        } else {
+          setPendingFiles((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), filename: file.name, mimeType: file.type, data, sizeBytes: file.size },
+          ]);
+        }
+      } catch (err) {
+        log.warn('Failed to process image', { err: String(err) });
+      }
+    },
+    [todo],
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = Array.from(e.clipboardData.items);
+      const imageItem = items.find((item) => item.type.startsWith('image/'));
+      if (!imageItem) return;
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) void addImageFile(file);
+    },
+    [addImageFile],
+  );
+
+  const handleFilePick = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) void addImageFile(file);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    },
+    [addImageFile],
+  );
+
+  const removePending = useCallback((id: string) => {
+    setPendingFiles((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    onSave({
-      title: title.trim(),
-      body: body.trim(),
-      status,
-      type,
-      priority,
-      labels: labels
-        .split(',')
-        .map((l) => l.trim())
-        .filter(Boolean),
-      assignees: assignees
-        .split(',')
-        .map((a) => a.trim())
-        .filter(Boolean),
-      milestone: milestone.trim() || undefined,
-    });
+    onSave(
+      {
+        title: title.trim(),
+        body: body.trim(),
+        status,
+        type,
+        priority,
+        labels: labels
+          .split(',')
+          .map((l) => l.trim())
+          .filter(Boolean),
+        assignees: assignees
+          .split(',')
+          .map((a) => a.trim())
+          .filter(Boolean),
+        milestone: milestone.trim() || undefined,
+      },
+      pendingFiles.length > 0 ? pendingFiles : undefined,
+    );
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div
         role="dialog"
         aria-modal="true"
         aria-label={todo ? 'Edit Task' : 'New Task'}
-        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border w-full max-w-lg mx-4 shadow-xl"
+        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border mx-4 shadow-xl relative"
+        style={{ width: size.width, maxHeight: '90vh' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border">
@@ -88,7 +197,11 @@ export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): Rea
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-3 max-h-[80vh] overflow-y-auto">
+        <form
+          onSubmit={handleSubmit}
+          className="p-4 space-y-3 overflow-y-auto scrollbar-none"
+          style={{ maxHeight: size.height - 52 }}
+        >
           <div className="flex flex-col gap-1">
             <label htmlFor="todo-title" className="text-mf-small text-mf-text-secondary">
               Title *
@@ -150,15 +263,70 @@ export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): Rea
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-mf-small text-mf-text-secondary">Description (markdown)</label>
+            <div className="flex items-baseline justify-between">
+              <label className="text-mf-small text-mf-text-secondary">Description (markdown)</label>
+              <span className="text-mf-status text-mf-text-secondary opacity-60">Paste image to attach</span>
+            </div>
             <textarea
               className={cn(input, 'resize-none')}
               rows={4}
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              onPaste={handlePaste}
               placeholder="Describe the task..."
             />
           </div>
+
+          {/* Attachments: existing todo uses TodoAttachments, new todo shows pending previews */}
+          {todo ? (
+            <TodoAttachments key={attachRefresh} todoId={todo.id} />
+          ) : (
+            <div className="flex flex-col gap-1">
+              <label className="text-mf-small text-mf-text-secondary">Attachments</label>
+              {pendingFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {pendingFiles.map((f) => (
+                    <div
+                      key={f.id}
+                      className="relative group rounded-mf-input border border-mf-border overflow-hidden bg-mf-app-bg"
+                    >
+                      <img
+                        src={`data:${f.mimeType};base64,${f.data}`}
+                        alt={f.filename}
+                        className="w-20 h-20 object-cover"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5">
+                        <span className="text-mf-status text-white truncate block">{f.filename}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removePending(f.id)}
+                        className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label={`Remove ${f.filename}`}
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={IMAGE_ACCEPT}
+                onChange={handleFilePick}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1 w-fit px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
+              >
+                <Upload size={12} />
+                Add image
+              </button>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1">
             <label className="text-mf-small text-mf-text-secondary">Labels (comma-separated)</label>
@@ -219,6 +387,21 @@ export function TodoModal({ todo, onClose, onSave, onStartSession }: Props): Rea
             </button>
           </div>
         </form>
+        {/* Resize handle */}
+        <div
+          onPointerDown={onResizeStart}
+          onPointerMove={onResizeMove}
+          onPointerUp={onResizeEnd}
+          onLostPointerCapture={onResizeEnd}
+          className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize flex items-end justify-end p-0.5 touch-none"
+          aria-hidden="true"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" className="text-mf-text-secondary">
+            <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1" opacity="0.4" />
+            <line x1="9" y1="4" x2="4" y2="9" stroke="currentColor" strokeWidth="1" opacity="0.4" />
+            <line x1="9" y1="7" x2="7" y2="9" stroke="currentColor" strokeWidth="1" opacity="0.4" />
+          </svg>
+        </div>
       </div>
     </div>
   );
