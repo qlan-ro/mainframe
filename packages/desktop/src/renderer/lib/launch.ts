@@ -2,18 +2,18 @@ import { API_BASE } from './api/http';
 
 interface LaunchStatusResponse {
   success: boolean;
-  data: { statuses: Record<string, string>; tunnelUrls: Record<string, string> };
+  data: { statuses: Record<string, string>; tunnelUrls: Record<string, string>; effectivePath: string };
 }
 
 export async function fetchLaunchStatuses(
   projectId: string,
   chatId?: string,
-): Promise<{ statuses: Record<string, string>; tunnelUrls: Record<string, string> }> {
+): Promise<{ statuses: Record<string, string>; tunnelUrls: Record<string, string>; effectivePath: string }> {
   const params = chatId ? `?chatId=${chatId}` : '';
   const res = await fetch(`${API_BASE}/api/projects/${projectId}/launch/status${params}`);
-  if (!res.ok) return { statuses: {}, tunnelUrls: {} };
+  if (!res.ok) return { statuses: {}, tunnelUrls: {}, effectivePath: '' };
   const json = (await res.json()) as LaunchStatusResponse;
-  return json.success ? json.data : { statuses: {}, tunnelUrls: {} };
+  return json.success ? json.data : { statuses: {}, tunnelUrls: {}, effectivePath: '' };
 }
 
 export async function fetchLaunchConfigs(

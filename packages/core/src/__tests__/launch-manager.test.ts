@@ -87,6 +87,46 @@ describe('LaunchManager', () => {
     manager.stop('server');
   });
 
+  it('emits effectivePath in launch.status events', async () => {
+    const config = {
+      name: 'ep-test',
+      runtimeExecutable: 'node',
+      runtimeArgs: ['-e', 'process.exit(0);'],
+      port: null,
+      url: null,
+      preview: false,
+    };
+    await manager.start(config);
+    await new Promise((r) => setTimeout(r, 200));
+    const statusEvents = events.filter((e) => e.type === 'launch.status') as Array<
+      Extract<DaemonEvent, { type: 'launch.status' }>
+    >;
+    expect(statusEvents.length).toBeGreaterThan(0);
+    for (const e of statusEvents) {
+      expect(e.effectivePath).toBe('/tmp');
+    }
+  });
+
+  it('emits effectivePath in launch.output events', async () => {
+    const config = {
+      name: 'ep-out',
+      runtimeExecutable: 'node',
+      runtimeArgs: ['-e', 'process.stdout.write("hi");process.exit(0);'],
+      port: null,
+      url: null,
+      preview: false,
+    };
+    await manager.start(config);
+    await new Promise((r) => setTimeout(r, 200));
+    const outputEvents = events.filter((e) => e.type === 'launch.output') as Array<
+      Extract<DaemonEvent, { type: 'launch.output' }>
+    >;
+    expect(outputEvents.length).toBeGreaterThan(0);
+    for (const e of outputEvents) {
+      expect(e.effectivePath).toBe('/tmp');
+    }
+  });
+
   it('passes env vars to the spawned process', async () => {
     const config = {
       name: 'env-test',

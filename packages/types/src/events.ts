@@ -38,11 +38,18 @@ export type DaemonEvent =
     }
   | { type: 'plugin.action.unregistered'; pluginId: string; actionId: string }
   | { type: 'plugin.notification'; pluginId: string; title: string; body: string; level?: string }
-  | { type: 'launch.output'; projectId: string; name: string; data: string; stream: 'stdout' | 'stderr' }
-  | { type: 'launch.status'; projectId: string; name: string; status: LaunchProcessStatus }
-  | { type: 'launch.tunnel'; projectId: string; name: string; url: string }
-  | { type: 'launch.tunnel.failed'; projectId: string; name: string; error: string }
-  | { type: 'launch.port.timeout'; projectId: string; name: string; port: number }
+  | {
+      type: 'launch.output';
+      projectId: string;
+      effectivePath: string;
+      name: string;
+      data: string;
+      stream: 'stdout' | 'stderr';
+    }
+  | { type: 'launch.status'; projectId: string; effectivePath: string; name: string; status: LaunchProcessStatus }
+  | { type: 'launch.tunnel'; projectId: string; effectivePath: string; name: string; url: string }
+  | { type: 'launch.tunnel.failed'; projectId: string; effectivePath: string; name: string; error: string }
+  | { type: 'launch.port.timeout'; projectId: string; effectivePath: string; name: string; port: number }
   | { type: 'sessions.external.count'; projectId: string; count: number };
 
 export type ClientEvent =

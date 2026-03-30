@@ -12,6 +12,7 @@ import { routeEvent } from '../lib/ws-event-router';
 import { createLogger } from '../lib/logger';
 import { fetchLaunchStatuses } from '../lib/launch';
 import { useSandboxStore } from '../store/sandbox';
+import { buildLaunchScope } from '../lib/launch-scope.js';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 
 export { useChatSession } from './useChatSession.js';
@@ -121,10 +122,12 @@ export function useProject(projectId: string | null) {
     const syncLaunchStatuses = async () => {
       try {
         const activeChatId = useChatsStore.getState().activeChatId ?? undefined;
-        const { statuses } = await fetchLaunchStatuses(projectId, activeChatId);
+        const { statuses, effectivePath } = await fetchLaunchStatuses(projectId, activeChatId);
+        if (!effectivePath) return;
+        const scopeKey = buildLaunchScope(projectId, effectivePath);
         const { setProcessStatus } = useSandboxStore.getState();
         for (const [name, status] of Object.entries(statuses)) {
-          setProcessStatus(projectId, name, status as LaunchProcessStatus);
+          setProcessStatus(scopeKey, name, status as LaunchProcessStatus);
         }
       } catch (err) {
         log.warn('launch status fetch failed', { err: String(err) });
