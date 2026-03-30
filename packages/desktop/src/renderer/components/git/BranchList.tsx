@@ -59,15 +59,17 @@ function BranchRow({
   isCurrent,
   isMain,
   tracking,
+  grouped,
   onClick,
 }: {
   name: string;
   isCurrent: boolean;
   isMain: boolean;
   tracking?: string;
+  grouped?: boolean;
   onClick: () => void;
 }): React.ReactElement {
-  const displayName = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+  const displayName = grouped && name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
 
   return (
     <button
@@ -125,6 +127,7 @@ function GroupSection({
               isCurrent={b.name === currentBranch}
               isMain={false}
               tracking={b.tracking}
+              grouped
               onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
             />
           </div>
