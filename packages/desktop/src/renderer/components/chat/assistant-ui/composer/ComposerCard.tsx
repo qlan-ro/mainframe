@@ -99,17 +99,12 @@ function StopButton() {
   const thread = useThread();
   if (!thread.isRunning) return null;
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <ComposerPrimitive.Cancel
-          className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-destructive transition-colors"
-          aria-label="Stop response"
-        >
-          <Square size={12} />
-        </ComposerPrimitive.Cancel>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">Stop response</TooltipContent>
-    </Tooltip>
+    <ComposerPrimitive.Cancel
+      className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-destructive transition-colors"
+      aria-label="Stop response"
+    >
+      <Square size={12} />
+    </ComposerPrimitive.Cancel>
   );
 }
 
@@ -127,27 +122,22 @@ function SendButton({
   const composerEmpty = useComposerEmpty(composerRuntime);
   const disabled = externalDisabled || (composerEmpty && !hasCaptures);
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            try {
-              composerRuntime.send();
-              drafts.delete(chatId);
-            } catch (err) {
-              log.warn('failed to send from composer', { err: String(err) });
-            }
-          }}
-          className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label="Send message"
-        >
-          <ArrowUp size={16} />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">Send message</TooltipContent>
-    </Tooltip>
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        try {
+          composerRuntime.send();
+          drafts.delete(chatId);
+        } catch (err) {
+          log.warn('failed to send from composer', { err: String(err) });
+        }
+      }}
+      className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      aria-label="Send message"
+    >
+      <ArrowUp size={16} />
+    </button>
   );
 }
 
