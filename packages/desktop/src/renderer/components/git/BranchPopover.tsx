@@ -157,6 +157,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
         {view === 'new-branch' && (
           <NewBranchDialog
             localBranches={branches.local.map((b) => b.name)}
+            remoteBranches={branches.remote}
             currentBranch={branches.current}
             startFrom={newBranchFrom}
             onBack={() => setView('list')}

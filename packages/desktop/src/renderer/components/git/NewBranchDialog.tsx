@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 
 interface NewBranchDialogProps {
   localBranches: string[];
+  remoteBranches: string[];
   currentBranch: string;
   startFrom?: string;
   onBack: () => void;
@@ -14,6 +15,7 @@ const BRANCH_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/;
 
 export function NewBranchDialog({
   localBranches,
+  remoteBranches,
   currentBranch,
   startFrom,
   onBack,
@@ -94,11 +96,22 @@ export function NewBranchDialog({
             disabled={creating}
             className="w-full px-2 py-1 text-xs rounded border border-mf-border bg-mf-app-bg text-mf-text-primary focus:outline-none focus:ring-1 focus:ring-mf-accent"
           >
-            {localBranches.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
+            <optgroup label="Local">
+              {localBranches.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </optgroup>
+            {remoteBranches.length > 0 && (
+              <optgroup label="Remote">
+                {remoteBranches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
