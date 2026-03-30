@@ -119,6 +119,17 @@ describe('GitService', () => {
       await svc.checkout('feat/foo');
       expect(mockGit.checkout).toHaveBeenCalledWith('feat/foo');
     });
+
+    it('falls back to plain checkout when local branch already exists for remote ref', async () => {
+      const err = new Error("A branch named 'feat/bar' already exists");
+      mockGit.checkout.mockRejectedValueOnce(err).mockResolvedValueOnce(undefined);
+      mockGit.getRemotes.mockResolvedValue([{ name: 'origin' }]);
+      const svc = GitService.forProject('/fake/path');
+      await svc.checkout('origin/feat/bar');
+      expect(mockGit.checkout).toHaveBeenCalledTimes(2);
+      expect(mockGit.checkout).toHaveBeenNthCalledWith(1, ['-b', 'feat/bar', 'origin/feat/bar', '--track']);
+      expect(mockGit.checkout).toHaveBeenNthCalledWith(2, 'feat/bar');
+    });
   });
 
   describe('merge()', () => {

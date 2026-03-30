@@ -123,7 +123,12 @@ export class GitService {
         const [, remote, localName] = remoteRefMatch;
         const remotes = await this.git().getRemotes();
         if (remotes.some((r) => r.name === remote)) {
-          await this.git().checkout(['-b', localName!, `${branch}`, '--track']);
+          try {
+            await this.git().checkout(['-b', localName!, `${branch}`, '--track']);
+          } catch {
+            // Local branch already exists — just switch to it
+            await this.git().checkout(localName!);
+          }
           return;
         }
       }
