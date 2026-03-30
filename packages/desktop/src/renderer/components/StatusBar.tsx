@@ -35,7 +35,7 @@ export function StatusBar(): React.ReactElement {
         log.warn('git branch fetch failed', { err: String(err) });
         setGitBranch(null);
       });
-    getGitStatus(activeProjectId)
+    getGitStatus(activeProjectId, activeChatId ?? undefined)
       .then((res) => {
         const conflicts = res.files.some((f) => isConflictStatus(f.status));
         setHasConflicts(conflicts);
