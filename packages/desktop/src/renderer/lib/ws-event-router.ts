@@ -5,6 +5,7 @@ import { useProjectsStore } from '../store/projects';
 import { usePluginLayoutStore } from '../store/plugins';
 import { useSandboxStore } from '../store/sandbox';
 import { createLogger } from './logger';
+import { buildLaunchScope } from './launch-scope.js';
 
 const log = createLogger('renderer:ws');
 
@@ -81,10 +82,14 @@ export function routeEvent(event: DaemonEvent): void {
       chats.updateProcessStatus(event.processId, 'stopped');
       break;
     case 'launch.output':
-      useSandboxStore.getState().appendLog(event.projectId, event.name, event.data, event.stream);
+      useSandboxStore
+        .getState()
+        .appendLog(buildLaunchScope(event.projectId, event.effectivePath), event.name, event.data, event.stream);
       break;
     case 'launch.status':
-      useSandboxStore.getState().setProcessStatus(event.projectId, event.name, event.status);
+      useSandboxStore
+        .getState()
+        .setProcessStatus(buildLaunchScope(event.projectId, event.effectivePath), event.name, event.status);
       break;
     case 'launch.tunnel':
       log.debug('event:launch.tunnel', { projectId: event.projectId, name: event.name, url: event.url });

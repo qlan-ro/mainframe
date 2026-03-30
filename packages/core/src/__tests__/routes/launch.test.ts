@@ -70,7 +70,21 @@ describe('launchRoutes', () => {
     await handler(req, res);
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { statuses: { server: 'running' }, tunnelUrls: {} },
+      data: { statuses: { server: 'running' }, tunnelUrls: {}, effectivePath: '/tmp/proj' },
+    });
+  });
+
+  it('GET /api/projects/:id/launch/status includes effectivePath', async () => {
+    (ctx.launchRegistry!.getOrCreate as any).mockReturnValue({
+      getAllStatuses: vi.fn().mockReturnValue({ server: 'running' }),
+    });
+    const handler = extractHandler(launchRoutes(ctx), 'get', '/api/projects/:id/launch/status');
+    const req: any = { params: { id: 'proj-1' }, query: {} };
+    const res = mockRes();
+    await handler(req, res);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { statuses: { server: 'running' }, tunnelUrls: {}, effectivePath: '/tmp/proj' },
     });
   });
 

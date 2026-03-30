@@ -5,6 +5,7 @@ import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
+import { useLaunchScopeKey } from '../../hooks/useLaunchScopeKey.js';
 
 interface Props {
   onClose: () => void;
@@ -14,8 +15,8 @@ export function StopPopover({ onClose }: Props): React.ReactElement {
   const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const launchConfig = useLaunchConfig();
-  const projectStatuses =
-    useSandboxStore((s) => (activeProjectId ? s.processStatuses[activeProjectId] : undefined)) ?? {};
+  const scopeKey = useLaunchScopeKey();
+  const scopeStatuses = useSandboxStore((s) => (scopeKey ? s.processStatuses[scopeKey] : undefined)) ?? {};
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -29,10 +30,10 @@ export function StopPopover({ onClose }: Props): React.ReactElement {
   const runningConfigs = useMemo(
     () =>
       configs.filter((c) => {
-        const s = projectStatuses[c.name] ?? 'stopped';
+        const s = scopeStatuses[c.name] ?? 'stopped';
         return s === 'running' || s === 'starting';
       }),
-    [configs, projectStatuses],
+    [configs, scopeStatuses],
   );
 
   const handleStop = async (name: string) => {

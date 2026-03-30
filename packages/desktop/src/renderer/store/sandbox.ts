@@ -11,9 +11,9 @@ export interface Capture {
 
 interface SandboxState {
   captures: Capture[];
-  // Scoped by projectId so statuses from different projects never bleed together
-  processStatuses: { [projectId: string]: { [name: string]: LaunchProcessStatus } };
-  logsOutput: { projectId: string; name: string; data: string; stream: 'stdout' | 'stderr' }[];
+  // Scoped by scopeKey (= projectId:effectivePath) so statuses from different scopes never bleed together
+  processStatuses: { [scopeKey: string]: { [name: string]: LaunchProcessStatus } };
+  logsOutput: { scopeKey: string; name: string; data: string; stream: 'stdout' | 'stderr' }[];
   selectedConfigName: string | null;
   // Tracks which process was most recently started — used to auto-switch tabs
   lastStartedProcess: string | null;
@@ -21,19 +21,15 @@ interface SandboxState {
   addCapture: (capture: Omit<Capture, 'id'>) => void;
   removeCapture: (id: string) => void;
   clearCaptures: () => void;
-  setProcessStatus: (projectId: string, name: string, status: LaunchProcessStatus) => void;
-  /** Find status for a process name across all projects */
-  getProcessStatus: (name: string) => LaunchProcessStatus;
-  appendLog: (projectId: string, name: string, data: string, stream: 'stdout' | 'stderr') => void;
+  setProcessStatus: (scopeKey: string, name: string, status: LaunchProcessStatus) => void;
+  appendLog: (scopeKey: string, name: string, data: string, stream: 'stdout' | 'stderr') => void;
   clearLogs: () => void;
-  clearLogsForProcess: (projectId: string, name: string) => void;
-  /** Clear logs matching a process name regardless of projectId */
-  clearLogsForName: (name: string) => void;
+  clearLogsForProcess: (scopeKey: string, name: string) => void;
   setSelectedConfigName: (name: string | null) => void;
   setLastStartedProcess: (name: string | null) => void;
 }
 
-export const useSandboxStore = create<SandboxState>()((set, get) => ({
+export const useSandboxStore = create<SandboxState>()((set) => ({
   captures: [],
   processStatuses: {},
   logsOutput: [],
@@ -46,39 +42,25 @@ export const useSandboxStore = create<SandboxState>()((set, get) => ({
 
   clearCaptures: () => set({ captures: [] }),
 
-  setProcessStatus: (projectId, name, status) =>
+  setProcessStatus: (scopeKey, name, status) =>
     set((state) => ({
       processStatuses: {
         ...state.processStatuses,
-        [projectId]: { ...(state.processStatuses[projectId] ?? {}), [name]: status },
+        [scopeKey]: { ...(state.processStatuses[scopeKey] ?? {}), [name]: status },
       },
     })),
 
-  getProcessStatus: (name) => {
-    const { processStatuses } = get();
-    for (const projStatuses of Object.values(processStatuses)) {
-      const st = projStatuses[name];
-      if (st) return st;
-    }
-    return 'stopped';
-  },
-
-  appendLog: (projectId, name, data, stream) =>
+  appendLog: (scopeKey, name, data, stream) =>
     set((state) => ({
       // Keep last 500 entries to avoid unbounded growth
-      logsOutput: [...state.logsOutput.slice(-499), { projectId, name, data, stream }],
+      logsOutput: [...state.logsOutput.slice(-499), { scopeKey, name, data, stream }],
     })),
 
   clearLogs: () => set({ logsOutput: [] }),
 
-  clearLogsForProcess: (projectId, name) =>
+  clearLogsForProcess: (scopeKey, name) =>
     set((state) => ({
-      logsOutput: state.logsOutput.filter((l) => !(l.projectId === projectId && l.name === name)),
-    })),
-
-  clearLogsForName: (name) =>
-    set((state) => ({
-      logsOutput: state.logsOutput.filter((l) => l.name !== name),
+      logsOutput: state.logsOutput.filter((l) => !(l.scopeKey === scopeKey && l.name === name)),
     })),
 
   setSelectedConfigName: (name) => set({ selectedConfigName: name }),

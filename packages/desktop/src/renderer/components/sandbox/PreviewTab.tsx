@@ -17,6 +17,7 @@ import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useSandboxStore } from '../../store/sandbox';
 import { useChatsStore } from '../../store/chats';
 import { useActiveProjectId, getActiveProjectId } from '../../hooks/useActiveProjectId.js';
+import { useLaunchScopeKey } from '../../hooks/useLaunchScopeKey.js';
 import { useUIStore } from '../../store/ui';
 import { daemonClient } from '../../lib/client';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
@@ -109,8 +110,9 @@ export function PreviewTab(): React.ReactElement {
   const [mobileView, setMobileView] = useState(false);
   const addCapture = useSandboxStore((s) => s.addCapture);
   const logsOutput = useSandboxStore((s) => s.logsOutput);
-  const clearLogsForName = useSandboxStore((s) => s.clearLogsForName);
+  const clearLogsForProcess = useSandboxStore((s) => s.clearLogsForProcess);
   const setLastStartedProcess = useSandboxStore((s) => s.setLastStartedProcess);
+  const scopeKey = useLaunchScopeKey();
   const setPanelVisible = useUIStore((s) => s.setPanelVisible);
 
   const launchConfig = useLaunchConfig();
@@ -142,8 +144,8 @@ export function PreviewTab(): React.ReactElement {
   const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const selectedProcessStatus = useSandboxStore((s) => {
-    if (!selectedProcess || !activeProjectId) return 'stopped' as const;
-    return s.processStatuses[activeProjectId]?.[selectedProcess] ?? 'stopped';
+    if (!selectedProcess || !scopeKey) return 'stopped' as const;
+    return s.processStatuses[scopeKey]?.[selectedProcess] ?? 'stopped';
   });
   const isSelectedRunning = selectedProcessStatus === 'running' || selectedProcessStatus === 'starting';
 
@@ -156,8 +158,8 @@ export function PreviewTab(): React.ReactElement {
 
   // Watch the preview process status (not the selected tab)
   const previewStatus = useSandboxStore((s) => {
-    if (!previewProcessName || !activeProjectId) return 'stopped' as const;
-    return s.processStatuses[activeProjectId]?.[previewProcessName] ?? 'stopped';
+    if (!previewProcessName || !scopeKey) return 'stopped' as const;
+    return s.processStatuses[scopeKey]?.[previewProcessName] ?? 'stopped';
   });
 
   // Track whether the webview has successfully loaded (separate from process status)
@@ -259,7 +261,7 @@ export function PreviewTab(): React.ReactElement {
   }, [logsOutput]);
 
   const filteredLogs = logsOutput.filter(
-    (l) => l.projectId === activeProjectId && (!selectedProcess || l.name === selectedProcess),
+    (l) => l.scopeKey === scopeKey && (!selectedProcess || l.name === selectedProcess),
   );
 
   const handleFullScreenshot = useCallback(async () => {
@@ -341,24 +343,24 @@ export function PreviewTab(): React.ReactElement {
   const handleStart = useCallback(async () => {
     if (!activeProjectId || !selectedProcessConfig) return;
     try {
-      clearLogsForName(selectedProcessConfig.name);
+      if (scopeKey) clearLogsForProcess(scopeKey, selectedProcessConfig.name);
       setLastStartedProcess(selectedProcessConfig.name);
       await startLaunchConfig(activeProjectId, selectedProcessConfig.name, activeChatId ?? undefined);
     } catch (err) {
       console.warn('[sandbox] start failed', err);
     }
-  }, [activeProjectId, activeChatId, selectedProcessConfig, clearLogsForName, setLastStartedProcess]);
+  }, [activeProjectId, activeChatId, selectedProcessConfig, scopeKey, clearLogsForProcess, setLastStartedProcess]);
 
   const handleRestart = useCallback(async () => {
     if (!activeProjectId || !selectedProcessConfig) return;
     try {
       await stopLaunchConfig(activeProjectId, selectedProcessConfig.name, activeChatId ?? undefined);
-      clearLogsForName(selectedProcessConfig.name);
+      if (scopeKey) clearLogsForProcess(scopeKey, selectedProcessConfig.name);
       await startLaunchConfig(activeProjectId, selectedProcessConfig.name, activeChatId ?? undefined);
     } catch (err) {
       console.warn('[sandbox] restart failed', err);
     }
-  }, [activeProjectId, activeChatId, selectedProcessConfig, clearLogsForName]);
+  }, [activeProjectId, activeChatId, selectedProcessConfig, scopeKey, clearLogsForProcess]);
 
   const isElectron = typeof window !== 'undefined' && 'mainframe' in window;
 
@@ -559,7 +561,7 @@ export function PreviewTab(): React.ReactElement {
               <div className="flex items-center">
                 <button
                   onClick={() => {
-                    if (selectedProcess) clearLogsForName(selectedProcess);
+                    if (selectedProcess && scopeKey) clearLogsForProcess(scopeKey, selectedProcess);
                   }}
                   disabled={!selectedProcess}
                   className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40"

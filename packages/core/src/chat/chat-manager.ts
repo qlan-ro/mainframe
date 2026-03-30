@@ -105,6 +105,12 @@ export class ChatManager {
     this.externalSessions = new ExternalSessionService(this.db, this.adapters, (e) => this.emitEvent(e));
   }
 
+  /** Late-bind a callback to stop launch processes before worktree removal */
+  setStopLaunchProcesses(fn: (projectId: string, projectPath: string) => Promise<void>): void {
+    this.lifecycle.setStopLaunchProcesses(fn);
+    this.configManager.setStopLaunchProcesses(fn);
+  }
+
   setPushService(service: import('../push/push-service.js').PushService): void {
     this.eventHandler.setPushService(service);
   }

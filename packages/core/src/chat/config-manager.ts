@@ -13,10 +13,16 @@ export interface ConfigManagerDeps {
   startChat: (chatId: string) => Promise<void>;
   stopChat: (chatId: string) => Promise<void>;
   emitEvent: (event: DaemonEvent) => void;
+  /** Stop launch processes for a project+path pair (e.g. before worktree removal) */
+  stopLaunchProcesses?: (projectId: string, projectPath: string) => Promise<void>;
 }
 
 export class ChatConfigManager {
   constructor(private deps: ConfigManagerDeps) {}
+
+  setStopLaunchProcesses(fn: (projectId: string, projectPath: string) => Promise<void>): void {
+    this.deps.stopLaunchProcesses = fn;
+  }
 
   async updateChatConfig(
     chatId: string,
@@ -175,6 +181,8 @@ export class ChatConfigManager {
       await active.session.kill();
       active.session = null;
     }
+
+    await this.deps.stopLaunchProcesses?.(active.chat.projectId, active.chat.worktreePath);
 
     const project = this.deps.db.projects.get(active.chat.projectId);
     if (project) removeWorktree(project.path, active.chat.worktreePath, active.chat.branchName!);
