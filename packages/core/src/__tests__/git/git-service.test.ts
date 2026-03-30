@@ -55,6 +55,23 @@ describe('GitService', () => {
       expect(result.worktrees).toEqual([]);
     });
 
+    it('filters out remote HEAD pseudo-refs', async () => {
+      mockGit.branch.mockResolvedValue({
+        current: 'main',
+        all: ['main', 'remotes/origin/HEAD -> origin/main', 'remotes/origin/main', 'remotes/origin/feat/bar'],
+        branches: {},
+      });
+      mockGit.raw
+        .mockResolvedValueOnce('') // worktree list
+        .mockResolvedValue('origin/main\n');
+
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.branches();
+
+      expect(result.remote).toEqual(['origin/main', 'origin/feat/bar']);
+      expect(result.remote).not.toContainEqual(expect.stringContaining('HEAD'));
+    });
+
     it('tags branches with their worktree directory name', async () => {
       mockGit.branch.mockResolvedValue({
         current: 'main',

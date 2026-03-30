@@ -78,6 +78,8 @@ export class GitService {
 
     for (const name of result.all) {
       if (name.startsWith('remotes/')) {
+        // Skip pseudo-refs like "remotes/origin/HEAD -> origin/main"
+        if (name.includes(' -> ') || name.endsWith('/HEAD')) continue;
         const remoteName = name.replace(/^remotes\//, '');
         remote.push(remoteName);
       } else {
