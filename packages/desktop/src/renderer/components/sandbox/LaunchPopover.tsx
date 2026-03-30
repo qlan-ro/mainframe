@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Play, Square, Plus } from 'lucide-react';
+import { Play, Square, Sparkles } from 'lucide-react';
 import { useSandboxStore } from '../../store/sandbox';
 import { useProjectsStore } from '../../store/projects';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
@@ -126,7 +126,6 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
             daemonClient.sendMessage(chatId, '/launch-config');
           } else {
             daemonClient.createChat(activeProject.id, 'claude');
-            // Chat creation is async; wait for it to appear, then send
             const unsub = useChatsStore.subscribe((state) => {
               if (state.activeChatId) {
                 daemonClient.sendMessage(state.activeChatId, '/launch-config');
@@ -138,8 +137,8 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
         }}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
       >
-        <Plus size={12} />
-        <span>Add configuration</span>
+        <Sparkles size={12} />
+        <span>Generate with Agent</span>
       </button>
     </div>
   );

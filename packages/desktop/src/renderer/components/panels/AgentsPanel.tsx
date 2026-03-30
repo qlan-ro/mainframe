@@ -27,14 +27,7 @@ function AgentItem({
       <Bot size={14} className="text-mf-accent mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="text-mf-body text-mf-text-primary truncate font-medium" tabIndex={0}>
-                {agent.name}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{agent.name}</TooltipContent>
-          </Tooltip>
+          <span className="text-mf-body text-mf-text-primary truncate font-medium">{agent.name}</span>
           <span className="flex items-center gap-0.5 px-1.5 py-0 rounded-full bg-mf-hover text-mf-status text-mf-text-secondary shrink-0">
             {SCOPE_ICON[agent.scope]}
             {agent.scope === 'project' ? 'Project' : 'Global'}
