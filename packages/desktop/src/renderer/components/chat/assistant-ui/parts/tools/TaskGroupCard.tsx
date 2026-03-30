@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Bot, Maximize2, Minimize2 } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { ErrorDot, type ToolCardProps } from './shared';
 import { renderToolCard } from './render-tool-card';
 
@@ -79,9 +80,14 @@ export function TaskGroupCard({ args, result, isError }: ToolCardProps) {
         <Bot size={14} className="text-mf-accent shrink-0" />
         <span className="text-mf-body text-mf-accent font-medium">{agentType}</span>
         {model && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{model}</span>}
-        <span className="text-mf-small text-mf-text-secondary/70 truncate" title={description}>
-          {truncatedDesc}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-mf-small text-mf-text-secondary/70 truncate" tabIndex={0}>
+              {truncatedDesc}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{description}</TooltipContent>
+        </Tooltip>
         <span className="flex-1" />
         {summary && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{summary}</span>}
         <ErrorDot isError={isError} />

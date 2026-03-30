@@ -1,4 +1,5 @@
 import { Bot } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { ErrorDot, type ToolCardProps } from './shared';
 
 const USAGE_RE =
@@ -39,9 +40,14 @@ export function TaskCard({ args, result, isError }: ToolCardProps) {
         <Bot size={14} className="text-mf-accent shrink-0" />
         <span className="text-mf-body text-mf-accent font-medium">{agentType}</span>
         {model && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{model}</span>}
-        <span className="text-mf-small text-mf-text-secondary/70 truncate" title={description}>
-          {truncatedDesc}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-mf-small text-mf-text-secondary/70 truncate" tabIndex={0}>
+              {truncatedDesc}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{description}</TooltipContent>
+        </Tooltip>
         <span className="flex-1" />
         {!isDone && <span className="w-2 h-2 rounded-full bg-mf-text-secondary/40 animate-pulse shrink-0" />}
         {isDone && usage && (

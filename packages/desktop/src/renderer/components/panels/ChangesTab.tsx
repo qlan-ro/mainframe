@@ -7,6 +7,7 @@ import { daemonClient } from '../../lib/client';
 import { getSessionDiffs, getBranchDiffs } from '../../lib/api';
 import type { SessionFileDiff, BranchDiffResponse } from '../../lib/api';
 import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 
@@ -122,9 +123,14 @@ export function ChangesTab(): React.ReactElement {
             : `${fileCount} changed file${fileCount !== 1 ? 's' : ''}`}
         </span>
         {activeChat?.branchName && activeChat?.worktreePath && (
-          <span className="text-mf-label text-mf-accent" title={activeChat.worktreePath}>
-            Worktree: {activeChat.branchName}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-mf-label text-mf-accent" tabIndex={0}>
+                Worktree: {activeChat.branchName}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{activeChat.worktreePath}</TooltipContent>
+          </Tooltip>
         )}
         <Button
           variant="ghost"
@@ -189,10 +195,15 @@ function SessionFileList({
             )}
           >
             <FileText size={14} className="text-mf-text-secondary shrink-0" />
-            <span className="flex-1 min-w-0 truncate" title={file.filePath}>
-              <span className="text-mf-small text-mf-text-primary">{name}</span>
-              {dir && <span className="text-mf-small text-mf-text-secondary ml-1">{dir}</span>}
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex-1 min-w-0 truncate" tabIndex={0}>
+                  <span className="text-mf-small text-mf-text-primary">{name}</span>
+                  {dir && <span className="text-mf-small text-mf-text-secondary ml-1">{dir}</span>}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{file.filePath}</TooltipContent>
+            </Tooltip>
             <span className={cn('text-mf-status font-medium shrink-0', info.color)}>{info.label}</span>
           </button>
         );
@@ -242,10 +253,15 @@ function BranchFileList({
             )}
           >
             <FileText size={14} className="text-mf-text-secondary shrink-0" />
-            <span className="flex-1 min-w-0 truncate" title={file.path}>
-              <span className="text-mf-small text-mf-text-primary">{name}</span>
-              {dir && <span className="text-mf-small text-mf-text-secondary ml-1">{dir}</span>}
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex-1 min-w-0 truncate" tabIndex={0}>
+                  <span className="text-mf-small text-mf-text-primary">{name}</span>
+                  {dir && <span className="text-mf-small text-mf-text-secondary ml-1">{dir}</span>}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{file.path}</TooltipContent>
+            </Tooltip>
             <span className={cn('text-mf-status font-medium shrink-0', info.color)}>{info.label}</span>
           </button>
         );

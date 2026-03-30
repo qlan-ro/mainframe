@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Copy, Check, Trash2, Loader2 } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import {
   getTunnelStatus,
   startTunnel,
@@ -412,13 +413,17 @@ function DevicesSection(): React.ReactElement {
                   {new Date(device.createdAt).toLocaleDateString()}
                 </span>
               </div>
-              <button
-                onClick={() => handleRemove(device.deviceId)}
-                className="p-1 text-mf-text-tertiary hover:text-red-400 transition-colors"
-                title="Remove device"
-              >
-                <Trash2 size={14} />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => handleRemove(device.deviceId)}
+                    className="p-1 text-mf-text-tertiary hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Remove device</TooltipContent>
+              </Tooltip>
             </div>
           ))}
         </div>
@@ -441,12 +446,16 @@ function CopyButton({ text }: { text: string }): React.ReactElement {
   }, [text]);
 
   return (
-    <button
-      onClick={handleCopy}
-      className="p-1 text-mf-text-tertiary hover:text-mf-text-primary transition-colors shrink-0"
-      title="Copy"
-    >
-      {copied ? <Check size={14} /> : <Copy size={14} />}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={handleCopy}
+          className="p-1 text-mf-text-tertiary hover:text-mf-text-primary transition-colors shrink-0"
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>Copy</TooltipContent>
+    </Tooltip>
   );
 }

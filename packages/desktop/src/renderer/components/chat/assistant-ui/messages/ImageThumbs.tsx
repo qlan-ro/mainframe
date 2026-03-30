@@ -1,5 +1,5 @@
-import React from 'react';
 import { FileText } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
 
 export function ImageThumbs({
   imageBlocks,
@@ -39,12 +39,14 @@ export function FileAttachmentThumbs({ attachments }: { attachments: { name: str
           className="w-16 h-16 rounded overflow-hidden bg-mf-input-bg border border-mf-border flex flex-col items-center justify-center gap-1 px-1 text-mf-text-secondary"
         >
           <FileText size={14} />
-          <span
-            className="text-[9px] leading-tight w-full h-7 overflow-hidden text-center break-all"
-            title={attachment.name}
-          >
-            {attachment.name}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-[9px] leading-tight w-full h-7 overflow-hidden text-center break-all" tabIndex={0}>
+                {attachment.name}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{attachment.name}</TooltipContent>
+          </Tooltip>
         </div>
       ))}
     </div>

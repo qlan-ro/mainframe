@@ -1,6 +1,6 @@
-import React from 'react';
 import { Search } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
 import { ErrorDot, stripErrorXml } from './shared';
 
@@ -27,9 +27,14 @@ export function SearchCard({
         <>
           <Search size={15} className="text-mf-text-secondary/40 shrink-0" />
           <span className="text-mf-body text-mf-text-secondary/60">{toolName}</span>
-          <span className="font-mono text-mf-small text-mf-text-secondary/60 truncate" title={pattern}>
-            {pattern}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="font-mono text-mf-small text-mf-text-secondary/60 truncate" tabIndex={0}>
+                {pattern}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{pattern}</TooltipContent>
+          </Tooltip>
         </>
       }
       statusDot={<ErrorDot isError={isError} />}

@@ -3,6 +3,7 @@ import { Bot, MoreHorizontal, Pencil, Trash2, Globe, FolderOpen } from 'lucide-r
 import { useSkillsStore, useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { AgentConfig } from '@qlan-ro/mainframe-types';
 
 const SCOPE_ICON: Record<string, React.ReactNode> = {
@@ -26,18 +27,28 @@ function AgentItem({
       <Bot size={14} className="text-mf-accent mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-mf-body text-mf-text-primary truncate font-medium" title={agent.name}>
-            {agent.name}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-mf-body text-mf-text-primary truncate font-medium" tabIndex={0}>
+                {agent.name}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{agent.name}</TooltipContent>
+          </Tooltip>
           <span className="flex items-center gap-0.5 px-1.5 py-0 rounded-full bg-mf-hover text-mf-status text-mf-text-secondary shrink-0">
             {SCOPE_ICON[agent.scope]}
             {agent.scope === 'project' ? 'Project' : 'Global'}
           </span>
         </div>
         {agent.description && (
-          <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" title={agent.description}>
-            {agent.description}
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
+                {agent.description}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>{agent.description}</TooltipContent>
+          </Tooltip>
         )}
       </div>
       <div className="relative shrink-0">

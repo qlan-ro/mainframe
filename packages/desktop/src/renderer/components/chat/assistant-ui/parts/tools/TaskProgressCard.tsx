@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Check } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import type { TaskProgressItem } from '../../convert-message';
 
 interface TaskState {
@@ -71,19 +72,24 @@ export function TaskProgressCard({ args }: { args: Record<string, unknown> }) {
           className="flex items-center gap-2 px-1 py-0.5 text-mf-body"
         >
           <TaskStatusIcon status={task.status} />
-          <span
-            className={cn(
-              'truncate',
-              task.status === 'completed'
-                ? 'text-mf-text-secondary/50 line-through'
-                : task.status === 'in_progress'
-                  ? 'text-mf-text-primary'
-                  : 'text-mf-text-secondary',
-            )}
-            title={task.subject}
-          >
-            {task.subject}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={cn(
+                  'truncate',
+                  task.status === 'completed'
+                    ? 'text-mf-text-secondary/50 line-through'
+                    : task.status === 'in_progress'
+                      ? 'text-mf-text-primary'
+                      : 'text-mf-text-secondary',
+                )}
+                tabIndex={0}
+              >
+                {task.subject}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{task.subject}</TooltipContent>
+          </Tooltip>
         </div>
       ))}
     </div>

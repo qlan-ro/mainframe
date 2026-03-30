@@ -1,5 +1,5 @@
-import React from 'react';
 import { Zap } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 
 export function SlashCommandCard({ args }: { args: Record<string, unknown> }) {
   const skill = (args.skill as string) || '';
@@ -10,9 +10,14 @@ export function SlashCommandCard({ args }: { args: Record<string, unknown> }) {
       <Zap size={14} className="text-mf-accent shrink-0" />
       <span className="font-mono text-mf-body text-mf-accent">/{skill}</span>
       {skillArgs && (
-        <span className="font-mono text-mf-small text-mf-text-secondary/60 truncate" title={skillArgs}>
-          {skillArgs}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="font-mono text-mf-small text-mf-text-secondary/60 truncate" tabIndex={0}>
+              {skillArgs}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{skillArgs}</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );

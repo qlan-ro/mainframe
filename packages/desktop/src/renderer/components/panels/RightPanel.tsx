@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Minus, PanelLeftOpen } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { ContextTab } from './ContextTab';
 import { FilesTab } from './FilesTab';
 import { ChangesTab } from './ChangesTab';
@@ -98,14 +99,18 @@ export function RightPanel(): React.ReactElement {
               </div>
             </>
           ) : (
-            <button
-              onClick={toggleFileViewCollapsed}
-              className="w-7 shrink-0 flex items-center justify-center border-r border-mf-divider text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors cursor-pointer"
-              title="Expand file view"
-              aria-label="Expand file view"
-            >
-              <PanelLeftOpen size={14} />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleFileViewCollapsed}
+                  className="w-7 shrink-0 flex items-center justify-center border-r border-mf-divider text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors cursor-pointer"
+                  aria-label="Expand file view"
+                >
+                  <PanelLeftOpen size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Expand file view</TooltipContent>
+            </Tooltip>
           )}
         </>
       )}
@@ -132,14 +137,18 @@ export function RightPanel(): React.ReactElement {
                 {c.label}
               </TabsTrigger>
             ))}
-            <button
-              onClick={() => togglePanel('right')}
-              className="ml-auto flex items-center justify-center w-6 h-6 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors cursor-pointer"
-              title="Collapse right panel"
-              aria-label="Collapse right panel"
-            >
-              <Minus size={14} />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => togglePanel('right')}
+                  className="ml-auto flex items-center justify-center w-6 h-6 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors cursor-pointer"
+                  aria-label="Collapse right panel"
+                >
+                  <Minus size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Collapse right panel</TooltipContent>
+            </Tooltip>
           </TabsList>
 
           <TabsContent value="context" className="flex-1 overflow-y-auto px-[10px] mt-0">
