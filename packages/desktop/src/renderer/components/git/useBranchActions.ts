@@ -239,8 +239,12 @@ export function useBranchActions(projectId: string, onBranchChanged: () => void,
 
   const handleAbort = useCallback(async () => {
     await withBusy(async () => {
-      await gitAbort(projectId);
-      toast.success('Aborted');
+      const result = await gitAbort(projectId);
+      if (result?.aborted === false) {
+        toast.info('No active merge or rebase to abort');
+      } else {
+        toast.success('Aborted');
+      }
       await loadBranches();
     });
   }, [projectId, loadBranches, withBusy]);

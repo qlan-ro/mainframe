@@ -217,4 +217,12 @@ describe('GitService', () => {
       expect(result.status).toBe('success');
     });
   });
+
+  describe('abort()', () => {
+    it('returns aborted:false when no merge or rebase is active', async () => {
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.abort();
+      expect(result).toEqual({ aborted: false });
+    });
+  });
 });

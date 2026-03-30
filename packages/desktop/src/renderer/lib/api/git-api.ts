@@ -58,8 +58,8 @@ export async function gitRebase(projectId: string, branch: string): Promise<Reba
   return postJson(`${API_BASE}/api/projects/${projectId}/git/rebase`, { branch });
 }
 
-export async function gitAbort(projectId: string): Promise<void> {
-  await postJson(`${API_BASE}/api/projects/${projectId}/git/abort`);
+export async function gitAbort(projectId: string): Promise<{ aborted: boolean }> {
+  return postJson(`${API_BASE}/api/projects/${projectId}/git/abort`);
 }
 
 export async function gitRenameBranch(projectId: string, oldName: string, newName: string): Promise<void> {

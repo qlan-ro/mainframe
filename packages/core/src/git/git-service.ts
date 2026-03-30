@@ -251,29 +251,30 @@ export class GitService {
     });
   }
 
-  async abort(): Promise<void> {
+  async abort(): Promise<{ aborted: boolean }> {
     return this.withLock(async () => {
       try {
         await access(join(this.projectPath, '.git', 'MERGE_HEAD'));
         await this.git().merge(['--abort']);
-        return;
+        return { aborted: true };
       } catch {
         /* expected — probing whether a merge is in progress */
       }
       try {
         await access(join(this.projectPath, '.git', 'rebase-merge'));
         await this.git().rebase(['--abort']);
-        return;
+        return { aborted: true };
       } catch {
         /* expected — probing whether an interactive rebase is in progress */
       }
       try {
         await access(join(this.projectPath, '.git', 'rebase-apply'));
         await this.git().rebase(['--abort']);
-        return;
+        return { aborted: true };
       } catch {
         /* expected — no active merge or rebase to abort */
       }
+      return { aborted: false };
     });
   }
 
