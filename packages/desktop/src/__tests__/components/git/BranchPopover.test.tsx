@@ -136,7 +136,7 @@ describe('BranchPopover', () => {
     });
 
     await waitFor(() => {
-      expect(api.gitFetch).toHaveBeenCalledWith('proj-1');
+      expect(api.gitFetch).toHaveBeenCalledWith('proj-1', undefined, undefined);
     });
   });
 

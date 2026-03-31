@@ -24,7 +24,7 @@ describe('Toaster', () => {
   it('dismisses on click', async () => {
     useToastStore.getState().add('info', 'Click me');
     render(<Toaster />);
-    await userEvent.click(screen.getByText('Click me'));
+    await userEvent.click(screen.getByLabelText('Dismiss'));
     expect(screen.queryByText('Click me')).not.toBeInTheDocument();
   });
 
