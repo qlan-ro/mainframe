@@ -162,7 +162,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search branches..."
-                  className="flex-1 bg-transparent text-xs text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none"
+                  className="flex-1 bg-transparent text-sm text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none"
                 />
               </div>
               <Tooltip>
@@ -194,7 +194,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                   setNewBranchFrom(undefined);
                   setView('new-branch');
                 }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-primary hover:bg-mf-hover"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-mf-text-primary hover:bg-mf-hover"
               >
                 <Plus size={12} />
                 <span>New Branch...</span>
@@ -203,7 +203,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                 onClick={actions.handleUpdateAll}
                 disabled={busy}
                 className={cn(
-                  'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-primary hover:bg-mf-hover',
+                  'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-mf-text-primary hover:bg-mf-hover',
                   busy && 'opacity-40 cursor-not-allowed',
                 )}
               >
@@ -214,7 +214,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                 onClick={handleGlobalPush}
                 disabled={busy}
                 className={cn(
-                  'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-primary hover:bg-mf-hover',
+                  'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-mf-text-primary hover:bg-mf-hover',
                   busy && 'opacity-40 cursor-not-allowed',
                 )}
               >
@@ -295,7 +295,7 @@ function RenameView({
         <button onClick={onBack} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
           <ArrowLeft size={14} />
         </button>
-        <span className="text-xs font-medium text-mf-text-primary">Rename Branch</span>
+        <span className="text-sm font-medium text-mf-text-primary">Rename Branch</span>
       </div>
       <input
         ref={inputRef}
@@ -304,13 +304,13 @@ function RenameView({
         onKeyDown={(e) => {
           if (e.key === 'Enter') onSubmit();
         }}
-        className="w-full px-2 py-1 text-xs rounded border border-mf-border bg-mf-app-bg text-mf-text-primary focus:outline-none focus:ring-1 focus:ring-mf-accent"
+        className="w-full px-2 py-1 text-sm rounded border border-mf-border bg-mf-app-bg text-mf-text-primary focus:outline-none focus:ring-1 focus:ring-mf-accent"
         disabled={busy}
       />
       <div className="flex justify-end gap-2">
         <button
           onClick={onBack}
-          className="px-3 py-1 text-xs rounded border border-mf-border text-mf-text-secondary hover:bg-mf-hover"
+          className="px-3 py-1 text-sm rounded border border-mf-border text-mf-text-secondary hover:bg-mf-hover"
         >
           Cancel
         </button>
@@ -318,7 +318,7 @@ function RenameView({
           onClick={onSubmit}
           disabled={busy || !value.trim()}
           className={cn(
-            'px-3 py-1 text-xs rounded text-white bg-mf-accent hover:opacity-80',
+            'px-3 py-1 text-sm rounded text-white bg-mf-accent hover:opacity-80',
             (busy || !value.trim()) && 'opacity-40 cursor-not-allowed',
           )}
         >

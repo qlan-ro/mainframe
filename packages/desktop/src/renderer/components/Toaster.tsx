@@ -1,15 +1,24 @@
 import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 import { useToastStore, type Toast } from '../store/toasts';
 import { cn } from '../lib/utils';
 
 const MAX_VISIBLE = 5;
 const AUTO_DISMISS_MS = 4000;
 
-const TYPE_STYLES: Record<Toast['type'], string> = {
-  success: 'bg-[#0a2e1a] border border-[#1a5c34] text-mf-success',
-  error: 'bg-[#2e0a0a] border border-[#5c1a1a] text-mf-destructive',
-  info: 'bg-[#0a1a2e] border border-[#1a345c] text-mf-accent',
+const TYPE_CONFIG: Record<Toast['type'], { icon: React.ReactNode; style: string }> = {
+  success: {
+    icon: <CheckCircle2 size={16} className="shrink-0 mt-0.5" />,
+    style: 'border-mf-success/30 text-mf-success bg-mf-panel-bg',
+  },
+  error: {
+    icon: <AlertCircle size={16} className="shrink-0 mt-0.5" />,
+    style: 'border-mf-destructive/30 text-mf-destructive bg-mf-panel-bg',
+  },
+  info: {
+    icon: <Info size={16} className="shrink-0 mt-0.5" />,
+    style: 'border-mf-accent/30 text-mf-accent bg-mf-panel-bg',
+  },
 };
 
 interface ToastItemProps {
@@ -24,18 +33,33 @@ function ToastItem({ toast, onDismiss }: ToastItemProps): React.ReactElement {
     return () => clearTimeout(timer);
   }, [toast.id, toast.type, onDismiss]);
 
+  const { icon, style } = TYPE_CONFIG[toast.type];
+
   return (
     <div
       role="alert"
       className={cn(
-        'cursor-pointer rounded-md px-4 py-3 text-sm font-medium shadow-lg',
+        'w-[340px] rounded-md px-3 py-2 text-sm shadow-lg border',
         'transition-opacity duration-200 flex items-start gap-2',
-        TYPE_STYLES[toast.type],
+        style,
       )}
-      onClick={() => onDismiss(toast.id)}
     >
-      <span className="flex-1">{toast.message}</span>
-      {toast.type === 'error' && <X size={14} className="shrink-0 mt-0.5 opacity-60 hover:opacity-100" />}
+      {icon}
+      <div className="flex-1 min-w-0">
+        <p className="font-medium select-text text-mf-text-primary">{toast.title}</p>
+        {toast.description && (
+          <p className="mt-1 text-xs select-text text-mf-text-secondary max-h-24 overflow-y-auto">
+            {toast.description}
+          </p>
+        )}
+      </div>
+      <button
+        onClick={() => onDismiss(toast.id)}
+        className="shrink-0 mt-0.5 opacity-40 hover:opacity-100 transition-opacity"
+        aria-label="Dismiss"
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }

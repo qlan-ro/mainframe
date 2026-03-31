@@ -78,6 +78,7 @@ export function StatusBar(): React.ReactElement {
           <div className="relative">
             <button
               data-testid="branch-button"
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={() => {
                 if (!popoverOpen) fetchBranchAndStatus();
                 setPopoverOpen(!popoverOpen);

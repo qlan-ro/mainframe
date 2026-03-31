@@ -142,7 +142,7 @@ export function BranchSubmenu({
     <div className="min-w-[220px]">
       {/* Header */}
       <div className="px-3 py-1.5 border-b border-mf-border">
-        <span className="text-xs font-medium text-mf-text-primary truncate">{branch}</span>
+        <span className="text-sm font-medium text-mf-text-primary truncate">{branch}</span>
       </div>
 
       {/* Menu items */}
@@ -157,7 +157,7 @@ export function BranchSubmenu({
               onClick={item.action}
               disabled={item.disabled}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left',
+                'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left',
                 'hover:bg-mf-hover rounded-sm transition-colors',
                 item.disabled && 'opacity-40 cursor-not-allowed',
                 item.destructive && !item.disabled && 'text-mf-destructive',

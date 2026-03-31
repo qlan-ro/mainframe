@@ -165,10 +165,10 @@ export function useBranchActions(
       return withBusy(async () => {
         if (!(await confirmDirtyTree())) return;
         const result = await gitMerge(projectId, branch, chatId);
-        if (result.status === 'conflict') {
-          toast.error('Merge conflicts');
-        } else {
-          toast.success(`Merged ${result.summary.commits} commits`);
+        if (result.status !== 'conflict') {
+          const { insertions, deletions } = result.summary;
+          const detail = insertions || deletions ? `+${insertions} -${deletions}` : undefined;
+          toast.success(`Merged ${branch}`, detail);
           onBranchChanged();
         }
         await loadBranches();
@@ -182,9 +182,7 @@ export function useBranchActions(
       return withBusy(async () => {
         if (!(await confirmDirtyTree())) return;
         const result = await gitRebase(projectId, branch, chatId);
-        if (result.status === 'conflict') {
-          toast.error('Rebase conflicts');
-        } else {
+        if (result.status !== 'conflict') {
           toast.success('Rebase complete');
           onBranchChanged();
         }

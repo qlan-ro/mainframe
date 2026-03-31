@@ -2,6 +2,8 @@ export interface BranchInfo {
   name: string;
   current: boolean;
   tracking?: string;
+  ahead?: number;
+  behind?: number;
   worktree?: string;
 }
 

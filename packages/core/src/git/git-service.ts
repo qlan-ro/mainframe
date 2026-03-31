@@ -85,13 +85,30 @@ export class GitService {
         remote.push(remoteName);
       } else {
         let tracking: string | undefined;
+        let ahead: number | undefined;
+        let behind: number | undefined;
         try {
           const upstream = (await this.git().raw(['rev-parse', '--abbrev-ref', `${name}@{upstream}`])).trim();
-          if (upstream && upstream !== '') tracking = upstream;
+          if (upstream && upstream !== '') {
+            tracking = upstream;
+            const counts = (
+              await this.git().raw(['rev-list', '--left-right', '--count', `${name}...${upstream}`])
+            ).trim();
+            const [a, b] = counts.split(/\s+/);
+            ahead = parseInt(a!, 10) || 0;
+            behind = parseInt(b!, 10) || 0;
+          }
         } catch {
           // No tracking branch — expected for local-only branches
         }
-        local.push({ name, current: name === result.current, tracking, worktree: branchToWorktree.get(name) });
+        local.push({
+          name,
+          current: name === result.current,
+          tracking,
+          ahead,
+          behind,
+          worktree: branchToWorktree.get(name),
+        });
       }
     }
 
@@ -260,7 +277,8 @@ export class GitService {
         return { status: 'success' };
       } catch (err: any) {
         try {
-          await access(join(this.projectPath, '.git', 'rebase-merge'));
+          const gitDir = (await this.git().raw(['rev-parse', '--git-dir'])).trim();
+          await access(join(gitDir, 'rebase-merge'));
           const statusResult = await this.git().status();
           return { status: 'conflict', conflicts: statusResult.conflicted, message: err.message };
         } catch {
@@ -272,22 +290,24 @@ export class GitService {
 
   async abort(): Promise<{ aborted: boolean }> {
     return this.withLock(async () => {
+      // Use git rev-parse to find the actual git dir (works in worktrees where .git is a file)
+      const gitDir = (await this.git().raw(['rev-parse', '--git-dir'])).trim();
       try {
-        await access(join(this.projectPath, '.git', 'MERGE_HEAD'));
+        await access(join(gitDir, 'MERGE_HEAD'));
         await this.git().merge(['--abort']);
         return { aborted: true };
       } catch {
         /* expected — probing whether a merge is in progress */
       }
       try {
-        await access(join(this.projectPath, '.git', 'rebase-merge'));
+        await access(join(gitDir, 'rebase-merge'));
         await this.git().rebase(['--abort']);
         return { aborted: true };
       } catch {
         /* expected — probing whether an interactive rebase is in progress */
       }
       try {
-        await access(join(this.projectPath, '.git', 'rebase-apply'));
+        await access(join(gitDir, 'rebase-apply'));
         await this.git().rebase(['--abort']);
         return { aborted: true };
       } catch {
