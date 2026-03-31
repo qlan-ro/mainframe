@@ -250,6 +250,7 @@ describe('GitService', () => {
 
   describe('abort()', () => {
     it('returns aborted:false when no merge or rebase is active', async () => {
+      mockGit.raw.mockResolvedValue('/fake/path/.git\n');
       const svc = GitService.forProject('/fake/path');
       const result = await svc.abort();
       expect(result).toEqual({ aborted: false });
