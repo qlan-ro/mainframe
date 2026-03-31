@@ -12,6 +12,7 @@ export interface BranchListResult {
   local: BranchInfo[];
   remote: string[];
   worktrees: string[];
+  activeOperation?: 'merge' | 'rebase';
 }
 
 export type FetchResult = {

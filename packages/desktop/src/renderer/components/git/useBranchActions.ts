@@ -23,6 +23,7 @@ interface BranchData {
   local: BranchInfo[];
   remote: string[];
   worktrees: string[];
+  activeOperation?: 'merge' | 'rebase';
 }
 
 interface ConflictFile {

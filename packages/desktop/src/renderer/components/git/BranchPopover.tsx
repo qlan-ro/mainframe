@@ -33,10 +33,10 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Switch to conflict view when conflicts detected
+  // Switch to conflict view when conflicts or active operation detected
   useEffect(() => {
-    if (conflictFiles.length > 0) setView('conflict');
-  }, [conflictFiles]);
+    if (conflictFiles.length > 0 || branches?.activeOperation) setView('conflict');
+  }, [conflictFiles, branches?.activeOperation]);
 
   useEffect(() => {
     if (view === 'list') searchRef.current?.focus();
@@ -127,7 +127,12 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
           </div>
         )}
         {view === 'conflict' && (
-          <ConflictView conflictFiles={conflictFiles} onAbort={handleAbortAndReset} aborting={busy} />
+          <ConflictView
+            conflictFiles={conflictFiles}
+            activeOperation={branches?.activeOperation}
+            onAbort={handleAbortAndReset}
+            aborting={busy}
+          />
         )}
 
         {view === 'rename' && renameTarget && (

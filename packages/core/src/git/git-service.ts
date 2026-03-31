@@ -112,7 +112,37 @@ export class GitService {
       }
     }
 
-    return { current: result.current, local, remote, worktrees: worktreeNames };
+    // Detect active merge/rebase operation
+    let activeOperation: 'merge' | 'rebase' | undefined;
+    try {
+      const gitDir = (await this.git().raw(['rev-parse', '--git-dir'])).trim();
+      try {
+        await access(join(gitDir, 'MERGE_HEAD'));
+        activeOperation = 'merge';
+      } catch {
+        /* no merge */
+      }
+      if (!activeOperation) {
+        try {
+          await access(join(gitDir, 'rebase-merge'));
+          activeOperation = 'rebase';
+        } catch {
+          /* no interactive rebase */
+        }
+      }
+      if (!activeOperation) {
+        try {
+          await access(join(gitDir, 'rebase-apply'));
+          activeOperation = 'rebase';
+        } catch {
+          /* no rebase */
+        }
+      }
+    } catch {
+      /* git-dir resolution failed */
+    }
+
+    return { current: result.current, local, remote, worktrees: worktreeNames, activeOperation };
   }
 
   async diff(args: string[]): Promise<string> {
