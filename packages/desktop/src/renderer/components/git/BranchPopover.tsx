@@ -18,8 +18,9 @@ interface BranchPopoverProps {
 }
 
 export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPopoverProps): React.ReactElement {
+  const activeChatId = useChatsStore((s) => s.activeChatId);
   const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
-  const actions = useBranchActions(projectId, onBranchChanged, onClose);
+  const actions = useBranchActions(projectId, activeChatId ?? undefined, onBranchChanged, onClose);
   const { branches, conflictFiles, busy, busyAction } = actions;
 
   const [view, setView] = useState<View>('list');
@@ -32,10 +33,10 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Switch to conflict view when conflicts detected
+  // Switch to conflict view when conflicts or active operation detected
   useEffect(() => {
-    if (conflictFiles.length > 0) setView('conflict');
-  }, [conflictFiles]);
+    if (conflictFiles.length > 0 || branches?.activeOperation) setView('conflict');
+  }, [conflictFiles, branches?.activeOperation]);
 
   useEffect(() => {
     if (view === 'list') searchRef.current?.focus();
@@ -86,19 +87,16 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
 
   const handleRenameSubmit = useCallback(async () => {
     if (!renameTarget || !renameValue.trim()) return;
-    await actions.handleRename(renameTarget, renameValue.trim());
-    setView('list');
+    if (await actions.handleRename(renameTarget, renameValue.trim())) setView('list');
   }, [renameTarget, renameValue, actions]);
 
   const handleAbortAndReset = useCallback(async () => {
-    await actions.handleAbort();
-    setView('list');
+    if (await actions.handleAbort()) setView('list');
   }, [actions]);
 
   const handleCreateAndReset = useCallback(
     async (name: string, startPoint: string) => {
-      await actions.handleCreateBranch(name, startPoint);
-      setView('list');
+      if (await actions.handleCreateBranch(name, startPoint)) setView('list');
     },
     [actions],
   );
@@ -129,7 +127,12 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
           </div>
         )}
         {view === 'conflict' && (
-          <ConflictView conflictFiles={conflictFiles} onAbort={handleAbortAndReset} aborting={busy} />
+          <ConflictView
+            conflictFiles={conflictFiles}
+            activeOperation={branches?.activeOperation}
+            onAbort={handleAbortAndReset}
+            aborting={busy}
+          />
         )}
 
         {view === 'rename' && renameTarget && (
@@ -145,6 +148,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
         {view === 'new-branch' && (
           <NewBranchDialog
             localBranches={branches.local.map((b) => b.name)}
+            remoteBranches={branches.remote}
             currentBranch={branches.current}
             startFrom={newBranchFrom}
             onBack={() => setView('list')}
@@ -163,7 +167,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search branches..."
-                  className="flex-1 bg-transparent text-xs text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none"
+                  className="flex-1 bg-transparent text-sm text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none"
                 />
               </div>
               <Tooltip>
@@ -195,7 +199,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                   setNewBranchFrom(undefined);
                   setView('new-branch');
                 }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-primary hover:bg-mf-hover"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-mf-text-primary hover:bg-mf-hover"
               >
                 <Plus size={12} />
                 <span>New Branch...</span>
@@ -204,7 +208,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                 onClick={actions.handleUpdateAll}
                 disabled={busy}
                 className={cn(
-                  'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-primary hover:bg-mf-hover',
+                  'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-mf-text-primary hover:bg-mf-hover',
                   busy && 'opacity-40 cursor-not-allowed',
                 )}
               >
@@ -215,7 +219,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                 onClick={handleGlobalPush}
                 disabled={busy}
                 className={cn(
-                  'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-primary hover:bg-mf-hover',
+                  'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-mf-text-primary hover:bg-mf-hover',
                   busy && 'opacity-40 cursor-not-allowed',
                 )}
               >
@@ -244,31 +248,24 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
             branch={selectedBranch}
             isCurrent={selectedBranch === branches.current}
             isRemote={selectedIsRemote}
+            isWorktree={!!branches.local.find((b) => b.name === selectedBranch)?.worktree}
             onClose={() => setView('list')}
             onCheckout={async (b) => {
-              await actions.handleCheckout(b);
-              setView('list');
+              if (await actions.handleCheckout(b)) setView('list');
             }}
             onPull={async (b) => {
-              await actions.handlePull(b);
-              setView('list');
+              if (await actions.handlePull(b)) setView('list');
             }}
-            onPush={async (b) => {
-              await actions.handlePush(b);
-              setView('list');
-            }}
+            onPush={(b) => actions.handlePush(b)}
             onMerge={async (b) => {
-              await actions.handleMerge(b);
-              setView('list');
+              if (await actions.handleMerge(b)) setView('list');
             }}
             onRebase={async (b) => {
-              await actions.handleRebase(b);
-              setView('list');
+              if (await actions.handleRebase(b)) setView('list');
             }}
             onRename={handleRenameStart}
             onDelete={async (b, r) => {
-              await actions.handleDelete(b, r);
-              setView('list');
+              if (await actions.handleDelete(b, r)) setView('list');
             }}
             onNewBranchFrom={handleNewBranchFrom}
             busy={busy}
@@ -303,7 +300,7 @@ function RenameView({
         <button onClick={onBack} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
           <ArrowLeft size={14} />
         </button>
-        <span className="text-xs font-medium text-mf-text-primary">Rename Branch</span>
+        <span className="text-sm font-medium text-mf-text-primary">Rename Branch</span>
       </div>
       <input
         ref={inputRef}
@@ -312,13 +309,13 @@ function RenameView({
         onKeyDown={(e) => {
           if (e.key === 'Enter') onSubmit();
         }}
-        className="w-full px-2 py-1 text-xs rounded border border-mf-border bg-mf-app-bg text-mf-text-primary focus:outline-none focus:ring-1 focus:ring-mf-accent"
+        className="w-full px-2 py-1 text-sm rounded border border-mf-border bg-mf-app-bg text-mf-text-primary focus:outline-none focus:ring-1 focus:ring-mf-accent"
         disabled={busy}
       />
       <div className="flex justify-end gap-2">
         <button
           onClick={onBack}
-          className="px-3 py-1 text-xs rounded border border-mf-border text-mf-text-secondary hover:bg-mf-hover"
+          className="px-3 py-1 text-sm rounded border border-mf-border text-mf-text-secondary hover:bg-mf-hover"
         >
           Cancel
         </button>
@@ -326,7 +323,7 @@ function RenameView({
           onClick={onSubmit}
           disabled={busy || !value.trim()}
           className={cn(
-            'px-3 py-1 text-xs rounded text-white bg-mf-accent hover:opacity-80',
+            'px-3 py-1 text-sm rounded text-white bg-mf-accent hover:opacity-80',
             (busy || !value.trim()) && 'opacity-40 cursor-not-allowed',
           )}
         >

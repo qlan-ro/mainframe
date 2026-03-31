@@ -55,6 +55,23 @@ describe('GitService', () => {
       expect(result.worktrees).toEqual([]);
     });
 
+    it('filters out remote HEAD pseudo-refs', async () => {
+      mockGit.branch.mockResolvedValue({
+        current: 'main',
+        all: ['main', 'remotes/origin/HEAD -> origin/main', 'remotes/origin/main', 'remotes/origin/feat/bar'],
+        branches: {},
+      });
+      mockGit.raw
+        .mockResolvedValueOnce('') // worktree list
+        .mockResolvedValue('origin/main\n');
+
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.branches();
+
+      expect(result.remote).toEqual(['origin/main', 'origin/feat/bar']);
+      expect(result.remote).not.toContainEqual(expect.stringContaining('HEAD'));
+    });
+
     it('tags branches with their worktree directory name', async () => {
       mockGit.branch.mockResolvedValue({
         current: 'main',
@@ -119,6 +136,26 @@ describe('GitService', () => {
       await svc.checkout('feat/foo');
       expect(mockGit.checkout).toHaveBeenCalledWith('feat/foo');
     });
+
+    it('falls back to plain checkout when local branch already exists for remote ref', async () => {
+      const err = new Error("A branch named 'feat/bar' already exists");
+      mockGit.checkout.mockRejectedValueOnce(err).mockResolvedValueOnce(undefined);
+      mockGit.getRemotes.mockResolvedValue([{ name: 'origin' }]);
+      const svc = GitService.forProject('/fake/path');
+      await svc.checkout('origin/feat/bar');
+      expect(mockGit.checkout).toHaveBeenCalledTimes(2);
+      expect(mockGit.checkout).toHaveBeenNthCalledWith(1, ['-b', 'feat/bar', 'origin/feat/bar', '--track']);
+      expect(mockGit.checkout).toHaveBeenNthCalledWith(2, 'feat/bar');
+    });
+
+    it('re-throws non-exists errors when checking out remote ref', async () => {
+      const err = new Error('fatal: invalid reference: origin/bad-ref');
+      mockGit.checkout.mockRejectedValueOnce(err);
+      mockGit.getRemotes.mockResolvedValue([{ name: 'origin' }]);
+      const svc = GitService.forProject('/fake/path');
+      await expect(svc.checkout('origin/bad-ref')).rejects.toThrow('invalid reference');
+      expect(mockGit.checkout).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('merge()', () => {
@@ -181,12 +218,42 @@ describe('GitService', () => {
     });
   });
 
+  describe('pull()', () => {
+    it('uses fetch refspec for non-current branch', async () => {
+      mockGit.branch.mockResolvedValue({ current: 'main' });
+      mockGit.fetch.mockResolvedValue(undefined);
+      mockGit.raw.mockResolvedValueOnce('aaa\n').mockResolvedValueOnce('bbb\n');
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.pull('origin', 'feat/foo', 'feat/foo');
+      expect(mockGit.fetch).toHaveBeenCalledWith('origin', 'feat/foo:feat/foo');
+      expect(result.status).toBe('success');
+    });
+
+    it('returns up-to-date when non-current branch ref unchanged', async () => {
+      mockGit.branch.mockResolvedValue({ current: 'main' });
+      mockGit.fetch.mockResolvedValue(undefined);
+      mockGit.raw.mockResolvedValueOnce('aaa\n').mockResolvedValueOnce('aaa\n');
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.pull('origin', 'feat/foo', 'feat/foo');
+      expect(result.status).toBe('up-to-date');
+    });
+  });
+
   describe('deleteBranch()', () => {
     it('returns success', async () => {
       mockGit.deleteLocalBranch.mockResolvedValue({ branch: 'feat/old', success: true });
       const svc = GitService.forProject('/fake/path');
       const result = await svc.deleteBranch('feat/old');
       expect(result.status).toBe('success');
+    });
+  });
+
+  describe('abort()', () => {
+    it('returns aborted:false when no merge or rebase is active', async () => {
+      mockGit.raw.mockResolvedValue('/fake/path/.git\n');
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.abort();
+      expect(result).toEqual({ aborted: false });
     });
   });
 });

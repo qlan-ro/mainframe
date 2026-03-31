@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, GitBranch } from 'lucide-react';
+import { AlertTriangle, FolderGit, GitBranch } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:statusbar');
@@ -7,6 +7,7 @@ import { useChatsStore } from '../store';
 import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useConnectionState } from '../hooks/useConnectionState';
 import { getGitBranch, getGitStatus } from '../lib/api';
+import { isConflictStatus } from '../lib/git-utils';
 import { cn } from '../lib/utils';
 import { BranchPopover } from './git/BranchPopover';
 
@@ -17,6 +18,7 @@ export function StatusBar(): React.ReactElement {
   const activeProjectId = useActiveProjectId();
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
+  const inWorktree = useChatsStore((s) => !!s.chats.find((c) => c.id === s.activeChatId)?.worktreePath);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [hasConflicts, setHasConflicts] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -34,9 +36,9 @@ export function StatusBar(): React.ReactElement {
         log.warn('git branch fetch failed', { err: String(err) });
         setGitBranch(null);
       });
-    getGitStatus(activeProjectId)
+    getGitStatus(activeProjectId, activeChatId ?? undefined)
       .then((res) => {
-        const conflicts = res.files.some((f) => f.status === 'U' || f.status === 'UU');
+        const conflicts = res.files.some((f) => isConflictStatus(f.status));
         setHasConflicts(conflicts);
       })
       .catch((err) => {
@@ -76,6 +78,7 @@ export function StatusBar(): React.ReactElement {
           <div className="relative">
             <button
               data-testid="branch-button"
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={() => {
                 if (!popoverOpen) fetchBranchAndStatus();
                 setPopoverOpen(!popoverOpen);
@@ -86,7 +89,7 @@ export function StatusBar(): React.ReactElement {
               )}
             >
               {hasConflicts && <AlertTriangle size={12} className="text-mf-warning" />}
-              <GitBranch size={14} />
+              {inWorktree ? <FolderGit size={14} className="text-mf-accent" /> : <GitBranch size={14} />}
               <span>{gitBranch}</span>
             </button>
 

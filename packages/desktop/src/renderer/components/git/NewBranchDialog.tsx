@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 
 interface NewBranchDialogProps {
   localBranches: string[];
+  remoteBranches: string[];
   currentBranch: string;
   startFrom?: string;
   onBack: () => void;
@@ -14,6 +15,7 @@ const BRANCH_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/;
 
 export function NewBranchDialog({
   localBranches,
+  remoteBranches,
   currentBranch,
   startFrom,
   onBack,
@@ -60,13 +62,13 @@ export function NewBranchDialog({
         <button onClick={onBack} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
           <ArrowLeft size={14} />
         </button>
-        <span className="text-xs font-medium text-mf-text-primary">New Branch</span>
+        <span className="text-sm font-medium text-mf-text-primary">New Branch</span>
       </div>
 
       <form onSubmit={handleSubmit} className="p-3 space-y-3">
         {/* Branch name */}
         <div>
-          <label className="block text-[10px] font-medium text-mf-text-secondary mb-1">Branch name</label>
+          <label className="block text-xs font-medium text-mf-text-secondary mb-1">Branch name</label>
           <input
             ref={inputRef}
             value={name}
@@ -76,29 +78,40 @@ export function NewBranchDialog({
             }}
             placeholder="feature/my-branch"
             className={cn(
-              'w-full px-2 py-1 text-xs rounded border bg-mf-app-bg text-mf-text-primary',
+              'w-full px-2 py-1 text-sm rounded border bg-mf-app-bg text-mf-text-primary',
               'focus:outline-none focus:ring-1 focus:ring-mf-accent',
               error ? 'border-mf-destructive' : 'border-mf-border',
             )}
             disabled={creating}
           />
-          {error && <p className="mt-1 text-[10px] text-mf-destructive">{error}</p>}
+          {error && <p className="mt-1 text-xs text-mf-destructive">{error}</p>}
         </div>
 
         {/* Start from */}
         <div>
-          <label className="block text-[10px] font-medium text-mf-text-secondary mb-1">Start from</label>
+          <label className="block text-xs font-medium text-mf-text-secondary mb-1">Start from</label>
           <select
             value={startPoint}
             onChange={(e) => setStartPoint(e.target.value)}
             disabled={creating}
-            className="w-full px-2 py-1 text-xs rounded border border-mf-border bg-mf-app-bg text-mf-text-primary focus:outline-none focus:ring-1 focus:ring-mf-accent"
+            className="w-full px-2 py-1 text-sm rounded border border-mf-border bg-mf-app-bg text-mf-text-primary focus:outline-none focus:ring-1 focus:ring-mf-accent"
           >
-            {localBranches.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
+            <optgroup label="Local">
+              {localBranches.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </optgroup>
+            {remoteBranches.length > 0 && (
+              <optgroup label="Remote">
+                {remoteBranches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
@@ -108,7 +121,7 @@ export function NewBranchDialog({
             type="button"
             onClick={onBack}
             disabled={creating}
-            className="px-3 py-1 text-xs rounded border border-mf-border text-mf-text-secondary hover:bg-mf-hover"
+            className="px-3 py-1 text-sm rounded border border-mf-border text-mf-text-secondary hover:bg-mf-hover"
           >
             Cancel
           </button>
@@ -116,7 +129,7 @@ export function NewBranchDialog({
             type="submit"
             disabled={creating || !name.trim()}
             className={cn(
-              'px-3 py-1 text-xs rounded text-white',
+              'px-3 py-1 text-sm rounded text-white',
               'bg-mf-accent hover:opacity-80 transition-opacity',
               (creating || !name.trim()) && 'opacity-40 cursor-not-allowed',
             )}

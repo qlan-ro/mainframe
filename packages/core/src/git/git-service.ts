@@ -7,6 +7,7 @@ import { parseWorktreeList } from '../workspace/worktree.js';
 import type {
   BranchListResult,
   BranchInfo,
+  BranchUpdateStatus,
   FetchResult,
   PullResult,
   PushResult,
@@ -78,21 +79,70 @@ export class GitService {
 
     for (const name of result.all) {
       if (name.startsWith('remotes/')) {
+        // Skip pseudo-refs like "remotes/origin/HEAD -> origin/main"
+        if (name.includes(' -> ') || name.endsWith('/HEAD')) continue;
         const remoteName = name.replace(/^remotes\//, '');
         remote.push(remoteName);
       } else {
         let tracking: string | undefined;
+        let ahead: number | undefined;
+        let behind: number | undefined;
         try {
           const upstream = (await this.git().raw(['rev-parse', '--abbrev-ref', `${name}@{upstream}`])).trim();
-          if (upstream && upstream !== '') tracking = upstream;
+          if (upstream && upstream !== '') {
+            tracking = upstream;
+            const counts = (
+              await this.git().raw(['rev-list', '--left-right', '--count', `${name}...${upstream}`])
+            ).trim();
+            const [a, b] = counts.split(/\s+/);
+            ahead = parseInt(a!, 10) || 0;
+            behind = parseInt(b!, 10) || 0;
+          }
         } catch {
           // No tracking branch — expected for local-only branches
         }
-        local.push({ name, current: name === result.current, tracking, worktree: branchToWorktree.get(name) });
+        local.push({
+          name,
+          current: name === result.current,
+          tracking,
+          ahead,
+          behind,
+          worktree: branchToWorktree.get(name),
+        });
       }
     }
 
-    return { current: result.current, local, remote, worktrees: worktreeNames };
+    // Detect active merge/rebase operation
+    let activeOperation: 'merge' | 'rebase' | undefined;
+    try {
+      const gitDir = (await this.git().raw(['rev-parse', '--git-dir'])).trim();
+      try {
+        await access(join(gitDir, 'MERGE_HEAD'));
+        activeOperation = 'merge';
+      } catch {
+        /* no merge */
+      }
+      if (!activeOperation) {
+        try {
+          await access(join(gitDir, 'rebase-merge'));
+          activeOperation = 'rebase';
+        } catch {
+          /* no interactive rebase */
+        }
+      }
+      if (!activeOperation) {
+        try {
+          await access(join(gitDir, 'rebase-apply'));
+          activeOperation = 'rebase';
+        } catch {
+          /* no rebase */
+        }
+      }
+    } catch {
+      /* git-dir resolution failed */
+    }
+
+    return { current: result.current, local, remote, worktrees: worktreeNames, activeOperation };
   }
 
   async diff(args: string[]): Promise<string> {
@@ -123,7 +173,15 @@ export class GitService {
         const [, remote, localName] = remoteRefMatch;
         const remotes = await this.git().getRemotes();
         if (remotes.some((r) => r.name === remote)) {
-          await this.git().checkout(['-b', localName!, `${branch}`, '--track']);
+          try {
+            await this.git().checkout(['-b', localName!, `${branch}`, '--track']);
+          } catch (err: any) {
+            if (err?.message?.includes('already exists')) {
+              await this.git().checkout(localName!);
+            } else {
+              throw err;
+            }
+          }
           return;
         }
       }
@@ -152,8 +210,23 @@ export class GitService {
     });
   }
 
-  async pull(remote?: string, branch?: string): Promise<PullResult> {
+  async pull(remote?: string, branch?: string, localBranch?: string): Promise<PullResult> {
     return this.withLock(async () => {
+      // When a local branch is specified and it differs from the current branch,
+      // use `git fetch remote remoteBranch:localBranch` to fast-forward the target
+      // ref without switching the working tree.
+      if (localBranch && branch) {
+        const currentBranch = (await this.git().branch()).current;
+        if (currentBranch !== localBranch) {
+          const pullRemote = remote ?? 'origin';
+          const refBefore = (await this.git().raw(['rev-parse', localBranch])).trim();
+          await this.git().fetch(pullRemote, `${branch}:${localBranch}`);
+          const refAfter = (await this.git().raw(['rev-parse', localBranch])).trim();
+          if (refBefore === refAfter) return { status: 'up-to-date' };
+          return { status: 'success', summary: { changes: 0, insertions: 0, deletions: 0 } };
+        }
+      }
+
       try {
         const result = await this.git().pull(remote, branch);
         if (result.summary.changes === 0 && result.summary.insertions === 0 && result.summary.deletions === 0) {
@@ -234,7 +307,8 @@ export class GitService {
         return { status: 'success' };
       } catch (err: any) {
         try {
-          await access(join(this.projectPath, '.git', 'rebase-merge'));
+          const gitDir = (await this.git().raw(['rev-parse', '--git-dir'])).trim();
+          await access(join(gitDir, 'rebase-merge'));
           const statusResult = await this.git().status();
           return { status: 'conflict', conflicts: statusResult.conflicted, message: err.message };
         } catch {
@@ -244,29 +318,32 @@ export class GitService {
     });
   }
 
-  async abort(): Promise<void> {
+  async abort(): Promise<{ aborted: boolean }> {
     return this.withLock(async () => {
+      // Use git rev-parse to find the actual git dir (works in worktrees where .git is a file)
+      const gitDir = (await this.git().raw(['rev-parse', '--git-dir'])).trim();
       try {
-        await access(join(this.projectPath, '.git', 'MERGE_HEAD'));
+        await access(join(gitDir, 'MERGE_HEAD'));
         await this.git().merge(['--abort']);
-        return;
+        return { aborted: true };
       } catch {
         /* expected — probing whether a merge is in progress */
       }
       try {
-        await access(join(this.projectPath, '.git', 'rebase-merge'));
+        await access(join(gitDir, 'rebase-merge'));
         await this.git().rebase(['--abort']);
-        return;
+        return { aborted: true };
       } catch {
         /* expected — probing whether an interactive rebase is in progress */
       }
       try {
-        await access(join(this.projectPath, '.git', 'rebase-apply'));
+        await access(join(gitDir, 'rebase-apply'));
         await this.git().rebase(['--abort']);
-        return;
+        return { aborted: true };
       } catch {
         /* expected — no active merge or rebase to abort */
       }
+      return { aborted: false };
     });
   }
 
@@ -307,6 +384,7 @@ export class GitService {
         logger.warn({ err }, 'fetch --all failed during updateAll');
       }
 
+      // Pull current branch
       let pull: PullResult;
       try {
         const result = await this.git().pull();
@@ -326,11 +404,43 @@ export class GitService {
         if (err?.git?.conflicts?.length > 0) {
           pull = { status: 'conflict', conflicts: err.git.conflicts, message: err.message };
         } else {
-          throw err;
+          logger.warn({ err }, 'pull failed during updateAll');
+          pull = { status: 'up-to-date' };
         }
       }
 
-      return { fetched, pull };
+      // Fast-forward all non-current local branches that have tracking remotes
+      const branches: BranchUpdateStatus[] = [];
+      try {
+        const branchResult = await this.git().branch(['-a']);
+        const currentBranch = branchResult.current;
+
+        for (const name of branchResult.all) {
+          if (name.startsWith('remotes/') || name === currentBranch) continue;
+          let upstream: string;
+          try {
+            upstream = (await this.git().raw(['rev-parse', '--abbrev-ref', `${name}@{upstream}`])).trim();
+          } catch {
+            continue; // no tracking remote
+          }
+          const idx = upstream.indexOf('/');
+          if (idx <= 0) continue;
+          const remote = upstream.slice(0, idx);
+          const remoteBranch = upstream.slice(idx + 1);
+          try {
+            const refBefore = (await this.git().raw(['rev-parse', name])).trim();
+            await this.git().fetch(remote, `${remoteBranch}:${name}`);
+            const refAfter = (await this.git().raw(['rev-parse', name])).trim();
+            branches.push({ branch: name, status: refBefore === refAfter ? 'up-to-date' : 'updated' });
+          } catch (err: any) {
+            branches.push({ branch: name, status: 'error', error: err.message });
+          }
+        }
+      } catch (err) {
+        logger.warn({ err }, 'branch enumeration failed during updateAll');
+      }
+
+      return { fetched, pull, branches };
     });
   }
 }

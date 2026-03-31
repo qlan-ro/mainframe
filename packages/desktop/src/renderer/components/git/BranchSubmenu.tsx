@@ -6,6 +6,7 @@ export interface BranchSubmenuProps {
   branch: string;
   isCurrent: boolean;
   isRemote?: boolean;
+  isWorktree?: boolean;
   onClose: () => void;
   onCheckout: (branch: string) => void;
   onPull: (branch: string) => void;
@@ -37,6 +38,7 @@ export function BranchSubmenu({
   branch,
   isCurrent,
   isRemote,
+  isWorktree,
   onCheckout,
   onPull,
   onPush,
@@ -93,13 +95,13 @@ export function BranchSubmenu({
           label: 'Checkout',
           icon: <Check size={12} />,
           action: () => onCheckout(branch),
-          disabled: isCurrent || busy,
+          disabled: isCurrent || isWorktree || busy,
         },
         {
           label: 'Pull',
           icon: <Download size={12} />,
           action: () => onPull(branch),
-          disabled: busy,
+          disabled: isWorktree || busy,
         },
         {
           label: 'Push',
@@ -125,13 +127,13 @@ export function BranchSubmenu({
           label: 'Rename...',
           icon: <Pencil size={12} />,
           action: () => onRename(branch),
-          disabled: busy,
+          disabled: isWorktree || busy,
         },
         {
           label: 'Delete Branch',
           icon: <Trash2 size={12} />,
           action: () => onDelete(branch, false),
-          disabled: isCurrent || busy,
+          disabled: isCurrent || isWorktree || busy,
           destructive: true,
         },
       ];
@@ -140,7 +142,7 @@ export function BranchSubmenu({
     <div className="min-w-[220px]">
       {/* Header */}
       <div className="px-3 py-1.5 border-b border-mf-border">
-        <span className="text-xs font-medium text-mf-text-primary truncate">{branch}</span>
+        <span className="text-sm font-medium text-mf-text-primary truncate">{branch}</span>
       </div>
 
       {/* Menu items */}
@@ -155,7 +157,7 @@ export function BranchSubmenu({
               onClick={item.action}
               disabled={item.disabled}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left',
+                'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left',
                 'hover:bg-mf-hover rounded-sm transition-colors',
                 item.disabled && 'opacity-40 cursor-not-allowed',
                 item.destructive && !item.disabled && 'text-mf-destructive',

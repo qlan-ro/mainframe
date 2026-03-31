@@ -59,33 +59,44 @@ function BranchRow({
   isCurrent,
   isMain,
   tracking,
+  ahead,
+  behind,
+  grouped,
   onClick,
 }: {
   name: string;
   isCurrent: boolean;
   isMain: boolean;
   tracking?: string;
+  ahead?: number;
+  behind?: number;
+  grouped?: boolean;
   onClick: () => void;
 }): React.ReactElement {
-  const displayName = name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+  const displayName = grouped && name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
 
   return (
     <button
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-1.5 px-3 py-1 text-left text-xs',
+        'w-full flex items-center gap-1.5 px-3 py-1 text-left text-sm',
         'hover:bg-mf-hover rounded transition-colors',
         isCurrent && 'bg-mf-hover text-mf-accent',
       )}
     >
       {isMain ? <Star size={12} className="text-mf-warning shrink-0" /> : <GitBranch size={12} className="shrink-0" />}
       <span className="truncate">{displayName}</span>
+      {((!!ahead && ahead > 0) || (!!behind && behind > 0)) && (
+        <span className="flex items-center gap-0.5 shrink-0 ml-1 text-xs text-mf-text-secondary">
+          <span className="opacity-40">·</span>
+          {!!behind && behind > 0 && <span>↓{behind}</span>}
+          {!!ahead && ahead > 0 && <span>↑{ahead}</span>}
+        </span>
+      )}
       {tracking && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="ml-auto shrink-0 text-[10px] text-mf-text-secondary truncate max-w-[120px]">
-              {tracking}
-            </span>
+            <span className="ml-auto shrink-0 text-xs text-mf-text-secondary truncate max-w-[120px]">{tracking}</span>
           </TooltipTrigger>
           <TooltipContent side="top">{tracking}</TooltipContent>
         </Tooltip>
@@ -112,7 +123,7 @@ function GroupSection({
     <div>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-1 px-2 py-0.5 text-xs text-mf-text-secondary hover:text-mf-text-primary"
+        className="w-full flex items-center gap-1 px-2 py-0.5 text-sm text-mf-text-secondary hover:text-mf-text-primary"
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span>{prefix}</span>
@@ -125,6 +136,9 @@ function GroupSection({
               isCurrent={b.name === currentBranch}
               isMain={false}
               tracking={b.tracking}
+              ahead={b.ahead}
+              behind={b.behind}
+              grouped
               onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
             />
           </div>
@@ -151,7 +165,7 @@ function WorktreeSection({
       <div className="border-t border-mf-border my-1" />
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider"
+        className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
       >
         {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
         {name}
@@ -215,7 +229,7 @@ export function BranchList({
       {/* Local branches */}
       <button
         onClick={() => setLocalExpanded(!localExpanded)}
-        className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider"
+        className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
       >
         {localExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
         Local Branches
@@ -231,6 +245,8 @@ export function BranchList({
               isCurrent={b.name === currentBranch}
               isMain={MAIN_BRANCHES.has(b.name)}
               tracking={b.tracking}
+              ahead={b.ahead}
+              behind={b.behind}
               onClick={() => onSelectBranch(b.name, b.name === currentBranch, false)}
             />
           ))}
@@ -248,8 +264,8 @@ export function BranchList({
         </>
       )}
 
-      {mainBranches.length === 0 && worktreeGroups.length === 0 && (
-        <div className="px-3 py-2 text-xs text-mf-text-secondary">No matching branches</div>
+      {mainBranches.length === 0 && worktreeGroups.length === 0 && filteredRemote.length === 0 && (
+        <div className="px-3 py-2 text-sm text-mf-text-secondary">No matching branches</div>
       )}
 
       {/* Worktree sections */}
@@ -269,7 +285,7 @@ export function BranchList({
           <div className="border-t border-mf-border my-1" />
           <button
             onClick={() => setRemoteExpanded(!remoteExpanded)}
-            className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-mf-text-secondary uppercase tracking-wider"
+            className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
           >
             {remoteExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
             Remote Branches
@@ -279,7 +295,7 @@ export function BranchList({
               <button
                 key={r}
                 onClick={() => onSelectBranch(r, false, true)}
-                className="w-full flex items-center gap-1.5 px-3 py-1 text-left text-xs text-mf-text-secondary hover:bg-mf-hover rounded transition-colors"
+                className="w-full flex items-center gap-1.5 px-3 py-1 text-left text-sm text-mf-text-secondary hover:bg-mf-hover rounded transition-colors"
               >
                 <GitBranch size={12} className="shrink-0" />
                 <span className="truncate">{r}</span>
