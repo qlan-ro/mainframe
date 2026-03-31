@@ -26,6 +26,7 @@ export const IGNORED_DIRS = new Set([
   '.nuxt',
   '.output',
   'bower_components',
+  '.worktrees',
 ]);
 
 export const BINARY_EXTENSIONS = new Set([
