@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore, useLayoutEffect } from 'react';
 import { File, Bot, Zap, FolderOpen, Globe, Puzzle, Wrench } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
@@ -74,7 +74,10 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
   const composerRuntime = useComposerRuntime();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [fileResults, setFileResults] = useState<{ name: string; path: string }[]>([]);
+  const [menuHeight, setMenuHeight] = useState(320);
+  const resizing = useRef<{ startY: number; startH: number } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Track whether user typed while picker was force-open, to auto-close on full delete
   const pickerHadQueryRef = useRef(false);
@@ -237,111 +240,162 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     el?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex]);
 
+  // Position above composer, clamped so it doesn't go off-screen
+  const [posStyle, setPosStyle] = useState<React.CSSProperties>({});
+  useLayoutEffect(() => {
+    if (!isOpen || items.length === 0 || !containerRef.current) return;
+    const parent = containerRef.current.parentElement;
+    if (!parent) return;
+    const parentRect = parent.getBoundingClientRect();
+    const spaceAbove = parentRect.top;
+    const clampedHeight = Math.min(menuHeight, spaceAbove - 8);
+    setPosStyle({
+      bottom: parentRect.height + 4,
+      left: 0,
+      width: Math.min(parentRect.width * 2, window.innerWidth - parentRect.left - 16),
+      maxHeight: Math.max(clampedHeight, 120),
+    });
+  }, [isOpen, items.length, menuHeight]);
+
+  const onResizeStart = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      resizing.current = { startY: e.clientY, startH: menuHeight };
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [menuHeight],
+  );
+
+  const onResizeMove = useCallback((e: React.PointerEvent) => {
+    if (!resizing.current) return;
+    // Dragging up = larger menu (negative delta)
+    const h = Math.max(120, resizing.current.startH - (e.clientY - resizing.current.startY));
+    setMenuHeight(h);
+  }, []);
+
+  const onResizeEnd = useCallback(() => {
+    resizing.current = null;
+  }, []);
+
   if (!isOpen || items.length === 0) return null;
 
   return (
     <div
-      ref={menuRef}
+      ref={containerRef}
       data-testid="context-picker-menu"
-      className="absolute bottom-full left-0 right-0 mb-1 max-h-[240px] overflow-y-auto bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-lg z-50"
+      style={posStyle}
+      className="absolute overflow-hidden bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-lg z-50 flex flex-col"
     >
-      {items.map((item, index) => {
-        const isSelected = index === selectedIndex;
-        const key =
-          item.type === 'agent'
-            ? `a:${item.name}`
-            : item.type === 'file'
-              ? `f:${item.path}`
-              : item.type === 'command'
-                ? `c:${item.command.name}`
-                : `s:${item.skill.id}`;
-        return (
-          <button
-            key={key}
-            type="button"
-            data-testid={`picker-item-${item.type}-${item.type === 'agent' ? item.name : item.type === 'file' ? item.name : item.type === 'command' ? item.command.name : item.skill.invocationName || item.skill.name}`}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              selectItem(item);
-            }}
-            onMouseEnter={() => setSelectedIndex(index)}
-            className={cn(
-              'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors',
-              isSelected ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
-            )}
-          >
-            {item.type === 'agent' && <Bot size={14} className="text-mf-accent mt-0.5 shrink-0" />}
-            {item.type === 'file' && <File size={14} className="text-mf-text-secondary mt-0.5 shrink-0" />}
-            {item.type === 'skill' && <Zap size={14} className="text-mf-accent mt-0.5 shrink-0" />}
-            {item.type === 'command' && <Wrench size={14} className="text-mf-text-secondary mt-0.5 shrink-0" />}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                {item.type === 'skill' ? (
-                  <span className="text-mf-body text-mf-text-primary font-medium font-mono">
-                    /{item.skill.invocationName || item.skill.name}
+      {/* Resize handle (top edge — drag up to grow) */}
+      <div
+        onPointerDown={onResizeStart}
+        onPointerMove={onResizeMove}
+        onPointerUp={onResizeEnd}
+        onLostPointerCapture={onResizeEnd}
+        className="h-1.5 cursor-ns-resize shrink-0 flex items-center justify-center touch-none"
+        aria-hidden="true"
+      >
+        <div className="w-8 h-0.5 rounded-full bg-mf-text-secondary opacity-30" />
+      </div>
+      <div ref={menuRef} className="overflow-y-auto flex-1">
+        {items.map((item, index) => {
+          const isSelected = index === selectedIndex;
+          const key =
+            item.type === 'agent'
+              ? `a:${item.name}`
+              : item.type === 'file'
+                ? `f:${item.path}`
+                : item.type === 'command'
+                  ? `c:${item.command.name}`
+                  : `s:${item.skill.id}`;
+          return (
+            <button
+              key={key}
+              type="button"
+              data-testid={`picker-item-${item.type}-${item.type === 'agent' ? item.name : item.type === 'file' ? item.name : item.type === 'command' ? item.command.name : item.skill.invocationName || item.skill.name}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                selectItem(item);
+              }}
+              onMouseEnter={() => setSelectedIndex(index)}
+              className={cn(
+                'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors',
+                isSelected ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
+              )}
+            >
+              {item.type === 'agent' && <Bot size={14} className="text-mf-accent mt-0.5 shrink-0" />}
+              {item.type === 'file' && <File size={14} className="text-mf-text-secondary mt-0.5 shrink-0" />}
+              {item.type === 'skill' && <Zap size={14} className="text-mf-accent mt-0.5 shrink-0" />}
+              {item.type === 'command' && <Wrench size={14} className="text-mf-text-secondary mt-0.5 shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  {item.type === 'skill' ? (
+                    <span className="text-mf-body text-mf-text-primary font-medium font-mono">
+                      /{item.skill.invocationName || item.skill.name}
+                    </span>
+                  ) : item.type === 'command' ? (
+                    <span className="font-mono text-mf-small text-mf-text-primary truncate">/{item.command.name}</span>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-mf-body text-mf-text-primary font-medium font-mono truncate" tabIndex={0}>
+                          {item.type === 'agent' ? item.name : item.path}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>{item.type === 'agent' ? item.name : item.path}</TooltipContent>
+                    </Tooltip>
+                  )}
+                  <span className="flex items-center gap-0.5 px-1.5 py-0 rounded-full bg-mf-hover text-mf-status text-mf-text-secondary shrink-0">
+                    {item.type === 'agent' && (
+                      <>
+                        {SCOPE_ICON[item.scope]}
+                        <span>agent</span>
+                      </>
+                    )}
+                    {item.type === 'file' && <span>file</span>}
+                    {item.type === 'skill' && SCOPE_ICON[item.skill.scope]}
+                    {item.type === 'command' && (
+                      <span className="ml-auto text-[10px] text-mf-text-secondary/60 shrink-0">
+                        {item.command.source}
+                      </span>
+                    )}
                   </span>
-                ) : item.type === 'command' ? (
-                  <span className="font-mono text-mf-small text-mf-text-primary truncate">/{item.command.name}</span>
-                ) : (
+                </div>
+                {item.type === 'agent' && item.description && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="text-mf-body text-mf-text-primary font-medium font-mono truncate" tabIndex={0}>
-                        {item.type === 'agent' ? item.name : item.path}
-                      </span>
+                      <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
+                        {item.description}
+                      </div>
                     </TooltipTrigger>
-                    <TooltipContent>{item.type === 'agent' ? item.name : item.path}</TooltipContent>
+                    <TooltipContent>{item.description}</TooltipContent>
                   </Tooltip>
                 )}
-                <span className="flex items-center gap-0.5 px-1.5 py-0 rounded-full bg-mf-hover text-mf-status text-mf-text-secondary shrink-0">
-                  {item.type === 'agent' && (
-                    <>
-                      {SCOPE_ICON[item.scope]}
-                      <span>agent</span>
-                    </>
-                  )}
-                  {item.type === 'file' && <span>file</span>}
-                  {item.type === 'skill' && SCOPE_ICON[item.skill.scope]}
-                  {item.type === 'command' && (
-                    <span className="ml-auto text-[10px] text-mf-text-secondary/60 shrink-0">
-                      {item.command.source}
-                    </span>
-                  )}
-                </span>
+                {item.type === 'skill' && item.skill.description && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
+                        {item.skill.description}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>{item.skill.description}</TooltipContent>
+                  </Tooltip>
+                )}
+                {item.type === 'command' && item.command.description && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
+                        {item.command.description}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>{item.command.description}</TooltipContent>
+                  </Tooltip>
+                )}
               </div>
-              {item.type === 'agent' && item.description && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
-                      {item.description}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>{item.description}</TooltipContent>
-                </Tooltip>
-              )}
-              {item.type === 'skill' && item.skill.description && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
-                      {item.skill.description}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>{item.skill.description}</TooltipContent>
-                </Tooltip>
-              )}
-              {item.type === 'command' && item.command.description && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
-                      {item.command.description}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>{item.command.description}</TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          </button>
-        );
-      })}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
