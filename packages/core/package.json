@@ -33,6 +33,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.83",
     "@qlan-ro/mainframe-types": "workspace:*",
+    "@vscode/ripgrep": "^1.17.1",
     "better-sqlite3": "^12.8.0",
     "express": "^5.0.0",
     "nanoid": "^5.1.7",

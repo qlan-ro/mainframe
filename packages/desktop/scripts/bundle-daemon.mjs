@@ -17,7 +17,7 @@ await build({
   target: 'node20',
   format: 'cjs',
   // Keep native modules and bundled LSP servers external — copied via extraResources
-  external: ['better-sqlite3', '*.node', 'typescript-language-server', 'pyright'],
+  external: ['better-sqlite3', '*.node', 'typescript-language-server', 'pyright', '@vscode/ripgrep'],
   outfile,
   logLevel: 'info',
   // import.meta.url is guarded with ?? fallback in manager.ts; suppress the cosmetic warning
