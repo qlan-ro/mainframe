@@ -296,7 +296,7 @@ export function SearchPalette(): React.ReactElement | null {
         aria-modal="true"
         aria-label="Search"
         className="relative bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-2xl flex flex-col overflow-hidden"
-        style={{ width: size.width, maxHeight: size.height }}
+        style={{ width: size.width, height: size.height }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
