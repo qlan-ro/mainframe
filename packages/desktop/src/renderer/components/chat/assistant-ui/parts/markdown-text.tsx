@@ -7,6 +7,7 @@ import {
 } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
 import { CodeHeader } from './CodeHeader';
 import { SyntaxHighlightedCode } from './SyntaxHighlightedCode';
 
@@ -97,30 +98,34 @@ function LinkWithPreview({
     setTimeout(() => setCopied(false), 1500);
   };
 
+  if (!href) {
+    return <a className={cn('aui-md-a', className)} href={href} {...props} />;
+  }
+
   return (
-    <span className="relative inline group/link">
-      <a
-        className={cn('aui-md-a', className)}
-        href={href}
-        onClick={(e) => {
-          e.preventDefault();
-          if (href) window.mainframe.openExternal(href);
-        }}
-        {...props}
-      />
-      {href && (
-        <span className="absolute left-0 bottom-full mb-1 hidden group-hover/link:flex items-center gap-1.5 max-w-[400px] px-2 py-1 rounded bg-mf-surface border border-mf-border shadow-lg z-50 text-mf-status text-mf-text-secondary">
-          <span className="truncate min-w-0">{href}</span>
-          <button
-            type="button"
-            onClick={copyUrl}
-            className="shrink-0 px-1.5 py-0.5 rounded bg-mf-hover hover:bg-mf-border text-mf-text-secondary hover:text-mf-text-primary transition-colors text-[10px]"
-          >
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-        </span>
-      )}
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          className={cn('aui-md-a', className)}
+          href={href}
+          onClick={(e) => {
+            e.preventDefault();
+            window.mainframe.openExternal(href);
+          }}
+          {...props}
+        />
+      </TooltipTrigger>
+      <TooltipContent className="flex items-center gap-1.5 max-w-[400px]">
+        <span className="truncate min-w-0">{href}</span>
+        <button
+          type="button"
+          onClick={copyUrl}
+          className="shrink-0 px-1.5 py-0.5 rounded bg-mf-hover hover:bg-mf-border text-mf-text-secondary hover:text-mf-text-primary transition-colors text-[10px]"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
