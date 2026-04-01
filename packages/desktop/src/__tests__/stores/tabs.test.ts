@@ -131,7 +131,7 @@ describe('useTabsStore', () => {
 
     it('uses default label when none provided', () => {
       useTabsStore.getState().openChatTab('abc');
-      expect(useTabsStore.getState().tabs[0]!.label).toBe('New Chat');
+      expect(useTabsStore.getState().tabs[0]!.label).toBe('Untitled session');
     });
   });
 

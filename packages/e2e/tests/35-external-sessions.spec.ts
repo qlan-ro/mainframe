@@ -101,7 +101,7 @@ test.describe('§35 External session import', () => {
   test('imported session has a title', async () => {
     const firstChat = fixture.page.locator('[data-testid="chat-list-item"]').first();
     const text = await firstChat.textContent();
-    expect(text).not.toContain('New Chat');
+    expect(text).not.toContain('Untitled session');
   });
 
   test('import does not switch active chat', async () => {

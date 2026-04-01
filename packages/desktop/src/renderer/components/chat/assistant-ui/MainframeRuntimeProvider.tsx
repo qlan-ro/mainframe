@@ -258,7 +258,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
       threads: chats.map((c) => ({
         status: 'regular' as const,
         id: c.id,
-        title: c.title || 'New Chat',
+        title: c.title || 'Untitled session',
       })),
       onSwitchToThread: (threadId: string) => {
         const chat = chats.find((c) => c.id === threadId);

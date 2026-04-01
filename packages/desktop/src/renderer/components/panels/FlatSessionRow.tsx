@@ -159,7 +159,7 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
                   isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
                 )}
               >
-                {chat.title || 'New Chat'}
+                {chat.title || 'Untitled session'}
               </div>
             )}
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
