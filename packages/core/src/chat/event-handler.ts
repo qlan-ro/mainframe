@@ -211,9 +211,12 @@ function buildSessionSink(
       // CLI process ended — clear stale permissions so displayStatus reflects
       // 'idle'. Permission state is reconstructed from JSONL on next loadChat.
       permissions.clear(chatId);
-      emitEvent({ type: 'chat.updated', chat: active.chat });
 
-      if (data.subtype === 'error_during_execution' && data.is_error !== false) {
+      const isError = data.subtype === 'error_during_execution' && data.is_error !== false;
+      const reason = wasInterrupted ? 'interrupted' : isError ? 'error' : 'completed';
+      emitEvent({ type: 'chat.updated', chat: active.chat, reason });
+
+      if (isError) {
         if (!wasInterrupted) {
           const message = messages.createTransientMessage(chatId, 'error', [
             { type: 'error', message: 'Session ended unexpectedly' },

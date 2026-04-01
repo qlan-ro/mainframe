@@ -20,7 +20,7 @@
       }
     },
     {
-      "name": "Desktop App",
+      "name": "Preview",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@qlan-ro/mainframe-desktop", "run", "dev:web"],
       "port": "${VITE_PORT:-5174}",
@@ -31,6 +31,31 @@
         "VITE_DAEMON_HTTP_PORT": "${DAEMON_PORT:-31416}",
         "VITE_DAEMON_WS_PORT": "${DAEMON_PORT:-31416}",
         "MAINFRAME_DATA_DIR": "${MAINFRAME_DATA_DIR:-~/.mainframe_dev}"
+      }
+    },
+    {
+      "name": "Electron App",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-desktop", "run", "dev"],
+      "port": null,
+      "url": null,
+      "preview": false,
+      "env": {
+        "VITE_PORT": "${VITE_PORT:-5174}",
+        "VITE_DAEMON_HTTP_PORT": "${DAEMON_PORT:-31416}",
+        "VITE_DAEMON_WS_PORT": "${DAEMON_PORT:-31416}",
+        "MAINFRAME_DATA_DIR": "${MAINFRAME_DATA_DIR:-~/.mainframe_dev}"
+      }
+    },
+    {
+      "name": "Expo iOS",
+      "runtimeExecutable": "./scripts/expo-start.sh",
+      "runtimeArgs": [],
+      "port": 8081,
+      "url": null,
+      "preview": false,
+      "env": {
+        "MAINFRAME_API_URL": "http://localhost:${DAEMON_PORT:-31416}"
       }
     }
   ]
