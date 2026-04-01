@@ -49,9 +49,9 @@
     },
     {
       "name": "Expo iOS",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-mobile", "run", "ios"],
-      "port": null,
+      "runtimeExecutable": "./scripts/expo-start.sh",
+      "runtimeArgs": [],
+      "port": 8081,
       "url": null,
       "preview": false,
       "env": {
