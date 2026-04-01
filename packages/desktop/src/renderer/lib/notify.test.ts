@@ -23,21 +23,18 @@ vi.mock('../store/chats', () => ({
   },
 }));
 
-vi.mock('../store/tabs', () => ({
-  useTabsStore: {
-    getState: vi.fn(() => ({ openChatTab: vi.fn() })),
-  },
-}));
-
 import { isAppFocused } from './app-focus';
 import { toast } from './toast';
 
 const mockIsAppFocused = vi.mocked(isAppFocused);
 
 describe('notify', () => {
+  const mockShowNotification = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsAppFocused.mockReturnValue(true);
+    (window as { mainframe?: unknown }).mainframe = { showNotification: mockShowNotification };
   });
 
   it('shows in-app toast when focused', () => {
@@ -45,20 +42,35 @@ describe('notify', () => {
     expect(toast.success).toHaveBeenCalledWith('Done', 'Finished', 'chat-1');
   });
 
-  it('shows system notification when not focused', () => {
+  it('uses IPC showNotification when not focused', () => {
     mockIsAppFocused.mockReturnValue(false);
+
+    notify({ type: 'info', title: 'Permission', body: 'Agent wants to run: Bash' });
+
+    expect(mockShowNotification).toHaveBeenCalledWith('Permission', 'Agent wants to run: Bash');
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it('falls back to Web Notification API without Electron', () => {
+    mockIsAppFocused.mockReturnValue(false);
+    (window as { mainframe?: unknown }).mainframe = {};
     const MockNotification = vi.fn();
     vi.stubGlobal('Notification', MockNotification);
 
     notify({ type: 'info', title: 'Permission', body: 'Agent wants to run: Bash' });
 
     expect(MockNotification).toHaveBeenCalledWith('Permission', { body: 'Agent wants to run: Bash' });
-    expect(toast.info).not.toHaveBeenCalled();
   });
 
-  it('suppresses when user is viewing the triggering chat', () => {
+  it('suppresses toast when user is viewing the triggering chat', () => {
     notify({ type: 'success', title: 'Done', chatId: 'active-chat' });
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('still sends system notification for active chat when unfocused', () => {
+    mockIsAppFocused.mockReturnValue(false);
+    notify({ type: 'success', title: 'Done', chatId: 'active-chat' });
+    expect(mockShowNotification).toHaveBeenCalledWith('Done', undefined);
   });
 
   it('does not suppress when chatId differs from active chat', () => {

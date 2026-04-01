@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, shell, ipcMain, utilityProcess, Menu } from 'electron';
+import { app, BrowserWindow, Notification, session, shell, ipcMain, utilityProcess, Menu } from 'electron';
 import type { UtilityProcess } from 'electron';
 import { join, resolve, sep } from 'path';
 import { execFileSync } from 'child_process';
@@ -157,6 +157,19 @@ function setupIPC(): void {
     await ses.clearStorageData();
     await ses.clearCache();
     log.info({ partition }, 'sandbox session cleared');
+  });
+
+  ipcMain.handle('notify:show', (_event, title: string, body?: string) => {
+    log.info({ title, body, supported: Notification.isSupported() }, 'notify:show IPC received');
+    if (!Notification.isSupported()) return;
+    const n = new Notification({ title, body: body ?? undefined });
+    n.on('click', () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
+    n.on('show', () => log.info({ title }, 'notification shown'));
+    n.on('failed', (_, err) => log.error({ title, err }, 'notification failed'));
+    n.show();
   });
 
   ipcMain.on('log', (_event, level: string, module: string, message: string, data?: unknown) => {

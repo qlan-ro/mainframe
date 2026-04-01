@@ -1,7 +1,6 @@
 import { toast } from './toast';
 import { isAppFocused } from './app-focus';
 import { useChatsStore } from '../store/chats';
-import { useTabsStore } from '../store/tabs';
 import { createLogger } from './logger';
 
 const log = createLogger('renderer:notify');
@@ -14,10 +13,12 @@ interface NotifyOptions {
 }
 
 export function notify(opts: NotifyOptions): void {
-  if (opts.chatId && useChatsStore.getState().activeChatId === opts.chatId) return;
-
   if (isAppFocused()) {
-    toast[opts.type](opts.title, opts.body, opts.chatId);
+    // Suppress in-app toast if user is already viewing this chat
+    const isViewingChat = opts.chatId && useChatsStore.getState().activeChatId === opts.chatId;
+    if (!isViewingChat) {
+      toast[opts.type](opts.title, opts.body, opts.chatId);
+    }
   } else {
     showSystemNotification(opts);
   }
@@ -25,15 +26,12 @@ export function notify(opts: NotifyOptions): void {
 
 function showSystemNotification(opts: NotifyOptions): void {
   try {
-    const n = new Notification(opts.title, { body: opts.body });
-    if (opts.chatId) {
-      const chatId = opts.chatId;
-      n.onclick = (): void => {
-        window.focus();
-        const chat = useChatsStore.getState().chats.find((c) => c.id === chatId);
-        useChatsStore.getState().setActiveChat(chatId);
-        useTabsStore.getState().openChatTab(chatId, chat?.title);
-      };
+    const mf = (window as { mainframe?: { showNotification?: (t: string, b?: string) => Promise<void> } }).mainframe;
+    if (mf?.showNotification) {
+      mf.showNotification(opts.title, opts.body);
+    } else {
+      // Fallback for web-only mode (dev:web without Electron shell)
+      new Notification(opts.title, { body: opts.body });
     }
   } catch (err) {
     log.warn('system notification failed', { error: String(err) });

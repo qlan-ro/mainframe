@@ -12,6 +12,7 @@ export interface MainframeAPI {
   showItemInFolder: (fullPath: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   clearSandboxSession: (projectId: string) => Promise<void>;
+  showNotification: (title: string, body?: string) => Promise<void>;
   log: (level: string, module: string, message: string, data?: unknown) => void;
 }
 
@@ -27,6 +28,7 @@ const api: MainframeAPI = {
   showItemInFolder: (fullPath: string) => ipcRenderer.invoke('shell:showItemInFolder', fullPath),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   clearSandboxSession: (projectId: string) => ipcRenderer.invoke('sandbox:clearSession', projectId),
+  showNotification: (title: string, body?: string) => ipcRenderer.invoke('notify:show', title, body),
   log: (level: string, module: string, message: string, data?: unknown) =>
     ipcRenderer.send('log', level, module, message, data),
 };

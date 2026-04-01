@@ -33,15 +33,15 @@ export function routeEvent(event: DaemonEvent): void {
       if (event.reason === 'completed') {
         notify({
           type: 'success',
-          title: 'Task Complete',
-          body: event.chat.title ?? 'Session finished',
+          title: event.chat.title ?? 'Session',
+          body: 'Agent responded',
           chatId: event.chat.id,
         });
       } else if (event.reason === 'error') {
         notify({
           type: 'error',
-          title: 'Session Error',
-          body: 'A session ended unexpectedly',
+          title: event.chat.title ?? 'Session',
+          body: 'Agent error',
           chatId: event.chat.id,
         });
       }
@@ -75,12 +75,15 @@ export function routeEvent(event: DaemonEvent): void {
         toolName: event.request.toolName,
       });
       chats.addPendingPermission(event.chatId, event.request);
-      notify({
-        type: 'info',
-        title: 'Permission Required',
-        body: `Agent wants to run: ${event.request.toolName}`,
-        chatId: event.chatId,
-      });
+      {
+        const chat = chats.chats.find((c) => c.id === event.chatId);
+        notify({
+          type: 'info',
+          title: chat?.title ?? 'Session',
+          body: 'Permission required',
+          chatId: event.chatId,
+        });
+      }
       break;
     case 'permission.resolved': {
       log.info('event:permission.resolved', { chatId: event.chatId, requestId: event.requestId });
@@ -148,14 +151,6 @@ export function routeEvent(event: DaemonEvent): void {
     case 'error':
       log.error('daemon error event', { error: event.error });
       useProjectsStore.getState().setError(event.error);
-      if (event.chatId) {
-        notify({
-          type: 'error',
-          title: 'Error',
-          body: event.error,
-          chatId: event.chatId,
-        });
-      }
       break;
   }
 }
