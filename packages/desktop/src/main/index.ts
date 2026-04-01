@@ -18,6 +18,37 @@ const log = createMainLogger('electron');
 let mainWindow: BrowserWindow | null = null;
 let daemon: UtilityProcess | null = null;
 
+const ALLOWED_SCHEMES = new Set([
+  'http:',
+  'https:',
+  'mailto:',
+  'slack:',
+  'vscode:',
+  'vscode-insiders:',
+  'cursor:',
+  'jetbrains:',
+  'idea:',
+  'zed:',
+  'figma:',
+  'linear:',
+  'notion:',
+  'discord:',
+  'tel:',
+]);
+
+function openExternalSafe(url: string): void {
+  try {
+    const parsed = new URL(url);
+    if (!ALLOWED_SCHEMES.has(parsed.protocol)) {
+      log.warn({ url }, 'blocked openExternal with disallowed scheme');
+      return;
+    }
+    shell.openExternal(url);
+  } catch {
+    log.warn({ url }, 'blocked openExternal with invalid URL');
+  }
+}
+
 // Electron apps launch with a minimal environment (/usr/bin:/bin:/usr/sbin:/sbin PATH,
 // no JAVA_HOME, etc.). Resolve the user's full login-shell environment so the daemon
 // can find CLI tools installed via nvm, sdkman, homebrew, etc.
@@ -116,18 +147,8 @@ function setupIPC(): void {
     shell.showItemInFolder(fullPath);
   });
 
-  const ALLOWED_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
   ipcMain.handle('shell:openExternal', (_event, url: string) => {
-    try {
-      const parsed = new URL(url);
-      if (!ALLOWED_SCHEMES.has(parsed.protocol)) {
-        log.warn({ url }, 'blocked openExternal with disallowed scheme');
-        return;
-      }
-      return shell.openExternal(url);
-    } catch {
-      log.warn({ url }, 'blocked openExternal with invalid URL');
-    }
+    openExternalSafe(url);
   });
 
   ipcMain.handle('sandbox:clearSession', async (_event, projectId: string) => {
@@ -170,7 +191,7 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
+    openExternalSafe(details.url);
     return { action: 'deny' };
   });
 
@@ -178,7 +199,7 @@ function createWindow(): void {
     const appOrigin = new URL(mainWindow!.webContents.getURL()).origin;
     if (new URL(url).origin !== appOrigin) {
       event.preventDefault();
-      shell.openExternal(url);
+      openExternalSafe(url);
     }
   });
 
@@ -252,7 +273,7 @@ app.whenReady().then(() => {
     // that legitimately redirect cross-origin (OAuth flows, SSO, etc.).
     // Only intercept window.open for truly external links (target="_blank").
     contents.setWindowOpenHandler((details) => {
-      shell.openExternal(details.url);
+      openExternalSafe(details.url);
       return { action: 'deny' };
     });
   });

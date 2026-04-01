@@ -123,6 +123,14 @@
           "**/*",
           "!**/*.md"
         ]
+      },
+      {
+        "from": "../../node_modules/@vscode/ripgrep",
+        "to": "node_modules/@vscode/ripgrep",
+        "filter": [
+          "**/*",
+          "!**/*.md"
+        ]
       }
     ],
     "mac": {

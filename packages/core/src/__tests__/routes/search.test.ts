@@ -153,4 +153,23 @@ describe('GET /api/projects/:id/search/content', () => {
     expect(results[0].column).toBe(1);
     expect(results[0].text).toBe('Hello World');
   });
+
+  it('uses ripgrep for directory search when available', async () => {
+    await mkdir(join(projectDir, 'lib'));
+    await writeFile(join(projectDir, 'lib', 'core.ts'), 'export const target = true;\n');
+    await writeFile(join(projectDir, 'lib', 'utils.ts'), 'no match here\n');
+
+    const ctx = createCtx(projectDir);
+    const router = contentSearchRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { q: 'target', path: '.' } }, res, vi.fn());
+    await flushPromises();
+
+    const { results } = res.json.mock.calls[0][0];
+    expect(results).toHaveLength(1);
+    expect(results[0].file).toContain('core.ts');
+    expect(results[0].text).toContain('target');
+  });
 });

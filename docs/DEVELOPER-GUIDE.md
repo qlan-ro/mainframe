@@ -330,6 +330,53 @@ sqlite3 ~/.mainframe/mainframe.db ".tables"
 sqlite3 ~/.mainframe/mainframe.db "SELECT * FROM chats ORDER BY updatedAt DESC LIMIT 5;"
 ```
 
+## Bundling Native & Platform Binaries
+
+The daemon (`@qlan-ro/mainframe-core`) is bundled into a single `daemon.cjs` via esbuild. Packages that ship native addons (`.node` files) or platform-specific binaries cannot be inlined — they must be kept external and copied into the Electron app separately.
+
+### How It Works
+
+1. **esbuild externals** — `packages/desktop/scripts/bundle-daemon.mjs` marks the package as external so `require('<pkg>')` is emitted as-is in the bundle.
+2. **electron-builder extraResources** — the `build.extraResources` array in `packages/desktop/package.json` copies the package from `node_modules` into `Contents/Resources/node_modules/<pkg>/` (outside the `.asar` archive).
+3. **pnpm build allowlist** — if the package has a postinstall/install script (native compilation or binary download), add it to `pnpm.onlyBuiltDependencies` in the root `package.json`.
+
+### Adding a New Native/Binary Dependency
+
+Follow these four steps (same pattern used by `better-sqlite3`, `pyright`, and `typescript-language-server`):
+
+**Step 1 — Install the package:**
+```bash
+pnpm --filter @qlan-ro/mainframe-core add <package-name>
+```
+
+**Step 2 — Allow its build script** (if it has a postinstall/install hook):
+```jsonc
+// root package.json → pnpm.onlyBuiltDependencies
+["better-sqlite3", "electron", "esbuild", "<package-name>"]
+```
+
+**Step 3 — Mark it external in esbuild:**
+```js
+// packages/desktop/scripts/bundle-daemon.mjs → external array
+external: ['better-sqlite3', '*.node', 'typescript-language-server', 'pyright', '<package-name>'],
+```
+
+**Step 4 — Add an extraResources entry:**
+```jsonc
+// packages/desktop/package.json → build.extraResources
+{
+  "from": "../../node_modules/<package-name>",
+  "to": "node_modules/<package-name>",
+  "filter": ["**/*", "!**/*.md"]
+}
+```
+
+If the package depends on helper modules for binary resolution (like `better-sqlite3` depends on `bindings` and `file-uri-to-path`), add those as separate `extraResources` entries too.
+
+### Standalone (Non-Electron) Builds
+
+For headless daemon deployments (`scripts/build-standalone.sh`), native `.node` files or platform binaries must be copied manually into the output directory. See the standalone build script for the `better-sqlite3` example.
+
 ## Code Conventions
 
 - **TypeScript strict mode** with `NodeNext` module resolution

@@ -46,6 +46,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@vscode/ripgrep",
       "better-sqlite3",
       "electron",
       "esbuild"

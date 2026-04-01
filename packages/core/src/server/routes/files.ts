@@ -10,6 +10,7 @@ import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
 import { BrowseFilesystemQuery, validate } from './schemas.js';
 import { IGNORED_DIRS } from '../fs-utils.js';
+import { listFilesWithRipgrep } from '../ripgrep.js';
 
 const logger = createChildLogger('routes:files');
 
@@ -85,35 +86,47 @@ async function handleSearchFiles(ctx: RouteContext, req: Request, res: Response)
     return qi === query.length;
   };
 
-  const walk = async (dir: string): Promise<void> => {
-    if (substringHits.length + fuzzyHits.length >= scanLimit) return;
-    let entries: Dirent[];
-    try {
-      entries = await readdir(dir, { withFileTypes: true });
-    } catch (err) {
-      logger.warn({ err, dir }, 'Failed to read directory during file search');
-      return;
-    }
-    for (const entry of entries) {
-      if (substringHits.length + fuzzyHits.length >= scanLimit) return;
-      if (IGNORED_DIRS.has(entry.name)) continue;
-      if (!resolveAndValidatePath(basePath, path.join(dir, entry.name))) continue;
-      const rel = path.relative(basePath, path.join(dir, entry.name));
-      const relLower = rel.toLowerCase();
-      if (relLower.includes(q)) {
-        substringHits.push({
-          name: entry.name,
-          path: rel,
-          type: entry.isDirectory() ? 'directory' : 'file',
-          exact: true,
-        });
-      } else if (fuzzyMatch(q, relLower)) {
-        fuzzyHits.push({ name: entry.name, path: rel, type: entry.isDirectory() ? 'directory' : 'file', exact: false });
-      }
-      if (entry.isDirectory()) await walk(path.join(dir, entry.name));
+  const addResult = (relPath: string, isDir: boolean): void => {
+    const relLower = relPath.toLowerCase();
+    const name = path.basename(relPath);
+    const type = isDir ? 'directory' : 'file';
+    if (relLower.includes(q)) {
+      substringHits.push({ name, path: relPath, type, exact: true });
+    } else if (fuzzyMatch(q, relLower)) {
+      fuzzyHits.push({ name, path: relPath, type, exact: false });
     }
   };
-  await walk(basePath);
+
+  // Try ripgrep file listing first — respects .gitignore, skips hidden/binary
+  const rgFiles = await listFilesWithRipgrep(basePath);
+
+  if (rgFiles !== null) {
+    for (const relFile of rgFiles) {
+      if (substringHits.length + fuzzyHits.length >= scanLimit) break;
+      addResult(relFile, false);
+    }
+  } else {
+    // Fallback to recursive walk when ripgrep is unavailable
+    const walk = async (dir: string): Promise<void> => {
+      if (substringHits.length + fuzzyHits.length >= scanLimit) return;
+      let entries: Dirent[];
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch (err) {
+        logger.warn({ err, dir }, 'Failed to read directory during file search');
+        return;
+      }
+      for (const entry of entries) {
+        if (substringHits.length + fuzzyHits.length >= scanLimit) return;
+        if (IGNORED_DIRS.has(entry.name)) continue;
+        if (!resolveAndValidatePath(basePath, path.join(dir, entry.name))) continue;
+        const rel = path.relative(basePath, path.join(dir, entry.name));
+        addResult(rel, entry.isDirectory());
+        if (entry.isDirectory()) await walk(path.join(dir, entry.name));
+      }
+    };
+    await walk(basePath);
+  }
 
   const combined = [...substringHits, ...fuzzyHits].slice(0, limit);
   res.json(combined.map(({ exact: _, ...r }) => r));

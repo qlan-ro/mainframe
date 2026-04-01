@@ -8,6 +8,7 @@ import type { SearchContentResult } from '@qlan-ro/mainframe-types';
 import { asyncHandler } from './async-handler.js';
 import { validate } from './schemas.js';
 import { listProjectFiles, hasBinaryExtension } from '../fs-utils.js';
+import { searchWithRipgrep, isRipgrepAvailable } from '../ripgrep.js';
 import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:search');
@@ -137,45 +138,61 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
       logger.warn({ err, resolvedScope }, 'Failed to stat file for content search');
     }
   } else {
-    // Directory search
-    let allFiles: string[];
-    try {
-      allFiles = await listProjectFiles(basePath, { includeIgnored: includeIgnoredFlag });
-    } catch (err) {
-      logger.warn({ err, basePath }, 'Failed to list project files for content search');
-      res.status(500).json({ error: 'Failed to list project files' });
-      return;
-    }
-
-    const scopeRel = path.relative(basePath, resolvedScope);
-    const scopePrefix = scopeRel === '' ? '' : scopeRel + path.sep;
-
-    const filteredFiles = allFiles.filter((f) => {
-      if (scopeRel !== '' && !f.startsWith(scopePrefix) && f !== scopeRel) return false;
-      return !hasBinaryExtension(f);
+    // Try ripgrep first for performance
+    const rgResults = await searchWithRipgrep(resolvedScope, q, {
+      maxResults: MAX_RESULTS,
+      maxFileSize: '1M',
+      includeIgnored: includeIgnoredFlag,
     });
 
-    let scanned = 0;
-    for (const relFile of filteredFiles) {
-      if (results.length >= MAX_RESULTS) break;
-      if (scanned >= MAX_FILES_SCANNED) break;
-
-      const absFile = path.join(basePath, relFile);
-      let fileStat: Awaited<ReturnType<typeof stat>>;
+    if (rgResults.length > 0 || isRipgrepAvailable()) {
+      // Re-relativize paths from scope-relative to basePath-relative, and filter binary extensions
+      for (const r of rgResults) {
+        const absFile = path.join(resolvedScope, r.file);
+        const relFile = path.relative(basePath, absFile);
+        if (hasBinaryExtension(relFile)) continue;
+        results.push({ ...r, file: relFile });
+      }
+    } else {
+      // Fallback to JS search when ripgrep is not available
+      let allFiles: string[];
       try {
-        fileStat = await stat(absFile);
-      } catch {
-        /* expected — file removed between listing and stat */
-        continue;
+        allFiles = await listProjectFiles(basePath, { includeIgnored: includeIgnoredFlag });
+      } catch (err) {
+        logger.warn({ err, basePath }, 'Failed to list project files for content search');
+        res.status(500).json({ error: 'Failed to list project files' });
+        return;
       }
 
-      if (fileStat.size > MAX_FILE_SIZE) {
+      const scopeRel = path.relative(basePath, resolvedScope);
+      const scopePrefix = scopeRel === '' ? '' : scopeRel + path.sep;
+
+      const filteredFiles = allFiles.filter((f) => {
+        if (scopeRel !== '' && !f.startsWith(scopePrefix) && f !== scopeRel) return false;
+        return !hasBinaryExtension(f);
+      });
+
+      let scanned = 0;
+      for (const relFile of filteredFiles) {
+        if (results.length >= MAX_RESULTS) break;
+        if (scanned >= MAX_FILES_SCANNED) break;
+
+        const absFile = path.join(basePath, relFile);
+        let fileStat: Awaited<ReturnType<typeof stat>>;
+        try {
+          fileStat = await stat(absFile);
+        } catch {
+          continue;
+        }
+
+        if (fileStat.size > MAX_FILE_SIZE) {
+          scanned++;
+          continue;
+        }
+
+        await searchFile(absFile, relFile, q, results, MAX_RESULTS);
         scanned++;
-        continue;
       }
-
-      await searchFile(absFile, relFile, q, results, MAX_RESULTS);
-      scanned++;
     }
   }
 

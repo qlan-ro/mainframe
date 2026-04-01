@@ -19,6 +19,14 @@ export const IGNORED_DIRS = new Set([
   'vendor',
   'coverage',
   '.turbo',
+  '.gradle',
+  '.cargo',
+  'target',
+  '.parcel-cache',
+  '.nuxt',
+  '.output',
+  'bower_components',
+  '.worktrees',
 ]);
 
 export const BINARY_EXTENSIONS = new Set([

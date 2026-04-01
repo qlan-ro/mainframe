@@ -152,6 +152,29 @@ describe('GET /api/projects/:id/search/files', () => {
     const results = res.json.mock.calls[0][0] as Array<{ name: string }>;
     expect(results.some((r) => r.name === 'main.ts')).toBe(true);
   });
+
+  it('excludes gitignored and binary files from search results', async () => {
+    await writeFile(join(projectDir, '.gitignore'), 'ignored.txt\n');
+    await writeFile(join(projectDir, 'app.ts'), '');
+    await writeFile(join(projectDir, 'ignored.txt'), '');
+    await writeFile(join(projectDir, 'logo.png'), '');
+    await writeFile(join(projectDir, 'font.woff2'), '');
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { q: 'a' } }, res, vi.fn());
+    await flushPromises();
+
+    const results = res.json.mock.calls[0][0];
+    const names = results.map((r: any) => r.name);
+    expect(names).toContain('app.ts');
+    expect(names).not.toContain('ignored.txt');
+    expect(names).not.toContain('logo.png');
+    expect(names).not.toContain('font.woff2');
+  });
 });
 
 describe('GET /api/filesystem/browse', () => {

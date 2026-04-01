@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import type { TextMessagePartComponent } from '@assistant-ui/react';
 import {
   MarkdownTextPrimitive,
@@ -7,6 +7,7 @@ import {
 } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
 import { CodeHeader } from './CodeHeader';
 import { SyntaxHighlightedCode } from './SyntaxHighlightedCode';
 
@@ -81,23 +82,60 @@ function MarkdownTr({ children, ...props }: React.ComponentProps<'tr'>) {
   );
 }
 
+function LinkWithPreview({
+  className,
+  href,
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
+  const [copied, setCopied] = useState(false);
+
+  const copyUrl = (e: React.MouseEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!href) return;
+    navigator.clipboard.writeText(href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  if (!href) {
+    return <a className={cn('aui-md-a', className)} href={href} {...props} />;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          className={cn('aui-md-a', className)}
+          href={href}
+          onClick={(e) => {
+            e.preventDefault();
+            window.mainframe.openExternal(href);
+          }}
+          {...props}
+        />
+      </TooltipTrigger>
+      <TooltipContent className="flex items-center gap-1.5 max-w-[400px]">
+        <span className="truncate min-w-0">{href}</span>
+        <button
+          type="button"
+          onClick={copyUrl}
+          className="shrink-0 px-1.5 py-0.5 rounded bg-mf-hover hover:bg-mf-border text-mf-text-secondary hover:text-mf-text-primary transition-colors text-[10px]"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export const markdownComponents = unstable_memoizeMarkdownComponents({
   h1: ({ className, ...props }) => <h1 className={cn('aui-md-h1', className)} {...props} />,
   h2: ({ className, ...props }) => <h2 className={cn('aui-md-h2', className)} {...props} />,
   h3: ({ className, ...props }) => <h3 className={cn('aui-md-h3', className)} {...props} />,
   h4: ({ className, ...props }) => <h4 className={cn('aui-md-h4', className)} {...props} />,
   p: ({ className, ...props }) => <p className={cn('aui-md-p', className)} {...props} />,
-  a: ({ className, href, ...props }) => (
-    <a
-      className={cn('aui-md-a', className)}
-      href={href}
-      onClick={(e) => {
-        e.preventDefault();
-        if (href) window.mainframe.openExternal(href);
-      }}
-      {...props}
-    />
-  ),
+  a: LinkWithPreview,
   blockquote: ({ className, ...props }) => <blockquote className={cn('aui-md-blockquote', className)} {...props} />,
   ul: ({ className, ...props }) => <ul className={cn('aui-md-ul', className)} {...props} />,
   ol: ({ className, ...props }) => <ol className={cn('aui-md-ol', className)} {...props} />,

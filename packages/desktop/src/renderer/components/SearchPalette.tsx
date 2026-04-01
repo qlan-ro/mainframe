@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import { Search, MessageSquare, FileText, Folder } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { createLogger } from '../lib/logger';
@@ -30,8 +30,11 @@ export function SearchPalette(): React.ReactElement | null {
   const activeProjectId = useActiveProjectId();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const [fileResults, setFileResults] = useState<FileResult[]>([]);
+  const [size, setSize] = useState({ width: 960, height: 480 });
+  const resizing = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const queryRef = useRef(query);
   queryRef.current = query;
@@ -141,6 +144,35 @@ export function SearchPalette(): React.ReactElement | null {
     const el = listRef.current.children[selectedIndex] as HTMLElement | undefined;
     el?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex]);
+
+  // Clamp size to viewport
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    setSize((s) => ({
+      width: Math.min(s.width, window.innerWidth - 32),
+      height: Math.min(s.height, window.innerHeight - 64),
+    }));
+  }, [isOpen]);
+
+  const onResizeStart = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      resizing.current = { startX: e.clientX, startY: e.clientY, startW: size.width, startH: size.height };
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [size],
+  );
+
+  const onResizeMove = useCallback((e: React.PointerEvent) => {
+    if (!resizing.current) return;
+    const w = Math.max(400, resizing.current.startW + (e.clientX - resizing.current.startX));
+    const h = Math.max(200, resizing.current.startH + (e.clientY - resizing.current.startY));
+    setSize({ width: w, height: h });
+  }, []);
+
+  const onResizeEnd = useCallback(() => {
+    resizing.current = null;
+  }, []);
 
   if (!isOpen) return null;
 
@@ -257,12 +289,14 @@ export function SearchPalette(): React.ReactElement | null {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center" style={{ paddingTop: '20%' }} onClick={close}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[min(20vh,120px)]" onClick={close}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Search"
-        className="w-[480px] max-w-[90%] h-fit max-h-[60vh] bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-2xl flex flex-col overflow-hidden"
+        className="relative bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-2xl flex flex-col overflow-hidden"
+        style={{ width: size.width, height: size.height }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
@@ -283,8 +317,24 @@ export function SearchPalette(): React.ReactElement | null {
         </div>
 
         {/* Results */}
-        <div ref={listRef} className="overflow-y-auto py-1">
+        <div ref={listRef} className="overflow-y-auto py-1 flex-1">
           {renderItems}
+        </div>
+
+        {/* Resize handle */}
+        <div
+          onPointerDown={onResizeStart}
+          onPointerMove={onResizeMove}
+          onPointerUp={onResizeEnd}
+          onLostPointerCapture={onResizeEnd}
+          className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize flex items-end justify-end p-0.5 touch-none"
+          aria-hidden="true"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" className="text-mf-text-secondary opacity-40">
+            <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1" />
+            <line x1="9" y1="4" x2="4" y2="9" stroke="currentColor" strokeWidth="1" />
+            <line x1="9" y1="7" x2="7" y2="9" stroke="currentColor" strokeWidth="1" />
+          </svg>
         </div>
       </div>
     </div>
