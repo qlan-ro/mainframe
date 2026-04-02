@@ -35,3 +35,19 @@ EOF
 echo "Wrote $ENV_FILE"
 echo "  DAEMON_PORT=$DAEMON_PORT"
 echo "  VITE_PORT=$VITE_PORT"
+
+# Install dependencies and build types package
+echo ""
+echo "Installing dependencies…"
+(cd "$PROJECT_ROOT" && pnpm install)
+
+echo ""
+echo "Building @qlan-ro/mainframe-types…"
+(cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-types build)
+
+echo ""
+echo "Building @qlan-ro/mainframe-core…"
+(cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-core build)
+
+echo ""
+echo "Worktree setup complete."
