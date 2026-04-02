@@ -41,8 +41,10 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
     >
       {/* Row 1: #number + title + type badge */}
       <div className="flex items-center gap-1.5 min-w-0">
-        <span className="shrink-0 font-mono text-mf-status text-mf-text-secondary">#{todo.number}</span>
-        <span className="flex-1 text-mf-small text-mf-text-primary leading-snug truncate">{todo.title}</span>
+        <span className="shrink-0 font-mono text-mf-body font-medium text-mf-accent">#{todo.number}</span>
+        <span className="flex-1 text-mf-body text-mf-text-primary font-semibold leading-snug truncate">
+          {todo.title}
+        </span>
         <span
           className={cn(
             'shrink-0 text-mf-status font-medium px-1.5 py-0.5 rounded capitalize',

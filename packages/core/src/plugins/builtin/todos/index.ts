@@ -122,12 +122,15 @@ function registerTodoRoutes(ctx: PluginContext): void {
         now,
       );
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
-    res.status(201).json({ todo: parseTodo(row) });
+    const todo = parseTodo(row);
+    ctx.ui.notify({ title: 'Task created', body: `#${todo.number} ${todo.title}`, level: 'info' });
+    res.status(201).json({ todo });
   });
 
   r.patch('/todos/:id', (req, res) => {
     const { id } = req.params;
-    if (!ctx.db.prepare<{ id: string }>('SELECT id FROM todos WHERE id = ?').get(id)) {
+    const existingRow = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id);
+    if (!existingRow) {
       res.status(404).json({ error: 'Not found' });
       return;
     }
@@ -175,7 +178,11 @@ function registerTodoRoutes(ctx: PluginContext): void {
     vals.push(id);
     ctx.db.prepare(`UPDATE todos SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
-    res.json({ todo: parseTodo(row) });
+    const updated = parseTodo(row);
+    if (d.status !== undefined && d.status !== existingRow.status) {
+      ctx.ui.notify({ title: `Task ${d.status}`, body: `#${updated.number} ${updated.title}`, level: 'info' });
+    }
+    res.json({ todo: updated });
   });
 
   r.patch('/todos/:id/move', (req, res) => {
@@ -185,15 +192,18 @@ function registerTodoRoutes(ctx: PluginContext): void {
       res.status(400).json({ error: 'Invalid status' });
       return;
     }
+    const { status } = parsed.data;
     ctx.db
       .prepare('UPDATE todos SET status = ?, updated_at = ? WHERE id = ?')
-      .run(parsed.data.status, new Date().toISOString(), id);
+      .run(status, new Date().toISOString(), id);
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id);
     if (!row) {
       res.status(404).json({ error: 'Not found' });
       return;
     }
-    res.json({ todo: parseTodo(row) });
+    const todo = parseTodo(row);
+    ctx.ui.notify({ title: `Task ${status}`, body: `#${todo.number} ${todo.title}`, level: 'info' });
+    res.json({ todo });
   });
 
   r.delete('/todos/:id', (req, res) => {
