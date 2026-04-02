@@ -26,6 +26,7 @@ export interface Todo {
   labels: string[];
   assignees: string[];
   milestone?: string | null;
+  dependencies: number[];
   order_index: number;
   created_at: string;
   updated_at: string;
@@ -41,6 +42,7 @@ export interface CreateTodoInput {
   labels?: string[];
   assignees?: string[];
   milestone?: string;
+  dependencies?: number[];
 }
 
 export type UpdateTodoInput = Partial<CreateTodoInput>;

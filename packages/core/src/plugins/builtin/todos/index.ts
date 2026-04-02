@@ -17,11 +17,13 @@ interface TodoRow {
   order_index: number;
   created_at: string;
   updated_at: string;
+  dependencies: string; // JSON array of todo numbers
 }
 
-interface Todo extends Omit<TodoRow, 'labels' | 'assignees'> {
+interface Todo extends Omit<TodoRow, 'labels' | 'assignees' | 'dependencies'> {
   labels: string[];
   assignees: string[];
+  dependencies: number[];
 }
 
 const MIGRATION = `
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS todos (
   labels TEXT NOT NULL DEFAULT '[]',
   assignees TEXT NOT NULL DEFAULT '[]',
   milestone TEXT,
+  dependencies TEXT NOT NULL DEFAULT '[]',
   order_index REAL NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -46,6 +49,7 @@ const parseTodo = (r: TodoRow): Todo => ({
   ...r,
   labels: JSON.parse(r.labels) as string[],
   assignees: JSON.parse(r.assignees) as string[],
+  dependencies: JSON.parse(r.dependencies || '[]') as number[],
 });
 
 const TodoSchema = z.object({
@@ -60,6 +64,7 @@ const TodoSchema = z.object({
   labels: z.array(z.string()).default([]),
   assignees: z.array(z.string()).default([]),
   milestone: z.string().optional(),
+  dependencies: z.array(z.number()).default([]),
 });
 
 function buildInitialMessage(todo: Todo): string {
@@ -172,6 +177,10 @@ function registerTodoRoutes(ctx: PluginContext): void {
       sets.push('milestone = ?');
       vals.push(d.milestone);
     }
+    if (d.dependencies !== undefined) {
+      sets.push('dependencies = ?');
+      vals.push(JSON.stringify(d.dependencies));
+    }
     vals.push(id);
     ctx.db.prepare(`UPDATE todos SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
@@ -269,9 +278,8 @@ function registerAttachmentRoutes(ctx: PluginContext): void {
   });
 }
 
-export function activate(ctx: PluginContext): void {
+function runMigrations(ctx: PluginContext): void {
   ctx.db.runMigration(MIGRATION);
-  // Add columns to existing DBs that predate these migrations.
   const cols = ctx.db.prepare<{ name: string }>('PRAGMA table_info(todos)').all();
   const colNames = new Set(cols.map((c) => c.name));
   if (!colNames.has('number')) {
@@ -284,6 +292,13 @@ export function activate(ctx: PluginContext): void {
   if (!colNames.has('project_id')) {
     ctx.db.runMigration("ALTER TABLE todos ADD COLUMN project_id TEXT NOT NULL DEFAULT ''");
   }
+  if (!colNames.has('dependencies')) {
+    ctx.db.runMigration("ALTER TABLE todos ADD COLUMN dependencies TEXT NOT NULL DEFAULT '[]'");
+  }
+}
+
+export function activate(ctx: PluginContext): void {
+  runMigrations(ctx);
   registerTodoRoutes(ctx);
   registerSessionRoute(ctx);
   registerAttachmentRoutes(ctx);

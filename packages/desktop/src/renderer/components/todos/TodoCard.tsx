@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Edit, Trash2, Paperclip } from 'lucide-react';
+import { Play, Edit, Trash2, Paperclip, GitFork } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { Todo } from '../../lib/api/todos-api';
@@ -78,6 +78,17 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
               <Paperclip size={10} />
               {attachmentCount}
             </span>
+          )}
+          {todo.dependencies.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-0.5 text-mf-status text-mf-text-secondary cursor-default">
+                  <GitFork size={10} />
+                  {todo.dependencies.length}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Depends on: {todo.dependencies.map((n) => `#${n}`).join(', ')}</TooltipContent>
+            </Tooltip>
           )}
         </div>
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">

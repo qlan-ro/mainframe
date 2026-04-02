@@ -149,14 +149,32 @@ export function TodosPanel(): React.ReactElement {
     [editingTodo],
   );
 
-  const handleMove = useCallback(async (id: string, status: TodoStatus) => {
-    try {
-      const updated = await todosApi.move(id, status);
-      setTodos((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-    } catch (err) {
-      log.warn('move failed', { err: String(err) });
-    }
-  }, []);
+  const handleMove = useCallback(
+    async (id: string, status: TodoStatus) => {
+      if (status === 'done') {
+        const todo = todos.find((t) => t.id === id);
+        if (todo?.dependencies.length) {
+          const openDeps = todo.dependencies.filter((depNum) => {
+            const dep = todos.find((t) => t.number === depNum);
+            return dep && dep.status !== 'done';
+          });
+          if (openDeps.length > 0) {
+            log.warn('moving todo to done with open dependencies', {
+              id,
+              openDeps: openDeps.map((n) => `#${n}`).join(', '),
+            });
+          }
+        }
+      }
+      try {
+        const updated = await todosApi.move(id, status);
+        setTodos((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      } catch (err) {
+        log.warn('move failed', { err: String(err) });
+      }
+    },
+    [todos],
+  );
 
   const handleDelete = useCallback(async (id: string) => {
     try {
@@ -303,6 +321,7 @@ export function TodosPanel(): React.ReactElement {
       {modalOpen && (
         <TodoModal
           todo={editingTodo}
+          allTodos={todos}
           onClose={() => {
             setModalOpen(false);
             setEditingTodo(null);
