@@ -135,7 +135,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
   openChatTab: (chatId, label) => {
     const id = `chat:${chatId}`;
-    get().openTab({ type: 'chat', id, chatId, label: label || 'New Chat' });
+    get().openTab({ type: 'chat', id, chatId, label: label || 'Untitled session' });
   },
 
   updateTabLabel: (id, label) =>

@@ -88,10 +88,10 @@ export function SearchPalette(): React.ReactElement | null {
   // Build unified items list
   const lowerQ = query.toLowerCase();
   const sessionItems: SearchItem[] = chats
-    .filter((c) => c.status !== 'archived' && (c.title || 'New Chat').toLowerCase().includes(lowerQ))
+    .filter((c) => c.status !== 'archived' && (c.title || 'Untitled session').toLowerCase().includes(lowerQ))
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, query ? 10 : 5)
-    .map((c) => ({ kind: 'session', id: c.id, label: c.title || 'New Chat', detail: c.adapterId }));
+    .map((c) => ({ kind: 'session', id: c.id, label: c.title || 'Untitled session', detail: c.adapterId }));
 
   const fileItems: SearchItem[] = fileResults.map((f) => ({
     kind: 'file',

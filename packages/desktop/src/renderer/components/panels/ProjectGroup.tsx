@@ -129,10 +129,10 @@ function ChatRow({ chat, isActive, isArchiving, adapters, onSelect, onArchive, o
                     )}
                     tabIndex={0}
                   >
-                    {chat.title || 'New Chat'}
+                    {chat.title || 'Untitled session'}
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>{chat.title || 'New Chat'}</TooltipContent>
+                <TooltipContent>{chat.title || 'Untitled session'}</TooltipContent>
               </Tooltip>
             )}
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
