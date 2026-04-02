@@ -187,6 +187,7 @@ function handleResultEvent(session: ClaudeSession, event: Record<string, unknown
     (usage?.input_tokens || 0) + (usage?.cache_creation_input_tokens || 0) + (usage?.cache_read_input_tokens || 0);
   const tokensOutput = usage?.output_tokens || 0;
   session.state.lastAssistantUsage = undefined;
+  session.clearInterruptTimer();
 
   sink.onResult({
     total_cost_usd: (event.total_cost_usd as number) || 0,

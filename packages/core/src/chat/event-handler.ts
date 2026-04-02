@@ -254,6 +254,7 @@ function buildSessionSink(
       if (active) {
         active.chat.processState = null;
         db.chats.update(chatId, { processState: null });
+        emitEvent({ type: 'chat.updated', chat: active.chat });
       }
       emitEvent({ type: 'process.stopped', processId: sessionId });
     },
