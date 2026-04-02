@@ -73,6 +73,11 @@ export function MonacoDiffEditor({
       });
       setGetModel(() => () => inner.getModel());
 
+      if (startLine) {
+        // Reveal the first line of the diff content (editor line 1 = file line startLine due to lineOffset)
+        setTimeout(() => inner.revealLineInCenter(1), 100);
+      }
+
       if (!onLineComment) return;
 
       decorationsRef.current = inner.createDecorationsCollection([]);
@@ -112,7 +117,7 @@ export function MonacoDiffEditor({
         run: () => openCommentRef.current(inner),
       });
     },
-    [onLineComment, openComment],
+    [onLineComment, openComment, startLine],
   );
 
   useLayoutEffect(() => {

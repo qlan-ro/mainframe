@@ -23,6 +23,7 @@ export function SearchCard({
   return (
     <CollapsibleToolCard
       variant="compact"
+      copyText={resultText}
       header={
         <>
           <Search size={15} className="text-mf-text-secondary/40 shrink-0" />

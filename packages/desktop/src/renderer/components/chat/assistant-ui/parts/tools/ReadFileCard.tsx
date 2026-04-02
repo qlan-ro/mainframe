@@ -11,6 +11,7 @@ export function ReadFileCard({ args, result, isError }: ToolCardProps) {
   return (
     <CollapsibleToolCard
       variant="compact"
+      copyText={resultText}
       header={
         <>
           <Eye size={15} className="text-mf-text-secondary/40 shrink-0" />
