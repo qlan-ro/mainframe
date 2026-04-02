@@ -251,7 +251,6 @@ export class ClaudeSession implements AdapterSession {
       session_id: this.state.chatId,
       message: { role: 'user', content },
       parent_tool_use_id: null,
-      priority: 'now',
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
