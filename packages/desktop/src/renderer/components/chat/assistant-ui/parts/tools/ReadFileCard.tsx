@@ -1,7 +1,6 @@
 import { Eye } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { ErrorDot, shortFilename, stripErrorXml, type ToolCardProps } from './shared';
+import { ClickableFilePath, ErrorDot, stripErrorXml, type ToolCardProps } from './shared';
 
 export function ReadFileCard({ args, result, isError }: ToolCardProps) {
   const filePath = (args.file_path as string) || '';
@@ -14,14 +13,7 @@ export function ReadFileCard({ args, result, isError }: ToolCardProps) {
       header={
         <>
           <Eye size={15} className="text-mf-text-secondary/40 shrink-0" />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="font-mono text-mf-text-secondary/60 truncate text-mf-body" tabIndex={0}>
-                {shortFilename(filePath)}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{filePath}</TooltipContent>
-          </Tooltip>
+          <ClickableFilePath filePath={filePath} />
         </>
       }
       statusDot={<ErrorDot isError={isError} />}
