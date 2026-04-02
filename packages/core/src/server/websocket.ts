@@ -161,6 +161,16 @@ export class WebSocketManager {
         break;
       }
 
+      case 'message.queue.edit': {
+        this.chats.editQueuedMessage(event.chatId, event.messageId, event.content);
+        break;
+      }
+
+      case 'message.queue.cancel': {
+        this.chats.cancelQueuedMessage(event.chatId, event.messageId);
+        break;
+      }
+
       case 'subscribe': {
         client.subscriptions.add(event.chatId);
         break;

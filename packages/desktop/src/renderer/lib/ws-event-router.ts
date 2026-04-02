@@ -55,6 +55,10 @@ export function routeEvent(event: DaemonEvent): void {
     case 'display.message.added':
       log.debug('event:display.message.added', { chatId: event.chatId });
       chats.addMessage(event.chatId, event.message);
+      // Clear queued message when the flushed message appears as a normal user message
+      if (event.message.type === 'user' && chats.queuedMessages.has(event.chatId)) {
+        chats.setQueuedMessage(event.chatId, null);
+      }
       break;
     case 'display.message.updated':
       log.debug('event:display.message.updated', { chatId: event.chatId, messageId: event.message.id });
@@ -147,6 +151,18 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'plugin.action.unregistered':
       usePluginLayoutStore.getState().unregisterAction(event.pluginId, event.actionId);
+      break;
+    case 'message.queued':
+      log.info('event:message.queued', { chatId: event.chatId, messageId: event.message.id });
+      chats.setQueuedMessage(event.chatId, event.message);
+      break;
+    case 'message.queue.updated':
+      log.debug('event:message.queue.updated', { chatId: event.chatId, messageId: event.message.id });
+      chats.setQueuedMessage(event.chatId, event.message);
+      break;
+    case 'message.queue.cancelled':
+      log.info('event:message.queue.cancelled', { chatId: event.chatId, messageId: event.messageId });
+      chats.setQueuedMessage(event.chatId, null);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });

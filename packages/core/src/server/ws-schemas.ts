@@ -81,6 +81,19 @@ const Unsubscribe = z.object({
   chatId: z.string().min(1),
 });
 
+const MessageQueueEdit = z.object({
+  type: z.literal('message.queue.edit'),
+  chatId: z.string().min(1),
+  messageId: z.string().min(1),
+  content: z.string().min(1),
+});
+
+const MessageQueueCancel = z.object({
+  type: z.literal('message.queue.cancel'),
+  chatId: z.string().min(1),
+  messageId: z.string().min(1),
+});
+
 export const ClientEventSchema = z.discriminatedUnion('type', [
   ChatCreate,
   ChatResume,
@@ -91,4 +104,6 @@ export const ClientEventSchema = z.discriminatedUnion('type', [
   PermissionRespond,
   Subscribe,
   Unsubscribe,
+  MessageQueueEdit,
+  MessageQueueCancel,
 ]);

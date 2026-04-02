@@ -17,6 +17,7 @@ import { ComposerDropdown } from './ComposerDropdown';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
+import { QueuedMessageBanner } from './QueuedMessageBanner';
 import { useSandboxStore } from '../../../../store/sandbox';
 
 const PERMISSION_MODES = [
@@ -260,6 +261,7 @@ export function ComposerCard() {
         </div>
       )}
 
+      <QueuedMessageBanner chatId={chatId} />
       <div className="relative">
         <ComposerHighlight />
         <ComposerPrimitive.Input

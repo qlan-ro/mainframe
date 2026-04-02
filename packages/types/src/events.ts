@@ -1,4 +1,4 @@
-import type { Chat, ChatMessage } from './chat.js';
+import type { Chat, ChatMessage, QueuedMessage } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
 import type { PermissionMode } from './settings.js';
 import type { UIZone } from './plugin.js';
@@ -50,7 +50,10 @@ export type DaemonEvent =
   | { type: 'launch.tunnel'; projectId: string; effectivePath: string; name: string; url: string }
   | { type: 'launch.tunnel.failed'; projectId: string; effectivePath: string; name: string; error: string }
   | { type: 'launch.port.timeout'; projectId: string; effectivePath: string; name: string; port: number }
-  | { type: 'sessions.external.count'; projectId: string; count: number };
+  | { type: 'sessions.external.count'; projectId: string; count: number }
+  | { type: 'message.queued'; chatId: string; message: QueuedMessage }
+  | { type: 'message.queue.updated'; chatId: string; message: QueuedMessage }
+  | { type: 'message.queue.cancelled'; chatId: string; messageId: string };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }
@@ -69,4 +72,6 @@ export type ClientEvent =
   | { type: 'chat.updateConfig'; chatId: string; adapterId?: string; model?: string; permissionMode?: PermissionMode }
   | { type: 'chat.interrupt'; chatId: string }
   | { type: 'subscribe'; chatId: string }
-  | { type: 'unsubscribe'; chatId: string };
+  | { type: 'unsubscribe'; chatId: string }
+  | { type: 'message.queue.edit'; chatId: string; messageId: string; content: string }
+  | { type: 'message.queue.cancel'; chatId: string; messageId: string };

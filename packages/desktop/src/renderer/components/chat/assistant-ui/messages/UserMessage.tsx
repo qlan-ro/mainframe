@@ -115,17 +115,10 @@ export function UserMessage() {
     <MessagePrimitive.Root className="flex flex-col items-end gap-2 pt-2">
       {hasTextContent && (
         <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5">
-          <div className="flex items-start gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="aui-md text-mf-chat text-mf-text-primary">
-                <Markdown remarkPlugins={REMARK_PLUGINS} components={userComponents}>
-                  {cleanText}
-                </Markdown>
-              </div>
-            </div>
-            {!!original?.metadata?.queued && (
-              <span className="text-mf-small text-mf-text-secondary opacity-60 shrink-0 mt-0.5">Queued</span>
-            )}
+          <div className="aui-md text-mf-chat text-mf-text-primary">
+            <Markdown remarkPlugins={REMARK_PLUGINS} components={userComponents}>
+              {cleanText}
+            </Markdown>
           </div>
         </div>
       )}

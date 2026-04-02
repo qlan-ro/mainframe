@@ -70,3 +70,11 @@ export type MessageContent =
   | { type: 'error'; message: string };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
+
+export interface QueuedMessage {
+  id: string;
+  chatId: string;
+  content: string;
+  attachmentIds?: string[];
+  timestamp: string;
+}

@@ -5,6 +5,7 @@ import type {
   ControlResponse,
   DaemonEvent,
   DisplayMessage,
+  QueuedMessage,
   SessionMention,
   SessionContext,
 } from '@qlan-ro/mainframe-types';
@@ -12,6 +13,7 @@ import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import { existsSync } from 'node:fs';
+import { nanoid } from 'nanoid';
 import { createChildLogger } from '../logger.js';
 import { MessageCache } from './message-cache.js';
 import { PermissionManager } from './permission-manager.js';
@@ -33,6 +35,7 @@ const logger = createChildLogger('chat:manager');
 
 export class ChatManager {
   private activeChats = new Map<string, ActiveChat>();
+  private pendingMessages = new Map<string, QueuedMessage>();
   private messages = new MessageCache();
   private permissions: PermissionManager;
   private planMode: PlanModeHandler;
@@ -79,7 +82,9 @@ export class ChatManager {
       messages: this.messages,
       permissions: this.permissions,
       emitEvent: (event) => this.emitEvent(event),
-      buildSink: (chatId, respondToPermission) => this.eventHandler.buildSink(chatId, respondToPermission),
+      buildSink: (chatId, respondToPermission, onTurnComplete) =>
+        this.eventHandler.buildSink(chatId, respondToPermission, onTurnComplete),
+      onTurnComplete: (chatId) => this.flushQueuedMessage(chatId),
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,
@@ -254,8 +259,22 @@ export class ChatManager {
       textPrefix.length > 0 ? (content ? `${textPrefix.join('\n')}\n\n${content}` : textPrefix.join('\n')) : content;
 
     const isQueued = postStart.chat.processState === 'working';
+
+    if (isQueued) {
+      const queuedMsg: QueuedMessage = {
+        id: nanoid(),
+        chatId,
+        content,
+        attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
+        timestamp: new Date().toISOString(),
+      };
+      this.pendingMessages.set(queuedMsg.id, queuedMsg);
+      this.emitEvent({ type: 'message.queued', chatId, message: queuedMsg });
+      logger.info({ chatId, messageId: queuedMsg.id }, 'message queued while CLI busy');
+      return;
+    }
+
     const transientMetadata: Record<string, unknown> = {};
-    if (isQueued) transientMetadata.queued = true;
     if (attachmentPreviews.length > 0) transientMetadata.attachments = attachmentPreviews;
     const message = this.messages.createTransientMessage(
       chatId,
@@ -289,6 +308,29 @@ export class ChatManager {
     this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
 
     await postStart.session.sendMessage(outgoingContent, images.length > 0 ? images : undefined);
+  }
+
+  editQueuedMessage(chatId: string, messageId: string, content: string): void {
+    const msg = this.pendingMessages.get(messageId);
+    if (!msg || msg.chatId !== chatId) return;
+    msg.content = content;
+    this.emitEvent({ type: 'message.queue.updated', chatId, message: msg });
+  }
+
+  cancelQueuedMessage(chatId: string, messageId: string): void {
+    const msg = this.pendingMessages.get(messageId);
+    if (!msg || msg.chatId !== chatId) return;
+    this.pendingMessages.delete(messageId);
+    this.emitEvent({ type: 'message.queue.cancelled', chatId, messageId });
+  }
+
+  flushQueuedMessage(chatId: string): void {
+    const pending = [...this.pendingMessages.entries()].find(([, m]) => m.chatId === chatId);
+    if (!pending) return;
+    const [id, msg] = pending;
+    this.pendingMessages.delete(id);
+    logger.info({ chatId, messageId: id }, 'flushing queued message');
+    void this.sendMessage(chatId, msg.content, msg.attachmentIds);
   }
 
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {

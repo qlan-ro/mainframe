@@ -36,7 +36,11 @@ export class EventHandler {
     this.pushService = service;
   }
 
-  buildSink(chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>): SessionSink {
+  buildSink(
+    chatId: string,
+    respondToPermission: (response: ControlResponse) => Promise<void>,
+    onTurnComplete?: () => void,
+  ): SessionSink {
     return buildSessionSink(
       chatId,
       this.db,
@@ -48,6 +52,7 @@ export class EventHandler {
       this.displayCache,
       this.getToolCategories,
       this.pushService,
+      onTurnComplete,
     );
   }
 
@@ -74,6 +79,7 @@ function buildSessionSink(
   displayCache: Map<string, DisplayMessage[]>,
   getToolCategories: (chatId: string) => ToolCategories | undefined,
   pushService?: PushService,
+  onTurnComplete?: () => void,
 ): SessionSink {
   function emitDisplay(): void {
     const categories = getToolCategories(chatId);
@@ -244,6 +250,8 @@ function buildSessionSink(
           })
           .catch((err) => log.warn({ err }, 'push notification failed'));
       }
+
+      onTurnComplete?.();
     },
 
     onExit(_code: number | null) {
