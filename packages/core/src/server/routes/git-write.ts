@@ -85,7 +85,7 @@ export function gitWriteRoutes(ctx: RouteContext): Router {
   );
   router.post(
     '/api/projects/:id/git/pull',
-    gitRoute(ctx, GitPullBody, (svc, d) => svc.pull(d.remote, d.branch), 'pull'),
+    gitRoute(ctx, GitPullBody, (svc, d) => svc.pull(d.remote, d.branch, d.localBranch), 'pull'),
   );
   router.post(
     '/api/projects/:id/git/push',
