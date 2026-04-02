@@ -35,6 +35,8 @@ const nullSink: SessionSink = {
   onExit: () => {},
   onError: () => {},
   onCompact: () => {},
+  onCompactStart: () => {},
+  onContextUsage: () => {},
   onPlanFile: () => {},
   onSkillFile: () => {},
 };
@@ -51,6 +53,7 @@ export interface ClaudeSessionState {
   child: ChildProcess | null;
   status: 'starting' | 'ready' | 'running' | 'stopped' | 'error';
   pid: number;
+  activeTasks: Map<string, { type: string; command?: string }>;
 }
 
 /**
@@ -85,6 +88,7 @@ export class ClaudeSession implements AdapterSession {
       child: null,
       status: 'starting',
       pid: 0,
+      activeTasks: new Map(),
     };
   }
 
@@ -191,11 +195,33 @@ export class ClaudeSession implements AdapterSession {
       request: { subtype: 'interrupt' },
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
+
+    for (const [taskId] of this.state.activeTasks) {
+      const stopPayload = {
+        type: 'control_request',
+        request_id: crypto.randomUUID(),
+        request: { subtype: 'stop_task', task_id: taskId },
+      };
+      child.stdin?.write(JSON.stringify(stopPayload) + '\n');
+    }
+    this.state.activeTasks.clear();
+
     // Also send SIGINT: the CLI's stdin message loop blocks while background
     // agents are running (agent-wait loop), so the protocol interrupt above
     // may sit unread in the buffer. SIGINT triggers the CLI's signal handler
     // which calls abort() on the current turn's AbortController directly.
     child.kill('SIGINT');
+  }
+
+  requestContextUsage(): void {
+    const child = this.state.child;
+    if (!child) return;
+    const payload = {
+      type: 'control_request',
+      request_id: crypto.randomUUID(),
+      request: { subtype: 'get_context_usage' },
+    };
+    child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
   async setPermissionMode(mode: string): Promise<void> {

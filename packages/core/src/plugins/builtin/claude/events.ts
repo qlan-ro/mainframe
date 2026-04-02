@@ -1,5 +1,11 @@
 import path from 'node:path';
-import type { ControlRequest, ControlUpdate, MessageContent, SessionSink } from '@qlan-ro/mainframe-types';
+import type {
+  ContextUsage,
+  ControlRequest,
+  ControlUpdate,
+  MessageContent,
+  SessionSink,
+} from '@qlan-ro/mainframe-types';
 import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
 import { createChildLogger } from '../../../logger.js';
@@ -46,6 +52,17 @@ function handleSystemEvent(session: ClaudeSession, event: Record<string, unknown
     sink.onInit(event.session_id as string);
   } else if (event.subtype === 'compact_boundary') {
     sink.onCompact();
+  } else if (event.subtype === 'task_started') {
+    session.state.activeTasks.set(event.task_id as string, {
+      type: event.task_type as string,
+      command: event.command as string | undefined,
+    });
+  } else if (event.subtype === 'task_notification') {
+    session.state.activeTasks.delete(event.task_id as string);
+  } else if (event.subtype === 'status') {
+    if (event.status === 'compacting') {
+      sink.onCompactStart();
+    }
   }
 }
 
@@ -139,6 +156,21 @@ function handleControlRequestEvent(session: ClaudeSession, event: Record<string,
   }
 }
 
+function handleControlResponseEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+  const response = event.response as Record<string, unknown> | undefined;
+  if (!response) return;
+
+  const data = response.data as Record<string, unknown> | undefined;
+  if (data?.subtype === 'context_usage') {
+    const usage: ContextUsage = {
+      totalTokens: (data.totalTokens as number) || 0,
+      maxTokens: (data.maxTokens as number) || 0,
+      percentage: (data.percentage as number) || 0,
+    };
+    sink.onContextUsage(usage);
+  }
+}
+
 function handleResultEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   const lastUsage = session.state.lastAssistantUsage;
   const usage =
@@ -169,6 +201,10 @@ function handleResultEvent(session: ClaudeSession, event: Record<string, unknown
     subtype: event.subtype as string | undefined,
     is_error: event.is_error as boolean | undefined,
   });
+
+  // Request context usage after each result so the UI can show an up-to-date
+  // context percentage without requiring a separate user action.
+  session.requestContextUsage();
 }
 
 function handleEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
@@ -188,6 +224,8 @@ function handleEvent(session: ClaudeSession, event: Record<string, unknown>, sin
       return handleUserEvent(session, event, sink);
     case 'control_request':
       return handleControlRequestEvent(session, event, sink);
+    case 'control_response':
+      return handleControlResponseEvent(session, event, sink);
     case 'result':
       return handleResultEvent(session, event, sink);
   }
