@@ -1,8 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, ChevronDown, Check } from 'lucide-react';
+import { Search, X, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Todo, TodoType, TodoPriority } from '../../lib/api/todos-api';
+
+export type TodoSortKey = 'number' | 'priority' | 'type';
+export type TodoSortDir = 'asc' | 'desc';
+export interface TodoSort {
+  key: TodoSortKey;
+  dir: TodoSortDir;
+}
 
 export interface TodoFilters {
   types: TodoType[];
@@ -14,6 +21,27 @@ export interface TodoFilters {
 const TYPES: TodoType[] = ['bug', 'feature', 'enhancement', 'documentation', 'question'];
 const PRIORITIES: TodoPriority[] = ['critical', 'high', 'medium', 'low'];
 
+const PRIORITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+const SORT_LABELS: Record<TodoSortKey, string> = { number: '#', priority: 'Priority', type: 'Type' };
+const SORT_KEYS: TodoSortKey[] = ['number', 'priority', 'type'];
+
+/** Sort todos by the given key and direction. */
+export function sortTodos(todos: Todo[], sort: TodoSort): Todo[] {
+  const sorted = [...todos];
+  const dir = sort.dir === 'asc' ? 1 : -1;
+  sorted.sort((a, b) => {
+    switch (sort.key) {
+      case 'number':
+        return (a.number - b.number) * dir;
+      case 'priority':
+        return ((PRIORITY_RANK[a.priority] ?? 4) - (PRIORITY_RANK[b.priority] ?? 4)) * dir;
+      case 'type':
+        return a.type.localeCompare(b.type) * dir;
+    }
+  });
+  return sorted;
+}
+
 const chipBase = 'px-1.5 py-0.5 rounded text-mf-status cursor-pointer select-none transition-colors';
 const chipOff = 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary';
 const chipOn = 'bg-mf-accent/20 text-mf-accent';
@@ -22,6 +50,8 @@ interface Props {
   filters: TodoFilters;
   onChange: (f: TodoFilters) => void;
   allLabels: string[];
+  sort: TodoSort;
+  onSortChange: (s: TodoSort) => void;
 }
 
 function toggleItem<T>(arr: T[], item: T): T[] {
@@ -164,7 +194,36 @@ function LabelsPopover({
 
 const divider = 'w-px h-4 bg-mf-border shrink-0';
 
-export function TodoFilterBar({ filters, onChange, allLabels }: Props): React.ReactElement {
+function SortControl({ sort, onSortChange }: { sort: TodoSort; onSortChange: (s: TodoSort) => void }) {
+  const cycle = (key: TodoSortKey) => {
+    if (sort.key === key) {
+      onSortChange({ key, dir: sort.dir === 'desc' ? 'asc' : 'desc' });
+    } else {
+      onSortChange({ key, dir: key === 'number' ? 'desc' : 'asc' });
+    }
+  };
+
+  const DirIcon = sort.dir === 'desc' ? ArrowDown : ArrowUp;
+
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <ArrowUpDown size={11} className="text-mf-text-secondary shrink-0" />
+      {SORT_KEYS.map((key) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => cycle(key)}
+          className={cn(chipBase, sort.key === key ? chipOn : chipOff, 'flex items-center gap-0.5')}
+        >
+          {SORT_LABELS[key]}
+          {sort.key === key && <DirIcon size={9} />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function TodoFilterBar({ filters, onChange, allLabels, sort, onSortChange }: Props): React.ReactElement {
   const active = hasActiveFilters(filters);
   const clearAll = () => onChange({ types: [], priorities: [], labels: [], search: '' });
 
@@ -214,21 +273,24 @@ export function TodoFilterBar({ filters, onChange, allLabels }: Props): React.Re
           </>
         )}
 
-        {/* Search — right-aligned */}
-        <div className="ml-auto flex items-center gap-1 w-40 shrink-0 bg-mf-app-bg border border-mf-border rounded-mf-input px-2 py-0.5">
-          <Search size={12} className="text-mf-text-secondary shrink-0" />
-          <input
-            type="text"
-            value={filters.search}
-            onChange={(e) => onChange({ ...filters, search: e.target.value })}
-            placeholder="Filter by title..."
-            className="flex-1 bg-transparent text-mf-small text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none min-w-0"
-          />
-          {filters.search && (
-            <button onClick={() => onChange({ ...filters, search: '' })} className="text-mf-text-secondary">
-              <X size={10} />
-            </button>
-          )}
+        {/* Sort + Search — right-aligned */}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <SortControl sort={sort} onSortChange={onSortChange} />
+          <div className="flex items-center gap-1 w-40 bg-mf-app-bg border border-mf-border rounded-mf-input px-2 py-0.5">
+            <Search size={12} className="text-mf-text-secondary shrink-0" />
+            <input
+              type="text"
+              value={filters.search}
+              onChange={(e) => onChange({ ...filters, search: e.target.value })}
+              placeholder="Filter by title..."
+              className="flex-1 bg-transparent text-mf-small text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none min-w-0"
+            />
+            {filters.search && (
+              <button onClick={() => onChange({ ...filters, search: '' })} className="text-mf-text-secondary">
+                <X size={10} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
