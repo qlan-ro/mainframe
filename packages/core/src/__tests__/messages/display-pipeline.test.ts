@@ -255,11 +255,11 @@ describe('prepareMessagesForClient', () => {
     });
   });
 
-  it('handles orphan tool_result (not attached to assistant) as assistant message', () => {
+  it('suppresses orphan tool_result (not attached to assistant)', () => {
     const messages = [rawMsg('user', [txt('question')]), rawMsg('tool_result', [tr('tu1', 'orphan result')])];
     const result = prepareMessagesForClient(messages);
-    expect(result).toHaveLength(2);
-    expect(result[1]!.type).toBe('assistant');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.type).toBe('user');
   });
 
   describe('tool grouping with categories', () => {
