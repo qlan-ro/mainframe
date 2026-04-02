@@ -6,6 +6,7 @@ import { usePluginLayoutStore } from '../store/plugins';
 import { useSandboxStore } from '../store/sandbox';
 import { createLogger } from './logger';
 import { buildLaunchScope } from './launch-scope.js';
+import { notify } from './notify';
 
 const log = createLogger('renderer:ws');
 
@@ -22,13 +23,30 @@ export function routeEvent(event: DaemonEvent): void {
         tabs.openChatTab(event.chat.id, event.chat.title);
       }
       break;
-    case 'chat.updated':
+    case 'chat.updated': {
       log.debug('event:chat.updated', { chatId: event.chat.id });
       chats.updateChat(event.chat);
       if (event.chat.title) {
         tabs.updateTabLabel(`chat:${event.chat.id}`, event.chat.title);
       }
+
+      if (event.reason === 'completed') {
+        notify({
+          type: 'success',
+          title: event.chat.title ?? 'Session',
+          body: 'Agent responded',
+          chatId: event.chat.id,
+        });
+      } else if (event.reason === 'error') {
+        notify({
+          type: 'error',
+          title: event.chat.title ?? 'Session',
+          body: 'Agent error',
+          chatId: event.chat.id,
+        });
+      }
       break;
+    }
     case 'chat.ended':
       log.info('event:chat.ended', { chatId: event.chatId });
       chats.removeChat(event.chatId);
@@ -57,6 +75,15 @@ export function routeEvent(event: DaemonEvent): void {
         toolName: event.request.toolName,
       });
       chats.addPendingPermission(event.chatId, event.request);
+      {
+        const chat = chats.chats.find((c) => c.id === event.chatId);
+        notify({
+          type: 'info',
+          title: chat?.title ?? 'Session',
+          body: 'Permission required',
+          chatId: event.chatId,
+        });
+      }
       break;
     case 'permission.resolved': {
       log.info('event:permission.resolved', { chatId: event.chatId, requestId: event.requestId });
@@ -101,6 +128,13 @@ export function routeEvent(event: DaemonEvent): void {
       log.warn('event:launch.port.timeout', { projectId: event.projectId, name: event.name, port: event.port });
       break;
     case 'sessions.external.count':
+      break;
+    case 'plugin.notification':
+      notify({
+        type: event.level === 'error' ? 'error' : event.level === 'success' ? 'success' : 'info',
+        title: event.title,
+        body: event.body,
+      });
       break;
     case 'plugin.action.registered':
       usePluginLayoutStore.getState().registerAction({

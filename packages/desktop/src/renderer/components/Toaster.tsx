@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 import { useToastStore, type Toast } from '../store/toasts';
+import { useChatsStore } from '../store/chats';
+import { useTabsStore } from '../store/tabs';
 import { cn } from '../lib/utils';
 
 const MAX_VISIBLE = 5;
@@ -33,15 +35,25 @@ function ToastItem({ toast, onDismiss }: ToastItemProps): React.ReactElement {
     return () => clearTimeout(timer);
   }, [toast.id, toast.type, onDismiss]);
 
+  const handleClick = useCallback(() => {
+    if (!toast.chatId) return;
+    const chat = useChatsStore.getState().chats.find((c) => c.id === toast.chatId);
+    useChatsStore.getState().setActiveChat(toast.chatId);
+    useTabsStore.getState().openChatTab(toast.chatId, chat?.title);
+    onDismiss(toast.id);
+  }, [toast.chatId, toast.id, onDismiss]);
+
   const { icon, style } = TYPE_CONFIG[toast.type];
 
   return (
     <div
       role="alert"
+      onClick={handleClick}
       className={cn(
         'w-[340px] rounded-md px-3 py-2 text-sm shadow-lg border',
         'transition-opacity duration-200 flex items-start gap-2',
         style,
+        toast.chatId && 'cursor-pointer hover:brightness-110',
       )}
     >
       {icon}
@@ -54,7 +66,10 @@ function ToastItem({ toast, onDismiss }: ToastItemProps): React.ReactElement {
         )}
       </div>
       <button
-        onClick={() => onDismiss(toast.id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDismiss(toast.id);
+        }}
         className="shrink-0 mt-0.5 opacity-40 hover:opacity-100 transition-opacity"
         aria-label="Dismiss"
       >
