@@ -5,7 +5,14 @@ import { createLogger } from '../../lib/logger';
 const log = createLogger('renderer:todos');
 import { todosApi, type Todo, type TodoStatus, type CreateTodoInput } from '../../lib/api/todos-api';
 import type { PendingAttachment } from './TodoModal';
-import { TodoFilterBar, type TodoFilters, matchesFilters, extractAllLabels } from './TodoFilterBar';
+import {
+  TodoFilterBar,
+  type TodoFilters,
+  type TodoSort,
+  matchesFilters,
+  extractAllLabels,
+  sortTodos,
+} from './TodoFilterBar';
 import { TodoCard } from './TodoCard';
 import { TodoModal } from './TodoModal';
 import { usePluginLayoutStore } from '../../store';
@@ -33,6 +40,7 @@ export function TodosPanel(): React.ReactElement {
     labels: [],
     search: '',
   });
+  const [sort, setSort] = useState<TodoSort>({ key: 'number', dir: 'desc' });
   const activeProjectId = useActiveProjectId();
 
   const loadAttachmentCounts = useCallback(async (todoIds: string[]) => {
@@ -240,12 +248,21 @@ export function TodosPanel(): React.ReactElement {
       </div>
 
       {/* Filters */}
-      <TodoFilterBar filters={filters} onChange={setFilters} allLabels={extractAllLabels(todos)} />
+      <TodoFilterBar
+        filters={filters}
+        onChange={setFilters}
+        allLabels={extractAllLabels(todos)}
+        sort={sort}
+        onSortChange={setSort}
+      />
 
       {/* Columns */}
       <div className="flex-1 flex gap-px overflow-hidden">
         {COLUMNS.map(({ status, label }) => {
-          const colTodos = todos.filter((t) => t.status === status && matchesFilters(t, filters));
+          const colTodos = sortTodos(
+            todos.filter((t) => t.status === status && matchesFilters(t, filters)),
+            sort,
+          );
           return (
             <div
               key={status}
