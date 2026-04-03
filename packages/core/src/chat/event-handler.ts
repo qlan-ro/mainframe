@@ -37,11 +37,7 @@ export class EventHandler {
     this.pushService = service;
   }
 
-  buildSink(
-    chatId: string,
-    respondToPermission: (response: ControlResponse) => Promise<void>,
-    onTurnComplete?: () => void,
-  ): SessionSink {
+  buildSink(chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>): SessionSink {
     return buildSessionSink(
       chatId,
       this.db,
@@ -53,7 +49,6 @@ export class EventHandler {
       this.displayCache,
       this.getToolCategories,
       this.pushService,
-      onTurnComplete,
     );
   }
 
@@ -80,7 +75,6 @@ function buildSessionSink(
   displayCache: Map<string, DisplayMessage[]>,
   getToolCategories: (chatId: string) => ToolCategories | undefined,
   pushService?: PushService,
-  onTurnComplete?: () => void,
 ): SessionSink {
   function emitDisplay(): void {
     const categories = getToolCategories(chatId);
@@ -251,8 +245,20 @@ function buildSessionSink(
           })
           .catch((err) => log.warn({ err }, 'push notification failed'));
       }
+    },
 
-      onTurnComplete?.();
+    onQueuedProcessed(uuid: string) {
+      const msgs = messages.get(chatId);
+      if (!msgs) return;
+      const msg = msgs.find((m) => m.metadata?.uuid === uuid);
+      if (!msg) return;
+      if (msg.metadata) {
+        delete (msg.metadata as Record<string, unknown>).queued;
+        delete (msg.metadata as Record<string, unknown>).uuid;
+      }
+      messages.reposition(chatId, msg.id);
+      emitDisplay();
+      emitEvent({ type: 'message.queued.processed', chatId, uuid });
     },
 
     onExit(_code: number | null) {

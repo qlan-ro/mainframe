@@ -5,7 +5,7 @@ import type {
   ControlResponse,
   DaemonEvent,
   DisplayMessage,
-  QueuedMessage,
+  QueuedMessageRef,
   SessionMention,
   SessionContext,
 } from '@qlan-ro/mainframe-types';
@@ -35,7 +35,7 @@ const logger = createChildLogger('chat:manager');
 
 export class ChatManager {
   private activeChats = new Map<string, ActiveChat>();
-  private pendingMessages = new Map<string, QueuedMessage>();
+  private queuedRefs = new Map<string, QueuedMessageRef>();
   private messages = new MessageCache();
   private permissions: PermissionManager;
   private planMode: PlanModeHandler;
@@ -82,9 +82,7 @@ export class ChatManager {
       messages: this.messages,
       permissions: this.permissions,
       emitEvent: (event) => this.emitEvent(event),
-      buildSink: (chatId, respondToPermission, onTurnComplete) =>
-        this.eventHandler.buildSink(chatId, respondToPermission, onTurnComplete),
-      onTurnComplete: (chatId) => this.flushQueuedMessage(chatId),
+      buildSink: (chatId, respondToPermission) => this.eventHandler.buildSink(chatId, respondToPermission),
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,
@@ -259,23 +257,13 @@ export class ChatManager {
       textPrefix.length > 0 ? (content ? `${textPrefix.join('\n')}\n\n${content}` : textPrefix.join('\n')) : content;
 
     const isQueued = postStart.chat.processState === 'working';
-
-    if (isQueued) {
-      const queuedMsg: QueuedMessage = {
-        id: nanoid(),
-        chatId,
-        content,
-        attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
-        timestamp: new Date().toISOString(),
-      };
-      this.pendingMessages.set(queuedMsg.id, queuedMsg);
-      this.emitEvent({ type: 'message.queued', chatId, message: queuedMsg });
-      logger.info({ chatId, messageId: queuedMsg.id }, 'message queued while CLI busy');
-      return;
-    }
-
     const transientMetadata: Record<string, unknown> = {};
+    if (isQueued) transientMetadata.queued = true;
     if (attachmentPreviews.length > 0) transientMetadata.attachments = attachmentPreviews;
+
+    // Generate uuid for queued messages — used for cancel/reposition tracking
+    const messageUuid = isQueued ? nanoid() : undefined;
+    if (messageUuid) transientMetadata.uuid = messageUuid;
     const message = this.messages.createTransientMessage(
       chatId,
       'user',
@@ -307,30 +295,71 @@ export class ChatManager {
     this.db.chats.update(chatId, { processState: 'working', updatedAt: now });
     this.emitEvent({ type: 'chat.updated', chat: postStart.chat });
 
-    await postStart.session.sendMessage(outgoingContent, images.length > 0 ? images : undefined);
+    await postStart.session.sendMessage(outgoingContent, images.length > 0 ? images : undefined, messageUuid);
+
+    // Track queued message ref for cancel/edit
+    if (messageUuid) {
+      const ref: QueuedMessageRef = {
+        messageId: message.id,
+        chatId,
+        uuid: messageUuid,
+        content,
+        attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
+        timestamp: message.timestamp,
+      };
+      this.queuedRefs.set(messageUuid, ref);
+      this.emitEvent({ type: 'message.queued', chatId, ref });
+      logger.info({ chatId, uuid: messageUuid, messageId: message.id }, 'message sent to CLI while busy (queued)');
+    }
   }
 
-  editQueuedMessage(chatId: string, messageId: string, content: string): void {
-    const msg = this.pendingMessages.get(messageId);
-    if (!msg || msg.chatId !== chatId) return;
-    msg.content = content;
-    this.emitEvent({ type: 'message.queue.updated', chatId, message: msg });
+  async editQueuedMessage(chatId: string, messageId: string, content: string): Promise<void> {
+    const ref = [...this.queuedRefs.values()].find((r) => r.chatId === chatId && r.messageId === messageId);
+    if (!ref) return;
+
+    const active = this.activeChats.get(chatId);
+    if (!active?.session) return;
+
+    const cancelled = await active.session.cancelQueuedMessage(ref.uuid);
+    if (!cancelled) {
+      logger.info({ chatId, uuid: ref.uuid }, 'edit failed: message already dequeued by CLI');
+      this.emitEvent({ type: 'message.queued.cancel_failed', chatId, uuid: ref.uuid });
+      return;
+    }
+
+    this.queuedRefs.delete(ref.uuid);
+    this.messages.removeById(chatId, ref.messageId);
+    this.eventHandler.emitDisplay(chatId);
+
+    await this.sendMessage(chatId, content, ref.attachmentIds);
   }
 
-  cancelQueuedMessage(chatId: string, messageId: string): void {
-    const msg = this.pendingMessages.get(messageId);
-    if (!msg || msg.chatId !== chatId) return;
-    this.pendingMessages.delete(messageId);
-    this.emitEvent({ type: 'message.queue.cancelled', chatId, messageId });
+  async cancelQueuedMessage(chatId: string, messageId: string): Promise<void> {
+    const ref = [...this.queuedRefs.values()].find((r) => r.chatId === chatId && r.messageId === messageId);
+    if (!ref) return;
+
+    const active = this.activeChats.get(chatId);
+    if (!active?.session) return;
+
+    const cancelled = await active.session.cancelQueuedMessage(ref.uuid);
+    if (!cancelled) {
+      logger.info({ chatId, uuid: ref.uuid }, 'cancel failed: message already dequeued by CLI');
+      this.emitEvent({ type: 'message.queued.cancel_failed', chatId, uuid: ref.uuid });
+      return;
+    }
+
+    this.queuedRefs.delete(ref.uuid);
+    this.messages.removeById(chatId, ref.messageId);
+    this.emitEvent({ type: 'message.queued.cancelled', chatId, uuid: ref.uuid });
+    this.eventHandler.emitDisplay(chatId);
+    logger.info({ chatId, uuid: ref.uuid }, 'queued message cancelled in CLI');
   }
 
-  flushQueuedMessage(chatId: string): void {
-    const pending = [...this.pendingMessages.entries()].find(([, m]) => m.chatId === chatId);
-    if (!pending) return;
-    const [id, msg] = pending;
-    this.pendingMessages.delete(id);
-    logger.info({ chatId, messageId: id }, 'flushing queued message');
-    void this.sendMessage(chatId, msg.content, msg.attachmentIds);
+  handleQueuedProcessed(chatId: string, uuid: string): void {
+    const ref = this.queuedRefs.get(uuid);
+    if (!ref) return;
+    this.queuedRefs.delete(uuid);
+    logger.info({ chatId, uuid, messageId: ref.messageId }, 'CLI processed queued message');
   }
 
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {

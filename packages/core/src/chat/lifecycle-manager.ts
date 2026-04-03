@@ -25,13 +25,7 @@ export interface LifecycleManagerDeps {
   messages: MessageCache;
   permissions: PermissionManager;
   emitEvent: (event: DaemonEvent) => void;
-  buildSink: (
-    chatId: string,
-    respondToPermission: (response: ControlResponse) => Promise<void>,
-    onTurnComplete?: () => void,
-  ) => SessionSink;
-  /** Called after a CLI turn completes — used to flush queued messages */
-  onTurnComplete?: (chatId: string) => void;
+  buildSink: (chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>) => SessionSink;
   /** Stop launch processes for a project+path pair (e.g. before worktree removal) */
   stopLaunchProcesses?: (projectId: string, projectPath: string) => Promise<void>;
 }
@@ -369,11 +363,7 @@ export class ChatLifecycleManager {
     });
     active.session = session;
 
-    const sink = this.deps.buildSink(
-      chatId,
-      (response) => session.respondToPermission(response),
-      () => this.deps.onTurnComplete?.(chatId),
-    );
+    const sink = this.deps.buildSink(chatId, (response) => session.respondToPermission(response));
 
     const executablePath = this.deps.db.settings.get('provider', `${chat.adapterId}.executablePath`) ?? undefined;
     const processInfo = await session.spawn(
