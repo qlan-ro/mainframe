@@ -87,16 +87,14 @@ function buildGroups(projects: Project[], chats: Chat[]): ProjectGroupData[] {
 const BADGE_BASE =
   'inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold leading-none';
 
-function FilterPillBadges({
-  unreadCount,
-  waitingCount,
+function FilterPillBadge({
+  count,
   isActive,
   onClick,
   label,
   truncate: shouldTruncate,
 }: {
-  unreadCount: number;
-  waitingCount: number;
+  count: number;
   isActive: boolean;
   onClick: () => void;
   label: string;
@@ -112,14 +110,9 @@ function FilterPillBadges({
       )}
     >
       {shouldTruncate ? <span className="truncate max-w-[140px]">{label}</span> : label}
-      {unreadCount > 0 && (
+      {count > 0 && (
         <span className={cn(BADGE_BASE, isActive ? 'bg-mf-hover text-mf-text-secondary' : 'bg-mf-accent text-white')}>
-          {unreadCount}
-        </span>
-      )}
-      {waitingCount > 0 && (
-        <span className={cn(BADGE_BASE, isActive ? 'bg-mf-hover text-mf-text-secondary' : 'bg-amber-500 text-white')}>
-          {waitingCount}
+          {count}
         </span>
       )}
     </button>
@@ -267,18 +260,14 @@ export function ChatsPanel(): React.ReactElement {
     [flatChats, filterProjectId],
   );
 
-  const badgeCounts = useMemo(() => {
-    const unread = new Map<string, number>();
-    const waiting = new Map<string, number>();
+  const attentionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
     for (const chat of chats) {
-      if (unreadChatIds.has(chat.id)) {
-        unread.set(chat.projectId, (unread.get(chat.projectId) ?? 0) + 1);
-      }
-      if (pendingPermissions.has(chat.id)) {
-        waiting.set(chat.projectId, (waiting.get(chat.projectId) ?? 0) + 1);
+      if (unreadChatIds.has(chat.id) || pendingPermissions.has(chat.id)) {
+        counts.set(chat.projectId, (counts.get(chat.projectId) ?? 0) + 1);
       }
     }
-    return { unread, waiting };
+    return counts;
   }, [chats, unreadChatIds, pendingPermissions]);
 
   // Sorted project list for filter badges (most recently used first)
@@ -444,9 +433,8 @@ export function ChatsPanel(): React.ReactElement {
       {projects.length > 1 && (
         <div className="px-2.5 py-2 overflow-hidden">
           <div ref={filterScrollRef} onWheel={handleFilterWheel} className="flex gap-2 overflow-x-auto scrollbar-none">
-            <FilterPillBadges
-              unreadCount={Array.from(badgeCounts.unread.values()).reduce((a, b) => a + b, 0)}
-              waitingCount={Array.from(badgeCounts.waiting.values()).reduce((a, b) => a + b, 0)}
+            <FilterPillBadge
+              count={Array.from(attentionCounts.values()).reduce((a, b) => a + b, 0)}
               isActive={filterProjectId === null}
               onClick={() => handleFilterSelect(null)}
               label="All"
@@ -454,9 +442,8 @@ export function ChatsPanel(): React.ReactElement {
             {sortedProjects.map((p) => (
               <Tooltip key={p.id}>
                 <TooltipTrigger asChild>
-                  <FilterPillBadges
-                    unreadCount={badgeCounts.unread.get(p.id) ?? 0}
-                    waitingCount={badgeCounts.waiting.get(p.id) ?? 0}
+                  <FilterPillBadge
+                    count={attentionCounts.get(p.id) ?? 0}
                     isActive={filterProjectId === p.id}
                     onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
                     label={p.name}
