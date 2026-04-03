@@ -113,12 +113,12 @@ function FilterPillBadges({
     >
       {shouldTruncate ? <span className="truncate max-w-[140px]">{label}</span> : label}
       {unreadCount > 0 && (
-        <span className={cn(BADGE_BASE, isActive ? 'bg-white/25 text-white' : 'bg-mf-accent text-white')}>
+        <span className={cn(BADGE_BASE, isActive ? 'bg-mf-hover text-mf-text-secondary' : 'bg-mf-accent text-white')}>
           {unreadCount}
         </span>
       )}
       {waitingCount > 0 && (
-        <span className={cn(BADGE_BASE, isActive ? 'bg-white/25 text-white' : 'bg-amber-500 text-white')}>
+        <span className={cn(BADGE_BASE, isActive ? 'bg-mf-hover text-mf-text-secondary' : 'bg-amber-500 text-white')}>
           {waitingCount}
         </span>
       )}
