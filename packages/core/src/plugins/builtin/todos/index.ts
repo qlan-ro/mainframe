@@ -78,9 +78,12 @@ const TodoUpdateSchema = z.object({
   labels: z.array(z.string()).optional(),
   assignees: z.array(z.string()).optional(),
   milestone: z.string().optional(),
+  dependencies: z.array(z.number()).optional(),
 });
 
-function buildInitialMessage(todo: Todo): string {
+const STATUS_LABELS: Record<string, string> = { open: 'Open', in_progress: 'In Progress', done: 'Done' };
+
+function buildInitialMessage(todo: Todo, depTodos: Todo[]): string {
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const labels = todo.labels.length > 0 ? todo.labels.join(', ') : 'none';
   const lines = [
@@ -88,6 +91,9 @@ function buildInitialMessage(todo: Todo): string {
     `Type: ${cap(todo.type)} | Priority: ${cap(todo.priority)} | Labels: ${labels}`,
   ];
   if (todo.milestone) lines.push(`Milestone: ${todo.milestone}`);
+  if (depTodos.length > 0) {
+    lines.push(`Dependencies: ${depTodos.map((d) => `#${d.number} ${d.title} (${d.status})`).join(', ')}`);
+  }
   if (todo.body) lines.push(``, `## Description`, todo.body);
   return lines.join('\n');
 }
@@ -118,10 +124,10 @@ function registerTodoRoutes(ctx: PluginContext): void {
     const id = nanoid();
     ctx.db
       .prepare(
-        `INSERT INTO todos (id,number,project_id,title,body,status,type,priority,labels,assignees,milestone,order_index,created_at,updated_at)
+        `INSERT INTO todos (id,number,project_id,title,body,status,type,priority,labels,assignees,milestone,dependencies,order_index,created_at,updated_at)
          VALUES (?,
            (SELECT COALESCE(MAX(number), 0) + 1 FROM todos WHERE project_id = ?),
-           ?,?,?,?,?,?,?,?,?,?,?,?)`,
+           ?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         id,
@@ -135,13 +141,14 @@ function registerTodoRoutes(ctx: PluginContext): void {
         JSON.stringify(d.labels),
         JSON.stringify(d.assignees),
         d.milestone ?? null,
+        JSON.stringify(d.dependencies),
         0,
         now,
         now,
       );
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
     const todo = parseTodo(row);
-    ctx.ui.notify({ title: 'Task created', body: `#${todo.number} ${todo.title}`, level: 'info' });
+    ctx.ui.notify({ title: 'Task created', body: `#${todo.number} ${todo.title}`, level: 'success' });
     res.status(201).json({ todo });
   });
 
@@ -202,7 +209,11 @@ function registerTodoRoutes(ctx: PluginContext): void {
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
     const updated = parseTodo(row);
     if (d.status !== undefined && d.status !== existingRow.status) {
-      ctx.ui.notify({ title: `Task ${d.status}`, body: `#${updated.number} ${updated.title}`, level: 'info' });
+      ctx.ui.notify({
+        title: `#${updated.number} ${updated.title}`,
+        body: `Moved to ${STATUS_LABELS[d.status] ?? d.status}`,
+        level: 'success',
+      });
     }
     res.json({ todo: updated });
   });
@@ -224,7 +235,19 @@ function registerTodoRoutes(ctx: PluginContext): void {
       return;
     }
     const todo = parseTodo(row);
-    ctx.ui.notify({ title: `Task ${status}`, body: `#${todo.number} ${todo.title}`, level: 'info' });
+    if (status === 'done' && todo.dependencies.length > 0) {
+      const openDeps = todo.dependencies
+        .map((num) =>
+          ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE number = ? AND project_id = ?').get(num, todo.project_id),
+        )
+        .filter((r): r is TodoRow => r !== undefined)
+        .map(parseTodo)
+        .filter((d) => d.status !== 'done');
+      if (openDeps.length > 0) {
+        const names = openDeps.map((d) => `#${d.number} ${d.title}`).join(', ');
+        ctx.ui.notify({ title: `#${todo.number} ${todo.title} has open dependencies`, body: names, level: 'warning' });
+      }
+    }
     res.json({ todo });
   });
 
@@ -252,8 +275,19 @@ function registerSessionRoute(ctx: PluginContext): void {
       return;
     }
     const todo = parseTodo(row);
+    const depTodos =
+      todo.dependencies.length > 0
+        ? todo.dependencies
+            .map((num) =>
+              ctx.db
+                .prepare<TodoRow>('SELECT * FROM todos WHERE number = ? AND project_id = ?')
+                .get(num, todo.project_id),
+            )
+            .filter((r): r is TodoRow => r !== undefined)
+            .map(parseTodo)
+        : [];
     const { chatId } = await ctx.services.chats.createChat({ projectId: parsed.data.projectId });
-    res.json({ chatId, initialMessage: buildInitialMessage(todo) });
+    res.json({ chatId, initialMessage: buildInitialMessage(todo, depTodos) });
   });
 }
 
