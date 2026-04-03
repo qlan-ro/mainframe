@@ -439,13 +439,13 @@ export function ChatsPanel(): React.ReactElement {
                     type="button"
                     onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
                     className={cn(
-                      'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status truncate max-w-[160px] transition-colors inline-flex items-center',
+                      'shrink-0 px-2.5 py-1 rounded-full text-mf-status max-w-[160px] transition-colors inline-flex items-center gap-1.5',
                       filterProjectId === p.id
                         ? 'bg-mf-accent text-white'
                         : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
                     )}
                   >
-                    {p.name}
+                    <span className="truncate">{p.name}</span>
                     {(() => {
                       const uc = badgeCounts.unread.get(p.id) ?? 0;
                       const wc = badgeCounts.waiting.get(p.id) ?? 0;
