@@ -43,6 +43,8 @@ const nullSink: SessionSink = {
   onExit: () => {},
   onError: () => {},
   onCompact: () => {},
+  onCompactStart: () => {},
+  onContextUsage: () => {},
   onPlanFile: () => {},
   onSkillFile: () => {},
 };

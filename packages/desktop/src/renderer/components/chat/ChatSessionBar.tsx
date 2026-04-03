@@ -30,6 +30,7 @@ function StatusIndicator({ chatId }: { chatId: string }) {
   const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
   const process = useChatsStore((s) => s.processes.get(chatId));
   const hasPendingPermission = useChatsStore((s) => s.pendingPermissions.has(chatId));
+  const isCompacting = useChatsStore((s) => s.compactingChats.has(chatId));
 
   if (!chat) return null;
 
@@ -47,6 +48,15 @@ function StatusIndicator({ chatId }: { chatId: string }) {
       <div className="flex items-center gap-1.5 text-mf-text-secondary">
         <CircleDot size={12} className="animate-pulse motion-reduce:animate-none shrink-0" />
         <span>Awaiting</span>
+      </div>
+    );
+  }
+
+  if (isCompacting) {
+    return (
+      <div className="flex items-center gap-1.5 text-mf-text-secondary">
+        <Loader2 size={12} className="animate-spin motion-reduce:animate-none shrink-0" />
+        <span>Compacting</span>
       </div>
     );
   }
@@ -88,6 +98,7 @@ interface ChatSessionBarProps {
 export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElement {
   const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
   const adapters = useAdaptersStore((s) => s.adapters);
+  const cliContextUsage = useChatsStore((s) => s.contextUsage.get(chatId));
 
   if (!chat) {
     return <div className="h-7 bg-mf-panel-bg" />;
@@ -97,7 +108,10 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
   const modelLabel = getModelLabel(chat.model, adapters);
   const accentClass = ADAPTER_ACCENT[chat.adapterId] ?? 'bg-mf-text-secondary';
   const contextWindow = getModelContextWindow(chat.model, adapters);
-  const usagePct = Math.min(100, Math.round(((chat.lastContextTokensInput ?? 0) / contextWindow) * 100));
+  // Prefer CLI-reported usage percentage; fall back to token-estimate
+  const usagePct = cliContextUsage
+    ? Math.min(100, Math.round(cliContextUsage.percentage))
+    : Math.min(100, Math.round(((chat.lastContextTokensInput ?? 0) / contextWindow) * 100));
   const filledSegments = Math.round((usagePct / 100) * PROGRESS_SEGMENTS);
   const progressColor = getProgressColor(usagePct);
 
