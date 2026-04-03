@@ -62,6 +62,19 @@ const TodoSchema = z.object({
   milestone: z.string().optional(),
 });
 
+const TodoUpdateSchema = z.object({
+  title: z.string().min(1).optional(),
+  body: z.string().optional(),
+  status: z.enum(['open', 'in_progress', 'done']).optional(),
+  type: z
+    .enum(['bug', 'feature', 'enhancement', 'documentation', 'question', 'wont_fix', 'duplicate', 'invalid'])
+    .optional(),
+  priority: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+  labels: z.array(z.string()).optional(),
+  assignees: z.array(z.string()).optional(),
+  milestone: z.string().optional(),
+});
+
 function buildInitialMessage(todo: Todo): string {
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const labels = todo.labels.length > 0 ? todo.labels.join(', ') : 'none';
@@ -134,7 +147,7 @@ function registerTodoRoutes(ctx: PluginContext): void {
       res.status(404).json({ error: 'Not found' });
       return;
     }
-    const parsed = TodoSchema.partial().safeParse(req.body);
+    const parsed = TodoUpdateSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Invalid input' });
       return;

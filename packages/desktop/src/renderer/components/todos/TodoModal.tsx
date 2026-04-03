@@ -181,7 +181,7 @@ export function TodoModal({ todo, onClose, onSave, onStartSession, allLabels = [
         role="dialog"
         aria-modal="true"
         aria-label={todo ? 'Edit Task' : 'New Task'}
-        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border mx-4 shadow-xl relative"
+        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border mx-4 shadow-xl relative flex flex-col overflow-hidden"
         style={{ width: size.width, maxHeight: '90vh' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -196,11 +196,7 @@ export function TodoModal({ todo, onClose, onSave, onStartSession, allLabels = [
           </button>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="p-4 space-y-3 overflow-y-auto scrollbar-none"
-          style={{ maxHeight: size.height - 52 }}
-        >
+        <form onSubmit={handleSubmit} className="p-4 space-y-3 overflow-y-auto scrollbar-none flex-1 min-h-0">
           <div className="flex flex-col gap-1">
             <label htmlFor="todo-title" className="text-mf-small text-mf-text-secondary">
               Title *

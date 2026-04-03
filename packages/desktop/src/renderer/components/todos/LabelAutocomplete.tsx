@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -10,19 +10,24 @@ interface Props {
 
 export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.ReactElement {
   const [inputValue, setInputValue] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const suggestions = allLabels.filter((l) => !value.includes(l) && l.toLowerCase().includes(inputValue.toLowerCase()));
+  const ghostSuggestion = useMemo(() => {
+    const trimmed = inputValue.trim().toLowerCase();
+    if (!trimmed) return null;
+    return allLabels.find((l) => !value.includes(l) && l.toLowerCase().startsWith(trimmed)) ?? null;
+  }, [inputValue, value, allLabels]);
 
-  const addLabel = useCallback(
-    (label: string) => {
-      const trimmed = label.trim();
-      if (!trimmed || value.includes(trimmed)) return;
-      onChange([...value, trimmed]);
+  const addLabels = useCallback(
+    (raw: string) => {
+      const newLabels = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s && !value.includes(s));
+      if (newLabels.length === 0) return;
+      const unique = [...new Set(newLabels)];
+      onChange([...value, ...unique]);
       setInputValue('');
-      setShowDropdown(false);
     },
     [value, onChange],
   );
@@ -36,31 +41,21 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Tab' && ghostSuggestion) {
         e.preventDefault();
-        if (inputValue.trim()) addLabel(inputValue);
+        addLabels(ghostSuggestion);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (inputValue.trim()) addLabels(inputValue);
       } else if (e.key === 'Backspace' && !inputValue && value.length > 0) {
         onChange(value.slice(0, -1));
-      } else if (e.key === 'Escape') {
-        setShowDropdown(false);
       }
     },
-    [inputValue, value, addLabel, onChange],
+    [inputValue, value, ghostSuggestion, addLabels, onChange],
   );
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
   return (
-    <div ref={containerRef} className="relative">
+    <div className="relative">
       <div
         className={cn(
           'bg-mf-app-bg border border-mf-border rounded-mf-input px-2 py-1.5',
@@ -88,38 +83,30 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
             </button>
           </span>
         ))}
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputValue}
-          onChange={(e) => {
-            setInputValue(e.target.value);
-            setShowDropdown(true);
-          }}
-          onFocus={() => setShowDropdown(true)}
-          onKeyDown={handleKeyDown}
-          placeholder={value.length === 0 ? 'Add labels...' : ''}
-          className="flex-1 min-w-[80px] bg-transparent text-mf-small text-mf-text-primary focus:outline-none"
-        />
-      </div>
-
-      {showDropdown && suggestions.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-mf-panel-bg border border-mf-border rounded-mf-input shadow-lg max-h-40 overflow-y-auto">
-          {suggestions.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                addLabel(suggestion);
-              }}
-              className="w-full text-left px-2 py-1 text-mf-small text-mf-text-primary hover:bg-mf-hover transition-colors"
+        <span className="relative flex-1 min-w-[80px]">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onBlur={() => {
+              if (inputValue.trim()) addLabels(inputValue);
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder={value.length === 0 ? 'Add labels...' : ''}
+            className="w-full bg-transparent text-mf-small text-mf-text-primary focus:outline-none"
+          />
+          {ghostSuggestion && (
+            <span
+              className="absolute inset-0 pointer-events-none text-mf-small select-none whitespace-nowrap overflow-hidden flex items-center"
+              aria-hidden="true"
             >
-              {suggestion}
-            </button>
-          ))}
-        </div>
-      )}
+              <span className="invisible">{inputValue}</span>
+              <span className="text-mf-text-secondary opacity-40">{ghostSuggestion.slice(inputValue.length)}</span>
+            </span>
+          )}
+        </span>
+      </div>
     </div>
   );
 }
