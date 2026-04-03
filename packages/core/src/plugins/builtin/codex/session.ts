@@ -167,7 +167,7 @@ export class CodexSession implements AdapterSession {
     return this.getProcessInfo()!;
   }
 
-  async sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void> {
+  async sendMessage(message: string, images?: { mediaType: string; data: string }[], _uuid?: string): Promise<void> {
     if (!this.client) throw new Error(`Session ${this.id} not spawned`);
 
     const input: UserInput[] = [];
@@ -217,6 +217,10 @@ export class CodexSession implements AdapterSession {
     });
 
     this.status = 'running';
+  }
+
+  async cancelQueuedMessage(_uuid: string): Promise<boolean> {
+    return false;
   }
 
   async kill(): Promise<void> {
