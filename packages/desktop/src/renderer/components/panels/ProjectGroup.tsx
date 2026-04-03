@@ -23,18 +23,20 @@ function SessionStatusDot({
   worktreeMissing?: boolean;
   isUnread?: boolean;
 }) {
-  if (worktreeMissing) {
-    return <div data-testid="chat-status-missing" className="w-2 h-2 rounded-full shrink-0 bg-mf-destructive" />;
-  }
   const isWorking = status === 'working' || status === 'waiting';
-  if (isWorking) {
-    return <Loader2 data-testid="chat-status-working" size={12} className="shrink-0 text-mf-accent animate-spin" />;
-  }
   return (
-    <div
-      data-testid="chat-status-idle"
-      className={cn('w-2 h-2 rounded-full shrink-0', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary opacity-40')}
-    />
+    <div className="w-3 h-3 shrink-0 flex items-center justify-center">
+      {worktreeMissing ? (
+        <div data-testid="chat-status-missing" className="w-2 h-2 rounded-full bg-mf-destructive" />
+      ) : isWorking ? (
+        <Loader2 data-testid="chat-status-working" size={12} className="text-mf-accent animate-spin" />
+      ) : (
+        <div
+          data-testid="chat-status-idle"
+          className={cn('w-2 h-2 rounded-full', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary opacity-40')}
+        />
+      )}
+    </div>
   );
 }
 
