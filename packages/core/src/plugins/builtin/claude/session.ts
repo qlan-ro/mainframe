@@ -279,7 +279,7 @@ export class ClaudeSession implements AdapterSession {
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
-  async sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void> {
+  async sendMessage(message: string, images?: { mediaType: string; data: string }[], uuid?: string): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const content: Record<string, unknown>[] = [];
@@ -291,12 +291,13 @@ export class ClaudeSession implements AdapterSession {
     if (message || content.length === 0) {
       content.push({ type: 'text', text: message });
     }
-    const payload = {
+    const payload: Record<string, unknown> = {
       type: 'user',
       session_id: this.state.chatId,
       message: { role: 'user', content },
       parent_tool_use_id: null,
     };
+    if (uuid) payload.uuid = uuid;
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
@@ -357,6 +358,26 @@ export class ClaudeSession implements AdapterSession {
       'writing permission response to stdin',
     );
     stdin.write(json + '\n');
+  }
+
+  async cancelQueuedMessage(uuid: string): Promise<boolean> {
+    const stdin = this.state.child?.stdin;
+    if (!stdin || stdin.destroyed) {
+      log.warn({ sessionId: this.id, uuid }, 'cancelQueuedMessage: stdin unavailable');
+      return false;
+    }
+    const requestId = nanoid();
+    const payload = {
+      type: 'control_request',
+      request_id: requestId,
+      request: {
+        subtype: 'cancel_async_message',
+        message_uuid: uuid,
+      },
+    };
+    log.info({ sessionId: this.id, uuid, requestId }, 'sending cancel_async_message');
+    stdin.write(JSON.stringify(payload) + '\n');
+    return true;
   }
 
   getContextFiles(): { global: ContextFile[]; project: ContextFile[] } {

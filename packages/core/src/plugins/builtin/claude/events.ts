@@ -89,6 +89,13 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
 }
 
 function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+  // Detect queued message processed by CLI (isReplay from SDK mode)
+  const isReplay = event.isReplay === true || event.is_replay === true;
+  const uuid = (event.uuid as string) || undefined;
+  if (isReplay && uuid) {
+    sink.onQueuedProcessed(uuid);
+  }
+
   // Live stream handles ONLY tool_result blocks from user events.
   // Text/image blocks in user entries are intentionally ignored here because:
   //   - User-typed text: already created as a ChatMessage by chat-manager.sendMessage()
