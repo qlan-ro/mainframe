@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Chat, DisplayMessage, ControlRequest, AdapterProcess, QueuedMessage } from '@qlan-ro/mainframe-types';
+import type { Chat, DisplayMessage, ControlRequest, AdapterProcess, QueuedMessageRef } from '@qlan-ro/mainframe-types';
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 
@@ -16,7 +16,7 @@ interface ChatsState {
   messages: Map<string, DisplayMessage[]>;
   pendingPermissions: Map<string, ControlRequest>;
   processes: Map<string, AdapterProcess>;
-  queuedMessages: Map<string, QueuedMessage>;
+  queuedMessages: Map<string, QueuedMessageRef>;
   compactingChats: Set<string>;
   contextUsage: Map<string, ContextUsageState>;
 
@@ -34,7 +34,7 @@ interface ChatsState {
   setProcess: (chatId: string, process: AdapterProcess) => void;
   updateProcessStatus: (processId: string, status: AdapterProcess['status']) => void;
   removeProcess: (chatId: string) => void;
-  setQueuedMessage: (chatId: string, message: QueuedMessage | null) => void;
+  setQueuedMessage: (chatId: string, ref: QueuedMessageRef | null) => void;
   setCompacting: (chatId: string, compacting: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
 }
@@ -157,11 +157,11 @@ export const useChatsStore = create<ChatsState>((set) => ({
       newProcesses.delete(chatId);
       return { processes: newProcesses };
     }),
-  setQueuedMessage: (chatId, message) =>
+  setQueuedMessage: (chatId, ref) =>
     set((state) => {
       const next = new Map(state.queuedMessages);
-      if (message) {
-        next.set(chatId, message);
+      if (ref) {
+        next.set(chatId, ref);
       } else {
         next.delete(chatId);
       }

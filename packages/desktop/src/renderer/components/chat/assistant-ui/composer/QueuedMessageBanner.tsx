@@ -1,51 +1,62 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Pencil, Clock } from 'lucide-react';
 import { useChatsStore } from '../../../../store/chats';
 import { daemonClient } from '../../../../lib/client';
 
 export function QueuedMessageBanner({ chatId }: { chatId: string }) {
-  const queuedMessage = useChatsStore((s) => s.queuedMessages.get(chatId));
-  const [text, setText] = useState(queuedMessage?.content ?? '');
+  const queuedRef = useChatsStore((s) => s.queuedMessages.get(chatId));
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
 
   useEffect(() => {
-    setText(queuedMessage?.content ?? '');
-  }, [queuedMessage?.content]);
+    if (queuedRef) setText(queuedRef.content);
+  }, [queuedRef?.content]);
 
-  const handleSave = useCallback(() => {
-    if (!queuedMessage) return;
+  if (!queuedRef) return null;
+
+  const handleCancel = () => {
+    daemonClient.cancelQueuedMessage(chatId, queuedRef.messageId);
+  };
+
+  const handleSaveEdit = () => {
     const trimmed = text.trim();
-    if (trimmed && trimmed !== queuedMessage.content) {
-      daemonClient.editQueuedMessage(chatId, queuedMessage.id, trimmed);
+    if (trimmed && trimmed !== queuedRef.content) {
+      daemonClient.editQueuedMessage(chatId, queuedRef.messageId, trimmed);
     }
-  }, [chatId, queuedMessage, text]);
-
-  const handleCancel = useCallback(() => {
-    if (!queuedMessage) return;
-    daemonClient.cancelQueuedMessage(chatId, queuedMessage.id);
-  }, [chatId, queuedMessage]);
-
-  if (!queuedMessage) return null;
+    setEditing(false);
+  };
 
   return (
-    <div className="mx-3 mb-2 p-2 bg-mf-panel-bg border border-mf-border rounded-lg">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-mf-status text-mf-text-secondary">Queued message</span>
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-          aria-label="Cancel queued message"
-        >
-          <X size={14} />
-        </button>
-      </div>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={handleSave}
-        className="w-full bg-mf-bg text-mf-small text-mf-text-primary border border-mf-border rounded p-1.5 resize-none outline-none focus:border-mf-accent"
-        rows={Math.min(text.split('\n').length, 4)}
-      />
+    <div className="flex items-center gap-2 px-3 py-2 bg-mf-hover/50 border-t border-mf-border text-mf-small text-mf-text-secondary">
+      <Clock size={14} className="shrink-0 animate-pulse text-mf-accent" />
+      {editing ? (
+        <textarea
+          className="flex-1 bg-mf-surface border border-mf-border rounded px-2 py-1 text-mf-small text-mf-text-primary resize-none"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={handleSaveEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSaveEdit();
+            }
+          }}
+          autoFocus
+          rows={1}
+        />
+      ) : (
+        <span className="flex-1 truncate">Queued: {queuedRef.content}</span>
+      )}
+      <button
+        onClick={() => setEditing(!editing)}
+        className="p-0.5 hover:bg-mf-hover rounded"
+        title="Edit queued message"
+      >
+        <Pencil size={14} />
+      </button>
+      <button onClick={handleCancel} className="p-0.5 hover:bg-mf-hover rounded" title="Cancel queued message">
+        <X size={14} />
+      </button>
     </div>
   );
 }
