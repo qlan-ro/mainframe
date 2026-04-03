@@ -3,6 +3,12 @@ import type { Chat, DisplayMessage, ControlRequest, AdapterProcess } from '@qlan
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 
+export interface ContextUsageState {
+  percentage: number;
+  totalTokens: number;
+  maxTokens: number;
+}
+
 interface ChatsState {
   chats: Chat[];
   activeChatId: string | null;
@@ -10,6 +16,8 @@ interface ChatsState {
   messages: Map<string, DisplayMessage[]>;
   pendingPermissions: Map<string, ControlRequest>;
   processes: Map<string, AdapterProcess>;
+  compactingChats: Set<string>;
+  contextUsage: Map<string, ContextUsageState>;
 
   setChats: (chats: Chat[]) => void;
   setActiveChat: (id: string | null) => void;
@@ -25,6 +33,8 @@ interface ChatsState {
   setProcess: (chatId: string, process: AdapterProcess) => void;
   updateProcessStatus: (processId: string, status: AdapterProcess['status']) => void;
   removeProcess: (chatId: string) => void;
+  setCompacting: (chatId: string, compacting: boolean) => void;
+  setContextUsage: (chatId: string, usage: ContextUsageState) => void;
 }
 
 export const useChatsStore = create<ChatsState>((set) => ({
@@ -34,6 +44,8 @@ export const useChatsStore = create<ChatsState>((set) => ({
   messages: new Map(),
   pendingPermissions: new Map(),
   processes: new Map(),
+  compactingChats: new Set(),
+  contextUsage: new Map(),
 
   setChats: (chats) => set({ chats }),
   setFilterProjectId: (id) => {
@@ -141,5 +153,21 @@ export const useChatsStore = create<ChatsState>((set) => ({
       const newProcesses = new Map(state.processes);
       newProcesses.delete(chatId);
       return { processes: newProcesses };
+    }),
+  setCompacting: (chatId, compacting) =>
+    set((state) => {
+      const next = new Set(state.compactingChats);
+      if (compacting) {
+        next.add(chatId);
+      } else {
+        next.delete(chatId);
+      }
+      return { compactingChats: next };
+    }),
+  setContextUsage: (chatId, usage) =>
+    set((state) => {
+      const next = new Map(state.contextUsage);
+      next.set(chatId, usage);
+      return { contextUsage: next };
     }),
 }));

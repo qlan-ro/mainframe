@@ -7,6 +7,7 @@ import type {
   SkillFileEntry,
   MessageMetadata,
   ToolCategories,
+  ContextUsage,
 } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { MessageCache } from './message-cache.js';
@@ -253,6 +254,7 @@ function buildSessionSink(
       if (active) {
         active.chat.processState = null;
         db.chats.update(chatId, { processState: null });
+        emitEvent({ type: 'chat.updated', chat: active.chat });
       }
       emitEvent({ type: 'process.stopped', processId: sessionId });
     },
@@ -261,7 +263,16 @@ function buildSessionSink(
       const message = messages.createTransientMessage(chatId, 'system', [{ type: 'text', text: 'Context compacted' }]);
       messages.append(chatId, message);
       emitEvent({ type: 'message.added', chatId, message });
+      emitEvent({ type: 'chat.compactDone', chatId });
       emitDisplay();
+    },
+
+    onCompactStart() {
+      emitEvent({ type: 'chat.compacting', chatId });
+    },
+
+    onContextUsage(usage: ContextUsage) {
+      emitEvent({ type: 'chat.contextUsage', chatId, ...usage });
     },
 
     onPlanFile(filePath: string) {

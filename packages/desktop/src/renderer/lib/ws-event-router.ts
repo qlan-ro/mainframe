@@ -127,6 +127,22 @@ export function routeEvent(event: DaemonEvent): void {
     case 'launch.port.timeout':
       log.warn('event:launch.port.timeout', { projectId: event.projectId, name: event.name, port: event.port });
       break;
+    case 'chat.compacting':
+      log.debug('event:chat.compacting', { chatId: event.chatId });
+      chats.setCompacting(event.chatId, true);
+      break;
+    case 'chat.compactDone':
+      log.debug('event:chat.compactDone', { chatId: event.chatId });
+      chats.setCompacting(event.chatId, false);
+      break;
+    case 'chat.contextUsage':
+      log.debug('event:chat.contextUsage', { chatId: event.chatId, percentage: event.percentage });
+      chats.setContextUsage(event.chatId, {
+        percentage: event.percentage,
+        totalTokens: event.totalTokens,
+        maxTokens: event.maxTokens,
+      });
+      break;
     case 'sessions.external.count':
       break;
     case 'plugin.notification':
