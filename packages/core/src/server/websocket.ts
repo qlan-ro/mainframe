@@ -162,12 +162,12 @@ export class WebSocketManager {
       }
 
       case 'message.queue.edit': {
-        this.chats.editQueuedMessage(event.chatId, event.messageId, event.content);
+        await this.chats.editQueuedMessage(event.chatId, event.messageId, event.content);
         break;
       }
 
       case 'message.queue.cancel': {
-        this.chats.cancelQueuedMessage(event.chatId, event.messageId);
+        await this.chats.cancelQueuedMessage(event.chatId, event.messageId);
         break;
       }
 
