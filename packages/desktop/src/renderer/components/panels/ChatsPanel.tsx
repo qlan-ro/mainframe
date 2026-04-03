@@ -84,6 +84,41 @@ function buildGroups(projects: Project[], chats: Chat[]): ProjectGroupData[] {
   return groups;
 }
 
+const BADGE_BASE =
+  'inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold leading-none';
+
+function FilterPillBadge({
+  count,
+  isActive,
+  onClick,
+  label,
+  truncate: shouldTruncate,
+}: {
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+  label: string;
+  truncate?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'shrink-0 px-2.5 py-1 rounded-full text-mf-status transition-colors inline-flex items-center gap-1.5',
+        isActive ? 'bg-mf-accent text-white' : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+      )}
+    >
+      {shouldTruncate ? <span className="truncate max-w-[140px]">{label}</span> : label}
+      {count > 0 && (
+        <span className={cn(BADGE_BASE, isActive ? 'bg-mf-hover text-mf-text-secondary' : 'bg-mf-accent text-white')}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function NewSessionPopover({
   projects,
   activeProjectId,
@@ -137,6 +172,8 @@ export function ChatsPanel(): React.ReactElement {
   const projects = useProjectsStore((s) => s.projects);
   const addProject = useProjectsStore((s) => s.addProject);
   const chats = useChatsStore((s) => s.chats);
+  const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
+  const pendingPermissions = useChatsStore((s) => s.pendingPermissions);
 
   const [viewMode, setViewMode] = useState<ViewMode>(
     () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) || 'grouped',
@@ -222,6 +259,16 @@ export function ChatsPanel(): React.ReactElement {
     () => (filterProjectId ? flatChats.filter((c) => c.projectId === filterProjectId) : flatChats),
     [flatChats, filterProjectId],
   );
+
+  const attentionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const chat of chats) {
+      if (unreadChatIds.has(chat.id) || pendingPermissions.has(chat.id)) {
+        counts.set(chat.projectId, (counts.get(chat.projectId) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [chats, unreadChatIds, pendingPermissions]);
 
   // Sorted project list for filter badges (most recently used first)
   const sortedProjects = useMemo(() => {
@@ -384,39 +431,24 @@ export function ChatsPanel(): React.ReactElement {
 
       {/* Project filter badges */}
       {projects.length > 1 && (
-        <div className="px-2.5 py-1.5 overflow-hidden">
-          <div
-            ref={filterScrollRef}
-            onWheel={handleFilterWheel}
-            className="flex gap-1.5 overflow-x-auto scrollbar-none"
-          >
-            <button
-              type="button"
+        <div className="px-2.5 py-2 overflow-hidden">
+          <div ref={filterScrollRef} onWheel={handleFilterWheel} className="flex gap-2 overflow-x-auto scrollbar-none">
+            <FilterPillBadge
+              count={Array.from(attentionCounts.values()).reduce((a, b) => a + b, 0)}
+              isActive={filterProjectId === null}
               onClick={() => handleFilterSelect(null)}
-              className={cn(
-                'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status transition-colors',
-                filterProjectId === null
-                  ? 'bg-mf-accent text-white'
-                  : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-              )}
-            >
-              All
-            </button>
+              label="All"
+            />
             {sortedProjects.map((p) => (
               <Tooltip key={p.id}>
                 <TooltipTrigger asChild>
-                  <button
-                    type="button"
+                  <FilterPillBadge
+                    count={attentionCounts.get(p.id) ?? 0}
+                    isActive={filterProjectId === p.id}
                     onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
-                    className={cn(
-                      'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status truncate max-w-[160px] transition-colors',
-                      filterProjectId === p.id
-                        ? 'bg-mf-accent text-white'
-                        : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-                    )}
-                  >
-                    {p.name}
-                  </button>
+                    label={p.name}
+                    truncate
+                  />
                 </TooltipTrigger>
                 <TooltipContent>{p.name}</TooltipContent>
               </Tooltip>

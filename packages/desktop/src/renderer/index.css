@@ -163,6 +163,7 @@
   .shadow-chat-error-inset {
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mf-chat-diff-removed) 28%, transparent);
   }
+
 }
 
 /* Hide scrollbar while keeping scroll functionality */
