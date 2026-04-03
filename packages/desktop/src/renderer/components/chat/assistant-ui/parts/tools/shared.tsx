@@ -1,6 +1,8 @@
 import React from 'react';
 import { structuredPatch } from 'diff';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
+import { useTabsStore } from '../../../../../store/tabs';
 export function stripErrorXml(text: string): string {
   return text.replace(/<\/?(?:tool_use_error|error)>/g, '').trim();
 }
@@ -46,6 +48,32 @@ export function cardStyle(result: unknown, isError: boolean | undefined): string
 export function shortFilename(filePath: string): string {
   const parts = filePath.split('/');
   return parts.length > 2 ? parts.slice(-2).join('/') : filePath;
+}
+
+export function ClickableFilePath({ filePath }: { filePath: string }) {
+  const openEditorTab = useTabsStore((s) => s.openEditorTab);
+  const revealFileInTree = useTabsStore((s) => s.revealFileInTree);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openEditorTab(filePath);
+    revealFileInTree(filePath);
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={handleClick}
+          className="font-mono text-mf-accent truncate text-mf-body hover:underline cursor-pointer"
+          tabIndex={0}
+        >
+          {shortFilename(filePath)}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{filePath}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function countDiffStats(hunks: DiffHunk[]): { added: number; removed: number } {
