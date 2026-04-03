@@ -84,6 +84,48 @@ function buildGroups(projects: Project[], chats: Chat[]): ProjectGroupData[] {
   return groups;
 }
 
+const BADGE_BASE =
+  'inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold leading-none';
+
+function FilterPillBadges({
+  unreadCount,
+  waitingCount,
+  isActive,
+  onClick,
+  label,
+  truncate: shouldTruncate,
+}: {
+  unreadCount: number;
+  waitingCount: number;
+  isActive: boolean;
+  onClick: () => void;
+  label: string;
+  truncate?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'shrink-0 px-2.5 py-1 rounded-full text-mf-status transition-colors inline-flex items-center gap-1.5',
+        isActive ? 'bg-mf-accent text-white' : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+      )}
+    >
+      {shouldTruncate ? <span className="truncate max-w-[140px]">{label}</span> : label}
+      {unreadCount > 0 && (
+        <span className={cn(BADGE_BASE, isActive ? 'bg-white/25 text-white' : 'bg-mf-accent text-white')}>
+          {unreadCount}
+        </span>
+      )}
+      {waitingCount > 0 && (
+        <span className={cn(BADGE_BASE, isActive ? 'bg-white/25 text-white' : 'bg-amber-500 text-white')}>
+          {waitingCount}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function NewSessionPopover({
   projects,
   activeProjectId,
@@ -402,69 +444,24 @@ export function ChatsPanel(): React.ReactElement {
       {projects.length > 1 && (
         <div className="px-2.5 py-2 overflow-hidden">
           <div ref={filterScrollRef} onWheel={handleFilterWheel} className="flex gap-2 overflow-x-auto scrollbar-none">
-            <button
-              type="button"
+            <FilterPillBadges
+              unreadCount={Array.from(badgeCounts.unread.values()).reduce((a, b) => a + b, 0)}
+              waitingCount={Array.from(badgeCounts.waiting.values()).reduce((a, b) => a + b, 0)}
+              isActive={filterProjectId === null}
               onClick={() => handleFilterSelect(null)}
-              className={cn(
-                'shrink-0 px-2.5 py-1 rounded-full text-mf-status transition-colors inline-flex items-center gap-1.5',
-                filterProjectId === null
-                  ? 'bg-mf-accent text-white'
-                  : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-              )}
-            >
-              All
-              {(() => {
-                const uc = Array.from(badgeCounts.unread.values()).reduce((a, b) => a + b, 0);
-                const wc = Array.from(badgeCounts.waiting.values()).reduce((a, b) => a + b, 0);
-                return (
-                  <>
-                    {uc > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-mf-accent text-white text-[10px] font-bold leading-none">
-                        {uc}
-                      </span>
-                    )}
-                    {wc > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
-                        {wc}
-                      </span>
-                    )}
-                  </>
-                );
-              })()}
-            </button>
+              label="All"
+            />
             {sortedProjects.map((p) => (
               <Tooltip key={p.id}>
                 <TooltipTrigger asChild>
-                  <button
-                    type="button"
+                  <FilterPillBadges
+                    unreadCount={badgeCounts.unread.get(p.id) ?? 0}
+                    waitingCount={badgeCounts.waiting.get(p.id) ?? 0}
+                    isActive={filterProjectId === p.id}
                     onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
-                    className={cn(
-                      'shrink-0 px-2.5 py-1 rounded-full text-mf-status transition-colors inline-flex items-center gap-1.5',
-                      filterProjectId === p.id
-                        ? 'bg-mf-accent text-white'
-                        : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-                    )}
-                  >
-                    <span className="truncate max-w-[140px]">{p.name}</span>
-                    {(() => {
-                      const uc = badgeCounts.unread.get(p.id) ?? 0;
-                      const wc = badgeCounts.waiting.get(p.id) ?? 0;
-                      return (
-                        <>
-                          {uc > 0 && (
-                            <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-mf-accent text-white text-[10px] font-bold leading-none">
-                              {uc}
-                            </span>
-                          )}
-                          {wc > 0 && (
-                            <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
-                              {wc}
-                            </span>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </button>
+                    label={p.name}
+                    truncate
+                  />
                 </TooltipTrigger>
                 <TooltipContent>{p.name}</TooltipContent>
               </Tooltip>
