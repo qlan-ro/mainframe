@@ -117,21 +117,10 @@ function convertGroupedToDisplay(
         ...(msg.metadata && { metadata: { ...msg.metadata } }),
       };
 
-    case 'tool_result': {
-      // Orphan tool_result: show as assistant text
-      const textParts = msg.content.map((c) => {
-        if (c.type === 'tool_result') {
-          return { type: 'text' as const, text: c.content };
-        }
-        return { type: 'text' as const, text: '' };
-      });
-      return {
-        ...base,
-        type: 'assistant',
-        content: textParts,
-        ...(msg.metadata && { metadata: { ...msg.metadata } }),
-      };
-    }
+    case 'tool_result':
+      // Orphan tool_result without a preceding assistant/tool_use — suppress
+      // instead of dumping raw tool output as a plain text message
+      return null;
 
     default:
       return null;

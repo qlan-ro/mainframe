@@ -2,7 +2,7 @@
   "version": "1",
   "configurations": [
     {
-      "name": "Setup Ports",
+      "name": "Setup Worktree",
       "runtimeExecutable": "./scripts/setup-ports.sh",
       "runtimeArgs": [],
       "port": null,

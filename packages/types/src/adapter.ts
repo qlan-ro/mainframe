@@ -93,6 +93,12 @@ export interface ControlResponse {
   clearContext?: boolean;
 }
 
+export interface ContextUsage {
+  percentage: number;
+  totalTokens: number;
+  maxTokens: number;
+}
+
 export interface SessionSink {
   onInit(sessionId: string): void;
   onMessage(content: import('./chat.js').MessageContent[], metadata?: MessageMetadata): void;
@@ -102,6 +108,8 @@ export interface SessionSink {
   onExit(code: number | null): void;
   onError(error: Error): void;
   onCompact(): void;
+  onCompactStart(): void;
+  onContextUsage(usage: ContextUsage): void;
   onPlanFile(filePath: string): void;
   onSkillFile(entry: import('./context.js').SkillFileEntry): void;
 }
