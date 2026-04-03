@@ -153,7 +153,9 @@ export function FlatSessionRow({
                 ? 'bg-mf-destructive'
                 : isWorking
                   ? 'bg-mf-accent animate-pulse motion-reduce:animate-none'
-                  : 'bg-mf-text-secondary opacity-40',
+                  : isUnread
+                    ? 'bg-mf-accent'
+                    : 'bg-mf-text-secondary opacity-40',
             )}
           />
           <div className="flex-1 min-w-0">

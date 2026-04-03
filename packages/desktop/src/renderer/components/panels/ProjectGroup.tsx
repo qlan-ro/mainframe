@@ -14,7 +14,15 @@ import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:project-group');
 
-function SessionStatusDot({ status, worktreeMissing }: { status: SessionStatus; worktreeMissing?: boolean }) {
+function SessionStatusDot({
+  status,
+  worktreeMissing,
+  isUnread,
+}: {
+  status: SessionStatus;
+  worktreeMissing?: boolean;
+  isUnread?: boolean;
+}) {
   if (worktreeMissing) {
     return <div data-testid="chat-status-missing" className="w-2 h-2 rounded-full shrink-0 bg-mf-destructive" />;
   }
@@ -24,7 +32,11 @@ function SessionStatusDot({ status, worktreeMissing }: { status: SessionStatus; 
       data-testid={isWorking ? 'chat-status-working' : 'chat-status-idle'}
       className={cn(
         'w-2 h-2 rounded-full shrink-0',
-        isWorking ? 'bg-mf-accent animate-pulse motion-reduce:animate-none' : 'bg-mf-text-secondary opacity-40',
+        isWorking
+          ? 'bg-mf-accent animate-pulse motion-reduce:animate-none'
+          : isUnread
+            ? 'bg-mf-accent'
+            : 'bg-mf-text-secondary opacity-40',
       )}
     />
   );
@@ -126,7 +138,11 @@ function ChatRow({
         className="flex-1 min-w-0 px-3 py-1.5 text-left rounded-mf-input"
       >
         <div className="flex items-center gap-2">
-          <SessionStatusDot status={chat.displayStatus ?? 'idle'} worktreeMissing={chat.worktreeMissing} />
+          <SessionStatusDot
+            status={chat.displayStatus ?? 'idle'}
+            worktreeMissing={chat.worktreeMissing}
+            isUnread={isUnread}
+          />
           <div className="flex-1 min-w-0">
             {editing ? (
               <input
