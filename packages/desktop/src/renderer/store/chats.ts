@@ -3,6 +3,12 @@ import type { Chat, DisplayMessage, ControlRequest, AdapterProcess, QueuedMessag
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 
+export interface ContextUsageState {
+  percentage: number;
+  totalTokens: number;
+  maxTokens: number;
+}
+
 interface ChatsState {
   chats: Chat[];
   activeChatId: string | null;
@@ -11,6 +17,8 @@ interface ChatsState {
   pendingPermissions: Map<string, ControlRequest>;
   processes: Map<string, AdapterProcess>;
   queuedMessages: Map<string, QueuedMessage>;
+  compactingChats: Set<string>;
+  contextUsage: Map<string, ContextUsageState>;
 
   setChats: (chats: Chat[]) => void;
   setActiveChat: (id: string | null) => void;
@@ -27,6 +35,8 @@ interface ChatsState {
   updateProcessStatus: (processId: string, status: AdapterProcess['status']) => void;
   removeProcess: (chatId: string) => void;
   setQueuedMessage: (chatId: string, message: QueuedMessage | null) => void;
+  setCompacting: (chatId: string, compacting: boolean) => void;
+  setContextUsage: (chatId: string, usage: ContextUsageState) => void;
 }
 
 export const useChatsStore = create<ChatsState>((set) => ({
@@ -37,6 +47,8 @@ export const useChatsStore = create<ChatsState>((set) => ({
   pendingPermissions: new Map(),
   processes: new Map(),
   queuedMessages: new Map(),
+  compactingChats: new Set(),
+  contextUsage: new Map(),
 
   setChats: (chats) => set({ chats }),
   setFilterProjectId: (id) => {
@@ -154,5 +166,21 @@ export const useChatsStore = create<ChatsState>((set) => ({
         next.delete(chatId);
       }
       return { queuedMessages: next };
+    }),
+  setCompacting: (chatId, compacting) =>
+    set((state) => {
+      const next = new Set(state.compactingChats);
+      if (compacting) {
+        next.add(chatId);
+      } else {
+        next.delete(chatId);
+      }
+      return { compactingChats: next };
+    }),
+  setContextUsage: (chatId, usage) =>
+    set((state) => {
+      const next = new Map(state.contextUsage);
+      next.set(chatId, usage);
+      return { contextUsage: next };
     }),
 }));

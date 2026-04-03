@@ -53,7 +53,10 @@ export type DaemonEvent =
   | { type: 'sessions.external.count'; projectId: string; count: number }
   | { type: 'message.queued'; chatId: string; message: QueuedMessage }
   | { type: 'message.queue.updated'; chatId: string; message: QueuedMessage }
-  | { type: 'message.queue.cancelled'; chatId: string; messageId: string };
+  | { type: 'message.queue.cancelled'; chatId: string; messageId: string }
+  | { type: 'chat.compacting'; chatId: string }
+  | { type: 'chat.compactDone'; chatId: string }
+  | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }

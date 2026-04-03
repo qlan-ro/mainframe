@@ -1,6 +1,8 @@
 import React from 'react';
 import { structuredPatch } from 'diff';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
+import { useTabsStore } from '../../../../../store/tabs';
 export function stripErrorXml(text: string): string {
   return text.replace(/<\/?(?:tool_use_error|error)>/g, '').trim();
 }
@@ -46,6 +48,32 @@ export function cardStyle(result: unknown, isError: boolean | undefined): string
 export function shortFilename(filePath: string): string {
   const parts = filePath.split('/');
   return parts.length > 2 ? parts.slice(-2).join('/') : filePath;
+}
+
+export function ClickableFilePath({ filePath }: { filePath: string }) {
+  const openEditorTab = useTabsStore((s) => s.openEditorTab);
+  const revealFileInTree = useTabsStore((s) => s.revealFileInTree);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    openEditorTab(filePath);
+    revealFileInTree(filePath);
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={handleClick}
+          className="font-mono text-mf-accent truncate text-mf-body hover:underline cursor-pointer"
+          tabIndex={0}
+        >
+          {shortFilename(filePath)}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{filePath}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function countDiffStats(hunks: DiffHunk[]): { added: number; removed: number } {
@@ -134,7 +162,9 @@ export function DiffFromPatch({ hunks }: { hunks: DiffHunk[] }) {
                     {newLineNum}
                   </span>
                   <span className="shrink-0 w-5 select-none text-mf-chat-diff-added-text text-center">+</span>
-                  <span className="text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">{content}</span>
+                  <span className="select-text text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">
+                    {content}
+                  </span>
                 </div>
               );
             }
@@ -149,7 +179,7 @@ export function DiffFromPatch({ hunks }: { hunks: DiffHunk[] }) {
                   </span>
                   <span className="shrink-0 w-8 select-none text-mf-text-secondary opacity-30 text-right pr-2"> </span>
                   <span className="shrink-0 w-5 select-none text-mf-chat-diff-removed-text text-center">-</span>
-                  <span className="text-mf-chat-diff-removed-content whitespace-pre-wrap break-all pr-3">
+                  <span className="select-text text-mf-chat-diff-removed-content whitespace-pre-wrap break-all pr-3">
                     {content}
                   </span>
                 </div>
@@ -167,7 +197,7 @@ export function DiffFromPatch({ hunks }: { hunks: DiffHunk[] }) {
                   {newLineNum}
                 </span>
                 <span className="shrink-0 w-5 select-none text-mf-text-secondary opacity-30 text-center"> </span>
-                <span className="text-mf-text-secondary whitespace-pre-wrap break-all pr-3">{content}</span>
+                <span className="select-text text-mf-text-secondary whitespace-pre-wrap break-all pr-3">{content}</span>
               </div>
             );
           })}
@@ -202,7 +232,9 @@ export function DiffFallback({
           </span>
           <span className="shrink-0 w-8 select-none text-mf-text-secondary opacity-30 text-right pr-2"> </span>
           <span className="shrink-0 w-5 select-none text-mf-chat-diff-removed-text text-center">-</span>
-          <span className="text-mf-chat-diff-removed-content whitespace-pre-wrap break-all pr-3">{line}</span>
+          <span className="select-text text-mf-chat-diff-removed-content whitespace-pre-wrap break-all pr-3">
+            {line}
+          </span>
         </div>
       ))}
       {oldLines.length > 0 && newLines.length > 0 && (
@@ -220,7 +252,7 @@ export function DiffFallback({
             {hasLineNums ? startLine + i : ''}
           </span>
           <span className="shrink-0 w-5 select-none text-mf-chat-diff-added-text text-center">+</span>
-          <span className="text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">{line}</span>
+          <span className="select-text text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">{line}</span>
         </div>
       ))}
     </div>

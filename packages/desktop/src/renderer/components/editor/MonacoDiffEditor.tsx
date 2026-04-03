@@ -5,6 +5,8 @@ import type * as monacoType from 'monaco-editor';
 import { Send } from 'lucide-react';
 import { InlineCommentWidget } from './InlineCommentWidget';
 import { useInlineComments } from './useInlineComments';
+import { setActiveDiffEditor } from './diff-nav';
+import { useTabsStore } from '../../store/tabs';
 import './setup';
 
 interface MonacoDiffEditorProps {
@@ -66,12 +68,25 @@ export function MonacoDiffEditor({
   const handleMount: DiffOnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
+      setActiveDiffEditor(editor);
       const inner = editor.getModifiedEditor();
 
       setChangeViewZones(() => (cb: (a: monacoType.editor.IViewZoneChangeAccessor) => void) => {
         inner.changeViewZones(cb);
       });
       setGetModel(() => () => inner.getModel());
+
+      // Scroll to the first change once the diff is computed, and update store count
+      let revealed = false;
+      editor.onDidUpdateDiff(() => {
+        const changes = editor.getLineChanges();
+        useTabsStore.getState().setDiffChangeCount(changes?.length ?? 0);
+        if (!revealed && changes && changes.length > 0) {
+          revealed = true;
+          const firstLine = changes[0]!.modifiedStartLineNumber || 1;
+          inner.revealLineInCenter(firstLine);
+        }
+      });
 
       if (!onLineComment) return;
 
@@ -117,6 +132,8 @@ export function MonacoDiffEditor({
 
   useLayoutEffect(() => {
     return () => {
+      setActiveDiffEditor(null);
+      useTabsStore.getState().setDiffChangeCount(0);
       const editor = editorRef.current;
       if (editor) {
         const model = editor.getModel();
@@ -173,6 +190,7 @@ export function MonacoDiffEditor({
             folding: false,
             renderIndicators: false,
             ignoreTrimWhitespace: true,
+            stickyScroll: { enabled: false },
             scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
             padding: { top: 4, bottom: 4 },
             ...(lineOffset > 0 ? { lineNumbers: (n: number) => String(n + lineOffset) } : {}),

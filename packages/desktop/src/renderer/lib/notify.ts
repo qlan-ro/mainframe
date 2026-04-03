@@ -6,7 +6,7 @@ import { createLogger } from './logger';
 const log = createLogger('renderer:notify');
 
 interface NotifyOptions {
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
   title: string;
   body?: string;
   chatId?: string;

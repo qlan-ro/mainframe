@@ -6,9 +6,9 @@ import { useTabsStore } from '../../../../../store/tabs';
 import { FileTypeIcon } from '../FileTypeIcon';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
 import {
+  ClickableFilePath,
   StatusDot,
   cardStyle,
-  shortFilename,
   isStructuredResult,
   stripErrorXml,
   countDiffStats,
@@ -49,14 +49,7 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
       header={
         <>
           <FileTypeIcon filePath={filePath} />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="font-mono text-mf-accent truncate text-mf-body" tabIndex={0}>
-                {shortFilename(filePath)}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{filePath}</TooltipContent>
-          </Tooltip>
+          <ClickableFilePath filePath={filePath} />
         </>
       }
       statusDot={<StatusDot result={result} isError={isError} />}
@@ -106,7 +99,9 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
                     {i + 1}
                   </span>
                   <span className="shrink-0 w-5 select-none text-mf-chat-diff-added-text text-center">+</span>
-                  <span className="text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">{line}</span>
+                  <span className="select-text text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">
+                    {line}
+                  </span>
                 </div>
               ))}
             </div>
