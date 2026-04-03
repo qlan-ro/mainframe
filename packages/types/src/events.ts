@@ -1,4 +1,4 @@
-import type { Chat, ChatMessage, QueuedMessage } from './chat.js';
+import type { Chat, ChatMessage, QueuedMessageRef } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
 import type { PermissionMode } from './settings.js';
 import type { UIZone } from './plugin.js';
@@ -51,9 +51,10 @@ export type DaemonEvent =
   | { type: 'launch.tunnel.failed'; projectId: string; effectivePath: string; name: string; error: string }
   | { type: 'launch.port.timeout'; projectId: string; effectivePath: string; name: string; port: number }
   | { type: 'sessions.external.count'; projectId: string; count: number }
-  | { type: 'message.queued'; chatId: string; message: QueuedMessage }
-  | { type: 'message.queue.updated'; chatId: string; message: QueuedMessage }
-  | { type: 'message.queue.cancelled'; chatId: string; messageId: string }
+  | { type: 'message.queued'; chatId: string; ref: QueuedMessageRef }
+  | { type: 'message.queued.processed'; chatId: string; uuid: string }
+  | { type: 'message.queued.cancelled'; chatId: string; uuid: string }
+  | { type: 'message.queued.cancel_failed'; chatId: string; uuid: string }
   | { type: 'chat.compacting'; chatId: string }
   | { type: 'chat.compactDone'; chatId: string }
   | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number };
