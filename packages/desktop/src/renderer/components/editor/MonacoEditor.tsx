@@ -245,7 +245,7 @@ export function MonacoEditor({
             scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
             padding: { top: 8 },
             glyphMargin: !!onLineComment,
-            stickyScroll: { enabled: true },
+            stickyScroll: { enabled: false },
             cursorBlinking: 'smooth',
             renderLineHighlight: 'gutter',
           }}

@@ -35,6 +35,8 @@ const nullSink: SessionSink = {
   onExit: () => {},
   onError: () => {},
   onCompact: () => {},
+  onCompactStart: () => {},
+  onContextUsage: () => {},
   onPlanFile: () => {},
   onSkillFile: () => {},
 };
@@ -51,6 +53,8 @@ export interface ClaudeSessionState {
   child: ChildProcess | null;
   status: 'starting' | 'ready' | 'running' | 'stopped' | 'error';
   pid: number;
+  activeTasks: Map<string, { type: string; command?: string }>;
+  interruptTimer: ReturnType<typeof setTimeout> | null;
 }
 
 /**
@@ -85,6 +89,8 @@ export class ClaudeSession implements AdapterSession {
       child: null,
       status: 'starting',
       pid: 0,
+      activeTasks: new Map(),
+      interruptTimer: null,
     };
   }
 
@@ -185,17 +191,56 @@ export class ClaudeSession implements AdapterSession {
   async interrupt(): Promise<void> {
     const child = this.state.child;
     if (!child) return;
+
+    // Interrupt the main turn first so the abort fires before subtask results
+    // propagate back to the main agent.
     const payload = {
       type: 'control_request',
       request_id: crypto.randomUUID(),
       request: { subtype: 'interrupt' },
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
-    // Also send SIGINT: the CLI's stdin message loop blocks while background
-    // agents are running (agent-wait loop), so the protocol interrupt above
-    // may sit unread in the buffer. SIGINT triggers the CLI's signal handler
-    // which calls abort() on the current turn's AbortController directly.
-    child.kill('SIGINT');
+
+    // Then stop subtasks to clean them up.
+    for (const [taskId] of this.state.activeTasks) {
+      const stopPayload = {
+        type: 'control_request',
+        request_id: crypto.randomUUID(),
+        request: { subtype: 'stop_task', task_id: taskId },
+      };
+      child.stdin?.write(JSON.stringify(stopPayload) + '\n');
+    }
+    this.state.activeTasks.clear();
+
+    // Fallback: if the protocol interrupt doesn't take effect within 10s
+    // (e.g. stdin reader is blocked), send SIGINT as a last resort.
+    // Cancelled by clearInterruptTimer() when a result event arrives.
+    this.state.interruptTimer = setTimeout(() => {
+      this.state.interruptTimer = null;
+      if (this.state.child === child && child.exitCode === null) {
+        log.warn({ sessionId: this.id }, 'protocol interrupt timed out, sending SIGINT fallback');
+        child.kill('SIGINT');
+      }
+    }, 10_000);
+  }
+
+  /** Cancel the SIGINT fallback — called when a result event confirms the turn ended. */
+  clearInterruptTimer(): void {
+    if (this.state.interruptTimer) {
+      clearTimeout(this.state.interruptTimer);
+      this.state.interruptTimer = null;
+    }
+  }
+
+  requestContextUsage(): void {
+    const child = this.state.child;
+    if (!child) return;
+    const payload = {
+      type: 'control_request',
+      request_id: crypto.randomUUID(),
+      request: { subtype: 'get_context_usage' },
+    };
+    child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
   async setPermissionMode(mode: string): Promise<void> {

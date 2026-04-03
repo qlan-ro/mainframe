@@ -50,7 +50,10 @@ export type DaemonEvent =
   | { type: 'launch.tunnel'; projectId: string; effectivePath: string; name: string; url: string }
   | { type: 'launch.tunnel.failed'; projectId: string; effectivePath: string; name: string; error: string }
   | { type: 'launch.port.timeout'; projectId: string; effectivePath: string; name: string; port: number }
-  | { type: 'sessions.external.count'; projectId: string; count: number };
+  | { type: 'sessions.external.count'; projectId: string; count: number }
+  | { type: 'chat.compacting'; chatId: string }
+  | { type: 'chat.compactDone'; chatId: string }
+  | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }

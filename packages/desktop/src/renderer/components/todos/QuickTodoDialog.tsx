@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { usePluginLayoutStore } from '../../store/plugins';
+import { LabelAutocomplete } from './LabelAutocomplete';
 import { todosApi } from '../../lib/api/todos-api';
 import { getActiveProjectId } from '../../hooks/useActiveProjectId';
 import { toast } from '../../lib/toast';
@@ -65,14 +66,15 @@ export function QuickTodoDialog() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [priority, setPriority] = useState<QuickPriority>('medium');
-  const [labels, setLabels] = useState('');
+  const [labelList, setLabelList] = useState<string[]>([]);
+  const [allLabels, setAllLabels] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
 
   const titleRef = useRef<HTMLInputElement>(null);
 
-  // Open when triggered, reset form
+  // Open when triggered, reset form and load label suggestions
   useEffect(() => {
     if (isTriggered) {
       setOpen(true);
@@ -80,11 +82,26 @@ export function QuickTodoDialog() {
       setTitle('');
       setBody('');
       setPriority('medium');
-      setLabels('');
+      setLabelList([]);
       setSubmitting(false);
       setPendingFiles([]);
       clearTriggeredAction();
       requestAnimationFrame(() => titleRef.current?.focus());
+      const projectId = getActiveProjectId();
+      if (projectId) {
+        todosApi
+          .list(projectId)
+          .then((todos) => {
+            const seen = new Set<string>();
+            for (const todo of todos) {
+              for (const l of todo.labels) seen.add(l);
+            }
+            setAllLabels([...seen].sort());
+          })
+          .catch(() => {
+            /* expected — not critical */
+          });
+      }
     }
   }, [isTriggered, clearTriggeredAction]);
 
@@ -137,18 +154,13 @@ export function QuickTodoDialog() {
 
     setSubmitting(true);
     try {
-      const parsedLabels = labels
-        .split(',')
-        .map((l) => l.trim())
-        .filter(Boolean);
-
       const todo = await todosApi.create({
         projectId,
         title: title.trim(),
         body: body.trim() || undefined,
         type,
         priority,
-        labels: parsedLabels.length > 0 ? parsedLabels : undefined,
+        labels: labelList.length > 0 ? labelList : undefined,
       });
 
       if (pendingFiles.length > 0) {
@@ -171,7 +183,7 @@ export function QuickTodoDialog() {
       toast.error('Failed to create task');
       setSubmitting(false);
     }
-  }, [title, body, type, priority, labels, submitting, pendingFiles]);
+  }, [title, body, type, priority, labelList, submitting, pendingFiles]);
 
   if (!open) return null;
 
@@ -265,14 +277,7 @@ export function QuickTodoDialog() {
           </div>
 
           {/* Labels */}
-          <input
-            type="text"
-            value={labels}
-            onChange={(e) => setLabels(e.target.value)}
-            placeholder="Labels (comma-separated)"
-            className={cn(input, 'w-full')}
-            onKeyDown={handleModEnter}
-          />
+          <LabelAutocomplete value={labelList} onChange={setLabelList} allLabels={allLabels} />
         </div>
 
         {/* Footer */}

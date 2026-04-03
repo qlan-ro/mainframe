@@ -41,8 +41,8 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
     >
       {/* Row 1: #number + title + type badge */}
       <div className="flex items-center gap-1.5 min-w-0">
-        <span className="shrink-0 font-mono text-mf-status text-mf-text-secondary">#{todo.number}</span>
-        <span className="flex-1 text-mf-small text-mf-text-primary leading-snug truncate">{todo.title}</span>
+        <span className="shrink-0 font-mono text-mf-body font-medium text-mf-accent">#{todo.number}</span>
+        <span className="flex-1 text-base text-mf-text-primary font-semibold leading-snug truncate">{todo.title}</span>
         <span
           className={cn(
             'shrink-0 text-mf-status font-medium px-1.5 py-0.5 rounded capitalize',
@@ -100,10 +100,10 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
                     e.stopPropagation();
                     onStartSession(todo);
                   }}
-                  className="p-1 rounded text-mf-accent hover:bg-mf-accent/10 transition-colors"
+                  className="p-1.5 rounded text-mf-accent hover:bg-mf-accent/10 transition-colors"
                   aria-label="Start in new session"
                 >
-                  <Play size={12} />
+                  <Play size={14} />
                 </button>
               </TooltipTrigger>
               <TooltipContent>Start session</TooltipContent>
@@ -116,10 +116,10 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
                   e.stopPropagation();
                   onEdit(todo);
                 }}
-                className="p-1 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
+                className="p-1.5 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
                 aria-label="Edit task"
               >
-                <Edit size={12} />
+                <Edit size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent>Edit</TooltipContent>
@@ -131,10 +131,10 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
                   e.stopPropagation();
                   onDelete(todo.id);
                 }}
-                className="p-1 rounded text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors"
+                className="p-1.5 rounded text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors"
                 aria-label="Delete task"
               >
-                <Trash2 size={12} />
+                <Trash2 size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent>Delete</TooltipContent>

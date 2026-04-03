@@ -5,6 +5,7 @@ import type { Todo, CreateTodoInput, TodoStatus, TodoType, TodoPriority } from '
 import { todosApi } from '../../lib/api/todos-api';
 import { TodoAttachments } from './TodoAttachments';
 import { DependencyPicker } from './DependencyPicker';
+import { LabelAutocomplete } from './LabelAutocomplete';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:todo-modal');
@@ -37,6 +38,7 @@ interface Props {
   onSave: (data: CreateTodoInput, pendingAttachments?: PendingAttachment[]) => void;
   onStartSession?: (todo: Todo) => void;
   onSaveAndStartSession?: (data: CreateTodoInput) => void;
+  allLabels?: string[];
 }
 
 const input = cn(
@@ -56,13 +58,20 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function TodoModal({ todo, allTodos = [], onClose, onSave, onStartSession }: Props): React.ReactElement {
+export function TodoModal({
+  todo,
+  allTodos = [],
+  onClose,
+  onSave,
+  onStartSession,
+  allLabels = [],
+}: Props): React.ReactElement {
   const [title, setTitle] = useState(todo?.title ?? '');
   const [body, setBody] = useState(todo?.body ?? '');
   const [status, setStatus] = useState<TodoStatus>(todo?.status ?? 'open');
   const [type, setType] = useState<TodoType>(todo?.type ?? 'feature');
   const [priority, setPriority] = useState<TodoPriority>(todo?.priority ?? 'medium');
-  const [labels, setLabels] = useState((todo?.labels ?? []).join(', '));
+  const [labelList, setLabelList] = useState<string[]>(todo?.labels ?? []);
   const [assignees, setAssignees] = useState((todo?.assignees ?? []).join(', '));
   const [milestone, setMilestone] = useState(todo?.milestone ?? '');
   const [dependencies, setDependencies] = useState<number[]>(todo?.dependencies ?? []);
@@ -165,10 +174,7 @@ export function TodoModal({ todo, allTodos = [], onClose, onSave, onStartSession
         status,
         type,
         priority,
-        labels: labels
-          .split(',')
-          .map((l) => l.trim())
-          .filter(Boolean),
+        labels: labelList,
         assignees: assignees
           .split(',')
           .map((a) => a.trim())
@@ -186,7 +192,7 @@ export function TodoModal({ todo, allTodos = [], onClose, onSave, onStartSession
         role="dialog"
         aria-modal="true"
         aria-label={todo ? 'Edit Task' : 'New Task'}
-        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border mx-4 shadow-xl relative"
+        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border mx-4 shadow-xl relative flex flex-col overflow-hidden"
         style={{ width: size.width, maxHeight: '90vh' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -201,11 +207,7 @@ export function TodoModal({ todo, allTodos = [], onClose, onSave, onStartSession
           </button>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="p-4 space-y-3 overflow-y-auto scrollbar-none"
-          style={{ maxHeight: size.height - 52 }}
-        >
+        <form onSubmit={handleSubmit} className="p-4 space-y-3 overflow-y-auto scrollbar-none flex-1 min-h-0">
           <div className="flex flex-col gap-1">
             <label htmlFor="todo-title" className="text-mf-small text-mf-text-secondary">
               Title *
@@ -333,13 +335,8 @@ export function TodoModal({ todo, allTodos = [], onClose, onSave, onStartSession
           )}
 
           <div className="flex flex-col gap-1">
-            <label className="text-mf-small text-mf-text-secondary">Labels (comma-separated)</label>
-            <input
-              className={input}
-              value={labels}
-              onChange={(e) => setLabels(e.target.value)}
-              placeholder="e.g. ui, backend, urgent"
-            />
+            <label className="text-mf-small text-mf-text-secondary">Labels</label>
+            <LabelAutocomplete value={labelList} onChange={setLabelList} allLabels={allLabels} />
           </div>
 
           <div className="flex flex-col gap-1">
