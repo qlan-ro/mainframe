@@ -400,17 +400,13 @@ export function ChatsPanel(): React.ReactElement {
 
       {/* Project filter badges */}
       {projects.length > 1 && (
-        <div className="px-2.5 py-1.5 overflow-hidden">
-          <div
-            ref={filterScrollRef}
-            onWheel={handleFilterWheel}
-            className="flex gap-1.5 overflow-x-auto scrollbar-none"
-          >
+        <div className="px-2.5 py-2 overflow-hidden">
+          <div ref={filterScrollRef} onWheel={handleFilterWheel} className="flex gap-2 overflow-x-auto scrollbar-none">
             <button
               type="button"
               onClick={() => handleFilterSelect(null)}
               className={cn(
-                'shrink-0 px-2.5 py-0.5 rounded-full text-mf-status transition-colors inline-flex items-center',
+                'shrink-0 px-2.5 py-1 rounded-full text-mf-status transition-colors inline-flex items-center gap-1.5',
                 filterProjectId === null
                   ? 'bg-mf-accent text-white'
                   : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
@@ -423,12 +419,12 @@ export function ChatsPanel(): React.ReactElement {
                 return (
                   <>
                     {uc > 0 && (
-                      <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-mf-accent text-white text-[10px] font-bold leading-none">
+                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-mf-accent text-white text-[10px] font-bold leading-none">
                         {uc}
                       </span>
                     )}
                     {wc > 0 && (
-                      <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
+                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
                         {wc}
                       </span>
                     )}
@@ -456,12 +452,12 @@ export function ChatsPanel(): React.ReactElement {
                       return (
                         <>
                           {uc > 0 && (
-                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-mf-accent text-white text-[10px] font-bold leading-none">
+                            <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-mf-accent text-white text-[10px] font-bold leading-none">
                               {uc}
                             </span>
                           )}
                           {wc > 0 && (
-                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
+                            <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
                               {wc}
                             </span>
                           )}
