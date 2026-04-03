@@ -19,7 +19,10 @@ interface ChatsState {
   queuedMessages: Map<string, QueuedMessageRef>;
   compactingChats: Set<string>;
   contextUsage: Map<string, ContextUsageState>;
+  unreadChatIds: Set<string>;
 
+  markUnread: (chatId: string) => void;
+  clearUnread: (chatId: string) => void;
   setChats: (chats: Chat[]) => void;
   setActiveChat: (id: string | null) => void;
   setFilterProjectId: (id: string | null) => void;
@@ -49,7 +52,21 @@ export const useChatsStore = create<ChatsState>((set) => ({
   queuedMessages: new Map(),
   compactingChats: new Set(),
   contextUsage: new Map(),
+  unreadChatIds: new Set(),
 
+  markUnread: (chatId) =>
+    set((state) => {
+      const next = new Set(state.unreadChatIds);
+      next.add(chatId);
+      return { unreadChatIds: next };
+    }),
+  clearUnread: (chatId) =>
+    set((state) => {
+      if (!state.unreadChatIds.has(chatId)) return state;
+      const next = new Set(state.unreadChatIds);
+      next.delete(chatId);
+      return { unreadChatIds: next };
+    }),
   setChats: (chats) => set({ chats }),
   setFilterProjectId: (id) => {
     if (id) {
@@ -65,7 +82,17 @@ export const useChatsStore = create<ChatsState>((set) => ({
     } else {
       localStorage.removeItem('mf:activeChatId');
     }
-    set({ activeChatId: id });
+    set((state) => {
+      const unreadChatIds =
+        id && state.unreadChatIds.has(id)
+          ? (() => {
+              const s = new Set(state.unreadChatIds);
+              s.delete(id);
+              return s;
+            })()
+          : state.unreadChatIds;
+      return { activeChatId: id, unreadChatIds };
+    });
   },
   addChat: (chat) =>
     set((state) => {
