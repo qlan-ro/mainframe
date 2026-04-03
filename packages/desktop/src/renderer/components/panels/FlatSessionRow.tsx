@@ -152,7 +152,7 @@ export function FlatSessionRow({
               chat.worktreeMissing
                 ? 'bg-mf-destructive'
                 : isWorking
-                  ? 'bg-mf-accent animate-pulse motion-reduce:animate-none'
+                  ? 'bg-mf-accent animate-heartbeat motion-reduce:animate-none'
                   : isUnread
                     ? 'bg-mf-accent'
                     : 'bg-mf-text-secondary opacity-40',
