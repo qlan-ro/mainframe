@@ -56,6 +56,8 @@ export interface ClaudeSessionState {
   pid: number;
   activeTasks: Map<string, { type: string; command?: string }>;
   interruptTimer: ReturnType<typeof setTimeout> | null;
+  /** Pending cancel_async_message callbacks keyed by request_id */
+  pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
 }
 
 /**
@@ -92,6 +94,7 @@ export class ClaudeSession implements AdapterSession {
       pid: 0,
       activeTasks: new Map(),
       interruptTimer: null,
+      pendingCancelCallbacks: new Map(),
     };
   }
 
@@ -378,7 +381,19 @@ export class ClaudeSession implements AdapterSession {
     };
     log.info({ sessionId: this.id, uuid, requestId }, 'sending cancel_async_message');
     stdin.write(JSON.stringify(payload) + '\n');
-    return true;
+
+    // Wait for the CLI's control_response with the actual cancelled boolean
+    return new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.state.pendingCancelCallbacks.delete(requestId);
+        log.warn({ sessionId: this.id, uuid, requestId }, 'cancel_async_message timed out');
+        resolve(false);
+      }, 5000);
+      this.state.pendingCancelCallbacks.set(requestId, (cancelled) => {
+        clearTimeout(timeout);
+        resolve(cancelled);
+      });
+    });
   }
 
   getContextFiles(): { global: ContextFile[]; project: ContextFile[] } {

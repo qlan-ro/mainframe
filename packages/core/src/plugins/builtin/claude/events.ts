@@ -176,6 +176,17 @@ function handleControlResponseEvent(session: ClaudeSession, event: Record<string
     };
     sink.onContextUsage(usage);
   }
+
+  // Route cancel_async_message responses to pending callbacks
+  const requestId = (response.request_id as string) || undefined;
+  const innerResponse = response.response as Record<string, unknown> | undefined;
+  if (requestId && innerResponse && typeof innerResponse.cancelled === 'boolean') {
+    const callback = session.state.pendingCancelCallbacks.get(requestId);
+    if (callback) {
+      session.state.pendingCancelCallbacks.delete(requestId);
+      callback(innerResponse.cancelled);
+    }
+  }
 }
 
 function handleResultEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {

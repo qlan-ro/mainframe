@@ -245,6 +245,23 @@ function buildSessionSink(
           })
           .catch((err) => log.warn({ err }, 'push notification failed'));
       }
+
+      // Clear queued badges on turn completion — the CLI has processed all queued
+      // messages by this point. We can't rely on isReplay events in stream-json mode.
+      const allMsgs = messages.get(chatId);
+      if (allMsgs) {
+        let cleared = false;
+        for (const msg of allMsgs) {
+          if (msg.metadata?.queued) {
+            const uuid = (msg.metadata as Record<string, unknown>).uuid as string | undefined;
+            delete (msg.metadata as Record<string, unknown>).queued;
+            delete (msg.metadata as Record<string, unknown>).uuid;
+            cleared = true;
+            if (uuid) emitEvent({ type: 'message.queued.processed', chatId, uuid });
+          }
+        }
+        if (cleared) emitDisplay();
+      }
     },
 
     onQueuedProcessed(uuid: string) {
