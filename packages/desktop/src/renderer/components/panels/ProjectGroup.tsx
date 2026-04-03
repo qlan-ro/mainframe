@@ -90,6 +90,8 @@ function ChatRow({
   }, [chat.id, handleStartRename, registerRenameCallback, unregisterRenameCallback]);
 
   const updateChat = useChatsStore((s) => s.updateChat);
+  const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
+  const isUnread = unreadChatIds.has(chat.id);
 
   const handleCommitRename = useCallback(() => {
     setEditing(false);
@@ -143,6 +145,7 @@ function ChatRow({
                     className={cn(
                       'text-mf-small truncate',
                       isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                      isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
                     )}
                     tabIndex={0}
                   >
