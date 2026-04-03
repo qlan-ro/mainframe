@@ -246,21 +246,44 @@ export function ChatsPanel(): React.ReactElement {
     });
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string | undefined) => {
+  const renameCallbacks = useRef<Map<string, () => void>>(new Map());
+
+  const registerRenameCallback = useCallback((chatId: string, trigger: () => void) => {
+    renameCallbacks.current.set(chatId, trigger);
+  }, []);
+
+  const unregisterRenameCallback = useCallback((chatId: string) => {
+    renameCallbacks.current.delete(chatId);
+  }, []);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => {
     e.preventDefault();
-    if (!sessionId) return;
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
       items: [
-        {
-          label: 'Copy Session ID',
-          onClick: () => {
-            navigator.clipboard.writeText(sessionId).catch((err) => {
-              log.warn('failed to copy session id', { err: String(err) });
-            });
-          },
-        },
+        ...(chatId
+          ? [
+              {
+                label: 'Rename',
+                onClick: () => {
+                  renameCallbacks.current.get(chatId)?.();
+                },
+              },
+            ]
+          : []),
+        ...(sessionId
+          ? [
+              {
+                label: 'Copy Session ID',
+                onClick: () => {
+                  navigator.clipboard.writeText(sessionId).catch((err) => {
+                    log.warn('failed to copy session id', { err: String(err) });
+                  });
+                },
+              },
+            ]
+          : []),
       ],
     });
   }, []);
@@ -417,6 +440,8 @@ export function ChatsPanel(): React.ReactElement {
                 collapsed={collapsed.has(g.project.id)}
                 onToggleCollapse={() => toggleCollapse(g.project.id)}
                 onContextMenu={handleContextMenu}
+                registerRenameCallback={registerRenameCallback}
+                unregisterRenameCallback={unregisterRenameCallback}
               />
             ))}
           </div>
@@ -431,6 +456,8 @@ export function ChatsPanel(): React.ReactElement {
                   chat={chat}
                   projectName={projectMap.get(chat.projectId)?.name}
                   onContextMenu={handleContextMenu}
+                  registerRenameCallback={registerRenameCallback}
+                  unregisterRenameCallback={unregisterRenameCallback}
                 />
               ))
             )}

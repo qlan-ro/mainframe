@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, ChevronDown, Check, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, X, ChevronDown, Check, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Todo, TodoType, TodoPriority } from '../../lib/api/todos-api';
 
@@ -207,7 +207,7 @@ function SortControl({ sort, onSortChange }: { sort: TodoSort; onSortChange: (s:
 
   return (
     <div className="flex items-center gap-1 shrink-0">
-      <ArrowUpDown size={11} className="text-mf-text-secondary shrink-0" />
+      <span className="text-[11px] text-mf-text-secondary shrink-0">Sort:</span>
       {SORT_KEYS.map((key) => (
         <button
           key={key}

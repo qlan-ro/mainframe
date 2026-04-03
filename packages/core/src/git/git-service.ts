@@ -228,7 +228,7 @@ export class GitService {
       }
 
       try {
-        const result = await this.git().pull(remote, branch);
+        const result = await this.git().pull(remote, branch, { '--ff-only': null });
         if (result.summary.changes === 0 && result.summary.insertions === 0 && result.summary.deletions === 0) {
           return { status: 'up-to-date' };
         }
@@ -387,7 +387,7 @@ export class GitService {
       // Pull current branch
       let pull: PullResult;
       try {
-        const result = await this.git().pull();
+        const result = await this.git().pull({ '--ff-only': null });
         if (result.summary.changes === 0 && result.summary.insertions === 0 && result.summary.deletions === 0) {
           pull = { status: 'up-to-date' };
         } else {
