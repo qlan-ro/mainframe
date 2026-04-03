@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Edit, Trash2, Paperclip, GitFork } from 'lucide-react';
+import { Play, Edit, Trash2, Paperclip } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { Todo } from '../../lib/api/todos-api';
@@ -42,7 +42,14 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
       {/* Row 1: #number + title + type badge */}
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="shrink-0 font-mono text-mf-body font-medium text-mf-accent">#{todo.number}</span>
-        <span className="flex-1 text-base text-mf-text-primary font-semibold leading-snug truncate">{todo.title}</span>
+        <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
+          <span className="text-base text-mf-text-primary font-semibold leading-snug truncate">{todo.title}</span>
+          {todo.dependencies.length > 0 && (
+            <span className="shrink-0 text-mf-status text-mf-text-secondary opacity-50">
+              Depends on {todo.dependencies.map((n) => `#${n}`).join(', ')}
+            </span>
+          )}
+        </span>
         <span
           className={cn(
             'shrink-0 text-mf-status font-medium px-1.5 py-0.5 rounded capitalize',
@@ -78,17 +85,6 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
               <Paperclip size={10} />
               {attachmentCount}
             </span>
-          )}
-          {todo.dependencies.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="flex items-center gap-0.5 text-mf-status text-mf-text-secondary cursor-default">
-                  <GitFork size={10} />
-                  {todo.dependencies.length}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Depends on: {todo.dependencies.map((n) => `#${n}`).join(', ')}</TooltipContent>
-            </Tooltip>
           )}
         </div>
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
