@@ -43,6 +43,8 @@ interface TabsState {
   fileView: FileView | null;
   fileViewCollapsed: boolean;
   sidebarWidth: number;
+  /** Number of diff changes in the active diff editor (set by MonacoDiffEditor). */
+  diffChangeCount: number;
 
   openTab: (tab: CenterTab) => void;
   closeTab: (id: string) => void;
@@ -63,6 +65,7 @@ interface TabsState {
   toggleTreePath: (path: string) => void;
   revealFileInTree: (filePath: string) => void;
   clearRevealPath: () => void;
+  setDiffChangeCount: (count: number) => void;
 }
 
 interface NavEntry {
@@ -103,6 +106,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   fileView: null,
   fileViewCollapsed: false,
   sidebarWidth: DEFAULT_SIDEBAR_PX,
+  diffChangeCount: 0,
   expandedPaths: ['.'],
   revealPath: null,
 
@@ -255,6 +259,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   },
 
   clearRevealPath: () => set({ revealPath: null }),
+  setDiffChangeCount: (count) => set({ diffChangeCount: count }),
 }));
 
 /** Close file view when the active project changes (e.g. switching chats across projects). */

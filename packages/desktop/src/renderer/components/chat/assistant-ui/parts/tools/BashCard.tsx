@@ -12,12 +12,9 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
     typeof result === 'string' ? result : result !== undefined ? JSON.stringify(result, null, 2) : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
 
-  const copyText = resultText ? `$ ${command}\n${resultText}` : command || undefined;
-
   return (
     <CollapsibleToolCard
       wrapperClassName={cardStyle(result, isError)}
-      copyText={copyText}
       header={
         <>
           <Terminal size={15} className="text-mf-text-secondary shrink-0" />

@@ -134,7 +134,9 @@ export function DiffFromPatch({ hunks }: { hunks: DiffHunk[] }) {
                     {newLineNum}
                   </span>
                   <span className="shrink-0 w-5 select-none text-mf-chat-diff-added-text text-center">+</span>
-                  <span className="text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">{content}</span>
+                  <span className="select-text text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">
+                    {content}
+                  </span>
                 </div>
               );
             }
@@ -149,7 +151,7 @@ export function DiffFromPatch({ hunks }: { hunks: DiffHunk[] }) {
                   </span>
                   <span className="shrink-0 w-8 select-none text-mf-text-secondary opacity-30 text-right pr-2"> </span>
                   <span className="shrink-0 w-5 select-none text-mf-chat-diff-removed-text text-center">-</span>
-                  <span className="text-mf-chat-diff-removed-content whitespace-pre-wrap break-all pr-3">
+                  <span className="select-text text-mf-chat-diff-removed-content whitespace-pre-wrap break-all pr-3">
                     {content}
                   </span>
                 </div>
@@ -167,7 +169,7 @@ export function DiffFromPatch({ hunks }: { hunks: DiffHunk[] }) {
                   {newLineNum}
                 </span>
                 <span className="shrink-0 w-5 select-none text-mf-text-secondary opacity-30 text-center"> </span>
-                <span className="text-mf-text-secondary whitespace-pre-wrap break-all pr-3">{content}</span>
+                <span className="select-text text-mf-text-secondary whitespace-pre-wrap break-all pr-3">{content}</span>
               </div>
             );
           })}
@@ -202,7 +204,9 @@ export function DiffFallback({
           </span>
           <span className="shrink-0 w-8 select-none text-mf-text-secondary opacity-30 text-right pr-2"> </span>
           <span className="shrink-0 w-5 select-none text-mf-chat-diff-removed-text text-center">-</span>
-          <span className="text-mf-chat-diff-removed-content whitespace-pre-wrap break-all pr-3">{line}</span>
+          <span className="select-text text-mf-chat-diff-removed-content whitespace-pre-wrap break-all pr-3">
+            {line}
+          </span>
         </div>
       ))}
       {oldLines.length > 0 && newLines.length > 0 && (
@@ -220,7 +224,7 @@ export function DiffFallback({
             {hasLineNums ? startLine + i : ''}
           </span>
           <span className="shrink-0 w-5 select-none text-mf-chat-diff-added-text text-center">+</span>
-          <span className="text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">{line}</span>
+          <span className="select-text text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">{line}</span>
         </div>
       ))}
     </div>
