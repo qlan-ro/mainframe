@@ -147,7 +147,14 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'plugin.notification':
       notify({
-        type: event.level === 'error' ? 'error' : event.level === 'success' ? 'success' : 'info',
+        type:
+          event.level === 'error'
+            ? 'error'
+            : event.level === 'warning'
+              ? 'warning'
+              : event.level === 'success'
+                ? 'success'
+                : 'info',
         title: event.title,
         body: event.body,
       });

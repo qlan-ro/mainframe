@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
 import { useToastStore, type Toast } from '../store/toasts';
 import { useChatsStore } from '../store/chats';
 import { useTabsStore } from '../store/tabs';
@@ -19,7 +19,11 @@ const TYPE_CONFIG: Record<Toast['type'], { icon: React.ReactNode; style: string 
   },
   info: {
     icon: <Info size={16} className="shrink-0 mt-0.5" />,
-    style: 'border-mf-accent/30 text-mf-accent bg-mf-panel-bg',
+    style: 'border-mf-text-secondary/30 text-mf-text-secondary bg-mf-panel-bg',
+  },
+  warning: {
+    icon: <AlertTriangle size={16} className="shrink-0 mt-0.5" />,
+    style: 'border-yellow-500/30 text-yellow-400 bg-mf-panel-bg',
   },
 };
 
