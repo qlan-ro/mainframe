@@ -146,18 +146,18 @@ export function FlatSessionRow({
     >
       <button type="button" onClick={handleSelect} className="flex-1 min-w-0 px-3 py-1.5 text-left">
         <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              'w-2 h-2 rounded-full shrink-0',
-              chat.worktreeMissing
-                ? 'bg-mf-destructive'
-                : isWorking
-                  ? 'bg-mf-accent animate-heartbeat motion-reduce:animate-none'
-                  : isUnread
-                    ? 'bg-mf-accent'
-                    : 'bg-mf-text-secondary opacity-40',
-            )}
-          />
+          {chat.worktreeMissing ? (
+            <div className="w-2 h-2 rounded-full shrink-0 bg-mf-destructive" />
+          ) : isWorking ? (
+            <Loader2 size={12} className="shrink-0 text-mf-accent animate-spin" />
+          ) : (
+            <div
+              className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary opacity-40',
+              )}
+            />
+          )}
           <div className="flex-1 min-w-0">
             {editing ? (
               <input

@@ -27,17 +27,13 @@ function SessionStatusDot({
     return <div data-testid="chat-status-missing" className="w-2 h-2 rounded-full shrink-0 bg-mf-destructive" />;
   }
   const isWorking = status === 'working' || status === 'waiting';
+  if (isWorking) {
+    return <Loader2 data-testid="chat-status-working" size={12} className="shrink-0 text-mf-accent animate-spin" />;
+  }
   return (
     <div
-      data-testid={isWorking ? 'chat-status-working' : 'chat-status-idle'}
-      className={cn(
-        'w-2 h-2 rounded-full shrink-0',
-        isWorking
-          ? 'bg-mf-accent animate-heartbeat motion-reduce:animate-none'
-          : isUnread
-            ? 'bg-mf-accent'
-            : 'bg-mf-text-secondary opacity-40',
-      )}
+      data-testid="chat-status-idle"
+      className={cn('w-2 h-2 rounded-full shrink-0', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary opacity-40')}
     />
   );
 }
