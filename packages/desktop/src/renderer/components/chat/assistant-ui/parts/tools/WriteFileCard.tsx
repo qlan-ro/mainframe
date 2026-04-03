@@ -106,7 +106,9 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
                     {i + 1}
                   </span>
                   <span className="shrink-0 w-5 select-none text-mf-chat-diff-added-text text-center">+</span>
-                  <span className="text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">{line}</span>
+                  <span className="select-text text-mf-chat-diff-added-content whitespace-pre-wrap break-all pr-3">
+                    {line}
+                  </span>
                 </div>
               ))}
             </div>

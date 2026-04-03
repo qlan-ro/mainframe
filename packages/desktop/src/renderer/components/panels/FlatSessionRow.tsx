@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Archive, FolderOpen, GitBranch, Clock, Loader2, Pencil } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
@@ -31,10 +31,18 @@ function formatRelativeTime(isoString: string): string {
 interface FlatSessionRowProps {
   chat: Chat;
   projectName?: string;
-  onContextMenu?: (e: React.MouseEvent, sessionId: string | undefined) => void;
+  onContextMenu?: (e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => void;
+  registerRenameCallback?: (chatId: string, trigger: () => void) => void;
+  unregisterRenameCallback?: (chatId: string) => void;
 }
 
-export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSessionRowProps): React.ReactElement {
+export function FlatSessionRow({
+  chat,
+  projectName,
+  onContextMenu,
+  registerRenameCallback,
+  unregisterRenameCallback,
+}: FlatSessionRowProps): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const chats = useChatsStore((s) => s.chats);
   const setActiveChat = useChatsStore((s) => s.setActiveChat);
@@ -88,14 +96,19 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleStartRename = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
+    (e?: React.MouseEvent) => {
+      e?.stopPropagation();
       setEditTitle(chat.title || '');
       setEditing(true);
       requestAnimationFrame(() => inputRef.current?.select());
     },
     [chat.title],
   );
+
+  useEffect(() => {
+    registerRenameCallback?.(chat.id, handleStartRename);
+    return () => unregisterRenameCallback?.(chat.id);
+  }, [chat.id, handleStartRename, registerRenameCallback, unregisterRenameCallback]);
 
   const updateChat = useChatsStore((s) => s.updateChat);
 
@@ -123,7 +136,7 @@ export function FlatSessionRow({ chat, projectName, onContextMenu }: FlatSession
   return (
     <div
       data-testid="chat-list-item"
-      onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId)}
+      onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId, chat.id)}
       className={cn(
         'group w-full rounded-mf-input transition-colors flex items-center gap-2',
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',

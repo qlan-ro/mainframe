@@ -1,27 +1,19 @@
 import React, { useMemo } from 'react';
-import { Crosshair, FileText, GitBranch, PanelLeftClose } from 'lucide-react';
+import { ChevronUp, ChevronDown, Crosshair, FileText, GitBranch, PanelLeftClose } from 'lucide-react';
+import { structuredPatch } from 'diff';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { useTabsStore, type FileView } from '../../store/tabs';
+import { navigateDiff } from '../editor/diff-nav';
 
 function computeInlineDiffStats(original?: string, modified?: string): { added: number; removed: number } | null {
   if (original == null || modified == null) return null;
-  const origLines = original.split('\n');
-  const modLines = modified.split('\n');
+  const patch = structuredPatch('', '', original, modified, '', '', { context: 0 });
   let added = 0;
   let removed = 0;
-  const maxLen = Math.max(origLines.length, modLines.length);
-  for (let i = 0; i < maxLen; i++) {
-    if (i >= origLines.length) {
-      added++;
-      continue;
-    }
-    if (i >= modLines.length) {
-      removed++;
-      continue;
-    }
-    if (origLines[i] !== modLines[i]) {
-      added++;
-      removed++;
+  for (const hunk of patch.hunks) {
+    for (const line of hunk.lines) {
+      if (line[0] === '+') added++;
+      else if (line[0] === '-') removed++;
     }
   }
   return { added, removed };
@@ -44,6 +36,7 @@ export function FileViewHeader(): React.ReactElement | null {
   const fileView = useTabsStore((s) => s.fileView);
   const toggleFileViewCollapsed = useTabsStore((s) => s.toggleFileViewCollapsed);
   const revealFileInTree = useTabsStore((s) => s.revealFileInTree);
+  const diffChangeCount = useTabsStore((s) => s.diffChangeCount);
 
   const diffStats = useMemo(() => {
     if (!fileView || fileView.type !== 'diff' || fileView.source !== 'inline') return null;
@@ -78,6 +71,35 @@ export function FileViewHeader(): React.ReactElement | null {
       )}
 
       <div className="flex-1" />
+
+      {diffChangeCount > 1 && (
+        <div className="flex items-center gap-0.5 shrink-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => navigateDiff('prev')}
+                className="p-0.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                aria-label="Previous change"
+              >
+                <ChevronUp size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Previous change</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => navigateDiff('next')}
+                className="p-0.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                aria-label="Next change"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Next change</TooltipContent>
+          </Tooltip>
+        </div>
+      )}
 
       {diffStats && (
         <div className="flex items-center gap-1.5 text-mf-status font-mono shrink-0">

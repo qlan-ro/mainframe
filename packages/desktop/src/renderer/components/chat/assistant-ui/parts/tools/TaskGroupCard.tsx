@@ -111,7 +111,9 @@ export function TaskGroupCard({ args, result, isError }: ToolCardProps) {
             </React.Fragment>
           ))}
           {resultText && (
-            <div className="pl-6 text-mf-small text-mf-text-secondary whitespace-pre-wrap">{resultText}</div>
+            <div className="pl-6 text-mf-small text-mf-text-secondary whitespace-pre-wrap select-text">
+              {resultText}
+            </div>
           )}
         </>
       )}
