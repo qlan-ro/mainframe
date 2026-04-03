@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "GitHub-style kanban board for tracking tasks",
   "author": "Mainframe Team",
-  "capabilities": ["storage", "chat:create", "ui:panels"],
+  "capabilities": ["storage", "chat:create", "ui:panels", "ui:notifications"],
   "ui": {
     "zone": "fullview",
     "label": "Tasks",

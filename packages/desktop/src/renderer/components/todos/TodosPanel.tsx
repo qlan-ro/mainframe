@@ -310,6 +310,7 @@ export function TodosPanel(): React.ReactElement {
           onSave={editingTodo ? handleUpdate : handleCreate}
           onStartSession={handleStartSession}
           onSaveAndStartSession={editingTodo ? undefined : handleCreateAndStart}
+          allLabels={extractAllLabels(todos)}
         />
       )}
     </div>
