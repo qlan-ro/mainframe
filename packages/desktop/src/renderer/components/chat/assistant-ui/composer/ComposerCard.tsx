@@ -120,6 +120,7 @@ export function ComposerCard() {
   useEffect(() => {
     const draft = getDraft(chatId);
     if (draft) {
+      deleteDraft(chatId);
       const restore = () => {
         try {
           composerRuntime.setText(draft.text);
