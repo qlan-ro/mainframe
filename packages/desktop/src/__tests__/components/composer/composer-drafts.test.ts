@@ -49,6 +49,11 @@ describe('composer-drafts', () => {
     expect(getDraft('test-chat-1')).toBeUndefined();
   });
 
+  it('does not save whitespace-only drafts', () => {
+    saveDraft('test-chat-1', { text: '   ', attachments: [], captures: [] });
+    expect(getDraft('test-chat-1')).toBeUndefined();
+  });
+
   it('saves draft with only attachments (no text)', () => {
     const draft = {
       text: '',
