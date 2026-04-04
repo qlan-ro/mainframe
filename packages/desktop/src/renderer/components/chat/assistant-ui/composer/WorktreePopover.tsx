@@ -131,7 +131,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
       setBranches(localNames);
       setCurrentBranch(result.current);
       setBaseBranch(result.current || localNames[0] || '');
-      setBranchName(`session/${chatId.slice(0, 8)}`);
+      setBranchName('');
     });
 
     const fetchWorktreeList = getProjectWorktrees(projectId).then((result) => {
@@ -325,7 +325,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
                 setBranchName(e.target.value);
                 setError(null);
               }}
-              placeholder={isMidSession ? 'feature/my-branch' : `session/${chatId.slice(0, 8)}`}
+              placeholder="feat/my-branch"
               className="w-full rounded-mf-input border border-mf-border bg-mf-panel-bg px-2 py-1.5 text-mf-small text-mf-text-primary font-mono outline-none placeholder:text-mf-text-secondary"
             />
             {validationError && <span className="text-mf-small text-mf-destructive mt-1 block">{validationError}</span>}
