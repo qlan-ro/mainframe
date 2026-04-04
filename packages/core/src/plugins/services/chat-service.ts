@@ -45,8 +45,29 @@ export function buildChatService(
 
     ...(has('chat:create')
       ? {
-          async createChat({ projectId, adapterId, model }) {
-            const chat = db.chats.create(projectId, adapterId ?? 'claude', model);
+          async createChat({
+            projectId,
+            adapterId,
+            model,
+            permissionMode,
+          }: {
+            projectId: string;
+            adapterId?: string;
+            model?: string;
+            permissionMode?: string;
+          }) {
+            const effectiveAdapter = adapterId ?? 'claude';
+            let effectiveModel = model;
+            let effectiveMode = permissionMode;
+
+            if (!effectiveModel || !effectiveMode) {
+              const defaultModel = db.settings.get('provider', `${effectiveAdapter}.defaultModel`);
+              const defaultMode = db.settings.get('provider', `${effectiveAdapter}.defaultMode`);
+              if (!effectiveModel && defaultModel) effectiveModel = defaultModel;
+              if (!effectiveMode && defaultMode) effectiveMode = defaultMode;
+            }
+
+            const chat = db.chats.create(projectId, effectiveAdapter, effectiveModel, effectiveMode);
             emitEvent({ type: 'chat.created', chat });
             return { chatId: chat.id };
           },

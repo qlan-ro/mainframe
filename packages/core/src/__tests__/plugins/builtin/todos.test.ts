@@ -20,7 +20,7 @@ const todosManifest: PluginManifest = {
 
 let tmpDir: string;
 
-function makeApp() {
+function makeApp(settingsOverride?: (namespace: string, key: string) => string | null) {
   tmpDir = mkdtempSync(join(tmpdir(), 'mf-todos-test-'));
   const router = Router();
   const app = express();
@@ -55,7 +55,7 @@ function makeApp() {
         get: vi.fn().mockReturnValue(null),
       },
       settings: {
-        get: vi.fn().mockReturnValue(null),
+        get: vi.fn().mockImplementation(settingsOverride ?? (() => null)),
         set: vi.fn(),
       },
     } as unknown as PluginContextDeps['db'],
@@ -67,7 +67,7 @@ function makeApp() {
   const ctx = buildPluginContext(deps);
   activate(ctx);
   app.use('/', router);
-  return { app, emitEvent };
+  return { app, emitEvent, deps };
 }
 
 afterEach(() => {
@@ -119,5 +119,19 @@ describe('todos plugin routes', () => {
     expect(res.body.chatId).toBe('chat-1');
     expect(res.body.initialMessage).toContain('Big feature');
     expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.created' }));
+  });
+
+  it('POST /todos/:id/start-session reads provider defaults for model and permissionMode', async () => {
+    const settingsOverride = (namespace: string, key: string): string | null => {
+      if (namespace === 'provider' && key === 'claude.defaultModel') return 'opus';
+      if (namespace === 'provider' && key === 'claude.defaultMode') return 'plan';
+      return null;
+    };
+    const { app, deps } = makeApp(settingsOverride);
+    const create = await request(app).post('/todos').send({ projectId: 'proj-1', title: 'Big feature' });
+    const id = create.body.todo.id as string;
+    const res = await request(app).post(`/todos/${id}/start-session`).send({ projectId: 'proj-1' });
+    expect(res.status).toBe(200);
+    expect(deps.db.chats.create).toHaveBeenCalledWith('proj-1', 'claude', 'opus', 'plan');
   });
 });
