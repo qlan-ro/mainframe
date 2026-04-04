@@ -5,6 +5,7 @@ import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
 import { daemonClient } from '../../lib/client';
 import { archiveChat, renameChat } from '../../lib/api';
+import { deleteDraft } from '../chat/assistant-ui/composer/composer-drafts.js';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { createLogger } from '../../lib/logger';
@@ -72,6 +73,7 @@ export function FlatSessionRow({
         .then(() => {
           const wasActive = activeChatId === chat.id;
           removeChat(chat.id);
+          deleteDraft(chat.id);
           useTabsStore.getState().closeTab(`chat:${chat.id}`);
           if (wasActive) {
             const next = chats
