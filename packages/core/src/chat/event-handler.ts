@@ -253,14 +253,15 @@ function buildSessionSink(
         let cleared = false;
         for (const msg of allMsgs) {
           if (msg.metadata?.queued) {
-            const uuid = (msg.metadata as Record<string, unknown>).uuid as string | undefined;
             delete (msg.metadata as Record<string, unknown>).queued;
             delete (msg.metadata as Record<string, unknown>).uuid;
             cleared = true;
-            if (uuid) emitEvent({ type: 'message.queued.processed', chatId, uuid });
           }
         }
-        if (cleared) emitDisplay();
+        if (cleared) {
+          emitDisplay();
+          emitEvent({ type: 'message.queued.cleared', chatId });
+        }
       }
     },
 
@@ -273,7 +274,6 @@ function buildSessionSink(
         delete (msg.metadata as Record<string, unknown>).queued;
         delete (msg.metadata as Record<string, unknown>).uuid;
       }
-      messages.reposition(chatId, msg.id);
       emitDisplay();
       emitEvent({ type: 'message.queued.processed', chatId, uuid });
     },

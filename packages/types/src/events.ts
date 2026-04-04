@@ -55,6 +55,7 @@ export type DaemonEvent =
   | { type: 'message.queued.processed'; chatId: string; uuid: string }
   | { type: 'message.queued.cancelled'; chatId: string; uuid: string }
   | { type: 'message.queued.cancel_failed'; chatId: string; uuid: string }
+  | { type: 'message.queued.cleared'; chatId: string }
   | { type: 'chat.compacting'; chatId: string }
   | { type: 'chat.compactDone'; chatId: string }
   | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number };

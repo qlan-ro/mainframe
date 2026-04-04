@@ -172,16 +172,19 @@ export function routeEvent(event: DaemonEvent): void {
       usePluginLayoutStore.getState().unregisterAction(event.pluginId, event.actionId);
       break;
     case 'message.queued':
-      chats.setQueuedMessage(event.chatId, event.ref);
+      chats.addQueuedMessage(event.chatId, event.ref);
       break;
     case 'message.queued.processed':
-      chats.setQueuedMessage(event.chatId, null);
+      chats.removeQueuedMessage(event.chatId, event.uuid);
       break;
     case 'message.queued.cancelled':
-      chats.setQueuedMessage(event.chatId, null);
+      chats.removeQueuedMessage(event.chatId, event.uuid);
       break;
     case 'message.queued.cancel_failed':
       console.warn(`[queue] cancel failed for ${event.uuid} — CLI already processing`);
+      break;
+    case 'message.queued.cleared':
+      chats.clearQueuedMessages(event.chatId);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });

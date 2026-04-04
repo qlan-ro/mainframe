@@ -69,13 +69,6 @@ export function UserMessage() {
     (file, i, arr) => arr.findIndex((f) => f.name === file.name) === i,
   );
 
-  const queuedBadge = isQueued ? (
-    <span className="flex items-center gap-1 text-[11px] text-mf-text-tertiary self-end mr-1">
-      <Clock size={12} className="animate-pulse" />
-      Queued
-    </span>
-  ) : null;
-
   if (cleanText.startsWith(PLAN_PREFIX)) {
     const planBody = cleanText.slice(PLAN_PREFIX.length);
     return (
@@ -96,6 +89,13 @@ export function UserMessage() {
       </MessagePrimitive.Root>
     );
   }
+
+  const queuedBadge = isQueued ? (
+    <span className="flex items-center gap-1 text-[11px] text-mf-text-tertiary self-end mr-1">
+      <Clock size={12} className="animate-pulse" />
+      Queued
+    </span>
+  ) : null;
 
   if (parsed) {
     const Icon = parsed.isCommand ? Wrench : Zap;

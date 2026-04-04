@@ -261,7 +261,7 @@ export class ChatManager {
     if (isQueued) transientMetadata.queued = true;
     if (attachmentPreviews.length > 0) transientMetadata.attachments = attachmentPreviews;
 
-    // Generate uuid for queued messages — used for cancel/reposition tracking
+    // Generate uuid for queued messages — used for cancel tracking
     const messageUuid = isQueued ? nanoid() : undefined;
     if (messageUuid) transientMetadata.uuid = messageUuid;
     const message = this.messages.createTransientMessage(
@@ -328,6 +328,7 @@ export class ChatManager {
     }
 
     this.queuedRefs.delete(ref.uuid);
+    this.emitEvent({ type: 'message.queued.cancelled', chatId, uuid: ref.uuid });
     this.messages.removeById(chatId, ref.messageId);
     this.eventHandler.emitDisplay(chatId);
 

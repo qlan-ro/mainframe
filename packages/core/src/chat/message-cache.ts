@@ -37,17 +37,6 @@ export class MessageCache {
     }
   }
 
-  /** Move a message to the end of its chat's list (for queued message repositioning). */
-  reposition(chatId: string, messageId: string): boolean {
-    const msgs = this.cache.get(chatId);
-    if (!msgs) return false;
-    const idx = msgs.findIndex((m) => m.id === messageId);
-    if (idx < 0 || idx === msgs.length - 1) return false;
-    const [msg] = msgs.splice(idx, 1);
-    msgs.push(msg!);
-    return true;
-  }
-
   /** Remove a message by ID. Returns true if found and removed. */
   removeById(chatId: string, messageId: string): boolean {
     const msgs = this.cache.get(chatId);
