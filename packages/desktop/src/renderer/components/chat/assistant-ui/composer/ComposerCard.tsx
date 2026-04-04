@@ -124,15 +124,22 @@ export function ComposerCard() {
       const restore = () => {
         try {
           composerRuntime.setText(draft.text);
-          for (const att of draft.attachments) {
-            void composerRuntime.addAttachment(att as Parameters<typeof composerRuntime.addAttachment>[0]);
+          // Only add attachments if the runtime doesn't already have them
+          // (React StrictMode re-runs effects without destroying the runtime)
+          const existing = composerRuntime.getState()?.attachments?.length ?? 0;
+          if (existing === 0) {
+            for (const att of draft.attachments) {
+              void composerRuntime.addAttachment(att as Parameters<typeof composerRuntime.addAttachment>[0]);
+            }
           }
         } catch {
           /* composer not ready */
         }
         if (draft.captures.length > 0) {
           const store = useSandboxStore.getState();
-          for (const cap of draft.captures) store.addCapture(cap);
+          if (store.captures.length === 0) {
+            for (const cap of draft.captures) store.addCapture(cap);
+          }
         }
       };
       try {
