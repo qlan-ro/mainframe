@@ -120,7 +120,7 @@ export function ComposerCard() {
   useEffect(() => {
     const draft = getDraft(chatId);
     if (draft) {
-      requestAnimationFrame(() => {
+      const restore = () => {
         try {
           composerRuntime.setText(draft.text);
           for (const att of draft.attachments) {
@@ -133,7 +133,12 @@ export function ComposerCard() {
           const store = useSandboxStore.getState();
           for (const cap of draft.captures) store.addCapture(cap);
         }
-      });
+      };
+      try {
+        restore();
+      } catch {
+        requestAnimationFrame(restore);
+      }
     }
     requestAnimationFrame(() => focusComposerInput());
 
