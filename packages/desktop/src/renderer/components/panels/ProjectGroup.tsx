@@ -7,6 +7,7 @@ import { useTabsStore } from '../../store/tabs';
 import { useAdaptersStore } from '../../store/adapters';
 import { daemonClient } from '../../lib/client';
 import { archiveChat, renameChat } from '../../lib/api';
+import { deleteDraft } from '../chat/assistant-ui/composer/composer-drafts.js';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel } from '../../lib/adapters';
@@ -269,6 +270,7 @@ export function ProjectGroup({
         .then(() => {
           const wasActive = activeChatId === chatId;
           removeChat(chatId);
+          deleteDraft(chatId);
           useTabsStore.getState().closeTab(`chat:${chatId}`);
           if (wasActive) {
             const next = chats

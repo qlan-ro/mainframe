@@ -11,6 +11,7 @@ import { useChatSession } from '../../../hooks/useChatSession';
 import { convertMessage } from './convert-message';
 import { daemonClient } from '../../../lib/client';
 import { archiveChat } from '../../../lib/api';
+import { deleteDraft } from './composer/composer-drafts.js';
 import { useChatsStore } from '../../../store/chats';
 import { useActiveProjectId } from '../../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../../store/tabs';
@@ -280,6 +281,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
         }
         await archiveChat(threadId, deleteWorktree);
         removeChat(threadId);
+        deleteDraft(threadId);
         useTabsStore.getState().closeTab(`chat:${threadId}`);
       },
     }),
