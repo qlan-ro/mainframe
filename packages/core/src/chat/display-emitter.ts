@@ -22,8 +22,25 @@ export function emitDisplayDelta(
     if (newDisplay.length > 0) {
       emitEvent({ type: 'display.messages.set', chatId, messages: newDisplay });
     }
-  } else if (newDisplay.length !== oldDisplay.length) {
-    // Count changed (message removed, reordered, or added in non-append pattern) — full reset
+  } else if (newDisplay.length > oldDisplay.length) {
+    // Messages added — check if it's a pure append (existing messages unchanged)
+    const isAppend = oldDisplay.every((msg, i) => msg.id === newDisplay[i]!.id);
+    if (isAppend) {
+      // Emit updates for any existing messages that changed (e.g. tool_result merged)
+      for (let i = 0; i < oldDisplay.length; i++) {
+        if (displayMessageChanged(oldDisplay[i]!, newDisplay[i]!)) {
+          emitEvent({ type: 'display.message.updated', chatId, message: newDisplay[i]! });
+        }
+      }
+      // Emit added for each new message
+      for (let i = oldDisplay.length; i < newDisplay.length; i++) {
+        emitEvent({ type: 'display.message.added', chatId, message: newDisplay[i]! });
+      }
+    } else {
+      emitEvent({ type: 'display.messages.set', chatId, messages: newDisplay });
+    }
+  } else if (newDisplay.length < oldDisplay.length) {
+    // Messages removed — full reset
     emitEvent({ type: 'display.messages.set', chatId, messages: newDisplay });
   } else {
     // Same count — check for order changes or per-message updates
