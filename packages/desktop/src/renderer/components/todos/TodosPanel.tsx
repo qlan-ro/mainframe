@@ -5,20 +5,14 @@ import { createLogger } from '../../lib/logger';
 const log = createLogger('renderer:todos');
 import { todosApi, type Todo, type TodoStatus, type CreateTodoInput } from '../../lib/api/todos-api';
 import type { PendingAttachment } from './TodoModal';
-import {
-  TodoFilterBar,
-  type TodoFilters,
-  type TodoSort,
-  matchesFilters,
-  extractAllLabels,
-  sortTodos,
-} from './TodoFilterBar';
+import { TodoFilterBar, matchesFilters, extractAllLabels, sortTodos } from './TodoFilterBar';
 import { TodoCard } from './TodoCard';
 import { TodoModal } from './TodoModal';
 import { usePluginLayoutStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useSkillsStore } from '../../store/skills';
 import { useSandboxStore } from '../../store/sandbox';
+import { useTodosFilterStore } from '../../store/todos-filters';
 import { daemonClient } from '../../lib/client';
 
 const COLUMNS: { status: TodoStatus; label: string }[] = [
@@ -34,13 +28,10 @@ export function TodosPanel(): React.ReactElement {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
-  const [filters, setFilters] = useState<TodoFilters>({
-    types: [],
-    priorities: [],
-    labels: [],
-    search: '',
-  });
-  const [sort, setSort] = useState<TodoSort>({ key: 'number', dir: 'desc' });
+  const filters = useTodosFilterStore((s) => s.filters);
+  const setFilters = useTodosFilterStore((s) => s.setFilters);
+  const sort = useTodosFilterStore((s) => s.sort);
+  const setSort = useTodosFilterStore((s) => s.setSort);
   const activeProjectId = useActiveProjectId();
 
   const loadAttachmentCounts = useCallback(async (todoIds: string[]) => {
