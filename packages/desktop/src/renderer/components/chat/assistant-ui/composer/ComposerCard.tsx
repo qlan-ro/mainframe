@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, CopySlash, FolderGit, GitBranch } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
@@ -17,7 +17,8 @@ import { ComposerDropdown } from './ComposerDropdown';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
-import { useSandboxStore } from '../../../../store/sandbox';
+import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
+import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
@@ -68,10 +69,12 @@ function SendButton({
   composerRuntime,
   hasCaptures,
   disabled: externalDisabled,
+  chatId,
 }: {
   composerRuntime: ComposerRuntime;
   hasCaptures: boolean;
   disabled?: boolean;
+  chatId: string;
 }) {
   const composerEmpty = useComposerEmpty(composerRuntime);
   const disabled = externalDisabled || (composerEmpty && !hasCaptures);
@@ -82,6 +85,7 @@ function SendButton({
       onClick={() => {
         try {
           composerRuntime.send();
+          deleteDraft(chatId);
         } catch (err) {
           log.warn('failed to send from composer', { err: String(err) });
         }
@@ -108,10 +112,50 @@ export function ComposerCard() {
   const captures = useSandboxStore((s) => s.captures);
   const removeCapture = useSandboxStore((s) => s.removeCapture);
 
+  const composerRuntimeRef = useRef(composerRuntime);
+  composerRuntimeRef.current = composerRuntime;
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
+
   useEffect(() => {
-    requestAnimationFrame(() => {
-      focusComposerInput();
-    });
+    const draft = getDraft(chatId);
+    if (draft) {
+      requestAnimationFrame(() => {
+        try {
+          composerRuntime.setText(draft.text);
+          for (const att of draft.attachments) {
+            void composerRuntime.addAttachment(att as Parameters<typeof composerRuntime.addAttachment>[0]);
+          }
+        } catch {
+          /* composer not ready */
+        }
+        if (draft.captures.length > 0) {
+          const store = useSandboxStore.getState();
+          for (const cap of draft.captures) store.addCapture(cap);
+        }
+      });
+    }
+    requestAnimationFrame(() => focusComposerInput());
+
+    return () => {
+      try {
+        const state = composerRuntimeRef.current.getState();
+        const text = state?.text ?? '';
+        const attachments = (state?.attachments ?? []).map(
+          (a: { type: string; name: string; contentType?: string; content?: unknown[] }) => ({
+            type: a.type,
+            name: a.name,
+            contentType: a.contentType,
+            content: a.content ?? [],
+          }),
+        );
+        const caps: Omit<Capture, 'id'>[] = useSandboxStore.getState().captures.map(({ id: _, ...rest }) => rest);
+        saveDraft(chatIdRef.current, { text, attachments, captures: caps });
+        useSandboxStore.getState().clearCaptures();
+      } catch {
+        /* composerRuntime already disposed */
+      }
+    };
   }, [chatId]);
 
   const pendingInvocation = useSkillsStore((s) => s.pendingInvocation);
@@ -275,6 +319,7 @@ export function ComposerCard() {
               e.preventDefault();
               try {
                 composerRuntime.send();
+                deleteDraft(chatId);
               } catch (err) {
                 log.warn('failed to send from composer', { err: String(err) });
               }
@@ -333,6 +378,7 @@ export function ComposerCard() {
             composerRuntime={composerRuntime}
             hasCaptures={captures.length > 0}
             disabled={chat?.worktreeMissing}
+            chatId={chatId}
           />
         </div>
       </div>
