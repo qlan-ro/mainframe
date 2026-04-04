@@ -117,6 +117,22 @@ export function ComposerCard() {
   composerRuntimeRef.current = composerRuntime;
   const chatIdRef = useRef(chatId);
   chatIdRef.current = chatId;
+  const lastTextRef = useRef('');
+
+  useEffect(() => {
+    try {
+      lastTextRef.current = composerRuntime.getState()?.text ?? '';
+    } catch {
+      /* not ready */
+    }
+    return composerRuntime.subscribe(() => {
+      try {
+        lastTextRef.current = composerRuntime.getState()?.text ?? '';
+      } catch {
+        /* disposed */
+      }
+    });
+  }, [composerRuntime]);
 
   useEffect(() => {
     const draft = getDraft(chatId);
@@ -125,6 +141,7 @@ export function ComposerCard() {
       const restore = () => {
         try {
           composerRuntime.setText(draft.text);
+          lastTextRef.current = draft.text;
           // Only add attachments if the runtime doesn't already have them
           // (React StrictMode re-runs effects without destroying the runtime)
           const existing = composerRuntime.getState()?.attachments?.length ?? 0;
@@ -153,8 +170,8 @@ export function ComposerCard() {
 
     return () => {
       try {
+        const text = lastTextRef.current;
         const state = composerRuntimeRef.current.getState();
-        const text = state?.text ?? '';
         const attachments = (state?.attachments ?? []).map(
           (a: { type: string; name: string; contentType?: string; content?: unknown[] }) => ({
             type: a.type,
@@ -177,6 +194,7 @@ export function ComposerCard() {
     if (pendingInvocation) {
       try {
         composerRuntime.setText(pendingInvocation);
+        lastTextRef.current = pendingInvocation;
         focusComposerInput();
       } catch (err) {
         log.warn('failed to set pending invocation', { err: String(err) });
