@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { useProject } from '../../renderer/hooks/useAppInit.js';
 import { useSandboxStore } from '../../renderer/store/sandbox.js';
+import { useChatsStore } from '../../renderer/store/chats.js';
 
 vi.mock('../../renderer/lib/launch.js', () => ({
   fetchLaunchStatuses: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock('../../renderer/store/skills.js', () => ({
 describe('useProject', () => {
   beforeEach(() => {
     useSandboxStore.setState({ processStatuses: {} });
+    useChatsStore.setState({ activeChatId: null, chats: [] });
     vi.clearAllMocks();
   });
 
@@ -67,6 +69,40 @@ describe('useProject', () => {
       const statuses = useSandboxStore.getState().processStatuses['proj-1:/tmp/proj'];
       expect(statuses?.['Desktop App']).toBe('running');
       expect(statuses?.['api']).toBe('stopped');
+    });
+  });
+
+  it('re-syncs launch statuses when activeChatId changes (worktree switch)', async () => {
+    const { fetchLaunchStatuses } = await import('../../renderer/lib/launch.js');
+
+    // First chat — main project path
+    vi.mocked(fetchLaunchStatuses).mockResolvedValue({
+      statuses: { dev: 'running' },
+      tunnelUrls: {},
+      effectivePath: '/tmp/proj',
+    });
+
+    useChatsStore.setState({ activeChatId: 'chat-1' });
+    const { rerender } = renderHook(() => useProject('proj-1'));
+
+    await waitFor(() => {
+      expect(fetchLaunchStatuses).toHaveBeenCalledWith('proj-1', 'chat-1');
+    });
+
+    // Switch to a different chat (worktree session) — same project
+    vi.mocked(fetchLaunchStatuses).mockResolvedValue({
+      statuses: { dev: 'stopped' },
+      tunnelUrls: {},
+      effectivePath: '/tmp/proj-worktree',
+    });
+
+    act(() => useChatsStore.setState({ activeChatId: 'chat-2' }));
+    rerender();
+
+    await waitFor(() => {
+      expect(fetchLaunchStatuses).toHaveBeenCalledWith('proj-1', 'chat-2');
+      const wtStatuses = useSandboxStore.getState().processStatuses['proj-1:/tmp/proj-worktree'];
+      expect(wtStatuses?.['dev']).toBe('stopped');
     });
   });
 });
