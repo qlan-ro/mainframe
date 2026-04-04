@@ -189,6 +189,16 @@ export class DaemonClient {
     });
   }
 
+  editQueuedMessage(chatId: string, messageId: string, content: string): void {
+    this.send({ type: 'message.queue.edit', chatId, messageId, content });
+    log.info('editQueuedMessage', { chatId, messageId });
+  }
+
+  cancelQueuedMessage(chatId: string, messageId: string): void {
+    this.send({ type: 'message.queue.cancel', chatId, messageId });
+    log.info('cancelQueuedMessage', { chatId, messageId });
+  }
+
   subscribe(chatId: string): void {
     this.send({ type: 'subscribe', chatId });
   }

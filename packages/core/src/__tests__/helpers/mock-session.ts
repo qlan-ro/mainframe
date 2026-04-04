@@ -59,7 +59,11 @@ export class MockBaseSession implements AdapterSession {
     };
   }
 
-  async sendMessage(_message: string, _images?: { mediaType: string; data: string }[]): Promise<void> {}
+  async sendMessage(_message: string, _images?: { mediaType: string; data: string }[], _uuid?: string): Promise<void> {}
+
+  async cancelQueuedMessage(_uuid: string): Promise<boolean> {
+    return false;
+  }
   async respondToPermission(_response: ControlResponse): Promise<void> {}
   async interrupt(): Promise<void> {}
   async setModel(_model: string): Promise<void> {}

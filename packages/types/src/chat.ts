@@ -70,3 +70,15 @@ export type MessageContent =
   | { type: 'error'; message: string };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
+
+/** Tracks a message that was sent to stdin while the CLI was busy. */
+export interface QueuedMessageRef {
+  /** The display message ID (from MessageCache) */
+  messageId: string;
+  chatId: string;
+  /** UUID sent to the CLI for cancel/tracking */
+  uuid: string;
+  content: string;
+  attachmentIds?: string[];
+  timestamp: string;
+}

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Chat, DisplayMessage, ControlRequest, AdapterProcess } from '@qlan-ro/mainframe-types';
+import type { Chat, DisplayMessage, ControlRequest, AdapterProcess, QueuedMessageRef } from '@qlan-ro/mainframe-types';
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 
@@ -16,6 +16,7 @@ interface ChatsState {
   messages: Map<string, DisplayMessage[]>;
   pendingPermissions: Map<string, ControlRequest>;
   processes: Map<string, AdapterProcess>;
+  queuedMessages: Map<string, QueuedMessageRef[]>;
   compactingChats: Set<string>;
   contextUsage: Map<string, ContextUsageState>;
   unreadChatIds: Set<string>;
@@ -36,6 +37,9 @@ interface ChatsState {
   setProcess: (chatId: string, process: AdapterProcess) => void;
   updateProcessStatus: (processId: string, status: AdapterProcess['status']) => void;
   removeProcess: (chatId: string) => void;
+  addQueuedMessage: (chatId: string, ref: QueuedMessageRef) => void;
+  removeQueuedMessage: (chatId: string, uuid: string) => void;
+  clearQueuedMessages: (chatId: string) => void;
   setCompacting: (chatId: string, compacting: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
 }
@@ -47,6 +51,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   messages: new Map(),
   pendingPermissions: new Map(),
   processes: new Map(),
+  queuedMessages: new Map(),
   compactingChats: new Set(),
   contextUsage: new Map(),
   unreadChatIds: new Set(),
@@ -180,6 +185,30 @@ export const useChatsStore = create<ChatsState>((set) => ({
       const newProcesses = new Map(state.processes);
       newProcesses.delete(chatId);
       return { processes: newProcesses };
+    }),
+  addQueuedMessage: (chatId, ref) =>
+    set((state) => {
+      const next = new Map(state.queuedMessages);
+      const list = [...(next.get(chatId) ?? []), ref];
+      next.set(chatId, list);
+      return { queuedMessages: next };
+    }),
+  removeQueuedMessage: (chatId, uuid) =>
+    set((state) => {
+      const next = new Map(state.queuedMessages);
+      const list = (next.get(chatId) ?? []).filter((r) => r.uuid !== uuid);
+      if (list.length > 0) {
+        next.set(chatId, list);
+      } else {
+        next.delete(chatId);
+      }
+      return { queuedMessages: next };
+    }),
+  clearQueuedMessages: (chatId) =>
+    set((state) => {
+      const next = new Map(state.queuedMessages);
+      next.delete(chatId);
+      return { queuedMessages: next };
     }),
   setCompacting: (chatId, compacting) =>
     set((state) => {

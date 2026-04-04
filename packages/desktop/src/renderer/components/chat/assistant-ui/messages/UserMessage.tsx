@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, Wrench, ClipboardList } from 'lucide-react';
+import { Zap, Wrench, ClipboardList, Clock } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { MessagePrimitive, useMessage } from '@assistant-ui/react';
 import { getExternalStoreMessages } from '@assistant-ui/react';
@@ -26,6 +26,7 @@ export function UserMessage() {
   const commands = useSkillsStore((s) => s.commands);
 
   const [original] = getExternalStoreMessages<DisplayMessage>(message);
+  const isQueued = original?.metadata?.queued === true;
 
   // Images from DisplayContent
   const imageBlocks = (original?.content?.filter((c): c is DisplayContent & { type: 'image' } => c.type === 'image') ??
@@ -89,10 +90,18 @@ export function UserMessage() {
     );
   }
 
+  const queuedBadge = isQueued ? (
+    <span className="flex items-center gap-1 text-[11px] text-mf-text-tertiary self-end mr-1">
+      <Clock size={12} className="animate-pulse" />
+      Queued
+    </span>
+  ) : null;
+
   if (parsed) {
     const Icon = parsed.isCommand ? Wrench : Zap;
     return (
       <MessagePrimitive.Root className="flex flex-col items-end gap-2 pt-2">
+        {queuedBadge}
         <div
           data-testid={parsed.isCommand ? 'user-command-bubble' : 'user-skill-bubble'}
           className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5"
@@ -113,19 +122,13 @@ export function UserMessage() {
 
   return (
     <MessagePrimitive.Root className="flex flex-col items-end gap-2 pt-2">
+      {queuedBadge}
       {hasTextContent && (
         <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5">
-          <div className="flex items-start gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="aui-md text-mf-chat text-mf-text-primary">
-                <Markdown remarkPlugins={REMARK_PLUGINS} components={userComponents}>
-                  {cleanText}
-                </Markdown>
-              </div>
-            </div>
-            {!!original?.metadata?.queued && (
-              <span className="text-mf-small text-mf-text-secondary opacity-60 shrink-0 mt-0.5">Queued</span>
-            )}
+          <div className="aui-md text-mf-chat text-mf-text-primary">
+            <Markdown remarkPlugins={REMARK_PLUGINS} components={userComponents}>
+              {cleanText}
+            </Markdown>
           </div>
         </div>
       )}
