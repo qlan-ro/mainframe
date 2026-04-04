@@ -147,7 +147,7 @@ export interface PluginUIContext {
   removePanel(): void;
   addAction(opts: { id: string; label: string; shortcut: string; icon?: string }): void;
   removeAction(id: string): void;
-  notify(options: { title: string; body: string; level?: 'info' | 'warning' | 'error' }): void;
+  notify(options: { title: string; body: string; level?: 'info' | 'success' | 'warning' | 'error' }): void;
 }
 
 export interface PluginConfig {

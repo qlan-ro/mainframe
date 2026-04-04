@@ -2,11 +2,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../renderer/store/tabs.js', () => ({
-  useTabsStore: {
-    getState: vi.fn().mockReturnValue({ openInlineDiffTab: vi.fn() }),
-  },
-}));
+vi.mock('../../../renderer/store/tabs.js', () => {
+  const state = { openInlineDiffTab: vi.fn(), openEditorTab: vi.fn(), revealFileInTree: vi.fn() };
+  const useTabsStore: any = (selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state);
+  useTabsStore.getState = vi.fn().mockReturnValue(state);
+  return { useTabsStore };
+});
 
 // useProjectsStore and useUIStore are imported transitively through tabs.ts
 // The mock above replaces the module before those imports are resolved.
@@ -17,7 +18,11 @@ import { TooltipProvider } from '../../../renderer/components/ui/tooltip.js';
 
 describe('EditFileCard', () => {
   beforeEach(() => {
-    vi.mocked(useTabsStore.getState).mockReturnValue({ openInlineDiffTab: vi.fn() });
+    vi.mocked(useTabsStore.getState).mockReturnValue({
+      openInlineDiffTab: vi.fn(),
+      openEditorTab: vi.fn(),
+      revealFileInTree: vi.fn(),
+    });
   });
 
   it('renders shortened filename (last 2 path segments)', () => {

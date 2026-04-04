@@ -17,6 +17,7 @@ import { ComposerDropdown } from './ComposerDropdown';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
+import { QueuedMessageBanner } from './QueuedMessageBanner';
 import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
 
@@ -317,6 +318,7 @@ export function ComposerCard() {
         </div>
       )}
 
+      <QueuedMessageBanner chatId={chatId} />
       <div className="relative">
         <ComposerHighlight />
         <ComposerPrimitive.Input

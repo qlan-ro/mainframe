@@ -113,6 +113,8 @@ export function FlatSessionRow({
   }, [chat.id, handleStartRename, registerRenameCallback, unregisterRenameCallback]);
 
   const updateChat = useChatsStore((s) => s.updateChat);
+  const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
+  const isUnread = unreadChatIds.has(chat.id);
 
   const handleCommitRename = useCallback(() => {
     setEditing(false);
@@ -146,16 +148,17 @@ export function FlatSessionRow({
     >
       <button type="button" onClick={handleSelect} className="flex-1 min-w-0 px-3 py-1.5 text-left">
         <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              'w-2 h-2 rounded-full shrink-0',
-              chat.worktreeMissing
-                ? 'bg-mf-destructive'
-                : isWorking
-                  ? 'bg-mf-accent animate-pulse motion-reduce:animate-none'
-                  : 'bg-mf-text-secondary opacity-40',
+          <div className="w-3 h-3 shrink-0 flex items-center justify-center">
+            {chat.worktreeMissing ? (
+              <div className="w-2 h-2 rounded-full bg-mf-destructive" />
+            ) : isWorking ? (
+              <Loader2 size={12} className="text-mf-accent animate-spin" />
+            ) : (
+              <div
+                className={cn('w-2 h-2 rounded-full', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary opacity-40')}
+              />
             )}
-          />
+          </div>
           <div className="flex-1 min-w-0">
             {editing ? (
               <input
@@ -172,6 +175,7 @@ export function FlatSessionRow({
                 className={cn(
                   'text-mf-small truncate',
                   isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                  isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
                 )}
               >
                 {chat.title || 'Untitled session'}

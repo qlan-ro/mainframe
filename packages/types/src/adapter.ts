@@ -112,6 +112,7 @@ export interface SessionSink {
   onContextUsage(usage: ContextUsage): void;
   onPlanFile(filePath: string): void;
   onSkillFile(entry: import('./context.js').SkillFileEntry): void;
+  onQueuedProcessed(uuid: string): void;
 }
 
 export interface AdapterSession {
@@ -124,12 +125,13 @@ export interface AdapterSession {
   kill(): Promise<void>;
   getProcessInfo(): AdapterProcess | null;
 
-  sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void>;
+  sendMessage(message: string, images?: { mediaType: string; data: string }[], uuid?: string): Promise<void>;
   respondToPermission(response: ControlResponse): Promise<void>;
   interrupt(): Promise<void>;
   setModel(model: string): Promise<void>;
   setPermissionMode(mode: string): Promise<void>;
   sendCommand(command: string, args?: string): Promise<void>;
+  cancelQueuedMessage(uuid: string): Promise<boolean>;
 
   getContextFiles(): { global: import('./context.js').ContextFile[]; project: import('./context.js').ContextFile[] };
   loadHistory(): Promise<import('./chat.js').ChatMessage[]>;

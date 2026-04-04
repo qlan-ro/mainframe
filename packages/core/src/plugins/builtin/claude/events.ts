@@ -89,6 +89,13 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
 }
 
 function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+  // Detect queued message processed by CLI (isReplay from SDK mode)
+  const isReplay = event.isReplay === true || event.is_replay === true;
+  const uuid = (event.uuid as string) || undefined;
+  if (isReplay && uuid) {
+    sink.onQueuedProcessed(uuid);
+  }
+
   // Live stream handles ONLY tool_result blocks from user events.
   // Text/image blocks in user entries are intentionally ignored here because:
   //   - User-typed text: already created as a ChatMessage by chat-manager.sendMessage()
@@ -168,6 +175,17 @@ function handleControlResponseEvent(session: ClaudeSession, event: Record<string
       percentage: (data.percentage as number) || 0,
     };
     sink.onContextUsage(usage);
+  }
+
+  // Route cancel_async_message responses to pending callbacks
+  const requestId = (response.request_id as string) || undefined;
+  const innerResponse = response.response as Record<string, unknown> | undefined;
+  if (requestId && innerResponse && typeof innerResponse.cancelled === 'boolean') {
+    const callback = session.state.pendingCancelCallbacks.get(requestId);
+    if (callback) {
+      session.state.pendingCancelCallbacks.delete(requestId);
+      callback(innerResponse.cancelled);
+    }
   }
 }
 

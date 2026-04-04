@@ -19,12 +19,14 @@ vi.mock('../store/chats', () => ({
       activeChatId: 'active-chat',
       chats: [{ id: 'chat-1', title: 'My Chat' }],
       setActiveChat: vi.fn(),
+      markUnread: vi.fn(),
     })),
   },
 }));
 
 import { isAppFocused } from './app-focus';
 import { toast } from './toast';
+import { useChatsStore } from '../store/chats';
 
 const mockIsAppFocused = vi.mocked(isAppFocused);
 
@@ -81,5 +83,47 @@ describe('notify', () => {
   it('does not suppress when no chatId provided', () => {
     notify({ type: 'info', title: 'Plugin says hi' });
     expect(toast.info).toHaveBeenCalledWith('Plugin says hi', undefined, undefined);
+  });
+
+  it('marks chat as unread when notifying', () => {
+    const mockMarkUnread = vi.fn();
+    vi.mocked(useChatsStore.getState).mockReturnValue({
+      activeChatId: null,
+      chats: [],
+      setActiveChat: vi.fn(),
+      markUnread: mockMarkUnread,
+    } as any);
+    mockIsAppFocused.mockReturnValue(true);
+
+    notify({ type: 'success', title: 'Done', chatId: 'chat-1' });
+    expect(mockMarkUnread).toHaveBeenCalledWith('chat-1');
+  });
+
+  it('does not mark unread when viewing that chat and focused', () => {
+    const mockMarkUnread = vi.fn();
+    vi.mocked(useChatsStore.getState).mockReturnValue({
+      activeChatId: 'active-chat',
+      chats: [],
+      setActiveChat: vi.fn(),
+      markUnread: mockMarkUnread,
+    } as any);
+    mockIsAppFocused.mockReturnValue(true);
+
+    notify({ type: 'success', title: 'Done', chatId: 'active-chat' });
+    expect(mockMarkUnread).not.toHaveBeenCalled();
+  });
+
+  it('marks unread even when app is unfocused', () => {
+    const mockMarkUnread = vi.fn();
+    vi.mocked(useChatsStore.getState).mockReturnValue({
+      activeChatId: 'active-chat',
+      chats: [],
+      setActiveChat: vi.fn(),
+      markUnread: mockMarkUnread,
+    } as any);
+    mockIsAppFocused.mockReturnValue(false);
+
+    notify({ type: 'success', title: 'Done', chatId: 'chat-1' });
+    expect(mockMarkUnread).toHaveBeenCalledWith('chat-1');
   });
 });
