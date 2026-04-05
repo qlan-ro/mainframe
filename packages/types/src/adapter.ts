@@ -113,6 +113,7 @@ export interface SessionSink {
   onPlanFile(filePath: string): void;
   onSkillFile(entry: import('./context.js').SkillFileEntry): void;
   onQueuedProcessed(uuid: string): void;
+  onTodoUpdate(todos: import('./chat.js').TodoItem[]): void;
 }
 
 export interface AdapterSession {
