@@ -85,7 +85,14 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
       if (block.type === 'tool_use' && block.name === 'TodoWrite') {
         const input = block.input as { todos?: unknown[] };
         if (Array.isArray(input?.todos)) {
-          sink.onTodoUpdate(input.todos as import('@qlan-ro/mainframe-types').TodoItem[]);
+          const valid = input.todos.filter(
+            (t): t is import('@qlan-ro/mainframe-types').TodoItem =>
+              typeof t === 'object' &&
+              t !== null &&
+              typeof (t as Record<string, unknown>).content === 'string' &&
+              typeof (t as Record<string, unknown>).status === 'string',
+          );
+          if (valid.length > 0) sink.onTodoUpdate(valid);
         }
       }
     }

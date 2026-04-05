@@ -98,7 +98,7 @@ export class ChatLifecycleManager {
     this.deps.emitEvent({ type: 'chat.updated', chat });
 
     // Restore todo checklist state for the UI
-    const todos = this.deps.db.chats.getTodos(chatId);
+    const todos = chat.todos;
     if (todos) {
       this.deps.emitEvent({ type: 'todos.updated', chatId, todos });
     }
