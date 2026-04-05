@@ -7,4 +7,6 @@ export const toast = {
     useToastStore.getState().add('error', title, description, chatId),
   info: (title: string, description?: string, chatId?: string) =>
     useToastStore.getState().add('info', title, description, chatId),
+  warning: (title: string, description?: string, chatId?: string) =>
+    useToastStore.getState().add('warning', title, description, chatId),
 };

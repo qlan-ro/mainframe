@@ -71,7 +71,7 @@ export class ClaudeSdkSession implements AdapterSession {
     return this.getProcessInfo()!;
   }
 
-  async sendMessage(message: string, images?: { mediaType: string; data: string }[]): Promise<void> {
+  async sendMessage(message: string, images?: { mediaType: string; data: string }[], _uuid?: string): Promise<void> {
     if (!this.sink) return;
 
     if (!this.queryHandle) {
@@ -79,6 +79,10 @@ export class ClaudeSdkSession implements AdapterSession {
     } else {
       await this.streamFollowUp(message, images);
     }
+  }
+
+  async cancelQueuedMessage(_uuid: string): Promise<boolean> {
+    return false;
   }
 
   private startQuery(message: string, images?: { mediaType: string; data: string }[]): void {

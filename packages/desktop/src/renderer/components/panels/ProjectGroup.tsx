@@ -7,6 +7,7 @@ import { useTabsStore } from '../../store/tabs';
 import { useAdaptersStore } from '../../store/adapters';
 import { daemonClient } from '../../lib/client';
 import { archiveChat, renameChat } from '../../lib/api';
+import { deleteDraft } from '../chat/assistant-ui/composer/composer-drafts.js';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel } from '../../lib/adapters';
@@ -14,19 +15,29 @@ import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:project-group');
 
-function SessionStatusDot({ status, worktreeMissing }: { status: SessionStatus; worktreeMissing?: boolean }) {
-  if (worktreeMissing) {
-    return <div data-testid="chat-status-missing" className="w-2 h-2 rounded-full shrink-0 bg-mf-destructive" />;
-  }
+function SessionStatusDot({
+  status,
+  worktreeMissing,
+  isUnread,
+}: {
+  status: SessionStatus;
+  worktreeMissing?: boolean;
+  isUnread?: boolean;
+}) {
   const isWorking = status === 'working' || status === 'waiting';
   return (
-    <div
-      data-testid={isWorking ? 'chat-status-working' : 'chat-status-idle'}
-      className={cn(
-        'w-2 h-2 rounded-full shrink-0',
-        isWorking ? 'bg-mf-accent animate-pulse motion-reduce:animate-none' : 'bg-mf-text-secondary opacity-40',
+    <div className="w-3 h-3 shrink-0 flex items-center justify-center">
+      {worktreeMissing ? (
+        <div data-testid="chat-status-missing" className="w-2 h-2 rounded-full bg-mf-destructive" />
+      ) : isWorking ? (
+        <Loader2 data-testid="chat-status-working" size={12} className="text-mf-accent animate-spin" />
+      ) : (
+        <div
+          data-testid="chat-status-idle"
+          className={cn('w-2 h-2 rounded-full', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary opacity-40')}
+        />
       )}
-    />
+    </div>
   );
 }
 
@@ -90,6 +101,8 @@ function ChatRow({
   }, [chat.id, handleStartRename, registerRenameCallback, unregisterRenameCallback]);
 
   const updateChat = useChatsStore((s) => s.updateChat);
+  const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
+  const isUnread = unreadChatIds.has(chat.id);
 
   const handleCommitRename = useCallback(() => {
     setEditing(false);
@@ -124,7 +137,11 @@ function ChatRow({
         className="flex-1 min-w-0 px-3 py-1.5 text-left rounded-mf-input"
       >
         <div className="flex items-center gap-2">
-          <SessionStatusDot status={chat.displayStatus ?? 'idle'} worktreeMissing={chat.worktreeMissing} />
+          <SessionStatusDot
+            status={chat.displayStatus ?? 'idle'}
+            worktreeMissing={chat.worktreeMissing}
+            isUnread={isUnread}
+          />
           <div className="flex-1 min-w-0">
             {editing ? (
               <input
@@ -143,6 +160,7 @@ function ChatRow({
                     className={cn(
                       'text-mf-small truncate',
                       isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                      isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
                     )}
                     tabIndex={0}
                   >
@@ -269,6 +287,7 @@ export function ProjectGroup({
         .then(() => {
           const wasActive = activeChatId === chatId;
           removeChat(chatId);
+          deleteDraft(chatId);
           useTabsStore.getState().closeTab(`chat:${chatId}`);
           if (wasActive) {
             const next = chats

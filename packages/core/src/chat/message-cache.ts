@@ -37,6 +37,16 @@ export class MessageCache {
     }
   }
 
+  /** Remove a message by ID. Returns true if found and removed. */
+  removeById(chatId: string, messageId: string): boolean {
+    const msgs = this.cache.get(chatId);
+    if (!msgs) return false;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    if (idx < 0) return false;
+    msgs.splice(idx, 1);
+    return true;
+  }
+
   createTransientMessage(
     chatId: string,
     type: ChatMessage['type'],

@@ -147,7 +147,14 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'plugin.notification':
       notify({
-        type: event.level === 'error' ? 'error' : event.level === 'success' ? 'success' : 'info',
+        type:
+          event.level === 'error'
+            ? 'error'
+            : event.level === 'warning'
+              ? 'warning'
+              : event.level === 'success'
+                ? 'success'
+                : 'info',
         title: event.title,
         body: event.body,
       });
@@ -163,6 +170,21 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'plugin.action.unregistered':
       usePluginLayoutStore.getState().unregisterAction(event.pluginId, event.actionId);
+      break;
+    case 'message.queued':
+      chats.addQueuedMessage(event.chatId, event.ref);
+      break;
+    case 'message.queued.processed':
+      chats.removeQueuedMessage(event.chatId, event.uuid);
+      break;
+    case 'message.queued.cancelled':
+      chats.removeQueuedMessage(event.chatId, event.uuid);
+      break;
+    case 'message.queued.cancel_failed':
+      console.warn(`[queue] cancel failed for ${event.uuid} — CLI already processing`);
+      break;
+    case 'message.queued.cleared':
+      chats.clearQueuedMessages(event.chatId);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });

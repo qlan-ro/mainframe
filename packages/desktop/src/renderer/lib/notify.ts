@@ -6,16 +6,22 @@ import { createLogger } from './logger';
 const log = createLogger('renderer:notify');
 
 interface NotifyOptions {
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
   title: string;
   body?: string;
   chatId?: string;
 }
 
 export function notify(opts: NotifyOptions): void {
+  const store = useChatsStore.getState();
+  const isViewingChat = opts.chatId && isAppFocused() && store.activeChatId === opts.chatId;
+
+  // Mark as unread unless the user is focused and viewing this exact chat
+  if (opts.chatId && !isViewingChat) {
+    store.markUnread(opts.chatId);
+  }
+
   if (isAppFocused()) {
-    // Suppress in-app toast if user is already viewing this chat
-    const isViewingChat = opts.chatId && useChatsStore.getState().activeChatId === opts.chatId;
     if (!isViewingChat) {
       toast[opts.type](opts.title, opts.body, opts.chatId);
     }
