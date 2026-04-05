@@ -103,7 +103,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
   const [branchName, setBranchName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [tab, setTab] = useState<'existing' | 'new'>('existing');
+  const [tab, setTab] = useState<'existing' | 'new'>('new');
   const [worktrees, setWorktrees] = useState<{ path: string; branch: string | null }[]>([]);
 
   const worktreePath = chat?.worktreePath;
@@ -137,7 +137,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
     const fetchWorktreeList = getProjectWorktrees(projectId).then((result) => {
       if (cancelled) return;
       setWorktrees(result.worktrees);
-      if (result.worktrees.length === 0) setTab('new');
+      if (result.worktrees.length > 0) setTab('existing');
     });
 
     Promise.all([fetchBranches, fetchWorktreeList])
