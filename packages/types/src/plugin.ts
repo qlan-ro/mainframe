@@ -103,6 +103,7 @@ export interface ChatServiceAPI {
     projectId: string;
     adapterId?: string;
     model?: string;
+    permissionMode?: string;
     initialMessage?: string;
   }) => Promise<{ chatId: string }>;
 }

@@ -115,14 +115,14 @@ export function useAppInit(): void {
 
 export function useProject(projectId: string | null) {
   const chats = useChatsStore((s) => s.chats);
+  const activeChatId = useChatsStore((s) => s.activeChatId);
 
   useEffect(() => {
     if (!projectId) return;
 
     const syncLaunchStatuses = async () => {
       try {
-        const activeChatId = useChatsStore.getState().activeChatId ?? undefined;
-        const { statuses, effectivePath } = await fetchLaunchStatuses(projectId, activeChatId);
+        const { statuses, effectivePath } = await fetchLaunchStatuses(projectId, activeChatId ?? undefined);
         if (!effectivePath) return;
         const scopeKey = buildLaunchScope(projectId, effectivePath);
         const { setProcessStatus } = useSandboxStore.getState();
@@ -154,7 +154,7 @@ export function useProject(projectId: string | null) {
     return () => {
       unsubConnection();
     };
-  }, [projectId]);
+  }, [projectId, activeChatId]);
 
   const createChat = useCallback(
     (adapterId: string, model?: string) => {

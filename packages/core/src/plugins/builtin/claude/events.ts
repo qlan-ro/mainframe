@@ -167,12 +167,12 @@ function handleControlResponseEvent(session: ClaudeSession, event: Record<string
   const response = event.response as Record<string, unknown> | undefined;
   if (!response) return;
 
-  const data = response.data as Record<string, unknown> | undefined;
-  if (data?.subtype === 'context_usage') {
+  const innerData = response.response as Record<string, unknown> | undefined;
+  if (innerData && typeof innerData.totalTokens === 'number' && typeof innerData.percentage === 'number') {
     const usage: ContextUsage = {
-      totalTokens: (data.totalTokens as number) || 0,
-      maxTokens: (data.maxTokens as number) || 0,
-      percentage: (data.percentage as number) || 0,
+      totalTokens: innerData.totalTokens,
+      maxTokens: (innerData.maxTokens as number) || 0,
+      percentage: innerData.percentage,
     };
     sink.onContextUsage(usage);
   }
