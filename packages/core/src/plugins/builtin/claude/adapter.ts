@@ -12,17 +12,89 @@ import type {
   CreateAgentInput,
 } from '@qlan-ro/mainframe-types';
 import { ClaudeSession } from './session.js';
+import { probeModels as doProbeModels } from './probe-models.js';
 import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 import manifest from './manifest.json' with { type: 'json' };
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
+const EXTENDED_CONTEXT_WINDOW = 1_000_000;
 const CLAUDE_MODELS: AdapterModel[] = [
-  { id: 'claude-opus-4-6', label: 'Opus 4.6', contextWindow: DEFAULT_CONTEXT_WINDOW },
-  { id: 'claude-opus-4-5-20251101', label: 'Opus 4.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
-  { id: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
+  {
+    id: 'claude-opus-4-6',
+    label: 'Opus 4.6',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsFastMode: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'opus[1m]',
+    label: 'Opus 4.6 (1M context)',
+    contextWindow: EXTENDED_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsFastMode: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    label: 'Sonnet 4.6',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'sonnet[1m]',
+    label: 'Sonnet 4.6 (1M context)',
+    contextWindow: EXTENDED_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-opus-4-5-20251101',
+    label: 'Opus 4.5',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-sonnet-4-5-20250929',
+    label: 'Sonnet 4.5',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-opus-4-1-20250805',
+    label: 'Opus 4.1',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-sonnet-4-20250514',
+    label: 'Sonnet 4',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-opus-4-20250514',
+    label: 'Opus 4.0',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-3-7-sonnet-20250219',
+    label: 'Sonnet 3.7',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+  },
   { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
+  { id: 'claude-3-5-sonnet-20241022', label: 'Sonnet 3.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
+  { id: 'claude-3-5-haiku-20241022', label: 'Haiku 3.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
 ];
 
 export class ClaudeAdapter implements Adapter {
@@ -30,6 +102,7 @@ export class ClaudeAdapter implements Adapter {
   name = 'Claude CLI';
 
   private sessions = new Set<ClaudeSession>();
+  private dynamicModels: AdapterModel[] | null = null;
 
   async isInstalled(): Promise<boolean> {
     return new Promise((resolve) => {
@@ -53,7 +126,15 @@ export class ClaudeAdapter implements Adapter {
   }
 
   async listModels(): Promise<AdapterModel[]> {
-    return CLAUDE_MODELS;
+    return this.dynamicModels ?? CLAUDE_MODELS;
+  }
+
+  async probeModels(): Promise<AdapterModel[] | null> {
+    const models = await doProbeModels('claude');
+    if (models) {
+      this.dynamicModels = models;
+    }
+    return models;
   }
 
   getToolCategories(): ToolCategories {

@@ -58,7 +58,8 @@ export type DaemonEvent =
   | { type: 'message.queued.cleared'; chatId: string }
   | { type: 'chat.compacting'; chatId: string }
   | { type: 'chat.compactDone'; chatId: string }
-  | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number };
+  | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number }
+  | { type: 'adapter.models.updated'; adapterId: string; models: import('./adapter.js').AdapterModel[] };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }
