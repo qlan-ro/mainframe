@@ -6,6 +6,7 @@ import { Send } from 'lucide-react';
 import { InlineCommentWidget } from './InlineCommentWidget';
 import { useInlineComments } from './useInlineComments';
 import { setActiveDiffEditor } from './diff-nav';
+import { copyReference } from './copy-reference';
 import { useTabsStore } from '../../store/tabs';
 import './setup';
 
@@ -13,6 +14,7 @@ interface MonacoDiffEditorProps {
   original: string;
   modified: string;
   language?: string;
+  filePath?: string;
   startLine?: number;
   onLineComment?: (startLine: number, endLine: number, lineContent: string, comment: string) => void;
   onSubmitReview?: (comments: { startLine: number; endLine: number; lineContent: string; comment: string }[]) => void;
@@ -22,6 +24,7 @@ export function MonacoDiffEditor({
   original,
   modified,
   language,
+  filePath,
   startLine,
   onLineComment,
   onSubmitReview,
@@ -88,6 +91,16 @@ export function MonacoDiffEditor({
         }
       });
 
+      const copyRefOffset = startLine && startLine > 1 ? startLine - 1 : 0;
+      inner.addAction({
+        id: 'mainframe.copyReference',
+        label: 'Copy Reference',
+        contextMenuGroupId: '9_cutcopypaste',
+        contextMenuOrder: 5,
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyC],
+        run: (ed) => copyReference(ed, filePath, monaco, copyRefOffset),
+      });
+
       if (!onLineComment) return;
 
       decorationsRef.current = inner.createDecorationsCollection([]);
@@ -127,6 +140,8 @@ export function MonacoDiffEditor({
         run: () => openCommentRef.current(inner),
       });
     },
+    // filePath and startLine intentionally omitted: handleMount fires once per mount,
+    // and DiffTab re-keys this component whenever filePath changes.
     [onLineComment, openComment],
   );
 
