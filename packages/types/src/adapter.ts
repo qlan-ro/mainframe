@@ -152,6 +152,9 @@ export interface AdapterModel {
   id: string;
   label: string;
   contextWindow?: number;
+  supportsEffort?: boolean;
+  supportsFastMode?: boolean;
+  supportsAutoMode?: boolean;
 }
 
 export interface ExternalSession {
@@ -174,6 +177,7 @@ export interface Adapter {
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
   listModels(): Promise<AdapterModel[]>;
+  probeModels?(): Promise<AdapterModel[] | null>;
 
   createSession(options: SessionOptions): AdapterSession;
   killAll(): void;
