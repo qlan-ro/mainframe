@@ -64,3 +64,49 @@ describe('AdapterRegistry', () => {
     expect(mock?.models).toEqual(mockModels);
   });
 });
+
+describe('AdapterRegistry.probeAllModels', () => {
+  it('calls probeModels on adapters that support it and emits event', async () => {
+    const probedModels: AdapterModel[] = [{ id: 'probed-model', label: 'Probed' }];
+    const adapter = createMockAdapter([{ id: 'fallback', label: 'Fallback' }]);
+    (adapter as any).probeModels = vi.fn().mockResolvedValue(probedModels);
+
+    const registry = new AdapterRegistry();
+    registry.register(adapter);
+
+    const events: any[] = [];
+    await registry.probeAllModels((event) => events.push(event));
+
+    expect((adapter as any).probeModels).toHaveBeenCalled();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({
+      type: 'adapter.models.updated',
+      adapterId: 'mock',
+      models: probedModels,
+    });
+  });
+
+  it('skips adapters without probeModels', async () => {
+    const adapter = createMockAdapter([]);
+    const registry = new AdapterRegistry();
+    registry.register(adapter);
+
+    const events: any[] = [];
+    await registry.probeAllModels((event) => events.push(event));
+
+    expect(events).toHaveLength(0);
+  });
+
+  it('handles probe failure gracefully', async () => {
+    const adapter = createMockAdapter([]);
+    (adapter as any).probeModels = vi.fn().mockResolvedValue(null);
+
+    const registry = new AdapterRegistry();
+    registry.register(adapter);
+
+    const events: any[] = [];
+    await registry.probeAllModels((event) => events.push(event));
+
+    expect(events).toHaveLength(0);
+  });
+});
