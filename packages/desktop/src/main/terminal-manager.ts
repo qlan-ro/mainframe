@@ -90,13 +90,14 @@ export function setupTerminalIPC(shellEnv: Record<string, string>): void {
 }
 
 export function killAllTerminals(): void {
-  for (const [id, entry] of terminals) {
+  const count = terminals.size;
+  for (const [, entry] of terminals) {
     try {
       entry.pty.kill();
     } catch {
       /* already dead */
     }
-    terminals.delete(id);
   }
-  log.info({ count: terminals.size }, 'all terminals killed');
+  terminals.clear();
+  log.info({ count }, 'all terminals killed');
 }
