@@ -5,6 +5,7 @@ import { PermissionBridge } from './permission-bridge.js';
 import { getContextFilesForProject } from './context.js';
 import { convertSessionMessages } from './history.js';
 import { createChildLogger } from '../../../logger.js';
+import { MAINFRAME_SYSTEM_PROMPT_APPEND } from '../claude/constants.js';
 import type {
   AdapterProcess,
   AdapterSession,
@@ -95,6 +96,7 @@ export class ClaudeSdkSession implements AdapterSession {
       permissionMode: toSdkPermissionMode(this.spawnOptions.permissionMode),
       // Route all permission checks through our canUseTool bridge instead of SDK's built-in prompts
       allowDangerouslySkipPermissions: true,
+      appendSystemPrompt: MAINFRAME_SYSTEM_PROMPT_APPEND,
       env: {
         ...process.env,
         FORCE_COLOR: '0',
