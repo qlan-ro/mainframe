@@ -119,6 +119,7 @@ export function DiffTab({
       original={original}
       modified={modified}
       language={inferLanguage(filePath)}
+      filePath={filePath}
       startLine={startLine}
       onLineComment={handleLineComment}
       onSubmitReview={handleSubmitReview}

@@ -7,6 +7,7 @@ import { InlineCommentWidget } from './InlineCommentWidget';
 import { useInlineComments } from './useInlineComments';
 import './setup';
 import { registerDefinitionProvider } from './navigation';
+import { copyReference } from './copy-reference';
 import { useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
@@ -161,6 +162,15 @@ export function MonacoEditor({
       if (filePath && language) {
         registerDefinitionProvider(monaco, language, filePath);
       }
+
+      editor.addAction({
+        id: 'mainframe.copyReference',
+        label: 'Copy Reference',
+        contextMenuGroupId: '9_cutcopypaste',
+        contextMenuOrder: 5,
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyC],
+        run: (ed) => copyReference(ed, filePath, monaco),
+      });
 
       if (!onLineComment) return;
 
