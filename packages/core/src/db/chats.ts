@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Chat, SessionMention, SkillFileEntry } from '@qlan-ro/mainframe-types';
+import type { Chat, SessionMention, SkillFileEntry, TodoItem } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
 
 function parseJsonColumn<T>(value: string | null | undefined, fallback: T): T {
@@ -25,12 +25,12 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState
+        process_state as processState, todos
       FROM chats
       WHERE project_id = ? AND status != 'archived'
       ORDER BY updated_at DESC
     `);
-    const rows = stmt.all(projectId) as (Chat & { mentions: string; modifiedFiles: string })[];
+    const rows = stmt.all(projectId) as (Chat & { mentions: string; modifiedFiles: string; todos: string })[];
     return rows.map((row) => ({
       ...row,
       mentions: parseJsonColumn(row.mentions, []),
@@ -38,6 +38,7 @@ export class ChatsRepository {
       worktreePath: row.worktreePath || undefined,
       branchName: row.branchName || undefined,
       processState: (row.processState as Chat['processState']) || null,
+      todos: parseJsonColumn(row.todos, undefined) ?? undefined,
     }));
   }
 
@@ -52,12 +53,12 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState
+        process_state as processState, todos
       FROM chats
       WHERE status != 'archived'
       ORDER BY updated_at DESC, rowid DESC
     `);
-    const rows = stmt.all() as (Chat & { mentions: string; modifiedFiles: string })[];
+    const rows = stmt.all() as (Chat & { mentions: string; modifiedFiles: string; todos: string })[];
     return rows.map((row) => ({
       ...row,
       mentions: parseJsonColumn(row.mentions, []),
@@ -65,6 +66,7 @@ export class ChatsRepository {
       worktreePath: row.worktreePath || undefined,
       branchName: row.branchName || undefined,
       processState: (row.processState as Chat['processState']) || null,
+      todos: parseJsonColumn(row.todos, undefined) ?? undefined,
     }));
   }
 
@@ -79,10 +81,10 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState
+        process_state as processState, todos
       FROM chats WHERE id = ?
     `);
-    const row = stmt.get(id) as (Chat & { mentions: string; modifiedFiles: string }) | null;
+    const row = stmt.get(id) as (Chat & { mentions: string; modifiedFiles: string; todos: string }) | null;
     if (!row) return null;
     return {
       ...row,
@@ -91,6 +93,7 @@ export class ChatsRepository {
       worktreePath: row.worktreePath || undefined,
       branchName: row.branchName || undefined,
       processState: (row.processState as Chat['processState']) || null,
+      todos: parseJsonColumn(row.todos, undefined) ?? undefined,
     };
   }
 
@@ -209,6 +212,17 @@ export class ChatsRepository {
     return true;
   }
 
+  getTodos(chatId: string): TodoItem[] | null {
+    const stmt = this.db.prepare('SELECT todos FROM chats WHERE id = ?');
+    const row = stmt.get(chatId) as { todos: string | null } | undefined;
+    if (!row?.todos) return null;
+    return parseJsonColumn<TodoItem[]>(row.todos, []);
+  }
+
+  updateTodos(chatId: string, todos: TodoItem[]): void {
+    this.db.prepare('UPDATE chats SET todos = ? WHERE id = ?').run(JSON.stringify(todos), chatId);
+  }
+
   getImportedSessionIds(projectId: string): string[] {
     const stmt = this.db.prepare(`
       SELECT claude_session_id FROM chats
@@ -229,10 +243,12 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState
+        process_state as processState, todos
       FROM chats WHERE claude_session_id = ? AND project_id = ?
     `);
-    const row = stmt.get(sessionId, projectId) as (Chat & { mentions: string; modifiedFiles: string }) | null;
+    const row = stmt.get(sessionId, projectId) as
+      | (Chat & { mentions: string; modifiedFiles: string; todos: string })
+      | null;
     if (!row) return null;
     return {
       ...row,
@@ -241,6 +257,7 @@ export class ChatsRepository {
       worktreePath: row.worktreePath || undefined,
       branchName: row.branchName || undefined,
       processState: (row.processState as Chat['processState']) || null,
+      todos: parseJsonColumn(row.todos, undefined) ?? undefined,
     };
   }
 }
