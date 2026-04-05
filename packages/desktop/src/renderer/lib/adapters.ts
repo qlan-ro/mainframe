@@ -1,4 +1,6 @@
 import type { AdapterInfo } from '@qlan-ro/mainframe-types';
+import { useSettingsStore } from '../store/settings';
+import { useAdaptersStore } from '../store/adapters';
 
 const ADAPTER_LABEL_FALLBACK: Record<string, string> = {
   claude: 'Claude',
@@ -47,6 +49,17 @@ export function getModelLabel(modelId: string | undefined, adapters: AdapterInfo
   const [, family = '', major, minor] = match;
   const familyLabel = `${family.slice(0, 1).toUpperCase()}${family.slice(1).toLowerCase()}`;
   return `${familyLabel} ${major}.${minor}`;
+}
+
+/**
+ * Resolve the default model for an adapter: provider setting → first model in list.
+ * Safe to call outside React (reads stores via getState()).
+ */
+export function getDefaultModelForAdapter(adapterId: string): string | undefined {
+  const providerDefault = useSettingsStore.getState().providers[adapterId]?.defaultModel;
+  if (providerDefault) return providerDefault;
+  const adapter = useAdaptersStore.getState().adapters.find((a) => a.id === adapterId);
+  return adapter?.models[0]?.id;
 }
 
 export function getModelContextWindow(modelId: string | undefined, adapters: AdapterInfo[]): number {

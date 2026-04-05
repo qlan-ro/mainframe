@@ -15,6 +15,7 @@ import { usePluginShortcuts } from './hooks/usePluginShortcuts';
 import { useSettingsStore } from './store';
 import { getActiveProjectId } from './hooks/useActiveProjectId.js';
 import { daemonClient } from './lib/client';
+import { getDefaultModelForAdapter } from './lib/adapters';
 import { PluginGlobalComponents } from './components/plugins/PluginGlobalComponents';
 
 export default function App(): React.ReactElement {
@@ -28,7 +29,7 @@ export default function App(): React.ReactElement {
         e.preventDefault();
         const projectId = getActiveProjectId();
         if (projectId) {
-          daemonClient.createChat(projectId, 'claude');
+          daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
         }
       }
     };
