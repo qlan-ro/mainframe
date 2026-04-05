@@ -194,12 +194,17 @@ export function PreviewTab(): React.ReactElement {
     consoleDragging.current = false;
   }, []);
 
-  // Reset ready state when process stops
+  // Reset ready state when process stops or scope changes (worktree switch)
   useEffect(() => {
     if (previewStatus !== 'running') {
       setWebviewReady(false);
     }
   }, [previewStatus]);
+
+  useEffect(() => {
+    setWebviewReady(false);
+    setSelectedProcess(null);
+  }, [scopeKey]);
 
   // Navigate the webview when process becomes running.
   // Daemon waits for port readiness before emitting 'running', so the server should be available.
@@ -539,7 +544,7 @@ export function PreviewTab(): React.ReactElement {
                 // Electron webviews render in a separate GPU process and paint OVER regular DOM,
                 // so visibility:hidden doesn't help. Use zero dimensions to truly hide until ready.
                 <webview
-                  key={activeProjectId ?? 'default'}
+                  key={scopeKey ?? activeProjectId ?? 'default'}
                   ref={webviewRef}
                   src="about:blank"
                   partition={`persist:sandbox-${activeProjectId ?? 'default'}`}
