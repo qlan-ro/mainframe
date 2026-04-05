@@ -19,6 +19,7 @@ import type { ToolCategories } from '../../../messages/tool-categorization.js';
 import manifest from './manifest.json' with { type: 'json' };
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
+const EXTENDED_CONTEXT_WINDOW = 1_000_000;
 const CLAUDE_MODELS: AdapterModel[] = [
   {
     id: 'claude-opus-4-6',
@@ -29,9 +30,24 @@ const CLAUDE_MODELS: AdapterModel[] = [
     supportsAutoMode: true,
   },
   {
+    id: 'opus[1m]',
+    label: 'Opus 4.6 (1M context)',
+    contextWindow: EXTENDED_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsFastMode: true,
+    supportsAutoMode: true,
+  },
+  {
     id: 'claude-sonnet-4-6',
     label: 'Sonnet 4.6',
     contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'sonnet[1m]',
+    label: 'Sonnet 4.6 (1M context)',
+    contextWindow: EXTENDED_CONTEXT_WINDOW,
     supportsEffort: true,
     supportsAutoMode: true,
   },

@@ -33,10 +33,12 @@ describe('ClaudeAdapter.listModels', () => {
   it('returns all 11 known Claude models', async () => {
     const adapter = new ClaudeAdapter();
     const models = await adapter.listModels();
-    expect(models.length).toBe(11);
+    expect(models.length).toBe(13);
     const ids = models.map((m) => m.id);
     expect(ids).toContain('claude-opus-4-6');
+    expect(ids).toContain('opus[1m]');
     expect(ids).toContain('claude-sonnet-4-6');
+    expect(ids).toContain('sonnet[1m]');
     expect(ids).toContain('claude-3-5-haiku-20241022');
     expect(ids).toContain('claude-3-5-sonnet-20241022');
   });
