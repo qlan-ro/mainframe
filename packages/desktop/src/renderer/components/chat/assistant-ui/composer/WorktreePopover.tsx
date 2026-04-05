@@ -137,7 +137,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
     const fetchWorktreeList = getProjectWorktrees(projectId).then((result) => {
       if (cancelled) return;
       setWorktrees(result.worktrees);
-      if (result.worktrees.length > 0) setTab('existing');
+      // tab defaults to 'new' — no override needed
     });
 
     Promise.all([fetchBranches, fetchWorktreeList])
