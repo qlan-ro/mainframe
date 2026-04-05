@@ -42,8 +42,10 @@ export function TasksSection({ todos }: TasksSectionProps): React.ReactElement {
         </div>
         <div className="space-y-0.5">
           {todos.map((todo) => (
-            <div key={todo.content} className="flex items-center gap-2 px-2 py-0.5 text-mf-small">
-              <StatusIcon status={todo.status} />
+            <div key={todo.content} className="flex items-start gap-2 px-2 py-0.5 text-mf-small">
+              <span className="mt-0.5">
+                <StatusIcon status={todo.status} />
+              </span>
               <span
                 className={
                   todo.status === 'completed'
