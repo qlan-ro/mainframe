@@ -22,7 +22,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:playwright": "playwright test -c playwright-ct.config.ts",
-    "package": "electron-builder"
+    "package": "electron-builder",
+    "postinstall": "node scripts/fix-pty-permissions.mjs"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.12.19",
