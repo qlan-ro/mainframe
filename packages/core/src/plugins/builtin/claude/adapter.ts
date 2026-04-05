@@ -12,6 +12,7 @@ import type {
   CreateAgentInput,
 } from '@qlan-ro/mainframe-types';
 import { ClaudeSession } from './session.js';
+import { probeModels as doProbeModels } from './probe-models.js';
 import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
@@ -85,6 +86,7 @@ export class ClaudeAdapter implements Adapter {
   name = 'Claude CLI';
 
   private sessions = new Set<ClaudeSession>();
+  private dynamicModels: AdapterModel[] | null = null;
 
   async isInstalled(): Promise<boolean> {
     return new Promise((resolve) => {
@@ -108,7 +110,15 @@ export class ClaudeAdapter implements Adapter {
   }
 
   async listModels(): Promise<AdapterModel[]> {
-    return CLAUDE_MODELS;
+    return this.dynamicModels ?? CLAUDE_MODELS;
+  }
+
+  async probeModels(): Promise<AdapterModel[] | null> {
+    const models = await doProbeModels('claude');
+    if (models) {
+      this.dynamicModels = models;
+    }
+    return models;
   }
 
   getToolCategories(): ToolCategories {
