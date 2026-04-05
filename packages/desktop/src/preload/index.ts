@@ -5,10 +5,8 @@ export interface TerminalAPI {
   write: (id: string, data: string) => Promise<void>;
   resize: (id: string, cols: number, rows: number) => Promise<void>;
   kill: (id: string) => Promise<void>;
-  onData: (callback: (id: string, data: string) => void) => void;
-  onExit: (callback: (id: string, exitCode: number) => void) => void;
-  removeDataListener: () => void;
-  removeExitListener: () => void;
+  onData: (callback: (id: string, data: string) => void) => () => void;
+  onExit: (callback: (id: string, exitCode: number) => void) => () => void;
 }
 
 export interface MainframeAPI {
@@ -49,16 +47,18 @@ const api: MainframeAPI = {
     resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
     kill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
     onData: (callback: (id: string, data: string) => void) => {
-      ipcRenderer.on('terminal:data', (_event, id: string, data: string) => callback(id, data));
+      const handler = (_event: Electron.IpcRendererEvent, id: string, data: string): void => callback(id, data);
+      ipcRenderer.on('terminal:data', handler);
+      return () => {
+        ipcRenderer.removeListener('terminal:data', handler);
+      };
     },
     onExit: (callback: (id: string, exitCode: number) => void) => {
-      ipcRenderer.on('terminal:exit', (_event, id: string, exitCode: number) => callback(id, exitCode));
-    },
-    removeDataListener: () => {
-      ipcRenderer.removeAllListeners('terminal:data');
-    },
-    removeExitListener: () => {
-      ipcRenderer.removeAllListeners('terminal:exit');
+      const handler = (_event: Electron.IpcRendererEvent, id: string, exitCode: number): void => callback(id, exitCode);
+      ipcRenderer.on('terminal:exit', handler);
+      return () => {
+        ipcRenderer.removeListener('terminal:exit', handler);
+      };
     },
   },
 };

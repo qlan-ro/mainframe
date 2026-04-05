@@ -48,7 +48,7 @@ export function TerminalInstance({ terminalId, visible }: TerminalInstanceProps)
         term.write(data);
       }
     };
-    window.mainframe.terminal.onData(handleData);
+    const removeDataListener = window.mainframe.terminal.onData(handleData);
 
     // Handle resize
     const onResizeDisposable = term.onResize(({ cols, rows }) => {
@@ -71,6 +71,7 @@ export function TerminalInstance({ terminalId, visible }: TerminalInstanceProps)
       observer.disconnect();
       onDataDisposable.dispose();
       onResizeDisposable.dispose();
+      removeDataListener();
       term.dispose();
       termRef.current = null;
       fitAddonRef.current = null;

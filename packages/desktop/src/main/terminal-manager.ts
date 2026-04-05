@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { randomUUID } from 'crypto';
+import { statSync } from 'fs';
 import pty from 'node-pty';
 import type { IPty } from 'node-pty';
 import { createMainLogger } from './logger.js';
@@ -20,6 +21,16 @@ export function setupTerminalIPC(shellEnv: Record<string, string>): void {
     process.platform === 'win32' ? 'powershell.exe' : shellEnv['SHELL'] || process.env.SHELL || '/bin/zsh';
 
   ipcMain.handle('terminal:create', (event: IpcMainInvokeEvent, options: { cwd: string }) => {
+    try {
+      const st = statSync(options.cwd);
+      if (!st.isDirectory()) {
+        throw new Error(`Not a directory: ${options.cwd}`);
+      }
+    } catch (err) {
+      log.warn({ cwd: options.cwd, err }, 'terminal:create invalid cwd');
+      throw new Error(`Invalid terminal cwd: ${options.cwd}`);
+    }
+
     const id = randomUUID();
     const cols = 80;
     const rows = 24;

@@ -20,10 +20,10 @@ export function TerminalPanel(): React.ReactElement {
   const counterRef = useRef(0);
 
   const getCwd = useCallback((): string => {
-    if (!activeProjectId) return process.env.HOME ?? '/';
+    if (!activeProjectId) return '/';
     const chat = useChatsStore.getState().chats.find((c) => c.id === useChatsStore.getState().activeChatId);
     const project = useProjectsStore.getState().projects.find((p) => p.id === activeProjectId);
-    if (!project) return process.env.HOME ?? '/';
+    if (!project) return '/';
     return chat?.worktreePath ?? project.path;
   }, [activeProjectId]);
 
@@ -41,7 +41,9 @@ export function TerminalPanel(): React.ReactElement {
 
   const closeTerminal = useCallback(
     (id: string) => {
-      window.mainframe.terminal.kill(id).catch(() => {});
+      window.mainframe.terminal.kill(id).catch((err) => {
+        console.warn('[terminal] failed to kill terminal', id, err);
+      });
       removeTerminal(id);
     },
     [removeTerminal],
@@ -61,18 +63,8 @@ export function TerminalPanel(): React.ReactElement {
     const handleExit = (id: string, _exitCode: number): void => {
       console.warn('[terminal] process exited', { id, _exitCode });
     };
-    window.mainframe.terminal.onExit(handleExit);
-    return () => {
-      window.mainframe.terminal.removeExitListener();
-    };
-  }, []);
-
-  // Cleanup all IPC listeners on unmount
-  useEffect(() => {
-    return () => {
-      window.mainframe.terminal.removeDataListener();
-      window.mainframe.terminal.removeExitListener();
-    };
+    const removeExitListener = window.mainframe.terminal.onExit(handleExit);
+    return removeExitListener;
   }, []);
 
   // Detect shell name from platform
