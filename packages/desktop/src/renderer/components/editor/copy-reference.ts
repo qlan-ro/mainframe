@@ -1,3 +1,5 @@
+import type * as monacoType from 'monaco-editor';
+
 /** Shape of TS NavigationTree returned by the language service worker. */
 export interface NavigationTreeNode {
   text: string;
@@ -54,4 +56,51 @@ export function buildReference(
   const adjustedLine = line + (lineOffset ?? 0);
   if (word) return `${path}:${adjustedLine} (${word})`;
   return `${path}:${adjustedLine}`;
+}
+
+/**
+ * Copy a qualified reference string for the symbol at the cursor to the clipboard.
+ * Called by the Monaco `mainframe.copyReference` action in both editors.
+ */
+export async function copyReference(
+  editor: monacoType.editor.ICodeEditor,
+  filePath: string | undefined,
+  monaco: typeof monacoType,
+  lineOffset?: number,
+): Promise<void> {
+  const position = editor.getPosition();
+  const model = editor.getModel();
+  if (!position || !model) return;
+
+  const line = position.lineNumber;
+  const wordInfo = model.getWordAtPosition(position);
+  const word = wordInfo?.word;
+
+  let symbolChain: string | undefined;
+
+  const langId = model.getLanguageId();
+  if (langId === 'typescript' || langId === 'javascript') {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tsLang = monaco.languages.typescript as any;
+      const getWorker = langId === 'typescript' ? tsLang.getTypeScriptWorker : tsLang.getJavaScriptWorker;
+      const worker = await getWorker();
+      const client = await worker(model.uri);
+      const navTree = await (client as any).getNavigationTree(model.uri.toString());
+      if (navTree) {
+        const offset = model.getOffsetAt(position);
+        symbolChain = findSymbolChain(navTree, offset);
+      }
+    } catch {
+      /* TS worker unavailable — fall back to word */
+    }
+  }
+
+  const reference = buildReference(filePath, line, symbolChain, word, lineOffset);
+
+  try {
+    await navigator.clipboard.writeText(reference);
+  } catch {
+    /* clipboard API failure — silent for v1 */
+  }
 }
