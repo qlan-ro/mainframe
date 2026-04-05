@@ -70,9 +70,12 @@ export function probeModels(executable: string): Promise<AdapterModel[] | null> 
       finish(null);
     });
 
+    // CLI exited before sending models — return null (also fires after successful probe; settled guard handles it)
     child.on('exit', () => {
       finish(null);
     });
+
+    child.stderr?.resume();
 
     let buffer = '';
     child.stdout?.on('data', (chunk: Buffer) => {
@@ -90,7 +93,7 @@ export function probeModels(executable: string): Promise<AdapterModel[] | null> 
             finish(models);
           }
         } catch {
-          // skip non-JSON lines
+          /* expected: CLI emits non-JSON lines (progress indicators, hook events, etc.) */
         }
       }
     });
