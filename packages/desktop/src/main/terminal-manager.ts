@@ -40,7 +40,7 @@ export function setupTerminalIPC(shellEnv: Record<string, string>): void {
       cols,
       rows,
       cwd: options.cwd,
-      env: { ...shellEnv, TERM_PROGRAM: 'Mainframe' },
+      env: { ...process.env, ...shellEnv, TERM_PROGRAM: 'Mainframe' },
     });
 
     const webContentsId = event.sender.id;
