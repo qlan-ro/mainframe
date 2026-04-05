@@ -140,6 +140,8 @@ export function MonacoDiffEditor({
         run: () => openCommentRef.current(inner),
       });
     },
+    // filePath and startLine intentionally omitted: handleMount fires once per mount,
+    // and DiffTab re-keys this component whenever filePath changes.
     [onLineComment, openComment],
   );
 
