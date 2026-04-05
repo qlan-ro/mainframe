@@ -10,6 +10,7 @@ import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { useLaunchScopeKey } from '../../hooks/useLaunchScopeKey.js';
 import { daemonClient } from '../../lib/client';
+import { getDefaultModelForAdapter } from '../../lib/adapters';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 
@@ -125,7 +126,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
           if (chatId) {
             daemonClient.sendMessage(chatId, '/launch-config');
           } else {
-            daemonClient.createChat(activeProject.id, 'claude');
+            daemonClient.createChat(activeProject.id, 'claude', getDefaultModelForAdapter('claude'));
             const unsub = useChatsStore.subscribe((state) => {
               if (state.activeChatId) {
                 daemonClient.sendMessage(state.activeChatId, '/launch-config');

@@ -2,6 +2,7 @@ import React from 'react';
 import { ThreadPrimitive, useThread } from '@assistant-ui/react';
 import { Loader2 } from 'lucide-react';
 import { useMainframeRuntime } from './MainframeRuntimeProvider';
+import { useChatsStore } from '../../../store/chats';
 import { PermissionCard } from '../PermissionCard';
 import { AskUserQuestionCard } from '../AskUserQuestionCard';
 import { PlanApprovalCard } from '../PlanApprovalCard';
@@ -24,11 +25,13 @@ function EmptyState() {
 
 function GeneratingIndicator() {
   const thread = useThread();
+  const activeChatId = useChatsStore((s) => s.activeChatId);
+  const isCompacting = useChatsStore((s) => (activeChatId ? s.compactingChats.has(activeChatId) : false));
   if (!thread.isRunning) return null;
   return (
     <div className="flex items-center gap-2 py-2 text-mf-text-secondary text-mf-body">
       <Loader2 size={14} className="animate-spin motion-reduce:animate-none text-mf-accent" />
-      <span>Thinking...</span>
+      <span>{isCompacting ? 'Compacting...' : 'Thinking...'}</span>
     </div>
   );
 }
