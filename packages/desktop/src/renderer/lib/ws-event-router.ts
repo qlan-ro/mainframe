@@ -144,6 +144,10 @@ export function routeEvent(event: DaemonEvent): void {
         maxTokens: event.maxTokens,
       });
       break;
+    case 'todos.updated':
+      log.debug('event:todos.updated', { chatId: event.chatId, count: event.todos.length });
+      chats.setTodos(event.chatId, event.todos);
+      break;
     case 'sessions.external.count':
       break;
     case 'plugin.notification':

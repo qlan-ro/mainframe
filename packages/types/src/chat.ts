@@ -1,5 +1,11 @@
 import type { SessionMention } from './context.js';
 
+export interface TodoItem {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  activeForm: string;
+}
+
 export interface Chat {
   id: string;
   adapterId: string;
@@ -24,6 +30,7 @@ export interface Chat {
   displayStatus?: 'idle' | 'working' | 'waiting';
   isRunning?: boolean;
   worktreeMissing?: boolean;
+  todos?: TodoItem[];
 }
 
 export interface Project {

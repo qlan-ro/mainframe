@@ -81,6 +81,22 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
     session.state.lastAssistantUsage = message.usage;
   }
   if (message?.content) {
+    for (const block of message.content) {
+      if (block.type === 'tool_use' && block.name === 'TodoWrite') {
+        const input = block.input as { todos?: unknown[] };
+        if (Array.isArray(input?.todos)) {
+          const valid = input.todos.filter(
+            (t): t is import('@qlan-ro/mainframe-types').TodoItem =>
+              typeof t === 'object' &&
+              t !== null &&
+              typeof (t as Record<string, unknown>).content === 'string' &&
+              typeof (t as Record<string, unknown>).status === 'string',
+          );
+          if (valid.length > 0) sink.onTodoUpdate(valid);
+        }
+      }
+    }
+
     sink.onMessage(message.content, {
       model: message.model,
       usage: message.usage,
