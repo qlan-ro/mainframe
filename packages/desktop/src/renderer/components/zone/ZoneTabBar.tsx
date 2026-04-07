@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { ZoneId } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '../../store/layout.js';
 import { getToolWindow } from './tool-windows.js';
+import { useDragContext } from './DragOverlay.js';
 
 interface ZoneTabBarProps {
   zoneId: ZoneId;
@@ -11,6 +12,8 @@ export function ZoneTabBar({ zoneId }: ZoneTabBarProps): React.ReactElement | nu
   const zone = useLayoutStore((s) => s.zones[zoneId]);
   const setActiveTab = useLayoutStore((s) => s.setActiveTab);
   const reorderTab = useLayoutStore((s) => s.reorderTab);
+  const moveToolWindow = useLayoutStore((s) => s.moveToolWindow);
+  const { isDragging, hoveredZone, setHoveredZone } = useDragContext();
 
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragIndexRef = useRef<number | null>(null);
@@ -53,10 +56,56 @@ export function ZoneTabBar({ zoneId }: ZoneTabBarProps): React.ReactElement | nu
     setDragOverIndex(null);
   }, []);
 
+  const handleBarDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (e.dataTransfer.types.includes('application/x-toolwindow')) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setHoveredZone(zoneId);
+      }
+    },
+    [zoneId, setHoveredZone],
+  );
+
+  const handleBarDragLeave = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+        setHoveredZone(null);
+      }
+    },
+    [setHoveredZone],
+  );
+
+  const handleBarDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (e.dataTransfer.types.includes('application/x-toolwindow')) {
+        e.preventDefault();
+        const toolWindowId = e.dataTransfer.getData('application/x-toolwindow');
+        if (toolWindowId) {
+          moveToolWindow(toolWindowId, zoneId);
+        }
+        setHoveredZone(null);
+      }
+    },
+    [zoneId, moveToolWindow, setHoveredZone],
+  );
+
   if (!zone || zone.tabs.length === 0) return null;
 
+  const isExternalDropTarget = isDragging && hoveredZone === zoneId;
+
   return (
-    <div className="flex h-7 items-center bg-mf-surface-secondary border-b border-mf-border overflow-x-auto">
+    <div
+      className={[
+        'flex h-7 items-center bg-mf-surface-secondary border-b border-mf-border overflow-x-auto transition-colors',
+        isExternalDropTarget ? 'ring-1 ring-inset ring-mf-accent' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      onDragOver={handleBarDragOver}
+      onDragLeave={handleBarDragLeave}
+      onDrop={handleBarDrop}
+    >
       {zone.tabs.map((tabId, index) => {
         const tw = getToolWindow(tabId);
         if (!tw) return null;
