@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Search, Play, Square, ChevronDown } from 'lucide-react';
-import type { Layout } from 'react-resizable-panels';
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { useProjectsStore, useSearchStore } from '../store';
 import { useUIStore } from '../store/ui';
@@ -14,17 +13,7 @@ import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../store/chats';
 import { useLaunchScopeKey } from '../hooks/useLaunchScopeKey.js';
 
-type PanelId = 'left' | 'right' | 'bottom';
-
-interface TitleBarProps {
-  panelSizes: Layout;
-  panelCollapsed: Record<PanelId, boolean>;
-}
-
-export function TitleBar({
-  panelSizes: _panelSizes,
-  panelCollapsed: _panelCollapsed,
-}: TitleBarProps): React.ReactElement {
+export function TitleBar(): React.ReactElement {
   const { projects } = useProjectsStore();
   const activeProjectId = useActiveProjectId();
   const activeProject = projects.find((p) => p.id === activeProjectId);
