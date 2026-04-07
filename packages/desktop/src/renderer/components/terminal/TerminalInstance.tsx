@@ -93,5 +93,5 @@ export function TerminalInstance({ terminalId, visible }: TerminalInstanceProps)
     }
   }, [visible]);
 
-  return <div ref={containerRef} className="h-full w-full" style={{ display: visible ? 'block' : 'none' }} />;
+  return <div ref={containerRef} className="absolute inset-0" style={{ visibility: visible ? 'visible' : 'hidden' }} />;
 }

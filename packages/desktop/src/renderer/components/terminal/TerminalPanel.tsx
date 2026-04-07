@@ -134,7 +134,7 @@ export function TerminalPanel(): React.ReactElement {
       </div>
 
       {/* Terminal instances — all mounted, only active one visible */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 relative">
         {terminals.map((t) => (
           <TerminalInstance key={t.id} terminalId={t.id} visible={t.id === activeTerminalId} />
         ))}
