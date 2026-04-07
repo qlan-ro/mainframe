@@ -9,6 +9,7 @@ import { StatusBar } from './StatusBar';
 import { PluginView } from './plugins/PluginView';
 import { Zone } from './zone/Zone';
 import { BottomResizeHandle } from './zone/BottomResizeHandle';
+import { DragProvider } from './zone/DragOverlay';
 
 const BOTTOM_HEIGHT_MIN = 120;
 const BOTTOM_HEIGHT_DEFAULT = 200;
@@ -49,109 +50,111 @@ export function Layout({ centerPanel }: LayoutProps): React.ReactElement {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-mf-app-bg">
-      <TitleBar />
+    <DragProvider>
+      <div className="h-screen flex flex-col bg-mf-app-bg">
+        <TitleBar />
 
-      <div className="flex-1 flex overflow-hidden gap-0">
-        <LeftRail />
+        <div className="flex-1 flex overflow-hidden gap-0">
+          <LeftRail />
 
-        <div className="flex-1 flex flex-col overflow-hidden pb-mf-gap">
-          {activeFullviewId ? (
-            <div className="flex-1 bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-              <PluginView pluginId={activeFullviewId} />
-            </div>
-          ) : (
-            <>
-              {/* Upper area: horizontal Group with left col + center + right col */}
-              <Group orientation="horizontal" className="flex-1">
-                {hasLeft && (
+          <div className="flex-1 flex flex-col overflow-hidden pb-mf-gap">
+            {activeFullviewId ? (
+              <div className="flex-1 bg-mf-panel-bg rounded-mf-panel overflow-hidden">
+                <PluginView pluginId={activeFullviewId} />
+              </div>
+            ) : (
+              <>
+                {/* Upper area: horizontal Group with left col + center + right col */}
+                <Group orientation="horizontal" className="flex-1">
+                  {hasLeft && (
+                    <>
+                      <Panel id="left-column" defaultSize="22%" maxSize="40%">
+                        <Group orientation="vertical">
+                          {hasLeftTop && (
+                            <Panel id="left-top" defaultSize="60%" minSize="20%">
+                              <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
+                                <Zone id="left-top" />
+                              </div>
+                            </Panel>
+                          )}
+                          {hasLeftTop && hasLeftBottom && <VerticalResizeHandle />}
+                          {hasLeftBottom && (
+                            <Panel id="left-bottom" defaultSize="40%" minSize="20%">
+                              <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
+                                <Zone id="left-bottom" />
+                              </div>
+                            </Panel>
+                          )}
+                        </Group>
+                      </Panel>
+                      <HorizontalResizeHandle />
+                    </>
+                  )}
+
+                  <Panel id="center">
+                    <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>
+                  </Panel>
+
+                  {hasRight && (
+                    <>
+                      <HorizontalResizeHandle />
+                      <Panel id="right-column" defaultSize="22%" minSize="10%" maxSize="40%">
+                        <Group orientation="vertical">
+                          {hasRightTop && (
+                            <Panel id="right-top" defaultSize="60%" minSize="20%">
+                              <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
+                                <Zone id="right-top" />
+                              </div>
+                            </Panel>
+                          )}
+                          {hasRightTop && hasRightBottom && <VerticalResizeHandle />}
+                          {hasRightBottom && (
+                            <Panel id="right-bottom" defaultSize="40%" minSize="20%">
+                              <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
+                                <Zone id="right-bottom" />
+                              </div>
+                            </Panel>
+                          )}
+                        </Group>
+                      </Panel>
+                    </>
+                  )}
+                </Group>
+
+                {/* Bottom area: full width */}
+                {hasBottom && (
                   <>
-                    <Panel id="left-column" defaultSize="22%" maxSize="40%">
-                      <Group orientation="vertical">
-                        {hasLeftTop && (
-                          <Panel id="left-top" defaultSize="60%" minSize="20%">
+                    <BottomResizeHandle onResize={handleBottomResize} />
+                    <div style={{ height: bottomHeight, flexShrink: 0 }}>
+                      <Group orientation="horizontal">
+                        {hasBottomLeft && (
+                          <Panel id="bottom-left" defaultSize="50%" minSize="20%">
                             <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-                              <Zone id="left-top" />
+                              <Zone id="bottom-left" />
                             </div>
                           </Panel>
                         )}
-                        {hasLeftTop && hasLeftBottom && <VerticalResizeHandle />}
-                        {hasLeftBottom && (
-                          <Panel id="left-bottom" defaultSize="40%" minSize="20%">
+                        {hasBottomLeft && hasBottomRight && <HorizontalResizeHandle />}
+                        {hasBottomRight && (
+                          <Panel id="bottom-right" defaultSize="50%" minSize="20%">
                             <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-                              <Zone id="left-bottom" />
+                              <Zone id="bottom-right" />
                             </div>
                           </Panel>
                         )}
                       </Group>
-                    </Panel>
-                    <HorizontalResizeHandle />
+                    </div>
                   </>
                 )}
+              </>
+            )}
+          </div>
 
-                <Panel id="center">
-                  <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>
-                </Panel>
-
-                {hasRight && (
-                  <>
-                    <HorizontalResizeHandle />
-                    <Panel id="right-column" defaultSize="22%" minSize="10%" maxSize="40%">
-                      <Group orientation="vertical">
-                        {hasRightTop && (
-                          <Panel id="right-top" defaultSize="60%" minSize="20%">
-                            <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-                              <Zone id="right-top" />
-                            </div>
-                          </Panel>
-                        )}
-                        {hasRightTop && hasRightBottom && <VerticalResizeHandle />}
-                        {hasRightBottom && (
-                          <Panel id="right-bottom" defaultSize="40%" minSize="20%">
-                            <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-                              <Zone id="right-bottom" />
-                            </div>
-                          </Panel>
-                        )}
-                      </Group>
-                    </Panel>
-                  </>
-                )}
-              </Group>
-
-              {/* Bottom area: full width */}
-              {hasBottom && (
-                <>
-                  <BottomResizeHandle onResize={handleBottomResize} />
-                  <div style={{ height: bottomHeight, flexShrink: 0 }}>
-                    <Group orientation="horizontal">
-                      {hasBottomLeft && (
-                        <Panel id="bottom-left" defaultSize="50%" minSize="20%">
-                          <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-                            <Zone id="bottom-left" />
-                          </div>
-                        </Panel>
-                      )}
-                      {hasBottomLeft && hasBottomRight && <HorizontalResizeHandle />}
-                      {hasBottomRight && (
-                        <Panel id="bottom-right" defaultSize="50%" minSize="20%">
-                          <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-                            <Zone id="bottom-right" />
-                          </div>
-                        </Panel>
-                      )}
-                    </Group>
-                  </div>
-                </>
-              )}
-            </>
-          )}
+          <RightRail />
         </div>
 
-        <RightRail />
+        <StatusBar />
       </div>
-
-      <StatusBar />
-    </div>
+    </DragProvider>
   );
 }

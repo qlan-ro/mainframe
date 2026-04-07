@@ -4,6 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { cn } from '../../lib/utils';
 import { useLayoutStore } from '../../store/layout';
 import { getToolWindow } from './tool-windows';
+import { useDragContext } from './DragOverlay';
 
 interface RailButtonProps {
   active?: boolean;
@@ -58,6 +59,7 @@ export function RailSection({ zoneId }: RailSectionProps): React.ReactElement {
   const setActiveTab = useLayoutStore((s) => s.setActiveTab);
   const toggleSide = useLayoutStore((s) => s.toggleSide);
   const moveToolWindow = useLayoutStore((s) => s.moveToolWindow);
+  const { isDragging, hoveredZone, startDrag, endDrag, setHoveredZone } = useDragContext();
 
   const side: 'left' | 'right' | 'bottom' = zoneId.startsWith('left')
     ? 'left'
@@ -80,6 +82,11 @@ export function RailSection({ zoneId }: RailSectionProps): React.ReactElement {
   const handleDragStart = (e: React.DragEvent, tabId: string): void => {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('application/x-toolwindow', tabId);
+    startDrag(tabId);
+  };
+
+  const handleDragEnd = (_e: React.DragEvent): void => {
+    endDrag();
   };
 
   const handleDragOver = (e: React.DragEvent): void => {
@@ -89,20 +96,40 @@ export function RailSection({ zoneId }: RailSectionProps): React.ReactElement {
     }
   };
 
+  const handleDragEnter = (e: React.DragEvent): void => {
+    if (e.dataTransfer.types.includes('application/x-toolwindow')) {
+      setHoveredZone(zoneId);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent): void => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setHoveredZone(null);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent): void => {
     e.preventDefault();
     const toolWindowId = e.dataTransfer.getData('application/x-toolwindow');
     if (toolWindowId) {
       moveToolWindow(toolWindowId, zoneId);
     }
+    setHoveredZone(null);
   };
 
   if (!zone) return <></>;
 
+  const isDropHighlighted = isDragging && hoveredZone === zoneId;
+
   return (
     <div
-      className="flex flex-col items-center gap-1"
+      className={cn(
+        'flex flex-col items-center gap-1 rounded transition-colors',
+        isDropHighlighted && 'ring-1 ring-mf-accent bg-mf-panel-bg',
+      )}
       onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       data-zone={zoneId}
     >
@@ -119,6 +146,7 @@ export function RailSection({ zoneId }: RailSectionProps): React.ReactElement {
             title={tw.label}
             draggable
             onDragStart={(e) => handleDragStart(e, tabId)}
+            onDragEnd={handleDragEnd}
           >
             {Icon ? <Icon className="w-4 h-4" /> : <span className="text-xs">{tw.label[0]}</span>}
           </RailButton>
