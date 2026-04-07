@@ -78,7 +78,7 @@ describe('ClaudeSession spawn args', () => {
     expect(args).toContain('--allow-dangerously-skip-permissions');
   });
 
-  it('includes --append-system-prompt with Mainframe prompt', async () => {
+  it('includes --append-system-prompt with Mainframe prompt by default', async () => {
     const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
     const { MAINFRAME_SYSTEM_PROMPT_APPEND } = await import('../plugins/builtin/claude/constants.js');
     const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
@@ -87,5 +87,15 @@ describe('ClaudeSession spawn args', () => {
     const idx = args.indexOf('--append-system-prompt');
     expect(idx).toBeGreaterThan(-1);
     expect(args[idx + 1]).toBe(MAINFRAME_SYSTEM_PROMPT_APPEND);
+  });
+
+  it('uses custom systemPrompt when provided', async () => {
+    const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    await session.spawn({ systemPrompt: 'Custom instructions' } as any).catch(() => {});
+    const args = spawnMock.mock.calls[0]?.[1] as string[];
+    const idx = args.indexOf('--append-system-prompt');
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx + 1]).toBe('Custom instructions');
   });
 });

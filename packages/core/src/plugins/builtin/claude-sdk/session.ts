@@ -96,7 +96,7 @@ export class ClaudeSdkSession implements AdapterSession {
       permissionMode: toSdkPermissionMode(this.spawnOptions.permissionMode),
       // Route all permission checks through our canUseTool bridge instead of SDK's built-in prompts
       allowDangerouslySkipPermissions: true,
-      appendSystemPrompt: MAINFRAME_SYSTEM_PROMPT_APPEND,
+      appendSystemPrompt: this.spawnOptions.systemPrompt || MAINFRAME_SYSTEM_PROMPT_APPEND,
       env: {
         ...process.env,
         FORCE_COLOR: '0',

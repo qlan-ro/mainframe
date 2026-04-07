@@ -160,7 +160,7 @@ describe('ClaudeSdkSession', () => {
     expect(callArgs.options.resume).toBe('existing-session');
   });
 
-  it('passes appendSystemPrompt in query options', async () => {
+  it('passes default appendSystemPrompt in query options', async () => {
     const { MAINFRAME_SYSTEM_PROMPT_APPEND } = await import('../../../plugins/builtin/claude/constants.js');
     const mockGen = createMockQuery([]);
     (mockQuery as ReturnType<typeof vi.fn>).mockReturnValue(mockGen);
@@ -172,5 +172,18 @@ describe('ClaudeSdkSession', () => {
 
     const callArgs = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(callArgs.options.appendSystemPrompt).toBe(MAINFRAME_SYSTEM_PROMPT_APPEND);
+  });
+
+  it('uses custom systemPrompt when provided', async () => {
+    const mockGen = createMockQuery([]);
+    (mockQuery as ReturnType<typeof vi.fn>).mockReturnValue(mockGen);
+
+    const session = new ClaudeSdkSession({ projectPath: '/tmp/test' });
+    const sink = createMockSink();
+    await session.spawn({ systemPrompt: 'Custom instructions' }, sink);
+    await session.sendMessage('Hello');
+
+    const callArgs = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArgs.options.appendSystemPrompt).toBe('Custom instructions');
   });
 });

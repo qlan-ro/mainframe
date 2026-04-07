@@ -79,6 +79,11 @@ export function settingRoutes(ctx: RouteContext): Router {
       if (executablePath) ctx.db.settings.set('provider', `${adapterId}.executablePath`, executablePath);
       else ctx.db.settings.delete('provider', `${adapterId}.executablePath`);
     }
+    const { systemPrompt } = parsed.data;
+    if (systemPrompt !== undefined) {
+      if (systemPrompt) ctx.db.settings.set('provider', `${adapterId}.systemPrompt`, systemPrompt);
+      else ctx.db.settings.delete('provider', `${adapterId}.systemPrompt`);
+    }
 
     res.json({ success: true });
   });

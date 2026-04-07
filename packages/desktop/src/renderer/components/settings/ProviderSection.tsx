@@ -65,6 +65,21 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
         </div>
       )}
 
+      {/* System Prompt */}
+      <div className="space-y-1.5">
+        <label className="text-mf-small text-mf-text-secondary">System Prompt</label>
+        <textarea
+          value={config.systemPrompt ?? ''}
+          onChange={(e) => update({ systemPrompt: e.target.value || undefined })}
+          placeholder="Custom instructions appended to every session's system prompt"
+          rows={3}
+          className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-mf-input focus:outline-none focus:border-mf-accent resize-y"
+        />
+        <p className="text-mf-status text-mf-text-secondary">
+          Appended to the default system prompt. Leave empty to use the built-in Mainframe prompt.
+        </p>
+      </div>
+
       {/* Default Model */}
       <ModelDropdown
         value={config.defaultModel ?? ''}

@@ -33,6 +33,7 @@ export const UpdateProviderSettingsBody = z.object({
   defaultModel: z.string().optional(),
   defaultMode: z.string().optional(),
   executablePath: z.string().optional(),
+  systemPrompt: z.string().optional(),
 });
 
 // Settings — general update
