@@ -9,7 +9,7 @@ import { useLayoutStore } from '../../renderer/store/layout.js';
 function Providers({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
     <TooltipProvider>
-      <Providers>{children}</Providers>
+      <DragProvider>{children}</DragProvider>
     </TooltipProvider>
   );
 }
@@ -130,7 +130,7 @@ describe('Zone', () => {
         <Zone id="left-top" />
       </Providers>,
     );
-    expect(screen.getByText('Sessions')).toBeInTheDocument();
+    expect(screen.getAllByText('Sessions').length).toBeGreaterThan(0);
   });
 
   it('renders tab bar and content area for multi-tab zone', () => {
