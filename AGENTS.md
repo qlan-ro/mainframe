@@ -5,7 +5,7 @@ AI-native development environment for orchestrating agents.
 # Workflow
 - Before any new bug/feature work, pull latest main and start a new branch on it
 - Before any work, check needed skills to guide your development see [Skills](#skills)
-- For Claude CLI behavior, refer to [CLAUDE-JSONL-SCHEMA.md](docs/adapters/claude/CLAUDE-JSONL-SCHEMA.md), [PROTOCOL_REVERSED.md](docs/adapters/claude/PROTOCOL_REVERSED.md), and examples in `~/.claude/projects/**` and [CLAUDE-JSONL-SAMPLES](docs/adapters/claude/CLAUDE-JSONL-SAMPLES.md)
+- For Claude CLI behavior, check the global `~/.claude/CLAUDE.md` first for source-level references. Protocol docs are in `docs/adapters/claude/`: [PROTOCOL_REVERSED](docs/adapters/claude/PROTOCOL_REVERSED.md), [COMPACTION](docs/adapters/claude/COMPACTION.md), [INTERRUPT](docs/adapters/claude/INTERRUPT.md), [CONTEXT_USAGE](docs/adapters/claude/CONTEXT_USAGE.md), [MODELS](docs/adapters/claude/MODELS.md), [TODOS](docs/adapters/claude/TODOS.md), [PR_TRACKING](docs/adapters/claude/PR_TRACKING.md)
 - Be sure to typecheck when you're done making a series of code changes
 - Prefer running single tests, and not the whole test suite, for performance
 - For git workflow and commit practices, see [Git](#git)
@@ -53,8 +53,13 @@ graph TD
 
 ### Protocol References
 
-- [`CLAUDE-JSONL-SCHEMA.md`](docs/adapters/claude/CLAUDE-JSONL-SCHEMA.md)
 - [`PROTOCOL_REVERSED.md`](docs/adapters/claude/PROTOCOL_REVERSED.md)
+- [`COMPACTION.md`](docs/adapters/claude/COMPACTION.md)
+- [`INTERRUPT.md`](docs/adapters/claude/INTERRUPT.md)
+- [`CONTEXT_USAGE.md`](docs/adapters/claude/CONTEXT_USAGE.md)
+- [`MODELS.md`](docs/adapters/claude/MODELS.md)
+- [`TODOS.md`](docs/adapters/claude/TODOS.md)
+- [`PR_TRACKING.md`](docs/adapters/claude/PR_TRACKING.md)
 
 ## Terminology
 

@@ -33,13 +33,82 @@ const execFileAsync = promisify(execFile);
 const logger = createChildLogger('claude-sdk-adapter');
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
-// TODO: Use query.supportedModels() for dynamic model discovery instead of hardcoding.
-// Hardcoded for now to match the CLI plugin pattern and avoid spawning a query just for listing.
+const EXTENDED_CONTEXT_WINDOW = 1_000_000;
 const CLAUDE_MODELS: AdapterModel[] = [
-  { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', contextWindow: DEFAULT_CONTEXT_WINDOW },
-  { id: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
-  { id: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
+  {
+    id: 'claude-opus-4-6',
+    label: 'Claude Opus 4.6',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsFastMode: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'opus[1m]',
+    label: 'Claude Opus 4.6 (1M context)',
+    contextWindow: EXTENDED_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsFastMode: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    label: 'Claude Sonnet 4.6',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'sonnet[1m]',
+    label: 'Claude Sonnet 4.6 (1M context)',
+    contextWindow: EXTENDED_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-opus-4-5-20251101',
+    label: 'Claude Opus 4.5',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-sonnet-4-5-20250929',
+    label: 'Claude Sonnet 4.5',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-opus-4-1-20250805',
+    label: 'Claude Opus 4.1',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-sonnet-4-20250514',
+    label: 'Claude Sonnet 4',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-opus-4-20250514',
+    label: 'Claude Opus 4.0',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsAutoMode: true,
+  },
+  {
+    id: 'claude-3-7-sonnet-20250219',
+    label: 'Claude Sonnet 3.7',
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    supportsEffort: true,
+  },
   { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
+  { id: 'claude-3-5-sonnet-20241022', label: 'Claude Sonnet 3.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
+  { id: 'claude-3-5-haiku-20241022', label: 'Claude Haiku 3.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
 ];
 
 export class ClaudeSdkAdapter implements Adapter {

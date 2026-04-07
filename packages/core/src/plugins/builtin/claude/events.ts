@@ -81,6 +81,22 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
     session.state.lastAssistantUsage = message.usage;
   }
   if (message?.content) {
+    for (const block of message.content) {
+      if (block.type === 'tool_use' && block.name === 'TodoWrite') {
+        const input = block.input as { todos?: unknown[] };
+        if (Array.isArray(input?.todos)) {
+          const valid = input.todos.filter(
+            (t): t is import('@qlan-ro/mainframe-types').TodoItem =>
+              typeof t === 'object' &&
+              t !== null &&
+              typeof (t as Record<string, unknown>).content === 'string' &&
+              typeof (t as Record<string, unknown>).status === 'string',
+          );
+          if (valid.length > 0) sink.onTodoUpdate(valid);
+        }
+      }
+    }
+
     sink.onMessage(message.content, {
       model: message.model,
       usage: message.usage,
@@ -167,12 +183,12 @@ function handleControlResponseEvent(session: ClaudeSession, event: Record<string
   const response = event.response as Record<string, unknown> | undefined;
   if (!response) return;
 
-  const data = response.data as Record<string, unknown> | undefined;
-  if (data?.subtype === 'context_usage') {
+  const innerData = response.response as Record<string, unknown> | undefined;
+  if (innerData && typeof innerData.totalTokens === 'number' && typeof innerData.percentage === 'number') {
     const usage: ContextUsage = {
-      totalTokens: (data.totalTokens as number) || 0,
-      maxTokens: (data.maxTokens as number) || 0,
-      percentage: (data.percentage as number) || 0,
+      totalTokens: innerData.totalTokens,
+      maxTokens: (innerData.maxTokens as number) || 0,
+      percentage: innerData.percentage,
     };
     sink.onContextUsage(usage);
   }

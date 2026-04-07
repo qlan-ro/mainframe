@@ -1,12 +1,15 @@
-import React, { useCallback, useRef } from 'react';
+import React, { Suspense, useCallback, useRef } from 'react';
 import { useUIStore } from '../../store/ui';
 import { PreviewTab } from './PreviewTab';
+
+const TerminalPanel = React.lazy(() => import('../terminal/TerminalPanel').then((m) => ({ default: m.TerminalPanel })));
 
 const MIN_HEIGHT = 120;
 
 export function BottomPanel(): React.ReactElement | null {
   const panelCollapsed = useUIStore((s) => s.panelCollapsed);
   const panelVisible = useUIStore((s) => s.panelVisible);
+  const bottomPanelMode = useUIStore((s) => s.bottomPanelMode);
   const height = useUIStore((s) => s.panelSizes.bottom);
   const setPanelSize = useUIStore((s) => s.setPanelSize);
   const dragging = useRef(false);
@@ -57,7 +60,19 @@ export function BottomPanel(): React.ReactElement | null {
 
       {/* Panel content */}
       <div className="bg-mf-panel-bg rounded-mf-panel overflow-hidden" style={{ height }}>
-        <PreviewTab />
+        {bottomPanelMode === 'terminal' ? (
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-mf-text-secondary text-sm">
+                Loading terminal...
+              </div>
+            }
+          >
+            <TerminalPanel />
+          </Suspense>
+        ) : (
+          <PreviewTab />
+        )}
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ if (process.env.NODE_ENV === 'development') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
 import { createMainLogger, logFromRenderer } from './logger.js';
+import { setupTerminalIPC, killAllTerminals } from './terminal-manager.js';
 
 const log = createMainLogger('electron');
 
@@ -77,7 +78,7 @@ function resolveShellEnv(): Record<string, string> {
   return { PATH: additions.length ? `${additions.join(':')}:${fallback}` : fallback };
 }
 
-function startDaemon(): void {
+function startDaemon(shellEnv: Record<string, string>): void {
   if (process.env.NODE_ENV === 'development') {
     log.info('development mode: daemon assumed external');
     return;
@@ -89,7 +90,7 @@ function startDaemon(): void {
   log.info({ path: daemonPath }, 'daemon starting');
   daemon = utilityProcess.fork(daemonPath, [], {
     stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'production', ...resolveShellEnv() },
+    env: { ...process.env, NODE_ENV: 'production', ...shellEnv },
   });
 
   daemon.on('exit', (code) => {
@@ -247,8 +248,10 @@ app.whenReady().then(() => {
   };
   session.defaultSession.setPermissionRequestHandler(denyUnneededPermissions);
 
+  const shellEnv = resolveShellEnv();
   setupIPC();
-  startDaemon();
+  startDaemon(shellEnv);
+  setupTerminalIPC(shellEnv);
 
   if (process.env.NODE_ENV !== 'development') {
     setProductionMenu();
@@ -305,6 +308,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('quit', () => {
+  killAllTerminals();
   if (daemon) {
     daemon.kill();
   }

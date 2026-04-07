@@ -6,6 +6,7 @@ import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
 import { useAdaptersStore } from '../../store/adapters';
 import { daemonClient } from '../../lib/client';
+import { getDefaultModelForAdapter } from '../../lib/adapters';
 import { archiveChat, renameChat } from '../../lib/api';
 import { deleteDraft } from '../chat/assistant-ui/composer/composer-drafts.js';
 import { cn } from '../../lib/utils';
@@ -314,7 +315,7 @@ export function ProjectGroup({
   const handleNewSession = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      daemonClient.createChat(project.id, 'claude');
+      daemonClient.createChat(project.id, 'claude', getDefaultModelForAdapter('claude'));
     },
     [project.id],
   );

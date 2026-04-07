@@ -1,6 +1,6 @@
 {
   "name": "@qlan-ro/mainframe-desktop",
-  "version": "0.7.0",
+  "version": "0.8.1",
   "description": "Mainframe desktop app — Electron/React frontend for orchestrating AI agents",
   "license": "MIT",
   "repository": {
@@ -22,7 +22,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:playwright": "playwright test -c playwright-ct.config.ts",
-    "package": "electron-builder"
+    "package": "electron-rebuild -o node-pty && electron-builder",
+    "postinstall": "node scripts/fix-pty-permissions.mjs"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.12.19",
@@ -35,6 +36,8 @@
     "@radix-ui/react-tabs": "^1.0.4",
     "@radix-ui/react-tooltip": "^1.0.7",
     "@tailwindcss/vite": "^4.2.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "diff": "^8.0.3",
@@ -42,6 +45,7 @@
     "monaco-editor": "^0.55.1",
     "monaco-languageclient": "^10.7.0",
     "nanoid": "^5.1.7",
+    "node-pty": "^1.1.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
@@ -52,6 +56,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
     "@playwright/experimental-ct-react": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -127,6 +132,14 @@
       {
         "from": "../../node_modules/@vscode/ripgrep",
         "to": "node_modules/@vscode/ripgrep",
+        "filter": [
+          "**/*",
+          "!**/*.md"
+        ]
+      },
+      {
+        "from": "../../node_modules/node-pty",
+        "to": "node_modules/node-pty",
         "filter": [
           "**/*",
           "!**/*.md"

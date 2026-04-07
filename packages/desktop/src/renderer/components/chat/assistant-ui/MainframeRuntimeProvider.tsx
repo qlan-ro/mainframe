@@ -10,6 +10,7 @@ import type { AttachmentAdapter, ExternalStoreThreadListAdapter } from '@assista
 import { useChatSession } from '../../../hooks/useChatSession';
 import { convertMessage } from './convert-message';
 import { daemonClient } from '../../../lib/client';
+import { getDefaultModelForAdapter } from '../../../lib/adapters';
 import { archiveChat } from '../../../lib/api';
 import { deleteDraft } from './composer/composer-drafts.js';
 import { useChatsStore } from '../../../store/chats';
@@ -269,7 +270,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
       },
       onSwitchToNewThread: () => {
         if (!activeProjectId) return;
-        daemonClient.createChat(activeProjectId, 'claude');
+        daemonClient.createChat(activeProjectId, 'claude', getDefaultModelForAdapter('claude'));
       },
       onArchive: async (threadId: string) => {
         const chat = chats.find((c) => c.id === threadId);

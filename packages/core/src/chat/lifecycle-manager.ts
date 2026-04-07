@@ -96,6 +96,12 @@ export class ChatLifecycleManager {
     // Always push current state to the just-(re)subscribed client so it can
     // recover displayStatus/isRunning after a project switch.
     this.deps.emitEvent({ type: 'chat.updated', chat });
+
+    // Restore todo checklist state for the UI
+    const todos = chat.todos;
+    if (todos) {
+      this.deps.emitEvent({ type: 'todos.updated', chatId, todos });
+    }
   }
 
   async loadChat(chatId: string): Promise<void> {

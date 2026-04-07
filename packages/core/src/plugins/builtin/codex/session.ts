@@ -48,6 +48,7 @@ const nullSink: SessionSink = {
   onPlanFile: () => {},
   onSkillFile: () => {},
   onQueuedProcessed: () => {},
+  onTodoUpdate: () => {},
 };
 
 export class CodexSession implements AdapterSession {
