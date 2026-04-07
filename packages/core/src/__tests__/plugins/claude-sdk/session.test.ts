@@ -174,16 +174,16 @@ describe('ClaudeSdkSession', () => {
     expect(callArgs.options.appendSystemPrompt).toBe(MAINFRAME_SYSTEM_PROMPT_APPEND);
   });
 
-  it('uses custom systemPrompt when provided', async () => {
+  it('omits appendSystemPrompt when systemPrompt is disabled', async () => {
     const mockGen = createMockQuery([]);
     (mockQuery as ReturnType<typeof vi.fn>).mockReturnValue(mockGen);
 
     const session = new ClaudeSdkSession({ projectPath: '/tmp/test' });
     const sink = createMockSink();
-    await session.spawn({ systemPrompt: 'Custom instructions' }, sink);
+    await session.spawn({ systemPrompt: 'disabled' }, sink);
     await session.sendMessage('Hello');
 
     const callArgs = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(callArgs.options.appendSystemPrompt).toBe('Custom instructions');
+    expect(callArgs.options.appendSystemPrompt).toBeUndefined();
   });
 });

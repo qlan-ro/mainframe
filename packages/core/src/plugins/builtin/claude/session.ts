@@ -128,8 +128,9 @@ export class ClaudeSession implements AdapterSession {
       'stdio',
     ];
 
-    const prompt = options.systemPrompt || MAINFRAME_SYSTEM_PROMPT_APPEND;
-    args.push('--append-system-prompt', prompt);
+    if (options.systemPrompt !== 'disabled') {
+      args.push('--append-system-prompt', MAINFRAME_SYSTEM_PROMPT_APPEND);
+    }
 
     if (this.resumeSessionId) args.push('--resume', this.resumeSessionId);
     if (options.model) args.push('--model', options.model);

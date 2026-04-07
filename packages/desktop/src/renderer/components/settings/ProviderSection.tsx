@@ -66,19 +66,20 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
       )}
 
       {/* System Prompt */}
-      <div className="space-y-1.5">
-        <label className="text-mf-small text-mf-text-secondary">System Prompt</label>
-        <textarea
-          value={config.systemPrompt ?? ''}
-          onChange={(e) => update({ systemPrompt: e.target.value || undefined })}
-          placeholder="Custom instructions appended to every session's system prompt"
-          rows={3}
-          className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-mf-input focus:outline-none focus:border-mf-accent resize-y"
+      <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
+        <input
+          type="checkbox"
+          checked={config.systemPrompt !== 'disabled'}
+          onChange={(e) => update({ systemPrompt: e.target.checked ? undefined : 'disabled' })}
+          className="mt-0.5 accent-mf-accent"
         />
-        <p className="text-mf-status text-mf-text-secondary">
-          Appended to the default system prompt. Leave empty to use the built-in Mainframe prompt.
-        </p>
-      </div>
+        <div>
+          <span className="text-mf-small text-mf-text-primary">Enforce AskUserQuestion for agent questions</span>
+          <p className="text-mf-status text-mf-text-secondary">
+            Instructs the agent to use the interactive AskUserQuestion tool instead of asking in plain text.
+          </p>
+        </div>
+      </label>
 
       {/* Default Model */}
       <ModelDropdown

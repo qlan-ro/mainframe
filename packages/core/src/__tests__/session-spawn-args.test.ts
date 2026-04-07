@@ -89,13 +89,11 @@ describe('ClaudeSession spawn args', () => {
     expect(args[idx + 1]).toBe(MAINFRAME_SYSTEM_PROMPT_APPEND);
   });
 
-  it('uses custom systemPrompt when provided', async () => {
+  it('omits --append-system-prompt when systemPrompt is disabled', async () => {
     const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
     const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
-    await session.spawn({ systemPrompt: 'Custom instructions' } as any).catch(() => {});
+    await session.spawn({ systemPrompt: 'disabled' } as any).catch(() => {});
     const args = spawnMock.mock.calls[0]?.[1] as string[];
-    const idx = args.indexOf('--append-system-prompt');
-    expect(idx).toBeGreaterThan(-1);
-    expect(args[idx + 1]).toBe('Custom instructions');
+    expect(args).not.toContain('--append-system-prompt');
   });
 });
