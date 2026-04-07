@@ -42,6 +42,13 @@ function cloneZones(zones: Record<ZoneId, ZoneState>): Record<ZoneId, ZoneState>
   return JSON.parse(JSON.stringify(zones)) as Record<ZoneId, ZoneState>;
 }
 
+function buildDefaultState(): Pick<LayoutState, 'zones' | 'collapsed'> {
+  return {
+    zones: cloneZones(DEFAULT_ZONES),
+    collapsed: { ...DEFAULT_COLLAPSED },
+  };
+}
+
 export const useLayoutStore = create<LayoutState>()(
   persist(
     (set, get) => ({
@@ -174,6 +181,33 @@ export const useLayoutStore = create<LayoutState>()(
         });
       },
     }),
-    { name: 'mainframe-layout' },
+    {
+      name: 'mainframe-layout',
+      version: 1,
+      migrate(persistedState, version) {
+        if (version === 0 || !persistedState) {
+          try {
+            const raw = localStorage.getItem('mainframe-ui');
+            if (raw) {
+              const old = JSON.parse(raw) as { state?: { panelCollapsed?: Record<string, boolean> } } | null;
+              if (old?.state?.panelCollapsed) {
+                const defaultState = buildDefaultState();
+                return {
+                  ...defaultState,
+                  collapsed: {
+                    left: old.state.panelCollapsed['left'] ?? false,
+                    right: old.state.panelCollapsed['right'] ?? false,
+                    bottom: old.state.panelCollapsed['bottom'] ?? true,
+                  },
+                };
+              }
+            }
+          } catch {
+            /* use defaults */
+          }
+        }
+        return persistedState as LayoutState;
+      },
+    },
   ),
 );
