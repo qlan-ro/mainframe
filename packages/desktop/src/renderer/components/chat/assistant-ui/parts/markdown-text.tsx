@@ -7,6 +7,7 @@ import {
 } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../../../lib/utils';
+import { urlTransform as markdownUrlTransform, remarkAppLinks } from '../../../../lib/markdown-url-transform';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
 import { CodeHeader } from './CodeHeader';
 import { SyntaxHighlightedCode } from './SyntaxHighlightedCode';
@@ -153,10 +154,17 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
   CodeHeader,
 });
 
-const REMARK_PLUGINS = [remarkGfm];
+const REMARK_PLUGINS = [remarkGfm, remarkAppLinks];
 
 export const MarkdownText: TextMessagePartComponent = memo(() => {
-  return <MarkdownTextPrimitive className="aui-md" remarkPlugins={REMARK_PLUGINS} components={markdownComponents} />;
+  return (
+    <MarkdownTextPrimitive
+      className="aui-md"
+      remarkPlugins={REMARK_PLUGINS}
+      urlTransform={markdownUrlTransform}
+      components={markdownComponents}
+    />
+  );
 });
 
 MarkdownText.displayName = 'MarkdownText';

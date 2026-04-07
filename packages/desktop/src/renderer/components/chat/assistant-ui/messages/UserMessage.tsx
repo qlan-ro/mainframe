@@ -8,10 +8,11 @@ import { markdownComponents } from '../parts/markdown-text';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useSkillsStore } from '../../../../store/skills';
 import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
+import { urlTransform, remarkAppLinks } from '../../../../lib/markdown-url-transform';
 import { PLAN_PREFIX, highlightMentions, resolveSkillName, parseRawCommand } from '../message-parsing';
 import { ImageThumbs, FileAttachmentThumbs } from './ImageThumbs';
 
-const REMARK_PLUGINS = [remarkGfm];
+const REMARK_PLUGINS = [remarkGfm, remarkAppLinks];
 
 function MentionParagraph({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
   return <p {...props}>{highlightMentions(children)}</p>;
@@ -80,7 +81,7 @@ export function UserMessage() {
           </div>
           <div className="px-4 py-3">
             <div className="aui-md text-mf-chat text-mf-text-primary">
-              <Markdown remarkPlugins={REMARK_PLUGINS} components={markdownComponents}>
+              <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
                 {planBody}
               </Markdown>
             </div>
@@ -126,7 +127,7 @@ export function UserMessage() {
       {hasTextContent && (
         <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5">
           <div className="aui-md text-mf-chat text-mf-text-primary">
-            <Markdown remarkPlugins={REMARK_PLUGINS} components={userComponents}>
+            <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userComponents}>
               {cleanText}
             </Markdown>
           </div>
