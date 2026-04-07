@@ -11,8 +11,6 @@ interface PluginLayoutState {
   actions: PluginAction[];
   triggeredAction: TriggeredAction | null;
   activeFullviewId: string | null;
-  activeLeftPanelId: string | null;
-  activeRightPanelId: string | null;
 
   registerContribution(c: PluginUIContribution): void;
   unregisterContribution(pluginId: string): void;
@@ -21,8 +19,6 @@ interface PluginLayoutState {
   triggerAction(pluginId: string, actionId: string): void;
   clearTriggeredAction(): void;
   activateFullview(pluginId: string): void;
-  setActiveLeftPanel(pluginId: string | null): void;
-  setActiveRightPanel(pluginId: string | null): void;
 }
 
 export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
@@ -30,8 +26,6 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
   actions: [],
   triggeredAction: null,
   activeFullviewId: null,
-  activeLeftPanelId: null,
-  activeRightPanelId: null,
 
   registerContribution: (c) =>
     set((s) => ({
@@ -42,8 +36,6 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
     set((s) => ({
       contributions: s.contributions.filter((c) => c.pluginId !== pluginId),
       activeFullviewId: s.activeFullviewId === pluginId ? null : s.activeFullviewId,
-      activeLeftPanelId: s.activeLeftPanelId === pluginId ? null : s.activeLeftPanelId,
-      activeRightPanelId: s.activeRightPanelId === pluginId ? null : s.activeRightPanelId,
     })),
 
   registerAction: (action) =>
@@ -64,8 +56,4 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
     set((s) => ({
       activeFullviewId: s.activeFullviewId === pluginId ? null : pluginId,
     })),
-
-  setActiveLeftPanel: (pluginId) => set({ activeLeftPanelId: pluginId, activeFullviewId: null }),
-
-  setActiveRightPanel: (pluginId) => set({ activeRightPanelId: pluginId, activeFullviewId: null }),
 }));
