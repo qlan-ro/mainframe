@@ -19,6 +19,8 @@ interface LayoutState {
   toggleSide: (side: CollapsibleSide) => void;
   resetLayout: () => void;
   findZoneForToolWindow: (id: string) => ZoneId | null;
+  registerToolWindow: (toolWindowId: string, defaultZone: ZoneId) => void;
+  unregisterToolWindow: (toolWindowId: string) => void;
 }
 
 const DEFAULT_ZONES: Record<ZoneId, ZoneState> = {
@@ -140,6 +142,36 @@ export const useLayoutStore = create<LayoutState>()(
           if (zones[zoneId]!.tabs.includes(id)) return zoneId;
         }
         return null;
+      },
+
+      registerToolWindow: (toolWindowId, defaultZone) => {
+        const already = get().findZoneForToolWindow(toolWindowId);
+        if (already !== null) return;
+        set((state) => {
+          const zones = cloneZones(state.zones);
+          zones[defaultZone]!.tabs.push(toolWindowId);
+          if (zones[defaultZone]!.activeTab === null) {
+            zones[defaultZone]!.activeTab = toolWindowId;
+          }
+          return { zones };
+        });
+      },
+
+      unregisterToolWindow: (toolWindowId) => {
+        set((state) => {
+          const zones = cloneZones(state.zones);
+          for (const zoneId of Object.keys(zones) as ZoneId[]) {
+            const zone = zones[zoneId]!;
+            if (!zone.tabs.includes(toolWindowId)) continue;
+            const wasActive = zone.activeTab === toolWindowId;
+            zone.tabs = zone.tabs.filter((t) => t !== toolWindowId);
+            if (wasActive) {
+              zone.activeTab = zone.tabs[0] ?? null;
+            }
+            break;
+          }
+          return { zones };
+        });
       },
     }),
     { name: 'mainframe-layout' },

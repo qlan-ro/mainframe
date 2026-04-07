@@ -170,4 +170,55 @@ describe('useLayoutStore', () => {
       expect(useLayoutStore.getState().findZoneForToolWindow('unknown-tool')).toBeNull();
     });
   });
+
+  describe('registerToolWindow', () => {
+    it('adds a plugin tool window to the default zone', () => {
+      useLayoutStore.getState().registerToolWindow('my-plugin', 'right-bottom');
+      const state = useLayoutStore.getState();
+      expect(state.zones['right-bottom']?.tabs).toContain('my-plugin');
+    });
+
+    it('is a no-op if the tool window is already placed in some zone', () => {
+      useLayoutStore.getState().registerToolWindow('my-plugin', 'right-bottom');
+      useLayoutStore.getState().registerToolWindow('my-plugin', 'left-top');
+      const state = useLayoutStore.getState();
+      expect(state.zones['right-bottom']?.tabs).toContain('my-plugin');
+      expect(state.zones['left-top']?.tabs).not.toContain('my-plugin');
+    });
+
+    it('sets activeTab on the default zone if it was null', () => {
+      useLayoutStore.setState({
+        zones: { ...DEFAULT_STATE.zones, 'bottom-left': { tabs: [], activeTab: null } },
+        collapsed: DEFAULT_STATE.collapsed,
+      });
+      useLayoutStore.getState().registerToolWindow('my-plugin', 'bottom-left');
+      expect(useLayoutStore.getState().zones['bottom-left']?.activeTab).toBe('my-plugin');
+    });
+  });
+
+  describe('unregisterToolWindow', () => {
+    it('removes a tool window from its zone', () => {
+      useLayoutStore.getState().registerToolWindow('my-plugin', 'right-bottom');
+      useLayoutStore.getState().unregisterToolWindow('my-plugin');
+      expect(useLayoutStore.getState().zones['right-bottom']?.tabs).not.toContain('my-plugin');
+    });
+
+    it('fixes activeTab when the active tool window is unregistered', () => {
+      useLayoutStore.setState({
+        zones: { ...DEFAULT_STATE.zones, 'bottom-right': { tabs: ['my-plugin', 'terminal'], activeTab: 'my-plugin' } },
+        collapsed: DEFAULT_STATE.collapsed,
+      });
+      useLayoutStore.getState().unregisterToolWindow('my-plugin');
+      expect(useLayoutStore.getState().zones['bottom-right']?.activeTab).toBe('terminal');
+    });
+
+    it('sets activeTab to null when the last tab is unregistered', () => {
+      useLayoutStore.setState({
+        zones: { ...DEFAULT_STATE.zones, 'left-top': { tabs: ['my-plugin'], activeTab: 'my-plugin' } },
+        collapsed: DEFAULT_STATE.collapsed,
+      });
+      useLayoutStore.getState().unregisterToolWindow('my-plugin');
+      expect(useLayoutStore.getState().zones['left-top']?.activeTab).toBeNull();
+    });
+  });
 });

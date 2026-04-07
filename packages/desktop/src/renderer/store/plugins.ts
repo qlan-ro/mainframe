@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import type { PluginAction, PluginUIContribution } from '@qlan-ro/mainframe-types';
+import type { PluginAction, PluginUIContribution, ZoneId } from '@qlan-ro/mainframe-types';
+import { registerPluginToolWindow, unregisterPluginToolWindow } from '../components/zone/tool-windows';
+import { useLayoutStore } from './layout';
 
 interface TriggeredAction {
   pluginId: string;
@@ -27,16 +29,24 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
   triggeredAction: null,
   activeFullviewId: null,
 
-  registerContribution: (c) =>
+  registerContribution: (c) => {
     set((s) => ({
       contributions: [...s.contributions.filter((x) => x.pluginId !== c.pluginId), c],
-    })),
+    }));
+    if (c.zone !== 'fullview') {
+      registerPluginToolWindow({ id: c.pluginId, label: c.label, defaultZone: c.zone as ZoneId });
+      useLayoutStore.getState().registerToolWindow(c.pluginId, c.zone as ZoneId);
+    }
+  },
 
-  unregisterContribution: (pluginId) =>
+  unregisterContribution: (pluginId) => {
     set((s) => ({
       contributions: s.contributions.filter((c) => c.pluginId !== pluginId),
       activeFullviewId: s.activeFullviewId === pluginId ? null : s.activeFullviewId,
-    })),
+    }));
+    unregisterPluginToolWindow(pluginId);
+    useLayoutStore.getState().unregisterToolWindow(pluginId);
+  },
 
   registerAction: (action) =>
     set((s) => ({
