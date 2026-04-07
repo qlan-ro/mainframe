@@ -70,7 +70,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
         <input
           type="checkbox"
           checked={config.systemPrompt === 'enabled'}
-          onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : undefined })}
+          onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : '' })}
           className="mt-0.5 accent-mf-accent"
         />
         <div>
