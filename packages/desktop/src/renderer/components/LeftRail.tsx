@@ -1,184 +1,55 @@
 import React from 'react';
-import { Settings, HelpCircle, MessageSquare, Play, TerminalSquare } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
-import { usePluginLayoutStore, useSettingsStore, useUIStore } from '../store';
+import { Settings, HelpCircle, ListChecks } from 'lucide-react';
+import { usePluginLayoutStore, useSettingsStore } from '../store';
 import { PluginIcon } from './plugins/PluginIcon';
-
-interface RailButtonProps {
-  active?: boolean;
-  onClick: () => void;
-  title: string;
-  children: React.ReactNode;
-}
-
-function RailButton({ active, onClick, title, children }: RailButtonProps): React.ReactElement {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          onClick={onClick}
-          className={cn(
-            'w-8 h-8 mx-auto flex items-center justify-center rounded-mf-card transition-colors',
-            active
-              ? 'bg-mf-panel-bg text-mf-text-primary'
-              : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg',
-          )}
-        >
-          {children}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="right">{title}</TooltipContent>
-    </Tooltip>
-  );
-}
+import { RailButton, RailSection } from './zone/RailSection';
 
 export function LeftRail(): React.ReactElement {
-  const contributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'left-panel');
-  const activeLeftPanelId = usePluginLayoutStore((s) => s.activeLeftPanelId);
   const fullviewContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'fullview');
   const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
-  const panelVisible = useUIStore((s) => s.panelVisible);
-  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
-  const togglePanel = useUIStore((s) => s.togglePanel);
-  const bottomPanelMode = useUIStore((s) => s.bottomPanelMode);
-  const setBottomPanelMode = useUIStore((s) => s.setBottomPanelMode);
-
-  const panelCollapsed = useUIStore((s) => s.panelCollapsed);
-
-  const handleSessionsClick = (): void => {
-    if (activeLeftPanelId === null && !panelCollapsed.left) {
-      togglePanel('left');
-      return;
-    }
-    usePluginLayoutStore.getState().setActiveLeftPanel(null);
-    if (panelCollapsed.left) togglePanel('left');
-  };
-
-  const handlePluginClick = (pluginId: string): void => {
-    const { activeLeftPanelId: current, setActiveLeftPanel } = usePluginLayoutStore.getState();
-    if (current === pluginId && !panelCollapsed.left) {
-      togglePanel('left');
-      return;
-    }
-    setActiveLeftPanel(pluginId);
-    if (panelCollapsed.left) togglePanel('left');
-  };
-
-  const handleFullviewClick = (pluginId: string): void => {
-    usePluginLayoutStore.getState().activateFullview(pluginId);
-  };
 
   return (
-    <div className="w-11 bg-mf-app-bg flex flex-col py-2">
-      {/* Activity icons */}
-      <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
-        {/* Default: Sessions / AI workspace */}
+    <div className="w-11 bg-mf-app-bg flex flex-col items-center py-2 shrink-0">
+      {/* Section 1: left-top zone icons */}
+      <RailSection zoneId="left-top" />
+
+      {/* Divider between top and mid */}
+      <div className="w-5 h-px bg-mf-divider my-2" />
+
+      {/* Section 2: left-bottom zone icons */}
+      <RailSection zoneId="left-bottom" />
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Section 3: bottom-left zone icons */}
+      <RailSection zoneId="bottom-left" />
+
+      {/* Fixed utilities separator */}
+      <div className="w-5 h-px bg-mf-divider my-2" />
+
+      {/* Fullview plugin icons */}
+      {fullviewContributions.map((c) => (
         <RailButton
-          active={activeLeftPanelId === null && !activeFullviewId && !panelCollapsed.left}
-          onClick={handleSessionsClick}
-          title="Sessions"
+          key={c.pluginId}
+          active={activeFullviewId === c.pluginId}
+          onClick={() => usePluginLayoutStore.getState().activateFullview(c.pluginId)}
+          title={c.label}
         >
-          <MessageSquare size={16} />
+          {c.icon ? <PluginIcon name={c.icon} size={16} /> : <span className="text-xs">{c.label[0]}</span>}
         </RailButton>
+      ))}
 
-        {/* Left-panel plugin icons */}
-        {contributions.map((c) => (
-          <RailButton
-            key={c.pluginId}
-            active={activeLeftPanelId === c.pluginId && !panelCollapsed.left}
-            onClick={() => handlePluginClick(c.pluginId)}
-            title={c.label}
-          >
-            {c.icon ? (
-              <PluginIcon name={c.icon} size={16} />
-            ) : (
-              <span className="text-mf-text-secondary">{c.label.charAt(0)}</span>
-            )}
-          </RailButton>
-        ))}
-      </div>
-
-      {/* Bottom actions */}
-      <div className="flex flex-col gap-2 pt-2">
-        {/* Logs toggle button */}
-        <RailButton
-          active={panelVisible && bottomPanelMode === 'preview' && !activeFullviewId}
-          onClick={() => {
-            if (activeFullviewId) {
-              usePluginLayoutStore.getState().activateFullview(activeFullviewId);
-              setBottomPanelMode('preview');
-              setPanelVisible(true);
-              if (useUIStore.getState().panelCollapsed.bottom) {
-                togglePanel('bottom');
-              }
-              return;
-            }
-            const isPreviewActive = panelVisible && bottomPanelMode === 'preview';
-            if (isPreviewActive) {
-              setPanelVisible(false);
-              return;
-            }
-            setBottomPanelMode('preview');
-            setPanelVisible(true);
-            if (useUIStore.getState().panelCollapsed.bottom) {
-              togglePanel('bottom');
-            }
-          }}
-          title="Toggle logs panel"
-        >
-          <span data-testid="toggle-logs-panel">
-            <Play size={16} />
-          </span>
-        </RailButton>
-
-        <RailButton
-          active={panelVisible && bottomPanelMode === 'terminal' && !activeFullviewId}
-          onClick={() => {
-            if (activeFullviewId) {
-              usePluginLayoutStore.getState().activateFullview(activeFullviewId);
-            }
-            const isTerminalActive = panelVisible && bottomPanelMode === 'terminal';
-            if (isTerminalActive) {
-              setPanelVisible(false);
-              return;
-            }
-            setBottomPanelMode('terminal');
-            setPanelVisible(true);
-            if (useUIStore.getState().panelCollapsed.bottom) {
-              togglePanel('bottom');
-            }
-          }}
-          title="Toggle terminal"
-        >
-          <TerminalSquare size={16} />
-        </RailButton>
-
-        <div className="w-5 h-px bg-mf-divider mx-auto" />
-
-        {/* Fullview plugin icons */}
-        {fullviewContributions.map((c) => (
-          <RailButton
-            key={c.pluginId}
-            active={activeFullviewId === c.pluginId}
-            onClick={() => handleFullviewClick(c.pluginId)}
-            title={c.label}
-          >
-            {c.icon ? (
-              <PluginIcon name={c.icon} size={16} />
-            ) : (
-              <span className="text-mf-text-secondary">{c.label.charAt(0)}</span>
-            )}
-          </RailButton>
-        ))}
-
-        <RailButton onClick={() => useSettingsStore.getState().open()} title="Settings">
-          <Settings size={16} />
-        </RailButton>
-        <RailButton onClick={() => useSettingsStore.getState().open(undefined, 'about')} title="Help">
-          <HelpCircle size={16} />
-        </RailButton>
-      </div>
+      {/* Fixed utility buttons — not part of zone system */}
+      <RailButton onClick={() => {}} title="Todos">
+        <ListChecks size={16} />
+      </RailButton>
+      <RailButton onClick={() => useSettingsStore.getState().open()} title="Settings">
+        <Settings size={16} />
+      </RailButton>
+      <RailButton onClick={() => useSettingsStore.getState().open(undefined, 'about')} title="Help">
+        <HelpCircle size={16} />
+      </RailButton>
     </div>
   );
 }
