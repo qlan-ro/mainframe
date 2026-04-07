@@ -22,7 +22,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:playwright": "playwright test -c playwright-ct.config.ts",
-    "package": "electron-builder",
+    "package": "electron-rebuild -o node-pty && electron-builder",
     "postinstall": "node scripts/fix-pty-permissions.mjs"
   },
   "dependencies": {
@@ -56,6 +56,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
     "@playwright/experimental-ct-react": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
