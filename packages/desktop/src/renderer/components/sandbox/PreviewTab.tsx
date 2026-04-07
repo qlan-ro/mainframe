@@ -21,6 +21,7 @@ import { useActiveProjectId, getActiveProjectId } from '../../hooks/useActivePro
 import { useLaunchScopeKey } from '../../hooks/useLaunchScopeKey.js';
 import { useUIStore } from '../../store/ui';
 import { daemonClient } from '../../lib/client';
+import { getDefaultModelForAdapter } from '../../lib/adapters';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 
 // CSS selector generator — injected into the webview page
@@ -281,7 +282,7 @@ export function PreviewTab(): React.ReactElement {
 
       if (!useChatsStore.getState().activeChatId) {
         const projectId = getActiveProjectId();
-        if (projectId) daemonClient.createChat(projectId, 'claude');
+        if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
       }
     } catch (err) {
       console.warn('[sandbox] full screenshot failed', err);
@@ -321,7 +322,7 @@ export function PreviewTab(): React.ReactElement {
       // Auto-create a chat session if none is active so the composer appears
       if (!useChatsStore.getState().activeChatId) {
         const projectId = getActiveProjectId();
-        if (projectId) daemonClient.createChat(projectId, 'claude');
+        if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
       }
     } catch (err) {
       console.warn('[sandbox] inspect failed', err);

@@ -113,6 +113,7 @@ export interface SessionSink {
   onPlanFile(filePath: string): void;
   onSkillFile(entry: import('./context.js').SkillFileEntry): void;
   onQueuedProcessed(uuid: string): void;
+  onTodoUpdate(todos: import('./chat.js').TodoItem[]): void;
 }
 
 export interface AdapterSession {
@@ -152,6 +153,9 @@ export interface AdapterModel {
   id: string;
   label: string;
   contextWindow?: number;
+  supportsEffort?: boolean;
+  supportsFastMode?: boolean;
+  supportsAutoMode?: boolean;
 }
 
 export interface ExternalSession {
@@ -174,6 +178,7 @@ export interface Adapter {
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
   listModels(): Promise<AdapterModel[]>;
+  probeModels?(): Promise<AdapterModel[] | null>;
 
   createSession(options: SessionOptions): AdapterSession;
   killAll(): void;

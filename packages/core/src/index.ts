@@ -119,6 +119,13 @@ async function main(): Promise<void> {
   await server.start(config.port);
   broadcastEvent = (event) => server.broadcastEvent(event);
 
+  // Probe adapters for dynamic model lists (non-blocking)
+  adapters
+    .probeAllModels((event) => broadcastEvent(event))
+    .catch((err) => {
+      logger.warn({ err }, 'Model probe failed');
+    });
+
   // Non-blocking: backfill worktree parent relationships for existing projects.
   // Failure here must not prevent the daemon from serving requests.
   backfillWorktreeRelationships(db.projects).catch((err) => {

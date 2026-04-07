@@ -1,4 +1,4 @@
-import type { Adapter, AdapterInfo } from '@qlan-ro/mainframe-types';
+import type { Adapter, AdapterInfo, AdapterModel, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 export class AdapterRegistry {
   private adapters = new Map<string, Adapter>();
@@ -19,6 +19,21 @@ export class AdapterRegistry {
     for (const adapter of this.adapters.values()) {
       adapter.killAll();
     }
+  }
+
+  async probeAllModels(emitEvent: (event: DaemonEvent) => void): Promise<void> {
+    const probes = [...this.adapters.values()]
+      .filter(
+        (a): a is Adapter & { probeModels(): Promise<AdapterModel[] | null> } =>
+          typeof (a as any).probeModels === 'function',
+      )
+      .map(async (adapter) => {
+        const models = await adapter.probeModels();
+        if (models) {
+          emitEvent({ type: 'adapter.models.updated', adapterId: adapter.id, models });
+        }
+      });
+    await Promise.allSettled(probes);
   }
 
   async list(): Promise<AdapterInfo[]> {

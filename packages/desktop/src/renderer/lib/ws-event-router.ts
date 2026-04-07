@@ -4,6 +4,7 @@ import { useTabsStore } from '../store/tabs';
 import { useProjectsStore } from '../store/projects';
 import { usePluginLayoutStore } from '../store/plugins';
 import { useSandboxStore } from '../store/sandbox';
+import { useAdaptersStore } from '../store/adapters';
 import { createLogger } from './logger';
 import { buildLaunchScope } from './launch-scope.js';
 import { notify } from './notify';
@@ -143,6 +144,10 @@ export function routeEvent(event: DaemonEvent): void {
         maxTokens: event.maxTokens,
       });
       break;
+    case 'todos.updated':
+      log.debug('event:todos.updated', { chatId: event.chatId, count: event.todos.length });
+      chats.setTodos(event.chatId, event.todos);
+      break;
     case 'sessions.external.count':
       break;
     case 'plugin.notification':
@@ -185,6 +190,10 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'message.queued.cleared':
       chats.clearQueuedMessages(event.chatId);
+      break;
+    case 'adapter.models.updated':
+      log.info('event:adapter.models.updated', { adapterId: event.adapterId, count: event.models.length });
+      useAdaptersStore.getState().updateAdapterModels(event.adapterId, event.models);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });

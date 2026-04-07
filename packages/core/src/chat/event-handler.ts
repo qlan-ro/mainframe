@@ -337,6 +337,13 @@ function buildSessionSink(
       }
     },
 
+    onTodoUpdate(todos: import('@qlan-ro/mainframe-types').TodoItem[]) {
+      db.chats.updateTodos(chatId, todos);
+      const active = getActiveChat(chatId);
+      if (active) active.chat.todos = todos;
+      emitEvent({ type: 'todos.updated', chatId, todos });
+    },
+
     onError(error: Error) {
       emitEvent({ type: 'error', chatId, error: error.message });
     },
