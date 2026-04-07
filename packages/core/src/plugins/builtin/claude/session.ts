@@ -128,7 +128,7 @@ export class ClaudeSession implements AdapterSession {
       'stdio',
     ];
 
-    if (options.systemPrompt !== 'disabled') {
+    if (options.systemPrompt === 'enabled') {
       args.push('--append-system-prompt', MAINFRAME_SYSTEM_PROMPT_APPEND);
     }
 

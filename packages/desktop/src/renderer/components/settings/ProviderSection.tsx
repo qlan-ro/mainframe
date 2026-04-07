@@ -69,8 +69,8 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
       <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
         <input
           type="checkbox"
-          checked={config.systemPrompt !== 'disabled'}
-          onChange={(e) => update({ systemPrompt: e.target.checked ? undefined : 'disabled' })}
+          checked={config.systemPrompt === 'enabled'}
+          onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : undefined })}
           className="mt-0.5 accent-mf-accent"
         />
         <div>
