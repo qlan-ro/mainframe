@@ -65,6 +65,22 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
         </div>
       )}
 
+      {/* System Prompt */}
+      <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
+        <input
+          type="checkbox"
+          checked={config.systemPrompt === 'enabled'}
+          onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : '' })}
+          className="mt-0.5 accent-mf-accent"
+        />
+        <div>
+          <span className="text-mf-small text-mf-text-primary">Enforce AskUserQuestion for agent questions</span>
+          <p className="text-mf-status text-mf-text-secondary">
+            Instructs the agent to use the interactive AskUserQuestion tool instead of asking in plain text.
+          </p>
+        </div>
+      </label>
+
       {/* Default Model */}
       <ModelDropdown
         value={config.defaultModel ?? ''}

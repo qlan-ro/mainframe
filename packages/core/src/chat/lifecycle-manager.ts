@@ -372,8 +372,9 @@ export class ChatLifecycleManager {
     const sink = this.deps.buildSink(chatId, (response) => session.respondToPermission(response));
 
     const executablePath = this.deps.db.settings.get('provider', `${chat.adapterId}.executablePath`) ?? undefined;
+    const systemPrompt = this.deps.db.settings.get('provider', `${chat.adapterId}.systemPrompt`) ?? undefined;
     const processInfo = await session.spawn(
-      { model: chat.model, permissionMode: chat.permissionMode, executablePath },
+      { model: chat.model, permissionMode: chat.permissionMode, executablePath, systemPrompt },
       sink,
     );
     log.info({ chatId }, 'chat session started');

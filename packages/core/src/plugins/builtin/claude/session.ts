@@ -17,6 +17,7 @@ import type {
   SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
 import { handleStdout, handleStderr } from './events.js';
+import { MAINFRAME_SYSTEM_PROMPT_APPEND } from './constants.js';
 import { createChildLogger } from '../../../logger.js';
 import {
   loadHistory as loadHistoryFromDisk,
@@ -127,6 +128,10 @@ export class ClaudeSession implements AdapterSession {
       '--permission-prompt-tool',
       'stdio',
     ];
+
+    if (options.systemPrompt === 'enabled') {
+      args.push('--append-system-prompt', MAINFRAME_SYSTEM_PROMPT_APPEND);
+    }
 
     if (this.resumeSessionId) args.push('--resume', this.resumeSessionId);
     if (options.model) args.push('--model', options.model);
