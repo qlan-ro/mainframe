@@ -4,6 +4,7 @@ export interface ProviderConfig {
   defaultModel?: string;
   defaultMode?: 'default' | 'acceptEdits' | 'yolo' | 'plan';
   executablePath?: string;
+  systemPrompt?: string;
 }
 
 export interface GeneralConfig {

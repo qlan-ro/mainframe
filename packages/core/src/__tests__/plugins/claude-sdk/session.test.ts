@@ -159,4 +159,31 @@ describe('ClaudeSdkSession', () => {
     const callArgs = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(callArgs.options.resume).toBe('existing-session');
   });
+
+  it('omits appendSystemPrompt by default', async () => {
+    const mockGen = createMockQuery([]);
+    (mockQuery as ReturnType<typeof vi.fn>).mockReturnValue(mockGen);
+
+    const session = new ClaudeSdkSession({ projectPath: '/tmp/test' });
+    const sink = createMockSink();
+    await session.spawn({}, sink);
+    await session.sendMessage('Hello');
+
+    const callArgs = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArgs.options.appendSystemPrompt).toBeUndefined();
+  });
+
+  it('passes appendSystemPrompt when systemPrompt is enabled', async () => {
+    const { MAINFRAME_SYSTEM_PROMPT_APPEND } = await import('../../../plugins/builtin/claude/constants.js');
+    const mockGen = createMockQuery([]);
+    (mockQuery as ReturnType<typeof vi.fn>).mockReturnValue(mockGen);
+
+    const session = new ClaudeSdkSession({ projectPath: '/tmp/test' });
+    const sink = createMockSink();
+    await session.spawn({ systemPrompt: 'enabled' }, sink);
+    await session.sendMessage('Hello');
+
+    const callArgs = (mockQuery as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArgs.options.appendSystemPrompt).toBe(MAINFRAME_SYSTEM_PROMPT_APPEND);
+  });
 });
