@@ -9,3 +9,5 @@ export { useTutorialStore } from './tutorial';
 export { usePluginLayoutStore } from './plugins';
 export { useSandboxStore } from './sandbox';
 export type { Capture } from './sandbox';
+export { useTerminalStore } from './terminal';
+export type { TerminalTab } from './terminal';
