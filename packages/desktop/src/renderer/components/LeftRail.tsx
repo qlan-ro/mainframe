@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, HelpCircle, MessageSquare, Play } from 'lucide-react';
+import { Settings, HelpCircle, MessageSquare, Play, TerminalSquare } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { usePluginLayoutStore, useSettingsStore, useUIStore } from '../store';
@@ -41,6 +41,8 @@ export function LeftRail(): React.ReactElement {
   const panelVisible = useUIStore((s) => s.panelVisible);
   const setPanelVisible = useUIStore((s) => s.setPanelVisible);
   const togglePanel = useUIStore((s) => s.togglePanel);
+  const bottomPanelMode = useUIStore((s) => s.bottomPanelMode);
+  const setBottomPanelMode = useUIStore((s) => s.setBottomPanelMode);
 
   const panelCollapsed = useUIStore((s) => s.panelCollapsed);
 
@@ -101,19 +103,25 @@ export function LeftRail(): React.ReactElement {
       <div className="flex flex-col gap-2 pt-2">
         {/* Logs toggle button */}
         <RailButton
-          active={panelVisible && !activeFullviewId}
+          active={panelVisible && bottomPanelMode === 'preview' && !activeFullviewId}
           onClick={() => {
             if (activeFullviewId) {
               usePluginLayoutStore.getState().activateFullview(activeFullviewId);
+              setBottomPanelMode('preview');
               setPanelVisible(true);
               if (useUIStore.getState().panelCollapsed.bottom) {
                 togglePanel('bottom');
               }
               return;
             }
-            const next = !panelVisible;
-            setPanelVisible(next);
-            if (next && useUIStore.getState().panelCollapsed.bottom) {
+            const isPreviewActive = panelVisible && bottomPanelMode === 'preview';
+            if (isPreviewActive) {
+              setPanelVisible(false);
+              return;
+            }
+            setBottomPanelMode('preview');
+            setPanelVisible(true);
+            if (useUIStore.getState().panelCollapsed.bottom) {
               togglePanel('bottom');
             }
           }}
@@ -122,6 +130,28 @@ export function LeftRail(): React.ReactElement {
           <span data-testid="toggle-logs-panel">
             <Play size={16} />
           </span>
+        </RailButton>
+
+        <RailButton
+          active={panelVisible && bottomPanelMode === 'terminal' && !activeFullviewId}
+          onClick={() => {
+            if (activeFullviewId) {
+              usePluginLayoutStore.getState().activateFullview(activeFullviewId);
+            }
+            const isTerminalActive = panelVisible && bottomPanelMode === 'terminal';
+            if (isTerminalActive) {
+              setPanelVisible(false);
+              return;
+            }
+            setBottomPanelMode('terminal');
+            setPanelVisible(true);
+            if (useUIStore.getState().panelCollapsed.bottom) {
+              togglePanel('bottom');
+            }
+          }}
+          title="Toggle terminal"
+        >
+          <TerminalSquare size={16} />
         </RailButton>
 
         <div className="w-5 h-px bg-mf-divider mx-auto" />

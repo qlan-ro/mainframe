@@ -9,12 +9,14 @@ interface UIState {
   panelVisible: boolean;
   leftPanelTab: 'files' | 'chats' | 'context';
   rightPanelTab: 'diff' | 'preview' | 'info';
+  bottomPanelMode: 'preview' | 'terminal';
 
   setPanelSize: (id: PanelId, size: number) => void;
   togglePanel: (id: PanelId) => void;
   setPanelVisible: (visible: boolean) => void;
   setLeftPanelTab: (tab: UIState['leftPanelTab']) => void;
   setRightPanelTab: (tab: UIState['rightPanelTab']) => void;
+  setBottomPanelMode: (mode: UIState['bottomPanelMode']) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -25,6 +27,7 @@ export const useUIStore = create<UIState>()(
       panelVisible: false,
       leftPanelTab: 'chats',
       rightPanelTab: 'diff',
+      bottomPanelMode: 'preview',
 
       setPanelSize: (id, size) =>
         set((state) => ({
@@ -40,6 +43,7 @@ export const useUIStore = create<UIState>()(
         })),
       setLeftPanelTab: (tab) => set({ leftPanelTab: tab }),
       setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
+      setBottomPanelMode: (mode) => set({ bottomPanelMode: mode }),
     }),
     { name: 'mainframe-ui' },
   ),
