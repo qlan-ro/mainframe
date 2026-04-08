@@ -55,19 +55,26 @@ export function TerminalInstance({ terminalId, visible }: TerminalInstanceProps)
       window.mainframe.terminal.resize(terminalId, cols, rows);
     });
 
-    // ResizeObserver for auto-fit
-    const observer = new ResizeObserver(() => {
-      if (fitAddonRef.current) {
+    // ResizeObserver for auto-fit — debounced via RAF, guarded against hidden state
+    let rafId: number | undefined;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry || !fitAddonRef.current) return;
+      const { width, height } = entry.contentRect;
+      if (width === 0 || height === 0) return; // container hidden or collapsed
+      if (rafId != null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
         try {
-          fitAddonRef.current.fit();
+          fitAddonRef.current?.fit();
         } catch {
-          /* container not visible */
+          /* container transitioning — fit will be retried on next resize */
         }
-      }
+      });
     });
     observer.observe(containerRef.current);
 
     return () => {
+      if (rafId != null) cancelAnimationFrame(rafId);
       observer.disconnect();
       onDataDisposable.dispose();
       onResizeDisposable.dispose();
@@ -81,13 +88,15 @@ export function TerminalInstance({ terminalId, visible }: TerminalInstanceProps)
   // Re-fit when visibility changes (tab switch)
   useEffect(() => {
     if (visible && fitAddonRef.current) {
-      // Delay fit to next frame so the DOM has the correct dimensions
+      // Double RAF ensures layout has fully settled after visibility change
       const frame = requestAnimationFrame(() => {
-        try {
-          fitAddonRef.current?.fit();
-        } catch {
-          /* not ready */
-        }
+        requestAnimationFrame(() => {
+          try {
+            fitAddonRef.current?.fit();
+          } catch {
+            /* layout not ready — ResizeObserver will retry on next resize */
+          }
+        });
       });
       return () => cancelAnimationFrame(frame);
     }
