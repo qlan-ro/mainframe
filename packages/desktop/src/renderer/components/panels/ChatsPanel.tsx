@@ -14,6 +14,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
 import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
+import { pinChat } from '../../lib/api';
 import { ProjectGroup } from './ProjectGroup';
 import { FlatSessionRow } from './FlatSessionRow';
 import { ImportSessionsPopover } from './ImportSessionsPopover';
@@ -249,7 +250,12 @@ export function ChatsPanel(): React.ReactElement {
   const groups = useMemo(() => buildGroups(projects, chats), [projects, chats]);
   const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   const flatChats = useMemo(
-    () => [...chats].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    () =>
+      [...chats].sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }),
     [chats],
   );
 
@@ -305,37 +311,51 @@ export function ChatsPanel(): React.ReactElement {
     renameCallbacks.current.delete(chatId);
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => {
-    e.preventDefault();
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      items: [
-        ...(chatId
-          ? [
-              {
-                label: 'Rename',
-                onClick: () => {
-                  renameCallbacks.current.get(chatId)?.();
+  const updateChat = useChatsStore((s) => s.updateChat);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => {
+      e.preventDefault();
+      const chat = chatId ? chats.find((c) => c.id === chatId) : undefined;
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          ...(chat
+            ? [
+                {
+                  label: 'Rename',
+                  onClick: () => {
+                    renameCallbacks.current.get(chat.id)?.();
+                  },
                 },
-              },
-            ]
-          : []),
-        ...(sessionId
-          ? [
-              {
-                label: 'Copy Session ID',
-                onClick: () => {
-                  navigator.clipboard.writeText(sessionId).catch((err) => {
-                    log.warn('failed to copy session id', { err: String(err) });
-                  });
+                {
+                  label: chat.pinned ? 'Unpin' : 'Pin',
+                  onClick: () => {
+                    const newPinned = !chat.pinned;
+                    updateChat({ ...chat, pinned: newPinned });
+                    pinChat(chat.id, newPinned).catch((err) => log.warn('pin failed', { err: String(err) }));
+                  },
                 },
-              },
-            ]
-          : []),
-      ],
-    });
-  }, []);
+              ]
+            : []),
+          ...(sessionId
+            ? [
+                {
+                  label: 'Copy Session ID',
+                  onClick: () => {
+                    navigator.clipboard.writeText(sessionId).catch((err) => {
+                      log.warn('failed to copy session id', { err: String(err) });
+                    });
+                  },
+                },
+              ]
+            : []),
+        ],
+      });
+    },
+    [chats, updateChat],
+  );
 
   const handleAddProject = useCallback(
     async (path: string) => {

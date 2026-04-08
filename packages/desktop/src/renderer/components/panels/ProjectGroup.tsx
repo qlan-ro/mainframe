@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Archive, Pencil, ChevronDown, ChevronRight, Bot, GitBranch, Clock, Loader2 } from 'lucide-react';
+import { Plus, Archive, Pencil, ChevronDown, ChevronRight, Bot, GitBranch, Clock, Loader2, Pin } from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
 import type { SessionStatus } from '../../store/chats';
 import { useChatsStore } from '../../store';
@@ -155,21 +155,24 @@ function ChatRow({
                 className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
               />
             ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
-                    className={cn(
-                      'text-mf-small truncate',
-                      isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                      isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
-                    )}
-                    tabIndex={0}
-                  >
-                    {chat.title || 'Untitled session'}
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>{chat.title || 'Untitled session'}</TooltipContent>
-              </Tooltip>
+              <div className="flex items-center gap-1 min-w-0">
+                {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={cn(
+                        'text-mf-small truncate',
+                        isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                        isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
+                      )}
+                      tabIndex={0}
+                    >
+                      {chat.title || 'Untitled session'}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{chat.title || 'Untitled session'}</TooltipContent>
+                </Tooltip>
+              </div>
             )}
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
               <Bot size={10} className="shrink-0" />

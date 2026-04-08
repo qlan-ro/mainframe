@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, FolderOpen, GitBranch, Clock, Loader2, Pencil } from 'lucide-react';
+import { Archive, FolderOpen, GitBranch, Clock, Loader2, Pencil, Pin } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
@@ -171,14 +171,17 @@ export function FlatSessionRow({
                 className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
               />
             ) : (
-              <div
-                className={cn(
-                  'text-mf-small truncate',
-                  isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                  isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
-                )}
-              >
-                {chat.title || 'Untitled session'}
+              <div className="flex items-center gap-1 min-w-0">
+                {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
+                <div
+                  className={cn(
+                    'text-mf-small truncate',
+                    isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                    isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
+                  )}
+                >
+                  {chat.title || 'Untitled session'}
+                </div>
               </div>
             )}
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
