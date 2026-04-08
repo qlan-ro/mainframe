@@ -148,6 +148,10 @@ export function routeEvent(event: DaemonEvent): void {
       log.debug('event:todos.updated', { chatId: event.chatId, count: event.todos.length });
       chats.setTodos(event.chatId, event.todos);
       break;
+    case 'chat.prDetected':
+      log.info('event:chat.prDetected', { chatId: event.chatId, prNumber: event.pr.number, repo: event.pr.repo });
+      chats.addDetectedPr(event.chatId, event.pr);
+      break;
     case 'sessions.external.count':
       break;
     case 'plugin.notification':

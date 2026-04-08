@@ -12,6 +12,18 @@ import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('claude:events');
 
+export const PR_URL_REGEX = /https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/;
+
+export function parsePrUrl(text: string): { url: string; owner: string; repo: string; number: number } | null {
+  const match = PR_URL_REGEX.exec(text);
+  if (!match) return null;
+  const owner = match[1];
+  const repo = match[2];
+  const number = parseInt(match[3]!, 10);
+  if (!owner || !repo || isNaN(number)) return null;
+  return { url: match[0], owner, repo, number };
+}
+
 export function handleStdout(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
   session.state.buffer += chunk.toString();
   const lines = session.state.buffer.split('\n');
@@ -138,6 +150,10 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       const planMatch = text.match(/Your plan has been saved to: (\/\S+\.md)/);
       if (planMatch?.[1]) {
         sink.onPlanFile(planMatch[1].trim());
+      }
+      const pr = parsePrUrl(text);
+      if (pr) {
+        sink.onPrDetected(pr);
       }
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';

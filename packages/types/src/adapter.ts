@@ -115,6 +115,7 @@ export interface SessionSink {
   onSkillFile(entry: import('./context.js').SkillFileEntry): void;
   onQueuedProcessed(uuid: string): void;
   onTodoUpdate(todos: import('./chat.js').TodoItem[]): void;
+  onPrDetected(pr: { url: string; owner: string; repo: string; number: number }): void;
 }
 
 export interface AdapterSession {

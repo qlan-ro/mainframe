@@ -16,6 +16,13 @@ export interface ContextUsageState {
   maxTokens: number;
 }
 
+export interface DetectedPr {
+  url: string;
+  owner: string;
+  repo: string;
+  number: number;
+}
+
 interface ChatsState {
   chats: Chat[];
   activeChatId: string | null;
@@ -28,6 +35,7 @@ interface ChatsState {
   contextUsage: Map<string, ContextUsageState>;
   unreadChatIds: Set<string>;
   todos: Map<string, TodoItem[]>;
+  detectedPrs: Map<string, DetectedPr[]>;
 
   markUnread: (chatId: string) => void;
   clearUnread: (chatId: string) => void;
@@ -51,6 +59,7 @@ interface ChatsState {
   setCompacting: (chatId: string, compacting: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
   setTodos: (chatId: string, todos: TodoItem[]) => void;
+  addDetectedPr: (chatId: string, pr: DetectedPr) => void;
 }
 
 export const useChatsStore = create<ChatsState>((set) => ({
@@ -65,6 +74,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   contextUsage: new Map(),
   unreadChatIds: new Set(),
   todos: new Map(),
+  detectedPrs: new Map(),
 
   markUnread: (chatId) =>
     set((state) => {
@@ -241,5 +251,15 @@ export const useChatsStore = create<ChatsState>((set) => ({
       const next = new Map(state.todos);
       next.set(chatId, todos);
       return { todos: next };
+    }),
+  addDetectedPr: (chatId, pr) =>
+    set((state) => {
+      const next = new Map(state.detectedPrs);
+      const existing = next.get(chatId) ?? [];
+      // Deduplicate by PR number within the same repo
+      const isDuplicate = existing.some((p) => p.owner === pr.owner && p.repo === pr.repo && p.number === pr.number);
+      if (isDuplicate) return state;
+      next.set(chatId, [...existing, pr]);
+      return { detectedPrs: next };
     }),
 }));

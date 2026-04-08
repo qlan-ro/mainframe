@@ -42,6 +42,7 @@ const nullSink: SessionSink = {
   onSkillFile: () => {},
   onQueuedProcessed: () => {},
   onTodoUpdate: () => {},
+  onPrDetected: () => {},
 };
 
 export interface ClaudeSessionState {

@@ -11,6 +11,7 @@ const execFileAsync = promisify(execFileCb);
 import { createChildLogger } from '../logger.js';
 import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
+import { parsePrUrl } from '../plugins/builtin/claude/events.js';
 import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
@@ -326,6 +327,23 @@ export class ChatLifecycleManager {
             // Skip command/skill injections — they contain example @-patterns
             if (/<mainframe-command|<command-name>/.test(text)) continue;
             extractMentionsFromText(chatId, text, this.deps.db);
+          }
+        }
+
+        // Scan tool_result blocks in history for PR URLs so old sessions
+        // also display the PR badge after a daemon restart.
+        const seenPrs = new Set<string>();
+        for (const msg of cached) {
+          if (msg.type !== 'tool_result') continue;
+          for (const block of msg.content) {
+            if (block.type !== 'tool_result') continue;
+            const text = typeof block.content === 'string' ? block.content : '';
+            const pr = parsePrUrl(text);
+            if (!pr) continue;
+            const key = `${pr.owner}/${pr.repo}/${pr.number}`;
+            if (seenPrs.has(key)) continue;
+            seenPrs.add(key);
+            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr });
           }
         }
       }
