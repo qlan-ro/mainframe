@@ -13,6 +13,7 @@ if (process.env.NODE_ENV === 'development') {
 }
 import { createMainLogger, logFromRenderer } from './logger.js';
 import { setupTerminalIPC, killAllTerminals } from './terminal-manager.js';
+import { initAutoUpdater } from './auto-updater.js';
 
 const log = createMainLogger('electron');
 
@@ -258,6 +259,8 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+
+  if (mainWindow) initAutoUpdater(mainWindow);
 
   const configuredPartitions = new Set<string>();
   app.on('web-contents-created', (_event, contents) => {

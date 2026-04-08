@@ -1,4 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { UpdateStatus } from '../main/auto-updater.js';
+
+export type { UpdateStatus };
+
+export interface UpdateAPI {
+  onStatus: (callback: (status: UpdateStatus) => void) => () => void;
+  check: () => Promise<unknown>;
+  download: () => Promise<unknown>;
+  install: () => void;
+}
 
 export interface TerminalAPI {
   create: (options: { cwd: string }) => Promise<{ id: string }>;
@@ -24,6 +34,7 @@ export interface MainframeAPI {
   showNotification: (title: string, body?: string) => Promise<void>;
   log: (level: string, module: string, message: string, data?: unknown) => void;
   terminal: TerminalAPI;
+  updates: UpdateAPI;
 }
 
 const api: MainframeAPI = {
@@ -59,6 +70,22 @@ const api: MainframeAPI = {
       return () => {
         ipcRenderer.removeListener('terminal:exit', handler);
       };
+    },
+  },
+  updates: {
+    onStatus: (callback: (status: UpdateStatus) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: UpdateStatus): void => callback(status);
+      ipcRenderer.on('update-status', handler);
+      return () => {
+        ipcRenderer.removeListener('update-status', handler);
+      };
+    },
+    check: () => ipcRenderer.invoke('update:check'),
+    download: () => ipcRenderer.invoke('update:download'),
+    install: () => {
+      ipcRenderer.invoke('update:install').catch((err: unknown) => {
+        console.warn('[updates] install invoke failed', err);
+      });
     },
   },
 };
