@@ -17,6 +17,7 @@ function createMockContext(): RouteContext {
       listAllChats: vi.fn(),
       archiveChat: vi.fn(),
       getMessages: vi.fn(),
+      getMessagesFromDisk: vi.fn(),
       getDisplayMessages: vi.fn(),
       getPendingPermission: vi.fn(),
       on: vi.fn(),
@@ -205,7 +206,7 @@ describe('chatRoutes', () => {
           timestamp: new Date().toISOString(),
         },
       ];
-      (ctx.chats.getMessages as any).mockResolvedValue(messages);
+      (ctx.chats.getMessagesFromDisk as any).mockResolvedValue(messages);
 
       const router = chatRoutes(ctx);
       const handler = extractHandler(router, 'get', '/api/chats/:id/session-diffs');
@@ -214,7 +215,7 @@ describe('chatRoutes', () => {
       handler({ params: { id: 'c1' }, query: {} }, res, vi.fn());
       await flushPromises();
 
-      expect(ctx.chats.getMessages).toHaveBeenCalledWith('c1');
+      expect(ctx.chats.getMessagesFromDisk).toHaveBeenCalledWith('c1');
       expect(res.json).toHaveBeenCalledWith({
         files: [{ filePath: 'src/index.ts', original: null, modified: 'content', status: 'added' }],
       });

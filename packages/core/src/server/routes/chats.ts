@@ -100,7 +100,9 @@ export function chatRoutes(ctx: RouteContext): Router {
     '/api/chats/:id/session-diffs',
     asyncHandler(async (req: Request, res: Response) => {
       const chatId = param(req, 'id');
-      const messages = await ctx.chats.getMessages(chatId);
+      // Load from disk to include subagent file changes not present in the
+      // in-memory cache during an active session.
+      const messages = await ctx.chats.getMessagesFromDisk(chatId);
       const files = extractSessionDiffs(messages);
       res.json({ files });
     }),

@@ -470,6 +470,31 @@ export class ChatManager {
     }
   }
 
+  /** Load messages from disk, bypassing the in-memory cache.
+   * Used by the session-diffs route to include subagent file changes. */
+  async getMessagesFromDisk(chatId: string): Promise<ChatMessage[]> {
+    const chat = this.getChat(chatId);
+    if (!chat?.claudeSessionId) return [];
+
+    const adapter = this.adapters.get(chat.adapterId);
+    if (!adapter) return [];
+
+    const project = this.db.projects.get(chat.projectId);
+    if (!project) return [];
+
+    try {
+      const session = adapter.createSession({
+        projectPath: chat.worktreePath ?? project.path,
+        chatId: chat.claudeSessionId,
+      });
+      const history = await session.loadHistory();
+      return history.map((msg) => ({ ...msg, chatId }));
+    } catch (err) {
+      logger.warn({ err, chatId }, 'getMessagesFromDisk failed');
+      return [];
+    }
+  }
+
   async getDisplayMessages(chatId: string): Promise<DisplayMessage[]> {
     const raw = await this.getMessages(chatId);
     const chat = this.getChat(chatId);

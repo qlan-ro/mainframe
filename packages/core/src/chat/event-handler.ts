@@ -84,6 +84,9 @@ function buildSessionSink(
   // Track tool_use id → file_path so onToolResult can emit context.updated
   // with the affected paths after the tool has executed.
   const pendingFilePaths = new Map<string, string>();
+  // Track subagent tool_use ids (Task/Agent) so onToolResult can emit
+  // context.updated when a subagent completes, triggering a diffs refresh.
+  const pendingSubagentIds = new Set<string>();
 
   return {
     onInit(sessionId: string) {
@@ -96,10 +99,14 @@ function buildSessionSink(
 
     onMessage(content: any[], metadata?: MessageMetadata) {
       log.debug({ chatId, blockCount: content.length }, 'assistant message received');
+      const categories = getToolCategories(chatId);
       for (const block of content) {
         if (block.type === 'tool_use' && (block.name === 'Write' || block.name === 'Edit')) {
           const fp = (block.input as Record<string, unknown>)?.file_path as string | undefined;
           if (fp) pendingFilePaths.set(block.id as string, fp);
+        }
+        if (block.type === 'tool_use' && categories?.subagent.has(block.name as string)) {
+          pendingSubagentIds.add(block.id as string);
         }
       }
       const hasEnterPlanMode = content.some((b: any) => b.type === 'tool_use' && b.name === 'EnterPlanMode');
@@ -133,12 +140,17 @@ function buildSessionSink(
 
     onToolResult(content: any[]) {
       const editedPaths: string[] = [];
+      let subagentCompleted = false;
       for (const block of content) {
         if (block.type !== 'tool_result' || block.isError) continue;
         const fp = pendingFilePaths.get(block.toolUseId);
         if (fp) {
           editedPaths.push(fp);
           pendingFilePaths.delete(block.toolUseId);
+        }
+        if (pendingSubagentIds.has(block.toolUseId)) {
+          pendingSubagentIds.delete(block.toolUseId);
+          subagentCompleted = true;
         }
       }
 
@@ -149,6 +161,10 @@ function buildSessionSink(
 
       if (editedPaths.length > 0) {
         emitEvent({ type: 'context.updated', chatId, filePaths: editedPaths });
+      } else if (subagentCompleted) {
+        // Subagents write files through their own JSONL files, not the parent stream.
+        // Emit context.updated so the frontend refreshes the session diffs from disk.
+        emitEvent({ type: 'context.updated', chatId });
       }
     },
 
