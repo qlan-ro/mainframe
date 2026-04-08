@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { getEditorViewStateForNav, getCursorPositionForNav } from '../components/editor/editor-state';
-import { useUIStore } from './ui';
+import { useLayoutStore } from './layout';
 import { useChatsStore } from './chats';
 
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
@@ -94,9 +94,9 @@ function currentEditorNavEntry(fv: FileView & { type: 'editor' }): NavEntry {
 }
 
 function expandRightPanel(): void {
-  const ui = useUIStore.getState();
-  if (ui.panelCollapsed.right) {
-    ui.togglePanel('right');
+  const layout = useLayoutStore.getState();
+  if (layout.collapsed.right) {
+    layout.toggleSide('right');
   }
 }
 

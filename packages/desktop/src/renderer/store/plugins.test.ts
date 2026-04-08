@@ -13,8 +13,6 @@ beforeEach(() => {
   usePluginLayoutStore.setState({
     contributions: [],
     activeFullviewId: null,
-    activeLeftPanelId: null,
-    activeRightPanelId: null,
   });
 });
 
@@ -52,34 +50,5 @@ describe('activateFullview / deactivateFullview', () => {
     usePluginLayoutStore.getState().activateFullview('todos');
     usePluginLayoutStore.getState().activateFullview('todos');
     expect(usePluginLayoutStore.getState().activeFullviewId).toBeNull();
-  });
-
-  it('deactivates fullview when left panel is activated', () => {
-    usePluginLayoutStore.getState().activateFullview('todos');
-    usePluginLayoutStore.getState().setActiveLeftPanel('myPlugin');
-    expect(usePluginLayoutStore.getState().activeFullviewId).toBeNull();
-    expect(usePluginLayoutStore.getState().activeLeftPanelId).toBe('myPlugin');
-  });
-
-  it('deactivates fullview when right panel is activated', () => {
-    usePluginLayoutStore.getState().activateFullview('todos');
-    usePluginLayoutStore.getState().setActiveRightPanel('right-plugin');
-    expect(usePluginLayoutStore.getState().activeFullviewId).toBeNull();
-    expect(usePluginLayoutStore.getState().activeRightPanelId).toBe('right-plugin');
-  });
-});
-
-describe('setActiveLeftPanel / setActiveRightPanel', () => {
-  it('sets null to restore default', () => {
-    usePluginLayoutStore.getState().setActiveLeftPanel('p1');
-    usePluginLayoutStore.getState().setActiveLeftPanel(null);
-    expect(usePluginLayoutStore.getState().activeLeftPanelId).toBeNull();
-  });
-
-  it('left and right are independent', () => {
-    usePluginLayoutStore.getState().setActiveLeftPanel('p1');
-    usePluginLayoutStore.getState().setActiveRightPanel('p2');
-    expect(usePluginLayoutStore.getState().activeLeftPanelId).toBe('p1');
-    expect(usePluginLayoutStore.getState().activeRightPanelId).toBe('p2');
   });
 });

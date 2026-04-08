@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { Plus, X, Minus } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { Plus } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { useTerminalStore } from '../../store/terminal';
-import { useProjectsStore, useUIStore } from '../../store';
+import { useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { TerminalInstance } from './TerminalInstance';
+import { useZoneHeaderTabs, useZoneHeaderActions } from '../zone/ZoneHeaderSlot.js';
+import type { InternalTab } from '../zone/ZoneHeaderSlot.js';
 
 export function TerminalPanel(): React.ReactElement {
   const terminals = useTerminalStore((s) => s.terminals);
@@ -13,8 +15,6 @@ export function TerminalPanel(): React.ReactElement {
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
   const setActiveTerminal = useTerminalStore((s) => s.setActiveTerminal);
-  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
-
   const activeProjectId = useActiveProjectId();
   const shellNameRef = useRef('zsh');
   const counterRef = useRef(0);
@@ -76,63 +76,42 @@ export function TerminalPanel(): React.ReactElement {
     }
   }, []);
 
+  // Register internal tabs with ZoneHeader
+  const internalTabs: InternalTab[] = useMemo(
+    () =>
+      terminals.map((t) => ({
+        id: t.id,
+        label: t.name,
+        onClose: () => closeTerminal(t.id),
+      })),
+    [terminals, closeTerminal],
+  );
+
+  const handleTabChange = useCallback((tabId: string) => setActiveTerminal(tabId), [setActiveTerminal]);
+
+  useZoneHeaderTabs(internalTabs, activeTerminalId, handleTabChange);
+
+  const headerActions = useMemo(
+    () => (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={() => void createTerminal()}
+            className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+          >
+            <Plus size={12} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">New terminal</TooltipContent>
+      </Tooltip>
+    ),
+    [createTerminal],
+  );
+
+  useZoneHeaderActions(headerActions);
+
   return (
     <div className="h-full flex flex-col" data-testid="terminal-panel">
-      {/* Tab bar */}
-      <div className="flex items-center justify-between shrink-0 border-b border-mf-divider">
-        <div className="flex items-center h-9 px-2 gap-0.5 overflow-x-auto">
-          {terminals.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setActiveTerminal(t.id)}
-              className={[
-                'group flex items-center gap-1.5 px-2.5 h-7 rounded text-mf-small transition-colors shrink-0',
-                t.id === activeTerminalId
-                  ? 'bg-mf-input-bg text-mf-text-primary'
-                  : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover',
-              ].join(' ')}
-            >
-              <span>{t.name}</span>
-              <span
-                role="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeTerminal(t.id);
-                }}
-                className="opacity-0 group-hover:opacity-100 hover:text-mf-destructive transition-opacity p-0.5"
-              >
-                <X size={12} />
-              </span>
-            </button>
-          ))}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => void createTerminal()}
-                className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-              >
-                <Plus size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">New terminal</TooltipContent>
-          </Tooltip>
-        </div>
-        <div className="flex items-center pr-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setPanelVisible(false)}
-                aria-label="Minimize"
-                className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-              >
-                <Minus size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Minimize</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
       {/* Terminal instances — all mounted, only active one visible */}
       <div className="flex-1 min-h-0 relative">
         {terminals.map((t) => (
