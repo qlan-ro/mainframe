@@ -66,4 +66,33 @@ describe('PushService', () => {
     service.unregisterDevice('device-1');
     expect(service.hasRegisteredDevices()).toBe(false);
   });
+
+  it('skips push when desktop is active', async () => {
+    service.registerDevice('device-1', 'ExponentPushToken[aaa]');
+    service.setDesktopActive(true);
+
+    await service.sendPush({
+      title: 'Test',
+      body: 'Test',
+      data: {},
+      priority: 'default',
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('sends push when desktop is idle', async () => {
+    service.registerDevice('device-1', 'ExponentPushToken[aaa]');
+    service.setDesktopActive(true);
+    service.setDesktopActive(false);
+
+    await service.sendPush({
+      title: 'Test',
+      body: 'Test',
+      data: {},
+      priority: 'default',
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });
