@@ -5,18 +5,16 @@ const log = createMainLogger('idle-reporter');
 
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 const IDLE_THRESHOLD_S = 5 * 60; // 5 minutes in seconds
+const DAEMON_HOST = process.env['DAEMON_HOST'] ?? '127.0.0.1';
 const DAEMON_PORT = process.env['DAEMON_PORT'] ?? '31415';
+const DAEMON_URL = `http://${DAEMON_HOST}:${DAEMON_PORT}`;
 
 let currentState: 'active' | 'idle' = 'active';
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-function getDaemonUrl(): string {
-  return `http://127.0.0.1:${DAEMON_PORT}`;
-}
-
 async function reportState(state: 'active' | 'idle'): Promise<void> {
   try {
-    await fetch(`${getDaemonUrl()}/api/device/activity`, {
+    await fetch(`${DAEMON_URL}/api/device/activity`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ state }),
