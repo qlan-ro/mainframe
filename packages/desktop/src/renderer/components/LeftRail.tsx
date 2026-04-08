@@ -5,7 +5,7 @@ import { PluginIcon } from './plugins/PluginIcon';
 import { RailButton, RailSection } from './zone/RailSection';
 
 export function LeftRail(): React.ReactElement {
-  const fullviewContributions = usePluginLayoutStore((s) => s.contributions).filter((c) => c.zone === 'fullview');
+  const fullviewContributions = usePluginLayoutStore((s) => s.contributions.filter((c) => c.zone === 'fullview'));
   const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
 
   return (
