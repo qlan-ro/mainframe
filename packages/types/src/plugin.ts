@@ -14,12 +14,16 @@ export type PluginCapability =
   | 'process:exec'
   | 'http:outbound';
 
-export type UIZone =
-  | 'fullview' // replaces Left + Center + Right; trigger in TitleBar
-  | 'left-panel' // replaces entire LeftPanel; trigger icon in Left Rail
-  | 'right-panel' // replaces entire RightPanel; trigger icon in Right Rail
-  | 'left-tab' // tab appended to LeftPanel tab strip
-  | 'right-tab'; // tab appended to RightPanel tab strip
+export type ZoneId = 'left-top' | 'left-bottom' | 'right-top' | 'right-bottom' | 'bottom-left' | 'bottom-right';
+
+export type UIZone = ZoneId | 'fullview';
+
+export interface ToolWindowManifest {
+  id: string;
+  label: string;
+  icon?: string;
+  defaultZone: ZoneId;
+}
 
 export interface PluginUIContribution {
   pluginId: string;
@@ -49,6 +53,7 @@ export interface PluginManifest {
     zone: UIZone;
     label: string; // tooltip for rail icons; tab text for tab zones
     icon?: string; // Lucide icon name; required for fullview/left-panel/right-panel
+    toolWindows?: ToolWindowManifest[];
   };
   /** Adapter plugins only */
   adapter?: {

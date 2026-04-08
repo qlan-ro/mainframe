@@ -17,6 +17,7 @@ import { getDefaultModelForAdapter } from '../../lib/adapters';
 import { ProjectGroup } from './ProjectGroup';
 import { FlatSessionRow } from './FlatSessionRow';
 import { ImportSessionsPopover } from './ImportSessionsPopover';
+import { useZoneHeaderActions } from '../zone/ZoneHeaderSlot.js';
 import type { Chat, Project } from '@qlan-ro/mainframe-types';
 
 const STORAGE_KEY = 'mf:collapsedProjects';
@@ -349,87 +350,101 @@ export function ChatsPanel(): React.ReactElement {
     [addProject],
   );
 
+  const headerActions = useMemo(
+    () => (
+      <>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setShowDirPicker(true)}
+              className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+            >
+              <FolderPlus size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Add project</TooltipContent>
+        </Tooltip>
+        <div className="relative" data-new-session-popover>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleNewSessionClick}
+                disabled={projects.length === 0}
+                className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <Plus size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">New session</TooltipContent>
+          </Tooltip>
+          {showNewSessionPopover && (
+            <NewSessionPopover
+              projects={projects}
+              activeProjectId={activeProjectId}
+              onSelect={handleNewSessionInProject}
+              onClose={() => setShowNewSessionPopover(false)}
+            />
+          )}
+        </div>
+        <div className="relative" data-import-popover>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setShowImportPopover((prev) => !prev)}
+                disabled={projects.length === 0}
+                className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                data-testid="import-sessions-btn"
+              >
+                <Download size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Import external sessions</TooltipContent>
+          </Tooltip>
+          {showImportPopover && (
+            <ImportSessionsPopover
+              projects={projects}
+              activeProjectId={activeProjectId}
+              filterProjectId={filterProjectId}
+              onClose={() => setShowImportPopover(false)}
+            />
+          )}
+        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={toggleViewMode}
+              className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+            >
+              {viewMode === 'grouped' ? <List size={14} /> : <LayoutList size={14} />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {viewMode === 'grouped' ? 'Switch to flat view' : 'Switch to grouped view'}
+          </TooltipContent>
+        </Tooltip>
+      </>
+    ),
+    [
+      handleNewSessionClick,
+      handleNewSessionInProject,
+      projects,
+      activeProjectId,
+      showNewSessionPopover,
+      showImportPopover,
+      filterProjectId,
+      toggleViewMode,
+      viewMode,
+    ],
+  );
+
+  useZoneHeaderActions(headerActions);
+
   return (
     <div className="h-full flex flex-col">
-      <div className="h-11 px-[10px] flex items-center justify-between">
-        <div className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Sessions</div>
-        <div className="flex items-center gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => setShowDirPicker(true)}
-                className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
-              >
-                <FolderPlus size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Add project</TooltipContent>
-          </Tooltip>
-          <div className="relative" data-new-session-popover>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleNewSessionClick}
-                  disabled={projects.length === 0}
-                  className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-                >
-                  <Plus size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">New session</TooltipContent>
-            </Tooltip>
-            {showNewSessionPopover && (
-              <NewSessionPopover
-                projects={projects}
-                activeProjectId={activeProjectId}
-                onSelect={handleNewSessionInProject}
-                onClose={() => setShowNewSessionPopover(false)}
-              />
-            )}
-          </div>
-          <div className="relative" data-import-popover>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setShowImportPopover((prev) => !prev)}
-                  disabled={projects.length === 0}
-                  className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-                  data-testid="import-sessions-btn"
-                >
-                  <Download size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Import external sessions</TooltipContent>
-            </Tooltip>
-            {showImportPopover && (
-              <ImportSessionsPopover
-                projects={projects}
-                activeProjectId={activeProjectId}
-                filterProjectId={filterProjectId}
-                onClose={() => setShowImportPopover(false)}
-              />
-            )}
-          </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={toggleViewMode}
-                className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
-              >
-                {viewMode === 'grouped' ? <List size={14} /> : <LayoutList size={14} />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {viewMode === 'grouped' ? 'Switch to flat view' : 'Switch to grouped view'}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
       {/* Project filter badges */}
       {projects.length > 1 && (
         <div className="px-2.5 py-2 overflow-hidden">
