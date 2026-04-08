@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { Chat, ChatMessage, ControlRequest, AdapterProcess } from '@qlan-ro/mainframe-types';
+import type { Chat, ControlRequest, AdapterProcess, DisplayMessage } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../renderer/store/chats.js';
 
 function makeChat(overrides: Partial<Chat> = {}): Chat {
@@ -13,11 +13,12 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
     totalCost: 0,
     totalTokensInput: 0,
     totalTokensOutput: 0,
+    lastContextTokensInput: 0,
     ...overrides,
   };
 }
 
-function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
+function makeMessage(overrides: Partial<DisplayMessage> = {}): DisplayMessage {
   return {
     id: 'msg-1',
     chatId: 'chat-1',
@@ -59,6 +60,9 @@ function resetStore(): void {
     messages: new Map(),
     pendingPermissions: new Map(),
     processes: new Map(),
+    queuedMessages: new Map(),
+    compactingChats: new Set(),
+    contextUsage: new Map(),
   });
 }
 
@@ -205,6 +209,44 @@ describe('useChatsStore', () => {
       useChatsStore.getState().setActiveChat('a');
       useChatsStore.getState().removeChat('b');
       expect(useChatsStore.getState().activeChatId).toBe('a');
+    });
+
+    it('cleans up messages for removed chat', () => {
+      useChatsStore.getState().addMessage('chat-a', makeMessage({ id: 'msg-1', chatId: 'chat-a' }));
+      useChatsStore.getState().addMessage('chat-b', makeMessage({ id: 'msg-2', chatId: 'chat-b' }));
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().messages.has('chat-a')).toBe(false);
+      expect(useChatsStore.getState().messages.has('chat-b')).toBe(true);
+    });
+
+    it('cleans up pendingPermissions for removed chat', () => {
+      useChatsStore.getState().addPendingPermission('chat-a', makePermission());
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().pendingPermissions.has('chat-a')).toBe(false);
+    });
+
+    it('cleans up processes for removed chat', () => {
+      useChatsStore.getState().setProcess('chat-a', makeProcess({ chatId: 'chat-a' }));
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().processes.has('chat-a')).toBe(false);
+    });
+
+    it('cleans up queuedMessages for removed chat', () => {
+      useChatsStore.getState().addQueuedMessage('chat-a', { uuid: 'q1', content: 'hi' } as any);
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().queuedMessages.has('chat-a')).toBe(false);
+    });
+
+    it('cleans up contextUsage for removed chat', () => {
+      useChatsStore.getState().setContextUsage('chat-a', { percentage: 50, totalTokens: 100, maxTokens: 200 });
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().contextUsage.has('chat-a')).toBe(false);
+    });
+
+    it('cleans up compactingChats for removed chat', () => {
+      useChatsStore.getState().setCompacting('chat-a', true);
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().compactingChats.has('chat-a')).toBe(false);
     });
   });
 

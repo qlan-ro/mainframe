@@ -130,10 +130,30 @@ export const useChatsStore = create<ChatsState>((set) => ({
       return { chats: updated };
     }),
   removeChat: (id) =>
-    set((state) => ({
-      chats: state.chats.filter((c) => c.id !== id),
-      activeChatId: state.activeChatId === id ? null : state.activeChatId,
-    })),
+    set((state) => {
+      const messages = new Map(state.messages);
+      messages.delete(id);
+      const pendingPermissions = new Map(state.pendingPermissions);
+      pendingPermissions.delete(id);
+      const processes = new Map(state.processes);
+      processes.delete(id);
+      const queuedMessages = new Map(state.queuedMessages);
+      queuedMessages.delete(id);
+      const contextUsage = new Map(state.contextUsage);
+      contextUsage.delete(id);
+      const compactingChats = new Set(state.compactingChats);
+      compactingChats.delete(id);
+      return {
+        chats: state.chats.filter((c) => c.id !== id),
+        activeChatId: state.activeChatId === id ? null : state.activeChatId,
+        messages,
+        pendingPermissions,
+        processes,
+        queuedMessages,
+        contextUsage,
+        compactingChats,
+      };
+    }),
   addMessage: (chatId, message) =>
     set((state) => {
       const newMessages = new Map(state.messages);
