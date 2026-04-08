@@ -41,7 +41,11 @@ export function LeftRail(): React.ReactElement {
       ))}
 
       {/* Fixed utility buttons — not part of zone system */}
-      <RailButton onClick={() => {}} title="Todos">
+      <RailButton
+        active={activeFullviewId === 'todos'}
+        onClick={() => usePluginLayoutStore.getState().activateFullview('todos')}
+        title="Todos"
+      >
         <ListChecks size={16} />
       </RailButton>
       <RailButton onClick={() => useSettingsStore.getState().open()} title="Settings">

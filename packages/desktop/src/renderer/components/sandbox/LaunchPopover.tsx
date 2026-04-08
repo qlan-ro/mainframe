@@ -4,7 +4,7 @@ import { useSandboxStore } from '../../store/sandbox';
 import { useProjectsStore } from '../../store/projects';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
-import { useUIStore } from '../../store/ui';
+import { useLayoutStore } from '../../store/layout';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -29,9 +29,9 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
   const scopeStatuses = useSandboxStore((s) => (scopeKey ? s.processStatuses[scopeKey] : undefined)) ?? {};
   const selectedConfigName = useSandboxStore((s) => s.selectedConfigName);
   const setSelectedConfigName = useSandboxStore((s) => s.setSelectedConfigName);
-  const togglePanel = useUIStore((s) => s.togglePanel);
-  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
-  const panelCollapsed = useUIStore((s) => s.panelCollapsed);
+  const bottomCollapsed = useLayoutStore((s) => s.collapsed.bottom);
+  const toggleSide = useLayoutStore((s) => s.toggleSide);
+  const setActiveTab = useLayoutStore((s) => s.setActiveTab);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -61,9 +61,9 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
       } else {
         if (scopeKey) clearLogsForProcess(scopeKey, config.name);
         setLastStartedProcess(config.name);
+        if (bottomCollapsed) toggleSide('bottom');
+        setActiveTab('bottom-left', 'preview');
         await startLaunchConfig(activeProject.id, config.name, activeChatId ?? undefined);
-        setPanelVisible(true);
-        if (panelCollapsed.bottom) togglePanel('bottom');
       }
     } catch (err) {
       console.warn('[sandbox] process toggle failed', err);

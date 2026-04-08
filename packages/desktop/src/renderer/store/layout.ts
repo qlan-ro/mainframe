@@ -14,7 +14,7 @@ interface LayoutState {
   collapsed: Record<CollapsibleSide, boolean>;
   moveToolWindow: (id: string, targetZone: ZoneId, index?: number) => void;
   reorderTab: (zoneId: ZoneId, from: number, to: number) => void;
-  setActiveTab: (zoneId: ZoneId, tab: string) => void;
+  setActiveTab: (zoneId: ZoneId, tab: string | null) => void;
   removeFromZone: (id: string) => void;
   toggleSide: (side: CollapsibleSide) => void;
   resetLayout: () => void;

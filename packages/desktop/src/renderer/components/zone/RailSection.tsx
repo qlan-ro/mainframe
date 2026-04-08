@@ -73,7 +73,8 @@ export function RailSection({ zoneId }: RailSectionProps): React.ReactElement {
       toggleSide(side);
       setActiveTab(zoneId, tabId);
     } else if (zone?.activeTab === tabId) {
-      toggleSide(side);
+      // Deactivate this zone; the side stays visible if another zone is still active
+      setActiveTab(zoneId, null);
     } else {
       setActiveTab(zoneId, tabId);
     }
@@ -133,6 +134,9 @@ export function RailSection({ zoneId }: RailSectionProps): React.ReactElement {
       onDrop={handleDrop}
       data-zone={zoneId}
     >
+      {zone.tabs.length === 0 && isDragging && (
+        <div className="w-8 h-8 rounded-mf-card border border-dashed border-mf-accent opacity-50" />
+      )}
       {zone.tabs.map((tabId) => {
         const tw = getToolWindow(tabId);
         if (!tw) return null;

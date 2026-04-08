@@ -31,16 +31,16 @@ export function Layout({ centerPanel }: LayoutProps): React.ReactElement {
   const collapsed = useLayoutStore((s) => s.collapsed);
   const zones = useLayoutStore((s) => s.zones);
 
-  const hasLeftTop = (zones['left-top']?.tabs.length ?? 0) > 0;
-  const hasLeftBottom = (zones['left-bottom']?.tabs.length ?? 0) > 0;
+  const hasLeftTop = (zones['left-top']?.tabs.length ?? 0) > 0 && zones['left-top']?.activeTab != null;
+  const hasLeftBottom = (zones['left-bottom']?.tabs.length ?? 0) > 0 && zones['left-bottom']?.activeTab != null;
   const hasLeft = (hasLeftTop || hasLeftBottom) && !collapsed.left;
 
-  const hasRightTop = (zones['right-top']?.tabs.length ?? 0) > 0;
-  const hasRightBottom = (zones['right-bottom']?.tabs.length ?? 0) > 0;
+  const hasRightTop = (zones['right-top']?.tabs.length ?? 0) > 0 && zones['right-top']?.activeTab != null;
+  const hasRightBottom = (zones['right-bottom']?.tabs.length ?? 0) > 0 && zones['right-bottom']?.activeTab != null;
   const hasRight = (hasRightTop || hasRightBottom) && !collapsed.right;
 
-  const hasBottomLeft = (zones['bottom-left']?.tabs.length ?? 0) > 0;
-  const hasBottomRight = (zones['bottom-right']?.tabs.length ?? 0) > 0;
+  const hasBottomLeft = (zones['bottom-left']?.tabs.length ?? 0) > 0 && zones['bottom-left']?.activeTab != null;
+  const hasBottomRight = (zones['bottom-right']?.tabs.length ?? 0) > 0 && zones['bottom-right']?.activeTab != null;
   const hasBottom = (hasBottomLeft || hasBottomRight) && !collapsed.bottom;
 
   const [bottomHeight, setBottomHeight] = useState(BOTTOM_HEIGHT_DEFAULT);

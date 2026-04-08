@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Search, Play, Square, ChevronDown } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { useProjectsStore, useSearchStore } from '../store';
-import { useUIStore } from '../store/ui';
+import { useLayoutStore } from '../store/layout';
 import { useSandboxStore } from '../store/sandbox';
 import { cn } from '../lib/utils';
 import { LaunchPopover } from './sandbox/LaunchPopover';
@@ -26,9 +26,9 @@ export function TitleBar(): React.ReactElement {
   const [launchPopoverOpen, setLaunchPopoverOpen] = useState(false);
   const launchConfig = useLaunchConfig();
   const configs = launchConfig?.configurations ?? [];
-  const togglePanel = useUIStore((s) => s.togglePanel);
-  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
-  const panelCollapsed = useUIStore((s) => s.panelCollapsed);
+  const bottomCollapsed = useLayoutStore((s) => s.collapsed.bottom);
+  const toggleSide = useLayoutStore((s) => s.toggleSide);
+  const setActiveTab = useLayoutStore((s) => s.setActiveTab);
   const scopeKey = useLaunchScopeKey();
   const scopeStatuses = useSandboxStore((s) => (scopeKey ? s.processStatuses[scopeKey] : undefined)) ?? {};
 
@@ -58,13 +58,13 @@ export function TitleBar(): React.ReactElement {
       const store = useSandboxStore.getState();
       if (scopeKey) store.clearLogsForProcess(scopeKey, selectedConfig.name);
       store.setLastStartedProcess(selectedConfig.name);
+      if (bottomCollapsed) toggleSide('bottom');
+      setActiveTab('bottom-left', 'preview');
       await startLaunchConfig(projectId, selectedConfig.name, activeChatId ?? undefined);
-      setPanelVisible(true);
-      if (panelCollapsed.bottom) togglePanel('bottom');
     } catch (err) {
       console.warn('[sandbox] start failed', err);
     }
-  }, [activeProjectId, activeChatId, selectedConfig, scopeKey, panelCollapsed, togglePanel, setPanelVisible]);
+  }, [activeProjectId, activeChatId, selectedConfig, scopeKey, bottomCollapsed, toggleSide]);
 
   const handleCloseLaunchPopover = useCallback(() => setLaunchPopoverOpen(false), []);
   const handleCloseStopPopover = useCallback(() => setStopPopoverOpen(false), []);

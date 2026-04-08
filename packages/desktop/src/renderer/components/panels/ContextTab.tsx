@@ -74,7 +74,7 @@ export function ContextTab(): React.ReactElement {
   const sessionCount = sessionFiles.size + attachments.length;
 
   return (
-    <div className="space-y-2">
+    <div className="h-full overflow-y-auto space-y-2">
       {todos && todos.length > 0 && <TasksSection todos={todos} />}
       <ContextSection icon={Globe} title="Global" count={globalFiles.length} defaultOpen>
         {globalFiles.map((f) => (
