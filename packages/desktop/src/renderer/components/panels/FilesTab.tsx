@@ -252,22 +252,20 @@ export function FilesTab(): React.ReactElement {
       <ScrollArea className="h-full">
         <div className="py-1">
           <div className="@container flex items-center">
-            <button
-              onClick={() => toggleTreePath('.')}
-              onContextMenu={(e) => handleContextMenu(e, '.', 'directory')}
-              className="flex-1 flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary min-w-0"
-            >
-              {rootExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              <Folder size={14} className="text-mf-accent shrink-0" />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="truncate" tabIndex={0}>
-                    {displayPath}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{displayPath}</TooltipContent>
-              </Tooltip>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => toggleTreePath('.')}
+                  onContextMenu={(e) => handleContextMenu(e, '.', 'directory')}
+                  className="flex-1 flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary min-w-0"
+                >
+                  {rootExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  <Folder size={14} className="text-mf-accent shrink-0" />
+                  <span className="truncate">{displayPath}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{displayPath}</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
