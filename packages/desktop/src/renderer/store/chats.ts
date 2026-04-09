@@ -6,7 +6,10 @@ import type {
   AdapterProcess,
   QueuedMessageRef,
   TodoItem,
+  DetectedPr,
 } from '@qlan-ro/mainframe-types';
+
+export type { DetectedPr } from '@qlan-ro/mainframe-types';
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 
@@ -49,6 +52,7 @@ interface ChatsState {
   contextUsage: Map<string, ContextUsageState>;
   unreadChatIds: Set<string>;
   todos: Map<string, TodoItem[]>;
+  detectedPrs: Map<string, DetectedPr[]>;
 
   markUnread: (chatId: string) => void;
   clearUnread: (chatId: string) => void;
@@ -72,6 +76,7 @@ interface ChatsState {
   setCompacting: (chatId: string, compacting: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
   setTodos: (chatId: string, todos: TodoItem[]) => void;
+  addDetectedPr: (chatId: string, pr: DetectedPr) => void;
 }
 
 export const useChatsStore = create<ChatsState>((set) => ({
@@ -86,6 +91,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   contextUsage: new Map(),
   unreadChatIds: new Set(),
   todos: new Map(),
+  detectedPrs: new Map(),
 
   markUnread: (chatId) =>
     set((state) => {
@@ -166,6 +172,8 @@ export const useChatsStore = create<ChatsState>((set) => ({
       compactingChats.delete(id);
       const todos = new Map(state.todos);
       todos.delete(id);
+      const detectedPrs = new Map(state.detectedPrs);
+      detectedPrs.delete(id);
       return {
         chats: state.chats.filter((c) => c.id !== id),
         activeChatId: state.activeChatId === id ? null : state.activeChatId,
@@ -176,6 +184,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
         contextUsage,
         compactingChats,
         todos,
+        detectedPrs,
       };
     }),
   addMessage: (chatId, message) =>
@@ -285,5 +294,23 @@ export const useChatsStore = create<ChatsState>((set) => ({
       const next = new Map(state.todos);
       next.set(chatId, todos);
       return { todos: next };
+    }),
+  addDetectedPr: (chatId, pr) =>
+    set((state) => {
+      const next = new Map(state.detectedPrs);
+      const existing = next.get(chatId) ?? [];
+      const idx = existing.findIndex((p) => p.owner === pr.owner && p.repo === pr.repo && p.number === pr.number);
+      if (idx >= 0) {
+        // Upgrade mentioned → created if applicable
+        if (existing[idx]!.source === 'mentioned' && pr.source === 'created') {
+          const updated = [...existing];
+          updated[idx] = pr;
+          next.set(chatId, updated);
+          return { detectedPrs: next };
+        }
+        return state;
+      }
+      next.set(chatId, [...existing, pr]);
+      return { detectedPrs: next };
     }),
 }));
