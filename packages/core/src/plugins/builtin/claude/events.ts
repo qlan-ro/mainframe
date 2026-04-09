@@ -14,6 +14,8 @@ const log = createChildLogger('claude:events');
 
 export const PR_URL_REGEX = /https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/;
 
+export const GITLAB_MR_URL_REGEX = /https:\/\/gitlab\.com\/([^/\s]+)\/([^/\s]+)\/-\/merge_requests\/(\d+)/;
+
 export const AZURE_PR_URL_REGEX = /https:\/\/dev\.azure\.com\/([^/\s]+)\/[^/\s]+\/_git\/([^/\s]+)\/pullrequest\/(\d+)/;
 
 const AZURE_PR_ID_REGEX = /"pullRequestId"\s*:\s*(\d+)/;
@@ -30,6 +32,16 @@ function isPrCreateCommand(command: string): boolean {
 
 export function parsePrUrl(text: string): { url: string; owner: string; repo: string; number: number } | null {
   const match = PR_URL_REGEX.exec(text);
+  if (!match) return null;
+  const owner = match[1];
+  const repo = match[2];
+  const number = parseInt(match[3]!, 10);
+  if (!owner || !repo || isNaN(number)) return null;
+  return { url: match[0], owner, repo, number };
+}
+
+export function parseGitlabMrUrl(text: string): { url: string; owner: string; repo: string; number: number } | null {
+  const match = GITLAB_MR_URL_REGEX.exec(text);
   if (!match) return null;
   const owner = match[1];
   const repo = match[2];
@@ -66,7 +78,7 @@ function parseAzurePrJson(text: string): { url: string; owner: string; repo: str
 export function extractPrFromToolResult(
   text: string,
 ): { url: string; owner: string; repo: string; number: number } | null {
-  return parsePrUrl(text) ?? parseAzurePrUrl(text) ?? parseAzurePrJson(text);
+  return parsePrUrl(text) ?? parseGitlabMrUrl(text) ?? parseAzurePrUrl(text) ?? parseAzurePrJson(text);
 }
 
 export function handleStdout(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {

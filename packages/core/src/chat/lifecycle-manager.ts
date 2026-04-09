@@ -358,7 +358,7 @@ export class ChatLifecycleManager {
             const key = `${pr.owner}/${pr.repo}/${pr.number}`;
             if (seenPrs.has(key)) continue;
             seenPrs.add(key);
-            const toolUseId = (block as Record<string, unknown>).tool_use_id as string | undefined;
+            const toolUseId = (block as Record<string, unknown>).toolUseId as string | undefined;
             const source = toolUseId && pendingCreates.has(toolUseId) ? ('created' as const) : ('mentioned' as const);
             if (source === 'created') pendingCreates.delete(toolUseId!);
             this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr: { ...pr, source } });

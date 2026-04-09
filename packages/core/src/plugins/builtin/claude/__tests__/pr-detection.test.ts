@@ -4,9 +4,11 @@ import {
   handleStdout,
   parsePrUrl,
   parseAzurePrUrl,
+  parseGitlabMrUrl,
   extractPrFromToolResult,
   PR_URL_REGEX,
   AZURE_PR_URL_REGEX,
+  GITLAB_MR_URL_REGEX,
   PR_CREATE_COMMANDS,
 } from '../events.js';
 import type { ClaudeSession } from '../session.js';
@@ -116,6 +118,66 @@ describe('parseAzurePrUrl', () => {
   it('returns null for non-matching text', () => {
     expect(parseAzurePrUrl('https://github.com/owner/repo/pull/1')).toBeNull();
     expect(parseAzurePrUrl('no URL here')).toBeNull();
+  });
+});
+
+describe('GITLAB_MR_URL_REGEX', () => {
+  it('matches a GitLab MR URL', () => {
+    const url = 'https://gitlab.com/mygroup/myrepo/-/merge_requests/42';
+    expect(GITLAB_MR_URL_REGEX.test(url)).toBe(true);
+  });
+
+  it('does not match other GitLab URLs', () => {
+    expect(GITLAB_MR_URL_REGEX.test('https://gitlab.com/mygroup/myrepo/-/issues/1')).toBe(false);
+    expect(GITLAB_MR_URL_REGEX.test('https://gitlab.com/mygroup')).toBe(false);
+  });
+});
+
+describe('parseGitlabMrUrl', () => {
+  it('parses a GitLab MR URL', () => {
+    const result = parseGitlabMrUrl('https://gitlab.com/acme/backend/-/merge_requests/99');
+    expect(result).toEqual({
+      url: 'https://gitlab.com/acme/backend/-/merge_requests/99',
+      owner: 'acme',
+      repo: 'backend',
+      number: 99,
+    });
+  });
+
+  it('returns null for non-matching text', () => {
+    expect(parseGitlabMrUrl('https://github.com/owner/repo/pull/1')).toBeNull();
+    expect(parseGitlabMrUrl('no URL here')).toBeNull();
+  });
+});
+
+describe('extractPrFromToolResult', () => {
+  it('extracts GitHub PR URL', () => {
+    const result = extractPrFromToolResult('Created https://github.com/acme/repo/pull/7');
+    expect(result).toEqual({ url: 'https://github.com/acme/repo/pull/7', owner: 'acme', repo: 'repo', number: 7 });
+  });
+
+  it('extracts GitLab MR URL', () => {
+    const result = extractPrFromToolResult('Created https://gitlab.com/acme/backend/-/merge_requests/99');
+    expect(result).toEqual({
+      url: 'https://gitlab.com/acme/backend/-/merge_requests/99',
+      owner: 'acme',
+      repo: 'backend',
+      number: 99,
+    });
+  });
+
+  it('extracts Azure DevOps PR URL', () => {
+    const result = extractPrFromToolResult('https://dev.azure.com/myorg/proj/_git/myrepo/pullrequest/5');
+    expect(result).toEqual({
+      url: 'https://dev.azure.com/myorg/proj/_git/myrepo/pullrequest/5',
+      owner: 'myorg',
+      repo: 'myrepo',
+      number: 5,
+    });
+  });
+
+  it('returns null for text without PR URLs', () => {
+    expect(extractPrFromToolResult('just some output')).toBeNull();
   });
 });
 

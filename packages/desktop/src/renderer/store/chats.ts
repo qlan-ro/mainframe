@@ -172,6 +172,8 @@ export const useChatsStore = create<ChatsState>((set) => ({
       compactingChats.delete(id);
       const todos = new Map(state.todos);
       todos.delete(id);
+      const detectedPrs = new Map(state.detectedPrs);
+      detectedPrs.delete(id);
       return {
         chats: state.chats.filter((c) => c.id !== id),
         activeChatId: state.activeChatId === id ? null : state.activeChatId,
@@ -182,6 +184,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
         contextUsage,
         compactingChats,
         todos,
+        detectedPrs,
       };
     }),
   addMessage: (chatId, message) =>
