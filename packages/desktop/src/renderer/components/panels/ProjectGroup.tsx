@@ -115,9 +115,9 @@ function ChatRow({
   const updateChat = useChatsStore((s) => s.updateChat);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const isUnread = unreadChatIds.has(chat.id);
-  const hasCreatedPr = useChatsStore((s) => {
+  const createdPrUrl = useChatsStore((s) => {
     const prs = s.detectedPrs.get(chat.id);
-    return prs?.some((p) => p.source === 'created') ?? false;
+    return prs?.find((p) => p.source === 'created')?.url ?? null;
   });
 
   const handleCommitRename = useCallback(() => {
@@ -160,6 +160,24 @@ function ChatRow({
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
+              {createdPrUrl && !editing && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(createdPrUrl, '_blank');
+                      }}
+                      className="w-5 h-5 shrink-0 rounded flex items-center justify-center text-[#1a7f37] hover:bg-mf-hover transition-colors"
+                      aria-label="Open PR"
+                    >
+                      <GitPullRequest size={13} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Open PR</TooltipContent>
+                </Tooltip>
+              )}
               {editing ? (
                 <input
                   ref={inputRef}
@@ -186,9 +204,6 @@ function ChatRow({
                   </TooltipTrigger>
                   <TooltipContent>{chat.title || 'Untitled session'}</TooltipContent>
                 </Tooltip>
-              )}
-              {hasCreatedPr && !editing && (
-                <GitPullRequest size={12} className="shrink-0 text-[#1a7f37]" aria-label="Has created PR" />
               )}
             </div>
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
