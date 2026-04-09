@@ -76,6 +76,7 @@ interface NavEntry {
   cursorLine?: number;
   cursorColumn?: number;
 }
+const MAX_NAV_STACK = 100;
 const navBackStack: NavEntry[] = [];
 const navForwardStack: NavEntry[] = [];
 
@@ -153,6 +154,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       const current = get().fileView;
       if (current?.type === 'editor') {
         navBackStack.push(currentEditorNavEntry(current));
+        if (navBackStack.length > MAX_NAV_STACK) navBackStack.splice(0, navBackStack.length - MAX_NAV_STACK);
         navForwardStack.length = 0;
       }
     }
@@ -195,6 +197,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     const current = get().fileView;
     if (current?.type === 'editor') {
       navForwardStack.push(currentEditorNavEntry(current));
+      if (navForwardStack.length > MAX_NAV_STACK) navForwardStack.splice(0, navForwardStack.length - MAX_NAV_STACK);
     }
     const label = entry.filePath.split('/').pop() || entry.filePath;
     set({
@@ -218,6 +221,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     const current = get().fileView;
     if (current?.type === 'editor') {
       navBackStack.push(currentEditorNavEntry(current));
+      if (navBackStack.length > MAX_NAV_STACK) navBackStack.splice(0, navBackStack.length - MAX_NAV_STACK);
     }
     const label = entry.filePath.split('/').pop() || entry.filePath;
     set({

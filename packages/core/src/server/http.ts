@@ -26,6 +26,7 @@ import {
 } from './routes/index.js';
 import { authRoutes } from './routes/auth.js';
 import { tunnelRoutes } from './routes/tunnel.js';
+import { deviceRoutes } from './routes/device.js';
 import { PushService } from '../push/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
@@ -96,6 +97,7 @@ export function createHttpServer(
   };
 
   app.use(authRoutes({ pushService, devicesRepo: db.devices }));
+  app.use(deviceRoutes({ pushService }));
   app.use(tunnelRoutes(ctx));
   app.use(projectRoutes(ctx));
   app.use(chatRoutes(ctx));
