@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import type { Chat, DisplayMessage, ControlRequest, AdapterProcess, QueuedMessageRef } from '@qlan-ro/mainframe-types';
+import type {
+  Chat,
+  DisplayMessage,
+  ControlRequest,
+  AdapterProcess,
+  QueuedMessageRef,
+  TodoItem,
+} from '@qlan-ro/mainframe-types';
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 
@@ -41,6 +48,7 @@ interface ChatsState {
   compactingChats: Set<string>;
   contextUsage: Map<string, ContextUsageState>;
   unreadChatIds: Set<string>;
+  todos: Map<string, TodoItem[]>;
 
   markUnread: (chatId: string) => void;
   clearUnread: (chatId: string) => void;
@@ -63,6 +71,7 @@ interface ChatsState {
   clearQueuedMessages: (chatId: string) => void;
   setCompacting: (chatId: string, compacting: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
+  setTodos: (chatId: string, todos: TodoItem[]) => void;
 }
 
 export const useChatsStore = create<ChatsState>((set) => ({
@@ -76,6 +85,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   compactingChats: new Set(),
   contextUsage: new Map(),
   unreadChatIds: new Set(),
+  todos: new Map(),
 
   markUnread: (chatId) =>
     set((state) => {
@@ -154,6 +164,8 @@ export const useChatsStore = create<ChatsState>((set) => ({
       contextUsage.delete(id);
       const compactingChats = new Set(state.compactingChats);
       compactingChats.delete(id);
+      const todos = new Map(state.todos);
+      todos.delete(id);
       return {
         chats: state.chats.filter((c) => c.id !== id),
         activeChatId: state.activeChatId === id ? null : state.activeChatId,
@@ -163,6 +175,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
         queuedMessages,
         contextUsage,
         compactingChats,
+        todos,
       };
     }),
   addMessage: (chatId, message) =>
@@ -266,5 +279,11 @@ export const useChatsStore = create<ChatsState>((set) => ({
       const next = new Map(state.contextUsage);
       next.set(chatId, usage);
       return { contextUsage: next };
+    }),
+  setTodos: (chatId, todos) =>
+    set((state) => {
+      const next = new Map(state.todos);
+      next.set(chatId, todos);
+      return { todos: next };
     }),
 }));
