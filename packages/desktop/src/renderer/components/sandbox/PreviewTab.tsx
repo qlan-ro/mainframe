@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Trash2,
   RotateCw,
@@ -7,22 +7,20 @@ import {
   RefreshCw,
   Crosshair,
   Camera,
-  Minus,
   ChevronDown,
   ChevronUp,
   Smartphone,
 } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useSandboxStore } from '../../store/sandbox';
 import { useChatsStore } from '../../store/chats';
 import { useActiveProjectId, getActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useLaunchScopeKey } from '../../hooks/useLaunchScopeKey.js';
-import { useUIStore } from '../../store/ui';
 import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
+import { useZoneHeaderTabs } from '../zone/ZoneHeaderSlot.js';
 
 // CSS selector generator — injected into the webview page
 const GET_SELECTOR_FN = `
@@ -115,30 +113,23 @@ export function PreviewTab(): React.ReactElement {
   const clearLogsForProcess = useSandboxStore((s) => s.clearLogsForProcess);
   const setLastStartedProcess = useSandboxStore((s) => s.setLastStartedProcess);
   const scopeKey = useLaunchScopeKey();
-  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
-
   const launchConfig = useLaunchConfig();
   const configs = launchConfig?.configurations ?? [];
 
-  // Selected process tab
-  const [selectedProcess, setSelectedProcess] = useState<string | null>(null);
+  // Selected process tab — single source of truth in sandbox store
+  const selectedConfigName = useSandboxStore((s) => s.selectedConfigName);
+  const setSelectedConfigName = useSandboxStore((s) => s.setSelectedConfigName);
 
-  // Switch to the tab when a process is started
-  const lastStartedProcess = useSandboxStore((s) => s.lastStartedProcess);
+  // Auto-select when configs load and nothing is selected yet
   useEffect(() => {
-    if (lastStartedProcess) {
-      setSelectedProcess(lastStartedProcess);
-      setLastStartedProcess(null); // Clear after switching
-    }
-  }, [lastStartedProcess, setLastStartedProcess]);
-
-  // Auto-select process when configs load and nothing is selected — prefer the preview config
-  useEffect(() => {
-    if (configs.length > 0 && !selectedProcess) {
+    if (configs.length > 0 && !selectedConfigName) {
       const preferred = configs.find((c) => c.preview) ?? configs[0]!;
-      setSelectedProcess(preferred.name);
+      setSelectedConfigName(preferred.name);
     }
-  }, [configs, selectedProcess]);
+  }, [configs, selectedConfigName, setSelectedConfigName]);
+
+  const selectedProcess = selectedConfigName;
+  const setSelectedProcess = setSelectedConfigName;
 
   // Selected tab's config — drives UI decisions (icons, log styling)
   const selectedProcessConfig = configs.find((c) => c.name === selectedProcess);
@@ -371,157 +362,128 @@ export function PreviewTab(): React.ReactElement {
 
   const isElectron = typeof window !== 'undefined' && 'mainframe' in window;
 
+  // Register process tabs with ZoneHeader
+  const processTabs = useMemo(() => configs.map((c) => ({ id: c.name, label: c.name })), [configs]);
+  const handleProcessTabChange = useCallback((tabId: string) => setSelectedProcess(tabId), []);
+  useZoneHeaderTabs(processTabs, selectedProcess, handleProcessTabChange);
+
   return (
-    <Tabs
-      data-testid="preview-tab"
-      value={selectedProcess ?? ''}
-      onValueChange={setSelectedProcess}
-      className="h-full flex flex-col"
-    >
-      {/* Header row: process tabs + actions */}
-      <div className="flex items-center justify-between shrink-0 border-b border-mf-divider">
-        <TabsList className="h-11 px-[10px] bg-transparent justify-start gap-1 shrink-0 rounded-none">
-          {configs.length === 0 ? (
-            <span className="text-mf-small text-mf-text-secondary">No processes running</span>
-          ) : (
-            configs.map((c) => (
-              <TabsTrigger key={c.name} value={c.name} className="text-mf-small">
-                {c.name}
-              </TabsTrigger>
-            ))
-          )}
-        </TabsList>
-        <div className="flex items-center pr-2">
-          {/* Process controls: play (stopped) or restart+stop (running) */}
-          {selectedProcess &&
-            (isSelectedRunning ? (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => void handleRestart()}
-                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                    >
-                      <RotateCw size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Restart</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => void handleStop()}
-                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-red-400 transition-colors"
-                    >
-                      <Square size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Stop</TooltipContent>
-                </Tooltip>
-              </>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => void handleStart()}
-                    className="p-1.5 rounded hover:bg-mf-hover text-mf-accent transition-colors"
-                  >
-                    <Play size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Start</TooltipContent>
-              </Tooltip>
-            ))}
-          {selectedProcess && <div className="w-px h-3.5 bg-mf-border mx-0.5" />}
-          {/* Preview controls: reload, inspect, screenshot */}
-          {hasPreview && (
+    <div data-testid="preview-tab" className="h-full flex flex-col">
+      {/* Action bar — process controls + preview tools */}
+      <div className="flex items-center h-7 px-2 shrink-0 border-b border-mf-divider gap-0.5">
+        {selectedProcess &&
+          (isSelectedRunning ? (
             <>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={handleReload}
-                    className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                    onClick={() => void handleRestart()}
+                    className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                   >
-                    <RefreshCw size={14} />
+                    <RotateCw size={13} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Reload</TooltipContent>
+                <TooltipContent side="bottom">Restart</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={() => void handleInspect()}
-                    className={[
-                      'p-1.5 rounded transition-colors',
-                      inspecting
-                        ? 'bg-mf-hover text-mf-accent'
-                        : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-                    ].join(' ')}
+                    onClick={() => void handleStop()}
+                    className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-red-400 transition-colors"
                   >
-                    <Crosshair size={14} />
+                    <Square size={13} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Pick element</TooltipContent>
+                <TooltipContent side="bottom">Stop</TooltipContent>
               </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => void handleFullScreenshot()}
-                    className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                  >
-                    <Camera size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Screenshot</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setMobileView((v) => !v)}
-                    className={[
-                      'p-1.5 rounded transition-colors',
-                      mobileView
-                        ? 'bg-mf-hover text-mf-accent'
-                        : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-                    ].join(' ')}
-                  >
-                    <Smartphone size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Mobile view (390x844)</TooltipContent>
-              </Tooltip>
-              {isElectron && activeProjectId && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => {
-                        window.mainframe.clearSandboxSession(activeProjectId).then(() => handleReload());
-                      }}
-                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Clear cookies & session data</TooltipContent>
-                </Tooltip>
-              )}
-              <div className="w-px h-3.5 bg-mf-border mx-0.5" />
             </>
-          )}
-          {/* Window controls: minimize */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setPanelVisible(false)}
-                aria-label="Minimize"
-                className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-              >
-                <Minus size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Minimize</TooltipContent>
-          </Tooltip>
-        </div>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => void handleStart()}
+                  className="p-1 rounded hover:bg-mf-hover text-mf-accent transition-colors"
+                >
+                  <Play size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Start</TooltipContent>
+            </Tooltip>
+          ))}
+        {hasPreview && (
+          <>
+            {selectedProcess && <div className="w-px h-3.5 bg-mf-border mx-0.5" />}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleReload}
+                  className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                >
+                  <RefreshCw size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Reload</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => void handleInspect()}
+                  className={[
+                    'p-1 rounded transition-colors',
+                    inspecting
+                      ? 'bg-mf-hover text-mf-accent'
+                      : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                  ].join(' ')}
+                >
+                  <Crosshair size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Pick element</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => void handleFullScreenshot()}
+                  className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                >
+                  <Camera size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Screenshot</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setMobileView((v) => !v)}
+                  className={[
+                    'p-1 rounded transition-colors',
+                    mobileView
+                      ? 'bg-mf-hover text-mf-accent'
+                      : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                  ].join(' ')}
+                >
+                  <Smartphone size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Mobile view (390x844)</TooltipContent>
+            </Tooltip>
+            {isElectron && activeProjectId && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => {
+                      window.mainframe.clearSandboxSession(activeProjectId).then(() => handleReload());
+                    }}
+                    className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Clear cookies & session data</TooltipContent>
+              </Tooltip>
+            )}
+          </>
+        )}
       </div>
 
       {configs.length === 0 ? (
@@ -654,6 +616,6 @@ export function PreviewTab(): React.ReactElement {
           </div>
         </>
       )}
-    </Tabs>
+    </div>
   );
 }

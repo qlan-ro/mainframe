@@ -15,6 +15,8 @@ export type {
   PluginCapability,
   PluginManifest,
   UIZone,
+  ZoneId,
+  ToolWindowManifest,
   PluginUIContribution,
   PublicDaemonEventName,
   PublicDaemonEvent,

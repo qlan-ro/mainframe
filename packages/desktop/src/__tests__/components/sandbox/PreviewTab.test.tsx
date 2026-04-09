@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { PreviewTab } from '../../../renderer/components/sandbox/PreviewTab';
-import { useUIStore } from '../../../renderer/store/ui';
 import { useSandboxStore } from '../../../renderer/store/sandbox';
 import { useChatsStore } from '../../../renderer/store/chats';
 import { TooltipProvider } from '../../../renderer/components/ui/tooltip.js';
@@ -19,14 +17,6 @@ vi.mock('../../../renderer/hooks/useActiveProjectId.js', () => ({
 describe('PreviewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset stores to default state
-    useUIStore.setState({
-      panelSizes: { left: 240, right: 280, bottom: 200 },
-      panelCollapsed: { left: false, right: false, bottom: true },
-      panelVisible: false,
-      leftPanelTab: 'chats',
-      rightPanelTab: 'diff',
-    });
     useSandboxStore.setState({
       processStatuses: {},
       logsOutput: [],
@@ -37,23 +27,12 @@ describe('PreviewTab', () => {
     });
   });
 
-  it('minimize button calls setPanelVisible(false)', async () => {
-    const user = userEvent.setup();
+  it('renders the preview tab', () => {
     render(
       <TooltipProvider>
         <PreviewTab />
       </TooltipProvider>,
     );
-
-    // Find the minimize button by its aria-label
-    const minimizeButton = screen.getByRole('button', { name: 'Minimize' });
-    expect(minimizeButton).toBeInTheDocument();
-
-    // Click the minimize button
-    await user.click(minimizeButton);
-
-    // Verify that panelVisible was updated to false in the store
-    const state = useUIStore.getState();
-    expect(state.panelVisible).toBe(false);
+    expect(screen.getByTestId('preview-tab')).toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText, RefreshCw } from 'lucide-react';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
+import { useZoneHeaderTabs } from '../zone/ZoneHeaderSlot.js';
 
 type Mode = 'branch' | 'session';
 
@@ -39,6 +40,17 @@ export function ChangesTab(): React.ReactElement {
   const [sessionDiffs, setSessionDiffs] = useState<SessionFileDiff[]>([]);
   const [branchData, setBranchData] = useState<BranchDiffResponse | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Register Session/Branch tabs with ZoneHeader
+  const changeTabs = useMemo(
+    () => [
+      { id: 'session', label: 'Session' },
+      { id: 'branch', label: 'Branch' },
+    ],
+    [],
+  );
+  const handleModeChange = useCallback((tabId: string) => setMode(tabId as Mode), []);
+  useZoneHeaderTabs(changeTabs, mode, handleModeChange);
 
   const refreshSession = async (): Promise<void> => {
     if (!activeChatId) return;
@@ -89,34 +101,8 @@ export function ChangesTab(): React.ReactElement {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Mode toggle */}
-      <div className="flex items-center gap-0.5 mx-2 mt-1.5 p-0.5 rounded-md bg-mf-input">
-        <button
-          onClick={() => setMode('session')}
-          className={cn(
-            'flex-1 text-mf-small px-2 py-0.5 rounded transition-colors',
-            mode === 'session'
-              ? 'bg-mf-surface text-mf-text-primary shadow-sm'
-              : 'text-mf-text-secondary hover:text-mf-text-primary',
-          )}
-        >
-          Session
-        </button>
-        <button
-          onClick={() => setMode('branch')}
-          className={cn(
-            'flex-1 text-mf-small px-2 py-0.5 rounded transition-colors',
-            mode === 'branch'
-              ? 'bg-mf-surface text-mf-text-primary shadow-sm'
-              : 'text-mf-text-secondary hover:text-mf-text-primary',
-          )}
-        >
-          Branch
-        </button>
-      </div>
-
       {/* Header row */}
-      <div className="flex items-center justify-between px-2 py-1">
+      <div className="flex items-center justify-between px-2 py-0.5">
         <span className="text-mf-label text-mf-text-secondary">
           {mode === 'session' && !activeChatId
             ? 'No active session'

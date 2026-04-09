@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import type { PluginAction, PluginUIContribution } from '@qlan-ro/mainframe-types';
+import type { PluginAction, PluginUIContribution, ZoneId } from '@qlan-ro/mainframe-types';
+import { registerPluginToolWindow, unregisterPluginToolWindow } from '../components/zone/tool-windows';
+import { useLayoutStore } from './layout';
 
 interface TriggeredAction {
   pluginId: string;
@@ -11,8 +13,6 @@ interface PluginLayoutState {
   actions: PluginAction[];
   triggeredAction: TriggeredAction | null;
   activeFullviewId: string | null;
-  activeLeftPanelId: string | null;
-  activeRightPanelId: string | null;
 
   registerContribution(c: PluginUIContribution): void;
   unregisterContribution(pluginId: string): void;
@@ -21,8 +21,6 @@ interface PluginLayoutState {
   triggerAction(pluginId: string, actionId: string): void;
   clearTriggeredAction(): void;
   activateFullview(pluginId: string): void;
-  setActiveLeftPanel(pluginId: string | null): void;
-  setActiveRightPanel(pluginId: string | null): void;
 }
 
 export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
@@ -30,21 +28,25 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
   actions: [],
   triggeredAction: null,
   activeFullviewId: null,
-  activeLeftPanelId: null,
-  activeRightPanelId: null,
 
-  registerContribution: (c) =>
+  registerContribution: (c) => {
     set((s) => ({
       contributions: [...s.contributions.filter((x) => x.pluginId !== c.pluginId), c],
-    })),
+    }));
+    if (c.zone !== 'fullview') {
+      registerPluginToolWindow({ id: c.pluginId, label: c.label, defaultZone: c.zone as ZoneId });
+      useLayoutStore.getState().registerToolWindow(c.pluginId, c.zone as ZoneId);
+    }
+  },
 
-  unregisterContribution: (pluginId) =>
+  unregisterContribution: (pluginId) => {
     set((s) => ({
       contributions: s.contributions.filter((c) => c.pluginId !== pluginId),
       activeFullviewId: s.activeFullviewId === pluginId ? null : s.activeFullviewId,
-      activeLeftPanelId: s.activeLeftPanelId === pluginId ? null : s.activeLeftPanelId,
-      activeRightPanelId: s.activeRightPanelId === pluginId ? null : s.activeRightPanelId,
-    })),
+    }));
+    unregisterPluginToolWindow(pluginId);
+    useLayoutStore.getState().unregisterToolWindow(pluginId);
+  },
 
   registerAction: (action) =>
     set((s) => ({
@@ -64,8 +66,4 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
     set((s) => ({
       activeFullviewId: s.activeFullviewId === pluginId ? null : pluginId,
     })),
-
-  setActiveLeftPanel: (pluginId) => set({ activeLeftPanelId: pluginId, activeFullviewId: null }),
-
-  setActiveRightPanel: (pluginId) => set({ activeRightPanelId: pluginId, activeFullviewId: null }),
 }));
