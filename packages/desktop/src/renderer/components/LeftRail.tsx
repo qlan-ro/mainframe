@@ -1,11 +1,14 @@
 import React from 'react';
 import { Settings, HelpCircle, ListChecks } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { usePluginLayoutStore, useSettingsStore } from '../store';
 import { PluginIcon } from './plugins/PluginIcon';
 import { RailButton, RailSection } from './zone/RailSection';
 
 export function LeftRail(): React.ReactElement {
-  const fullviewContributions = usePluginLayoutStore((s) => s.contributions.filter((c) => c.zone === 'fullview'));
+  const fullviewContributions = usePluginLayoutStore(
+    useShallow((s) => s.contributions.filter((c) => c.zone === 'fullview')),
+  );
   const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
 
   return (
