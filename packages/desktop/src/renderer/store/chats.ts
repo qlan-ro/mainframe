@@ -6,7 +6,10 @@ import type {
   AdapterProcess,
   QueuedMessageRef,
   TodoItem,
+  DetectedPr,
 } from '@qlan-ro/mainframe-types';
+
+export type { DetectedPr } from '@qlan-ro/mainframe-types';
 
 export type SessionStatus = 'idle' | 'working' | 'waiting';
 
@@ -35,13 +38,6 @@ export interface ContextUsageState {
   percentage: number;
   totalTokens: number;
   maxTokens: number;
-}
-
-export interface DetectedPr {
-  url: string;
-  owner: string;
-  repo: string;
-  number: number;
 }
 
 interface ChatsState {
@@ -300,9 +296,17 @@ export const useChatsStore = create<ChatsState>((set) => ({
     set((state) => {
       const next = new Map(state.detectedPrs);
       const existing = next.get(chatId) ?? [];
-      // Deduplicate by PR number within the same repo
-      const isDuplicate = existing.some((p) => p.owner === pr.owner && p.repo === pr.repo && p.number === pr.number);
-      if (isDuplicate) return state;
+      const idx = existing.findIndex((p) => p.owner === pr.owner && p.repo === pr.repo && p.number === pr.number);
+      if (idx >= 0) {
+        // Upgrade mentioned → created if applicable
+        if (existing[idx]!.source === 'mentioned' && pr.source === 'created') {
+          const updated = [...existing];
+          updated[idx] = pr;
+          next.set(chatId, updated);
+          return { detectedPrs: next };
+        }
+        return state;
+      }
       next.set(chatId, [...existing, pr]);
       return { detectedPrs: next };
     }),
