@@ -100,6 +100,14 @@ export interface ContextUsage {
   maxTokens: number;
 }
 
+export interface DetectedPr {
+  url: string;
+  owner: string;
+  repo: string;
+  number: number;
+  source: 'created' | 'mentioned';
+}
+
 export interface SessionSink {
   onInit(sessionId: string): void;
   onMessage(content: import('./chat.js').MessageContent[], metadata?: MessageMetadata): void;
@@ -115,7 +123,7 @@ export interface SessionSink {
   onSkillFile(entry: import('./context.js').SkillFileEntry): void;
   onQueuedProcessed(uuid: string): void;
   onTodoUpdate(todos: import('./chat.js').TodoItem[]): void;
-  onPrDetected(pr: { url: string; owner: string; repo: string; number: number }): void;
+  onPrDetected(pr: DetectedPr): void;
 }
 
 export interface AdapterSession {
