@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { getEditorViewStateForNav, getCursorPositionForNav } from '../components/editor/editor-state';
-import { useLayoutStore } from './layout';
 import { useChatsStore } from './chats';
 
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
@@ -94,13 +93,6 @@ function currentEditorNavEntry(fv: FileView & { type: 'editor' }): NavEntry {
   };
 }
 
-function expandRightPanel(): void {
-  const layout = useLayoutStore.getState();
-  if (layout.collapsed.right) {
-    layout.toggleSide('right');
-  }
-}
-
 export const useTabsStore = create<TabsState>((set, get) => ({
   tabs: [],
   activePrimaryTabId: null,
@@ -158,19 +150,19 @@ export const useTabsStore = create<TabsState>((set, get) => ({
         navForwardStack.length = 0;
       }
     }
-    expandRightPanel();
+
     set({ fileView: { type: 'editor', filePath, label, content, line, column }, fileViewCollapsed: false });
   },
 
   openDiffTab: (filePath, source, chatId, oldPath, base) => {
     const label = `${filePath.split('/').pop() || filePath} (diff)`;
-    expandRightPanel();
+
     set({ fileView: { type: 'diff', filePath, label, source, chatId, oldPath, base }, fileViewCollapsed: false });
   },
 
   openInlineDiffTab: (filePath, original, modified, startLine) => {
     const label = `${filePath.split('/').pop() || filePath} (diff)`;
-    expandRightPanel();
+
     set({
       fileView: { type: 'diff', filePath, label, source: 'inline', original, modified, startLine },
       fileViewCollapsed: false,
@@ -178,7 +170,6 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   },
 
   openSkillEditorTab: (skillId, adapterId, label) => {
-    expandRightPanel();
     set({ fileView: { type: 'skill-editor', skillId, adapterId, label }, fileViewCollapsed: false });
   },
 
