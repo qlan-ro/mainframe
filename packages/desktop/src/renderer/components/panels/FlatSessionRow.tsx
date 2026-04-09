@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, FolderOpen, GitBranch, Clock, Loader2, Pencil } from 'lucide-react';
+import { Archive, FolderOpen, GitBranch, GitPullRequest, Clock, Loader2, Pencil } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
@@ -115,6 +115,10 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   const updateChat = useChatsStore((s) => s.updateChat);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const isUnread = unreadChatIds.has(chat.id);
+  const hasCreatedPr = useChatsStore((s) => {
+    const prs = s.detectedPrs.get(chat.id);
+    return prs?.some((p) => p.source === 'created') ?? false;
+  });
 
   const handleCommitRename = useCallback(() => {
     setEditing(false);
@@ -160,27 +164,32 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            {editing ? (
-              <input
-                ref={inputRef}
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onBlur={handleCommitRename}
-                onKeyDown={handleRenameKeyDown}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
-              />
-            ) : (
-              <div
-                className={cn(
-                  'text-mf-small truncate',
-                  isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                  isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
-                )}
-              >
-                {chat.title || 'Untitled session'}
-              </div>
-            )}
+            <div className="flex items-center gap-1">
+              {editing ? (
+                <input
+                  ref={inputRef}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={handleCommitRename}
+                  onKeyDown={handleRenameKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
+                />
+              ) : (
+                <div
+                  className={cn(
+                    'text-mf-small truncate',
+                    isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                    isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
+                  )}
+                >
+                  {chat.title || 'Untitled session'}
+                </div>
+              )}
+              {hasCreatedPr && !editing && (
+                <GitPullRequest size={12} className="shrink-0 text-[#1a7f37]" aria-label="Has created PR" />
+              )}
+            </div>
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
               {projectName && (
                 <>
