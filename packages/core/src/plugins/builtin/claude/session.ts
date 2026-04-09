@@ -61,6 +61,8 @@ export interface ClaudeSessionState {
   interruptTimer: ReturnType<typeof setTimeout> | null;
   /** Pending cancel_async_message callbacks keyed by request_id */
   pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
+  /** Tool_use IDs for Bash commands that match PR-create patterns (gh pr create, etc.) */
+  pendingPrCreates: Set<string>;
 }
 
 /**
@@ -98,6 +100,7 @@ export class ClaudeSession implements AdapterSession {
       activeTasks: new Map(),
       interruptTimer: null,
       pendingCancelCallbacks: new Map(),
+      pendingPrCreates: new Set(),
     };
   }
 

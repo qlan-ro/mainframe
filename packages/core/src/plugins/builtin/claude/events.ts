@@ -14,6 +14,20 @@ const log = createChildLogger('claude:events');
 
 export const PR_URL_REGEX = /https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/;
 
+export const AZURE_PR_URL_REGEX = /https:\/\/dev\.azure\.com\/([^/\s]+)\/[^/\s]+\/_git\/([^/\s]+)\/pullrequest\/(\d+)/;
+
+const AZURE_PR_ID_REGEX = /"pullRequestId"\s*:\s*(\d+)/;
+
+export const PR_CREATE_COMMANDS: RegExp[] = [
+  /\bgh\s+pr\s+create\b/,
+  /\bglab\s+mr\s+create\b/,
+  /\baz\s+repos\s+pr\s+create\b/,
+];
+
+function isPrCreateCommand(command: string): boolean {
+  return PR_CREATE_COMMANDS.some((re) => re.test(command));
+}
+
 export function parsePrUrl(text: string): { url: string; owner: string; repo: string; number: number } | null {
   const match = PR_URL_REGEX.exec(text);
   if (!match) return null;
@@ -22,6 +36,37 @@ export function parsePrUrl(text: string): { url: string; owner: string; repo: st
   const number = parseInt(match[3]!, 10);
   if (!owner || !repo || isNaN(number)) return null;
   return { url: match[0], owner, repo, number };
+}
+
+export function parseAzurePrUrl(text: string): { url: string; owner: string; repo: string; number: number } | null {
+  const match = AZURE_PR_URL_REGEX.exec(text);
+  if (!match) return null;
+  const owner = match[1];
+  const repo = match[2];
+  const number = parseInt(match[3]!, 10);
+  if (!owner || !repo || isNaN(number)) return null;
+  return { url: match[0], owner, repo, number };
+}
+
+function parseAzurePrJson(text: string): { url: string; owner: string; repo: string; number: number } | null {
+  const idMatch = AZURE_PR_ID_REGEX.exec(text);
+  if (!idMatch) return null;
+  const number = parseInt(idMatch[1]!, 10);
+  if (isNaN(number)) return null;
+  const repoMatch = /"name"\s*:\s*"([^"]+)"/.exec(text);
+  const orgMatch = /dev\.azure\.com\/([^/"]+)/.exec(text);
+  return {
+    url: text.trim(),
+    owner: orgMatch?.[1] ?? 'azure',
+    repo: repoMatch?.[1] ?? 'unknown',
+    number,
+  };
+}
+
+export function extractPrFromToolResult(
+  text: string,
+): { url: string; owner: string; repo: string; number: number } | null {
+  return parsePrUrl(text) ?? parseAzurePrUrl(text) ?? parseAzurePrJson(text);
 }
 
 export function handleStdout(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
@@ -94,17 +139,26 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
   }
   if (message?.content) {
     for (const block of message.content) {
-      if (block.type === 'tool_use' && block.name === 'TodoWrite') {
-        const input = block.input as { todos?: unknown[] };
-        if (Array.isArray(input?.todos)) {
-          const valid = input.todos.filter(
-            (t): t is import('@qlan-ro/mainframe-types').TodoItem =>
-              typeof t === 'object' &&
-              t !== null &&
-              typeof (t as Record<string, unknown>).content === 'string' &&
-              typeof (t as Record<string, unknown>).status === 'string',
-          );
-          if (valid.length > 0) sink.onTodoUpdate(valid);
+      if (block.type === 'tool_use') {
+        if (block.name === 'TodoWrite') {
+          const input = block.input as { todos?: unknown[] };
+          if (Array.isArray(input?.todos)) {
+            const valid = input.todos.filter(
+              (t): t is import('@qlan-ro/mainframe-types').TodoItem =>
+                typeof t === 'object' &&
+                t !== null &&
+                typeof (t as Record<string, unknown>).content === 'string' &&
+                typeof (t as Record<string, unknown>).status === 'string',
+            );
+            if (valid.length > 0) sink.onTodoUpdate(valid);
+          }
+        }
+        const name = block.name as string;
+        if (name === 'Bash' || name === 'BashTool') {
+          const input = block.input as { command?: string } | undefined;
+          if (input?.command && isPrCreateCommand(input.command)) {
+            session.state.pendingPrCreates.add(block.id as string);
+          }
         }
       }
     }
@@ -151,9 +205,12 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       if (planMatch?.[1]) {
         sink.onPlanFile(planMatch[1].trim());
       }
-      const pr = parsePrUrl(text);
+      const pr = extractPrFromToolResult(text);
       if (pr) {
-        sink.onPrDetected(pr);
+        const toolUseId = block.tool_use_id as string | undefined;
+        const source = toolUseId && session.state.pendingPrCreates.has(toolUseId) ? 'created' : 'mentioned';
+        if (source === 'created') session.state.pendingPrCreates.delete(toolUseId!);
+        sink.onPrDetected({ ...pr, source });
       }
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';

@@ -1,6 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
-import { handleStdout, parsePrUrl, PR_URL_REGEX } from '../events.js';
+import {
+  handleStdout,
+  parsePrUrl,
+  parseAzurePrUrl,
+  extractPrFromToolResult,
+  PR_URL_REGEX,
+  AZURE_PR_URL_REGEX,
+  PR_CREATE_COMMANDS,
+} from '../events.js';
 import type { ClaudeSession } from '../session.js';
 
 function createMockSink(): SessionSink {
@@ -33,6 +41,7 @@ function createMockSession(): ClaudeSession {
       lastAssistantUsage: undefined,
       activeTasks: new Map(),
       pendingCancelCallbacks: new Map(),
+      pendingPrCreates: new Set(),
     },
     clearInterruptTimer: vi.fn(),
     requestContextUsage: vi.fn(),
@@ -54,6 +63,18 @@ describe('PR_URL_REGEX', () => {
   it('matches PR URL embedded in surrounding text', () => {
     const text = 'Pull request created at https://github.com/foo/bar/pull/42 — done!';
     expect(PR_URL_REGEX.test(text)).toBe(true);
+  });
+});
+
+describe('AZURE_PR_URL_REGEX', () => {
+  it('matches an Azure DevOps PR URL', () => {
+    const url = 'https://dev.azure.com/myorg/myproject/_git/myrepo/pullrequest/42';
+    expect(AZURE_PR_URL_REGEX.test(url)).toBe(true);
+  });
+
+  it('does not match other Azure URLs', () => {
+    expect(AZURE_PR_URL_REGEX.test('https://dev.azure.com/myorg/myproject/_git/myrepo/commit/abc')).toBe(false);
+    expect(AZURE_PR_URL_REGEX.test('https://dev.azure.com/myorg')).toBe(false);
   });
 });
 
@@ -81,35 +102,207 @@ describe('parsePrUrl', () => {
   });
 });
 
-describe('PR detection via handleStdout', () => {
-  it('calls sink.onPrDetected when tool_result contains a GitHub PR URL', () => {
+describe('parseAzurePrUrl', () => {
+  it('parses an Azure DevOps PR URL', () => {
+    const result = parseAzurePrUrl('https://dev.azure.com/myorg/myproject/_git/myrepo/pullrequest/42');
+    expect(result).toEqual({
+      url: 'https://dev.azure.com/myorg/myproject/_git/myrepo/pullrequest/42',
+      owner: 'myorg',
+      repo: 'myrepo',
+      number: 42,
+    });
+  });
+
+  it('returns null for non-matching text', () => {
+    expect(parseAzurePrUrl('https://github.com/owner/repo/pull/1')).toBeNull();
+    expect(parseAzurePrUrl('no URL here')).toBeNull();
+  });
+});
+
+describe('command-level PR detection', () => {
+  it('detects source: created when gh pr create tool_use precedes tool_result with PR URL', () => {
     const sink = createMockSink();
     const session = createMockSession();
 
-    const event = {
+    // Step 1: assistant event with gh pr create tool_use
+    const assistantEvent = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_pr_1',
+            name: 'Bash',
+            input: { command: 'gh pr create --title "feat" --body "desc"' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(assistantEvent) + '\n'), sink);
+
+    // Verify tool_use_id was stashed
+    expect(session.state.pendingPrCreates.has('tu_pr_1')).toBe(true);
+
+    // Step 2: user event with tool_result containing PR URL
+    const userEvent = {
       type: 'user',
       message: {
         content: [
           {
             type: 'tool_result',
-            tool_use_id: 'tu_1',
-            content: 'Pull request created: https://github.com/myorg/myrepo/pull/99',
+            tool_use_id: 'tu_pr_1',
+            content: 'https://github.com/myorg/myrepo/pull/99',
           },
         ],
       },
     };
-
-    handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
 
     expect(sink.onPrDetected).toHaveBeenCalledWith({
       url: 'https://github.com/myorg/myrepo/pull/99',
       owner: 'myorg',
       repo: 'myrepo',
       number: 99,
+      source: 'created',
+    });
+
+    // pendingPrCreates should be consumed
+    expect(session.state.pendingPrCreates.has('tu_pr_1')).toBe(false);
+  });
+
+  it('detects source: mentioned when no matching tool_use preceded tool_result', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_other',
+            content: 'See https://github.com/myorg/myrepo/pull/50 for context',
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    expect(sink.onPrDetected).toHaveBeenCalledWith({
+      url: 'https://github.com/myorg/myrepo/pull/50',
+      owner: 'myorg',
+      repo: 'myrepo',
+      number: 50,
+      source: 'mentioned',
     });
   });
 
-  it('does not call sink.onPrDetected when tool_result has no PR URL', () => {
+  it('stashes tool_use_id for glab mr create', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const event = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_gl_1',
+            name: 'BashTool',
+            input: { command: 'glab mr create --fill' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
+
+    expect(session.state.pendingPrCreates.has('tu_gl_1')).toBe(true);
+  });
+
+  it('stashes tool_use_id for az repos pr create', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const event = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_az_1',
+            name: 'Bash',
+            input: { command: 'az repos pr create --source-branch feat --target-branch main' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
+
+    expect(session.state.pendingPrCreates.has('tu_az_1')).toBe(true);
+  });
+
+  it('parses Azure DevOps URL in tool_result', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    // Stash the az command
+    session.state.pendingPrCreates.add('tu_az_2');
+
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_az_2',
+            content: 'Created: https://dev.azure.com/myorg/myproject/_git/myrepo/pullrequest/7',
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    expect(sink.onPrDetected).toHaveBeenCalledWith({
+      url: 'https://dev.azure.com/myorg/myproject/_git/myrepo/pullrequest/7',
+      owner: 'myorg',
+      repo: 'myrepo',
+      number: 7,
+      source: 'created',
+    });
+  });
+
+  it('parses Azure JSON output with pullRequestId', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    session.state.pendingPrCreates.add('tu_az_3');
+
+    const jsonOutput =
+      '{"pullRequestId": 42, "name": "my-repo", "url": "https://dev.azure.com/myorg/myproject/_apis/git/repositories/my-repo/pullRequests/42"}';
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_az_3',
+            content: jsonOutput,
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    expect(sink.onPrDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        number: 42,
+        repo: 'my-repo',
+        source: 'created',
+      }),
+    );
+  });
+
+  it('does not call onPrDetected when tool_result has no PR URL', () => {
     const sink = createMockSink();
     const session = createMockSession();
 
@@ -125,31 +318,52 @@ describe('PR detection via handleStdout', () => {
         ],
       },
     };
-
     handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
 
     expect(sink.onPrDetected).not.toHaveBeenCalled();
   });
 
-  it('does not call sink.onPrDetected for non-PR GitHub URLs in tool_result', () => {
+  it('does not stash tool_use_id for non-Bash tools', () => {
     const sink = createMockSink();
     const session = createMockSession();
 
     const event = {
-      type: 'user',
+      type: 'assistant',
       message: {
         content: [
           {
-            type: 'tool_result',
-            tool_use_id: 'tu_1',
-            content: 'See https://github.com/org/repo/issues/5 for context',
+            type: 'tool_use',
+            id: 'tu_edit_1',
+            name: 'Edit',
+            input: { command: 'gh pr create' },
           },
         ],
       },
     };
-
     handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
 
-    expect(sink.onPrDetected).not.toHaveBeenCalled();
+    expect(session.state.pendingPrCreates.size).toBe(0);
+  });
+
+  it('does not stash tool_use_id for non-create gh commands', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const event = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_view_1',
+            name: 'Bash',
+            input: { command: 'gh pr view 123' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
+
+    expect(session.state.pendingPrCreates.size).toBe(0);
   });
 });

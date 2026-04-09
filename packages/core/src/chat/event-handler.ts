@@ -344,7 +344,7 @@ function buildSessionSink(
       emitEvent({ type: 'todos.updated', chatId, todos });
     },
 
-    onPrDetected(pr: { url: string; owner: string; repo: string; number: number }) {
+    onPrDetected(pr: import('@qlan-ro/mainframe-types').DetectedPr) {
       emitEvent({ type: 'chat.prDetected', chatId, pr });
     },
 

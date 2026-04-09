@@ -343,7 +343,7 @@ export class ChatLifecycleManager {
             const key = `${pr.owner}/${pr.repo}/${pr.number}`;
             if (seenPrs.has(key)) continue;
             seenPrs.add(key);
-            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr });
+            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr: { ...pr, source: 'mentioned' } });
           }
         }
       }
