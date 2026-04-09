@@ -148,7 +148,6 @@ function registerTodoRoutes(ctx: PluginContext): void {
       );
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
     const todo = parseTodo(row);
-    ctx.ui.notify({ title: 'Task created', body: `#${todo.number} ${todo.title}`, level: 'success' });
     res.status(201).json({ todo });
   });
 

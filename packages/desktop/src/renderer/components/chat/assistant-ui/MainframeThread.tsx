@@ -1,14 +1,17 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { ThreadPrimitive, useThread } from '@assistant-ui/react';
 import { Loader2 } from 'lucide-react';
 import { useMainframeRuntime } from './MainframeRuntimeProvider';
 import { useChatsStore } from '../../../store/chats';
-import { PermissionCard } from '../PermissionCard';
-import { AskUserQuestionCard } from '../AskUserQuestionCard';
-import { PlanApprovalCard } from '../PlanApprovalCard';
 import { ImageLightbox } from '../ImageLightbox';
 import { UserMessage, AssistantMessage, SystemMessage } from './messages';
 import { ComposerCard } from './composer';
+
+const PermissionCard = React.lazy(() => import('../PermissionCard').then((m) => ({ default: m.PermissionCard })));
+const AskUserQuestionCard = React.lazy(() =>
+  import('../AskUserQuestionCard').then((m) => ({ default: m.AskUserQuestionCard })),
+);
+const PlanApprovalCard = React.lazy(() => import('../PlanApprovalCard').then((m) => ({ default: m.PlanApprovalCard })));
 
 function EmptyState() {
   return (
@@ -36,7 +39,7 @@ function GeneratingIndicator() {
   );
 }
 
-function BottomCard() {
+function BottomCardInner() {
   const { pendingPermission, respondToPermission } = useMainframeRuntime();
 
   if (pendingPermission) {
@@ -50,6 +53,14 @@ function BottomCard() {
   }
 
   return <ComposerCard />;
+}
+
+function BottomCard() {
+  return (
+    <Suspense fallback={<ComposerCard />}>
+      <BottomCardInner />
+    </Suspense>
+  );
 }
 
 export function MainframeThread() {

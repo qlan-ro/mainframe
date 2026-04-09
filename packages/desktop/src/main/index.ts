@@ -13,6 +13,7 @@ if (process.env.NODE_ENV === 'development') {
 }
 import { createMainLogger, logFromRenderer } from './logger.js';
 import { setupTerminalIPC, killAllTerminals } from './terminal-manager.js';
+import { startIdleReporter, stopIdleReporter } from './idle-reporter.js';
 
 const log = createMainLogger('electron');
 
@@ -258,6 +259,7 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  startIdleReporter();
 
   const configuredPartitions = new Set<string>();
   app.on('web-contents-created', (_event, contents) => {
@@ -308,6 +310,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('quit', () => {
+  stopIdleReporter();
   killAllTerminals();
   if (daemon) {
     daemon.kill();

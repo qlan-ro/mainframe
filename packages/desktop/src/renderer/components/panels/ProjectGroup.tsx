@@ -245,7 +245,7 @@ interface ProjectGroupProps {
   unregisterRenameCallback?: (chatId: string) => void;
 }
 
-export function ProjectGroup({
+export const ProjectGroup = React.memo(function ProjectGroup({
   project,
   chats,
   parentName,
@@ -388,4 +388,4 @@ export function ProjectGroup({
       )}
     </div>
   );
-}
+});

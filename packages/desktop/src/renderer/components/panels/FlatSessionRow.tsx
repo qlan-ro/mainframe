@@ -37,7 +37,7 @@ interface FlatSessionRowProps {
   unregisterRenameCallback?: (chatId: string) => void;
 }
 
-export function FlatSessionRow({
+export const FlatSessionRow = React.memo(function FlatSessionRow({
   chat,
   projectName,
   onContextMenu,
@@ -246,4 +246,4 @@ export function FlatSessionRow({
       </div>
     </div>
   );
-}
+});
