@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFileCb);
 import { createChildLogger } from '../logger.js';
 import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
-import { parsePrUrl } from '../plugins/builtin/claude/events.js';
+import { extractPrFromToolResult, PR_CREATE_COMMANDS } from '../plugins/builtin/claude/events.js';
 import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
@@ -330,20 +330,38 @@ export class ChatLifecycleManager {
           }
         }
 
-        // Scan tool_result blocks in history for PR URLs so old sessions
-        // also display the PR badge after a daemon restart.
+        // Scan history for PR URLs with command-level correlation.
+        // Walk messages in order: assistant tool_use blocks identify PR-create
+        // commands; subsequent tool_result blocks with PR URLs are classified.
         const seenPrs = new Set<string>();
+        const pendingCreates = new Set<string>();
         for (const msg of cached) {
+          if (msg.type === 'assistant') {
+            for (const block of msg.content) {
+              if (block.type === 'tool_use') {
+                const name = (block as Record<string, unknown>).name as string | undefined;
+                if (name === 'Bash' || name === 'BashTool') {
+                  const input = (block as Record<string, unknown>).input as { command?: string } | undefined;
+                  if (input?.command && PR_CREATE_COMMANDS.some((re) => re.test(input.command!))) {
+                    pendingCreates.add((block as Record<string, unknown>).id as string);
+                  }
+                }
+              }
+            }
+          }
           if (msg.type !== 'tool_result') continue;
           for (const block of msg.content) {
             if (block.type !== 'tool_result') continue;
             const text = typeof block.content === 'string' ? block.content : '';
-            const pr = parsePrUrl(text);
+            const pr = extractPrFromToolResult(text);
             if (!pr) continue;
             const key = `${pr.owner}/${pr.repo}/${pr.number}`;
             if (seenPrs.has(key)) continue;
             seenPrs.add(key);
-            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr: { ...pr, source: 'mentioned' } });
+            const toolUseId = (block as Record<string, unknown>).tool_use_id as string | undefined;
+            const source = toolUseId && pendingCreates.has(toolUseId) ? ('created' as const) : ('mentioned' as const);
+            if (source === 'created') pendingCreates.delete(toolUseId!);
+            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr: { ...pr, source } });
           }
         }
       }
