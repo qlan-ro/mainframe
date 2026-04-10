@@ -143,7 +143,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   },
   addChat: (chat) =>
     set((state) => {
-      const sorted = sortChats([...state.chats, chat]);
+      const sorted = sortChats([chat, ...state.chats]);
       return { chats: sorted };
     }),
   updateChat: (chat) =>
