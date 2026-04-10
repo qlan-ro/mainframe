@@ -6,9 +6,33 @@ import type {
   AdapterProcess,
   QueuedMessageRef,
   TodoItem,
+  DetectedPr,
 } from '@qlan-ro/mainframe-types';
 
+export type { DetectedPr } from '@qlan-ro/mainframe-types';
+
 export type SessionStatus = 'idle' | 'working' | 'waiting';
+
+const MAX_MESSAGES_PER_CHAT = 2000;
+const MAX_DISPLAY_CHATS = 50;
+
+function capMessages(msgs: DisplayMessage[]): DisplayMessage[] {
+  return msgs.length > MAX_MESSAGES_PER_CHAT ? msgs.slice(-MAX_MESSAGES_PER_CHAT) : msgs;
+}
+
+function evictMessages(
+  messages: Map<string, DisplayMessage[]>,
+  currentChatId: string | null,
+): Map<string, DisplayMessage[]> {
+  if (messages.size <= MAX_DISPLAY_CHATS) return messages;
+  const evicted = new Map(messages);
+  for (const key of evicted.keys()) {
+    if (evicted.size <= MAX_DISPLAY_CHATS) break;
+    if (key === currentChatId) continue;
+    evicted.delete(key);
+  }
+  return evicted;
+}
 
 export interface ContextUsageState {
   percentage: number;
@@ -28,6 +52,7 @@ interface ChatsState {
   contextUsage: Map<string, ContextUsageState>;
   unreadChatIds: Set<string>;
   todos: Map<string, TodoItem[]>;
+  detectedPrs: Map<string, DetectedPr[]>;
 
   markUnread: (chatId: string) => void;
   clearUnread: (chatId: string) => void;
@@ -51,6 +76,7 @@ interface ChatsState {
   setCompacting: (chatId: string, compacting: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
   setTodos: (chatId: string, todos: TodoItem[]) => void;
+  addDetectedPr: (chatId: string, pr: DetectedPr) => void;
 }
 
 function sortChats(chats: Chat[]): Chat[] {
@@ -73,6 +99,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   contextUsage: new Map(),
   unreadChatIds: new Set(),
   todos: new Map(),
+  detectedPrs: new Map(),
 
   markUnread: (chatId) =>
     set((state) => {
@@ -134,22 +161,48 @@ export const useChatsStore = create<ChatsState>((set) => ({
       return { chats: updated };
     }),
   removeChat: (id) =>
-    set((state) => ({
-      chats: state.chats.filter((c) => c.id !== id),
-      activeChatId: state.activeChatId === id ? null : state.activeChatId,
-    })),
+    set((state) => {
+      const messages = new Map(state.messages);
+      messages.delete(id);
+      const pendingPermissions = new Map(state.pendingPermissions);
+      pendingPermissions.delete(id);
+      const processes = new Map(state.processes);
+      processes.delete(id);
+      const queuedMessages = new Map(state.queuedMessages);
+      queuedMessages.delete(id);
+      const contextUsage = new Map(state.contextUsage);
+      contextUsage.delete(id);
+      const compactingChats = new Set(state.compactingChats);
+      compactingChats.delete(id);
+      const todos = new Map(state.todos);
+      todos.delete(id);
+      const detectedPrs = new Map(state.detectedPrs);
+      detectedPrs.delete(id);
+      return {
+        chats: state.chats.filter((c) => c.id !== id),
+        activeChatId: state.activeChatId === id ? null : state.activeChatId,
+        messages,
+        pendingPermissions,
+        processes,
+        queuedMessages,
+        contextUsage,
+        compactingChats,
+        todos,
+        detectedPrs,
+      };
+    }),
   addMessage: (chatId, message) =>
     set((state) => {
       const newMessages = new Map(state.messages);
       const existing = newMessages.get(chatId) || [];
-      newMessages.set(chatId, [...existing, message]);
-      return { messages: newMessages };
+      newMessages.set(chatId, capMessages([...existing, message]));
+      return { messages: evictMessages(newMessages, state.activeChatId) };
     }),
   setMessages: (chatId, messages) =>
     set((state) => {
       const newMessages = new Map(state.messages);
-      newMessages.set(chatId, messages);
-      return { messages: newMessages };
+      newMessages.set(chatId, capMessages(messages));
+      return { messages: evictMessages(newMessages, state.activeChatId) };
     }),
   updateMessage: (chatId, message) =>
     set((state) => {
@@ -161,7 +214,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
         updated[idx] = message;
         newMessages.set(chatId, updated);
       } else {
-        newMessages.set(chatId, [...existing, message]);
+        newMessages.set(chatId, capMessages([...existing, message]));
       }
       return { messages: newMessages };
     }),
@@ -245,5 +298,23 @@ export const useChatsStore = create<ChatsState>((set) => ({
       const next = new Map(state.todos);
       next.set(chatId, todos);
       return { todos: next };
+    }),
+  addDetectedPr: (chatId, pr) =>
+    set((state) => {
+      const next = new Map(state.detectedPrs);
+      const existing = next.get(chatId) ?? [];
+      const idx = existing.findIndex((p) => p.owner === pr.owner && p.repo === pr.repo && p.number === pr.number);
+      if (idx >= 0) {
+        // Upgrade mentioned → created if applicable
+        if (existing[idx]!.source === 'mentioned' && pr.source === 'created') {
+          const updated = [...existing];
+          updated[idx] = pr;
+          next.set(chatId, updated);
+          return { detectedPrs: next };
+        }
+        return state;
+      }
+      next.set(chatId, [...existing, pr]);
+      return { detectedPrs: next };
     }),
 }));

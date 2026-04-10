@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 import { usePluginLayoutStore } from '../store';
 import { useLayoutStore } from '../store/layout';
+import { useTabsStore } from '../store/tabs';
 import { TitleBar } from './TitleBar';
 import { LeftRail } from './LeftRail';
 import { RightRail } from './RightRail';
@@ -10,6 +11,8 @@ import { PluginView } from './plugins/PluginView';
 import { Zone } from './zone/Zone';
 import { BottomResizeHandle } from './zone/BottomResizeHandle';
 import { DragProvider } from './zone/DragOverlay';
+import { FileViewHeader } from './panels/FileViewHeader';
+import { FileViewContent } from './panels/FileViewContent';
 
 const BOTTOM_HEIGHT_MIN = 120;
 const BOTTOM_HEIGHT_DEFAULT = 200;
@@ -24,6 +27,33 @@ function HorizontalResizeHandle(): React.ReactElement {
 
 function VerticalResizeHandle(): React.ReactElement {
   return <Separator className="h-mf-gap bg-mf-app-bg hover:bg-mf-divider transition-colors" />;
+}
+
+function CenterSplit({ centerPanel }: { centerPanel: React.ReactNode }): React.ReactElement {
+  const fileView = useTabsStore((s) => s.fileView);
+  const fileViewCollapsed = useTabsStore((s) => s.fileViewCollapsed);
+  const showFileView = fileView != null && !fileViewCollapsed;
+
+  if (!showFileView) {
+    return <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>;
+  }
+
+  return (
+    <Group orientation="horizontal">
+      <Panel id="center-chat" defaultSize="50%" minSize="30%">
+        <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>
+      </Panel>
+      <HorizontalResizeHandle />
+      <Panel id="center-file" defaultSize="50%" minSize="20%">
+        <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden flex flex-col">
+          <FileViewHeader />
+          <div className="flex-1 overflow-hidden">
+            <FileViewContent />
+          </div>
+        </div>
+      </Panel>
+    </Group>
+  );
 }
 
 export function Layout({ centerPanel }: LayoutProps): React.ReactElement {
@@ -92,7 +122,7 @@ export function Layout({ centerPanel }: LayoutProps): React.ReactElement {
                   )}
 
                   <Panel id="center">
-                    <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>
+                    <CenterSplit centerPanel={centerPanel} />
                   </Panel>
 
                   {hasRight && (
