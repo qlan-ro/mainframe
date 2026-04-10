@@ -79,6 +79,14 @@ interface ChatsState {
   addDetectedPr: (chatId: string, pr: DetectedPr) => void;
 }
 
+function sortChats(chats: Chat[]): Chat[] {
+  return chats.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime();
+  });
+}
+
 export const useChatsStore = create<ChatsState>((set) => ({
   chats: [],
   activeChatId: null,
@@ -135,21 +143,17 @@ export const useChatsStore = create<ChatsState>((set) => ({
   },
   addChat: (chat) =>
     set((state) => {
-      const chatTime = new Date(chat.updatedAt ?? chat.createdAt).getTime();
-      const idx = state.chats.findIndex((c) => new Date(c.updatedAt ?? c.createdAt).getTime() <= chatTime);
-      if (idx === -1) return { chats: [...state.chats, chat] };
-      const next = [...state.chats];
-      next.splice(idx, 0, chat);
-      return { chats: next };
+      const sorted = sortChats([chat, ...state.chats]);
+      return { chats: sorted };
     }),
   updateChat: (chat) =>
     set((state) => {
       const idx = state.chats.findIndex((c) => c.id === chat.id);
-      if (idx === -1) return { chats: [chat, ...state.chats] };
+      if (idx === -1) return { chats: sortChats([chat, ...state.chats]) };
       const prev = state.chats[idx]!;
-      // Only move to top when updatedAt actually changed (real content update)
-      if (chat.updatedAt !== prev.updatedAt) {
-        return { chats: [chat, ...state.chats.filter((c) => c.id !== chat.id)] };
+      // Only re-sort when updatedAt or pinned changed
+      if (chat.updatedAt !== prev.updatedAt || chat.pinned !== prev.pinned) {
+        return { chats: sortChats([chat, ...state.chats.filter((c) => c.id !== chat.id)]) };
       }
       // Otherwise update in-place to preserve list order
       const updated = [...state.chats];

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, FolderOpen, GitBranch, GitPullRequest, Clock, Loader2, Pencil } from 'lucide-react';
+import { Archive, FolderOpen, GitBranch, GitPullRequest, Clock, Loader2, Pencil, Pin } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
@@ -150,6 +150,24 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
       )}
     >
+      {createdPrUrl && !editing && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(createdPrUrl, '_blank');
+              }}
+              className="w-5 h-5 shrink-0 ml-2 rounded flex items-center justify-center text-[#1a7f37] hover:bg-mf-hover transition-colors"
+              aria-label="Open PR"
+            >
+              <GitPullRequest size={13} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Open PR</TooltipContent>
+        </Tooltip>
+      )}
       <button type="button" onClick={handleSelect} className="flex-1 min-w-0 px-3 py-1.5 text-left">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 shrink-0 flex items-center justify-center">
@@ -165,24 +183,6 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
-              {createdPrUrl && !editing && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(createdPrUrl, '_blank');
-                      }}
-                      className="w-5 h-5 shrink-0 rounded flex items-center justify-center text-[#1a7f37] hover:bg-mf-hover transition-colors"
-                      aria-label="Open PR"
-                    >
-                      <GitPullRequest size={13} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Open PR</TooltipContent>
-                </Tooltip>
-              )}
               {editing ? (
                 <input
                   ref={inputRef}
@@ -194,14 +194,17 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
                   className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
                 />
               ) : (
-                <div
-                  className={cn(
-                    'text-mf-small truncate',
-                    isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                    isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
-                  )}
-                >
-                  {chat.title || 'Untitled session'}
+                <div className="flex items-center gap-1 min-w-0">
+                  {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
+                  <div
+                    className={cn(
+                      'text-mf-small truncate',
+                      isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                      isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
+                    )}
+                  >
+                    {chat.title || 'Untitled session'}
+                  </div>
                 </div>
               )}
             </div>

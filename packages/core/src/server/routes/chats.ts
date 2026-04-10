@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
@@ -76,6 +77,29 @@ export function chatRoutes(ctx: RouteContext): Router {
       res.json({ success: true, data: chat });
     } catch (err) {
       logger.warn({ err, chatId }, 'Failed to rename chat');
+      res.status(500).json({ success: false, error: 'Operation failed' });
+    }
+  });
+
+  const pinSchema = z.object({ pinned: z.boolean() });
+
+  router.patch('/api/chats/:id/pinned', (req: Request, res: Response) => {
+    const chatId = param(req, 'id');
+    const parsed = pinSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: 'pinned (boolean) is required' });
+      return;
+    }
+    try {
+      ctx.db.chats.update(chatId, { pinned: parsed.data.pinned });
+      const chat = ctx.db.chats.get(chatId);
+      if (!chat) {
+        res.status(404).json({ success: false, error: 'Chat not found' });
+        return;
+      }
+      res.json({ success: true, data: chat });
+    } catch (err) {
+      logger.warn({ err, chatId }, 'Failed to update pinned state');
       res.status(500).json({ success: false, error: 'Operation failed' });
     }
   });

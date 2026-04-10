@@ -236,6 +236,50 @@ describe('ChatsRepository', () => {
       const fetched = chats.get(chat.id);
       expect(fetched!.mentions).toEqual(mentions);
     });
+
+    it('pins a chat and returns pinned: true', () => {
+      const chat = chats.create(projectId, 'claude');
+      expect(chats.get(chat.id)!.pinned).toBe(false);
+
+      chats.update(chat.id, { pinned: true });
+      expect(chats.get(chat.id)!.pinned).toBe(true);
+    });
+
+    it('unpins a chat and returns pinned: false', () => {
+      const chat = chats.create(projectId, 'claude');
+      chats.update(chat.id, { pinned: true });
+      chats.update(chat.id, { pinned: false });
+      expect(chats.get(chat.id)!.pinned).toBe(false);
+    });
+  });
+
+  describe('pinned ordering', () => {
+    it('list() returns pinned chats before unpinned ones', () => {
+      const older = chats.create(projectId, 'claude');
+      const newer = chats.create(projectId, 'claude');
+      chats.update(older.id, { updatedAt: new Date(Date.now() - 5000).toISOString() });
+      chats.update(newer.id, { updatedAt: new Date(Date.now()).toISOString() });
+
+      // Pin the older chat — it should now appear first
+      chats.update(older.id, { pinned: true });
+
+      const all = chats.list(projectId);
+      expect(all[0]!.id).toBe(older.id);
+      expect(all[1]!.id).toBe(newer.id);
+    });
+
+    it('listAll() returns pinned chats before unpinned ones', () => {
+      const c1 = chats.create(projectId, 'claude');
+      const c2 = chats.create(projectId, 'claude');
+      chats.update(c1.id, { updatedAt: new Date(Date.now() - 5000).toISOString() });
+      chats.update(c2.id, { updatedAt: new Date(Date.now()).toISOString() });
+
+      chats.update(c1.id, { pinned: true });
+
+      const all = chats.listAll();
+      const ids = all.map((c) => c.id);
+      expect(ids.indexOf(c1.id)).toBeLessThan(ids.indexOf(c2.id));
+    });
   });
 
   describe('mentions', () => {

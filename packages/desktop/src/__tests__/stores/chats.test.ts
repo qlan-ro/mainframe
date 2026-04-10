@@ -348,9 +348,7 @@ describe('useChatsStore', () => {
     });
 
     it('setMessages caps at MAX_MESSAGES_PER_CHAT', () => {
-      const msgs = Array.from({ length: 2500 }, (_, i) =>
-        makeMessage({ id: `msg-${i}`, chatId: 'chat-1' }),
-      );
+      const msgs = Array.from({ length: 2500 }, (_, i) => makeMessage({ id: `msg-${i}`, chatId: 'chat-1' }));
       useChatsStore.getState().setMessages('chat-1', msgs);
       expect(useChatsStore.getState().messages.get('chat-1')).toHaveLength(2000);
     });
