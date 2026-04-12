@@ -11,6 +11,7 @@ describe('PushService', () => {
   });
 
   afterEach(() => {
+    service.dispose();
     global.fetch = originalFetch;
   });
 
@@ -65,5 +66,77 @@ describe('PushService', () => {
     expect(service.hasRegisteredDevices()).toBe(true);
     service.unregisterDevice('device-1');
     expect(service.hasRegisteredDevices()).toBe(false);
+  });
+
+  it('skips push when desktop is active', async () => {
+    service.registerDevice('device-1', 'ExponentPushToken[aaa]');
+    service.setDesktopActive(true);
+
+    await service.sendPush({
+      title: 'Test',
+      body: 'Test',
+      data: {},
+      priority: 'default',
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('sends push when desktop is idle', async () => {
+    service.registerDevice('device-1', 'ExponentPushToken[aaa]');
+    service.setDesktopActive(true);
+    service.setDesktopActive(false);
+
+    await service.sendPush({
+      title: 'Test',
+      body: 'Test',
+      data: {},
+      priority: 'default',
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('expires desktop-active state after staleness timeout', async () => {
+    vi.useFakeTimers();
+    service.registerDevice('device-1', 'ExponentPushToken[aaa]');
+    service.setDesktopActive(true);
+
+    // Advance past 6-minute staleness timeout
+    vi.advanceTimersByTime(6 * 60 * 1000 + 100);
+
+    await service.sendPush({
+      title: 'Test',
+      body: 'Test',
+      data: {},
+      priority: 'default',
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('resets staleness timer on repeated setDesktopActive(true)', async () => {
+    vi.useFakeTimers();
+    service.registerDevice('device-1', 'ExponentPushToken[aaa]');
+    service.setDesktopActive(true);
+
+    // Advance 5 minutes, then re-report active
+    vi.advanceTimersByTime(5 * 60 * 1000);
+    service.setDesktopActive(true);
+
+    // Advance another 5 minutes (10 total, but only 5 since last active)
+    vi.advanceTimersByTime(5 * 60 * 1000);
+
+    await service.sendPush({
+      title: 'Test',
+      body: 'Test',
+      data: {},
+      priority: 'default',
+    });
+
+    // Should still be suppressed — timer was reset
+    expect(fetch).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

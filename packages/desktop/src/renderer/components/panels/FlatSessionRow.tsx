@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, FolderOpen, GitBranch, Clock, Loader2, Pencil } from 'lucide-react';
+import { Archive, FolderOpen, GitBranch, GitPullRequest, Clock, Loader2, Pencil, Pin } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
@@ -37,7 +37,7 @@ interface FlatSessionRowProps {
   unregisterRenameCallback?: (chatId: string) => void;
 }
 
-export function FlatSessionRow({
+export const FlatSessionRow = React.memo(function FlatSessionRow({
   chat,
   projectName,
   onContextMenu,
@@ -115,6 +115,10 @@ export function FlatSessionRow({
   const updateChat = useChatsStore((s) => s.updateChat);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const isUnread = unreadChatIds.has(chat.id);
+  const createdPrUrl = useChatsStore((s) => {
+    const prs = s.detectedPrs.get(chat.id);
+    return prs?.find((p) => p.source === 'created')?.url ?? null;
+  });
 
   const handleCommitRename = useCallback(() => {
     setEditing(false);
@@ -146,6 +150,24 @@ export function FlatSessionRow({
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
       )}
     >
+      {createdPrUrl && !editing && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(createdPrUrl, '_blank');
+              }}
+              className="w-5 h-5 shrink-0 ml-2 rounded flex items-center justify-center text-[#1a7f37] hover:bg-mf-hover transition-colors"
+              aria-label="Open PR"
+            >
+              <GitPullRequest size={13} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Open PR</TooltipContent>
+        </Tooltip>
+      )}
       <button type="button" onClick={handleSelect} className="flex-1 min-w-0 px-3 py-1.5 text-left">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 shrink-0 flex items-center justify-center">
@@ -160,27 +182,32 @@ export function FlatSessionRow({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            {editing ? (
-              <input
-                ref={inputRef}
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onBlur={handleCommitRename}
-                onKeyDown={handleRenameKeyDown}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
-              />
-            ) : (
-              <div
-                className={cn(
-                  'text-mf-small truncate',
-                  isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                  isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
-                )}
-              >
-                {chat.title || 'Untitled session'}
-              </div>
-            )}
+            <div className="flex items-center gap-1">
+              {editing ? (
+                <input
+                  ref={inputRef}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={handleCommitRename}
+                  onKeyDown={handleRenameKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
+                />
+              ) : (
+                <div className="flex items-center gap-1 min-w-0">
+                  {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
+                  <div
+                    className={cn(
+                      'text-mf-small truncate',
+                      isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                      isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
+                    )}
+                  >
+                    {chat.title || 'Untitled session'}
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
               {projectName && (
                 <>
@@ -246,4 +273,4 @@ export function FlatSessionRow({
       </div>
     </div>
   );
-}
+});

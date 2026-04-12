@@ -2,6 +2,14 @@ import type Database from 'better-sqlite3';
 import type { Chat, SessionMention, SkillFileEntry, TodoItem } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
 
+/** Raw shape returned by SQLite before boolean/JSON coercion. */
+type RawChatRow = Omit<Chat, 'pinned' | 'mentions' | 'modifiedFiles' | 'todos'> & {
+  mentions: string;
+  modifiedFiles: string;
+  todos: string;
+  pinned: number;
+};
+
 function parseJsonColumn<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
   try {
@@ -25,12 +33,12 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos
+        process_state as processState, todos, pinned
       FROM chats
       WHERE project_id = ? AND status != 'archived'
-      ORDER BY updated_at DESC
+      ORDER BY pinned DESC, updated_at DESC
     `);
-    const rows = stmt.all(projectId) as (Chat & { mentions: string; modifiedFiles: string; todos: string })[];
+    const rows = stmt.all(projectId) as RawChatRow[];
     return rows.map((row) => ({
       ...row,
       mentions: parseJsonColumn(row.mentions, []),
@@ -39,6 +47,7 @@ export class ChatsRepository {
       branchName: row.branchName || undefined,
       processState: (row.processState as Chat['processState']) || null,
       todos: parseJsonColumn(row.todos, undefined) ?? undefined,
+      pinned: Boolean(row.pinned),
     }));
   }
 
@@ -53,12 +62,12 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos
+        process_state as processState, todos, pinned
       FROM chats
       WHERE status != 'archived'
-      ORDER BY updated_at DESC, rowid DESC
+      ORDER BY pinned DESC, updated_at DESC, rowid DESC
     `);
-    const rows = stmt.all() as (Chat & { mentions: string; modifiedFiles: string; todos: string })[];
+    const rows = stmt.all() as RawChatRow[];
     return rows.map((row) => ({
       ...row,
       mentions: parseJsonColumn(row.mentions, []),
@@ -67,6 +76,7 @@ export class ChatsRepository {
       branchName: row.branchName || undefined,
       processState: (row.processState as Chat['processState']) || null,
       todos: parseJsonColumn(row.todos, undefined) ?? undefined,
+      pinned: Boolean(row.pinned),
     }));
   }
 
@@ -81,10 +91,10 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos
+        process_state as processState, todos, pinned
       FROM chats WHERE id = ?
     `);
-    const row = stmt.get(id) as (Chat & { mentions: string; modifiedFiles: string; todos: string }) | null;
+    const row = stmt.get(id) as RawChatRow | null;
     if (!row) return null;
     return {
       ...row,
@@ -94,6 +104,7 @@ export class ChatsRepository {
       branchName: row.branchName || undefined,
       processState: (row.processState as Chat['processState']) || null,
       todos: parseJsonColumn(row.todos, undefined) ?? undefined,
+      pinned: Boolean(row.pinned),
     };
   }
 
@@ -140,6 +151,7 @@ export class ChatsRepository {
     processState: { column: 'process_state' },
     createdAt: { column: 'created_at' },
     updatedAt: { column: 'updated_at' },
+    pinned: { column: 'pinned', transform: (v) => (v ? 1 : 0) },
   };
 
   update(id: string, updates: Partial<Chat>): void {
@@ -243,12 +255,10 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos
+        process_state as processState, todos, pinned
       FROM chats WHERE claude_session_id = ? AND project_id = ?
     `);
-    const row = stmt.get(sessionId, projectId) as
-      | (Chat & { mentions: string; modifiedFiles: string; todos: string })
-      | null;
+    const row = stmt.get(sessionId, projectId) as RawChatRow | null;
     if (!row) return null;
     return {
       ...row,
@@ -258,6 +268,7 @@ export class ChatsRepository {
       branchName: row.branchName || undefined,
       processState: (row.processState as Chat['processState']) || null,
       todos: parseJsonColumn(row.todos, undefined) ?? undefined,
+      pinned: Boolean(row.pinned),
     };
   }
 }
