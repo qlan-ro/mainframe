@@ -5,7 +5,7 @@ import { useChatsStore } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
 import { daemonClient } from '../../lib/client';
 import { getSessionDiffs, getBranchDiffs } from '../../lib/api';
-import type { SessionFileDiff, BranchDiffResponse } from '../../lib/api';
+import type { BranchDiffResponse } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { Button } from '../ui/button';
@@ -34,10 +34,10 @@ export function ChangesTab(): React.ReactElement {
   const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
-  const { openDiffTab, openInlineDiffTab } = useTabsStore();
+  const { openDiffTab } = useTabsStore();
   const fileView = useTabsStore((s) => s.fileView);
   const [mode, setMode] = useState<Mode>('session');
-  const [sessionDiffs, setSessionDiffs] = useState<SessionFileDiff[]>([]);
+  const [sessionDiffs, setSessionDiffs] = useState<string[]>([]);
   const [branchData, setBranchData] = useState<BranchDiffResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -136,7 +136,7 @@ export function ChangesTab(): React.ReactElement {
             files={sessionDiffs}
             activeChatId={activeChatId}
             fileView={fileView}
-            openInlineDiffTab={openInlineDiffTab}
+            openDiffTab={openDiffTab}
           />
         ) : (
           <BranchFileList data={branchData} activeChatId={activeChatId} fileView={fileView} openDiffTab={openDiffTab} />
@@ -150,12 +150,12 @@ function SessionFileList({
   files,
   activeChatId,
   fileView,
-  openInlineDiffTab,
+  openDiffTab,
 }: {
-  files: SessionFileDiff[];
+  files: string[];
   activeChatId: string | null;
   fileView: ReturnType<typeof useTabsStore.getState>['fileView'];
-  openInlineDiffTab: ReturnType<typeof useTabsStore.getState>['openInlineDiffTab'];
+  openDiffTab: ReturnType<typeof useTabsStore.getState>['openDiffTab'];
 }): React.ReactElement {
   if (!activeChatId) {
     return <EmptyState text="Select a session to view its changes" />;
@@ -166,15 +166,13 @@ function SessionFileList({
 
   return (
     <div className="space-y-0.5 px-1">
-      {files.map((file) => {
-        const info = statusLabels[file.status] ?? { label: file.status, color: 'text-mf-text-secondary' };
-        const { name, dir } = splitPath(file.filePath);
-        const isActive =
-          fileView?.type === 'diff' && fileView.source === 'inline' && fileView.filePath === file.filePath;
+      {files.map((filePath) => {
+        const { name, dir } = splitPath(filePath);
+        const isActive = fileView?.type === 'diff' && fileView.filePath === filePath;
         return (
           <button
-            key={file.filePath}
-            onClick={() => openInlineDiffTab(file.filePath, file.original ?? '', file.modified)}
+            key={filePath}
+            onClick={() => openDiffTab(filePath, 'git', activeChatId, undefined, undefined)}
             className={cn(
               'w-full flex items-center gap-2 px-2 py-1 rounded-mf-input text-left',
               isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
@@ -188,9 +186,8 @@ function SessionFileList({
                   {dir && <span className="text-mf-small text-mf-text-secondary ml-1">{dir}</span>}
                 </span>
               </TooltipTrigger>
-              <TooltipContent>{file.filePath}</TooltipContent>
+              <TooltipContent>{filePath}</TooltipContent>
             </Tooltip>
-            <span className={cn('text-mf-status font-medium shrink-0', info.color)}>{info.label}</span>
           </button>
         );
       })}

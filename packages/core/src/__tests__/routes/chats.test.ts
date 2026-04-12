@@ -189,20 +189,13 @@ describe('chatRoutes', () => {
   });
 
   describe('GET /api/chats/:id/session-diffs', () => {
-    it('returns session diffs from message history', async () => {
+    it('returns session file paths from message history', async () => {
       const messages = [
         {
           id: 'm1',
           chatId: 'c1',
           type: 'assistant',
           content: [{ type: 'tool_use', id: 'tu1', name: 'Write', input: { file_path: 'src/index.ts' } }],
-          timestamp: new Date().toISOString(),
-        },
-        {
-          id: 'm2',
-          chatId: 'c1',
-          type: 'user',
-          content: [{ type: 'tool_result', toolUseId: 'tu1', content: 'ok', isError: false, modifiedFile: 'content' }],
           timestamp: new Date().toISOString(),
         },
       ];
@@ -216,9 +209,7 @@ describe('chatRoutes', () => {
       await flushPromises();
 
       expect(ctx.chats.getMessagesFromDisk).toHaveBeenCalledWith('c1');
-      expect(res.json).toHaveBeenCalledWith({
-        files: [{ filePath: 'src/index.ts', original: null, modified: 'content', status: 'added' }],
-      });
+      expect(res.json).toHaveBeenCalledWith({ files: ['src/index.ts'] });
     });
   });
 });

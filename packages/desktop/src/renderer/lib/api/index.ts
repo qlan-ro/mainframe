@@ -29,8 +29,6 @@ export {
   searchContent,
 } from './files-api';
 
-export type { SessionFileDiff } from './files-api';
-
 export {
   getGitBranch,
   getGitStatus,
