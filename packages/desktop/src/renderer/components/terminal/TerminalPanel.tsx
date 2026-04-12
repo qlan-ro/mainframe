@@ -27,10 +27,17 @@ export function TerminalPanel(): React.ReactElement {
     return chat?.worktreePath ?? project.path;
   }, [activeProjectId]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const createTerminal = useCallback(async () => {
     const cwd = getCwd();
     try {
-      const { id } = await window.mainframe.terminal.create({ cwd });
+      // Estimate initial cols/rows from container so the PTY starts at the
+      // correct size — avoids prompt misalignment on first render.
+      const rect = containerRef.current?.getBoundingClientRect();
+      const initCols = rect ? Math.max(2, Math.floor(rect.width / 7.8)) : undefined;
+      const initRows = rect ? Math.max(1, Math.floor(rect.height / 17)) : undefined;
+      const { id } = await window.mainframe.terminal.create({ cwd, cols: initCols, rows: initRows });
       counterRef.current += 1;
       const name = counterRef.current === 1 ? shellNameRef.current : `${shellNameRef.current} (${counterRef.current})`;
       addTerminal({ id, name });
@@ -113,7 +120,7 @@ export function TerminalPanel(): React.ReactElement {
   return (
     <div className="h-full flex flex-col" data-testid="terminal-panel">
       {/* Terminal instances — all mounted, only active one visible */}
-      <div className="flex-1 min-h-0 relative">
+      <div ref={containerRef} className="flex-1 min-h-0 relative">
         {terminals.map((t) => (
           <TerminalInstance key={t.id} terminalId={t.id} visible={t.id === activeTerminalId} />
         ))}
