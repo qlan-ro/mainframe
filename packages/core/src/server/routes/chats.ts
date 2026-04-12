@@ -121,7 +121,7 @@ export function chatRoutes(ctx: RouteContext): Router {
   });
 
   router.get(
-    '/api/chats/:id/session-diffs',
+    '/api/chats/:id/session-files',
     asyncHandler(async (req: Request, res: Response) => {
       const chatId = param(req, 'id');
       // Load from disk to include subagent file changes not present in the

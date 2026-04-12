@@ -188,7 +188,7 @@ describe('chatRoutes', () => {
     });
   });
 
-  describe('GET /api/chats/:id/session-diffs', () => {
+  describe('GET /api/chats/:id/session-files', () => {
     it('returns session file paths from message history', async () => {
       const messages = [
         {
@@ -202,7 +202,7 @@ describe('chatRoutes', () => {
       (ctx.chats.getMessagesFromDisk as any).mockResolvedValue(messages);
 
       const router = chatRoutes(ctx);
-      const handler = extractHandler(router, 'get', '/api/chats/:id/session-diffs');
+      const handler = extractHandler(router, 'get', '/api/chats/:id/session-files');
       const res = mockRes();
 
       handler({ params: { id: 'c1' }, query: {} }, res, vi.fn());
