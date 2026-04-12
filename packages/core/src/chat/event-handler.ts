@@ -344,6 +344,10 @@ function buildSessionSink(
       emitEvent({ type: 'todos.updated', chatId, todos });
     },
 
+    onPrDetected(pr: import('@qlan-ro/mainframe-types').DetectedPr) {
+      emitEvent({ type: 'chat.prDetected', chatId, pr });
+    },
+
     onError(error: Error) {
       emitEvent({ type: 'error', chatId, error: error.message });
     },

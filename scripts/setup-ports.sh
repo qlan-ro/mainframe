@@ -27,9 +27,12 @@ find_free_port() {
 DAEMON_PORT=$(find_free_port 31416 32416)
 VITE_PORT=$(find_free_port 5174 6174)
 
+MAINFRAME_DATA_DIR="${MAINFRAME_DATA_DIR:-$HOME/.mainframe_dev}"
+
 cat > "$ENV_FILE" <<EOF
 DAEMON_PORT=$DAEMON_PORT
 VITE_PORT=$VITE_PORT
+MAINFRAME_DATA_DIR=$MAINFRAME_DATA_DIR
 EOF
 
 echo "Wrote $ENV_FILE"
@@ -48,6 +51,10 @@ echo "Building @qlan-ro/mainframe-types…"
 echo ""
 echo "Building @qlan-ro/mainframe-core…"
 (cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-core build)
+
+echo ""
+echo "Building @qlan-ro/mainframe-desktop…"
+(cd "$PROJECT_ROOT" && pnpm --filter @qlan-ro/mainframe-desktop build)
 
 echo ""
 echo "Worktree setup complete."

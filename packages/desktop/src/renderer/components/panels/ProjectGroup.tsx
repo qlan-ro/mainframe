@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Archive, Pencil, ChevronDown, ChevronRight, Bot, GitBranch, Clock, Loader2 } from 'lucide-react';
+import {
+  Plus,
+  Archive,
+  Pencil,
+  ChevronDown,
+  ChevronRight,
+  Bot,
+  GitBranch,
+  GitPullRequest,
+  Clock,
+  Loader2,
+  Pin,
+} from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
 import type { SessionStatus } from '../../store/chats';
 import { useChatsStore } from '../../store';
@@ -104,6 +116,10 @@ function ChatRow({
   const updateChat = useChatsStore((s) => s.updateChat);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const isUnread = unreadChatIds.has(chat.id);
+  const createdPrUrl = useChatsStore((s) => {
+    const prs = s.detectedPrs.get(chat.id);
+    return prs?.find((p) => p.source === 'created')?.url ?? null;
+  });
 
   const handleCommitRename = useCallback(() => {
     setEditing(false);
@@ -132,6 +148,24 @@ function ChatRow({
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
       )}
     >
+      {createdPrUrl && !editing && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(createdPrUrl, '_blank');
+              }}
+              className="w-5 h-5 shrink-0 ml-2 rounded flex items-center justify-center text-[#1a7f37] hover:bg-mf-hover transition-colors"
+              aria-label="Open PR"
+            >
+              <GitPullRequest size={13} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Open PR</TooltipContent>
+        </Tooltip>
+      )}
       <button
         type="button"
         onClick={() => onSelect(chat.id, chat.title)}
@@ -144,33 +178,38 @@ function ChatRow({
             isUnread={isUnread}
           />
           <div className="flex-1 min-w-0">
-            {editing ? (
-              <input
-                ref={inputRef}
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onBlur={handleCommitRename}
-                onKeyDown={handleRenameKeyDown}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
-              />
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
-                    className={cn(
-                      'text-mf-small truncate',
-                      isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                      isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
-                    )}
-                    tabIndex={0}
-                  >
-                    {chat.title || 'Untitled session'}
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>{chat.title || 'Untitled session'}</TooltipContent>
-              </Tooltip>
-            )}
+            <div className="flex items-center gap-1">
+              {editing ? (
+                <input
+                  ref={inputRef}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={handleCommitRename}
+                  onKeyDown={handleRenameKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
+                />
+              ) : (
+                <div className="flex items-center gap-1 min-w-0">
+                  {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={cn(
+                          'text-mf-small truncate',
+                          isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                          isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
+                        )}
+                        tabIndex={0}
+                      >
+                        {chat.title || 'Untitled session'}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>{chat.title || 'Untitled session'}</TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+            </div>
             <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
               <Bot size={10} className="shrink-0" />
               <span className="truncate">{getAdapterLabel(chat.adapterId, adapters)}</span>
@@ -245,7 +284,7 @@ interface ProjectGroupProps {
   unregisterRenameCallback?: (chatId: string) => void;
 }
 
-export function ProjectGroup({
+export const ProjectGroup = React.memo(function ProjectGroup({
   project,
   chats,
   parentName,
@@ -388,4 +427,4 @@ export function ProjectGroup({
       )}
     </div>
   );
-}
+});

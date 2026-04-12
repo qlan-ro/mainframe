@@ -19,6 +19,7 @@ function createMockSink(): SessionSink {
     onSkillFile: vi.fn(),
     onQueuedProcessed: vi.fn(),
     onTodoUpdate: vi.fn(),
+    onPrDetected: vi.fn(),
   };
 }
 

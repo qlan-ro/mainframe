@@ -8,6 +8,7 @@ export {
   getAllChats,
   renameChat,
   archiveChat,
+  pinChat,
   getChatMessages,
   getAdapters,
 } from './projects-api';

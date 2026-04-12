@@ -27,9 +27,11 @@ function ChatTabDot({ chatId }: { chatId: string }): React.ReactElement {
 }
 
 export function CenterPanel(): React.ReactElement {
-  const { tabs, activePrimaryTabId } = useTabsStore();
+  const tabs = useTabsStore((s) => s.tabs);
+  const activePrimaryTabId = useTabsStore((s) => s.activePrimaryTabId);
   const activeProjectId = useActiveProjectId();
-  const { activeChatId, addPendingPermission } = useChatsStore();
+  const activeChatId = useChatsStore((s) => s.activeChatId);
+  const addPendingPermission = useChatsStore((s) => s.addPendingPermission);
   const { createChat } = useProject(activeProjectId);
 
   React.useEffect(() => {
