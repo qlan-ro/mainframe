@@ -4,7 +4,7 @@ import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
 import { daemonClient } from '../../lib/client';
-import { getSessionDiffs, getBranchDiffs } from '../../lib/api';
+import { getSessionFiles, getBranchDiffs } from '../../lib/api';
 import type { BranchDiffResponse } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -56,7 +56,7 @@ export function ChangesTab(): React.ReactElement {
     if (!activeChatId) return;
     setLoading(true);
     try {
-      const result = await getSessionDiffs(activeChatId);
+      const result = await getSessionFiles(activeChatId);
       setSessionDiffs(result.files);
     } catch {
       setSessionDiffs([]);

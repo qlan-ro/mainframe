@@ -20,7 +20,7 @@ export {
   getFileContent,
   getFileBinary,
   getPendingPermission,
-  getSessionDiffs,
+  getSessionFiles,
   getSessionContext,
   getSessionFile,
   addMention,
@@ -46,6 +46,7 @@ export {
   gitUpdateAll,
   getDiff,
   getBranchDiffs,
+  getUncommittedFiles,
 } from './git-api';
 
 export type { BranchDiffResponse } from './git-api';
