@@ -55,26 +55,30 @@ export function TerminalInstance({ terminalId, visible }: TerminalInstanceProps)
       window.mainframe.terminal.resize(terminalId, cols, rows);
     });
 
-    // ResizeObserver for auto-fit — debounced via RAF, guarded against hidden state
-    let rafId: number | undefined;
+    // ResizeObserver for auto-fit — debounced with trailing delay to prevent
+    // rapid-fire PTY resize calls during drag. Each fit() resizes xterm AND
+    // sends cols/rows to the PTY via IPC; flooding the PTY at 60Hz causes
+    // cols mismatch when the shell emits output between resize calls.
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const RESIZE_DEBOUNCE_MS = 150;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry || !fitAddonRef.current) return;
       const { width, height } = entry.contentRect;
       if (width === 0 || height === 0) return; // container hidden or collapsed
-      if (rafId != null) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
         try {
           fitAddonRef.current?.fit();
         } catch {
           /* container transitioning — fit will be retried on next resize */
         }
-      });
+      }, RESIZE_DEBOUNCE_MS);
     });
     observer.observe(containerRef.current);
 
     return () => {
-      if (rafId != null) cancelAnimationFrame(rafId);
+      clearTimeout(resizeTimer);
       observer.disconnect();
       onDataDisposable.dispose();
       onResizeDisposable.dispose();
