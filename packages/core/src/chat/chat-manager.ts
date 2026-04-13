@@ -471,7 +471,7 @@ export class ChatManager {
   }
 
   /** Load messages from disk, bypassing the in-memory cache.
-   * Used by the session-diffs route to include subagent file changes. */
+   * Used by the session-files route to include subagent file changes. */
   async getMessagesFromDisk(chatId: string): Promise<ChatMessage[]> {
     const chat = this.getChat(chatId);
     if (!chat?.claudeSessionId) return [];
