@@ -41,6 +41,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "diff": "^8.0.3",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^0.577.0",
     "monaco-editor": "^0.55.1",
     "monaco-languageclient": "^10.7.0",
