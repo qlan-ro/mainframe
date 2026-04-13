@@ -49,7 +49,7 @@ export function ChangesTab(): React.ReactElement {
     [],
   );
   const handleModeChange = useCallback((tabId: string) => setMode(tabId as Mode), []);
-  useZoneHeaderTabs(changeTabs, mode, handleModeChange);
+  useZoneHeaderTabs(changeTabs, mode, handleModeChange, 'dropdown');
 
   const refreshSession = useCallback(async (): Promise<void> => {
     if (!activeChatId) return;

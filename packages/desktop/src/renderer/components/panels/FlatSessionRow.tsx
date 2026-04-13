@@ -150,24 +150,6 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
       )}
     >
-      {createdPrUrl && !editing && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                window.open(createdPrUrl, '_blank');
-              }}
-              className="w-5 h-5 shrink-0 ml-2 rounded flex items-center justify-center text-[#1a7f37] hover:bg-mf-hover transition-colors"
-              aria-label="Open PR"
-            >
-              <GitPullRequest size={13} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Open PR</TooltipContent>
-        </Tooltip>
-      )}
       <button type="button" onClick={handleSelect} className="flex-1 min-w-0 px-3 py-1.5 text-left">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 shrink-0 flex items-center justify-center">
@@ -196,6 +178,24 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               ) : (
                 <div className="flex items-center gap-1 min-w-0">
                   {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
+                  {createdPrUrl && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          role="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(createdPrUrl, '_blank');
+                          }}
+                          className="shrink-0 text-[#1a7f37] hover:opacity-70 cursor-pointer"
+                          aria-label="Open PR"
+                        >
+                          <GitPullRequest size={12} />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Open PR</TooltipContent>
+                    </Tooltip>
+                  )}
                   <div
                     className={cn(
                       'text-mf-small truncate',
