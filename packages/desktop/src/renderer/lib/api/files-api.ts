@@ -63,15 +63,8 @@ export async function getPendingPermission(chatId: string): Promise<ControlReque
   return json.data;
 }
 
-export interface SessionFileDiff {
-  filePath: string;
-  original: string | null;
-  modified: string;
-  status: 'added' | 'modified';
-}
-
-export async function getSessionDiffs(chatId: string): Promise<{ files: SessionFileDiff[] }> {
-  return fetchJson(`${API_BASE}/api/chats/${chatId}/session-diffs`);
+export async function getSessionFiles(chatId: string): Promise<{ files: string[] }> {
+  return fetchJson(`${API_BASE}/api/chats/${chatId}/session-files`);
 }
 
 export async function getSessionContext(chatId: string): Promise<SessionContext> {

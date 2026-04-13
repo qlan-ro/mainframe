@@ -14,6 +14,7 @@ if (process.env.NODE_ENV === 'development') {
 import { createMainLogger, logFromRenderer } from './logger.js';
 import { setupTerminalIPC, killAllTerminals } from './terminal-manager.js';
 import { initAutoUpdater } from './auto-updater.js';
+import { startIdleReporter, stopIdleReporter } from './idle-reporter.js';
 
 const log = createMainLogger('electron');
 
@@ -259,6 +260,7 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  startIdleReporter();
 
   if (mainWindow) initAutoUpdater(mainWindow);
 
@@ -311,6 +313,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('quit', () => {
+  stopIdleReporter();
   killAllTerminals();
   if (daemon) {
     daemon.kill();

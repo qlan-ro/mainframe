@@ -300,6 +300,7 @@ export class LspClientManager {
     for (const key of [...this.clients.keys()]) {
       this.removeEntry(key);
     }
+    this.openedUris.clear();
   }
 
   private removeEntry(key: string): void {
@@ -307,6 +308,11 @@ export class LspClientManager {
     if (!entry) return;
     this.clients.delete(key);
     for (const d of entry.disposables) d.dispose();
+    // Clear tracked URIs for this client's project to prevent unbounded growth
+    const prefix = `file://${entry.projectPath}`;
+    for (const uri of this.openedUris) {
+      if (uri.startsWith(prefix)) this.openedUris.delete(uri);
+    }
     try {
       if (entry.ws.readyState === WebSocket.OPEN) entry.ws.close();
     } catch {

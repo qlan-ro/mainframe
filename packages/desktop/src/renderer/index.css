@@ -175,6 +175,17 @@
   display: none; /* Chrome/Safari/Electron */
 }
 
+/* Scrollbar visible only on hover */
+.scrollbar-on-hover::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.scrollbar-on-hover:hover::-webkit-scrollbar-thumb {
+  background: var(--mf-scrollbar);
+}
+.scrollbar-on-hover:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--mf-scrollbar-hover);
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

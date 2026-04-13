@@ -5,6 +5,7 @@ import { useAdaptersStore } from '../../store/adapters';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel, getModelContextWindow, getModelLabel } from '../../lib/adapters';
+import { PrBadge } from './PrBadge';
 
 const ADAPTER_ACCENT: Record<string, string> = {
   claude: 'bg-mf-accent-claude',
@@ -143,6 +144,8 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
             </div>
           </>
         )}
+
+        <PrBadge chatId={chatId} />
       </div>
 
       {/* Center: status */}

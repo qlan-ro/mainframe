@@ -11,7 +11,7 @@ export interface UpdateAPI {
 }
 
 export interface TerminalAPI {
-  create: (options: { cwd: string }) => Promise<{ id: string }>;
+  create: (options: { cwd: string; cols?: number; rows?: number }) => Promise<{ id: string }>;
   write: (id: string, data: string) => Promise<void>;
   resize: (id: string, cols: number, rows: number) => Promise<void>;
   kill: (id: string) => Promise<void>;
@@ -53,7 +53,7 @@ const api: MainframeAPI = {
   log: (level: string, module: string, message: string, data?: unknown) =>
     ipcRenderer.send('log', level, module, message, data),
   terminal: {
-    create: (options: { cwd: string }) => ipcRenderer.invoke('terminal:create', options),
+    create: (options: { cwd: string; cols?: number; rows?: number }) => ipcRenderer.invoke('terminal:create', options),
     write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
     resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
     kill: (id: string) => ipcRenderer.invoke('terminal:kill', id),

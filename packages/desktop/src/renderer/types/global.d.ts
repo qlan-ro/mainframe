@@ -14,7 +14,7 @@ export interface UpdateAPI {
 }
 
 export interface TerminalAPI {
-  create: (options: { cwd: string }) => Promise<{ id: string }>;
+  create: (options: { cwd: string; cols?: number; rows?: number }) => Promise<{ id: string }>;
   write: (id: string, data: string) => Promise<void>;
   resize: (id: string, cols: number, rows: number) => Promise<void>;
   kill: (id: string) => Promise<void>;

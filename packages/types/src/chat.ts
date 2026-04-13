@@ -31,6 +31,7 @@ export interface Chat {
   isRunning?: boolean;
   worktreeMissing?: boolean;
   todos?: TodoItem[];
+  pinned?: boolean;
 }
 
 export interface Project {

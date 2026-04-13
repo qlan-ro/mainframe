@@ -23,7 +23,7 @@ export function ComposerHighlight() {
     const sync = () => {
       el.scrollTop = textarea.scrollTop;
     };
-    textarea.addEventListener('scroll', sync);
+    textarea.addEventListener('scroll', sync, { passive: true });
     return () => textarea.removeEventListener('scroll', sync);
   }, []);
 

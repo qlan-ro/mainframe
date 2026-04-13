@@ -17,15 +17,17 @@ function TooltipContent({
   ref?: React.Ref<React.ComponentRef<typeof TooltipPrimitive.Content>>;
 }) {
   return (
-    <TooltipPrimitive.Content
-      ref={ref}
-      sideOffset={sideOffset}
-      className={cn(
-        'z-50 overflow-hidden rounded-mf-input bg-[var(--mf-panel-bg)] border border-[var(--mf-divider)] px-3 py-1.5 text-mf-small text-[var(--mf-text-primary)] animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-        className,
-      )}
-      {...props}
-    />
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Content
+        ref={ref}
+        sideOffset={sideOffset}
+        className={cn(
+          'z-50 overflow-hidden rounded-mf-input bg-[var(--mf-panel-bg)] border border-[var(--mf-divider)] px-3 py-1.5 text-mf-small text-[var(--mf-text-primary)] animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+          className,
+        )}
+        {...props}
+      />
+    </TooltipPrimitive.Portal>
   );
 }
 

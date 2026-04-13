@@ -17,6 +17,7 @@ function createMockContext(): RouteContext {
       listAllChats: vi.fn(),
       archiveChat: vi.fn(),
       getMessages: vi.fn(),
+      getMessagesFromDisk: vi.fn(),
       getDisplayMessages: vi.fn(),
       getPendingPermission: vi.fn(),
       on: vi.fn(),
@@ -187,8 +188,8 @@ describe('chatRoutes', () => {
     });
   });
 
-  describe('GET /api/chats/:id/session-diffs', () => {
-    it('returns session diffs from message history', async () => {
+  describe('GET /api/chats/:id/session-files', () => {
+    it('returns session file paths from message history', async () => {
       const messages = [
         {
           id: 'm1',
@@ -197,27 +198,18 @@ describe('chatRoutes', () => {
           content: [{ type: 'tool_use', id: 'tu1', name: 'Write', input: { file_path: 'src/index.ts' } }],
           timestamp: new Date().toISOString(),
         },
-        {
-          id: 'm2',
-          chatId: 'c1',
-          type: 'user',
-          content: [{ type: 'tool_result', toolUseId: 'tu1', content: 'ok', isError: false, modifiedFile: 'content' }],
-          timestamp: new Date().toISOString(),
-        },
       ];
-      (ctx.chats.getMessages as any).mockResolvedValue(messages);
+      (ctx.chats.getMessagesFromDisk as any).mockResolvedValue(messages);
 
       const router = chatRoutes(ctx);
-      const handler = extractHandler(router, 'get', '/api/chats/:id/session-diffs');
+      const handler = extractHandler(router, 'get', '/api/chats/:id/session-files');
       const res = mockRes();
 
       handler({ params: { id: 'c1' }, query: {} }, res, vi.fn());
       await flushPromises();
 
-      expect(ctx.chats.getMessages).toHaveBeenCalledWith('c1');
-      expect(res.json).toHaveBeenCalledWith({
-        files: [{ filePath: 'src/index.ts', original: null, modified: 'content', status: 'added' }],
-      });
+      expect(ctx.chats.getMessagesFromDisk).toHaveBeenCalledWith('c1');
+      expect(res.json).toHaveBeenCalledWith({ files: ['src/index.ts'] });
     });
   });
 });
