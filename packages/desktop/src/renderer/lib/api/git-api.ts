@@ -127,13 +127,3 @@ export async function getBranchDiffs(projectId: string, chatId?: string): Promis
   const qs = params.toString();
   return fetchJson(`${API_BASE}/api/projects/${projectId}/git/branch-diffs${qs ? `?${qs}` : ''}`);
 }
-
-export async function getUncommittedFiles(
-  projectId: string,
-  chatId?: string,
-): Promise<{ files: { path: string; status: string }[] }> {
-  const params = new URLSearchParams();
-  if (chatId) params.set('chatId', chatId);
-  const qs = params.toString();
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/git/status${qs ? `?${qs}` : ''}`);
-}

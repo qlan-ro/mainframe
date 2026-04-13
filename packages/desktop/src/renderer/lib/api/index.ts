@@ -46,7 +46,6 @@ export {
   gitUpdateAll,
   getDiff,
   getBranchDiffs,
-  getUncommittedFiles,
 } from './git-api';
 
 export type { BranchDiffResponse } from './git-api';

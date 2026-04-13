@@ -4,7 +4,7 @@ import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { useTabsStore } from '../../store/tabs';
 import { daemonClient } from '../../lib/client';
-import { getSessionFiles, getBranchDiffs, getUncommittedFiles } from '../../lib/api';
+import { getSessionFiles, getBranchDiffs, getGitStatus } from '../../lib/api';
 import type { BranchDiffResponse } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -57,7 +57,8 @@ export function ChangesTab(): React.ReactElement {
     try {
       const result = await getSessionFiles(activeChatId);
       setSessionFiles(result.files);
-    } catch {
+    } catch (err) {
+      console.warn('[ChangesTab] refreshSession failed:', err);
       setSessionFiles([]);
     }
     setLoading(false);
@@ -67,9 +68,10 @@ export function ChangesTab(): React.ReactElement {
     if (!activeProjectId) return;
     setLoading(true);
     try {
-      const result = await getUncommittedFiles(activeProjectId, activeChatId ?? undefined);
+      const result = await getGitStatus(activeProjectId, activeChatId ?? undefined);
       setUncommittedFiles(result.files);
-    } catch {
+    } catch (err) {
+      console.warn('[ChangesTab] refreshUncommitted failed:', err);
       setUncommittedFiles([]);
     }
     setLoading(false);
@@ -81,7 +83,8 @@ export function ChangesTab(): React.ReactElement {
     try {
       const result = await getBranchDiffs(activeProjectId, activeChatId ?? undefined);
       setBranchData(result);
-    } catch {
+    } catch (err) {
+      console.warn('[ChangesTab] refreshBranch failed:', err);
       setBranchData(null);
     }
     setLoading(false);
@@ -92,12 +95,12 @@ export function ChangesTab(): React.ReactElement {
   // Always fetch branch data so session tab can use mergeBase for diffs
   useEffect(() => {
     refreshBranch();
-  }, [activeProjectId, activeChatId]);
+  }, [refreshBranch]);
 
   useEffect(() => {
     if (mode === 'session') refreshSession();
     else if (mode === 'uncommitted') refreshUncommitted();
-  }, [activeChatId, activeProjectId, mode]);
+  }, [mode, refreshSession, refreshUncommitted]);
 
   // Refresh on context.updated events
   useEffect(() => {
