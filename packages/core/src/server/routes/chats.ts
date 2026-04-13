@@ -4,7 +4,7 @@ import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
-import { extractSessionDiffs } from '../../messages/session-diffs.js';
+import { extractSessionFilePaths } from '../../messages/session-files.js';
 
 const logger = createChildLogger('routes:chats');
 
@@ -121,11 +121,13 @@ export function chatRoutes(ctx: RouteContext): Router {
   });
 
   router.get(
-    '/api/chats/:id/session-diffs',
+    '/api/chats/:id/session-files',
     asyncHandler(async (req: Request, res: Response) => {
       const chatId = param(req, 'id');
-      const messages = await ctx.chats.getMessages(chatId);
-      const files = extractSessionDiffs(messages);
+      // Load from disk to include subagent file changes not present in the
+      // in-memory cache during an active session.
+      const messages = await ctx.chats.getMessagesFromDisk(chatId);
+      const files = extractSessionFilePaths(messages);
       res.json({ files });
     }),
   );

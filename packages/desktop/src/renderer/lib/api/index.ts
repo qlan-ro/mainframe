@@ -20,7 +20,7 @@ export {
   getFileContent,
   getFileBinary,
   getPendingPermission,
-  getSessionDiffs,
+  getSessionFiles,
   getSessionContext,
   getSessionFile,
   addMention,
@@ -28,8 +28,6 @@ export {
   saveFileContent,
   searchContent,
 } from './files-api';
-
-export type { SessionFileDiff } from './files-api';
 
 export {
   getGitBranch,

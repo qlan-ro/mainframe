@@ -148,24 +148,6 @@ function ChatRow({
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
       )}
     >
-      {createdPrUrl && !editing && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                window.open(createdPrUrl, '_blank');
-              }}
-              className="w-5 h-5 shrink-0 ml-2 rounded flex items-center justify-center text-[#1a7f37] hover:bg-mf-hover transition-colors"
-              aria-label="Open PR"
-            >
-              <GitPullRequest size={13} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Open PR</TooltipContent>
-        </Tooltip>
-      )}
       <button
         type="button"
         onClick={() => onSelect(chat.id, chat.title)}
@@ -192,6 +174,24 @@ function ChatRow({
               ) : (
                 <div className="flex items-center gap-1 min-w-0">
                   {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
+                  {createdPrUrl && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          role="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(createdPrUrl, '_blank');
+                          }}
+                          className="shrink-0 text-[#1a7f37] hover:opacity-70 cursor-pointer"
+                          aria-label="Open PR"
+                        >
+                          <GitPullRequest size={12} />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Open PR</TooltipContent>
+                    </Tooltip>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
