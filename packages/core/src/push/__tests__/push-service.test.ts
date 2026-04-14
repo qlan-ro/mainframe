@@ -97,6 +97,23 @@ describe('PushService', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('deduplicates tokens when multiple deviceIds share the same push token', async () => {
+    service.registerDevice('device-1', 'ExponentPushToken[aaa]');
+    service.registerDevice('device-2', 'ExponentPushToken[aaa]');
+
+    await service.sendPush({
+      title: 'Test',
+      body: 'Test',
+      data: {},
+      priority: 'default',
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1].body);
+    expect(body).toHaveLength(1);
+    expect(body[0].to).toBe('ExponentPushToken[aaa]');
+  });
+
   it('expires desktop-active state after staleness timeout', async () => {
     vi.useFakeTimers();
     service.registerDevice('device-1', 'ExponentPushToken[aaa]');

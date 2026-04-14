@@ -77,9 +77,13 @@ export class PushService {
       return;
     }
 
-    const disconnectedTokens = Array.from(this.devices.values())
-      .filter((d) => !d.connected)
-      .map((d) => d.pushToken);
+    const disconnectedTokens = [
+      ...new Set(
+        Array.from(this.devices.values())
+          .filter((d) => !d.connected)
+          .map((d) => d.pushToken),
+      ),
+    ];
 
     if (disconnectedTokens.length === 0) return;
 
