@@ -261,24 +261,21 @@ function buildSessionSink(
           emitEvent({ type: 'message.added', chatId, message });
           emitDisplay();
 
+          const notification = { title: 'Session Error', body: 'A session ended unexpectedly' };
+          emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'error' });
           pushService
-            ?.sendPush({
-              title: 'Session Error',
-              body: 'A session ended unexpectedly',
-              data: { chatId, type: 'error' },
-              priority: 'high',
-            })
+            ?.sendPush({ ...notification, data: { chatId, type: 'error' }, priority: 'high' })
             .catch((err) => log.warn({ err }, 'push notification failed'));
         }
       } else {
         const lastText = getLastAssistantText(messages.get(chatId));
+        const notification = {
+          title: 'Task Complete',
+          body: lastText || `Session finished (cost: $${cost.toFixed(4)})`,
+        };
+        emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'success' });
         pushService
-          ?.sendPush({
-            title: 'Task Complete',
-            body: lastText || `Session finished (cost: $${cost.toFixed(4)})`,
-            data: { chatId, type: 'task_complete' },
-            priority: 'default',
-          })
+          ?.sendPush({ ...notification, data: { chatId, type: 'task_complete' }, priority: 'default' })
           .catch((err) => log.warn({ err }, 'push notification failed'));
       }
 
