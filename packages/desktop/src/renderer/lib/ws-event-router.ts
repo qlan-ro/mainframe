@@ -1,4 +1,4 @@
-import type { DaemonEvent } from '@qlan-ro/mainframe-types';
+import type { DaemonEvent, DisplayMessage } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../store/chats';
 import { useTabsStore } from '../store/tabs';
 import { useProjectsStore } from '../store/projects';
@@ -10,6 +10,23 @@ import { buildLaunchScope } from './launch-scope.js';
 import { notify } from './notify';
 
 const log = createLogger('renderer:ws');
+
+function getLastAssistantText(msgs: DisplayMessage[] | undefined): string {
+  if (!msgs) return '';
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const msg = msgs[i]!;
+    if (msg.type !== 'assistant') continue;
+    for (let j = msg.content.length - 1; j >= 0; j--) {
+      const block = msg.content[j]!;
+      if (block.type === 'text' && block.text.trim()) {
+        const text = block.text.trim();
+        if (text.length <= 200) return text;
+        return text.slice(0, 199) + '…';
+      }
+    }
+  }
+  return '';
+}
 
 export function routeEvent(event: DaemonEvent): void {
   const chats = useChatsStore.getState();
@@ -32,10 +49,11 @@ export function routeEvent(event: DaemonEvent): void {
       }
 
       if (event.reason === 'completed') {
+        const lastText = getLastAssistantText(chats.messages.get(event.chat.id));
         notify({
           type: 'success',
           title: event.chat.title ?? 'Session',
-          body: 'Agent responded',
+          body: lastText || 'Agent responded',
           chatId: event.chat.id,
         });
       } else if (event.reason === 'error') {
