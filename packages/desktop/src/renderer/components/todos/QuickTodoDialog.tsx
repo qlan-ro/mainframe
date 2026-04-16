@@ -176,7 +176,7 @@ export function QuickTodoDialog() {
         );
       }
 
-      toast.success(`Task #${todo.number} created`);
+      toast.success(`Task #${todo.number} created: ${todo.title}`);
       window.dispatchEvent(new CustomEvent('todos:changed'));
       setOpen(false);
     } catch {
