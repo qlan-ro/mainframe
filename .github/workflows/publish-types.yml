@@ -24,6 +24,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build types
         run: pnpm --filter @qlan-ro/mainframe-types build
