@@ -87,10 +87,15 @@ export function probeModels(executable: string): Promise<AdapterModel[] | null> 
         if (!line) continue;
         try {
           const event = JSON.parse(line);
-          if (event.type === 'control_response' && event.response?.models) {
-            const models = (event.response.models as CliModelInfo[]).map(mapModelInfo);
-            log.info({ count: models.length }, 'probe received models');
-            finish(models);
+          if (event.type === 'control_response') {
+            // Claude CLI wraps the initialize payload under response.response when subtype === 'success'.
+            const payload = event.response?.response ?? event.response;
+            const rawModels = payload?.models;
+            if (Array.isArray(rawModels)) {
+              const models = (rawModels as CliModelInfo[]).map(mapModelInfo);
+              log.info({ count: models.length }, 'probe received models');
+              finish(models);
+            }
           }
         } catch {
           /* expected: CLI emits non-JSON lines (progress indicators, hook events, etc.) */

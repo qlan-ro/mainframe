@@ -34,14 +34,17 @@ function emitInitializeResponse(child: ChildProcess, models: unknown[]): void {
   const response = JSON.stringify({
     type: 'control_response',
     response: {
-      subtype: 'initialize',
+      subtype: 'success',
       request_id: 'test',
-      models,
-      commands: [],
-      agents: [],
-      output_style: 'concise',
-      available_output_styles: ['concise'],
-      account: {},
+      response: {
+        commands: [],
+        agents: [],
+        output_style: 'concise',
+        available_output_styles: ['concise'],
+        models,
+        account: {},
+        pid: 12345,
+      },
     },
   });
   (child.stdout as Readable).push(response + '\n');
