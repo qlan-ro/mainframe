@@ -31,13 +31,32 @@ async function handleTree(ctx: RouteContext, req: Request, res: Response): Promi
     }
 
     const dirents = await readdir(fullPath, { withFileTypes: true });
-    const entries = dirents
-      .filter((e) => !IGNORED_DIRS.has(e.name))
-      .map((e) => ({
-        name: e.name,
-        type: e.isDirectory() ? ('directory' as const) : ('file' as const),
-        path: path.relative(basePath, path.join(fullPath, e.name)),
-      }))
+    const resolved = await Promise.all(
+      dirents
+        .filter((e) => !IGNORED_DIRS.has(e.name))
+        .map(async (e) => {
+          const entryPath = path.join(fullPath, e.name);
+          let type: 'file' | 'directory';
+          if (e.isSymbolicLink()) {
+            try {
+              const st = await stat(entryPath);
+              type = st.isDirectory() ? 'directory' : 'file';
+            } catch {
+              /* broken symlink, loop, or race — skip */
+              return null;
+            }
+          } else {
+            type = e.isDirectory() ? 'directory' : 'file';
+          }
+          return {
+            name: e.name,
+            type,
+            path: path.relative(basePath, entryPath),
+          };
+        }),
+    );
+    const entries = resolved
+      .filter((e): e is NonNullable<typeof e> => e !== null)
       .sort((a, b) => {
         if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
         return a.name.localeCompare(b.name);
