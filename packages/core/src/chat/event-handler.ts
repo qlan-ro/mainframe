@@ -20,6 +20,25 @@ import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('chat:events');
 
+const PUSH_BODY_MAX_LENGTH = 200;
+
+function getLastAssistantText(msgs: import('@qlan-ro/mainframe-types').ChatMessage[] | undefined): string {
+  if (!msgs) return '';
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const msg = msgs[i]!;
+    if (msg.type !== 'assistant') continue;
+    for (let j = msg.content.length - 1; j >= 0; j--) {
+      const block = msg.content[j]!;
+      if (block.type === 'text' && block.text.trim()) {
+        const text = block.text.trim();
+        if (text.length <= PUSH_BODY_MAX_LENGTH) return text;
+        return text.slice(0, PUSH_BODY_MAX_LENGTH - 1) + '…';
+      }
+    }
+  }
+  return '';
+}
+
 export class EventHandler {
   private displayCache = new Map<string, DisplayMessage[]>();
   private pushService?: PushService;
@@ -242,23 +261,21 @@ function buildSessionSink(
           emitEvent({ type: 'message.added', chatId, message });
           emitDisplay();
 
+          const notification = { title: 'Session Error', body: 'A session ended unexpectedly' };
+          emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'error' });
           pushService
-            ?.sendPush({
-              title: 'Session Error',
-              body: 'A session ended unexpectedly',
-              data: { chatId, type: 'error' },
-              priority: 'high',
-            })
+            ?.sendPush({ ...notification, data: { chatId, type: 'error' }, priority: 'high' })
             .catch((err) => log.warn({ err }, 'push notification failed'));
         }
       } else {
+        const lastText = getLastAssistantText(messages.get(chatId));
+        const notification = {
+          title: 'Task Complete',
+          body: lastText || `Session finished (cost: $${cost.toFixed(4)})`,
+        };
+        emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'success' });
         pushService
-          ?.sendPush({
-            title: 'Task Complete',
-            body: `Session finished (cost: $${cost.toFixed(4)})`,
-            data: { chatId, type: 'task_complete' },
-            priority: 'default',
-          })
+          ?.sendPush({ ...notification, data: { chatId, type: 'task_complete' }, priority: 'default' })
           .catch((err) => log.warn({ err }, 'push notification failed'));
       }
 

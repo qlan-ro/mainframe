@@ -9,10 +9,14 @@ const DAEMON_HOST = process.env['DAEMON_HOST'] ?? '127.0.0.1';
 const DAEMON_PORT = process.env['DAEMON_PORT'] ?? '31415';
 const DAEMON_URL = `http://${DAEMON_HOST}:${DAEMON_PORT}`;
 
+const KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes — must be shorter than daemon's 6-min staleness timer
+
 let currentState: 'active' | 'idle' = 'active';
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let lastReportedAt = 0;
 
 async function reportState(state: 'active' | 'idle'): Promise<void> {
+  lastReportedAt = Date.now();
   try {
     await fetch(`${DAEMON_URL}/api/device/activity`, {
       method: 'POST',
@@ -32,6 +36,8 @@ function checkIdle(): void {
     currentState = newState;
     log.info({ state: currentState, idleSeconds }, 'desktop state transition');
     reportState(currentState);
+  } else if (newState === 'active' && Date.now() - lastReportedAt >= KEEPALIVE_INTERVAL_MS) {
+    reportState('active');
   }
 }
 
