@@ -37,24 +37,36 @@ export function useAppInit(): void {
     const loadData = async () => {
       setLoading(true);
       try {
-        const projects = await getProjects();
-        setProjects(projects);
-        try {
-          const adapters = await getAdapters();
-          setAdapters(adapters);
-        } catch (err) {
-          log.warn('adapter fetch failed', { err: String(err) });
+        const [projectsResult, adaptersResult, providerResult, pluginsResult, chatsResult] = await Promise.allSettled([
+          getProjects(),
+          getAdapters(),
+          getProviderSettings(),
+          getPlugins(),
+          getAllChats(),
+        ]);
+
+        if (projectsResult.status === 'fulfilled') {
+          setProjects(projectsResult.value);
+        } else {
+          throw projectsResult.reason;
         }
-        try {
-          const providerSettings = await getProviderSettings();
-          loadProviders(providerSettings);
-        } catch {
+
+        if (adaptersResult.status === 'fulfilled') {
+          setAdapters(adaptersResult.value);
+        } else {
+          log.warn('adapter fetch failed', { err: String(adaptersResult.reason) });
+        }
+
+        if (providerResult.status === 'fulfilled') {
+          loadProviders(providerResult.value);
+        } else {
           // Keep booting even if provider settings fetch fails.
+          log.warn('provider settings fetch failed', { err: String(providerResult.reason) });
         }
-        try {
-          const plugins = await getPlugins();
+
+        if (pluginsResult.status === 'fulfilled') {
           const store = usePluginLayoutStore.getState();
-          for (const plugin of plugins) {
+          for (const plugin of pluginsResult.value) {
             if (plugin.panel) {
               store.registerContribution({ pluginId: plugin.id, ...plugin.panel });
             }
@@ -64,13 +76,12 @@ export function useAppInit(): void {
               }
             }
           }
-        } catch (err) {
-          log.warn('plugin fetch failed', { err: String(err) });
+        } else {
+          log.warn('plugin fetch failed', { err: String(pluginsResult.reason) });
         }
 
-        // Fetch all chats across all projects
-        try {
-          const chatsList = await getAllChats();
+        if (chatsResult.status === 'fulfilled') {
+          const chatsList = chatsResult.value;
           useChatsStore.getState().setChats(chatsList);
 
           // Restore active chat from localStorage
@@ -88,8 +99,8 @@ export function useAppInit(): void {
             useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
             daemonClient.subscribe(mostRecent.id);
           }
-        } catch (err) {
-          log.warn('chat fetch failed', { err: String(err) });
+        } else {
+          log.warn('chat fetch failed', { err: String(chatsResult.reason) });
         }
       } catch {
         setError('Failed to connect to daemon');

@@ -266,6 +266,61 @@ describe('EventHandler context.updated timing', () => {
     const ctxEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'context.updated');
     expect(ctxEvents).toHaveLength(0);
   });
+
+  it('emits context.updated (without filePaths) when a subagent tool result completes', () => {
+    const subagentCategories = {
+      subagent: new Set(['Task', 'Agent']),
+      explore: new Set<string>(),
+      hidden: new Set<string>(),
+      progress: new Set<string>(),
+    };
+    const handler = new EventHandler(
+      db,
+      messages,
+      permissions,
+      (id) => activeChats.get(id),
+      emitEvent,
+      () => subagentCategories,
+    );
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
+
+    sink.onMessage([{ type: 'tool_use', id: 'toolu_task', name: 'Task', input: { prompt: 'do work' } }]);
+
+    sink.onToolResult([{ type: 'tool_result', toolUseId: 'toolu_task', content: 'done', isError: false }]);
+
+    const ctxEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'context.updated');
+    expect(ctxEvents).toHaveLength(1);
+    // No filePaths — the frontend will load from disk to get subagent changes
+    expect(ctxEvents[0]![0].filePaths).toBeUndefined();
+    expect(ctxEvents[0]![0].chatId).toBe(chatId);
+  });
+
+  it('does not emit duplicate context.updated when subagent tool also matches file tool', () => {
+    // Edge case: if somehow a tool is both a file tool and subagent, only one event
+    const subagentCategories = {
+      subagent: new Set(['Task']),
+      explore: new Set<string>(),
+      hidden: new Set<string>(),
+      progress: new Set<string>(),
+    };
+    const handler = new EventHandler(
+      db,
+      messages,
+      permissions,
+      (id) => activeChats.get(id),
+      emitEvent,
+      () => subagentCategories,
+    );
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
+
+    sink.onMessage([{ type: 'tool_use', id: 'toolu_task', name: 'Task', input: { prompt: 'do work' } }]);
+    emitEvent.mockClear();
+
+    sink.onToolResult([{ type: 'tool_result', toolUseId: 'toolu_task', content: 'done', isError: false }]);
+
+    const ctxEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'context.updated');
+    expect(ctxEvents).toHaveLength(1);
+  });
 });
 
 describe('EventHandler onPermission — yolo no longer auto-approves', () => {

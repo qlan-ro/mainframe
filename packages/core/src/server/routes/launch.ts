@@ -133,7 +133,16 @@ export function launchRoutes(ctx: RouteContext): Router {
         await manager.start(config);
         res.json({ success: true });
       } catch (err) {
-        logger.error({ err, projectId: resolved.projectId, name }, 'failed to start launch process');
+        const errno = err as NodeJS.ErrnoException;
+        logger.warn(
+          {
+            projectId: resolved.projectId,
+            name,
+            code: errno.code,
+            message: errno.message,
+          },
+          'failed to start launch process',
+        );
         res.status(500).json({ success: false, error: 'Failed to start process' });
       }
     }),

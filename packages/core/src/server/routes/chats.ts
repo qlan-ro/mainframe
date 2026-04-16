@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
-import { extractSessionDiffs } from '../../messages/session-diffs.js';
+import { extractSessionFilePaths } from '../../messages/session-files.js';
 
 const logger = createChildLogger('routes:chats');
 
@@ -80,6 +81,29 @@ export function chatRoutes(ctx: RouteContext): Router {
     }
   });
 
+  const pinSchema = z.object({ pinned: z.boolean() });
+
+  router.patch('/api/chats/:id/pinned', (req: Request, res: Response) => {
+    const chatId = param(req, 'id');
+    const parsed = pinSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: 'pinned (boolean) is required' });
+      return;
+    }
+    try {
+      ctx.db.chats.update(chatId, { pinned: parsed.data.pinned });
+      const chat = ctx.db.chats.get(chatId);
+      if (!chat) {
+        res.status(404).json({ success: false, error: 'Chat not found' });
+        return;
+      }
+      res.json({ success: true, data: chat });
+    } catch (err) {
+      logger.warn({ err, chatId }, 'Failed to update pinned state');
+      res.status(500).json({ success: false, error: 'Operation failed' });
+    }
+  });
+
   router.post('/api/chats/:id/unarchive', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
     try {
@@ -97,11 +121,13 @@ export function chatRoutes(ctx: RouteContext): Router {
   });
 
   router.get(
-    '/api/chats/:id/session-diffs',
+    '/api/chats/:id/session-files',
     asyncHandler(async (req: Request, res: Response) => {
       const chatId = param(req, 'id');
-      const messages = await ctx.chats.getMessages(chatId);
-      const files = extractSessionDiffs(messages);
+      // Load from disk to include subagent file changes not present in the
+      // in-memory cache during an active session.
+      const messages = await ctx.chats.getMessagesFromDisk(chatId);
+      const files = extractSessionFilePaths(messages);
       res.json({ files });
     }),
   );

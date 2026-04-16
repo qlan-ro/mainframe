@@ -30,7 +30,13 @@ interface Props {
   onStartSession: (todo: Todo) => void;
 }
 
-export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSession }: Props): React.ReactElement {
+export const TodoCard = React.memo(function TodoCard({
+  todo,
+  attachmentCount,
+  onEdit,
+  onDelete,
+  onStartSession,
+}: Props): React.ReactElement {
   return (
     <div
       data-testid="todo-card"
@@ -139,4 +145,4 @@ export function TodoCard({ todo, attachmentCount, onEdit, onDelete, onStartSessi
       </div>
     </div>
   );
-}
+});

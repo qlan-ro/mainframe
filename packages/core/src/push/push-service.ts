@@ -17,6 +17,9 @@ interface RegisteredDevice {
 
 export class PushService {
   private devices = new Map<string, RegisteredDevice>();
+  private desktopActive = false;
+  private stalenessTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly STALENESS_MS = 6 * 60 * 1000; // 6 minutes
 
   registerDevice(deviceId: string, pushToken: string): void {
     const existing = this.devices.get(deviceId);
@@ -46,10 +49,41 @@ export class PushService {
     return this.devices.size > 0;
   }
 
+  setDesktopActive(active: boolean): void {
+    this.desktopActive = active;
+    if (this.stalenessTimer) {
+      clearTimeout(this.stalenessTimer);
+      this.stalenessTimer = null;
+    }
+    if (active) {
+      this.stalenessTimer = setTimeout(() => {
+        this.desktopActive = false;
+        logger.info('desktop staleness timeout — resuming push');
+      }, PushService.STALENESS_MS);
+    }
+    logger.info({ active }, 'desktop active state changed');
+  }
+
+  dispose(): void {
+    if (this.stalenessTimer) {
+      clearTimeout(this.stalenessTimer);
+      this.stalenessTimer = null;
+    }
+  }
+
   async sendPush(message: PushMessage): Promise<void> {
-    const disconnectedTokens = Array.from(this.devices.values())
-      .filter((d) => !d.connected)
-      .map((d) => d.pushToken);
+    if (this.desktopActive) {
+      logger.debug('push suppressed — desktop is active');
+      return;
+    }
+
+    const disconnectedTokens = [
+      ...new Set(
+        Array.from(this.devices.values())
+          .filter((d) => !d.connected)
+          .map((d) => d.pushToken),
+      ),
+    ];
 
     if (disconnectedTokens.length === 0) return;
 

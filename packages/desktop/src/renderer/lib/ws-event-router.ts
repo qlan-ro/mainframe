@@ -31,21 +31,16 @@ export function routeEvent(event: DaemonEvent): void {
         tabs.updateTabLabel(`chat:${event.chat.id}`, event.chat.title);
       }
 
-      if (event.reason === 'completed') {
-        notify({
-          type: 'success',
-          title: event.chat.title ?? 'Session',
-          body: 'Agent responded',
-          chatId: event.chat.id,
-        });
-      } else if (event.reason === 'error') {
-        notify({
-          type: 'error',
-          title: event.chat.title ?? 'Session',
-          body: 'Agent error',
-          chatId: event.chat.id,
-        });
-      }
+      break;
+    }
+    case 'chat.notification': {
+      const chat = chats.chats.find((c) => c.id === event.chatId);
+      notify({
+        type: event.level,
+        title: chat?.title ?? event.title,
+        body: event.body,
+        chatId: event.chatId,
+      });
       break;
     }
     case 'chat.ended':
@@ -147,6 +142,10 @@ export function routeEvent(event: DaemonEvent): void {
     case 'todos.updated':
       log.debug('event:todos.updated', { chatId: event.chatId, count: event.todos.length });
       chats.setTodos(event.chatId, event.todos);
+      break;
+    case 'chat.prDetected':
+      log.info('event:chat.prDetected', { chatId: event.chatId, prNumber: event.pr.number, repo: event.pr.repo });
+      chats.addDetectedPr(event.chatId, event.pr);
       break;
     case 'sessions.external.count':
       break;

@@ -20,6 +20,25 @@ import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('chat:events');
 
+const PUSH_BODY_MAX_LENGTH = 200;
+
+function getLastAssistantText(msgs: import('@qlan-ro/mainframe-types').ChatMessage[] | undefined): string {
+  if (!msgs) return '';
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const msg = msgs[i]!;
+    if (msg.type !== 'assistant') continue;
+    for (let j = msg.content.length - 1; j >= 0; j--) {
+      const block = msg.content[j]!;
+      if (block.type === 'text' && block.text.trim()) {
+        const text = block.text.trim();
+        if (text.length <= PUSH_BODY_MAX_LENGTH) return text;
+        return text.slice(0, PUSH_BODY_MAX_LENGTH - 1) + '…';
+      }
+    }
+  }
+  return '';
+}
+
 export class EventHandler {
   private displayCache = new Map<string, DisplayMessage[]>();
   private pushService?: PushService;
@@ -84,6 +103,9 @@ function buildSessionSink(
   // Track tool_use id → file_path so onToolResult can emit context.updated
   // with the affected paths after the tool has executed.
   const pendingFilePaths = new Map<string, string>();
+  // Track subagent tool_use ids (Task/Agent) so onToolResult can emit
+  // context.updated when a subagent completes, triggering a diffs refresh.
+  const pendingSubagentIds = new Set<string>();
 
   return {
     onInit(sessionId: string) {
@@ -96,10 +118,14 @@ function buildSessionSink(
 
     onMessage(content: any[], metadata?: MessageMetadata) {
       log.debug({ chatId, blockCount: content.length }, 'assistant message received');
+      const categories = getToolCategories(chatId);
       for (const block of content) {
         if (block.type === 'tool_use' && (block.name === 'Write' || block.name === 'Edit')) {
           const fp = (block.input as Record<string, unknown>)?.file_path as string | undefined;
           if (fp) pendingFilePaths.set(block.id as string, fp);
+        }
+        if (block.type === 'tool_use' && categories?.subagent.has(block.name as string)) {
+          pendingSubagentIds.add(block.id as string);
         }
       }
       const hasEnterPlanMode = content.some((b: any) => b.type === 'tool_use' && b.name === 'EnterPlanMode');
@@ -133,12 +159,17 @@ function buildSessionSink(
 
     onToolResult(content: any[]) {
       const editedPaths: string[] = [];
+      let subagentCompleted = false;
       for (const block of content) {
         if (block.type !== 'tool_result' || block.isError) continue;
         const fp = pendingFilePaths.get(block.toolUseId);
         if (fp) {
           editedPaths.push(fp);
           pendingFilePaths.delete(block.toolUseId);
+        }
+        if (pendingSubagentIds.has(block.toolUseId)) {
+          pendingSubagentIds.delete(block.toolUseId);
+          subagentCompleted = true;
         }
       }
 
@@ -149,6 +180,10 @@ function buildSessionSink(
 
       if (editedPaths.length > 0) {
         emitEvent({ type: 'context.updated', chatId, filePaths: editedPaths });
+      } else if (subagentCompleted) {
+        // Subagents write files through their own JSONL files, not the parent stream.
+        // Emit context.updated so the frontend refreshes the session diffs from disk.
+        emitEvent({ type: 'context.updated', chatId });
       }
     },
 
@@ -226,23 +261,21 @@ function buildSessionSink(
           emitEvent({ type: 'message.added', chatId, message });
           emitDisplay();
 
+          const notification = { title: 'Session Error', body: 'A session ended unexpectedly' };
+          emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'error' });
           pushService
-            ?.sendPush({
-              title: 'Session Error',
-              body: 'A session ended unexpectedly',
-              data: { chatId, type: 'error' },
-              priority: 'high',
-            })
+            ?.sendPush({ ...notification, data: { chatId, type: 'error' }, priority: 'high' })
             .catch((err) => log.warn({ err }, 'push notification failed'));
         }
       } else {
+        const lastText = getLastAssistantText(messages.get(chatId));
+        const notification = {
+          title: 'Task Complete',
+          body: lastText || `Session finished (cost: $${cost.toFixed(4)})`,
+        };
+        emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'success' });
         pushService
-          ?.sendPush({
-            title: 'Task Complete',
-            body: `Session finished (cost: $${cost.toFixed(4)})`,
-            data: { chatId, type: 'task_complete' },
-            priority: 'default',
-          })
+          ?.sendPush({ ...notification, data: { chatId, type: 'task_complete' }, priority: 'default' })
           .catch((err) => log.warn({ err }, 'push notification failed'));
       }
 
@@ -342,6 +375,10 @@ function buildSessionSink(
       const active = getActiveChat(chatId);
       if (active) active.chat.todos = todos;
       emitEvent({ type: 'todos.updated', chatId, todos });
+    },
+
+    onPrDetected(pr: import('@qlan-ro/mainframe-types').DetectedPr) {
+      emitEvent({ type: 'chat.prDetected', chatId, pr });
     },
 
     onError(error: Error) {
