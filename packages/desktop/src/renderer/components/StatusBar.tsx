@@ -1,17 +1,84 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, FolderGit, GitBranch } from 'lucide-react';
+import { AlertTriangle, ArrowDownCircle, Download, FolderGit, GitBranch, RotateCcw } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:statusbar');
 import { useChatsStore } from '../store';
 import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useConnectionState } from '../hooks/useConnectionState';
+import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
 import { getGitBranch, getGitStatus } from '../lib/api';
 import { isConflictStatus } from '../lib/git-utils';
 import { cn } from '../lib/utils';
 import { BranchPopover } from './git/BranchPopover';
 
 const GIT_POLL_INTERVAL = 60_000;
+
+function UpdateIndicator(): React.ReactElement | null {
+  const status = useUpdateStatus();
+
+  if (!status || status.state === 'not-available' || status.state === 'checking') {
+    return null;
+  }
+
+  if (status.state === 'available') {
+    return (
+      <button
+        className="flex items-center gap-1 text-mf-accent hover:text-mf-text-primary transition-colors"
+        onClick={() => {
+          try {
+            window.mainframe.updates.download();
+          } catch (err) {
+            console.warn('[UpdateIndicator] download failed', err);
+          }
+        }}
+        title={`Download update v${status.version}`}
+      >
+        <Download size={12} />
+        <span>Update v{status.version}</span>
+      </button>
+    );
+  }
+
+  if (status.state === 'downloading') {
+    return (
+      <span className="flex items-center gap-1 text-mf-text-secondary">
+        <ArrowDownCircle size={12} />
+        <span>Downloading… {status.percent}%</span>
+      </span>
+    );
+  }
+
+  if (status.state === 'downloaded') {
+    return (
+      <button
+        className="flex items-center gap-1 text-mf-success hover:text-mf-text-primary transition-colors"
+        onClick={() => {
+          try {
+            window.mainframe.updates.install();
+          } catch (err) {
+            console.warn('[UpdateIndicator] install failed', err);
+          }
+        }}
+        title={`Restart to install v${status.version}`}
+      >
+        <RotateCcw size={12} />
+        <span>Restart to update</span>
+      </button>
+    );
+  }
+
+  if (status.state === 'error') {
+    return (
+      <span className="flex items-center gap-1 text-mf-destructive" title={status.message}>
+        <AlertTriangle size={12} />
+        <span>Update error</span>
+      </span>
+    );
+  }
+
+  return null;
+}
 
 export function StatusBar(): React.ReactElement {
   const connected = useConnectionState();
@@ -113,6 +180,11 @@ export function StatusBar(): React.ReactElement {
             <span>{counts.idle} Idle</span>
           </div>
         )}
+      </div>
+
+      {/* Right side — update indicator */}
+      <div className="flex items-center gap-2 text-mf-body">
+        <UpdateIndicator />
       </div>
     </div>
   );

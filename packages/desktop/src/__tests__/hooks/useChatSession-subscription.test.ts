@@ -56,17 +56,18 @@ describe('useChatSession subscription lifecycle', () => {
     expect(mockResumeChat).toHaveBeenCalledWith('chat-1');
   });
 
-  it('does NOT call unsubscribe on unmount', () => {
+  it('calls unsubscribe on unmount', () => {
     const { unmount } = renderHook(() => useChatSession('chat-1'));
     unmount();
-    expect(mockUnsubscribe).not.toHaveBeenCalled();
+    expect(mockUnsubscribe).toHaveBeenCalledWith('chat-1');
   });
 
-  it('does NOT call unsubscribe when chatId changes', () => {
+  it('calls unsubscribe for previous chatId when chatId changes', () => {
     const { rerender } = renderHook(({ chatId }) => useChatSession(chatId), {
       initialProps: { chatId: 'chat-1' as string | null },
     });
     rerender({ chatId: 'chat-2' });
-    expect(mockUnsubscribe).not.toHaveBeenCalled();
+    expect(mockUnsubscribe).toHaveBeenCalledWith('chat-1');
+    expect(mockResumeChat).toHaveBeenCalledWith('chat-2');
   });
 });

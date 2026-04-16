@@ -111,25 +111,15 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
     const baseInfo = await detectMergeBase(svc);
 
     if (!baseInfo || branch === baseInfo.baseBranch) {
-      const statusOutput = await svc.statusRaw();
-      const files = parseStatusLines(statusOutput);
-      res.json({ branch, baseBranch: null, mergeBase: null, files });
+      res.json({ branch, baseBranch: null, mergeBase: null, files: [] });
       return;
     }
 
     const { baseBranch, mergeBase } = baseInfo;
-
     const committedOutput = await svc.diff(['--name-status', `${mergeBase}..HEAD`]);
-    const committedFiles = parseDiffNameStatus(committedOutput);
+    const files = parseDiffNameStatus(committedOutput);
 
-    const statusOutput = await svc.statusRaw();
-    const uncommittedFiles = parseStatusLines(statusOutput);
-
-    const fileMap = new Map<string, { status: string; path: string; oldPath?: string }>();
-    for (const f of committedFiles) fileMap.set(f.path, f);
-    for (const f of uncommittedFiles) fileMap.set(f.path, f);
-
-    res.json({ branch, baseBranch, mergeBase, files: Array.from(fileMap.values()) });
+    res.json({ branch, baseBranch, mergeBase, files });
   } catch (err) {
     if (!isNotGitRepo(err)) {
       logger.warn({ err, basePath }, 'Failed to compute branch diffs');

@@ -56,11 +56,13 @@ export type DaemonEvent =
   | { type: 'message.queued.cancelled'; chatId: string; uuid: string }
   | { type: 'message.queued.cancel_failed'; chatId: string; uuid: string }
   | { type: 'message.queued.cleared'; chatId: string }
+  | { type: 'chat.notification'; chatId: string; title: string; body: string; level: 'success' | 'error' }
   | { type: 'chat.compacting'; chatId: string }
   | { type: 'chat.compactDone'; chatId: string }
   | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number }
   | { type: 'adapter.models.updated'; adapterId: string; models: import('./adapter.js').AdapterModel[] }
-  | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] };
+  | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] }
+  | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr };
 
 export type ClientEvent =
   | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }

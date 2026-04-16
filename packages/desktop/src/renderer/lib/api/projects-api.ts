@@ -52,6 +52,15 @@ export async function renameChat(chatId: string, title: string): Promise<void> {
   });
 }
 
+export async function pinChat(chatId: string, pinned: boolean): Promise<void> {
+  log.info('pinChat', { chatId, pinned });
+  await fetch(`${API_BASE}/api/chats/${chatId}/pinned`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pinned }),
+  });
+}
+
 export async function archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
   log.info('archiveChat', { chatId, deleteWorktree });
   const params = deleteWorktree ? '' : '?deleteWorktree=false';

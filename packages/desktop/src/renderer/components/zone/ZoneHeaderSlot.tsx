@@ -16,10 +16,13 @@ export interface InternalTab {
   onClose?: () => void;
 }
 
+export type TabStyle = 'tabs' | 'dropdown';
+
 export interface ZoneHeaderSlotState {
   tabs: InternalTab[];
   activeTabId: string | null;
   onTabChange: ((tabId: string) => void) | null;
+  tabStyle: TabStyle;
   actions: React.ReactNode;
 }
 
@@ -32,6 +35,7 @@ const defaultSlotState: ZoneHeaderSlotState = {
   tabs: [],
   activeTabId: null,
   onTabChange: null,
+  tabStyle: 'tabs',
   actions: null,
 };
 
@@ -60,15 +64,16 @@ export function useZoneHeaderTabs(
   tabs: InternalTab[],
   activeTabId: string | null,
   onTabChange: (tabId: string) => void,
+  tabStyle: TabStyle = 'tabs',
 ): void {
   const { setSlotState } = useContext(ZoneHeaderSlotContext);
 
   useEffect(() => {
-    setSlotState((prev) => ({ ...prev, tabs, activeTabId, onTabChange }));
+    setSlotState((prev) => ({ ...prev, tabs, activeTabId, onTabChange, tabStyle }));
     return () => {
-      setSlotState((prev) => ({ ...prev, tabs: [], activeTabId: null, onTabChange: null }));
+      setSlotState((prev) => ({ ...prev, tabs: [], activeTabId: null, onTabChange: null, tabStyle: 'tabs' }));
     };
-  }, [setSlotState, JSON.stringify(tabs.map((t) => t.id)), activeTabId, onTabChange]);
+  }, [setSlotState, JSON.stringify(tabs.map((t) => t.id)), activeTabId, onTabChange, tabStyle]);
 }
 
 /**
