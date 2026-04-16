@@ -201,8 +201,9 @@ export function FilesTab(): React.ReactElement {
       e.preventDefault();
       if (!activeProject) return;
 
-      const sep = activeProject.path.includes('\\') ? '\\' : '/';
-      const fullPath = `${activeProject.path}${sep}${entryPath}`;
+      const basePath = activeChatWorktreePath ?? activeProject.path;
+      const sep = basePath.includes('\\') ? '\\' : '/';
+      const fullPath = `${basePath}${sep}${entryPath}`;
 
       setContextMenu({
         x: e.clientX,
@@ -238,7 +239,7 @@ export function FilesTab(): React.ReactElement {
         ],
       });
     },
-    [activeProject],
+    [activeProject, activeChatWorktreePath],
   );
 
   if (!activeProject) {

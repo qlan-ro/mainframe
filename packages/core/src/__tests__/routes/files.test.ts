@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileRoutes } from '../../server/routes/files.js';
@@ -102,6 +102,82 @@ describe('GET /api/projects/:id/tree', () => {
     const entries = res.json.mock.calls[0][0] as Array<{ name: string }>;
     expect(entries.find((e) => e.name === 'node_modules')).toBeUndefined();
     expect(entries.find((e) => e.name === 'src')).toBeDefined();
+  });
+
+  it('classifies a symlink to a directory as a directory', async () => {
+    await mkdir(join(projectDir, 'real-dir'));
+    await symlink(join(projectDir, 'real-dir'), join(projectDir, 'link-to-dir'));
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
+    await flushPromises();
+
+    const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+    const link = entries.find((e) => e.name === 'link-to-dir');
+    expect(link).toBeDefined();
+    expect(link?.type).toBe('directory');
+  });
+
+  it('classifies a symlink to a file as a file', async () => {
+    await writeFile(join(projectDir, 'real-file.txt'), 'hi');
+    await symlink(join(projectDir, 'real-file.txt'), join(projectDir, 'link-to-file'));
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
+    await flushPromises();
+
+    const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+    const link = entries.find((e) => e.name === 'link-to-file');
+    expect(link).toBeDefined();
+    expect(link?.type).toBe('file');
+  });
+
+  it('omits broken symlinks from the listing', async () => {
+    await writeFile(join(projectDir, 'visible.txt'), '');
+    await symlink(join(projectDir, 'does-not-exist'), join(projectDir, 'broken-link'));
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
+    await flushPromises();
+
+    const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+    expect(entries.find((e) => e.name === 'broken-link')).toBeUndefined();
+    expect(entries.find((e) => e.name === 'visible.txt')).toBeDefined();
+  });
+
+  it('omits symlinks pointing outside the project', async () => {
+    const outsideDir = await mkdtemp(join(tmpdir(), 'mf-files-outside-'));
+    try {
+      await writeFile(join(outsideDir, 'secret.txt'), 's');
+      await symlink(outsideDir, join(projectDir, 'escape-link'));
+      await writeFile(join(projectDir, 'visible.txt'), '');
+
+      const ctx = createCtx(projectDir);
+      const router = fileRoutes(ctx);
+      const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
+      const res = mockRes();
+
+      handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
+      await flushPromises();
+
+      const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+      expect(entries.find((e) => e.name === 'escape-link')).toBeUndefined();
+      expect(entries.find((e) => e.name === 'visible.txt')).toBeDefined();
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true });
+    }
   });
 
   it('includes dotfiles and dotfolders in listing', async () => {
