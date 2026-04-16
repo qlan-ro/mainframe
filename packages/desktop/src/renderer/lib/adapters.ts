@@ -30,10 +30,17 @@ export function getAdapterLabel(adapterId: string, adapters?: AdapterInfo[]): st
   return name ?? ADAPTER_LABEL_FALLBACK[adapterId] ?? adapterId;
 }
 
-export function getModelOptions(adapterId: string, adapters: AdapterInfo[]): { id: string; label: string }[] {
+export function getModelOptions(
+  adapterId: string,
+  adapters: AdapterInfo[],
+): { id: string; label: string; description?: string }[] {
   const adapter = adapters.find((entry) => entry.id === adapterId);
   if (!adapter) return [];
-  return adapter.models.map((model) => ({ id: model.id, label: model.label }));
+  return adapter.models.map((model) => ({
+    id: model.id,
+    label: model.label,
+    ...(model.description ? { description: model.description } : {}),
+  }));
 }
 
 export function getModelLabel(modelId: string | undefined, adapters: AdapterInfo[]): string {
@@ -52,14 +59,14 @@ export function getModelLabel(modelId: string | undefined, adapters: AdapterInfo
 }
 
 /**
- * Resolve the default model for an adapter: provider setting → first model in list.
+ * Resolve the default model for an adapter: provider setting → isDefault entry → first model.
  * Safe to call outside React (reads stores via getState()).
  */
 export function getDefaultModelForAdapter(adapterId: string): string | undefined {
   const providerDefault = useSettingsStore.getState().providers[adapterId]?.defaultModel;
   if (providerDefault) return providerDefault;
   const adapter = useAdaptersStore.getState().adapters.find((a) => a.id === adapterId);
-  return adapter?.models[0]?.id;
+  return adapter?.models.find((m) => m.isDefault)?.id ?? adapter?.models[0]?.id;
 }
 
 export function getModelContextWindow(modelId: string | undefined, adapters: AdapterInfo[]): number {

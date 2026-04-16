@@ -162,10 +162,13 @@ export interface AdapterInfo {
 export interface AdapterModel {
   id: string;
   label: string;
+  description?: string;
   contextWindow?: number;
   supportsEffort?: boolean;
   supportsFastMode?: boolean;
   supportsAutoMode?: boolean;
+  /** Marks the provider default. When the user hasn't picked a specific model, this one is used. */
+  isDefault?: boolean;
 }
 
 export interface ExternalSession {

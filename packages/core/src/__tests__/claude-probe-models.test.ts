@@ -34,14 +34,17 @@ function emitInitializeResponse(child: ChildProcess, models: unknown[]): void {
   const response = JSON.stringify({
     type: 'control_response',
     response: {
-      subtype: 'initialize',
+      subtype: 'success',
       request_id: 'test',
-      models,
-      commands: [],
-      agents: [],
-      output_style: 'concise',
-      available_output_styles: ['concise'],
-      account: {},
+      response: {
+        commands: [],
+        agents: [],
+        output_style: 'concise',
+        available_output_styles: ['concise'],
+        models,
+        account: {},
+        pid: 12345,
+      },
     },
   });
   (child.stdout as Readable).push(response + '\n');
@@ -69,27 +72,33 @@ describe('probeModels', () => {
 
     emitInitializeResponse(child, [
       {
-        value: 'claude-opus-4-6',
-        displayName: 'Opus',
-        description: 'Most capable',
+        value: 'default',
+        displayName: 'Default (recommended)',
+        description: 'Opus 4.7 with 1M context',
         supportsEffort: true,
         supportsFastMode: true,
         supportsAutoMode: true,
       },
-      { value: 'claude-sonnet-4-6', displayName: 'Sonnet', description: 'Fast' },
+      { value: 'claude-sonnet-4-6', displayName: 'Sonnet', description: 'Sonnet 4.6 · Best for everyday tasks' },
     ]);
 
     const result = await promise;
 
     expect(result).toHaveLength(2);
     expect(result![0]).toEqual({
-      id: 'claude-opus-4-6',
-      label: 'Opus',
+      id: 'default',
+      label: 'Default - Opus 4.7',
+      description: 'Opus 4.7 with 1M context',
       supportsEffort: true,
       supportsFastMode: true,
       supportsAutoMode: true,
+      isDefault: true,
     });
-    expect(result![1]).toEqual({ id: 'claude-sonnet-4-6', label: 'Sonnet' });
+    expect(result![1]).toEqual({
+      id: 'claude-sonnet-4-6',
+      label: 'Sonnet 4.6',
+      description: 'Sonnet 4.6 · Best for everyday tasks',
+    });
     expect(child.kill).toHaveBeenCalled();
   });
 
