@@ -81,11 +81,11 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
         </div>
       </label>
 
-      {/* Default Model */}
+      {/* Default Model — picking "Default" delegates to the CLI's own default (e.g. Opus 4.7 on Max). */}
       <ModelDropdown
-        value={config.defaultModel ?? ''}
-        options={[{ id: '', label: 'None (use provider default)' }, ...models]}
-        onChange={(v) => update({ defaultModel: v || undefined })}
+        value={config.defaultModel ?? 'default'}
+        options={models}
+        onChange={(v) => update({ defaultModel: v })}
       />
 
       {/* Default Mode */}

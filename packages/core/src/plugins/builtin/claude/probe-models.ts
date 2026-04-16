@@ -16,11 +16,31 @@ interface CliModelInfo {
   supportsAutoMode?: boolean;
 }
 
+// CLI descriptions look like "Opus 4.7 with 1M context · Most capable for complex work".
+// The part before "·" is the model identity ("Opus 4.7 with 1M context"); the tail is marketing.
+function extractIdentity(description: string | undefined): string | null {
+  if (!description) return null;
+  const firstChunk = description.split('·')[0]?.trim();
+  return firstChunk || null;
+}
+
 function mapModelInfo(info: CliModelInfo): AdapterModel {
-  const model: AdapterModel = { id: info.value, label: info.displayName };
+  const identity = extractIdentity(info.description);
+  let label = info.displayName;
+  if (info.value === 'default') {
+    // Drop the "with 1M context" tail for default — "Default" already implies top config.
+    const bare = identity?.split(/\s+with\s+/i)[0]?.trim();
+    label = bare ? `Default - ${bare}` : 'Default';
+  } else if (identity) {
+    label = identity;
+  }
+  const model: AdapterModel = { id: info.value, label };
+  if (info.description) model.description = info.description;
   if (info.supportsEffort) model.supportsEffort = true;
   if (info.supportsFastMode) model.supportsFastMode = true;
   if (info.supportsAutoMode) model.supportsAutoMode = true;
+  // The CLI exposes the tier-resolved default under value: "default" (e.g. Opus 4.7 on Max).
+  if (info.value === 'default') model.isDefault = true;
   return model;
 }
 

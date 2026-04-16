@@ -8,7 +8,7 @@ import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useChatsStore } from '../../../../store/chats';
 import { useSkillsStore } from '../../../../store/skills';
 import { useAdaptersStore } from '../../../../store/adapters';
-import { getAdapterOptions, getModelOptions } from '../../../../lib/adapters';
+import { getAdapterOptions, getModelOptions, getModelLabel } from '../../../../lib/adapters';
 import { daemonClient } from '../../../../lib/client';
 import { getGitBranch } from '../../../../lib/api';
 import { focusComposerInput } from '../../../../lib/focus';
@@ -218,6 +218,12 @@ export function ComposerCard() {
   const adapterOptions = getAdapterOptions(adapters);
   const modelOptions = getModelOptions(currentAdapter, adapters);
   const currentModel = chat?.model ?? modelOptions[0]?.id ?? '';
+  // Legacy / tier-specific IDs may not be present in the probed catalog.
+  // Keep the stored id, but inject a synthetic entry so the trigger and list show a readable label.
+  const dropdownOptions =
+    currentModel && !modelOptions.some((o) => o.id === currentModel)
+      ? [{ id: currentModel, label: getModelLabel(currentModel, adapters) }, ...modelOptions]
+      : modelOptions;
 
   const handleAdapterChange = useCallback(
     (adapterId: string) => {
@@ -370,7 +376,7 @@ export function ComposerCard() {
             onChange={handleAdapterChange}
             disabled={hasMessages}
           />
-          <ComposerDropdown items={modelOptions} value={currentModel} onChange={handleModelChange} />
+          <ComposerDropdown items={dropdownOptions} value={currentModel} onChange={handleModelChange} />
           <ComposerDropdown
             items={PERMISSION_MODES}
             value={currentMode}

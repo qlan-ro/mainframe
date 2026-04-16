@@ -21,6 +21,19 @@ import manifest from './manifest.json' with { type: 'json' };
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const EXTENDED_CONTEXT_WINDOW = 1_000_000;
 const CLAUDE_MODELS: AdapterModel[] = [
+  // The CLI accepts "default" as an alias that resolves to the user's tier default
+  // at spawn time (e.g. Opus 4.7 on Max). This hardcoded fallback points at Opus 4.6
+  // with 1M context until the probe replaces the list with the live catalog.
+  {
+    id: 'default',
+    label: 'Default - Opus 4.6',
+    description: 'Opus 4.6 with 1M context',
+    contextWindow: EXTENDED_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsFastMode: true,
+    supportsAutoMode: true,
+    isDefault: true,
+  },
   {
     id: 'claude-opus-4-6',
     label: 'Opus 4.6',
