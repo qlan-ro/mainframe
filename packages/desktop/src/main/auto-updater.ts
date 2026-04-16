@@ -43,7 +43,7 @@ function registerListeners(mainWindow: BrowserWindow): void {
   });
 
   autoUpdater.on('error', (err) => {
-    log.error({ err }, 'update error');
+    log.warn({ message: err.message }, 'update error');
     send(mainWindow, { state: 'error', message: err.message });
   });
 }

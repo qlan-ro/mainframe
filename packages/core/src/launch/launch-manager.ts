@@ -190,8 +190,17 @@ export class LaunchManager {
         );
         resolve();
       });
-      child.once('error', (err) => {
-        log.error({ err, name: config.name }, 'process error');
+      child.once('error', (err: NodeJS.ErrnoException) => {
+        log.warn(
+          {
+            name: config.name,
+            code: err.code,
+            syscall: err.syscall,
+            path: err.path,
+            message: err.message,
+          },
+          'process error',
+        );
         managed.status = 'failed';
         this.processes.delete(config.name);
         this.emit({
