@@ -219,6 +219,13 @@ function createWindow(): void {
     }
   });
 
+  // Capture renderer crashes (blank-screen bugs leave no other trace — the React
+  // ErrorBoundary only catches render errors, not process-level crashes like OOM
+  // or GPU-killed). Log the reason so we can diagnose recurring cases.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    log.error({ reason: details.reason, exitCode: details.exitCode }, 'renderer process gone');
+  });
+
   if (process.env.NODE_ENV !== 'development') {
     mainWindow.webContents.on('devtools-opened', () => {
       mainWindow?.webContents.closeDevTools();
