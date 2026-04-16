@@ -12,7 +12,9 @@ Fixes todo #98 (bug, high) and #96 (feature, medium). Both are file-tree scoped,
 
 `packages/core/src/server/routes/files.ts:33-45` (`handleTree`) classifies each `Dirent` via `isDirectory() ? 'directory' : 'file'`. For a symlink, `Dirent.isDirectory()` and `isFile()` both return false, so every symlink (to a file or a directory) is labelled as a file and can't be expanded.
 
-**Fix:** When `e.isSymbolicLink()` is true, `stat()` the resolved path to learn whether the target is a file or directory, and classify accordingly. If the target cannot be stat'd (broken/dangling symlink) or resolves outside `basePath`, skip the entry (same treatment as `walkProjectFiles` in `fs-utils.ts`). Resolve symlinks in parallel with `Promise.all` so one slow stat doesn't serialize the listing. No UI change — symlinked directories just become expandable.
+**Fix:** When `e.isSymbolicLink()` is true, `stat()` (which follows the symlink) to learn whether the target is a file or directory, and classify accordingly. If the stat throws (broken symlink, loop, race), skip the entry — there's nothing meaningful to show. Symlinks whose target is outside the project root are *listed* (with the correct type), matching how VS Code and Finder surface them; the existing `resolveAndValidatePath` check on `/files` and subsequent `/tree` calls still guards actual read/traversal. Resolve symlinks in parallel with `Promise.all` so one slow stat doesn't serialize the listing.
+
+No UI change — symlinked directories just become expandable.
 
 ## Non-goals
 
@@ -23,7 +25,7 @@ Fixes todo #98 (bug, high) and #96 (feature, medium). Both are file-tree scoped,
 ## Testing
 
 - **#98:** manual — open a chat with a worktree, right-click an entry, verify Copy Path and Reveal in Finder point at the worktree's copy.
-- **#96:** unit test for `handleTree` against a tmp dir containing (a) a symlink to a file, (b) a symlink to a directory, (c) a broken symlink, (d) a symlink pointing outside the project. Assert classification and that out-of-scope/broken symlinks are omitted.
+- **#96:** unit test for `handleTree` against a tmp dir containing (a) a symlink to a file, (b) a symlink to a directory, (c) a broken symlink, (d) a symlink pointing outside the project. Assert classification for (a)(b)(d), broken symlink omitted.
 
 ## Risk
 

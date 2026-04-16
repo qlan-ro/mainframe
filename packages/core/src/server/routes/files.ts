@@ -31,7 +31,6 @@ async function handleTree(ctx: RouteContext, req: Request, res: Response): Promi
     }
 
     const dirents = await readdir(fullPath, { withFileTypes: true });
-    const realBase = await realpath(basePath);
     const resolved = await Promise.all(
       dirents
         .filter((e) => !IGNORED_DIRS.has(e.name))
@@ -40,12 +39,10 @@ async function handleTree(ctx: RouteContext, req: Request, res: Response): Promi
           let type: 'file' | 'directory';
           if (e.isSymbolicLink()) {
             try {
-              const real = await realpath(entryPath);
-              if (real !== realBase && !real.startsWith(realBase + path.sep)) return null;
               const st = await stat(entryPath);
               type = st.isDirectory() ? 'directory' : 'file';
             } catch {
-              /* broken symlink or race — skip */
+              /* broken symlink, loop, or race — skip */
               return null;
             }
           } else {

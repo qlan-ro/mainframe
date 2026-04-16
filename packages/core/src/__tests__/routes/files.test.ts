@@ -157,12 +157,10 @@ describe('GET /api/projects/:id/tree', () => {
     expect(entries.find((e) => e.name === 'visible.txt')).toBeDefined();
   });
 
-  it('omits symlinks pointing outside the project', async () => {
+  it('lists symlinks pointing outside the project, classified by target', async () => {
     const outsideDir = await mkdtemp(join(tmpdir(), 'mf-files-outside-'));
     try {
-      await writeFile(join(outsideDir, 'secret.txt'), 's');
-      await symlink(outsideDir, join(projectDir, 'escape-link'));
-      await writeFile(join(projectDir, 'visible.txt'), '');
+      await symlink(outsideDir, join(projectDir, 'outside-dir-link'));
 
       const ctx = createCtx(projectDir);
       const router = fileRoutes(ctx);
@@ -173,8 +171,9 @@ describe('GET /api/projects/:id/tree', () => {
       await flushPromises();
 
       const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
-      expect(entries.find((e) => e.name === 'escape-link')).toBeUndefined();
-      expect(entries.find((e) => e.name === 'visible.txt')).toBeDefined();
+      const link = entries.find((e) => e.name === 'outside-dir-link');
+      expect(link).toBeDefined();
+      expect(link?.type).toBe('directory');
     } finally {
       await rm(outsideDir, { recursive: true, force: true });
     }
