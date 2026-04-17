@@ -25,3 +25,7 @@ export async function getWorktrees(
 export async function attachWorktree(chatId: string, worktreePath: string, branchName: string): Promise<void> {
   await postJson(`${API_BASE}/api/chats/${chatId}/attach-worktree`, { worktreePath, branchName });
 }
+
+export async function deleteWorktree(projectId: string, worktreePath: string, branchName?: string): Promise<void> {
+  await postJson(`${API_BASE}/api/projects/${projectId}/git/delete-worktree`, { worktreePath, branchName });
+}

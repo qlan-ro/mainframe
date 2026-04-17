@@ -110,6 +110,10 @@ export const GitDeleteBranchBody = z.object({
   force: z.boolean().optional(),
   remote: z.boolean().optional(),
 });
+export const GitDeleteWorktreeBody = z.object({
+  worktreePath: z.string().min(1),
+  branchName: z.string().optional(),
+});
 
 // --- Validation helper ---
 

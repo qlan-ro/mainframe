@@ -236,6 +236,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
               currentBranch={branches.current}
               search={search}
               onSelectBranch={handleSelectBranch}
+              onDeleteWorktree={actions.handleDeleteWorktree}
             />
           </>
         )}
