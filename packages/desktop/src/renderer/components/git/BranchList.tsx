@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown, GitBranch, Star } from 'lucide-react';
+import { ChevronRight, ChevronDown, GitBranch, Star, Trash2 } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -16,6 +16,7 @@ interface BranchListProps {
   currentBranch: string;
   search: string;
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
+  onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
 }
 
 function groupBranches(branches: BranchInfo[]): { groups: BranchGroup[]; ungrouped: BranchInfo[] } {
@@ -152,24 +153,43 @@ function WorktreeSection({
   branches,
   currentBranch,
   onSelectBranch,
+  onDeleteWorktree,
 }: {
   name: string;
   branches: BranchInfo[];
   currentBranch: string;
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
+  onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
+  const branchName = branches[0]?.name;
 
   return (
     <>
       <div className="border-t border-mf-border my-1" />
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
-      >
-        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-        {name}
-      </button>
+      <div className="flex items-center">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex-1 flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
+        >
+          {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+          {name}
+        </button>
+        {onDeleteWorktree && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => onDeleteWorktree(name, branchName)}
+                className="p-1 mr-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-destructive transition-colors"
+                aria-label={`Delete worktree ${name}`}
+              >
+                <Trash2 size={11} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Delete worktree</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
       {expanded &&
         branches.map((b) => (
           <BranchRow
@@ -194,6 +214,7 @@ export function BranchList({
   currentBranch,
   search,
   onSelectBranch,
+  onDeleteWorktree,
 }: BranchListProps): React.ReactElement {
   const mainBranches = useMemo(
     () =>
@@ -276,6 +297,7 @@ export function BranchList({
           branches={wt.branches}
           currentBranch={currentBranch}
           onSelectBranch={onSelectBranch}
+          onDeleteWorktree={onDeleteWorktree}
         />
       ))}
 

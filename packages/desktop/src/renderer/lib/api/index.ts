@@ -93,4 +93,5 @@ export {
   forkToWorktree,
   getWorktrees as getProjectWorktrees,
   attachWorktree,
+  deleteWorktree,
 } from './worktree-api';
