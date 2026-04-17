@@ -352,7 +352,7 @@ export function ComposerCard() {
           spellCheck={false}
           disabled={chat?.worktreeMissing}
           placeholder="Type @ to search files, / for skills… (Enter to send)"
-          className="w-full bg-transparent border-none px-3 py-2 font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-transparent border-none px-3 py-2 font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && chat?.isRunning) {
               e.preventDefault();
