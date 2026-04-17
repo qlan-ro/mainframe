@@ -116,8 +116,10 @@ async function handleSearchFiles(ctx: RouteContext, req: Request, res: Response)
     }
   };
 
-  // Try ripgrep file listing first — respects .gitignore, skips hidden/binary
-  const rgFiles = await listFilesWithRipgrep(basePath);
+  // Use builtin-ignore-only mode: skips .gitignore so gitignored config files
+  // (e.g. .env) appear in results, while still excluding build artifacts via
+  // IGNORED_DIRS globs (node_modules, dist, .next, etc).
+  const rgFiles = await listFilesWithRipgrep(basePath, { useBuiltinIgnoreOnly: true });
 
   if (rgFiles !== null) {
     for (const relFile of rgFiles) {

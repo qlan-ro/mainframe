@@ -228,10 +228,12 @@ describe('GET /api/projects/:id/search/files', () => {
     expect(results.some((r) => r.name === 'main.ts')).toBe(true);
   });
 
-  it('excludes gitignored and binary files from search results', async () => {
-    await writeFile(join(projectDir, '.gitignore'), 'ignored.txt\n');
+  it('surfaces gitignored config files and excludes binary files from search results', async () => {
+    // .env.local is gitignored but should appear — file search uses useBuiltinIgnoreOnly
+    // so env/config files surface even when listed in .gitignore
+    await writeFile(join(projectDir, '.gitignore'), '.env.local\n');
     await writeFile(join(projectDir, 'app.ts'), '');
-    await writeFile(join(projectDir, 'ignored.txt'), '');
+    await writeFile(join(projectDir, '.env.local'), 'SECRET=hunter2\n');
     await writeFile(join(projectDir, 'logo.png'), '');
     await writeFile(join(projectDir, 'font.woff2'), '');
 
@@ -240,13 +242,14 @@ describe('GET /api/projects/:id/search/files', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'a' } }, res, vi.fn());
+    // query 'app' matches app.ts; query 'env' matches .env.local
+    handler({ params: { id: 'proj-1' }, query: { q: 'env' } }, res, vi.fn());
     await flushPromises();
 
     const results = res.json.mock.calls[0][0];
     const names = results.map((r: any) => r.name);
-    expect(names).toContain('app.ts');
-    expect(names).not.toContain('ignored.txt');
+    // gitignored config file should now surface
+    expect(names).toContain('.env.local');
     expect(names).not.toContain('logo.png');
     expect(names).not.toContain('font.woff2');
   });
