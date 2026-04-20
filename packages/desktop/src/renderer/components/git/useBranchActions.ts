@@ -19,6 +19,8 @@ import {
   getProjectWorktrees,
   deleteWorktree,
 } from '../../lib/api';
+import { daemonClient } from '../../lib/client';
+import { getDefaultModelForAdapter } from '../../lib/adapters';
 
 interface BranchData {
   current: string;
@@ -47,6 +49,7 @@ export interface BranchActions {
   handleRename: (oldName: string, newName: string) => Promise<boolean>;
   handleDelete: (branch: string, isRemote?: boolean) => Promise<boolean>;
   handleDeleteWorktree: (worktreeDirName: string, branchName: string | undefined) => Promise<boolean>;
+  handleNewSession: (worktreeDirName: string, branchName: string | undefined) => Promise<boolean>;
   handleFetch: () => Promise<boolean>;
   handleUpdateAll: () => Promise<boolean>;
   handleAbort: () => Promise<boolean>;
@@ -298,6 +301,26 @@ export function useBranchActions(
     [projectId, loadBranches, withBusy],
   );
 
+  const handleNewSession = useCallback(
+    async (worktreeDirName: string, branchName: string | undefined) => {
+      return withBusy(async () => {
+        const { worktrees } = await getProjectWorktrees(projectId);
+        const match = worktrees.find((wt) => wt.path.endsWith(`/${worktreeDirName}`) || wt.path === worktreeDirName);
+        if (!match) {
+          toast.error(`Could not resolve path for worktree '${worktreeDirName}'`);
+          return;
+        }
+        daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'), undefined, {
+          worktreePath: match.path,
+          branchName: branchName ?? worktreeDirName,
+        });
+        toast.success(`Started new session on worktree '${worktreeDirName}'`);
+        onClose();
+      });
+    },
+    [projectId, onClose, withBusy],
+  );
+
   return {
     branches,
     conflictFiles,
@@ -312,6 +335,7 @@ export function useBranchActions(
     handleRename,
     handleDelete,
     handleDeleteWorktree,
+    handleNewSession,
     handleFetch,
     handleUpdateAll,
     handleAbort,
