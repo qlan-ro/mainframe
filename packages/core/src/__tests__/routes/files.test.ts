@@ -253,6 +253,72 @@ describe('GET /api/projects/:id/search/files', () => {
     expect(names).not.toContain('logo.png');
     expect(names).not.toContain('font.woff2');
   });
+
+  it('filters binary/non-editable files (png, pdf, jpg, zip) even when name matches query', async () => {
+    await mkdir(join(projectDir, 'assets'), { recursive: true });
+    await writeFile(join(projectDir, 'assets', 'icon_108.png'), '');
+    await writeFile(join(projectDir, 'assets', 'icon_324.jpg'), '');
+    await writeFile(join(projectDir, 'assets', 'icon.svg'), '<svg/>');
+    await writeFile(join(projectDir, 'assets', 'doc.pdf'), '');
+    await writeFile(join(projectDir, 'assets', 'archive.zip'), '');
+    await writeFile(join(projectDir, 'IconButton.tsx'), 'export {}');
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { q: 'icon' } }, res, vi.fn());
+    await flushPromises();
+
+    const results = res.json.mock.calls[0][0];
+    const names = results.map((r: any) => r.name);
+
+    // Editable source file should surface
+    expect(names).toContain('IconButton.tsx');
+    // Binary / non-editable formats should not
+    expect(names).not.toContain('icon_108.png');
+    expect(names).not.toContain('icon_324.jpg');
+    expect(names).not.toContain('icon.svg');
+    expect(names).not.toContain('doc.pdf');
+    expect(names).not.toContain('archive.zip');
+  });
+
+  it('surfaces .log files (plain text — should be searchable)', async () => {
+    await mkdir(join(projectDir, 'webapp', 'logs'), { recursive: true });
+    await writeFile(join(projectDir, 'webapp', 'logs', 'legacy_lumen.log'), 'log data\n');
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { q: 'legacy_lumen' } }, res, vi.fn());
+    await flushPromises();
+
+    const results = res.json.mock.calls[0][0];
+    const names = results.map((r: any) => r.name);
+    expect(names).toContain('legacy_lumen.log');
+  });
+
+  it('never returns directories — only files', async () => {
+    await mkdir(join(projectDir, 'components', 'Button'), { recursive: true });
+    await writeFile(join(projectDir, 'components', 'Button', 'Button.tsx'), '');
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { q: 'button' } }, res, vi.fn());
+    await flushPromises();
+
+    const results = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+    // Every result must be a file — no directories
+    for (const r of results) {
+      expect(r.type).toBe('file');
+    }
+  });
 });
 
 describe('GET /api/filesystem/browse', () => {

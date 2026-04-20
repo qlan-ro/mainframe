@@ -9,7 +9,7 @@ import { resolveAndValidatePath, resolveClaudeConfigPath } from './path-utils.js
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
 import { BrowseFilesystemQuery, validate } from './schemas.js';
-import { IGNORED_DIRS } from '../fs-utils.js';
+import { IGNORED_DIRS, hasBinaryExtension } from '../fs-utils.js';
 import { listFilesWithRipgrep } from '../ripgrep.js';
 
 const logger = createChildLogger('routes:files');
@@ -106,13 +106,15 @@ async function handleSearchFiles(ctx: RouteContext, req: Request, res: Response)
   };
 
   const addResult = (relPath: string, isDir: boolean): void => {
+    // File picker only surfaces files users can open in a text editor.
+    if (isDir) return;
+    if (hasBinaryExtension(relPath)) return;
     const relLower = relPath.toLowerCase();
     const name = path.basename(relPath);
-    const type = isDir ? 'directory' : 'file';
     if (relLower.includes(q)) {
-      substringHits.push({ name, path: relPath, type, exact: true });
+      substringHits.push({ name, path: relPath, type: 'file', exact: true });
     } else if (fuzzyMatch(q, relLower)) {
-      fuzzyHits.push({ name, path: relPath, type, exact: false });
+      fuzzyHits.push({ name, path: relPath, type: 'file', exact: false });
     }
   };
 

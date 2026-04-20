@@ -27,6 +27,50 @@ beforeAll(async () => {
   // Another excluded build dir
   await mkdir(path.join(tmpDir, 'dist'), { recursive: true });
   await writeFile(path.join(tmpDir, 'dist', 'bundle.js'), 'var x=1;\n');
+
+  // iOS / Swift build artifacts — CocoaPods, Xcode DerivedData, SwiftPM, Carthage
+  await mkdir(path.join(tmpDir, 'ios', 'Pods', 'Target Support Files', 'ExpoClipboard'), {
+    recursive: true,
+  });
+  await writeFile(
+    path.join(tmpDir, 'ios', 'Pods', 'Target Support Files', 'ExpoClipboard', 'ExpoClipboard.modulemap'),
+    'module ExpoClipboard {}\n',
+  );
+
+  await mkdir(path.join(tmpDir, 'ios', 'DerivedData', 'Build'), { recursive: true });
+  await writeFile(path.join(tmpDir, 'ios', 'DerivedData', 'Build', 'x.o'), '');
+
+  await mkdir(path.join(tmpDir, '.build', 'debug'), { recursive: true });
+  await writeFile(path.join(tmpDir, '.build', 'debug', 'bin.o'), '');
+
+  await mkdir(path.join(tmpDir, 'Carthage', 'Build'), { recursive: true });
+  await writeFile(path.join(tmpDir, 'Carthage', 'Build', 'Foo.framework'), '');
+
+  // Worktree directories — agents check out copies of the repo here; results
+  // would otherwise surface duplicate copies of every source file.
+  await mkdir(path.join(tmpDir, '.claude', 'worktrees', 'agent-abc123', 'src'), {
+    recursive: true,
+  });
+  await writeFile(path.join(tmpDir, '.claude', 'worktrees', 'agent-abc123', 'src', 'Service.scala'), '');
+
+  await mkdir(path.join(tmpDir, '.worktree', 'feature-x'), { recursive: true });
+  await writeFile(path.join(tmpDir, '.worktree', 'feature-x', 'copy.ts'), '');
+
+  // IDE / editor config directories
+  await mkdir(path.join(tmpDir, '.idea'), { recursive: true });
+  await writeFile(path.join(tmpDir, '.idea', 'workspace.xml'), '<xml/>');
+
+  await mkdir(path.join(tmpDir, '.vscode'), { recursive: true });
+  await writeFile(path.join(tmpDir, '.vscode', 'settings.json'), '{}');
+
+  await mkdir(path.join(tmpDir, '.vs'), { recursive: true });
+  await writeFile(path.join(tmpDir, '.vs', 'slnx.sqlite'), '');
+
+  await mkdir(path.join(tmpDir, '.fleet'), { recursive: true });
+  await writeFile(path.join(tmpDir, '.fleet', 'run.json'), '{}');
+
+  await mkdir(path.join(tmpDir, '.zed'), { recursive: true });
+  await writeFile(path.join(tmpDir, '.zed', 'settings.json'), '{}');
 });
 
 afterAll(async () => {
@@ -61,5 +105,32 @@ describe('listFilesWithRipgrep', () => {
 
     const hasDist = files.some((f) => f.startsWith('dist/') || f === 'dist');
     expect(hasDist).toBe(false);
+  });
+
+  it('useBuiltinIgnoreOnly excludes iOS/Swift build dirs (Pods, DerivedData, .build, Carthage)', async () => {
+    const files = await listFilesWithRipgrep(tmpDir, { useBuiltinIgnoreOnly: true });
+    if (files === null) return; // ripgrep unavailable in CI — skip gracefully
+
+    expect(files.some((f) => f.includes('/Pods/') || f.startsWith('Pods/'))).toBe(false);
+    expect(files.some((f) => f.includes('/DerivedData/') || f.startsWith('DerivedData/'))).toBe(false);
+    expect(files.some((f) => f.includes('/.build/') || f.startsWith('.build/'))).toBe(false);
+    expect(files.some((f) => f.includes('/Carthage/') || f.startsWith('Carthage/'))).toBe(false);
+  });
+
+  it('useBuiltinIgnoreOnly excludes worktree directories (.claude/worktrees, .worktree)', async () => {
+    const files = await listFilesWithRipgrep(tmpDir, { useBuiltinIgnoreOnly: true });
+    if (files === null) return; // ripgrep unavailable in CI — skip gracefully
+
+    expect(files.some((f) => f.includes('/worktrees/') || f.startsWith('worktrees/'))).toBe(false);
+    expect(files.some((f) => f.includes('/.worktree/') || f.startsWith('.worktree/'))).toBe(false);
+  });
+
+  it('useBuiltinIgnoreOnly excludes IDE config directories (.idea, .vscode, .vs, .fleet, .zed)', async () => {
+    const files = await listFilesWithRipgrep(tmpDir, { useBuiltinIgnoreOnly: true });
+    if (files === null) return; // ripgrep unavailable in CI — skip gracefully
+
+    for (const dir of ['.idea', '.vscode', '.vs', '.fleet', '.zed']) {
+      expect(files.some((f) => f.includes(`/${dir}/`) || f.startsWith(`${dir}/`))).toBe(false);
+    }
   });
 });
