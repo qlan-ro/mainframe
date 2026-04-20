@@ -111,6 +111,8 @@ export class WebSocketManager {
           event.adapterId,
           event.model,
           event.permissionMode,
+          event.worktreePath,
+          event.branchName,
         );
         client.subscriptions.add(chat.id);
         break;

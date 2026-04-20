@@ -65,7 +65,15 @@ export type DaemonEvent =
   | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr };
 
 export type ClientEvent =
-  | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }
+  | {
+      type: 'chat.create';
+      projectId: string;
+      adapterId: string;
+      model?: string;
+      permissionMode?: PermissionMode;
+      worktreePath?: string;
+      branchName?: string;
+    }
   | { type: 'chat.resume'; chatId: string }
   | { type: 'chat.end'; chatId: string }
   | {
