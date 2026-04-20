@@ -13,6 +13,8 @@ import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { Skill, CustomCommand } from '@qlan-ro/mainframe-types';
 
+type DerivedMode = 'all' | 'fuzzy-agents-files' | 'autocomplete' | 'skills';
+
 type PickerItem =
   | { type: 'agent'; name: string; description: string; scope: string }
   | { type: 'file'; name: string; path: string }
@@ -82,7 +84,6 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
   const atToken: AtToken | null = parseAtToken(text, caret);
   const slashMatch = atToken ? null : text.match(/^\/(\S*)$/);
 
-  type DerivedMode = 'all' | 'fuzzy-agents-files' | 'autocomplete' | 'skills';
   let mode: DerivedMode = 'all';
   if (atToken) mode = atToken.mode === 'fuzzy' ? 'fuzzy-agents-files' : 'autocomplete';
   else if (slashMatch) mode = 'skills';
