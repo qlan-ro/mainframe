@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderPlus, List, LayoutList, Plus, Download } from 'lucide-react';
+import { FolderPlus, Plus, Download } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
@@ -22,9 +22,6 @@ import { useZoneHeaderActions } from '../zone/ZoneHeaderSlot.js';
 import type { Chat, Project } from '@qlan-ro/mainframe-types';
 
 const STORAGE_KEY = 'mf:collapsedProjects';
-const VIEW_MODE_KEY = 'mf:sessionsViewMode';
-
-type ViewMode = 'grouped' | 'flat';
 
 function loadCollapsed(): Set<string> {
   try {
@@ -178,9 +175,6 @@ export function ChatsPanel(): React.ReactElement {
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const pendingPermissions = useChatsStore((s) => s.pendingPermissions);
 
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) || 'grouped',
-  );
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showDirPicker, setShowDirPicker] = useState(false);
@@ -216,13 +210,13 @@ export function ChatsPanel(): React.ReactElement {
     }
   }, []);
 
-  const toggleViewMode = useCallback(() => {
-    setViewMode((prev) => {
-      const next = prev === 'grouped' ? 'flat' : 'grouped';
-      localStorage.setItem(VIEW_MODE_KEY, next);
-      return next;
-    });
+  // Clean up stale localStorage key from old manual toggle feature
+  useEffect(() => {
+    localStorage.removeItem('mf:sessionsViewMode');
   }, []);
+
+  // View mode is derived from the filter: 'All' → grouped, specific project → flat
+  const viewMode = filterProjectId === null ? 'grouped' : 'flat';
 
   const handleNewSessionClick = useCallback(() => {
     if (projects.length === 0) return;
@@ -432,20 +426,6 @@ export function ChatsPanel(): React.ReactElement {
             />
           )}
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={toggleViewMode}
-              className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-            >
-              {viewMode === 'grouped' ? <List size={14} /> : <LayoutList size={14} />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {viewMode === 'grouped' ? 'Switch to flat view' : 'Switch to grouped view'}
-          </TooltipContent>
-        </Tooltip>
       </>
     ),
     [
@@ -456,8 +436,6 @@ export function ChatsPanel(): React.ReactElement {
       showNewSessionPopover,
       showImportPopover,
       filterProjectId,
-      toggleViewMode,
-      viewMode,
     ],
   );
 
