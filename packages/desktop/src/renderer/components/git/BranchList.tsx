@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown, GitBranch, Star, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, GitBranch, Star, Trash2, Plus } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -17,6 +17,7 @@ interface BranchListProps {
   search: string;
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
   onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
+  onNewSession?: (worktreeDirName: string, branchName: string | undefined) => void;
 }
 
 function groupBranches(branches: BranchInfo[]): { groups: BranchGroup[]; ungrouped: BranchInfo[] } {
@@ -154,12 +155,14 @@ function WorktreeSection({
   currentBranch,
   onSelectBranch,
   onDeleteWorktree,
+  onNewSession,
 }: {
   name: string;
   branches: BranchInfo[];
   currentBranch: string;
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
   onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
+  onNewSession?: (worktreeDirName: string, branchName: string | undefined) => void;
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
   const branchName = branches[0]?.name;
@@ -175,6 +178,20 @@ function WorktreeSection({
           {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
           {name}
         </button>
+        {onNewSession && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => onNewSession(name, branchName)}
+                className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                aria-label={`New session on worktree ${name}`}
+              >
+                <Plus size={11} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">New session on this worktree</TooltipContent>
+          </Tooltip>
+        )}
         {onDeleteWorktree && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -215,6 +232,7 @@ export function BranchList({
   search,
   onSelectBranch,
   onDeleteWorktree,
+  onNewSession,
 }: BranchListProps): React.ReactElement {
   const mainBranches = useMemo(
     () =>
@@ -298,6 +316,7 @@ export function BranchList({
           currentBranch={currentBranch}
           onSelectBranch={onSelectBranch}
           onDeleteWorktree={onDeleteWorktree}
+          onNewSession={onNewSession}
         />
       ))}
 
