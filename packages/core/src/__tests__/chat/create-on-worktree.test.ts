@@ -27,12 +27,11 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
 }
 
 function makeDeps(overrides: Partial<LifecycleManagerDeps> = {}): LifecycleManagerDeps {
-  const createdChat = makeChat();
   return {
     db: {
       chats: {
-        get: vi.fn(() => createdChat),
-        create: vi.fn(() => createdChat),
+        get: vi.fn(() => makeChat()),
+        create: vi.fn(() => makeChat()),
         update: vi.fn(),
       },
       projects: { get: vi.fn() },
@@ -105,6 +104,35 @@ describe('ChatLifecycleManager.createChat — worktree attachment', () => {
         branchName: 'feat-x',
       }),
     });
+  });
+
+  it('does not persist when only worktreePath is provided (defensive guard)', async () => {
+    const deps = makeDeps();
+    const lifecycle = new ChatLifecycleManager(deps);
+
+    const chat = await lifecycle.createChat(
+      'proj-1',
+      'claude',
+      'claude-sonnet-4-5',
+      'default',
+      '/projects/my-repo/.worktrees/feat-x',
+      // branchName omitted
+    );
+
+    expect(deps.db.chats.update).not.toHaveBeenCalled();
+    expect(chat.worktreePath).toBeUndefined();
+    expect(chat.branchName).toBeUndefined();
+  });
+
+  it('does not persist when only branchName is provided (defensive guard)', async () => {
+    const deps = makeDeps();
+    const lifecycle = new ChatLifecycleManager(deps);
+
+    const chat = await lifecycle.createChat('proj-1', 'claude', 'claude-sonnet-4-5', 'default', undefined, 'feat-x');
+
+    expect(deps.db.chats.update).not.toHaveBeenCalled();
+    expect(chat.worktreePath).toBeUndefined();
+    expect(chat.branchName).toBeUndefined();
   });
 });
 
