@@ -8,6 +8,8 @@ const ChatCreate = z.object({
   adapterId: z.string().min(1),
   model: z.string().optional(),
   permissionMode: permissionModeSchema,
+  worktreePath: z.string().min(1).optional(),
+  branchName: z.string().min(1).optional(),
 });
 
 const ChatResume = z.object({
