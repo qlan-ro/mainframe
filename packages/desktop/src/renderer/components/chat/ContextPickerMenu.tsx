@@ -80,7 +80,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
 
   const caret = text.length; // composer doesn't expose caret position — end-of-text is correct for live typing
   const atToken: AtToken | null = parseAtToken(text, caret);
-  const slashMatch = !atToken && text.match(/^\/(\S*)$/);
+  const slashMatch = atToken ? null : text.match(/^\/(\S*)$/);
 
   type DerivedMode = 'all' | 'fuzzy-agents-files' | 'autocomplete' | 'skills';
   let mode: DerivedMode = 'all';
@@ -89,7 +89,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
 
   const fuzzyQuery = atToken?.mode === 'fuzzy' ? atToken.query : '';
   const allModeQuery = mode === 'all' ? (text.match(/(\S+)$/)?.[1] ?? '') : '';
-  const query = fuzzyQuery || (slashMatch !== null ? (slashMatch?.[1] ?? '') : '') || allModeQuery;
+  const query = fuzzyQuery || (slashMatch?.[1] ?? '') || allModeQuery;
   const isOpen = forceOpen || atToken !== null || slashMatch !== null;
 
   // Auto-close when user typed then deleted everything (forceOpen mode only)
