@@ -1,6 +1,6 @@
 {
   "name": "mainframe",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "private": true,
   "description": "AI-native development environment for orchestrating agents",
   "license": "MIT",
