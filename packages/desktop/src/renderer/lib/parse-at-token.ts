@@ -20,12 +20,11 @@ export interface AtToken {
 export function parseAtToken(text: string, caret: number): AtToken | null {
   let at = -1;
   for (let i = caret - 1; i >= 0; i--) {
-    const ch = text[i];
-    if (ch === undefined) break;
+    const ch = text[i] as string;
     if (/\s/.test(ch)) return null;
     if (ch === '@') {
-      const prev = i === 0 ? ' ' : text[i - 1];
-      if (prev === undefined || /\s/.test(prev)) {
+      const prev = i === 0 ? ' ' : (text[i - 1] as string);
+      if (/\s/.test(prev)) {
         at = i;
       }
       break;
@@ -35,8 +34,7 @@ export function parseAtToken(text: string, caret: number): AtToken | null {
 
   let end = at + 1;
   while (end < text.length) {
-    const ch = text[end];
-    if (ch === undefined || /\s/.test(ch)) break;
+    if (/\s/.test(text[end] as string)) break;
     end++;
   }
   if (caret > end) return null;

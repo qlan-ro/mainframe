@@ -103,4 +103,32 @@ describe('parseAtToken', () => {
       endOffset: 4,
     });
   });
+
+  it('handles relative parent navigation (@../x)', () => {
+    expect(parseAtToken('@../x', 5)).toEqual({
+      mode: 'autocomplete',
+      query: '',
+      dir: '..',
+      leaf: 'x',
+      startOffset: 0,
+      endOffset: 5,
+    });
+  });
+
+  it('accepts caret inside the token (mid-token position)', () => {
+    // caret at index 2 — between '@' and 'foo'
+    expect(parseAtToken('@foo', 2)).toEqual({
+      mode: 'fuzzy',
+      query: 'foo',
+      dir: '',
+      leaf: '',
+      startOffset: 0,
+      endOffset: 4,
+    });
+  });
+
+  it('returns null when caret is past trailing whitespace right after @', () => {
+    // text = '@ ', caret at end — caret is past the token (end = 1, caret = 2)
+    expect(parseAtToken('@ ', 2)).toBeNull();
+  });
 });
