@@ -8,11 +8,10 @@ import { focusComposerInput } from '../../lib/focus';
 import { useSkillsStore, useChatsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { searchFiles, addMention } from '../../lib/api';
+import { parseAtToken, type AtToken } from '../../lib/parse-at-token';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { Skill, CustomCommand } from '@qlan-ro/mainframe-types';
-
-type FilterMode = 'all' | 'agents-files' | 'skills';
 
 type PickerItem =
   | { type: 'agent'; name: string; description: string; scope: string }
@@ -79,17 +78,19 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
   // Track whether user typed while picker was force-open, to auto-close on full delete
   const pickerHadQueryRef = useRef(false);
 
-  const atMatch = text.match(/(?:^|\s)@(\S*)$/);
-  const slashMatch = !atMatch && text.match(/^\/(\S*)$/);
+  const caret = text.length; // composer doesn't expose caret position — end-of-text is correct for live typing
+  const atToken: AtToken | null = parseAtToken(text, caret);
+  const slashMatch = !atToken && text.match(/^\/(\S*)$/);
 
-  let filterMode: FilterMode = 'all';
-  if (atMatch) filterMode = 'agents-files';
-  else if (slashMatch) filterMode = 'skills';
+  type DerivedMode = 'all' | 'fuzzy-agents-files' | 'autocomplete' | 'skills';
+  let mode: DerivedMode = 'all';
+  if (atToken) mode = atToken.mode === 'fuzzy' ? 'fuzzy-agents-files' : 'autocomplete';
+  else if (slashMatch) mode = 'skills';
 
-  // In all mode (button-triggered, no @ or / trigger), use the trailing word as query
-  const allModeQuery = filterMode === 'all' ? (text.match(/(\S+)$/)?.[1] ?? '') : '';
-  const query = atMatch?.[1] ?? (slashMatch !== false ? slashMatch?.[1] : undefined) ?? allModeQuery;
-  const isOpen = forceOpen || atMatch !== null || slashMatch !== null;
+  const fuzzyQuery = atToken?.mode === 'fuzzy' ? atToken.query : '';
+  const allModeQuery = mode === 'all' ? (text.match(/(\S+)$/)?.[1] ?? '') : '';
+  const query = fuzzyQuery || (slashMatch !== null ? (slashMatch?.[1] ?? '') : '') || allModeQuery;
+  const isOpen = forceOpen || atToken !== null || slashMatch !== null;
 
   // Auto-close when user typed then deleted everything (forceOpen mode only)
   useEffect(() => {
@@ -105,9 +106,9 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     }
   }, [forceOpen, allModeQuery, onClose]);
 
-  // File search (agents-files mode only, query >= 1 char)
+  // File search (fuzzy-agents-files mode only, query >= 1 char)
   useEffect(() => {
-    if (filterMode !== 'agents-files' || query.length < 1 || !activeProjectId) {
+    if (mode !== 'fuzzy-agents-files' || query.length < 1 || !activeProjectId) {
       setFileResults([]);
       return;
     }
@@ -121,20 +122,20 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(debounceRef.current);
-  }, [filterMode, query, activeProjectId, activeChatId]);
+  }, [mode, query, activeProjectId, activeChatId]);
 
   // Build item list (no hint items — composer placeholder already guides file search)
   const items: PickerItem[] = [];
   if (isOpen) {
-    if (filterMode === 'all' || filterMode === 'agents-files') {
+    if (mode === 'all' || mode === 'fuzzy-agents-files') {
       agents
         .filter((a) => !query || fuzzyMatch(query, a.name))
         .forEach((a) => items.push({ type: 'agent', name: a.name, description: a.description, scope: a.scope }));
     }
-    if (filterMode === 'agents-files') {
+    if (mode === 'fuzzy-agents-files') {
       fileResults.forEach((f) => items.push({ type: 'file', name: f.name, path: f.path }));
     }
-    if (filterMode === 'all' || filterMode === 'skills') {
+    if (mode === 'all' || mode === 'skills') {
       skills
         .filter((s) => {
           if (!query) return true;
@@ -151,7 +152,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     }
   }
 
-  useEffect(() => setSelectedIndex(0), [filterMode, query]);
+  useEffect(() => setSelectedIndex(0), [mode, query]);
 
   const selectItem = useCallback(
     (item: PickerItem) => {
