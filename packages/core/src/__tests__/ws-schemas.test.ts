@@ -83,4 +83,20 @@ describe('ChatCreate schema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejects worktreePath without branchName', () => {
+    const result = ClientEventSchema.safeParse({
+      ...base,
+      worktreePath: '/projects/my-repo/.worktrees/feat-x',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects branchName without worktreePath', () => {
+    const result = ClientEventSchema.safeParse({
+      ...base,
+      branchName: 'feat-x',
+    });
+    expect(result.success).toBe(false);
+  });
 });
