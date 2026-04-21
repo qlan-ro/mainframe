@@ -62,11 +62,11 @@ describe('parseAtToken', () => {
     });
   });
 
-  it('handles token starting with slash (project root)', () => {
+  it('handles token starting with slash (filesystem root)', () => {
     expect(parseAtToken('@/', 2)).toEqual({
       mode: 'autocomplete',
       query: '',
-      dir: '.',
+      dir: '/',
       leaf: '',
       startOffset: 0,
       endOffset: 2,
@@ -74,10 +74,56 @@ describe('parseAtToken', () => {
     expect(parseAtToken('@/src', 5)).toEqual({
       mode: 'autocomplete',
       query: '',
-      dir: '.',
+      dir: '/',
       leaf: 'src',
       startOffset: 0,
       endOffset: 5,
+    });
+  });
+
+  it('handles absolute path segments', () => {
+    expect(parseAtToken('@/Users/', 8)).toEqual({
+      mode: 'autocomplete',
+      query: '',
+      dir: '/Users',
+      leaf: '',
+      startOffset: 0,
+      endOffset: 8,
+    });
+    expect(parseAtToken('@/Users/doruchiulan', 19)).toEqual({
+      mode: 'autocomplete',
+      query: '',
+      dir: '/Users',
+      leaf: 'doruchiulan',
+      startOffset: 0,
+      endOffset: 19,
+    });
+  });
+
+  it('handles home-relative paths (~/)', () => {
+    expect(parseAtToken('@~/', 3)).toEqual({
+      mode: 'autocomplete',
+      query: '',
+      dir: '~',
+      leaf: '',
+      startOffset: 0,
+      endOffset: 3,
+    });
+    expect(parseAtToken('@~/Doc', 6)).toEqual({
+      mode: 'autocomplete',
+      query: '',
+      dir: '~',
+      leaf: 'Doc',
+      startOffset: 0,
+      endOffset: 6,
+    });
+    expect(parseAtToken('@~/Documents/foo', 16)).toEqual({
+      mode: 'autocomplete',
+      query: '',
+      dir: '~/Documents',
+      leaf: 'foo',
+      startOffset: 0,
+      endOffset: 16,
     });
   });
 

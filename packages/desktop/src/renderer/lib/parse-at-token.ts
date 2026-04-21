@@ -54,7 +54,7 @@ export function parseAtToken(text: string, caret: number): AtToken | null {
   }
 
   const rawDir = tokenBody.slice(0, lastSlash);
-  const dir = rawDir === '' ? '.' : rawDir;
+  const dir = rawDir !== '' ? rawDir : tokenBody.startsWith('/') ? '/' : '.';
   const leaf = tokenBody.slice(lastSlash + 1);
   return {
     mode: 'autocomplete',
