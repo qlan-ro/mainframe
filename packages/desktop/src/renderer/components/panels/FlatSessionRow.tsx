@@ -148,7 +148,6 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
       className={cn(
         'group w-full rounded-mf-input transition-colors flex items-center gap-2',
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
-        chat.status === 'archived' && 'opacity-60',
       )}
     >
       <button type="button" onClick={handleSelect} className="flex-1 min-w-0 px-3 py-1.5 text-left">

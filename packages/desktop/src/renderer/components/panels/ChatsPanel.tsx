@@ -19,6 +19,7 @@ import { pinChat } from '../../lib/api';
 import { ProjectGroup } from './ProjectGroup';
 import { FlatSessionRow } from './FlatSessionRow';
 import { ImportSessionsPopover } from './ImportSessionsPopover';
+import { ArchivedSessionsPopover } from './ArchivedSessionsPopover';
 import { useZoneHeaderActions } from '../zone/ZoneHeaderSlot.js';
 import type { Chat, Project } from '@qlan-ro/mainframe-types';
 
@@ -190,12 +191,7 @@ export function ChatsPanel(): React.ReactElement {
   const projects = useProjectsStore((s) => s.projects);
   const addProject = useProjectsStore((s) => s.addProject);
   const allChats = useChatsStore((s) => s.chats);
-  const showArchived = useChatsStore((s) => s.showArchived);
-  const toggleShowArchived = useChatsStore((s) => s.toggleShowArchived);
-  const chats = useMemo(
-    () => (showArchived ? allChats : allChats.filter((c) => c.status !== 'archived')),
-    [allChats, showArchived],
-  );
+  const chats = useMemo(() => allChats.filter((c) => c.status !== 'archived'), [allChats]);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const pendingPermissions = useChatsStore((s) => s.pendingPermissions);
 
@@ -204,6 +200,7 @@ export function ChatsPanel(): React.ReactElement {
   const [showDirPicker, setShowDirPicker] = useState(false);
   const [showNewSessionPopover, setShowNewSessionPopover] = useState(false);
   const [showImportPopover, setShowImportPopover] = useState(false);
+  const [showArchivedPopover, setShowArchivedPopover] = useState(false);
   const filterProjectId = useChatsStore((s) => s.filterProjectId);
   const _setFilterProjectId = useChatsStore((s) => s.setFilterProjectId);
   const setActiveChat = useChatsStore((s) => s.setActiveChat);
@@ -417,23 +414,6 @@ export function ChatsPanel(): React.ReactElement {
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={toggleShowArchived}
-              className={cn(
-                'p-1 rounded transition-colors',
-                showArchived
-                  ? 'bg-mf-accent text-white'
-                  : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-              )}
-            >
-              <Archive size={14} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{showArchived ? 'Hide archived' : 'Show archived'}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
               onClick={() => setShowDirPicker(true)}
               className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
             >
@@ -462,6 +442,29 @@ export function ChatsPanel(): React.ReactElement {
               activeProjectId={activeProjectId}
               onSelect={handleNewSessionInProject}
               onClose={() => setShowNewSessionPopover(false)}
+            />
+          )}
+        </div>
+        <div className="relative" data-archived-popover>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setShowArchivedPopover((prev) => !prev)}
+                className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                data-testid="archived-sessions-btn"
+              >
+                <Archive size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Archived sessions</TooltipContent>
+          </Tooltip>
+          {showArchivedPopover && (
+            <ArchivedSessionsPopover
+              chats={allChats}
+              projects={projects}
+              filterProjectId={filterProjectId}
+              onClose={() => setShowArchivedPopover(false)}
             />
           )}
         </div>
@@ -498,9 +501,9 @@ export function ChatsPanel(): React.ReactElement {
       activeProjectId,
       showNewSessionPopover,
       showImportPopover,
+      showArchivedPopover,
       filterProjectId,
-      showArchived,
-      toggleShowArchived,
+      allChats,
     ],
   );
 

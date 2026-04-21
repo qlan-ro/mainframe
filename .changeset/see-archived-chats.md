@@ -3,4 +3,4 @@
 '@qlan-ro/mainframe-desktop': minor
 ---
 
-Archived chats are now visible in the session list behind a header toggle. They render with reduced opacity so they stay visually distinct from active chats.
+Add an Archive button to the chat panel header that opens a popover listing archived sessions with a Restore action. Archived chats stay hidden from the main list.

@@ -44,7 +44,6 @@ interface ChatsState {
   chats: Chat[];
   activeChatId: string | null;
   filterProjectId: string | null;
-  showArchived: boolean;
   messages: Map<string, DisplayMessage[]>;
   pendingPermissions: Map<string, ControlRequest>;
   processes: Map<string, AdapterProcess>;
@@ -60,8 +59,6 @@ interface ChatsState {
   setChats: (chats: Chat[]) => void;
   setActiveChat: (id: string | null) => void;
   setFilterProjectId: (id: string | null) => void;
-  setShowArchived: (value: boolean) => void;
-  toggleShowArchived: () => void;
   addChat: (chat: Chat) => void;
   updateChat: (chat: Chat) => void;
   removeChat: (id: string) => void;
@@ -95,7 +92,6 @@ export const useChatsStore = create<ChatsState>((set) => ({
   chats: [],
   activeChatId: null,
   filterProjectId: localStorage.getItem('mf:filterProjectId'),
-  showArchived: localStorage.getItem('mf:showArchived') === 'true',
   messages: new Map(),
   pendingPermissions: new Map(),
   processes: new Map(),
@@ -128,24 +124,6 @@ export const useChatsStore = create<ChatsState>((set) => ({
     }
     set({ filterProjectId: id });
   },
-  setShowArchived: (value) => {
-    if (value) {
-      localStorage.setItem('mf:showArchived', 'true');
-    } else {
-      localStorage.removeItem('mf:showArchived');
-    }
-    set({ showArchived: value });
-  },
-  toggleShowArchived: () =>
-    set((state) => {
-      const next = !state.showArchived;
-      if (next) {
-        localStorage.setItem('mf:showArchived', 'true');
-      } else {
-        localStorage.removeItem('mf:showArchived');
-      }
-      return { showArchived: next };
-    }),
   setActiveChat: (id) => {
     if (id) {
       localStorage.setItem('mf:activeChatId', id);
