@@ -40,7 +40,7 @@ vi.mock('@assistant-ui/react', () => ({
 }));
 
 import { ContextPickerMenu } from './ContextPickerMenu';
-import { searchFiles, getFileTree } from '../../lib/api';
+import { searchFiles, getFileTree, addMention } from '../../lib/api';
 import { TooltipProvider } from '../ui/tooltip';
 
 beforeEach(() => {
@@ -48,6 +48,7 @@ beforeEach(() => {
   composerSubscribers.clear();
   vi.mocked(searchFiles).mockClear();
   vi.mocked(getFileTree).mockClear();
+  vi.mocked(addMention).mockClear();
 });
 
 describe('ContextPickerMenu: fuzzy mode preserved', () => {
@@ -152,5 +153,43 @@ describe('ContextPickerMenu: autocomplete selection', () => {
       path: 'src/app.ts',
     });
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('ContextPickerMenu: Tab key', () => {
+  it('Tab on file completes the leaf but does NOT close picker or commit mention', async () => {
+    vi.mocked(getFileTree).mockResolvedValueOnce([{ name: 'Button.tsx', type: 'file', path: 'src/Button.tsx' }]);
+    const onClose = vi.fn();
+    render(
+      <TooltipProvider>
+        <ContextPickerMenu forceOpen={false} onClose={onClose} />
+      </TooltipProvider>,
+    );
+    act(() => mockComposerRuntime.setText('@src/But'));
+    await new Promise((r) => setTimeout(r, 200));
+
+    await userEvent.keyboard('{Tab}');
+
+    expect(composerText).toBe('@src/Button.tsx');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(addMention).not.toHaveBeenCalled();
+  });
+
+  it('Tab on directory drills in (same as Enter)', async () => {
+    vi.mocked(getFileTree)
+      .mockResolvedValueOnce([{ name: 'components', type: 'directory', path: 'src/components' }])
+      .mockResolvedValueOnce([]);
+
+    render(
+      <TooltipProvider>
+        <ContextPickerMenu forceOpen={false} onClose={vi.fn()} />
+      </TooltipProvider>,
+    );
+    act(() => mockComposerRuntime.setText('@src/co'));
+    await new Promise((r) => setTimeout(r, 200));
+
+    await userEvent.keyboard('{Tab}');
+
+    expect(composerText).toBe('@src/components/');
   });
 });

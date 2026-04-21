@@ -306,7 +306,19 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
       } else if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         const item = items[selectedIndex];
-        if (item) selectItem(item);
+        if (!item) return;
+
+        // Tab in autocomplete on a file: only fill the leaf, don't commit.
+        if (e.key === 'Tab' && atToken?.mode === 'autocomplete' && item.type === 'file') {
+          const cur = composerRuntime.getState()?.text ?? '';
+          const before = cur.slice(0, atToken.startOffset);
+          const after = cur.slice(atToken.endOffset);
+          composerRuntime.setText(`${before}@${item.path}${after}`);
+          focusComposerInput();
+          return;
+        }
+
+        selectItem(item);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         try {
@@ -324,7 +336,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     };
     document.addEventListener('keydown', handleKeyDown, true);
     return () => document.removeEventListener('keydown', handleKeyDown, true);
-  }, [isOpen, items, selectedIndex, selectItem, composerRuntime, onClose]);
+  }, [isOpen, items, selectedIndex, selectItem, composerRuntime, onClose, atToken]);
 
   // Auto-scroll selected item into view
   useEffect(() => {
