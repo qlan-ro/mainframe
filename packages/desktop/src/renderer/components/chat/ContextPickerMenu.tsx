@@ -232,15 +232,18 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
         if (atToken?.mode === 'autocomplete' && (item.type === 'directory' || item.type === 'file')) {
           const before = cur.slice(0, atToken.startOffset);
           const after = cur.slice(atToken.endOffset);
+          // Tree entries on Windows can contain backslashes; parseAtToken
+          // splits on '/' so the rewritten token must use POSIX separators.
+          const posixPath = item.path.replace(/\\/g, '/');
           if (item.type === 'directory') {
-            composerRuntime.setText(`${before}@${item.path}/${after}`);
+            composerRuntime.setText(`${before}@${posixPath}/${after}`);
             focusComposerInput();
             return; // stay open; useEffect will re-fetch on the new dir
           }
           // File: insert full path + trailing space, commit mention, close.
-          composerRuntime.setText(`${before}@${item.path} ${after}`);
+          composerRuntime.setText(`${before}@${posixPath} ${after}`);
           if (activeChatId) {
-            addMention(activeChatId, { kind: 'file', name: item.name, path: item.path }).catch((err) =>
+            addMention(activeChatId, { kind: 'file', name: item.name, path: posixPath }).catch((err) =>
               log.warn('add mention failed', { err: String(err) }),
             );
           }
@@ -313,7 +316,8 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
           const cur = composerRuntime.getState()?.text ?? '';
           const before = cur.slice(0, atToken.startOffset);
           const after = cur.slice(atToken.endOffset);
-          composerRuntime.setText(`${before}@${item.path}${after}`);
+          const posixPath = item.path.replace(/\\/g, '/');
+          composerRuntime.setText(`${before}@${posixPath}${after}`);
           focusComposerInput();
           return;
         }
