@@ -7,7 +7,7 @@ import { useComposerRuntime } from '@assistant-ui/react';
 import { focusComposerInput } from '../../lib/focus';
 import { useSkillsStore, useChatsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
-import { searchFiles, getFileTree, addMention } from '../../lib/api';
+import { searchFiles, getFileTree, browseFilesystem, addMention } from '../../lib/api';
 import { parseAtToken, type AtToken } from '../../lib/parse-at-token';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -40,6 +40,13 @@ function fuzzyMatch(query: string, target: string): boolean {
 }
 
 const SEARCH_DEBOUNCE_MS = 150;
+
+/** Returns true if the token's dir should resolve via the filesystem-browse
+ * endpoint instead of the project tree. Matches absolute paths (`/foo`, `/`)
+ * and home-relative paths (`~`, `~/foo`). */
+function isFilesystemDir(dir: string): boolean {
+  return dir.startsWith('/') || dir.startsWith('~');
+}
 
 function describePickerItem(item: PickerItem): { key: string; testIdLabel: string } {
   switch (item.type) {
@@ -145,23 +152,34 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     return () => clearTimeout(debounceRef.current);
   }, [mode, query, activeProjectId, activeChatId]);
 
-  // Tree fetch (autocomplete mode only). `cancelled` suppresses stale
-  // setState from a previous dir's request; it does not cancel the HTTP
-  // call (getFileTree has no signal parameter).
+  // Tree fetch (autocomplete mode only). Routes filesystem paths (@/, @~) to
+  // browseFilesystem; project paths to getFileTree. `cancelled` suppresses
+  // stale setState; does not cancel the HTTP call.
   useEffect(() => {
-    if (mode !== 'autocomplete' || !atToken || !activeProjectId) {
+    if (mode !== 'autocomplete' || !atToken) {
       setTreeEntries([]);
       return;
     }
     const dir = atToken.dir;
-    const cacheKey = `${activeProjectId}:${dir}`;
+    const fsMode = isFilesystemDir(dir);
+    // Project tree needs an activeProjectId; filesystem mode does not.
+    if (!fsMode && !activeProjectId) {
+      setTreeEntries([]);
+      return;
+    }
+    const cacheKey = fsMode ? `fs:${dir}` : `${activeProjectId}:${dir}`;
     const cached = treeCacheRef.current.get(cacheKey);
     if (cached) {
       setTreeEntries(cached);
       return;
     }
     let cancelled = false;
-    getFileTree(activeProjectId, dir, activeChatId ?? undefined)
+    const fetchPromise = fsMode
+      ? browseFilesystem(dir, { includeFiles: true, includeHidden: true }).then((r) =>
+          r.entries.map((e) => ({ name: e.name, path: e.path, type: e.type ?? 'directory' })),
+        )
+      : getFileTree(activeProjectId!, dir, activeChatId ?? undefined);
+    fetchPromise
       .then((entries) => {
         if (cancelled) return;
         treeCacheRef.current.set(cacheKey, entries);

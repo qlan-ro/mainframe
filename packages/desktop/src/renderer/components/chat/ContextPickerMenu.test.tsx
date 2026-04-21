@@ -6,6 +6,7 @@ vi.mock('../../lib/api', () => ({
   searchFiles: vi.fn().mockResolvedValue([]),
   getFileTree: vi.fn().mockResolvedValue([]),
   addMention: vi.fn().mockResolvedValue(undefined),
+  browseFilesystem: vi.fn().mockResolvedValue({ path: '/', entries: [] }),
 }));
 
 vi.mock('../../store', () => ({
@@ -40,7 +41,7 @@ vi.mock('@assistant-ui/react', () => ({
 }));
 
 import { ContextPickerMenu } from './ContextPickerMenu';
-import { searchFiles, getFileTree, addMention } from '../../lib/api';
+import { searchFiles, getFileTree, addMention, browseFilesystem } from '../../lib/api';
 import { TooltipProvider } from '../ui/tooltip';
 
 beforeEach(() => {
@@ -49,6 +50,7 @@ beforeEach(() => {
   vi.mocked(searchFiles).mockClear();
   vi.mocked(getFileTree).mockClear();
   vi.mocked(addMention).mockClear();
+  vi.mocked(browseFilesystem).mockClear();
 });
 
 describe('ContextPickerMenu: fuzzy mode preserved', () => {
@@ -214,5 +216,106 @@ describe('ContextPickerMenu: back-navigation', () => {
     act(() => mockComposerRuntime.setText('@src'));
     await new Promise((r) => setTimeout(r, 200));
     expect(searchFiles).toHaveBeenCalledWith('proj-1', 'src', 30, 'chat-1');
+  });
+});
+
+describe('ContextPickerMenu: filesystem mode', () => {
+  it('routes @/Users/... to browseFilesystem with includeFiles + includeHidden', async () => {
+    const { browseFilesystem } = await import('../../lib/api');
+    vi.mocked(browseFilesystem).mockResolvedValueOnce({
+      path: '/Users',
+      entries: [
+        { name: 'doruchiulan', path: '/Users/doruchiulan', type: 'directory' },
+        { name: '.DS_Store', path: '/Users/.DS_Store', type: 'file' },
+      ],
+    });
+    vi.mocked(getFileTree).mockClear();
+
+    render(
+      <TooltipProvider>
+        <ContextPickerMenu forceOpen={false} onClose={vi.fn()} />
+      </TooltipProvider>,
+    );
+    act(() => mockComposerRuntime.setText('@/Users/'));
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(browseFilesystem).toHaveBeenCalledWith('/Users', { includeFiles: true, includeHidden: true });
+    expect(getFileTree).not.toHaveBeenCalled();
+    expect(await screen.findByText('doruchiulan/')).toBeInTheDocument();
+    // File items render item.path, so the full absolute path is shown.
+    expect(await screen.findByText('/Users/.DS_Store')).toBeInTheDocument();
+  });
+
+  it('routes @~/... to browseFilesystem (home-relative)', async () => {
+    const { browseFilesystem } = await import('../../lib/api');
+    vi.mocked(browseFilesystem).mockResolvedValueOnce({
+      path: '/Users/doruchiulan',
+      entries: [{ name: 'Documents', path: '/Users/doruchiulan/Documents', type: 'directory' }],
+    });
+
+    render(
+      <TooltipProvider>
+        <ContextPickerMenu forceOpen={false} onClose={vi.fn()} />
+      </TooltipProvider>,
+    );
+    act(() => mockComposerRuntime.setText('@~/Doc'));
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(browseFilesystem).toHaveBeenCalledWith('~', { includeFiles: true, includeHidden: true });
+    expect(await screen.findByText('Documents/')).toBeInTheDocument();
+  });
+
+  it('Enter on filesystem file commits mention with absolute path', async () => {
+    const { browseFilesystem, addMention } = await import('../../lib/api');
+    vi.mocked(browseFilesystem).mockResolvedValueOnce({
+      path: '/Users/doruchiulan',
+      entries: [{ name: 'foo.txt', path: '/Users/doruchiulan/foo.txt', type: 'file' }],
+    });
+
+    render(
+      <TooltipProvider>
+        <ContextPickerMenu forceOpen={false} onClose={vi.fn()} />
+      </TooltipProvider>,
+    );
+    act(() => mockComposerRuntime.setText('@/Users/doruchiulan/f'));
+    await new Promise((r) => setTimeout(r, 200));
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(composerText).toBe('@/Users/doruchiulan/foo.txt ');
+    expect(addMention).toHaveBeenCalledWith('chat-1', {
+      kind: 'file',
+      name: 'foo.txt',
+      path: '/Users/doruchiulan/foo.txt',
+    });
+  });
+
+  it('Enter on filesystem directory drills in, keeps picker open', async () => {
+    const { browseFilesystem } = await import('../../lib/api');
+    vi.mocked(browseFilesystem)
+      .mockResolvedValueOnce({
+        path: '/Users',
+        entries: [{ name: 'doruchiulan', path: '/Users/doruchiulan', type: 'directory' }],
+      })
+      .mockResolvedValueOnce({ path: '/Users/doruchiulan', entries: [] });
+
+    const onClose = vi.fn();
+    render(
+      <TooltipProvider>
+        <ContextPickerMenu forceOpen={false} onClose={onClose} />
+      </TooltipProvider>,
+    );
+    act(() => mockComposerRuntime.setText('@/Users/d'));
+    await new Promise((r) => setTimeout(r, 200));
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(composerText).toBe('@/Users/doruchiulan/');
+    expect(onClose).not.toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 200));
+    expect(browseFilesystem).toHaveBeenLastCalledWith('/Users/doruchiulan', {
+      includeFiles: true,
+      includeHidden: true,
+    });
   });
 });
