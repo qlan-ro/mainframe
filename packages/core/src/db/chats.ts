@@ -35,7 +35,7 @@ export class ChatsRepository {
         worktree_path as worktreePath, branch_name as branchName,
         process_state as processState, todos, pinned
       FROM chats
-      WHERE project_id = ? AND status != 'archived'
+      WHERE project_id = ?
       ORDER BY pinned DESC, updated_at DESC
     `);
     const rows = stmt.all(projectId) as RawChatRow[];
@@ -64,7 +64,6 @@ export class ChatsRepository {
         worktree_path as worktreePath, branch_name as branchName,
         process_state as processState, todos, pinned
       FROM chats
-      WHERE status != 'archived'
       ORDER BY pinned DESC, updated_at DESC, rowid DESC
     `);
     const rows = stmt.all() as RawChatRow[];

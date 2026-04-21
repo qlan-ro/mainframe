@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderPlus, Plus, Download } from 'lucide-react';
+import { FolderPlus, Plus, Download, Archive } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
@@ -171,7 +171,13 @@ function NewSessionPopover({
 export function ChatsPanel(): React.ReactElement {
   const projects = useProjectsStore((s) => s.projects);
   const addProject = useProjectsStore((s) => s.addProject);
-  const chats = useChatsStore((s) => s.chats);
+  const allChats = useChatsStore((s) => s.chats);
+  const showArchived = useChatsStore((s) => s.showArchived);
+  const toggleShowArchived = useChatsStore((s) => s.toggleShowArchived);
+  const chats = useMemo(
+    () => (showArchived ? allChats : allChats.filter((c) => c.status !== 'archived')),
+    [allChats, showArchived],
+  );
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const pendingPermissions = useChatsStore((s) => s.pendingPermissions);
 
@@ -371,6 +377,23 @@ export function ChatsPanel(): React.ReactElement {
           <TooltipTrigger asChild>
             <button
               type="button"
+              onClick={toggleShowArchived}
+              className={cn(
+                'p-1 rounded transition-colors',
+                showArchived
+                  ? 'bg-mf-accent text-white'
+                  : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+              )}
+            >
+              <Archive size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{showArchived ? 'Hide archived' : 'Show archived'}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
               onClick={() => setShowDirPicker(true)}
               className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
             >
@@ -436,6 +459,8 @@ export function ChatsPanel(): React.ReactElement {
       showNewSessionPopover,
       showImportPopover,
       filterProjectId,
+      showArchived,
+      toggleShowArchived,
     ],
   );
 

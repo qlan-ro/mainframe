@@ -146,6 +146,7 @@ function ChatRow({
       className={cn(
         'group w-full rounded-mf-input transition-colors flex items-center gap-2 ml-2',
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
+        chat.status === 'archived' && 'opacity-60',
       )}
     >
       <button
