@@ -193,3 +193,26 @@ describe('ContextPickerMenu: Tab key', () => {
     expect(composerText).toBe('@src/components/');
   });
 });
+
+describe('ContextPickerMenu: back-navigation', () => {
+  it('deleting the slash reverts to fuzzy mode', async () => {
+    vi.mocked(getFileTree).mockResolvedValueOnce([]);
+    vi.mocked(searchFiles).mockResolvedValue([]);
+
+    render(
+      <TooltipProvider>
+        <ContextPickerMenu forceOpen={false} onClose={vi.fn()} />
+      </TooltipProvider>,
+    );
+
+    // Enter autocomplete mode.
+    act(() => mockComposerRuntime.setText('@src/'));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(getFileTree).toHaveBeenCalledTimes(1);
+
+    // User backspaces past the '/'. Token becomes '@src' → fuzzy mode.
+    act(() => mockComposerRuntime.setText('@src'));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(searchFiles).toHaveBeenCalledWith('proj-1', 'src', 30, 'chat-1');
+  });
+});
