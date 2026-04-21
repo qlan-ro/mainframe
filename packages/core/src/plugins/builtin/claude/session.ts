@@ -131,6 +131,10 @@ export class ClaudeSession implements AdapterSession {
       '--verbose',
       '--permission-prompt-tool',
       'stdio',
+      // Make the CLI emit `isReplay: true` user events for every queued uuid
+      // it dequeues, so the daemon can ack per-message instead of relying on
+      // brittle turn-boundary heuristics.
+      '--replay-user-messages',
     ];
 
     if (options.systemPrompt === 'enabled') {

@@ -73,6 +73,7 @@ interface ChatsState {
   addQueuedMessage: (chatId: string, ref: QueuedMessageRef) => void;
   removeQueuedMessage: (chatId: string, uuid: string) => void;
   clearQueuedMessages: (chatId: string) => void;
+  setQueuedMessages: (chatId: string, refs: QueuedMessageRef[]) => void;
   setCompacting: (chatId: string, compacting: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
   setTodos: (chatId: string, todos: TodoItem[]) => void;
@@ -275,6 +276,16 @@ export const useChatsStore = create<ChatsState>((set) => ({
     set((state) => {
       const next = new Map(state.queuedMessages);
       next.delete(chatId);
+      return { queuedMessages: next };
+    }),
+  setQueuedMessages: (chatId, refs) =>
+    set((state) => {
+      const next = new Map(state.queuedMessages);
+      if (refs.length === 0) {
+        next.delete(chatId);
+      } else {
+        next.set(chatId, refs);
+      }
       return { queuedMessages: next };
     }),
   setCompacting: (chatId, compacting) =>
