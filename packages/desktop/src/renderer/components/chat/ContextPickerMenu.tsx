@@ -41,6 +41,23 @@ function fuzzyMatch(query: string, target: string): boolean {
 
 const SEARCH_DEBOUNCE_MS = 150;
 
+function describePickerItem(item: PickerItem): { key: string; testIdLabel: string } {
+  switch (item.type) {
+    case 'agent':
+      return { key: `a:${item.name}`, testIdLabel: item.name };
+    case 'file':
+      return { key: `f:${item.path}`, testIdLabel: item.name };
+    case 'directory':
+      return { key: `d:${item.path}`, testIdLabel: item.name };
+    case 'command':
+      return { key: `c:${item.command.name}`, testIdLabel: item.command.name };
+    case 'skill': {
+      const label = item.skill.invocationName || item.skill.name;
+      return { key: `s:${item.skill.id}`, testIdLabel: label };
+    }
+  }
+}
+
 function useComposerText(): string {
   const composerRuntime = useComposerRuntime();
   const subscribe = useCallback(
@@ -82,7 +99,6 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
   const pickerHadQueryRef = useRef(false);
   const [treeEntries, setTreeEntries] = useState<{ name: string; type: 'file' | 'directory'; path: string }[]>([]);
   const treeCacheRef = useRef<Map<string, { name: string; type: 'file' | 'directory'; path: string }[]>>(new Map());
-  const treeAbortRef = useRef<AbortController | null>(null);
 
   const caret = text.length; // composer doesn't expose caret position — end-of-text is correct for live typing
   const atToken: AtToken | null = parseAtToken(text, caret);
@@ -129,7 +145,9 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     return () => clearTimeout(debounceRef.current);
   }, [mode, query, activeProjectId, activeChatId]);
 
-  // Tree fetch (autocomplete mode only)
+  // Tree fetch (autocomplete mode only). `cancelled` suppresses stale
+  // setState from a previous dir's request; it does not cancel the HTTP
+  // call (getFileTree has no signal parameter).
   useEffect(() => {
     if (mode !== 'autocomplete' || !atToken || !activeProjectId) {
       setTreeEntries([]);
@@ -142,20 +160,21 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
       setTreeEntries(cached);
       return;
     }
-    treeAbortRef.current?.abort();
-    const controller = new AbortController();
-    treeAbortRef.current = controller;
+    let cancelled = false;
     getFileTree(activeProjectId, dir, activeChatId ?? undefined)
       .then((entries) => {
-        if (controller.signal.aborted) return;
+        if (cancelled) return;
         treeCacheRef.current.set(cacheKey, entries);
         setTreeEntries(entries);
       })
       .catch((err) => {
-        if (controller.signal.aborted) return;
+        if (cancelled) return;
         log.warn('tree fetch failed', { err: String(err), dir });
         setTreeEntries([]);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [mode, atToken?.dir, activeProjectId, activeChatId]);
 
   // Build item list (no hint items — composer placeholder already guides file search)
@@ -299,21 +318,12 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     >
       {items.map((item, index) => {
         const isSelected = index === selectedIndex;
-        const key =
-          item.type === 'agent'
-            ? `a:${item.name}`
-            : item.type === 'file'
-              ? `f:${item.path}`
-              : item.type === 'directory'
-                ? `d:${item.path}`
-                : item.type === 'command'
-                  ? `c:${item.command.name}`
-                  : `s:${item.skill.id}`;
+        const { key, testIdLabel } = describePickerItem(item);
         return (
           <button
             key={key}
             type="button"
-            data-testid={`picker-item-${item.type}-${item.type === 'agent' ? item.name : item.type === 'file' ? item.name : item.type === 'directory' ? item.name : item.type === 'command' ? item.command.name : item.skill.invocationName || item.skill.name}`}
+            data-testid={`picker-item-${item.type}-${testIdLabel}`}
             onMouseDown={(e) => {
               e.preventDefault();
               selectItem(item);
