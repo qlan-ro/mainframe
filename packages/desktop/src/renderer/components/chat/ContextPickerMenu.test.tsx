@@ -1,4 +1,5 @@
 import { render, screen, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../lib/api', () => ({
@@ -101,5 +102,55 @@ describe('ContextPickerMenu: autocomplete mode', () => {
     await new Promise((r) => setTimeout(r, 200));
     // Same dir 'src' → cache hit, still 1 call.
     expect(getFileTree).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ContextPickerMenu: autocomplete selection', () => {
+  it('Enter on directory rewrites text with trailing slash, keeps picker open, re-fetches', async () => {
+    vi.mocked(getFileTree)
+      .mockResolvedValueOnce([{ name: 'components', type: 'directory', path: 'src/components' }])
+      .mockResolvedValueOnce([{ name: 'Button.tsx', type: 'file', path: 'src/components/Button.tsx' }]);
+
+    const onClose = vi.fn();
+    render(
+      <TooltipProvider>
+        <ContextPickerMenu forceOpen={false} onClose={onClose} />
+      </TooltipProvider>,
+    );
+    act(() => mockComposerRuntime.setText('@src/co'));
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Press Enter on the (only) matching item — 'components' directory.
+    await userEvent.keyboard('{Enter}');
+
+    expect(composerText).toBe('@src/components/');
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Wait for the re-fetch effect; dir changed to 'src/components'.
+    await new Promise((r) => setTimeout(r, 200));
+    expect(getFileTree).toHaveBeenLastCalledWith('proj-1', 'src/components', 'chat-1');
+  });
+
+  it('Enter on file commits mention, closes picker', async () => {
+    vi.mocked(getFileTree).mockResolvedValueOnce([{ name: 'app.ts', type: 'file', path: 'src/app.ts' }]);
+    const onClose = vi.fn();
+    render(
+      <TooltipProvider>
+        <ContextPickerMenu forceOpen={false} onClose={onClose} />
+      </TooltipProvider>,
+    );
+    act(() => mockComposerRuntime.setText('@src/a'));
+    await new Promise((r) => setTimeout(r, 200));
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(composerText).toBe('@src/app.ts ');
+    const { addMention } = await import('../../lib/api');
+    expect(addMention).toHaveBeenCalledWith('chat-1', {
+      kind: 'file',
+      name: 'app.ts',
+      path: 'src/app.ts',
+    });
+    expect(onClose).toHaveBeenCalled();
   });
 });

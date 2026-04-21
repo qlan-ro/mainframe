@@ -226,13 +226,37 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     (item: PickerItem) => {
       try {
         const cur = composerRuntime.getState()?.text ?? '';
+
+        // Autocomplete selections use atToken offsets so the rewrite is
+        // deterministic regardless of what the user originally typed.
+        if (atToken?.mode === 'autocomplete' && (item.type === 'directory' || item.type === 'file')) {
+          const before = cur.slice(0, atToken.startOffset);
+          const after = cur.slice(atToken.endOffset);
+          if (item.type === 'directory') {
+            composerRuntime.setText(`${before}@${item.path}/${after}`);
+            focusComposerInput();
+            return; // stay open; useEffect will re-fetch on the new dir
+          }
+          // File: insert full path + trailing space, commit mention, close.
+          composerRuntime.setText(`${before}@${item.path} ${after}`);
+          if (activeChatId) {
+            addMention(activeChatId, { kind: 'file', name: item.name, path: item.path }).catch((err) =>
+              log.warn('add mention failed', { err: String(err) }),
+            );
+          }
+          focusComposerInput();
+          onClose();
+          return;
+        }
+
+        // Fuzzy / skills / all mode — existing insert behaviour.
         const ins =
           item.type === 'agent'
             ? `@${item.name} `
             : item.type === 'file'
               ? `@${item.path} `
               : item.type === 'directory'
-                ? `@${item.path}/`
+                ? `@${item.path}/` // fallback — shouldn't fire because directory only appears in autocomplete mode
                 : item.type === 'command'
                   ? `/${item.command.name} `
                   : `/${item.skill.invocationName || item.skill.name} `;
@@ -261,12 +285,13 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
             path: item.type === 'file' ? item.path : undefined,
           }).catch((err) => log.warn('add mention failed', { err: String(err) }));
         }
+        onClose();
       } catch (err) {
         log.warn('selection failed', { err: String(err) });
+        onClose();
       }
-      onClose();
     },
-    [composerRuntime, activeChatId, onClose],
+    [composerRuntime, activeChatId, onClose, atToken],
   );
 
   useEffect(() => {
