@@ -20,6 +20,7 @@ import { WorktreePopover } from './WorktreePopover';
 import { QueuedMessageBanner } from './QueuedMessageBanner';
 import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
@@ -397,19 +398,25 @@ export function ComposerCard() {
           />
           {isGitProject && (
             <div className="relative">
-              <button
-                type="button"
-                onClick={() => setWorktreePopoverOpen((o) => !o)}
-                className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
-                  chat?.worktreePath
-                    ? 'text-mf-accent bg-mf-hover'
-                    : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
-                }`}
-                title={chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
-                aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
-              >
-                {chat?.worktreePath ? <FolderGit size={14} /> : <GitBranch size={14} />}
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setWorktreePopoverOpen((o) => !o)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
+                      chat?.worktreePath
+                        ? 'text-mf-accent bg-mf-hover'
+                        : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
+                    }`}
+                    aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
+                  >
+                    {chat?.worktreePath ? <FolderGit size={14} /> : <GitBranch size={14} />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
+                </TooltipContent>
+              </Tooltip>
               {worktreePopoverOpen && chatId && (
                 <WorktreePopover
                   chatId={chatId}
