@@ -7,16 +7,18 @@ import { useComposerRuntime } from '@assistant-ui/react';
 import { focusComposerInput } from '../../lib/focus';
 import { useSkillsStore, useChatsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
-import { searchFiles, addMention } from '../../lib/api';
+import { searchFiles, getFileTree, browseFilesystem, addMention } from '../../lib/api';
+import { parseAtToken, type AtToken } from '../../lib/parse-at-token';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import type { Skill, CustomCommand } from '@qlan-ro/mainframe-types';
 
-type FilterMode = 'all' | 'agents-files' | 'skills';
+type DerivedMode = 'all' | 'fuzzy-agents-files' | 'autocomplete' | 'skills';
 
 type PickerItem =
   | { type: 'agent'; name: string; description: string; scope: string }
   | { type: 'file'; name: string; path: string }
+  | { type: 'directory'; name: string; path: string }
   | { type: 'skill'; skill: Skill }
   | { type: 'command'; command: CustomCommand };
 
@@ -38,6 +40,30 @@ function fuzzyMatch(query: string, target: string): boolean {
 }
 
 const SEARCH_DEBOUNCE_MS = 150;
+
+/** Returns true if the token's dir should resolve via the filesystem-browse
+ * endpoint instead of the project tree. Matches absolute paths (`/foo`, `/`)
+ * and home-relative paths (`~`, `~/foo`). */
+function isFilesystemDir(dir: string): boolean {
+  return dir.startsWith('/') || dir.startsWith('~');
+}
+
+function describePickerItem(item: PickerItem): { key: string; testIdLabel: string } {
+  switch (item.type) {
+    case 'agent':
+      return { key: `a:${item.name}`, testIdLabel: item.name };
+    case 'file':
+      return { key: `f:${item.path}`, testIdLabel: item.name };
+    case 'directory':
+      return { key: `d:${item.path}`, testIdLabel: item.name };
+    case 'command':
+      return { key: `c:${item.command.name}`, testIdLabel: item.command.name };
+    case 'skill': {
+      const label = item.skill.invocationName || item.skill.name;
+      return { key: `s:${item.skill.id}`, testIdLabel: label };
+    }
+  }
+}
 
 function useComposerText(): string {
   const composerRuntime = useComposerRuntime();
@@ -78,18 +104,21 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Track whether user typed while picker was force-open, to auto-close on full delete
   const pickerHadQueryRef = useRef(false);
+  const [treeEntries, setTreeEntries] = useState<{ name: string; type: 'file' | 'directory'; path: string }[]>([]);
+  const treeCacheRef = useRef<Map<string, { name: string; type: 'file' | 'directory'; path: string }[]>>(new Map());
 
-  const atMatch = text.match(/(?:^|\s)@(\S*)$/);
-  const slashMatch = !atMatch && text.match(/^\/(\S*)$/);
+  const caret = text.length; // composer doesn't expose caret position — end-of-text is correct for live typing
+  const atToken: AtToken | null = parseAtToken(text, caret);
+  const slashMatch = atToken ? null : text.match(/^\/(\S*)$/);
 
-  let filterMode: FilterMode = 'all';
-  if (atMatch) filterMode = 'agents-files';
-  else if (slashMatch) filterMode = 'skills';
+  let mode: DerivedMode = 'all';
+  if (atToken) mode = atToken.mode === 'fuzzy' ? 'fuzzy-agents-files' : 'autocomplete';
+  else if (slashMatch) mode = 'skills';
 
-  // In all mode (button-triggered, no @ or / trigger), use the trailing word as query
-  const allModeQuery = filterMode === 'all' ? (text.match(/(\S+)$/)?.[1] ?? '') : '';
-  const query = atMatch?.[1] ?? (slashMatch !== false ? slashMatch?.[1] : undefined) ?? allModeQuery;
-  const isOpen = forceOpen || atMatch !== null || slashMatch !== null;
+  const fuzzyQuery = atToken?.mode === 'fuzzy' ? atToken.query : '';
+  const allModeQuery = mode === 'all' ? (text.match(/(\S+)$/)?.[1] ?? '') : '';
+  const query = fuzzyQuery || (slashMatch?.[1] ?? '') || allModeQuery;
+  const isOpen = forceOpen || atToken !== null || slashMatch !== null;
 
   // Auto-close when user typed then deleted everything (forceOpen mode only)
   useEffect(() => {
@@ -105,9 +134,9 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     }
   }, [forceOpen, allModeQuery, onClose]);
 
-  // File search (agents-files mode only, query >= 1 char)
+  // File search (fuzzy-agents-files mode only, query >= 1 char)
   useEffect(() => {
-    if (filterMode !== 'agents-files' || query.length < 1 || !activeProjectId) {
+    if (mode !== 'fuzzy-agents-files' || query.length < 1 || !activeProjectId) {
       setFileResults([]);
       return;
     }
@@ -121,20 +150,78 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(debounceRef.current);
-  }, [filterMode, query, activeProjectId, activeChatId]);
+  }, [mode, query, activeProjectId, activeChatId]);
+
+  // Tree fetch (autocomplete mode only). Routes filesystem paths (@/, @~) to
+  // browseFilesystem; project paths to getFileTree. `cancelled` suppresses
+  // stale setState; does not cancel the HTTP call.
+  useEffect(() => {
+    if (mode !== 'autocomplete' || !atToken) {
+      setTreeEntries([]);
+      return;
+    }
+    const dir = atToken.dir;
+    const fsMode = isFilesystemDir(dir);
+    // Project tree needs an activeProjectId; filesystem mode does not.
+    if (!fsMode && !activeProjectId) {
+      setTreeEntries([]);
+      return;
+    }
+    const cacheKey = fsMode ? `fs:${dir}` : `${activeProjectId}:${dir}`;
+    const cached = treeCacheRef.current.get(cacheKey);
+    if (cached) {
+      setTreeEntries(cached);
+      return;
+    }
+    let cancelled = false;
+    const fetchPromise = fsMode
+      ? browseFilesystem(dir, { includeFiles: true, includeHidden: true }).then((r) =>
+          r.entries.map((e) => ({ name: e.name, path: e.path, type: e.type ?? 'directory' })),
+        )
+      : getFileTree(activeProjectId!, dir, activeChatId ?? undefined);
+    fetchPromise
+      .then((entries) => {
+        if (cancelled) return;
+        treeCacheRef.current.set(cacheKey, entries);
+        setTreeEntries(entries);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        log.warn('tree fetch failed', { err: String(err), dir });
+        setTreeEntries([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, atToken?.dir, activeProjectId, activeChatId]);
 
   // Build item list (no hint items — composer placeholder already guides file search)
   const items: PickerItem[] = [];
   if (isOpen) {
-    if (filterMode === 'all' || filterMode === 'agents-files') {
+    if (mode === 'autocomplete' && atToken) {
+      const leafLower = atToken.leaf.toLowerCase();
+      const filtered = treeEntries.filter((e) => e.name.toLowerCase().startsWith(leafLower));
+      filtered.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      for (const e of filtered) {
+        if (e.type === 'directory') {
+          items.push({ type: 'directory', name: e.name, path: e.path });
+        } else {
+          items.push({ type: 'file', name: e.name, path: e.path });
+        }
+      }
+    }
+    if (mode === 'all' || mode === 'fuzzy-agents-files') {
       agents
         .filter((a) => !query || fuzzyMatch(query, a.name))
         .forEach((a) => items.push({ type: 'agent', name: a.name, description: a.description, scope: a.scope }));
     }
-    if (filterMode === 'agents-files') {
+    if (mode === 'fuzzy-agents-files') {
       fileResults.forEach((f) => items.push({ type: 'file', name: f.name, path: f.path }));
     }
-    if (filterMode === 'all' || filterMode === 'skills') {
+    if (mode === 'all' || mode === 'skills') {
       skills
         .filter((s) => {
           if (!query) return true;
@@ -151,20 +238,49 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     }
   }
 
-  useEffect(() => setSelectedIndex(0), [filterMode, query]);
+  useEffect(() => setSelectedIndex(0), [mode, query]);
 
   const selectItem = useCallback(
     (item: PickerItem) => {
       try {
         const cur = composerRuntime.getState()?.text ?? '';
+
+        // Autocomplete selections use atToken offsets so the rewrite is
+        // deterministic regardless of what the user originally typed.
+        if (atToken?.mode === 'autocomplete' && (item.type === 'directory' || item.type === 'file')) {
+          const before = cur.slice(0, atToken.startOffset);
+          const after = cur.slice(atToken.endOffset);
+          // Tree entries on Windows can contain backslashes; parseAtToken
+          // splits on '/' so the rewritten token must use POSIX separators.
+          const posixPath = item.path.replace(/\\/g, '/');
+          if (item.type === 'directory') {
+            composerRuntime.setText(`${before}@${posixPath}/${after}`);
+            focusComposerInput();
+            return; // stay open; useEffect will re-fetch on the new dir
+          }
+          // File: insert full path + trailing space, commit mention, close.
+          composerRuntime.setText(`${before}@${posixPath} ${after}`);
+          if (activeChatId) {
+            addMention(activeChatId, { kind: 'file', name: item.name, path: posixPath }).catch((err) =>
+              log.warn('add mention failed', { err: String(err) }),
+            );
+          }
+          focusComposerInput();
+          onClose();
+          return;
+        }
+
+        // Fuzzy / skills / all mode — existing insert behaviour.
         const ins =
           item.type === 'agent'
             ? `@${item.name} `
             : item.type === 'file'
               ? `@${item.path} `
-              : item.type === 'command'
-                ? `/${item.command.name} `
-                : `/${item.skill.invocationName || item.skill.name} `;
+              : item.type === 'directory'
+                ? `@${item.path}/` // fallback — shouldn't fire because directory only appears in autocomplete mode
+                : item.type === 'command'
+                  ? `/${item.command.name} `
+                  : `/${item.skill.invocationName || item.skill.name} `;
         const aInText = cur.match(/(?:^|\s)@(\S*)$/);
         const sInText = cur.match(/^\/(\S*)$/);
         if (aInText) {
@@ -190,12 +306,13 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
             path: item.type === 'file' ? item.path : undefined,
           }).catch((err) => log.warn('add mention failed', { err: String(err) }));
         }
+        onClose();
       } catch (err) {
         log.warn('selection failed', { err: String(err) });
+        onClose();
       }
-      onClose();
     },
-    [composerRuntime, activeChatId, onClose],
+    [composerRuntime, activeChatId, onClose, atToken],
   );
 
   useEffect(() => {
@@ -210,7 +327,20 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
       } else if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         const item = items[selectedIndex];
-        if (item) selectItem(item);
+        if (!item) return;
+
+        // Tab in autocomplete on a file: only fill the leaf, don't commit.
+        if (e.key === 'Tab' && atToken?.mode === 'autocomplete' && item.type === 'file') {
+          const cur = composerRuntime.getState()?.text ?? '';
+          const before = cur.slice(0, atToken.startOffset);
+          const after = cur.slice(atToken.endOffset);
+          const posixPath = item.path.replace(/\\/g, '/');
+          composerRuntime.setText(`${before}@${posixPath}${after}`);
+          focusComposerInput();
+          return;
+        }
+
+        selectItem(item);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         try {
@@ -228,7 +358,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     };
     document.addEventListener('keydown', handleKeyDown, true);
     return () => document.removeEventListener('keydown', handleKeyDown, true);
-  }, [isOpen, items, selectedIndex, selectItem, composerRuntime, onClose]);
+  }, [isOpen, items, selectedIndex, selectItem, composerRuntime, onClose, atToken]);
 
   // Auto-scroll selected item into view
   useEffect(() => {
@@ -247,19 +377,12 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
     >
       {items.map((item, index) => {
         const isSelected = index === selectedIndex;
-        const key =
-          item.type === 'agent'
-            ? `a:${item.name}`
-            : item.type === 'file'
-              ? `f:${item.path}`
-              : item.type === 'command'
-                ? `c:${item.command.name}`
-                : `s:${item.skill.id}`;
+        const { key, testIdLabel } = describePickerItem(item);
         return (
           <button
             key={key}
             type="button"
-            data-testid={`picker-item-${item.type}-${item.type === 'agent' ? item.name : item.type === 'file' ? item.name : item.type === 'command' ? item.command.name : item.skill.invocationName || item.skill.name}`}
+            data-testid={`picker-item-${item.type}-${testIdLabel}`}
             onMouseDown={(e) => {
               e.preventDefault();
               selectItem(item);
@@ -272,6 +395,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
           >
             {item.type === 'agent' && <Bot size={14} className="text-mf-accent mt-0.5 shrink-0" />}
             {item.type === 'file' && <File size={14} className="text-mf-text-secondary mt-0.5 shrink-0" />}
+            {item.type === 'directory' && <FolderOpen size={14} className="text-mf-text-secondary mt-0.5 shrink-0" />}
             {item.type === 'skill' && <Zap size={14} className="text-mf-accent mt-0.5 shrink-0" />}
             {item.type === 'command' && <Wrench size={14} className="text-mf-text-secondary mt-0.5 shrink-0" />}
             <div className="flex-1 min-w-0">
@@ -282,6 +406,15 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
                   </span>
                 ) : item.type === 'command' ? (
                   <span className="font-mono text-mf-small text-mf-text-primary truncate">/{item.command.name}</span>
+                ) : item.type === 'directory' ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-mf-body text-mf-text-primary font-medium font-mono truncate" tabIndex={0}>
+                        {item.name}/
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{item.path}/</TooltipContent>
+                  </Tooltip>
                 ) : (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -300,6 +433,7 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
                     </>
                   )}
                   {item.type === 'file' && <span>file</span>}
+                  {item.type === 'directory' && <span>dir</span>}
                   {item.type === 'skill' && SCOPE_ICON[item.skill.scope]}
                   {item.type === 'command' && (
                     <span className="ml-auto text-[10px] text-mf-text-secondary/60 shrink-0">
