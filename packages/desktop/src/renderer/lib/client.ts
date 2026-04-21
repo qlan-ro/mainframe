@@ -138,9 +138,18 @@ export class DaemonClient {
     adapterId: string,
     model?: string,
     permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo',
+    attachWorktree?: { worktreePath: string; branchName: string },
   ): void {
-    this.send({ type: 'chat.create', projectId, adapterId, model, permissionMode });
-    log.info('createChat', { projectId, adapterId, model, permissionMode });
+    this.send({
+      type: 'chat.create',
+      projectId,
+      adapterId,
+      model,
+      permissionMode,
+      worktreePath: attachWorktree?.worktreePath,
+      branchName: attachWorktree?.branchName,
+    });
+    log.info('createChat', { projectId, adapterId, model, permissionMode, attachWorktree });
   }
 
   updateChatConfig(

@@ -52,9 +52,21 @@ export class ChatLifecycleManager {
     return this.loadingChats;
   }
 
-  async createChat(projectId: string, adapterId: string, model?: string, permissionMode?: string): Promise<Chat> {
+  async createChat(
+    projectId: string,
+    adapterId: string,
+    model?: string,
+    permissionMode?: string,
+    worktreePath?: string,
+    branchName?: string,
+  ): Promise<Chat> {
     const chat = this.deps.db.chats.create(projectId, adapterId, model, permissionMode);
-    log.info({ chatId: chat.id, projectId, adapterId }, 'chat created');
+    if (worktreePath && branchName) {
+      this.deps.db.chats.update(chat.id, { worktreePath, branchName });
+      chat.worktreePath = worktreePath;
+      chat.branchName = branchName;
+    }
+    log.info({ chatId: chat.id, projectId, adapterId, worktreePath }, 'chat created');
     this.deps.activeChats.set(chat.id, { chat, session: null });
     this.deps.emitEvent({ type: 'chat.created', chat });
     return chat;
@@ -65,6 +77,8 @@ export class ChatLifecycleManager {
     adapterId: string,
     model?: string,
     permissionMode?: string,
+    worktreePath?: string,
+    branchName?: string,
   ): Promise<Chat> {
     let effectiveModel = model;
     let effectiveMode = permissionMode;
@@ -77,7 +91,7 @@ export class ChatLifecycleManager {
       if (!effectiveMode && defaultMode) effectiveMode = defaultMode;
     }
 
-    return this.createChat(projectId, adapterId, effectiveModel, effectiveMode);
+    return this.createChat(projectId, adapterId, effectiveModel, effectiveMode, worktreePath, branchName);
   }
 
   async resumeChat(chatId: string): Promise<void> {

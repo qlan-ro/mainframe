@@ -139,8 +139,10 @@ export class ChatManager {
     adapterId: string,
     model?: string,
     permissionMode?: string,
+    worktreePath?: string,
+    branchName?: string,
   ): Promise<Chat> {
-    return this.lifecycle.createChatWithDefaults(projectId, adapterId, model, permissionMode);
+    return this.lifecycle.createChatWithDefaults(projectId, adapterId, model, permissionMode, worktreePath, branchName);
   }
 
   async resumeChat(chatId: string): Promise<void> {
