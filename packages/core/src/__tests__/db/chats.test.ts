@@ -102,15 +102,16 @@ describe('ChatsRepository', () => {
       expect(all[1].id).toBe(c2.id);
     });
 
-    it('excludes archived chats', () => {
+    it('includes archived chats', () => {
       const c1 = chats.create(projectId, 'claude');
       const c2 = chats.create(projectId, 'claude');
 
       chats.update(c2.id, { status: 'archived' });
 
       const all = chats.list(projectId);
-      expect(all).toHaveLength(1);
-      expect(all[0].id).toBe(c1.id);
+      expect(all).toHaveLength(2);
+      expect(all.map((c) => c.id)).toContain(c1.id);
+      expect(all.map((c) => c.id)).toContain(c2.id);
     });
 
     it('returns empty array for a project with no chats', () => {

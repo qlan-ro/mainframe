@@ -402,6 +402,14 @@ export class ChatManager {
     this.eventHandler.clearDisplayCache(chatId);
   }
 
+  unarchiveChat(chatId: string): Chat | null {
+    this.db.chats.update(chatId, { status: 'active' });
+    const chat = this.db.chats.get(chatId);
+    if (!chat) return null;
+    this.emitEvent({ type: 'chat.updated', chat });
+    return chat;
+  }
+
   async endChat(chatId: string): Promise<void> {
     await this.lifecycle.endChat(chatId);
     this.eventHandler.clearDisplayCache(chatId);
