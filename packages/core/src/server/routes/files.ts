@@ -272,7 +272,7 @@ async function handleWriteFile(ctx: RouteContext, req: Request, res: Response): 
   }
 }
 
-/** GET /api/filesystem/browse?path=~ */
+/** GET /api/filesystem/browse?path=~&includeFiles=true&includeHidden=true */
 async function handleBrowseFilesystem(_ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = validate(BrowseFilesystemQuery, req.query);
   if (!parsed.success) {
@@ -280,38 +280,62 @@ async function handleBrowseFilesystem(_ctx: RouteContext, req: Request, res: Res
     return;
   }
 
+  const { includeFiles, includeHidden } = parsed.data;
   const homeDir = homedir();
-  const requestedPath = parsed.data.path || homeDir;
-
-  // Lexical check first — distinguishes 403 (outside home) from 404 (doesn't exist)
-  const normalized = path.resolve(requestedPath);
-  const normalizedHome = path.resolve(homeDir);
-  if (!normalized.startsWith(normalizedHome + path.sep) && normalized !== normalizedHome) {
-    res.status(403).json({ error: 'Path outside home directory' });
-    return;
+  let requestedPath = parsed.data.path || homeDir;
+  // Expand leading ~
+  if (requestedPath.startsWith('~')) {
+    requestedPath = path.join(homeDir, requestedPath.slice(1));
   }
 
-  // Resolve symlinks to prevent traversal via symlink pointing outside home
+  const normalized = path.resolve(requestedPath);
+
+  // Resolve symlinks; return 404 if path doesn't exist.
+  let real: string;
   try {
-    const real = await realpath(normalized);
-    const realHome = await realpath(homeDir);
-    if (!real.startsWith(realHome + path.sep) && real !== realHome) {
-      res.status(403).json({ error: 'Path outside home directory' });
-      return;
-    }
+    real = await realpath(normalized);
   } catch {
     res.status(404).json({ error: 'Directory not found' });
     return;
   }
 
   try {
-    const dirents = await readdir(normalized, { withFileTypes: true });
+    const dirents = await readdir(real, { withFileTypes: true });
     const entries = dirents
-      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !IGNORED_DIRS.has(e.name))
-      .map((e) => ({ name: e.name, path: path.join(normalized, e.name) }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .filter((e) => {
+        const isDir = e.isDirectory();
+        const isFile = e.isFile();
+        const isSymlink = e.isSymbolicLink();
+        if (!isDir && !isFile && !isSymlink) return false;
+        if (!includeHidden && e.name.startsWith('.')) return false;
+        if (IGNORED_DIRS.has(e.name)) return false;
+        // If only dirs requested, drop plain files. Symlinks pass through to be
+        // resolved below and then filtered by type if needed.
+        if (!includeFiles && !isDir && !isSymlink) return false;
+        return true;
+      })
+      .map(async (e) => {
+        let type: 'file' | 'directory';
+        if (e.isSymbolicLink()) {
+          try {
+            const st = await stat(path.join(real, e.name));
+            type = st.isDirectory() ? 'directory' : 'file';
+          } catch {
+            return null;
+          }
+        } else {
+          type = e.isDirectory() ? 'directory' : 'file';
+        }
+        if (!includeFiles && type === 'file') return null;
+        return { name: e.name, path: path.join(real, e.name), type };
+      });
+    const resolved = (await Promise.all(entries)).filter((e): e is NonNullable<typeof e> => e !== null);
+    resolved.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
 
-    res.json({ path: normalized, entries });
+    res.json({ path: real, entries: resolved });
   } catch (err) {
     logger.warn({ err, path: requestedPath }, 'Failed to browse directory');
     res.status(404).json({ error: 'Directory not found' });

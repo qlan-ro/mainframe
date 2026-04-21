@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, mkdir, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, symlink, realpath } from 'node:fs/promises';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileRoutes } from '../../server/routes/files.js';
@@ -323,13 +323,20 @@ describe('GET /api/projects/:id/search/files', () => {
 
 describe('GET /api/filesystem/browse', () => {
   afterEach(() => {
-    vi.mocked(homedir).mockReset();
+    // Restore to a sensible default so tests outside this describe still get a valid
+    // home directory. process.env.HOME is always set in Node.js test environments.
+    vi.mocked(homedir)
+      .mockReset()
+      .mockReturnValue(process.env['HOME'] ?? '/tmp');
   });
 
   it('returns subdirectories of the given path', async () => {
     await mkdir(join(projectDir, 'alpha'));
     await mkdir(join(projectDir, 'beta'));
     await writeFile(join(projectDir, 'file.txt'), 'hello');
+
+    // realpath expands macOS /var -> /private/var symlink so assertions match.
+    const realProjectDir = await realpath(projectDir);
 
     vi.mocked(homedir).mockReturnValue(projectDir);
 
@@ -342,10 +349,10 @@ describe('GET /api/filesystem/browse', () => {
     await flushPromises();
 
     expect(res.json).toHaveBeenCalledWith({
-      path: projectDir,
+      path: realProjectDir,
       entries: [
-        { name: 'alpha', path: expect.stringContaining('alpha') },
-        { name: 'beta', path: expect.stringContaining('beta') },
+        { name: 'alpha', path: expect.stringContaining('alpha'), type: 'directory' },
+        { name: 'beta', path: expect.stringContaining('beta'), type: 'directory' },
       ],
     });
   });
@@ -384,7 +391,33 @@ describe('GET /api/filesystem/browse', () => {
     expect(res.status).toHaveBeenCalledWith(404);
   });
 
-  it('rejects paths outside home directory', async () => {
+  it('allows paths outside home directory when passed explicitly', async () => {
+    // Use a fresh tmpdir — on macOS /tmp is a symlink to /private/tmp so we use the
+    // real tmpdir() value which is always outside a mocked home.
+    const outsideDir = await mkdtemp(join(tmpdir(), 'mf-outside-browse-'));
+    try {
+      await mkdir(join(outsideDir, 'subdir'));
+      // Mock home to something different so outsideDir is definitely outside
+      vi.mocked(homedir).mockReturnValue(join(outsideDir, 'fake-home'));
+
+      const ctx = createCtx(projectDir);
+      const router = fileRoutes(ctx);
+      const handler = extractHandler(router, 'get', '/api/filesystem/browse');
+      const res = mockRes();
+
+      handler({ query: { path: outsideDir } } as any, res, vi.fn());
+      await flushPromises();
+
+      expect(res.status).not.toHaveBeenCalledWith(403);
+      const result = res.json.mock.calls[0][0];
+      expect(result.entries.some((e: { name: string }) => e.name === 'subdir')).toBe(true);
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it('expands ~ in path parameter', async () => {
+    await mkdir(join(projectDir, 'sub'));
     vi.mocked(homedir).mockReturnValue(projectDir);
 
     const ctx = createCtx(projectDir);
@@ -392,10 +425,114 @@ describe('GET /api/filesystem/browse', () => {
     const handler = extractHandler(router, 'get', '/api/filesystem/browse');
     const res = mockRes();
 
-    handler({ query: { path: '/etc' } } as any, res, vi.fn());
+    handler({ query: { path: '~/sub' } } as any, res, vi.fn());
     await flushPromises();
 
-    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.status).not.toHaveBeenCalledWith(404);
+    const result = res.json.mock.calls[0][0];
+    expect(result.path).toContain('sub');
+  });
+
+  it('returns files when includeFiles=true', async () => {
+    await mkdir(join(projectDir, 'mydir'));
+    await writeFile(join(projectDir, 'myfile.txt'), 'hello');
+
+    vi.mocked(homedir).mockReturnValue(projectDir);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/filesystem/browse');
+
+    // Default: only dirs
+    const resDirs = mockRes();
+    handler({ query: { path: projectDir } } as any, resDirs, vi.fn());
+    await flushPromises();
+    const defaultResult = resDirs.json.mock.calls[0][0];
+    expect(defaultResult.entries.some((e: { name: string }) => e.name === 'myfile.txt')).toBe(false);
+    expect(defaultResult.entries.some((e: { name: string }) => e.name === 'mydir')).toBe(true);
+
+    // With includeFiles=true: both appear
+    const resBoth = mockRes();
+    handler({ query: { path: projectDir, includeFiles: 'true' } } as any, resBoth, vi.fn());
+    await flushPromises();
+    const filesResult = resBoth.json.mock.calls[0][0];
+    expect(filesResult.entries.some((e: { name: string }) => e.name === 'myfile.txt')).toBe(true);
+    expect(filesResult.entries.some((e: { name: string }) => e.name === 'mydir')).toBe(true);
+  });
+
+  it('returns hidden entries when includeHidden=true', async () => {
+    await writeFile(join(projectDir, '.hidden'), 'secret');
+    await writeFile(join(projectDir, 'visible.txt'), 'public');
+
+    vi.mocked(homedir).mockReturnValue(projectDir);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/filesystem/browse');
+
+    // Default (no includeFiles, no includeHidden): no files at all
+    const resDefault = mockRes();
+    handler({ query: { path: projectDir } } as any, resDefault, vi.fn());
+    await flushPromises();
+    const defaultResult = resDefault.json.mock.calls[0][0];
+    expect(defaultResult.entries.some((e: { name: string }) => e.name === '.hidden')).toBe(false);
+    expect(defaultResult.entries.some((e: { name: string }) => e.name === 'visible.txt')).toBe(false);
+
+    // includeFiles only: visible.txt appears, .hidden does not
+    const resFiles = mockRes();
+    handler({ query: { path: projectDir, includeFiles: 'true' } } as any, resFiles, vi.fn());
+    await flushPromises();
+    const filesResult = resFiles.json.mock.calls[0][0];
+    expect(filesResult.entries.some((e: { name: string }) => e.name === 'visible.txt')).toBe(true);
+    expect(filesResult.entries.some((e: { name: string }) => e.name === '.hidden')).toBe(false);
+
+    // Both flags: both appear
+    const resBoth = mockRes();
+    handler({ query: { path: projectDir, includeFiles: 'true', includeHidden: 'true' } } as any, resBoth, vi.fn());
+    await flushPromises();
+    const bothResult = resBoth.json.mock.calls[0][0];
+    expect(bothResult.entries.some((e: { name: string }) => e.name === 'visible.txt')).toBe(true);
+    expect(bothResult.entries.some((e: { name: string }) => e.name === '.hidden')).toBe(true);
+  });
+
+  it('still filters IGNORED_DIRS even with includeHidden=true', async () => {
+    await mkdir(join(projectDir, 'node_modules'));
+    await mkdir(join(projectDir, 'src'));
+
+    vi.mocked(homedir).mockReturnValue(projectDir);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/filesystem/browse');
+    const res = mockRes();
+
+    handler({ query: { path: projectDir, includeHidden: 'true' } } as any, res, vi.fn());
+    await flushPromises();
+
+    const result = res.json.mock.calls[0][0];
+    expect(result.entries.some((e: { name: string }) => e.name === 'node_modules')).toBe(false);
+    expect(result.entries.some((e: { name: string }) => e.name === 'src')).toBe(true);
+  });
+
+  it('returns type field on entries', async () => {
+    await mkdir(join(projectDir, 'adir'));
+    await writeFile(join(projectDir, 'afile.ts'), '');
+
+    vi.mocked(homedir).mockReturnValue(projectDir);
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/filesystem/browse');
+    const res = mockRes();
+
+    handler({ query: { path: projectDir, includeFiles: 'true' } } as any, res, vi.fn());
+    await flushPromises();
+
+    const result = res.json.mock.calls[0][0];
+    const dirEntry = result.entries.find((e: { name: string }) => e.name === 'adir');
+    const fileEntry = result.entries.find((e: { name: string }) => e.name === 'afile.ts');
+    expect(dirEntry?.type).toBe('directory');
+    expect(fileEntry?.type).toBe('file');
   });
 });
 

@@ -86,11 +86,19 @@ export async function addMention(
 export interface BrowseEntry {
   name: string;
   path: string;
+  type?: 'file' | 'directory';
 }
 
-export async function browseFilesystem(dirPath?: string): Promise<{ path: string; entries: BrowseEntry[] }> {
-  const params = dirPath ? `?path=${encodeURIComponent(dirPath)}` : '';
-  return fetchJson(`${API_BASE}/api/filesystem/browse${params}`);
+export async function browseFilesystem(
+  dirPath?: string,
+  opts?: { includeFiles?: boolean; includeHidden?: boolean },
+): Promise<{ path: string; entries: BrowseEntry[] }> {
+  const params = new URLSearchParams();
+  if (dirPath) params.set('path', dirPath);
+  if (opts?.includeFiles) params.set('includeFiles', 'true');
+  if (opts?.includeHidden) params.set('includeHidden', 'true');
+  const qs = params.toString();
+  return fetchJson(`${API_BASE}/api/filesystem/browse${qs ? `?${qs}` : ''}`);
 }
 
 export async function searchContent(

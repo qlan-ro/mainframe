@@ -48,6 +48,14 @@ export const UpdateGeneralSettingsBody = z.object({
 // Filesystem browsing
 export const BrowseFilesystemQuery = z.object({
   path: z.string().optional(),
+  includeFiles: z
+    .union([z.boolean(), z.enum(['true', 'false'])])
+    .optional()
+    .transform((v) => v === true || v === 'true'),
+  includeHidden: z
+    .union([z.boolean(), z.enum(['true', 'false'])])
+    .optional()
+    .transform((v) => v === true || v === 'true'),
 });
 
 // Skills
