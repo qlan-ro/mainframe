@@ -183,7 +183,7 @@ function WorktreeSection({
             <TooltipTrigger asChild>
               <button
                 onClick={() => onNewSession(name, branchName)}
-                className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                className="p-1 mr-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                 aria-label={`New session on worktree ${name}`}
               >
                 <Plus size={11} />
