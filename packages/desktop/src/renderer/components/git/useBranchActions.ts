@@ -16,7 +16,11 @@ import {
   gitRenameBranch,
   gitDeleteBranch,
   gitUpdateAll,
+  getProjectWorktrees,
+  deleteWorktree,
 } from '../../lib/api';
+import { daemonClient } from '../../lib/client';
+import { getDefaultModelForAdapter } from '../../lib/adapters';
 
 interface BranchData {
   current: string;
@@ -44,6 +48,8 @@ export interface BranchActions {
   handleRebase: (branch: string) => Promise<boolean>;
   handleRename: (oldName: string, newName: string) => Promise<boolean>;
   handleDelete: (branch: string, isRemote?: boolean) => Promise<boolean>;
+  handleDeleteWorktree: (worktreeDirName: string, branchName: string | undefined) => Promise<boolean>;
+  handleNewSession: (worktreeDirName: string, branchName: string | undefined) => Promise<boolean>;
   handleFetch: () => Promise<boolean>;
   handleUpdateAll: () => Promise<boolean>;
   handleAbort: () => Promise<boolean>;
@@ -274,6 +280,47 @@ export function useBranchActions(
     [projectId, chatId, loadBranches, onBranchChanged, withBusy],
   );
 
+  const handleDeleteWorktree = useCallback(
+    async (worktreeDirName: string, branchName: string | undefined) => {
+      const label = branchName
+        ? `worktree '${worktreeDirName}' (branch: ${branchName})`
+        : `worktree '${worktreeDirName}'`;
+      if (!window.confirm(`Delete ${label}?\nThis cannot be undone.`)) return false;
+      return withBusy(async () => {
+        const { worktrees } = await getProjectWorktrees(projectId);
+        const match = worktrees.find((wt) => wt.path.endsWith(`/${worktreeDirName}`) || wt.path === worktreeDirName);
+        if (!match) {
+          toast.error(`Could not resolve path for worktree '${worktreeDirName}'`);
+          return;
+        }
+        await deleteWorktree(projectId, match.path, branchName);
+        toast.success(`Deleted ${label}`);
+        await loadBranches();
+      }, `deleteWorktree:${worktreeDirName}`);
+    },
+    [projectId, loadBranches, withBusy],
+  );
+
+  const handleNewSession = useCallback(
+    async (worktreeDirName: string, branchName: string | undefined) => {
+      return withBusy(async () => {
+        const { worktrees } = await getProjectWorktrees(projectId);
+        const match = worktrees.find((wt) => wt.path.endsWith(`/${worktreeDirName}`) || wt.path === worktreeDirName);
+        if (!match) {
+          toast.error(`Could not resolve path for worktree '${worktreeDirName}'`);
+          return;
+        }
+        daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'), undefined, {
+          worktreePath: match.path,
+          branchName: branchName ?? worktreeDirName,
+        });
+        toast.success(`Started new session on worktree '${worktreeDirName}'`);
+        onClose();
+      });
+    },
+    [projectId, onClose, withBusy],
+  );
+
   return {
     branches,
     conflictFiles,
@@ -287,6 +334,8 @@ export function useBranchActions(
     handleRebase,
     handleRename,
     handleDelete,
+    handleDeleteWorktree,
+    handleNewSession,
     handleFetch,
     handleUpdateAll,
     handleAbort,

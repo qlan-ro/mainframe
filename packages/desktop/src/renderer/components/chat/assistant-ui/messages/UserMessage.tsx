@@ -4,6 +4,7 @@ import Markdown from 'react-markdown';
 import { MessagePrimitive, useMessage } from '@assistant-ui/react';
 import { getExternalStoreMessages } from '@assistant-ui/react';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { markdownComponents } from '../parts/markdown-text';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useSkillsStore } from '../../../../store/skills';
@@ -12,7 +13,9 @@ import { urlTransform, remarkAppLinks } from '../../../../lib/markdown-url-trans
 import { PLAN_PREFIX, highlightMentions, resolveSkillName, parseRawCommand } from '../message-parsing';
 import { ImageThumbs, FileAttachmentThumbs } from './ImageThumbs';
 
-const REMARK_PLUGINS = [remarkGfm, remarkAppLinks];
+// remarkBreaks converts single newlines into <br> elements so user-typed line breaks
+// are preserved in rendered output (CommonMark collapses them to spaces by default).
+const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 
 function MentionParagraph({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
   return <p {...props}>{highlightMentions(children)}</p>;
