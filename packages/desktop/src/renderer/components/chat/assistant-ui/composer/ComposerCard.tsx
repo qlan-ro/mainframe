@@ -343,28 +343,37 @@ export function ComposerCard() {
       )}
 
       <QueuedMessageBanner chatId={chatId} />
-      <div className="relative">
-        <ComposerHighlight />
-        <ComposerPrimitive.Input
-          data-mf-composer-input
-          rows={2}
-          autoFocus
-          spellCheck={false}
-          disabled={chat?.worktreeMissing}
-          placeholder="Type @ to search files, / for skills… (Enter to send)"
-          className="w-full bg-transparent border-none px-3 py-2 font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && chat?.isRunning) {
-              e.preventDefault();
-              try {
-                composerRuntime.send();
-                deleteDraft(chatId);
-              } catch (err) {
-                log.warn('failed to send from composer', { err: String(err) });
+      {/*
+        Scroll wrapper (outer) owns max-h + overflow. The textarea grows naturally inside
+        the inner wrapper; both textarea and overlay then share the same wrapping width
+        and move together under a single scrollbar. If max-h lived on the textarea, its
+        own scrollbar would shave 8px off its content width, making it wrap at a narrower
+        width than the overlay and drift the caret away from the visible text.
+      */}
+      <div className="relative max-h-[200px] overflow-y-auto">
+        <div className="relative">
+          <ComposerHighlight />
+          <ComposerPrimitive.Input
+            data-mf-composer-input
+            rows={2}
+            autoFocus
+            spellCheck={false}
+            disabled={chat?.worktreeMissing}
+            placeholder="Type @ to search files, / for skills… (Enter to send)"
+            className="block w-full bg-transparent border-none px-3 py-2 font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && chat?.isRunning) {
+                e.preventDefault();
+                try {
+                  composerRuntime.send();
+                  deleteDraft(chatId);
+                } catch (err) {
+                  log.warn('failed to send from composer', { err: String(err) });
+                }
               }
-            }
-          }}
-        />
+            }}
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-between px-2 pb-2">

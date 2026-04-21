@@ -448,9 +448,9 @@ textarea:focus-visible,
   outline: none;
 }
 
-/* Selection */
+/* Selection — neutral blue so it stays readable over orange mentions/accents. */
 ::selection {
-  background: var(--mf-accent);
+  background: #3a78c4;
   color: white;
 }
 
