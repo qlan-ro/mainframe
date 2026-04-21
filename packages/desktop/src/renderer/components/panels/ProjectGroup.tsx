@@ -15,14 +15,14 @@ import {
 } from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
 import type { SessionStatus } from '../../store/chats';
-import { useChatsStore, useProjectsStore } from '../../store';
+import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
 import { useAdaptersStore } from '../../store/adapters';
-import { useToastStore } from '../../store/toasts';
 import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
-import { archiveChat, renameChat, removeProject } from '../../lib/api';
+import { archiveChat, renameChat } from '../../lib/api';
 import { deleteDraft } from '../chat/assistant-ui/composer/composer-drafts.js';
+import { deleteProjectWithCleanup } from '../../lib/delete-project';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel } from '../../lib/adapters';
@@ -361,42 +361,12 @@ export const ProjectGroup = React.memo(function ProjectGroup({
     [project.id],
   );
 
-  const addToast = useToastStore((s) => s.add);
-  const removeProjectFromStore = useProjectsStore((s) => s.removeProject);
-  const setFilterProjectId = useChatsStore((s) => s.setFilterProjectId);
-
   const handleDeleteProject = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
-      const confirmed = window.confirm(
-        `Delete project "${project.name}"?\n\nThis will stop all its sessions and remove the project from the database. Files on disk are NOT affected.\n\nThis cannot be undone.`,
-      );
-      if (!confirmed) return;
-
-      try {
-        await removeProject(project.id);
-        // Clean up client-side state
-        const { filterProjectId, activeChatId, chats: allChats, setActiveChat } = useChatsStore.getState();
-        const projectChatIds = new Set(allChats.filter((c) => c.projectId === project.id).map((c) => c.id));
-        for (const chatId of projectChatIds) {
-          useChatsStore.getState().removeChat(chatId);
-          deleteDraft(chatId);
-          useTabsStore.getState().closeTab(`chat:${chatId}`);
-        }
-        if (filterProjectId === project.id) {
-          setFilterProjectId(null);
-        }
-        if (activeChatId && projectChatIds.has(activeChatId)) {
-          setActiveChat(null);
-        }
-        removeProjectFromStore(project.id);
-        addToast('success', 'Project deleted', project.name);
-      } catch (err) {
-        log.warn('delete project failed', { err: String(err) });
-        addToast('error', 'Failed to delete project', String(err));
-      }
+      await deleteProjectWithCleanup(project);
     },
-    [project.id, project.name, removeProjectFromStore, setFilterProjectId, addToast],
+    [project],
   );
 
   return (
@@ -445,7 +415,7 @@ export const ProjectGroup = React.memo(function ProjectGroup({
             <button
               type="button"
               onClick={handleDeleteProject}
-              className="w-6 h-6 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+              className="w-6 h-6 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
               aria-label={`Delete project ${project.name}`}
             >
               <Trash2 size={12} />
