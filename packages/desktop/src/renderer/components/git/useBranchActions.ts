@@ -296,7 +296,7 @@ export function useBranchActions(
         await deleteWorktree(projectId, match.path, branchName);
         toast.success(`Deleted ${label}`);
         await loadBranches();
-      });
+      }, `deleteWorktree:${worktreeDirName}`);
     },
     [projectId, loadBranches, withBusy],
   );

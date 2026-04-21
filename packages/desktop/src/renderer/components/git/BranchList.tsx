@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown, GitBranch, Star, Trash2, Plus } from 'lucide-react';
+import { ChevronRight, ChevronDown, GitBranch, Star, Trash2, Plus, Loader2 } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -18,6 +18,7 @@ interface BranchListProps {
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
   onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
   onNewSession?: (worktreeDirName: string, branchName: string | undefined) => void;
+  busyAction?: string | null;
 }
 
 function groupBranches(branches: BranchInfo[]): { groups: BranchGroup[]; ungrouped: BranchInfo[] } {
@@ -156,6 +157,7 @@ function WorktreeSection({
   onSelectBranch,
   onDeleteWorktree,
   onNewSession,
+  busyAction,
 }: {
   name: string;
   branches: BranchInfo[];
@@ -163,9 +165,11 @@ function WorktreeSection({
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
   onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
   onNewSession?: (worktreeDirName: string, branchName: string | undefined) => void;
+  busyAction?: string | null;
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
   const branchName = branches[0]?.name;
+  const isDeleting = busyAction === `deleteWorktree:${name}`;
 
   return (
     <>
@@ -183,7 +187,11 @@ function WorktreeSection({
             <TooltipTrigger asChild>
               <button
                 onClick={() => onNewSession(name, branchName)}
-                className="p-1 mr-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                disabled={isDeleting}
+                className={cn(
+                  'p-1 mr-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors',
+                  isDeleting && 'opacity-40 cursor-not-allowed',
+                )}
                 aria-label={`New session on worktree ${name}`}
               >
                 <Plus size={11} />
@@ -197,13 +205,17 @@ function WorktreeSection({
             <TooltipTrigger asChild>
               <button
                 onClick={() => onDeleteWorktree(name, branchName)}
-                className="p-1 mr-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-destructive transition-colors"
+                disabled={isDeleting}
+                className={cn(
+                  'p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-destructive transition-colors',
+                  isDeleting && 'opacity-60 cursor-not-allowed',
+                )}
                 aria-label={`Delete worktree ${name}`}
               >
-                <Trash2 size={11} />
+                {isDeleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top">Delete worktree</TooltipContent>
+            <TooltipContent side="top">{isDeleting ? 'Deleting…' : 'Delete worktree'}</TooltipContent>
           </Tooltip>
         )}
       </div>
@@ -233,6 +245,7 @@ export function BranchList({
   onSelectBranch,
   onDeleteWorktree,
   onNewSession,
+  busyAction,
 }: BranchListProps): React.ReactElement {
   const mainBranches = useMemo(
     () =>
@@ -317,6 +330,7 @@ export function BranchList({
           onSelectBranch={onSelectBranch}
           onDeleteWorktree={onDeleteWorktree}
           onNewSession={onNewSession}
+          busyAction={busyAction}
         />
       ))}
 
