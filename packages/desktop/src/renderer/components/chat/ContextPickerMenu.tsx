@@ -212,9 +212,11 @@ export function ContextPickerMenu({ forceOpen, onClose }: ContextPickerMenuProps
             ? `@${item.name} `
             : item.type === 'file'
               ? `@${item.path} `
-              : item.type === 'command'
-                ? `/${item.command.name} `
-                : `/${item.skill.invocationName || item.skill.name} `;
+              : item.type === 'directory'
+                ? `@${item.path}/`
+                : item.type === 'command'
+                  ? `/${item.command.name} `
+                  : `/${item.skill.invocationName || item.skill.name} `;
         const aInText = cur.match(/(?:^|\s)@(\S*)$/);
         const sInText = cur.match(/^\/(\S*)$/);
         if (aInText) {
