@@ -18,13 +18,13 @@ import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
 import { QueuedMessageBanner } from './QueuedMessageBanner';
+import { PlanModeToggle, adapterSupportsPlanMode, displayModeForDropdown } from './PlanModeToggle';
 import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
-  { id: 'plan', label: 'Plan' },
   { id: 'acceptEdits', label: 'Auto-Edits' },
   { id: 'yolo', label: 'Unattended' },
 ];
@@ -244,11 +244,31 @@ export function ComposerCard() {
   );
 
   const currentMode = chat?.permissionMode ?? 'default';
+  // Remember the last non-plan mode so we can restore it when plan is disabled.
+  // Using a ref (not state) avoids a re-render and resets on page reload, which is fine.
+  const lastNonPlanModeRef = useRef<'default' | 'acceptEdits' | 'yolo'>('default');
 
   const handleModeChange = useCallback(
     (mode: string) => {
       if (!chatId) return;
-      daemonClient.updateChatConfig(chatId, undefined, undefined, mode as 'default' | 'acceptEdits' | 'plan' | 'yolo');
+      const typedMode = mode as 'default' | 'acceptEdits' | 'plan' | 'yolo';
+      if (typedMode !== 'plan') {
+        lastNonPlanModeRef.current = typedMode;
+      }
+      daemonClient.updateChatConfig(chatId, undefined, undefined, typedMode);
+    },
+    [chatId],
+  );
+
+  const handlePlanToggle = useCallback(
+    (enable: boolean) => {
+      if (!chatId) return;
+      if (enable) {
+        daemonClient.updateChatConfig(chatId, undefined, undefined, 'plan');
+      } else {
+        const restore = lastNonPlanModeRef.current;
+        daemonClient.updateChatConfig(chatId, undefined, undefined, restore);
+      }
     },
     [chatId],
   );
@@ -389,13 +409,14 @@ export function ComposerCard() {
           <ComposerDropdown items={dropdownOptions} value={currentModel} onChange={handleModelChange} />
           <ComposerDropdown
             items={PERMISSION_MODES}
-            value={currentMode}
+            value={displayModeForDropdown(currentMode)}
             onChange={handleModeChange}
             icon={<Shield size={14} />}
-            className={
-              currentMode === 'yolo' ? 'text-mf-destructive' : currentMode === 'plan' ? 'text-mf-accent' : undefined
-            }
+            className={currentMode === 'yolo' ? 'text-mf-destructive' : undefined}
           />
+          {adapterSupportsPlanMode(currentAdapter) && (
+            <PlanModeToggle active={currentMode === 'plan'} onToggle={handlePlanToggle} />
+          )}
           {isGitProject && (
             <div className="relative">
               <Tooltip>
