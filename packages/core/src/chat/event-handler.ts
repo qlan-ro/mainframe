@@ -50,6 +50,8 @@ export class EventHandler {
     private getActiveChat: (chatId: string) => ActiveChat | undefined,
     private emitEvent: (event: DaemonEvent) => void,
     private getToolCategories: (chatId: string) => ToolCategories | undefined = () => undefined,
+    private onQueuedProcessed: (chatId: string, uuid: string) => void = () => {},
+    private onQueuedCleared: (chatId: string) => void = () => {},
   ) {}
 
   setPushService(service: PushService): void {
@@ -67,6 +69,8 @@ export class EventHandler {
       respondToPermission,
       this.displayCache,
       this.getToolCategories,
+      this.onQueuedProcessed,
+      this.onQueuedCleared,
       this.pushService,
     );
   }
@@ -93,6 +97,8 @@ function buildSessionSink(
   _respondToPermission: (response: ControlResponse) => Promise<void>,
   displayCache: Map<string, DisplayMessage[]>,
   getToolCategories: (chatId: string) => ToolCategories | undefined,
+  onQueuedProcessedCb: (chatId: string, uuid: string) => void,
+  onQueuedClearedCb: (chatId: string) => void,
   pushService?: PushService,
 ): SessionSink {
   function emitDisplay(): void {
@@ -279,42 +285,49 @@ function buildSessionSink(
           .catch((err) => log.warn({ err }, 'push notification failed'));
       }
 
-      // Clear queued badges on turn completion — the CLI has processed all queued
-      // messages by this point. We can't rely on isReplay events in stream-json mode.
-      const allMsgs = messages.get(chatId);
-      if (allMsgs) {
-        let cleared = false;
-        for (const msg of allMsgs) {
-          if (msg.metadata?.queued) {
-            delete (msg.metadata as Record<string, unknown>).queued;
-            delete (msg.metadata as Record<string, unknown>).uuid;
-            cleared = true;
-          }
-        }
-        if (cleared) {
-          emitDisplay();
-          emitEvent({ type: 'message.queued.cleared', chatId });
-        }
-      }
+      // Per-queued-uuid cleanup happens in onQueuedProcessed (driven by the
+      // CLI's isReplay acks under --replay-user-messages). Don't bulk-clear
+      // on turn completion — that strips metadata.queued from messages the
+      // CLI hasn't dequeued yet.
     },
 
     onQueuedProcessed(uuid: string) {
       const msgs = messages.get(chatId);
-      if (!msgs) return;
-      const msg = msgs.find((m) => m.metadata?.uuid === uuid);
-      if (!msg) return;
-      if (msg.metadata) {
+      const msg = msgs?.find((m) => m.metadata?.uuid === uuid);
+      if (msg?.metadata) {
         delete (msg.metadata as Record<string, unknown>).queued;
         delete (msg.metadata as Record<string, unknown>).uuid;
+        emitDisplay();
       }
-      emitDisplay();
       emitEvent({ type: 'message.queued.processed', chatId, uuid });
+      onQueuedProcessedCb(chatId, uuid);
     },
 
     onExit(_code: number | null) {
       const active = getActiveChat(chatId);
       const sessionId = active?.session?.id ?? '';
       log.debug({ sessionId, chatId }, 'session exited');
+
+      // Any messages still flagged as queued are stranded — the CLI process
+      // is gone and will never emit an isReplay ack for them. Clear here so
+      // the composer banner and the daemon's queuedRefs don't leak.
+      const cachedMsgs = messages.get(chatId);
+      let hadQueued = false;
+      if (cachedMsgs) {
+        for (const msg of cachedMsgs) {
+          if (msg.metadata?.queued) {
+            delete (msg.metadata as Record<string, unknown>).queued;
+            delete (msg.metadata as Record<string, unknown>).uuid;
+            hadQueued = true;
+          }
+        }
+      }
+      if (hadQueued) {
+        emitDisplay();
+        emitEvent({ type: 'message.queued.cleared', chatId });
+      }
+      onQueuedClearedCb(chatId);
+
       if (active) {
         active.chat.processState = null;
         db.chats.update(chatId, { processState: null });

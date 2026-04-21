@@ -63,6 +63,8 @@ export class ChatManager {
         const adapter = chat ? this.adapters.get(chat.adapterId) : undefined;
         return adapter?.getToolCategories?.();
       },
+      (chatId, uuid) => this.handleQueuedProcessed(chatId, uuid),
+      (chatId) => this.clearAllQueuedForChat(chatId),
     );
     this.planMode = new PlanModeHandler({
       permissions: this.permissions,
@@ -363,6 +365,25 @@ export class ChatManager {
     if (!ref) return;
     this.queuedRefs.delete(uuid);
     logger.info({ chatId, uuid, messageId: ref.messageId }, 'CLI processed queued message');
+  }
+
+  /** Return all queued refs for a chat, oldest-first. */
+  getQueuedForChat(chatId: string): QueuedMessageRef[] {
+    return [...this.queuedRefs.values()].filter((r) => r.chatId === chatId);
+  }
+
+  /** Drop every queuedRef belonging to a chat. Called when the CLI process exits. */
+  clearAllQueuedForChat(chatId: string): void {
+    let removed = 0;
+    for (const [uuid, ref] of this.queuedRefs) {
+      if (ref.chatId === chatId) {
+        this.queuedRefs.delete(uuid);
+        removed++;
+      }
+    }
+    if (removed > 0) {
+      logger.info({ chatId, removed }, 'cleared queued refs for exited chat');
+    }
   }
 
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
