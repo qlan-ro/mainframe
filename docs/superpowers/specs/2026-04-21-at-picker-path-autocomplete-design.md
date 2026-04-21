@@ -61,9 +61,11 @@ Backspace only deletes characters. Directory context only changes when the user 
 
 ### Absolute paths, `..`, `~`
 
-- Absolute paths (`@/Users/...`) are treated as project-rooted. `resolveAndValidatePath` in `handleTree` already rejects anything outside the project root; the picker just lets the request fail and shows an empty result.
-- `..` is allowed inside the token but stops at the project root (same guard). Users can type `@../` but it won't escape the project.
-- `~` is not supported. Typing it yields no tree results — acceptable since this is a project-scoped picker.
+- Absolute paths (`@/Users/...`) and home paths (`@~/Documents/...`) now **switch the picker to filesystem-browse mode**. Tree calls target the `browseFilesystem` endpoint instead of `getFileTree`.
+- `@/` means **filesystem root**, not project root. To reference project-root files use `@filename` (fuzzy) or `@subdir/` (project tree).
+- `..` is allowed inside project-relative tokens but stops at the project root via `resolveAndValidatePath`.
+- Filesystem mode honours `IGNORED_DIRS` (no `.git/`, `node_modules/` etc.) but **shows hidden files/dirs** (`.config/`, `.ssh/`) — matches terminal autocomplete.
+- Committed mentions in filesystem mode carry the absolute path; the CLI agent reads from that path directly.
 
 ### Hidden & binary files
 
