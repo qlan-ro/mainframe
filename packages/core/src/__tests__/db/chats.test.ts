@@ -447,6 +447,20 @@ describe('ChatsRepository', () => {
     });
   });
 
+  describe('planMode', () => {
+    it('reads and writes planMode', () => {
+      const chat = chats.create(projectId, 'claude');
+      expect(chat.planMode).toBe(false);
+
+      chats.update(chat.id, { planMode: true });
+      const reread = chats.get(chat.id)!;
+      expect(reread.planMode).toBe(true);
+
+      chats.update(chat.id, { planMode: false });
+      expect(chats.get(chat.id)!.planMode).toBe(false);
+    });
+  });
+
   describe('processState', () => {
     it('defaults to null', () => {
       const chat = chats.create(projectId, 'claude');
