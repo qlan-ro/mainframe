@@ -19,6 +19,7 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
     totalCost: 0,
     totalTokensInput: 0,
     totalTokensOutput: 0,
+    lastContextTokensInput: 0,
     ...overrides,
   };
 }
