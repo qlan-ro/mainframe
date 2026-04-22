@@ -74,7 +74,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
               type="checkbox"
               checked={config.systemPrompt === 'enabled'}
               onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : '' })}
-              className="h-3.5 w-3.5 accent-mf-accent"
+              className="h-4 w-4 accent-mf-accent m-0"
             />
           </span>
           <div className="flex-1">
@@ -92,7 +92,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
                 type="checkbox"
                 checked={config.defaultPlanMode === 'true'}
                 onChange={(e) => update({ defaultPlanMode: e.target.checked ? 'true' : 'false' })}
-                className="h-3.5 w-3.5 accent-mf-accent"
+                className="h-4 w-4 accent-mf-accent m-0"
               />
             </span>
             <div className="flex-1">
@@ -127,7 +127,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
                   name={`${adapterId}-mode`}
                   checked={(config.defaultMode ?? 'default') === mode.id}
                   onChange={() => update({ defaultMode: mode.id })}
-                  className={`h-3.5 w-3.5 ${mode.danger ? 'accent-mf-destructive' : 'accent-mf-accent'}`}
+                  className={`h-4 w-4 m-0 ${mode.danger ? 'accent-mf-destructive' : 'accent-mf-accent'}`}
                 />
               </span>
               <div className="flex-1">
