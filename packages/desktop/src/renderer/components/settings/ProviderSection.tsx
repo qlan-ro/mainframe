@@ -66,21 +66,44 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
         </div>
       )}
 
-      {/* System Prompt */}
-      <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
-        <input
-          type="checkbox"
-          checked={config.systemPrompt === 'enabled'}
-          onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : '' })}
-          className="mt-0.5 accent-mf-accent"
-        />
-        <div>
-          <span className="text-mf-small text-mf-text-primary">Enforce AskUserQuestion for agent questions</span>
-          <p className="text-mf-status text-mf-text-secondary">
-            Instructs the agent to use the interactive AskUserQuestion tool instead of asking in plain text.
-          </p>
-        </div>
-      </label>
+      {/* Toggles */}
+      <div className="space-y-1">
+        <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
+          <span className="flex items-center h-[18px] shrink-0">
+            <input
+              type="checkbox"
+              checked={config.systemPrompt === 'enabled'}
+              onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : '' })}
+              className="h-3.5 w-3.5 accent-mf-accent"
+            />
+          </span>
+          <div className="flex-1">
+            <span className="text-mf-small text-mf-text-primary">Enforce AskUserQuestion for agent questions</span>
+            <p className="text-mf-status text-mf-text-secondary">
+              Instructs the agent to use the interactive AskUserQuestion tool instead of asking in plain text.
+            </p>
+          </div>
+        </label>
+
+        {adapter?.capabilities.planMode && (
+          <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
+            <span className="flex items-center h-[18px] shrink-0">
+              <input
+                type="checkbox"
+                checked={config.defaultPlanMode === 'true'}
+                onChange={(e) => update({ defaultPlanMode: e.target.checked ? 'true' : 'false' })}
+                className="h-3.5 w-3.5 accent-mf-accent"
+              />
+            </span>
+            <div className="flex-1">
+              <span className="text-mf-small text-mf-text-primary">Start in Plan Mode</span>
+              <p className="text-mf-status text-mf-text-secondary">
+                New chats begin with plan mode enabled. You can toggle it off mid-session.
+              </p>
+            </div>
+          </label>
+        )}
+      </div>
 
       {/* Default Model — picking "Default" delegates to the CLI's own default (e.g. Opus 4.7 on Max). */}
       <ModelDropdown
@@ -98,14 +121,16 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
               key={mode.id}
               className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors"
             >
-              <input
-                type="radio"
-                name={`${adapterId}-mode`}
-                checked={(config.defaultMode ?? 'default') === mode.id}
-                onChange={() => update({ defaultMode: mode.id })}
-                className={`mt-0.5 ${mode.danger ? 'accent-mf-destructive' : 'accent-mf-accent'}`}
-              />
-              <div>
+              <span className="flex items-center h-[18px] shrink-0">
+                <input
+                  type="radio"
+                  name={`${adapterId}-mode`}
+                  checked={(config.defaultMode ?? 'default') === mode.id}
+                  onChange={() => update({ defaultMode: mode.id })}
+                  className={`h-3.5 w-3.5 ${mode.danger ? 'accent-mf-destructive' : 'accent-mf-accent'}`}
+                />
+              </span>
+              <div className="flex-1">
                 <span className={`text-mf-small ${mode.danger ? 'text-mf-destructive' : 'text-mf-text-primary'}`}>
                   {mode.label}
                 </span>
@@ -115,23 +140,6 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
           ))}
         </div>
       </div>
-
-      {adapter?.capabilities.planMode && (
-        <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
-          <input
-            type="checkbox"
-            checked={config.defaultPlanMode === 'true'}
-            onChange={(e) => update({ defaultPlanMode: e.target.checked ? 'true' : 'false' })}
-            className="mt-0.5 accent-mf-accent"
-          />
-          <div>
-            <span className="text-mf-small text-mf-text-primary">Start in Plan Mode</span>
-            <p className="text-mf-status text-mf-text-secondary">
-              New chats begin with plan mode enabled. You can toggle it off mid-session.
-            </p>
-          </div>
-        </label>
-      )}
     </div>
   );
 }
