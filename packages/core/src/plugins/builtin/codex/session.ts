@@ -258,7 +258,7 @@ export class CodexSession implements AdapterSession {
     this.pendingPermissionMode = mode;
   }
 
-  setPlanMode(on: boolean): void {
+  async setPlanMode(on: boolean): Promise<void> {
     this.pendingPlanMode = on;
   }
 

@@ -244,17 +244,11 @@ export function ComposerCard() {
   );
 
   const currentMode = chat?.permissionMode ?? 'default';
-  // Remember the last non-plan mode so we can restore it when plan is disabled.
-  // Using a ref (not state) avoids a re-render and resets on page reload, which is fine.
-  const lastNonPlanModeRef = useRef<'default' | 'acceptEdits' | 'yolo'>('default');
 
   const handleModeChange = useCallback(
     (mode: string) => {
       if (!chatId) return;
-      const typedMode = mode as 'default' | 'acceptEdits' | 'plan' | 'yolo';
-      if (typedMode !== 'plan') {
-        lastNonPlanModeRef.current = typedMode;
-      }
+      const typedMode = mode as 'default' | 'acceptEdits' | 'yolo';
       daemonClient.updateChatConfig(chatId, undefined, undefined, typedMode);
     },
     [chatId],
@@ -263,12 +257,7 @@ export function ComposerCard() {
   const handlePlanToggle = useCallback(
     (enable: boolean) => {
       if (!chatId) return;
-      if (enable) {
-        daemonClient.updateChatConfig(chatId, undefined, undefined, 'plan');
-      } else {
-        const restore = lastNonPlanModeRef.current;
-        daemonClient.updateChatConfig(chatId, undefined, undefined, restore);
-      }
+      daemonClient.updateChatConfig(chatId, undefined, undefined, undefined, enable);
     },
     [chatId],
   );

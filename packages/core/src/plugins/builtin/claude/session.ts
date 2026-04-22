@@ -83,6 +83,10 @@ export class ClaudeSession implements AdapterSession {
   /** Mutable internal state — readable by claude-events.ts and tests. */
   readonly state: ClaudeSessionState;
 
+  /** Last non-plan permission mode seen at spawn time. Used by setPlanMode(off)
+   *  to restore the original mode when plan is toggled off. */
+  private basePermissionMode: string = 'default';
+
   private readonly resumeSessionId: string | undefined;
   private readonly onExit: (() => void) | undefined;
 
@@ -143,11 +147,10 @@ export class ClaudeSession implements AdapterSession {
 
     if (this.resumeSessionId) args.push('--resume', this.resumeSessionId);
     if (options.model) args.push('--model', options.model);
-    const cliMode = options.planMode
-      ? 'plan'
-      : options.permissionMode === 'yolo'
-        ? 'bypassPermissions'
-        : (options.permissionMode ?? 'default');
+    // Remember the base (non-plan) mode so setPlanMode(false) can restore it.
+    const baseMode = options.permissionMode === 'yolo' ? 'bypassPermissions' : (options.permissionMode ?? 'default');
+    this.basePermissionMode = baseMode;
+    const cliMode = options.planMode ? 'plan' : baseMode;
     args.push('--permission-mode', cliMode, '--allow-dangerously-skip-permissions');
 
     const executable = options.executablePath || 'claude';
@@ -269,12 +272,21 @@ export class ClaudeSession implements AdapterSession {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const cliMode = mode === 'yolo' ? 'bypassPermissions' : mode;
+    // Track non-plan modes so setPlanMode(false) can restore whatever the user
+    // last picked (default/acceptEdits/bypassPermissions).
+    if (cliMode !== 'plan') {
+      this.basePermissionMode = cliMode;
+    }
     const payload = {
       type: 'control_request',
       request_id: crypto.randomUUID(),
       request: { subtype: 'set_permission_mode', mode: cliMode },
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
+  }
+
+  async setPlanMode(on: boolean): Promise<void> {
+    await this.setPermissionMode(on ? 'plan' : this.basePermissionMode);
   }
 
   async setModel(model: string): Promise<void> {

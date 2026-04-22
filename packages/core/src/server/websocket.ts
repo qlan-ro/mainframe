@@ -125,7 +125,13 @@ export class WebSocketManager {
       }
 
       case 'chat.updateConfig': {
-        await this.chats.updateChatConfig(event.chatId, event.adapterId, event.model, event.permissionMode);
+        await this.chats.updateChatConfig(
+          event.chatId,
+          event.adapterId,
+          event.model,
+          event.permissionMode,
+          event.planMode,
+        );
         break;
       }
 

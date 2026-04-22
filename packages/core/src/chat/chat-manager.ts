@@ -157,8 +157,9 @@ export class ChatManager {
     adapterId?: string,
     model?: string,
     permissionMode?: Chat['permissionMode'],
+    planMode?: boolean,
   ): Promise<void> {
-    return this.configManager.updateChatConfig(chatId, adapterId, model, permissionMode);
+    return this.configManager.updateChatConfig(chatId, adapterId, model, permissionMode, planMode);
   }
 
   async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
