@@ -18,7 +18,8 @@ export class ClaudePlanModeHandler implements PlanModeActionHandler {
 
   async onApproveAndClearContext(response: ControlResponse, ctx: PlanActionContext): Promise<void> {
     const exec = (response.executionMode ?? 'default') as 'default' | 'acceptEdits' | 'yolo';
-    const plan = (response.updatedInput as Record<string, unknown> | undefined)?.plan as string | undefined;
+    const planRaw = response.updatedInput?.plan;
+    const plan = typeof planRaw === 'string' ? planRaw : undefined;
 
     const recoveredPlanPath = extractLatestPlanFileFromMessages(ctx.messages.get(ctx.chatId) ?? []);
     if (recoveredPlanPath && ctx.db.chats.addPlanFile(ctx.chatId, recoveredPlanPath)) {
