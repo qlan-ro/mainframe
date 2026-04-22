@@ -8,17 +8,34 @@ const log = createChildLogger('codex:approvals');
 
 export type RespondFn = (id: RequestId, result: unknown) => void;
 
+interface PlanContext {
+  planMode: boolean;
+  currentTurnPlan: { id: string; text: string } | null;
+}
+
 interface PendingApproval {
   mainframeRequestId: string;
   jsonRpcId: RequestId;
   respond: RespondFn;
   method: string;
+  /**
+   * For `item/tool/requestUserInput`, the rendered option labels — one inner
+   * array per option group in the order emitted by Codex. Task 9's plan-mode
+   * handler prefix-matches the user's Approve/Deny choice against these to
+   * derive a Codex option index.
+   */
+  optionLabels?: string[][];
 }
 
 export class ApprovalHandler {
   private pending = new Map<string, PendingApproval>();
+  private planContext: PlanContext = { planMode: false, currentTurnPlan: null };
 
   constructor(private readonly sink: SessionSink) {}
+
+  setPlanContext(ctx: PlanContext): void {
+    this.planContext = ctx;
+  }
 
   handleRequest(method: string, params: unknown, jsonRpcId: RequestId, respond: RespondFn): void {
     const mainframeRequestId = nanoid();
@@ -26,6 +43,7 @@ export class ApprovalHandler {
     let toolName: string;
     let toolUseId: string;
     let input: Record<string, unknown>;
+    let optionLabels: string[][] | undefined;
 
     if (method === 'item/commandExecution/requestApproval') {
       const p = params as CommandExecutionApprovalParams;
@@ -39,15 +57,39 @@ export class ApprovalHandler {
       input = { reason: p.reason };
     } else if (method === 'item/tool/requestUserInput') {
       const p = params as {
-        threadId: string;
-        turnId: string;
-        itemId: string;
-        questions: Array<{ id: string; question: string }>;
+        threadId?: string;
+        turnId?: string;
+        itemId?: string;
+        toolCallId?: string;
+        questions: Array<{ id: string; question: string } | string>;
+        options?: Array<Array<{ label: string; description?: string }>>;
       };
-      toolName = 'AskUserQuestion';
-      toolUseId = p.itemId;
-      const questionText = p.questions.map((q) => q.question).join('\n');
-      input = { question: questionText, questions: p.questions };
+      toolUseId = p.toolCallId ?? p.itemId ?? mainframeRequestId;
+
+      const rawOptions = Array.isArray(p.options) ? p.options : undefined;
+      optionLabels = rawOptions?.map((group) =>
+        Array.isArray(group) ? group.map((o) => (typeof o?.label === 'string' ? o.label : '')) : [],
+      );
+
+      const isPlanExit =
+        this.planContext.planMode &&
+        this.planContext.currentTurnPlan !== null &&
+        Array.isArray(rawOptions) &&
+        rawOptions.length === 2;
+
+      if (isPlanExit) {
+        toolName = 'ExitPlanMode';
+        input = { plan: this.planContext.currentTurnPlan!.text, allowedPrompts: [] };
+      } else {
+        toolName = 'AskUserQuestion';
+        const questionText = Array.isArray(p.questions)
+          ? p.questions
+              .map((q) => (typeof q === 'string' ? q : (q?.question ?? '')))
+              .filter((t) => t.length > 0)
+              .join('\n')
+          : '';
+        input = { question: questionText, questions: p.questions, options: rawOptions };
+      }
     } else {
       log.warn({ method }, 'codex: unknown server request method');
       respond(jsonRpcId, { decision: 'decline' as ApprovalDecision });
@@ -62,7 +104,7 @@ export class ApprovalHandler {
       suggestions: [],
     };
 
-    this.pending.set(mainframeRequestId, { mainframeRequestId, jsonRpcId, respond, method });
+    this.pending.set(mainframeRequestId, { mainframeRequestId, jsonRpcId, respond, method, optionLabels });
 
     log.info({ mainframeRequestId, jsonRpcId, toolName, toolUseId }, 'codex approval request');
     this.sink.onPermission(request);

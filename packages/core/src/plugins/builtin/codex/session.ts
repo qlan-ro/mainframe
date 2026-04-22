@@ -67,6 +67,7 @@ export class CodexSession implements AdapterSession {
 
   private pendingModel: string | undefined;
   private pendingPermissionMode: string = 'default';
+  private pendingPlanMode: boolean = false;
   private pid = 0;
   private status: 'starting' | 'ready' | 'running' | 'stopped' | 'error' = 'starting';
 
@@ -98,6 +99,7 @@ export class CodexSession implements AdapterSession {
     this.sink = sink ?? nullSink;
     this.pendingModel = options.model;
     this.pendingPermissionMode = options.permissionMode ?? 'default';
+    this.pendingPlanMode = options.planMode ?? false;
 
     try {
       accessSync(this.projectPath);
@@ -126,6 +128,10 @@ export class CodexSession implements AdapterSession {
     this.client = new JsonRpcClient(child, {
       onNotification: (method, params) => handleNotification(method, params, this.sink, this.state),
       onRequest: (method, params, id) => {
+        approvalHandler.setPlanContext({
+          planMode: this.pendingPlanMode,
+          currentTurnPlan: this.state.currentTurnPlan,
+        });
         approvalHandler.handleRequest(method, params, id, (rpcId, result) => {
           this.client?.respond(rpcId, result);
         });
@@ -250,6 +256,10 @@ export class CodexSession implements AdapterSession {
 
   async setPermissionMode(mode: string): Promise<void> {
     this.pendingPermissionMode = mode;
+  }
+
+  setPlanMode(on: boolean): void {
+    this.pendingPlanMode = on;
   }
 
   async sendCommand(_command: string, _args?: string): Promise<void> {
