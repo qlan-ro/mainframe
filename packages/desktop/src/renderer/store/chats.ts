@@ -114,7 +114,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
       next.delete(chatId);
       return { unreadChatIds: next };
     }),
-  setChats: (chats) => set({ chats }),
+  setChats: (chats) => set({ chats: sortChats([...chats]) }),
   setFilterProjectId: (id) => {
     if (id) {
       localStorage.setItem('mf:filterProjectId', id);
