@@ -86,7 +86,9 @@ export function useAppInit(): void {
 
           // Restore active chat from localStorage
           const lastChatId = localStorage.getItem('mf:activeChatId');
+          let restoredChat: (typeof chatsList)[number] | undefined;
           if (lastChatId && chatsList.some((c) => c.id === lastChatId)) {
+            restoredChat = chatsList.find((c) => c.id === lastChatId);
             useChatsStore.getState().setActiveChat(lastChatId);
             daemonClient.subscribe(lastChatId);
           } else if (chatsList.length > 0) {
@@ -94,10 +96,21 @@ export function useAppInit(): void {
             const sorted = [...chatsList].sort(
               (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
             );
-            const mostRecent = sorted[0]!;
-            useChatsStore.getState().setActiveChat(mostRecent.id);
-            useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
-            daemonClient.subscribe(mostRecent.id);
+            restoredChat = sorted[0]!;
+            useChatsStore.getState().setActiveChat(restoredChat.id);
+            useTabsStore.getState().openChatTab(restoredChat.id, restoredChat.title);
+            daemonClient.subscribe(restoredChat.id);
+          }
+
+          // Keep the project badge in sync with the restored active chat.
+          // If the persisted filterProjectId disagrees with the active chat's
+          // project (e.g. user reloaded after switching chats without clicking
+          // the badge), update the filter so both stay consistent.
+          if (restoredChat) {
+            const { filterProjectId, setFilterProjectId } = useChatsStore.getState();
+            if (filterProjectId !== null && filterProjectId !== restoredChat.projectId) {
+              setFilterProjectId(restoredChat.projectId);
+            }
           }
         } else {
           log.warn('chat fetch failed', { err: String(chatsResult.reason) });
