@@ -30,7 +30,8 @@ export interface SessionOptions {
 
 export interface SessionSpawnOptions {
   model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
+  permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+  planMode?: boolean;
   executablePath?: string;
   systemPrompt?: string;
 }
@@ -187,6 +188,9 @@ export interface ExternalSession {
 export interface Adapter {
   id: string;
   name: string;
+  readonly capabilities: {
+    planMode: boolean;
+  };
 
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
