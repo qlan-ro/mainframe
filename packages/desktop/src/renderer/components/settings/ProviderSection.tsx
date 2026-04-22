@@ -17,6 +17,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
   const config = useSettingsStore((s) => s.providers[adapterId] ?? EMPTY_CONFIG);
   const setProviderConfig = useSettingsStore((s) => s.setProviderConfig);
   const adapters = useAdaptersStore((s) => s.adapters);
+  const adapter = adapters.find((entry) => entry.id === adapterId);
   const models = getModelOptions(adapterId, adapters);
   const [conflicts, setConflicts] = useState<string[]>([]);
 
@@ -114,6 +115,23 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
           ))}
         </div>
       </div>
+
+      {adapter?.capabilities.planMode && (
+        <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
+          <input
+            type="checkbox"
+            checked={config.defaultPlanMode === 'true'}
+            onChange={(e) => update({ defaultPlanMode: e.target.checked ? 'true' : 'false' })}
+            className="mt-0.5 accent-mf-accent"
+          />
+          <div>
+            <span className="text-mf-small text-mf-text-primary">Start in Plan Mode</span>
+            <p className="text-mf-status text-mf-text-secondary">
+              New chats begin with plan mode enabled. You can toggle it off mid-session.
+            </p>
+          </div>
+        </label>
+      )}
     </div>
   );
 }

@@ -159,6 +159,9 @@ export interface AdapterInfo {
   installed: boolean;
   version?: string;
   models: AdapterModel[];
+  capabilities: {
+    planMode: boolean;
+  };
 }
 
 export interface AdapterModel {

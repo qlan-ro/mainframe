@@ -18,7 +18,7 @@ import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
 import { QueuedMessageBanner } from './QueuedMessageBanner';
-import { PlanModeToggle, adapterSupportsPlanMode, displayModeForDropdown } from './PlanModeToggle';
+import { PlanModeToggle } from './PlanModeToggle';
 import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip';
@@ -216,6 +216,7 @@ export function ComposerCard() {
   }, [chat?.projectId]);
 
   const currentAdapter = chat?.adapterId ?? 'claude';
+  const currentAdapterInfo = adapters.find((adapter) => adapter.id === currentAdapter);
   const adapterOptions = getAdapterOptions(adapters);
   const modelOptions = getModelOptions(currentAdapter, adapters);
   const currentModel = chat?.model ?? modelOptions[0]?.id ?? '';
@@ -398,13 +399,13 @@ export function ComposerCard() {
           <ComposerDropdown items={dropdownOptions} value={currentModel} onChange={handleModelChange} />
           <ComposerDropdown
             items={PERMISSION_MODES}
-            value={displayModeForDropdown(currentMode)}
+            value={currentMode}
             onChange={handleModeChange}
             icon={<Shield size={14} />}
             className={currentMode === 'yolo' ? 'text-mf-destructive' : undefined}
           />
-          {adapterSupportsPlanMode(currentAdapter) && (
-            <PlanModeToggle active={currentMode === 'plan'} onToggle={handlePlanToggle} />
+          {currentAdapterInfo?.capabilities.planMode && (
+            <PlanModeToggle active={chat?.planMode === true} onToggle={handlePlanToggle} />
           )}
           {isGitProject && (
             <div className="relative">

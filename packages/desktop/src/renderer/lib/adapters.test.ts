@@ -10,6 +10,7 @@ describe('adapters model metadata', () => {
       description: 'Claude adapter',
       installed: true,
       version: '1.0.0',
+      capabilities: { planMode: true },
       models: [
         { id: 'claude-opus-4-6', label: 'Opus 4.6', contextWindow: 200_000 },
         { id: 'claude-opus-4-5-20251101', label: 'Opus 4.5', contextWindow: 200_000 },
