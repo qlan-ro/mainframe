@@ -342,7 +342,7 @@ export class CodexSession implements AdapterSession {
   }
 
   private buildCollaborationMode(): CollaborationMode {
-    const mode = this.pendingPermissionMode === 'plan' ? 'plan' : 'default';
+    const mode = this.pendingPlanMode ? 'plan' : 'default';
     return {
       mode,
       settings: {
