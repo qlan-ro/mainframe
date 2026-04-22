@@ -219,4 +219,13 @@ export interface Adapter {
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
   listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
+
+  /**
+   * Factory for an adapter-specific plan-mode action handler.
+   *
+   * Returns `unknown` here to avoid a core→types dependency cycle — core casts
+   * the result to `PlanModeActionHandler` (defined in
+   * `packages/core/src/chat/plan-mode-actions.ts`).
+   */
+  createPlanModeHandler?(): unknown;
 }

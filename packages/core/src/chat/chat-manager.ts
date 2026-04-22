@@ -70,6 +70,7 @@ export class ChatManager {
       permissions: this.permissions,
       messages: this.messages,
       db: this.db,
+      adapters: this.adapters,
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       emitEvent: (event) => this.emitEvent(event),
       clearDisplayCache: (chatId) => this.eventHandler.clearDisplayCache(chatId),
