@@ -91,6 +91,9 @@ export function initializeSchema(db: Database.Database): void {
   if (!cols.some((c) => c.name === 'pinned')) {
     db.exec('ALTER TABLE chats ADD COLUMN pinned INTEGER DEFAULT 0');
   }
+  if (!cols.some((c) => c.name === 'effort')) {
+    db.exec('ALTER TABLE chats ADD COLUMN effort TEXT');
+  }
 
   const projectCols = db.pragma('table_info(projects)') as { name: string }[];
   if (!projectCols.some((c) => c.name === 'parent_project_id')) {

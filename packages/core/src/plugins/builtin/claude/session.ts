@@ -139,6 +139,7 @@ export class ClaudeSession implements AdapterSession {
 
     if (this.resumeSessionId) args.push('--resume', this.resumeSessionId);
     if (options.model) args.push('--model', options.model);
+    if (options.effort) args.push('--effort', options.effort);
     const cliMode = options.permissionMode === 'yolo' ? 'bypassPermissions' : (options.permissionMode ?? 'default');
     args.push('--permission-mode', cliMode, '--allow-dangerously-skip-permissions');
 
@@ -174,6 +175,7 @@ export class ClaudeSession implements AdapterSession {
         resume: !!this.resumeSessionId,
         model: options.model ?? 'default',
         permissionMode: options.permissionMode ?? 'default',
+        effort: options.effort ?? null,
       },
       'claude session spawned',
     );

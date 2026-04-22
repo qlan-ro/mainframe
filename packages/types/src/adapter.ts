@@ -33,6 +33,8 @@ export interface SessionSpawnOptions {
   permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
   executablePath?: string;
   systemPrompt?: string;
+  /** Reasoning effort passed as --effort to the CLI. Only honored by adapters whose selected model supports it. */
+  effort?: import('./chat.js').ChatEffort;
 }
 
 export interface AdapterProcess {

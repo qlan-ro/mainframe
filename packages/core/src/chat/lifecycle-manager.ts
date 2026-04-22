@@ -424,7 +424,13 @@ export class ChatLifecycleManager {
     const executablePath = this.deps.db.settings.get('provider', `${chat.adapterId}.executablePath`) ?? undefined;
     const systemPrompt = this.deps.db.settings.get('provider', `${chat.adapterId}.systemPrompt`) ?? undefined;
     const processInfo = await session.spawn(
-      { model: chat.model, permissionMode: chat.permissionMode, executablePath, systemPrompt },
+      {
+        model: chat.model,
+        permissionMode: chat.permissionMode,
+        executablePath,
+        systemPrompt,
+        effort: chat.effort,
+      },
       sink,
     );
     log.info({ chatId }, 'chat session started');

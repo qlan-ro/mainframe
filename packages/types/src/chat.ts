@@ -6,6 +6,8 @@ export interface TodoItem {
   activeForm: string;
 }
 
+export type ChatEffort = 'low' | 'medium' | 'high';
+
 export interface Chat {
   id: string;
   adapterId: string;
@@ -32,6 +34,8 @@ export interface Chat {
   worktreeMissing?: boolean;
   todos?: TodoItem[];
   pinned?: boolean;
+  /** Reasoning effort for Claude adapter (gated on model.supportsEffort). Applied as --effort on CLI spawn. */
+  effort?: ChatEffort;
 }
 
 export interface Project {
