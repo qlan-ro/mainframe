@@ -179,10 +179,10 @@ describe('ChatsRepository', () => {
 
     it('updates permissionMode', () => {
       const chat = chats.create(projectId, 'claude');
-      chats.update(chat.id, { permissionMode: 'plan' });
+      chats.update(chat.id, { permissionMode: 'acceptEdits' });
 
       const fetched = chats.get(chat.id);
-      expect(fetched!.permissionMode).toBe('plan');
+      expect(fetched!.permissionMode).toBe('acceptEdits');
     });
 
     it('updates worktreePath and branchName', () => {
@@ -444,6 +444,20 @@ describe('ChatsRepository', () => {
       const fetched = chats.get(chat.id);
       expect(fetched!.worktreePath).toBe('/tmp/wt-123');
       expect(fetched!.branchName).toBe('feat/x');
+    });
+  });
+
+  describe('planMode', () => {
+    it('reads and writes planMode', () => {
+      const chat = chats.create(projectId, 'claude');
+      expect(chat.planMode).toBe(false);
+
+      chats.update(chat.id, { planMode: true });
+      const reread = chats.get(chat.id)!;
+      expect(reread.planMode).toBe(true);
+
+      chats.update(chat.id, { planMode: false });
+      expect(chats.get(chat.id)!.planMode).toBe(false);
     });
   });
 

@@ -48,4 +48,22 @@ describe('ClaudeSession spawn args', () => {
     expect(args).toContain('stream-json');
     expect(args).toContain('--output-format');
   });
+
+  it('passes --permission-mode plan when planMode=true', async () => {
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    await session.spawn({ planMode: true, permissionMode: 'acceptEdits' });
+
+    const args = spawnSpy.mock.calls[0][1] as string[];
+    expect(args).toContain('--permission-mode');
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('plan');
+  });
+
+  it('passes --permission-mode <base> when planMode=false', async () => {
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    await session.spawn({ planMode: false, permissionMode: 'acceptEdits' });
+
+    const args = spawnSpy.mock.calls[0][1] as string[];
+    expect(args).toContain('--permission-mode');
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('acceptEdits');
+  });
 });

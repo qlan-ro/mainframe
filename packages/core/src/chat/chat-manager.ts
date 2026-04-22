@@ -70,6 +70,7 @@ export class ChatManager {
       permissions: this.permissions,
       messages: this.messages,
       db: this.db,
+      adapters: this.adapters,
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       emitEvent: (event) => this.emitEvent(event),
       clearDisplayCache: (chatId) => this.eventHandler.clearDisplayCache(chatId),
@@ -84,7 +85,8 @@ export class ChatManager {
       messages: this.messages,
       permissions: this.permissions,
       emitEvent: (event) => this.emitEvent(event),
-      buildSink: (chatId, respondToPermission) => this.eventHandler.buildSink(chatId, respondToPermission),
+      buildSink: (chatId, sessionId, respondToPermission) =>
+        this.eventHandler.buildSink(chatId, sessionId, respondToPermission),
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,
@@ -156,8 +158,9 @@ export class ChatManager {
     adapterId?: string,
     model?: string,
     permissionMode?: Chat['permissionMode'],
+    planMode?: boolean,
   ): Promise<void> {
-    return this.configManager.updateChatConfig(chatId, adapterId, model, permissionMode);
+    return this.configManager.updateChatConfig(chatId, adapterId, model, permissionMode, planMode);
   }
 
   async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
