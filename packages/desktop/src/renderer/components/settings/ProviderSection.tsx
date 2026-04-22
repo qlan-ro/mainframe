@@ -69,14 +69,13 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
       {/* Toggles */}
       <div className="space-y-1">
         <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
-          <span className="flex items-center h-[18px] shrink-0">
-            <input
-              type="checkbox"
-              checked={config.systemPrompt === 'enabled'}
-              onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : '' })}
-              className="h-4 w-4 accent-mf-accent m-0"
-            />
-          </span>
+          <input
+            type="checkbox"
+            checked={config.systemPrompt === 'enabled'}
+            onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : '' })}
+            className="h-4 w-4 accent-mf-accent shrink-0 m-0"
+            style={{ marginTop: 'calc((1.125rem - 1rem) / 2)' }}
+          />
           <div className="flex-1">
             <span className="text-mf-small text-mf-text-primary">Enforce AskUserQuestion for agent questions</span>
             <p className="text-mf-status text-mf-text-secondary">
@@ -87,14 +86,13 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
 
         {adapter?.capabilities.planMode && (
           <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
-            <span className="flex items-center h-[18px] shrink-0">
-              <input
-                type="checkbox"
-                checked={config.defaultPlanMode === 'true'}
-                onChange={(e) => update({ defaultPlanMode: e.target.checked ? 'true' : 'false' })}
-                className="h-4 w-4 accent-mf-accent m-0"
-              />
-            </span>
+            <input
+              type="checkbox"
+              checked={config.defaultPlanMode === 'true'}
+              onChange={(e) => update({ defaultPlanMode: e.target.checked ? 'true' : 'false' })}
+              className="h-4 w-4 accent-mf-accent shrink-0 m-0"
+              style={{ marginTop: 'calc((1.125rem - 1rem) / 2)' }}
+            />
             <div className="flex-1">
               <span className="text-mf-small text-mf-text-primary">Start in Plan Mode</span>
               <p className="text-mf-status text-mf-text-secondary">
@@ -121,15 +119,14 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
               key={mode.id}
               className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors"
             >
-              <span className="flex items-center h-[18px] shrink-0">
-                <input
-                  type="radio"
-                  name={`${adapterId}-mode`}
-                  checked={(config.defaultMode ?? 'default') === mode.id}
-                  onChange={() => update({ defaultMode: mode.id })}
-                  className={`h-4 w-4 m-0 ${mode.danger ? 'accent-mf-destructive' : 'accent-mf-accent'}`}
-                />
-              </span>
+              <input
+                type="radio"
+                name={`${adapterId}-mode`}
+                checked={(config.defaultMode ?? 'default') === mode.id}
+                onChange={() => update({ defaultMode: mode.id })}
+                className={`h-4 w-4 shrink-0 m-0 ${mode.danger ? 'accent-mf-destructive' : 'accent-mf-accent'}`}
+                style={{ marginTop: 'calc((1.125rem - 1rem) / 2)' }}
+              />
               <div className="flex-1">
                 <span className={`text-mf-small ${mode.danger ? 'text-mf-destructive' : 'text-mf-text-primary'}`}>
                   {mode.label}
