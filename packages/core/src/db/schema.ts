@@ -100,4 +100,19 @@ export function initializeSchema(db: Database.Database): void {
   if (!projectCols.some((c) => c.name === 'parent_project_id')) {
     db.exec('ALTER TABLE projects ADD COLUMN parent_project_id TEXT REFERENCES projects(id)');
   }
+
+  const planModeSettings = db
+    .prepare("SELECT id, key FROM settings WHERE category='provider' AND key LIKE '%.defaultMode' AND value='plan'")
+    .all() as { id: string; key: string }[];
+  for (const { id, key } of planModeSettings) {
+    const now = new Date().toISOString();
+    const prefix = key.slice(0, -'.defaultMode'.length);
+    const planKey = `${prefix}.defaultPlanMode`;
+    db.prepare("UPDATE settings SET value='default', updated_at=? WHERE id=?").run(now, id);
+    db.prepare(
+      `INSERT INTO settings (id, category, key, value, updated_at)
+       VALUES (?, 'provider', ?, 'true', ?)
+       ON CONFLICT(category, key) DO UPDATE SET value='true', updated_at=excluded.updated_at`,
+    ).run(`${id}-plan`, planKey, now);
+  }
 }

@@ -39,4 +39,23 @@ describe('plan_mode column migration', () => {
     expect(rows[0]).toEqual({ id: 'c1', permission_mode: 'default', plan_mode: 1 });
     expect(rows[1]).toEqual({ id: 'c2', permission_mode: 'default', plan_mode: 0 });
   });
+
+  it("rewrites settings.defaultMode='plan' to ('default' + defaultPlanMode='true') on migration", () => {
+    db.exec(`
+      CREATE TABLE settings (id TEXT PRIMARY KEY, category TEXT, key TEXT, value TEXT, updated_at TEXT, UNIQUE(category, key));
+      INSERT INTO settings VALUES ('s1', 'provider', 'claude.defaultMode', 'plan', '2026');
+      INSERT INTO settings VALUES ('s2', 'provider', 'codex.defaultMode', 'acceptEdits', '2026');
+    `);
+
+    initializeSchema(db);
+
+    const row = db
+      .prepare("SELECT value FROM settings WHERE category='provider' AND key='claude.defaultMode'")
+      .get() as { value: string };
+    expect(row.value).toBe('default');
+    const planRow = db
+      .prepare("SELECT value FROM settings WHERE category='provider' AND key='claude.defaultPlanMode'")
+      .get() as { value: string } | undefined;
+    expect(planRow?.value).toBe('true');
+  });
 });

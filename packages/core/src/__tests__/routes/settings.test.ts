@@ -80,7 +80,8 @@ describe('settingRoutes', () => {
     it('does not override existing defaultMode with skipPermissions', () => {
       (ctx.db.settings.getByCategory as any).mockReturnValue({
         'claude.skipPermissions': 'true',
-        'claude.defaultMode': 'plan',
+        'claude.defaultMode': 'default',
+        'claude.defaultPlanMode': 'true',
       });
 
       const router = settingRoutes(ctx);
@@ -90,7 +91,8 @@ describe('settingRoutes', () => {
       handler({ params: {}, query: {} }, res, vi.fn());
 
       const call = res.json.mock.calls[0][0];
-      expect(call.data.claude.defaultMode).toBe('plan');
+      expect(call.data.claude.defaultMode).toBe('default');
+      expect(call.data.claude.defaultPlanMode).toBe('true');
     });
 
     it('skips keys without a dot separator', () => {
@@ -143,6 +145,17 @@ describe('settingRoutes', () => {
 
       expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'claude.defaultMode', 'yolo');
       expect(ctx.db.settings.delete).toHaveBeenCalledWith('provider', 'claude.skipPermissions');
+    });
+
+    it('sets defaultPlanMode', () => {
+      const router = settingRoutes(ctx);
+      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
+      const res = mockRes();
+
+      handler({ params: { adapterId: 'claude' }, query: {}, body: { defaultPlanMode: 'true' } }, res, vi.fn());
+
+      expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'claude.defaultPlanMode', 'true');
+      expect(res.json).toHaveBeenCalledWith({ success: true });
     });
 
     it('sets executablePath', () => {
