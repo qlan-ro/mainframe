@@ -179,10 +179,10 @@ describe('ChatsRepository', () => {
 
     it('updates permissionMode', () => {
       const chat = chats.create(projectId, 'claude');
-      chats.update(chat.id, { permissionMode: 'plan' });
+      chats.update(chat.id, { permissionMode: 'acceptEdits' });
 
       const fetched = chats.get(chat.id);
-      expect(fetched!.permissionMode).toBe('plan');
+      expect(fetched!.permissionMode).toBe('acceptEdits');
     });
 
     it('updates worktreePath and branchName', () => {
