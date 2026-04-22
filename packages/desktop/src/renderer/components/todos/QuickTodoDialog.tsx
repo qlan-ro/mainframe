@@ -32,8 +32,11 @@ function fileToBase64(file: File): Promise<string> {
 type QuickType = 'bug' | 'feature';
 type QuickPriority = 'low' | 'medium' | 'high';
 
+// Physical padding properties (pl-*/pr-*) are used instead of the logical px-* shorthand.
+// Chromium does not scroll <input> elements correctly to the start of text when
+// padding-inline is used — the first character ends up clipped behind the left border.
 const input = cn(
-  'bg-mf-app-bg border border-mf-border rounded-mf-input px-2 py-1.5',
+  'bg-mf-app-bg border border-mf-border rounded-mf-input pl-3 pr-3 py-1.5',
   'text-mf-small text-mf-text-primary focus:outline-none focus:border-mf-accent',
 );
 
