@@ -21,6 +21,8 @@ export function PlanModeToggle({ active, onToggle }: PlanModeToggleProps) {
           }`}
           aria-label={active ? 'Plan mode enabled — click to disable' : 'Plan mode disabled — click to enable'}
           aria-pressed={active}
+          data-testid="plan-mode-toggle"
+          data-active={active ? 'true' : 'false'}
         >
           <ClipboardList size={14} />
         </button>
