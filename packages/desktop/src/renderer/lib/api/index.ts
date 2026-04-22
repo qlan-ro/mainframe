@@ -18,6 +18,7 @@ export {
   getFilesList,
   searchFiles,
   getFileContent,
+  getExternalFileContent,
   getFileBinary,
   getPendingPermission,
   getSessionFiles,
