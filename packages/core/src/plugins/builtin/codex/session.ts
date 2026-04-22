@@ -63,7 +63,7 @@ export class CodexSession implements AdapterSession {
   private readonly onExitCallback: (() => void) | undefined;
   private readonly resumeThreadId: string | undefined;
 
-  readonly state: CodexSessionState = { threadId: null, currentTurnId: null };
+  readonly state: CodexSessionState = { threadId: null, currentTurnId: null, currentTurnPlan: null };
 
   private pendingModel: string | undefined;
   private pendingPermissionMode: string = 'default';
