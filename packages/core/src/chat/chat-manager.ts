@@ -85,7 +85,8 @@ export class ChatManager {
       messages: this.messages,
       permissions: this.permissions,
       emitEvent: (event) => this.emitEvent(event),
-      buildSink: (chatId, respondToPermission) => this.eventHandler.buildSink(chatId, respondToPermission),
+      buildSink: (chatId, sessionId, respondToPermission) =>
+        this.eventHandler.buildSink(chatId, sessionId, respondToPermission),
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,

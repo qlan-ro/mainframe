@@ -233,8 +233,22 @@ export class CodexSession implements AdapterSession {
   }
 
   async kill(): Promise<void> {
+    const client = this.client;
+    if (!client) return;
+
     this.approvalHandler?.rejectAll();
-    this.client?.close();
+    const closed = new Promise<void>((resolve) => {
+      const unsubscribe = client.onClose(() => {
+        unsubscribe();
+        resolve();
+      });
+    });
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(resolve, 3000);
+    });
+
+    client.close();
+    await Promise.race([closed, timeout]);
     this.client = null;
   }
 

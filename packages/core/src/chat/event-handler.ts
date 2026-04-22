@@ -58,9 +58,20 @@ export class EventHandler {
     this.pushService = service;
   }
 
-  buildSink(chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>): SessionSink {
+  buildSink(
+    chatId: string,
+    sessionIdOrRespondToPermission: string | ((response: ControlResponse) => Promise<void>),
+    maybeRespondToPermission?: (response: ControlResponse) => Promise<void>,
+  ): SessionSink {
+    const builtForSessionId =
+      typeof sessionIdOrRespondToPermission === 'string' ? sessionIdOrRespondToPermission : undefined;
+    const respondToPermission =
+      typeof sessionIdOrRespondToPermission === 'string' ? maybeRespondToPermission : sessionIdOrRespondToPermission;
+    if (!respondToPermission) throw new Error('respondToPermission is required');
+
     return buildSessionSink(
       chatId,
+      builtForSessionId,
       this.db,
       this.messages,
       this.permissions,
@@ -89,6 +100,7 @@ export class EventHandler {
 
 function buildSessionSink(
   chatId: string,
+  builtForSessionId: string | undefined,
   db: DatabaseManager,
   messages: MessageCache,
   permissions: PermissionManager,
@@ -137,9 +149,9 @@ function buildSessionSink(
       const hasEnterPlanMode = content.some((b: any) => b.type === 'tool_use' && b.name === 'EnterPlanMode');
       if (hasEnterPlanMode) {
         const active = getActiveChat(chatId);
-        if (active && active.chat.permissionMode !== 'plan') {
-          db.chats.update(chatId, { permissionMode: 'plan' });
-          active.chat.permissionMode = 'plan';
+        if (active && active.chat.planMode !== true) {
+          db.chats.update(chatId, { planMode: true });
+          active.chat.planMode = true;
           emitEvent({ type: 'chat.updated', chat: active.chat });
         }
       }
@@ -305,6 +317,9 @@ function buildSessionSink(
 
     onExit(_code: number | null) {
       const active = getActiveChat(chatId);
+      if (builtForSessionId && active?.session && active.session.id !== builtForSessionId) {
+        return;
+      }
       const sessionId = active?.session?.id ?? '';
       log.debug({ sessionId, chatId }, 'session exited');
 

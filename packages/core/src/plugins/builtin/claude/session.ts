@@ -206,11 +206,28 @@ export class ClaudeSession implements AdapterSession {
 
   async kill(): Promise<void> {
     const child = this.state.child;
-    if (child) {
-      log.debug({ sessionId: this.id }, 'claude session killed');
-      child.kill('SIGTERM');
-      this.state.child = null;
-    }
+    if (!child) return;
+
+    const exited = new Promise<void>((resolve) => {
+      child.once('close', () => resolve());
+    });
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        if (child.exitCode === null) {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            /* already dead */
+          }
+        }
+        resolve();
+      }, 3000);
+    });
+
+    child.kill('SIGTERM');
+    await Promise.race([exited, timeout]);
+    this.state.child = null;
+    log.debug({ sessionId: this.id }, 'claude session killed');
   }
 
   async interrupt(): Promise<void> {
