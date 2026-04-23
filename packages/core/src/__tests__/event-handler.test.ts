@@ -323,6 +323,54 @@ describe('EventHandler context.updated timing', () => {
   });
 });
 
+describe('EventHandler onSkillLoaded', () => {
+  let db: any;
+  let msgCache: MessageCache;
+  let permissions: PermissionManager;
+  let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
+  let activeChats: Map<string, any>;
+
+  const chatId = 'chat-skill-loaded';
+
+  beforeEach(() => {
+    db = {
+      chats: { update: vi.fn(), get: vi.fn(), addSkillFile: vi.fn().mockReturnValue(false) },
+      projects: { get: vi.fn() },
+      settings: { get: vi.fn() },
+    };
+    msgCache = new MessageCache();
+    permissions = new PermissionManager();
+    emitEvent = vi.fn();
+    activeChats = new Map();
+    activeChats.set(chatId, {
+      chat: { id: chatId, totalCost: 0, totalTokensInput: 0, totalTokensOutput: 0, processState: 'working' },
+      session: null,
+    });
+  });
+
+  it('emits message.added with skill_loaded content block', () => {
+    const handler = new EventHandler(db, msgCache, permissions, (id) => activeChats.get(id), emitEvent);
+    const sink: SessionSink = handler.buildSink(chatId, () => Promise.resolve());
+
+    sink.onSkillLoaded({
+      skillName: 'brainstorming',
+      path: '/home/user/.claude/skills/brainstorming/SKILL.md',
+      content: '# brainstorming\n\nThink broadly.',
+    });
+
+    const addedEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'message.added');
+    expect(addedEvents).toHaveLength(1);
+    const msg = addedEvents[0]![0].message;
+    expect(msg.type).toBe('system');
+    expect(msg.content[0]).toMatchObject({
+      type: 'skill_loaded',
+      skillName: 'brainstorming',
+      path: '/home/user/.claude/skills/brainstorming/SKILL.md',
+      content: '# brainstorming\n\nThink broadly.',
+    });
+  });
+});
+
 describe('EventHandler onPermission — yolo no longer auto-approves', () => {
   let db: any;
   let messages: MessageCache;

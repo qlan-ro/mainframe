@@ -178,7 +178,10 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
           const input = block.input as { skill?: string } | undefined;
           const skillName = input?.skill?.trim();
           if (skillName) {
-            const resolvedPath = resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache);
+            // Use the cached path from a prior user-event (more accurate), falling back to the probe.
+            const cachedPath = session.state.skillPathCache.get(skillName);
+            const resolvedPath =
+              cachedPath ?? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache);
             sink.onSkillFile({ path: resolvedPath, displayName: skillName });
           }
         }
@@ -242,7 +245,36 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       // CLI-synthesized feedback (e.g. unknown-command errors, notices) — surface as system messages.
       // Discriminator: not a replay of user-typed text AND not a CLI meta wrapper.
       if (!isReplay && !isMeta && text.trim()) {
-        sink.onCliMessage(text.trim());
+        if (text.includes('<skill-format>true</skill-format>')) {
+          // Skill injection text — parse it into a structured skill card instead of raw bubble.
+          const nameMatch = /<command-name>([^<]+)<\/command-name>/.exec(text);
+          const dirMatch = /Base directory for this skill:\s*(.+)/.exec(text);
+          const skillName = nameMatch?.[1]?.replace(/^\//, '').trim() ?? '';
+          const rawDir = dirMatch?.[1]?.trim() ?? '';
+          // Append SKILL.md if the path is a directory (no extension)
+          const resolvedPath = rawDir && !path.extname(rawDir) ? path.join(rawDir, 'SKILL.md') : rawDir;
+          // Use the path extracted from the text as primary signal; fall back to probe.
+          const finalPath =
+            resolvedPath ||
+            (skillName ? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache) : '');
+
+          // Cache the authoritative path for future tool_use lookups.
+          if (skillName && finalPath) {
+            session.state.skillPathCache.set(skillName, finalPath);
+          }
+
+          // Strip the three tag lines + base-dir line; keep remaining markdown.
+          const content = text
+            .replace(/<command-name>[^<]*<\/command-name>\n?/g, '')
+            .replace(/<skill-format>[^<]*<\/skill-format>\n?/g, '')
+            .replace(/Base directory for this skill:[^\n]*\n?/, '')
+            .trim();
+
+          sink.onSkillLoaded({ skillName, path: finalPath, content });
+          sink.onSkillFile({ path: finalPath, displayName: skillName });
+        } else {
+          sink.onCliMessage(text.trim());
+        }
       }
     }
   }

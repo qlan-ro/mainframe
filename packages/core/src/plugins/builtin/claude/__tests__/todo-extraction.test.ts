@@ -21,6 +21,7 @@ function createMockSink(): SessionSink {
     onTodoUpdate: vi.fn(),
     onPrDetected: vi.fn(),
     onCliMessage: vi.fn(),
+    onSkillLoaded: vi.fn(),
   };
 }
 

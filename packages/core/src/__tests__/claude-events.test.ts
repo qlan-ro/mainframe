@@ -25,6 +25,7 @@ function createSink(): SessionSink {
     onTodoUpdate: vi.fn(),
     onPrDetected: vi.fn(),
     onCliMessage: vi.fn(),
+    onSkillLoaded: vi.fn(),
   };
 }
 
@@ -247,6 +248,58 @@ describe('handleStdout', () => {
     handleStdout(session, Buffer.from(event + '\n'), sink);
 
     expect(sink.onSkillFile).not.toHaveBeenCalled();
+  });
+
+  // Skill-loaded card: user-event text with <skill-format>true</skill-format>
+  it('calls onSkillLoaded and onSkillFile (not onCliMessage) when user-event has skill-format tags', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const skillContent = '# brainstorming\n\nThink broadly.';
+    const text = [
+      '<command-name>brainstorming</command-name>',
+      '<skill-format>true</skill-format>',
+      'Base directory for this skill: /home/user/.claude/skills/brainstorming',
+      skillContent,
+    ].join('\n');
+
+    const event = JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'text', text }] },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).not.toHaveBeenCalled();
+    expect(sink.onSkillLoaded).toHaveBeenCalledTimes(1);
+    const loaded = (sink.onSkillLoaded as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(loaded.skillName).toBe('brainstorming');
+    expect(loaded.path).toBe('/home/user/.claude/skills/brainstorming/SKILL.md');
+    expect(loaded.content).toContain('# brainstorming');
+    expect(loaded.content).not.toContain('<command-name>');
+    expect(loaded.content).not.toContain('<skill-format>');
+    expect(loaded.content).not.toContain('Base directory for this skill:');
+
+    expect(sink.onSkillFile).toHaveBeenCalledWith({
+      path: '/home/user/.claude/skills/brainstorming/SKILL.md',
+      displayName: 'brainstorming',
+    });
+  });
+
+  it('non-skill CLI text still calls onCliMessage (not onSkillLoaded)', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'Unknown command: /typo. Did you mean /brainstorming?' }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).toHaveBeenCalledWith('Unknown command: /typo. Did you mean /brainstorming?');
+    expect(sink.onSkillLoaded).not.toHaveBeenCalled();
   });
 });
 

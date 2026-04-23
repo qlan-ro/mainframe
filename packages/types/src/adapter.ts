@@ -127,6 +127,8 @@ export interface SessionSink {
   onPrDetected(pr: DetectedPr): void;
   /** CLI-synthesized feedback text (e.g. unknown-command errors) shown as system messages. */
   onCliMessage(text: string): void;
+  /** A skill was loaded via slash-command; show a collapsible skill card instead of raw text. */
+  onSkillLoaded(entry: { skillName: string; path: string; content: string }): void;
 }
 
 export interface AdapterSession {

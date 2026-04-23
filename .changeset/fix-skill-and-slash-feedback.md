@@ -1,11 +1,16 @@
 ---
+'@qlan-ro/mainframe-types': patch
 '@qlan-ro/mainframe-core': patch
 '@qlan-ro/mainframe-desktop': patch
 ---
 
-Fix slash-command forwarding and skill detection
+Replace skill-injection grey bubble with a collapsible SkillLoadedCard
 
-- Forward unknown `/cmd` input as plain user text so the CLI handles it natively, including its own "Unknown command" error messages (Fix A)
-- Surface CLI-synthesized user text blocks (e.g. unknown-command feedback) as system messages in the chat; skip replayed user text and isMeta wrapper events (Fix B)
-- Detect model-initiated SkillTool `tool_use` blocks in assistant events and fire `onSkillFile` so the skill appears in the ContextTab (Fix C)
-- Add `onCliMessage` to `SessionSink` interface and implement it in `event-handler.ts` as a transient system message
+- Add `skill_loaded` content block type to `MessageContent` and `DisplayContent`
+- Add `onSkillLoaded` to `SessionSink`; parse skill name, path, and content from the CLI-injected user-event text (`<skill-format>true</skill-format>`)
+- Suppress `onCliMessage` for skill-injection text; emit `onSkillLoaded` + `onSkillFile` instead
+- Cache the authoritative path extracted from the text so the `Skill` tool_use branch reuses it
+- Wire `onSkillLoaded` through `event-handler.ts` as a transient system message with a `skill_loaded` block
+- Pass `skill_loaded` blocks through `display-pipeline.ts` and `convert-message.ts` via message metadata
+- Render skill messages as a `SkillLoadedCard` (collapsible, `defaultOpen={false}`) in `SystemMessage.tsx`
+- New `SkillLoadedCard.tsx`: Zap icon + `/skillName` header with path tooltip; markdown body inside `max-h-[480px]` scrollable pane

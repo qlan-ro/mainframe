@@ -421,6 +421,15 @@ function buildSessionSink(
       emitDisplay();
     },
 
+    onSkillLoaded(entry: { skillName: string; path: string; content: string }) {
+      const message = messages.createTransientMessage(chatId, 'system', [
+        { type: 'skill_loaded', skillName: entry.skillName, path: entry.path, content: entry.content },
+      ]);
+      messages.append(chatId, message);
+      emitEvent({ type: 'message.added', chatId, message });
+      emitDisplay();
+    },
+
     onError(error: Error) {
       emitEvent({ type: 'error', chatId, error: error.message });
     },
