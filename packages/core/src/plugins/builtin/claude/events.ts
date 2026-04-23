@@ -245,29 +245,39 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       // CLI-synthesized feedback (e.g. unknown-command errors, notices) — surface as system messages.
       // Discriminator: not a replay of user-typed text AND not a CLI meta wrapper.
       if (!isReplay && !isMeta && text.trim()) {
-        if (text.includes('<skill-format>true</skill-format>')) {
-          // Skill injection text — parse it into a structured skill card instead of raw bubble.
-          const nameMatch = /<command-name>([^<]+)<\/command-name>/.exec(text);
-          const dirMatch = /Base directory for this skill:\s*(.+)/.exec(text);
-          const skillName = nameMatch?.[1]?.replace(/^\//, '').trim() ?? '';
-          const rawDir = dirMatch?.[1]?.trim() ?? '';
-          // Append SKILL.md if the path is a directory (no extension)
+        // Two skill-injection shapes:
+        //   (A) <skill-format>true</skill-format> marker — model-initiated SkillTool
+        //       output + subagent skill preloads (via runAgent formatter).
+        //   (B) Text starting with "Base directory for this skill: <path>" — the
+        //       user-typed /skill-name path, which the CLI injects as a follow-up
+        //       user text block with NO skill-format tag. Authoritative path is
+        //       the first line; skill name is the last segment of the path.
+        const hasSkillFormat = text.includes('<skill-format>true</skill-format>');
+        const baseDirMatch = /^Base directory for this skill:\s*(.+?)(?:\n|$)/m.exec(text);
+        const isSkillInjection = hasSkillFormat || Boolean(baseDirMatch);
+
+        if (isSkillInjection) {
+          const nameFromTag = /<command-name>([^<]+)<\/command-name>/.exec(text)?.[1]?.replace(/^\//, '').trim();
+          const rawDir = baseDirMatch?.[1]?.trim() ?? '';
+          // Derive skill name from the path's last segment when the XML tag
+          // isn't present (shape B). For plugin skills the last segment is
+          // still the skill's short name, which is what the display expects.
+          const skillName = nameFromTag || (rawDir ? path.basename(rawDir) : '');
+          // Append SKILL.md if the path is a directory (no extension).
           const resolvedPath = rawDir && !path.extname(rawDir) ? path.join(rawDir, 'SKILL.md') : rawDir;
-          // Use the path extracted from the text as primary signal; fall back to probe.
           const finalPath =
             resolvedPath ||
             (skillName ? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache) : '');
 
-          // Cache the authoritative path for future tool_use lookups.
           if (skillName && finalPath) {
             session.state.skillPathCache.set(skillName, finalPath);
           }
 
-          // Strip the three tag lines + base-dir line; keep remaining markdown.
           const content = text
+            .replace(/<command-message>[^<]*<\/command-message>\n?/g, '')
             .replace(/<command-name>[^<]*<\/command-name>\n?/g, '')
             .replace(/<skill-format>[^<]*<\/skill-format>\n?/g, '')
-            .replace(/Base directory for this skill:[^\n]*\n?/, '')
+            .replace(/^Base directory for this skill:[^\n]*\n?/m, '')
             .trim();
 
           sink.onSkillLoaded({ skillName, path: finalPath, content });
