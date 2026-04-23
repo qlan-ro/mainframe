@@ -50,6 +50,7 @@ const nullSink: SessionSink = {
   onQueuedProcessed: () => {},
   onTodoUpdate: () => {},
   onPrDetected: () => {},
+  onCliMessage: () => {},
 };
 
 export class CodexSession implements AdapterSession {

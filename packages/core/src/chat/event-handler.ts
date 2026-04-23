@@ -414,6 +414,13 @@ function buildSessionSink(
       emitEvent({ type: 'chat.prDetected', chatId, pr });
     },
 
+    onCliMessage(text: string) {
+      const message = messages.createTransientMessage(chatId, 'system', [{ type: 'text', text }]);
+      messages.append(chatId, message);
+      emitEvent({ type: 'message.added', chatId, message });
+      emitDisplay();
+    },
+
     onError(error: Error) {
       emitEvent({ type: 'error', chatId, error: error.message });
     },

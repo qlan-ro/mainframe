@@ -19,6 +19,7 @@ function mkSink(onPermissionSpy = vi.fn()) {
     onQueuedProcessed: vi.fn(),
     onTodoUpdate: vi.fn(),
     onPrDetected: vi.fn(),
+    onCliMessage: vi.fn(),
   };
 }
 

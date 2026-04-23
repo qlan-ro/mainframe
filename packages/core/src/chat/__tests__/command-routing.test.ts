@@ -187,4 +187,25 @@ describe('ChatManager command routing', () => {
     expect(session.sendMessageCalls[0]).toBe('Hello world');
     expect(session.sendCommandCalls).toHaveLength(0);
   });
+
+  // Fix A: unknown/CLI slash commands forwarded as plain text (no sendCommand wrapping)
+  it('sends unknown slash command as plain text when no metadata is provided', async () => {
+    const { manager, session } = createManager(adapter);
+
+    await manager.sendMessage('chat-1', '/insights');
+
+    expect(session.sendMessageCalls).toHaveLength(1);
+    expect(session.sendMessageCalls[0]).toBe('/insights');
+    expect(session.sendCommandCalls).toHaveLength(0);
+  });
+
+  it('sends unknown slash command with args as plain text', async () => {
+    const { manager, session } = createManager(adapter);
+
+    await manager.sendMessage('chat-1', '/branch feature/my-feature');
+
+    expect(session.sendMessageCalls).toHaveLength(1);
+    expect(session.sendMessageCalls[0]).toBe('/branch feature/my-feature');
+    expect(session.sendCommandCalls).toHaveLength(0);
+  });
 });

@@ -3,8 +3,8 @@ import { handleStdout, handleStderr } from '../plugins/builtin/claude/events.js'
 import { ClaudeSession } from '../plugins/builtin/claude/session.js';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
 
-function createSession() {
-  return new ClaudeSession({ projectPath: '/tmp', chatId: '' });
+function createSession(projectPath = '/tmp') {
+  return new ClaudeSession({ projectPath, chatId: '' });
 }
 
 function createSink(): SessionSink {
@@ -17,8 +17,14 @@ function createSink(): SessionSink {
     onExit: vi.fn(),
     onError: vi.fn(),
     onCompact: vi.fn(),
+    onCompactStart: vi.fn(),
+    onContextUsage: vi.fn(),
     onPlanFile: vi.fn(),
     onSkillFile: vi.fn(),
+    onQueuedProcessed: vi.fn(),
+    onTodoUpdate: vi.fn(),
+    onPrDetected: vi.fn(),
+    onCliMessage: vi.fn(),
   };
 }
 
@@ -66,7 +72,84 @@ describe('handleStdout', () => {
     expect(sink.onMessage).not.toHaveBeenCalled();
   });
 
-  it('extracts skill name (not full path) from user text blocks', () => {
+  it('detects model-initiated skill from SkillTool tool_use and resolves path', async () => {
+    const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const pathMod = await import('node:path');
+
+    const projectDir = await mkdtemp(pathMod.join(tmpdir(), 'mf-skill-test-'));
+    const skillDir = pathMod.join(projectDir, '.claude', 'skills', 'brainstorming');
+    await mkdir(skillDir, { recursive: true });
+    const skillPath = pathMod.join(skillDir, 'SKILL.md');
+    await writeFile(skillPath, '# brainstorming');
+
+    try {
+      const session = createSession(projectDir);
+      const sink = createSink();
+
+      const event = JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude',
+          content: [{ type: 'tool_use', id: 'toolu_1', name: 'Skill', input: { skill: 'brainstorming' } }],
+        },
+      });
+      handleStdout(session, Buffer.from(event + '\n'), sink);
+
+      // Project-local skill file wins over user/plugin locations.
+      expect(sink.onSkillFile).toHaveBeenCalledWith({ path: skillPath, displayName: 'brainstorming' });
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to ~/.claude/skills convention when the skill file is nowhere on disk', async () => {
+    const { homedir } = await import('node:os');
+    const pathMod = await import('node:path');
+
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'assistant',
+      message: {
+        model: 'claude',
+        content: [{ type: 'tool_use', id: 'toolu_2', name: 'Skill', input: { skill: '__definitely-not-installed' } }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onSkillFile).toHaveBeenCalledWith({
+      path: pathMod.join(homedir(), '.claude', 'skills', '__definitely-not-installed', 'SKILL.md'),
+      displayName: '__definitely-not-installed',
+    });
+  });
+
+  it('does NOT fire onSkillFile for user text blocks (prose or <skill-format> tags)', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    // User-event text must NOT be a skill signal — only assistant tool_use does.
+    const event = JSON.stringify({
+      type: 'user',
+      isMeta: true,
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: '<command-name>foo</command-name>\n<skill-format>true</skill-format>\n\nBase directory for this skill: /home/user/.claude/skills/foo',
+          },
+        ],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onSkillFile).not.toHaveBeenCalled();
+  });
+
+  // Fix B: CLI-synthesized user messages (e.g. unknown-command errors)
+  it('surfaces CLI-synthesized text as onCliMessage when not isReplay and not isMeta', () => {
     const session = createSession();
     const sink = createSink();
 
@@ -77,36 +160,93 @@ describe('handleStdout', () => {
         content: [
           {
             type: 'text',
-            text: 'Base directory for this skill: /home/user/.claude/skills/brainstorming\n\n# Skill Content',
+            text: 'Unknown command: /inisights. Did you mean /insights?',
           },
         ],
       },
     });
     handleStdout(session, Buffer.from(event + '\n'), sink);
 
-    expect(sink.onSkillFile).toHaveBeenCalledWith({
-      path: '/home/user/.claude/skills/brainstorming/SKILL.md',
-      displayName: 'brainstorming',
-    });
+    expect(sink.onCliMessage).toHaveBeenCalledWith('Unknown command: /inisights. Did you mean /insights?');
   });
 
-  it('extracts skill name from rawContent string (non-array content)', () => {
+  it('skips onCliMessage when event isReplay is true', () => {
     const session = createSession();
     const sink = createSink();
 
     const event = JSON.stringify({
       type: 'user',
+      isReplay: true,
+      uuid: 'some-uuid',
       message: {
         role: 'user',
-        content: 'Base directory for this skill: /home/user/.claude/skills/my-skill\n\nSkill body here.',
+        content: [{ type: 'text', text: 'Hello from user' }],
       },
     });
     handleStdout(session, Buffer.from(event + '\n'), sink);
 
-    expect(sink.onSkillFile).toHaveBeenCalledWith({
-      path: '/home/user/.claude/skills/my-skill/SKILL.md',
-      displayName: 'my-skill',
+    expect(sink.onCliMessage).not.toHaveBeenCalled();
+  });
+
+  it('skips onCliMessage when event isMeta is true', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      isMeta: true,
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: '<local-command-caveat>skill content</local-command-caveat>' }],
+      },
     });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).not.toHaveBeenCalled();
+  });
+
+  // Fix C: SkillTool detection in assistant events
+  it('calls onSkillFile when a Skill tool_use block appears in assistant event', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_001',
+            name: 'Skill',
+            input: { skill: 'brainstorming', args: 'some args' },
+          },
+        ],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onSkillFile).toHaveBeenCalledTimes(1);
+    const call = (sink.onSkillFile as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(call.displayName).toBe('brainstorming');
+    expect(call.path).toContain('brainstorming');
+    expect(call.path).toContain('SKILL.md');
+  });
+
+  it('does not call onSkillFile when Skill tool_use has no skill name', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'toolu_002', name: 'Skill', input: {} }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onSkillFile).not.toHaveBeenCalled();
   });
 });
 

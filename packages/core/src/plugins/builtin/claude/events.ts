@@ -1,10 +1,12 @@
 import path from 'node:path';
+import { resolveSkillPath } from './skill-path.js';
 import type {
   ContextUsage,
   ControlRequest,
   ControlUpdate,
   MessageContent,
   SessionSink,
+  SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
 import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
@@ -172,6 +174,14 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
             session.state.pendingPrCreates.add(block.id as string);
           }
         }
+        if (name === 'Skill') {
+          const input = block.input as { skill?: string } | undefined;
+          const skillName = input?.skill?.trim();
+          if (skillName) {
+            const resolvedPath = resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache);
+            sink.onSkillFile({ path: resolvedPath, displayName: skillName });
+          }
+        }
       }
     }
 
@@ -191,12 +201,15 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   }
 
   // Live stream handles ONLY tool_result blocks from user events.
-  // Text/image blocks in user entries are intentionally ignored here because:
-  //   - User-typed text: already created as a ChatMessage by chat-manager.sendMessage()
-  //   - Image blocks: not surfaced in live mode (no UX for them)
+  // Text blocks in user entries are ignored when isReplay (user-typed text already created
+  // by chat-manager.sendMessage()) or when isMeta (CLI-internal command wrappers like
+  // <local-command-caveat>). Text blocks that are neither are CLI-synthesized feedback
+  // messages (e.g. "Unknown command: /foo. Did you mean /bar?") and ARE surfaced.
+  // Image blocks: not surfaced in live mode (no UX for them).
   // History loading (convertUserEntry) reconstructs these from JSONL since it
   // has no sendMessage() counterpart. See docs/plans/2026-02-17-unified-event-pipeline.md.
   // TODO(task-support): handle <task-notification> string content as TaskGroupCard
+  const isMeta = event.isMeta === true || event.is_meta === true;
   const message = event.message as { content: Array<Record<string, unknown>> } | undefined;
   if (!message?.content) return;
 
@@ -226,23 +239,11 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       }
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';
-      const skillMatch = text.match(/^Base directory for this skill: (.+)/m);
-      if (skillMatch?.[1]) {
-        const basePath = skillMatch[1].trim();
-        const skillPath = path.join(basePath, 'SKILL.md');
-        const skillName = basePath.split('/').pop() ?? basePath;
-        sink.onSkillFile({ path: skillPath, displayName: skillName });
+      // CLI-synthesized feedback (e.g. unknown-command errors, notices) — surface as system messages.
+      // Discriminator: not a replay of user-typed text AND not a CLI meta wrapper.
+      if (!isReplay && !isMeta && text.trim()) {
+        sink.onCliMessage(text.trim());
       }
-    }
-  }
-  const rawContent = (event.message as Record<string, unknown>)?.content;
-  if (typeof rawContent === 'string') {
-    const skillMatch = rawContent.match(/^Base directory for this skill: (.+)/m);
-    if (skillMatch?.[1]) {
-      const basePath = skillMatch[1].trim();
-      const skillPath = path.join(basePath, 'SKILL.md');
-      const skillName = basePath.split('/').pop() ?? basePath;
-      sink.onSkillFile({ path: skillPath, displayName: skillName });
     }
   }
 }

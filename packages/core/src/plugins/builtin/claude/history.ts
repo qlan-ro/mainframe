@@ -22,17 +22,7 @@ export function deriveModifiedFile(
   return undefined;
 }
 
-function extractSkillPathFromText(content: Array<Record<string, unknown>>): string | null {
-  for (const block of content) {
-    if (block.type !== 'text') continue;
-    const text = block.text as string;
-    const match = text.match(/^Base directory for this skill: (.+)/);
-    if (match?.[1]) {
-      return path.join(match[1].trim(), 'SKILL.md');
-    }
-  }
-  return null;
-}
+import { resolveSkillPath } from './skill-path.js';
 
 function extractToolResultContent(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -462,7 +452,15 @@ export async function extractSkillFilePaths(sessionId: string, projectPath: stri
   const { allFiles: jsonlFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
   if (jsonlFiles.length === 0) return [];
 
+  const seen = new Set<string>();
+  const cache = new Map<string, string>();
   const skillFiles: SkillFileEntry[] = [];
+  const push = (name: string): void => {
+    const trimmed = name.trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    skillFiles.push({ path: resolveSkillPath(projectPath, trimmed, cache), displayName: trimmed });
+  };
 
   for (const file of jsonlFiles) {
     const stream = createReadStream(file);
@@ -472,15 +470,14 @@ export async function extractSkillFilePaths(sessionId: string, projectPath: stri
         if (!line.trim()) continue;
         try {
           const entry = JSON.parse(line);
-          if (entry.type !== 'user' || entry.isMeta !== true) continue;
+          if (entry.type !== 'assistant') continue;
           const content = entry.message?.content;
           if (!Array.isArray(content)) continue;
-          const skillPath = extractSkillPathFromText(content);
-          if (skillPath) {
-            const segments = skillPath.split('/');
-            const file = segments.pop() ?? skillPath;
-            const displayName = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
-            skillFiles.push({ path: skillPath, displayName });
+          for (const block of content) {
+            if (block?.type === 'tool_use' && block.name === 'Skill') {
+              const skill = (block.input as { skill?: unknown } | undefined)?.skill;
+              if (typeof skill === 'string' && skill) push(skill);
+            }
           }
         } catch {
           /* skip malformed */

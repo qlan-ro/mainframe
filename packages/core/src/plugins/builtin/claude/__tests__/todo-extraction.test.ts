@@ -20,6 +20,7 @@ function createMockSink(): SessionSink {
     onQueuedProcessed: vi.fn(),
     onTodoUpdate: vi.fn(),
     onPrDetected: vi.fn(),
+    onCliMessage: vi.fn(),
   };
 }
 

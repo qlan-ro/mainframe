@@ -2,6 +2,7 @@
 // once we're confident the SDK type contract is stable. Currently using `any` to avoid
 // tight coupling to SDK internals during initial integration.
 import type { MessageContent, SessionSink, MessageMetadata, SessionResult } from '@qlan-ro/mainframe-types';
+import { resolveSkillPath } from '../claude/skill-path.js';
 
 export function mapSdkMessage(msg: any, sink: SessionSink): void {
   switch (msg.type) {
@@ -48,6 +49,13 @@ function mapAssistantMessage(msg: any, sink: SessionSink): void {
           name: block.name,
           input: block.input as Record<string, unknown>,
         });
+        if (block.name === 'Skill') {
+          const skill = (block.input as { skill?: unknown } | undefined)?.skill;
+          if (typeof skill === 'string' && skill.trim()) {
+            const name = skill.trim();
+            sink.onSkillFile({ path: resolveSkillPath(undefined, name), displayName: name });
+          }
+        }
         break;
       case 'thinking':
         content.push({ type: 'thinking', thinking: block.thinking });
@@ -105,13 +113,12 @@ function detectPlanFiles(content: string, sink: SessionSink): void {
   }
 }
 
-function detectSkillFiles(content: string, sink: SessionSink): void {
-  const skillMatch = content.match(/Base directory for this skill:\s*(.+)/);
-  if (skillMatch?.[1]) {
-    const path = skillMatch[1].trim();
-    const displayName = path.split('/').pop() ?? path;
-    sink.onSkillFile({ path, displayName });
-  }
+// No-op: SDK path detects skills from assistant tool_use blocks (name:"Skill")
+// in mapAssistantMessage, not from user tool_result content. Left as a stub
+// so the existing call sites in mapUserMessage still compile; we'll remove
+// those call sites in a follow-up if they turn out to be truly dead.
+function detectSkillFiles(_content: string, _sink: SessionSink): void {
+  /* structured detection happens in mapAssistantMessage */
 }
 
 function mapResultMessage(msg: any, sink: SessionSink): void {

@@ -125,6 +125,8 @@ export interface SessionSink {
   onQueuedProcessed(uuid: string): void;
   onTodoUpdate(todos: import('./chat.js').TodoItem[]): void;
   onPrDetected(pr: DetectedPr): void;
+  /** CLI-synthesized feedback text (e.g. unknown-command errors) shown as system messages. */
+  onCliMessage(text: string): void;
 }
 
 export interface AdapterSession {
