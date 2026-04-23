@@ -65,11 +65,15 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       domNode.style.boxSizing = 'border-box';
 
       // Pin the view-zone node width to the editor's content column so it never
-      // inflates Monaco's scrollWidth and causes the horizontal scrollbar to diverge.
-      const layoutInfo = editor.getLayoutInfo();
-      domNode.style.width = `${layoutInfo.contentWidth}px`;
+      // inflates Monaco's scrollWidth and causes the horizontal scrollbar to
+      // diverge. Leave a small gap before the vertical scrollbar — contentWidth
+      // in side-by-side diff editors can abut the scrollbar track, and without
+      // clearance the two hit-regions conflict visually and on hover.
+      const SCROLLBAR_CLEARANCE = 12;
+      const computeWidth = (info: { contentWidth: number }) => Math.max(0, info.contentWidth - SCROLLBAR_CLEARANCE);
+      domNode.style.width = `${computeWidth(editor.getLayoutInfo())}px`;
       const layoutListener = editor.onDidLayoutChange((info) => {
-        domNode.style.width = `${info.contentWidth}px`;
+        domNode.style.width = `${computeWidth(info)}px`;
       });
 
       let zoneId = '';
