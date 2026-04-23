@@ -34,12 +34,10 @@ export function SkillLoadedCard({ skillName, path, content }: SkillLoadedCardPro
   return (
     <CollapsibleToolCard defaultOpen={false} header={<SkillHeader skillName={skillName} path={path} />}>
       <div className="max-h-[480px] overflow-y-auto px-3 pb-3 pt-1">
-        <ReactMarkdown
-          className="prose prose-sm dark:prose-invert max-w-none text-mf-text-primary text-mf-body"
-          remarkPlugins={[remarkGfm]}
-        >
-          {content}
-        </ReactMarkdown>
+        {/* react-markdown dropped its className prop in v9; wrap the output instead. */}
+        <div className="prose prose-sm dark:prose-invert max-w-none text-mf-text-primary text-mf-body">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        </div>
       </div>
     </CollapsibleToolCard>
   );
