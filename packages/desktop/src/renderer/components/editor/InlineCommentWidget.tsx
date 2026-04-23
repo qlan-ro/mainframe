@@ -35,7 +35,7 @@ export function InlineCommentWidget({ text, onTextChange, onSubmit, onClose }: I
         }}
         placeholder="Add context about this line..."
         style={{ whiteSpace: 'pre-wrap', overflowX: 'hidden', overflowY: 'auto', boxSizing: 'border-box' }}
-        className="w-full h-[54px] resize-none bg-mf-input-bg border border-mf-divider rounded-md px-3 py-2 text-[13px] font-mono text-mf-text-primary focus:outline-none focus:border-mf-accent/50"
+        className="w-full h-[64px] resize-none bg-mf-input-bg border border-mf-divider rounded-md px-3.5 py-3 text-[13px] leading-[1.45] font-mono text-mf-text-primary focus:outline-none focus:border-mf-accent/50"
       />
       <div className="flex items-center gap-2 mt-1">
         <button
