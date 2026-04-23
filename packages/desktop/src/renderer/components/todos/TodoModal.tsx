@@ -49,6 +49,18 @@ const input = cn(
   'text-mf-small text-mf-text-primary focus:outline-none focus:border-mf-accent',
 );
 
+// Scrollable textareas need the border/padding on a wrapping div, because a
+// textarea's own padding-bottom is consumed at scroll-end — content would sit
+// flush against the bottom border once the user types past the visible rows.
+const textareaWrap = cn(
+  'bg-mf-app-bg border border-mf-border rounded-mf-input pl-3 pr-3 py-1.5',
+  'focus-within:border-mf-accent',
+);
+const textareaInner = cn(
+  'w-full bg-transparent border-0 p-0 resize-none',
+  'text-mf-small text-mf-text-primary outline-none focus:outline-none focus-visible:outline-none',
+);
+
 const MAX_SIZE = 10 * 1024 * 1024;
 const IMAGE_ACCEPT = '.jpg,.jpeg,.png,.gif,.webp';
 
@@ -276,14 +288,16 @@ export function TodoModal({
               <label className="text-mf-small text-mf-text-secondary">Description (markdown)</label>
               <span className="text-mf-status text-mf-text-secondary opacity-60">Paste image to attach</span>
             </div>
-            <textarea
-              className={cn(input, 'resize-none')}
-              rows={4}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              onPaste={handlePaste}
-              placeholder="Describe the task..."
-            />
+            <div className={textareaWrap}>
+              <textarea
+                className={textareaInner}
+                rows={4}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                onPaste={handlePaste}
+                placeholder="Describe the task..."
+              />
+            </div>
           </div>
 
           {/* Attachments: existing todo uses TodoAttachments, new todo shows pending previews */}

@@ -40,6 +40,18 @@ const input = cn(
   'text-mf-small text-mf-text-primary focus:outline-none focus:border-mf-accent',
 );
 
+// Scrollable textareas need the border/padding on a wrapping div, because a
+// textarea's own padding-bottom is consumed at scroll-end — content would sit
+// flush against the bottom border once the user types past the visible rows.
+const textareaWrap = cn(
+  'bg-mf-app-bg border border-mf-border rounded-mf-input pl-3 pr-3 py-1.5',
+  'focus-within:border-mf-accent',
+);
+const textareaInner = cn(
+  'w-full bg-transparent border-0 p-0 resize-none',
+  'text-mf-small text-mf-text-primary outline-none focus:outline-none focus-visible:outline-none',
+);
+
 const pillBase = cn('px-3 py-1 text-mf-small rounded-full border transition-colors cursor-pointer');
 
 function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -231,15 +243,17 @@ export function QuickTodoDialog() {
 
           {/* Description */}
           <div className="space-y-1">
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              onPaste={handlePaste}
-              placeholder="Details (optional)"
-              rows={2}
-              className={cn(input, 'w-full resize-none')}
-              onKeyDown={handleModEnter}
-            />
+            <div className={textareaWrap}>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                onPaste={handlePaste}
+                placeholder="Details (optional)"
+                rows={2}
+                className={textareaInner}
+                onKeyDown={handleModEnter}
+              />
+            </div>
             <span className="text-mf-status text-mf-text-secondary opacity-60">Paste image to attach</span>
           </div>
 
