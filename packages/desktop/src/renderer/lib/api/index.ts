@@ -8,6 +8,7 @@ export {
   getAllChats,
   renameChat,
   archiveChat,
+  unarchiveChat,
   pinChat,
   getChatMessages,
   getAdapters,

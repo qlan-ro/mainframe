@@ -16,6 +16,7 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
     updatedAt: new Date().toISOString(),
     title: undefined,
     claudeSessionId: undefined,
+    planMode: false,
     worktreePath: undefined,
     branchName: undefined,
     totalCost: 0,
@@ -159,5 +160,30 @@ describe('ChatLifecycleManager.createChatWithDefaults — worktree attachment', 
       '/projects/my-repo/.worktrees/feat-x',
       'feat-x',
     );
+  });
+
+  it('sets planMode when provider defaultPlanMode is enabled', async () => {
+    const deps = makeDeps({
+      db: {
+        chats: {
+          get: vi.fn(() => makeChat()),
+          create: vi.fn(() => makeChat()),
+          update: vi.fn(),
+        },
+        projects: { get: vi.fn() },
+        settings: {
+          get: vi.fn((category: string, key: string) => {
+            if (category === 'provider' && key === 'claude.defaultPlanMode') return 'true';
+            return undefined;
+          }),
+        },
+      } as any,
+    });
+    const lifecycle = new ChatLifecycleManager(deps);
+
+    const chat = await lifecycle.createChatWithDefaults('proj-1', 'claude');
+
+    expect(chat.planMode).toBe(true);
+    expect(deps.db.chats.update).toHaveBeenCalledWith(chat.id, { planMode: true });
   });
 });

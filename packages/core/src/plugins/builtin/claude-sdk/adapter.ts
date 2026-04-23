@@ -114,6 +114,7 @@ const CLAUDE_MODELS: AdapterModel[] = [
 export class ClaudeSdkAdapter implements Adapter {
   readonly id = 'claude-sdk';
   readonly name = 'Claude Agent SDK';
+  readonly capabilities = { planMode: true };
 
   private sessions = new Set<ClaudeSdkSession>();
 

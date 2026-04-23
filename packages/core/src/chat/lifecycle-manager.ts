@@ -26,7 +26,11 @@ export interface LifecycleManagerDeps {
   messages: MessageCache;
   permissions: PermissionManager;
   emitEvent: (event: DaemonEvent) => void;
-  buildSink: (chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>) => SessionSink;
+  buildSink: (
+    chatId: string,
+    sessionId: string,
+    respondToPermission: (response: ControlResponse) => Promise<void>,
+  ) => SessionSink;
   /** Stop launch processes for a project+path pair (e.g. before worktree removal) */
   stopLaunchProcesses?: (projectId: string, projectPath: string) => Promise<void>;
 }
@@ -82,16 +86,25 @@ export class ChatLifecycleManager {
   ): Promise<Chat> {
     let effectiveModel = model;
     let effectiveMode = permissionMode;
+    let effectivePlanMode = false;
 
-    if (!effectiveModel || !effectiveMode) {
+    if (!effectiveModel || !effectiveMode || !effectivePlanMode) {
       const defaultModel = this.deps.db.settings.get('provider', `${adapterId}.defaultModel`);
       const defaultMode = this.deps.db.settings.get('provider', `${adapterId}.defaultMode`);
+      const defaultPlanMode = this.deps.db.settings.get('provider', `${adapterId}.defaultPlanMode`);
 
       if (!effectiveModel && defaultModel) effectiveModel = defaultModel;
       if (!effectiveMode && defaultMode) effectiveMode = defaultMode;
+      if (defaultPlanMode === 'true') effectivePlanMode = true;
     }
 
-    return this.createChat(projectId, adapterId, effectiveModel, effectiveMode, worktreePath, branchName);
+    const chat = await this.createChat(projectId, adapterId, effectiveModel, effectiveMode, worktreePath, branchName);
+    if (effectivePlanMode) {
+      chat.planMode = true;
+      this.deps.db.chats.update(chat.id, { planMode: true });
+    }
+
+    return chat;
   }
 
   async resumeChat(chatId: string): Promise<void> {
@@ -419,12 +432,18 @@ export class ChatLifecycleManager {
     });
     active.session = session;
 
-    const sink = this.deps.buildSink(chatId, (response) => session.respondToPermission(response));
+    const sink = this.deps.buildSink(chatId, session.id, (response) => session.respondToPermission(response));
 
     const executablePath = this.deps.db.settings.get('provider', `${chat.adapterId}.executablePath`) ?? undefined;
     const systemPrompt = this.deps.db.settings.get('provider', `${chat.adapterId}.systemPrompt`) ?? undefined;
     const processInfo = await session.spawn(
-      { model: chat.model, permissionMode: chat.permissionMode, executablePath, systemPrompt },
+      {
+        model: chat.model,
+        permissionMode: chat.permissionMode,
+        planMode: chat.planMode ?? false,
+        executablePath,
+        systemPrompt,
+      },
       sink,
     );
     log.info({ chatId }, 'chat session started');

@@ -67,6 +67,11 @@ export async function archiveChat(chatId: string, deleteWorktree = true): Promis
   await postJson(`${API_BASE}/api/chats/${chatId}/archive${params}`);
 }
 
+export async function unarchiveChat(chatId: string): Promise<void> {
+  log.info('unarchiveChat', { chatId });
+  await postJson(`${API_BASE}/api/chats/${chatId}/unarchive`);
+}
+
 export async function getChatMessages(chatId: string): Promise<DisplayMessage[]> {
   const res = await fetch(`${API_BASE}/api/chats/${chatId}/messages`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 export interface ContextMenuItem {
   label: string;
   onClick: () => void;
+  destructive?: boolean;
 }
 
 interface ContextMenuProps {
@@ -47,7 +48,10 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps): React.R
             item.onClick();
             onClose();
           }}
-          className="w-full text-left px-3 py-1.5 text-mf-small text-mf-text-primary hover:bg-mf-hover transition-colors"
+          className={cn(
+            'w-full text-left px-3 py-1.5 text-mf-small hover:bg-mf-hover transition-colors',
+            item.destructive ? 'text-mf-destructive' : 'text-mf-text-primary',
+          )}
         >
           {item.label}
         </button>

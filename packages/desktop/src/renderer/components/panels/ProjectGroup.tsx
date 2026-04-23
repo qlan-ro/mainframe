@@ -11,6 +11,7 @@ import {
   Clock,
   Loader2,
   Pin,
+  Trash2,
 } from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
 import type { SessionStatus } from '../../store/chats';
@@ -21,6 +22,7 @@ import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
 import { archiveChat, renameChat } from '../../lib/api';
 import { deleteDraft } from '../chat/assistant-ui/composer/composer-drafts.js';
+import { deleteProjectWithCleanup } from '../../lib/delete-project';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel } from '../../lib/adapters';
@@ -359,6 +361,14 @@ export const ProjectGroup = React.memo(function ProjectGroup({
     [project.id],
   );
 
+  const handleDeleteProject = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      await deleteProjectWithCleanup(project);
+    },
+    [project],
+  );
+
   return (
     <div data-testid={`project-group-${project.id}`}>
       {/* Group header */}
@@ -372,7 +382,7 @@ export const ProjectGroup = React.memo(function ProjectGroup({
             onToggleCollapse();
           }
         }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors cursor-pointer"
+        className="group w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors cursor-pointer"
       >
         {collapsed ? <ChevronRight size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
         <div className="flex-1 min-w-0 text-left">
@@ -399,6 +409,19 @@ export const ProjectGroup = React.memo(function ProjectGroup({
             </button>
           </TooltipTrigger>
           <TooltipContent>New Session</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleDeleteProject}
+              className="w-6 h-6 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+              aria-label={`Delete project ${project.name}`}
+            >
+              <Trash2 size={12} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Delete Project</TooltipContent>
         </Tooltip>
       </div>
 

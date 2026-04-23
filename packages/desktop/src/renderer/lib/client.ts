@@ -137,7 +137,7 @@ export class DaemonClient {
     projectId: string,
     adapterId: string,
     model?: string,
-    permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo',
+    permissionMode?: 'default' | 'acceptEdits' | 'yolo',
     attachWorktree?: { worktreePath: string; branchName: string },
   ): void {
     this.send({
@@ -156,10 +156,11 @@ export class DaemonClient {
     chatId: string,
     adapterId?: string,
     model?: string,
-    permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo',
+    permissionMode?: 'default' | 'acceptEdits' | 'yolo',
+    planMode?: boolean,
   ): void {
-    this.send({ type: 'chat.updateConfig', chatId, adapterId, model, permissionMode });
-    log.info('updateChatConfig', { chatId, adapterId, model, permissionMode });
+    this.send({ type: 'chat.updateConfig', chatId, adapterId, model, permissionMode, planMode });
+    log.info('updateChatConfig', { chatId, adapterId, model, permissionMode, planMode });
   }
 
   resumeChat(chatId: string): void {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const permissionModeSchema = z.enum(['default', 'acceptEdits', 'plan', 'yolo']).optional();
+const permissionModeSchema = z.enum(['default', 'acceptEdits', 'yolo']).optional();
 
 const ChatCreate = z
   .object({
@@ -37,6 +37,7 @@ const ChatUpdateConfig = z.object({
   adapterId: z.string().optional(),
   model: z.string().optional(),
   permissionMode: permissionModeSchema,
+  planMode: z.boolean().optional(),
 });
 
 const MessageSend = z
