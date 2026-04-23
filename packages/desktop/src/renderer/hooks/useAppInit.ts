@@ -67,8 +67,9 @@ export function useAppInit(): void {
         if (pluginsResult.status === 'fulfilled') {
           const store = usePluginLayoutStore.getState();
           for (const plugin of pluginsResult.value) {
-            if (plugin.panel) {
-              store.registerContribution({ pluginId: plugin.id, ...plugin.panel });
+            const panels = plugin.panels ?? (plugin.panel ? [plugin.panel] : []);
+            for (const panel of panels) {
+              store.registerContribution({ pluginId: plugin.id, ...panel });
             }
             if (plugin.actions) {
               for (const action of plugin.actions) {
