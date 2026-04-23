@@ -242,49 +242,51 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       }
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';
-      // CLI-synthesized feedback (e.g. unknown-command errors, notices) — surface as system messages.
-      // Discriminator: not a replay of user-typed text AND not a CLI meta wrapper.
-      if (!isReplay && !isMeta && text.trim()) {
-        // Two skill-injection shapes:
-        //   (A) <skill-format>true</skill-format> marker — model-initiated SkillTool
-        //       output + subagent skill preloads (via runAgent formatter).
-        //   (B) Text starting with "Base directory for this skill: <path>" — the
-        //       user-typed /skill-name path, which the CLI injects as a follow-up
-        //       user text block with NO skill-format tag. Authoritative path is
-        //       the first line; skill name is the last segment of the path.
-        const hasSkillFormat = text.includes('<skill-format>true</skill-format>');
-        const baseDirMatch = /^Base directory for this skill:\s*(.+?)(?:\n|$)/m.exec(text);
-        const isSkillInjection = hasSkillFormat || Boolean(baseDirMatch);
+      if (!text.trim()) continue;
 
-        if (isSkillInjection) {
-          const nameFromTag = /<command-name>([^<]+)<\/command-name>/.exec(text)?.[1]?.replace(/^\//, '').trim();
-          const rawDir = baseDirMatch?.[1]?.trim() ?? '';
-          // Derive skill name from the path's last segment when the XML tag
-          // isn't present (shape B). For plugin skills the last segment is
-          // still the skill's short name, which is what the display expects.
-          const skillName = nameFromTag || (rawDir ? path.basename(rawDir) : '');
-          // Append SKILL.md if the path is a directory (no extension).
-          const resolvedPath = rawDir && !path.extname(rawDir) ? path.join(rawDir, 'SKILL.md') : rawDir;
-          const finalPath =
-            resolvedPath ||
-            (skillName ? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache) : '');
+      // Skill injection — must be checked regardless of isReplay/isMeta.
+      // The CLI marks the skill-content user message as isMeta: true for
+      // user-typed /skill-name (processSlashCommand.tsx:905-907), so
+      // filtering isMeta out first would miss it entirely.
+      //
+      // Two shapes:
+      //   (A) <skill-format>true</skill-format> — model-initiated SkillTool
+      //       output + subagent preloads
+      //   (B) Text starting with "Base directory for this skill: <path>" —
+      //       user-typed /skill-name injection (isMeta: true, no XML tag)
+      const hasSkillFormat = text.includes('<skill-format>true</skill-format>');
+      const baseDirMatch = /^Base directory for this skill:\s*(.+?)(?:\n|$)/m.exec(text);
+      const isSkillInjection = hasSkillFormat || Boolean(baseDirMatch);
 
-          if (skillName && finalPath) {
-            session.state.skillPathCache.set(skillName, finalPath);
-          }
+      if (isSkillInjection) {
+        const nameFromTag = /<command-name>([^<]+)<\/command-name>/.exec(text)?.[1]?.replace(/^\//, '').trim();
+        const rawDir = baseDirMatch?.[1]?.trim() ?? '';
+        const skillName = nameFromTag || (rawDir ? path.basename(rawDir) : '');
+        const resolvedPath = rawDir && !path.extname(rawDir) ? path.join(rawDir, 'SKILL.md') : rawDir;
+        const finalPath =
+          resolvedPath ||
+          (skillName ? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache) : '');
 
-          const content = text
-            .replace(/<command-message>[^<]*<\/command-message>\n?/g, '')
-            .replace(/<command-name>[^<]*<\/command-name>\n?/g, '')
-            .replace(/<skill-format>[^<]*<\/skill-format>\n?/g, '')
-            .replace(/^Base directory for this skill:[^\n]*\n?/m, '')
-            .trim();
-
-          sink.onSkillLoaded({ skillName, path: finalPath, content });
-          sink.onSkillFile({ path: finalPath, displayName: skillName });
-        } else {
-          sink.onCliMessage(text.trim());
+        if (skillName && finalPath) {
+          session.state.skillPathCache.set(skillName, finalPath);
         }
+
+        const content = text
+          .replace(/<command-message>[^<]*<\/command-message>\n?/g, '')
+          .replace(/<command-name>[^<]*<\/command-name>\n?/g, '')
+          .replace(/<skill-format>[^<]*<\/skill-format>\n?/g, '')
+          .replace(/^Base directory for this skill:[^\n]*\n?/m, '')
+          .trim();
+
+        sink.onSkillLoaded({ skillName, path: finalPath, content });
+        sink.onSkillFile({ path: finalPath, displayName: skillName });
+        continue;
+      }
+
+      // CLI-synthesized feedback (e.g. unknown-command errors, notices).
+      // Discriminator: not a replay of user-typed text AND not a CLI meta wrapper.
+      if (!isReplay && !isMeta) {
+        sink.onCliMessage(text.trim());
       }
     }
   }

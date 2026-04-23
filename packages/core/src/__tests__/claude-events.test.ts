@@ -126,11 +126,12 @@ describe('handleStdout', () => {
     });
   });
 
-  it('does NOT fire onSkillFile for user text blocks (prose or <skill-format> tags)', () => {
+  it('fires onSkillFile + onSkillLoaded for isMeta user text (user-typed /skill-name injection)', () => {
     const session = createSession();
     const sink = createSink();
 
-    // User-event text must NOT be a skill signal — only assistant tool_use does.
+    // processSlashCommand.tsx:905-907 marks the skill-content user message
+    // isMeta:true — detection must run despite the isMeta flag.
     const event = JSON.stringify({
       type: 'user',
       isMeta: true,
@@ -139,14 +140,50 @@ describe('handleStdout', () => {
         content: [
           {
             type: 'text',
-            text: '<command-name>foo</command-name>\n<skill-format>true</skill-format>\n\nBase directory for this skill: /home/user/.claude/skills/foo',
+            text: '<command-name>foo</command-name>\n<skill-format>true</skill-format>\n\nBase directory for this skill: /home/user/.claude/skills/foo\n\n# Foo skill body',
           },
         ],
       },
     });
     handleStdout(session, Buffer.from(event + '\n'), sink);
 
-    expect(sink.onSkillFile).not.toHaveBeenCalled();
+    expect(sink.onSkillFile).toHaveBeenCalledWith({
+      path: '/home/user/.claude/skills/foo/SKILL.md',
+      displayName: 'foo',
+    });
+    expect(sink.onSkillLoaded).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skillName: 'foo',
+        path: '/home/user/.claude/skills/foo/SKILL.md',
+      }),
+    );
+  });
+
+  it('fires onSkillFile for user-typed /skill-name with no <skill-format> tag', () => {
+    // This is the plain "Base directory for this skill:" injection format
+    // that user-typed /skill-name produces — no XML marker, no tool_use.
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      isMeta: true,
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Base directory for this skill: /Users/me/.claude/plugins/cache/marketplace/work-logger/2.0.0/skills/slack-status-writer\n\n# Slack Status Writer\n\nBody.',
+          },
+        ],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onSkillFile).toHaveBeenCalledWith({
+      path: '/Users/me/.claude/plugins/cache/marketplace/work-logger/2.0.0/skills/slack-status-writer/SKILL.md',
+      displayName: 'slack-status-writer',
+    });
   });
 
   // Fix B: CLI-synthesized user messages (e.g. unknown-command errors)
