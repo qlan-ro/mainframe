@@ -31,6 +31,8 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
   const [comments, setComments] = useState<CommentEntry[]>([]);
   const commentsRef = useRef(comments);
   commentsRef.current = comments;
+  // Tracks per-comment layout listeners so they can be disposed on close.
+  const layoutListenersRef = useRef<Map<string, monacoType.IDisposable>>(new Map());
 
   const openComment = useCallback(
     (editor: monacoType.editor.ICodeEditor, targetLine?: number) => {
@@ -59,6 +61,26 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
 
       const domNode = document.createElement('div');
       domNode.style.zIndex = '10';
+      domNode.style.overflow = 'hidden';
+      domNode.style.boxSizing = 'border-box';
+
+      // Pin the view-zone node width to the editor's content column so it never
+      // inflates Monaco's scrollWidth and causes the horizontal scrollbar to
+      // diverge. Leave a small gap before the vertical scrollbar — contentWidth
+      // in side-by-side diff editors can abut the scrollbar track, and without
+      // clearance the two hit-regions conflict visually and on hover.
+      const SCROLLBAR_CLEARANCE = 12;
+      const computeWidth = (info: { contentWidth: number }) => Math.max(0, info.contentWidth - SCROLLBAR_CLEARANCE);
+      domNode.style.width = `${computeWidth(editor.getLayoutInfo())}px`;
+      const layoutListener = editor.onDidLayoutChange((info) => {
+        domNode.style.width = `${computeWidth(info)}px`;
+      });
+
+      // Monaco swallows wheel events inside view zones and drives its own
+      // scroll. Treat the widget as an island: stop propagation so the
+      // textarea (and any future scrollable children) handle the wheel
+      // natively without scrolling the editor underneath.
+      domNode.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
 
       let zoneId = '';
       changeViewZones((accessor) => {
@@ -70,6 +92,7 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       });
 
       const id = `comment-${++nextId}`;
+      layoutListenersRef.current.set(id, layoutListener);
       setComments((prev) => [...prev, { id, startLine, endLine, lineContent, zoneId, domNode, text: '' }]);
     },
     [changeViewZones, getModel],
@@ -81,6 +104,8 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       if (entry && changeViewZones) {
         changeViewZones((accessor) => accessor.removeZone(entry.zoneId));
       }
+      layoutListenersRef.current.get(id)?.dispose();
+      layoutListenersRef.current.delete(id);
       setComments((prev) => prev.filter((c) => c.id !== id));
     },
     [changeViewZones],
@@ -94,6 +119,10 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
         }
       });
     }
+    for (const listener of layoutListenersRef.current.values()) {
+      listener.dispose();
+    }
+    layoutListenersRef.current.clear();
     setComments([]);
   }, [changeViewZones]);
 
