@@ -84,20 +84,42 @@ export function useAppInit(): void {
           const chatsList = chatsResult.value;
           useChatsStore.getState().setChats(chatsList);
 
-          // Restore active chat from localStorage
+          // Restore active chat from localStorage. Archived chats are hidden
+          // from the flat list but still returned by the daemon, so we must
+          // skip them explicitly — otherwise activeChatId points to a chat
+          // the user cannot see or switch away from.
           const lastChatId = localStorage.getItem('mf:activeChatId');
-          if (lastChatId && chatsList.some((c) => c.id === lastChatId)) {
-            useChatsStore.getState().setActiveChat(lastChatId);
-            daemonClient.subscribe(lastChatId);
-          } else if (chatsList.length > 0) {
+          const visibleChats = chatsList.filter((c) => c.status !== 'archived');
+          let restoredChat: (typeof chatsList)[number] | undefined;
+          const lastChat = lastChatId ? visibleChats.find((c) => c.id === lastChatId) : undefined;
+          if (lastChat) {
+            restoredChat = lastChat;
+            useChatsStore.getState().setActiveChat(lastChat.id);
+            daemonClient.subscribe(lastChat.id);
+          } else if (visibleChats.length > 0) {
             // Fall back to most recently updated chat
-            const sorted = [...chatsList].sort(
+            const sorted = [...visibleChats].sort(
               (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
             );
-            const mostRecent = sorted[0]!;
-            useChatsStore.getState().setActiveChat(mostRecent.id);
-            useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
-            daemonClient.subscribe(mostRecent.id);
+            restoredChat = sorted[0]!;
+            useChatsStore.getState().setActiveChat(restoredChat.id);
+            useTabsStore.getState().openChatTab(restoredChat.id, restoredChat.title);
+            daemonClient.subscribe(restoredChat.id);
+          } else if (lastChatId) {
+            // No visible chats — clear the stale pointer so it doesn't
+            // resurface on a subsequent boot once data changes.
+            localStorage.removeItem('mf:activeChatId');
+          }
+
+          // Keep the project badge in sync with the restored active chat.
+          // If the persisted filterProjectId disagrees with the active chat's
+          // project (e.g. user reloaded after switching chats without clicking
+          // the badge), update the filter so both stay consistent.
+          if (restoredChat) {
+            const { filterProjectId, setFilterProjectId } = useChatsStore.getState();
+            if (filterProjectId !== null && filterProjectId !== restoredChat.projectId) {
+              setFilterProjectId(restoredChat.projectId);
+            }
           }
         } else {
           log.warn('chat fetch failed', { err: String(chatsResult.reason) });
