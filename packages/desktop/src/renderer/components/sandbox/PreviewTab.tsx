@@ -104,6 +104,27 @@ interface ElementPickResult {
   viewport: { width: number; height: number };
 }
 
+interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Converts a CSS-pixel crop rectangle to device pixels by multiplying by the zoom factor.
+ * capturePage() operates in device pixels; getBoundingClientRect() returns CSS pixels.
+ * At zoom != 1.0 (Cmd+/-), failing to scale causes an offset crop rectangle.
+ */
+export function scaleCropRect(rect: CropRect, zoom: number): CropRect {
+  return {
+    x: Math.round(rect.x * zoom),
+    y: Math.round(rect.y * zoom),
+    width: Math.round(rect.width * zoom),
+    height: Math.round(rect.height * zoom),
+  };
+}
+
 export function PreviewTab(): React.ReactElement {
   const webviewRef = useRef<HTMLElement>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -301,12 +322,11 @@ export function PreviewTab(): React.ReactElement {
       const right = Math.min(result.viewport.width, result.rect.x + result.rect.width + PAD);
       const bottom = Math.min(result.viewport.height, result.rect.y + result.rect.height + PAD);
 
-      const image = (await wv.capturePage({
-        x,
-        y,
-        width: Math.round(right - x),
-        height: Math.round(bottom - y),
-      })) as { toDataURL: () => string };
+      // getBoundingClientRect() returns CSS pixels, but capturePage() operates in device pixels.
+      // At non-1.0 zoom (Cmd+/Cmd-), we must scale the crop rect by the zoom factor to avoid offset captures.
+      const zoom: number = (wv.getZoomFactor?.() as number | undefined) ?? 1;
+      const cropRect = scaleCropRect({ x, y, width: right - x, height: bottom - y }, zoom);
+      const image = (await wv.capturePage(cropRect)) as { toDataURL: () => string };
       const dataUrl = image.toDataURL();
       addCapture({ type: 'element', imageDataUrl: dataUrl, selector: result.selector });
 
