@@ -42,8 +42,15 @@ export function InlineCommentWidget({ text, onTextChange, onSubmit, onClose }: I
             if (e.key === 'Escape') onClose();
           }}
           placeholder="Add context about this line..."
-          style={{ whiteSpace: 'pre-wrap', overflowX: 'hidden', overflowY: 'auto', boxSizing: 'border-box' }}
-          className="w-full h-full resize-none bg-transparent p-0 border-0 text-[13px] leading-[1.45] font-mono text-mf-text-primary focus:outline-none"
+          style={{
+            whiteSpace: 'pre-wrap',
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            boxSizing: 'border-box',
+            outline: 'none',
+            boxShadow: 'none',
+          }}
+          className="w-full h-full resize-none bg-transparent p-0 border-0 text-[13px] leading-[1.45] font-mono text-mf-text-primary outline-none focus:outline-none focus-visible:outline-none"
         />
       </div>
       <div className="flex items-center gap-2 mt-1">
