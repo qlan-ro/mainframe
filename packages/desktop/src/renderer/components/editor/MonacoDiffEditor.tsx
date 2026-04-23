@@ -191,7 +191,7 @@ export function MonacoDiffEditor({
             readOnly: true,
             minimap: { enabled: false },
             lineNumbersMinChars: 5,
-            lineDecorationsWidth: 0,
+            lineDecorationsWidth: 6,
             scrollBeyondLastLine: false,
             fontSize: 13,
             lineHeight: 20,
