@@ -1,4 +1,4 @@
-import type { Project, Chat, DisplayMessage, AdapterInfo } from '@qlan-ro/mainframe-types';
+import type { Project, Chat, ChatEffort, DisplayMessage, AdapterInfo } from '@qlan-ro/mainframe-types';
 import { postJson, deleteRequest, API_BASE } from './http';
 import { createLogger } from '../logger';
 
@@ -59,6 +59,16 @@ export async function pinChat(chatId: string, pinned: boolean): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pinned }),
   });
+}
+
+export async function setChatEffort(chatId: string, effort: ChatEffort | null): Promise<void> {
+  log.info('setChatEffort', { chatId, effort });
+  const res = await fetch(`${API_BASE}/api/chats/${chatId}/effort`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ effort }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
 export async function archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
