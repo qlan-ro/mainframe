@@ -247,6 +247,9 @@ function buildSessionSink(
       const newCost = active.chat.totalCost + cost;
       const newInput = active.chat.totalTokensInput + tokensInput;
       const newOutput = active.chat.totalTokensOutput + tokensOutput;
+      // Bump updatedAt so the session resurfaces to the top of the list when
+      // the AI finishes a turn, not only when the user sends a message.
+      const now = new Date().toISOString();
 
       db.chats.update(chatId, {
         totalCost: newCost,
@@ -254,12 +257,14 @@ function buildSessionSink(
         totalTokensOutput: newOutput,
         lastContextTokensInput: tokensInput,
         processState: 'idle',
+        updatedAt: now,
       });
       active.chat.totalCost = newCost;
       active.chat.totalTokensInput = newInput;
       active.chat.totalTokensOutput = newOutput;
       active.chat.lastContextTokensInput = tokensInput;
       active.chat.processState = 'idle';
+      active.chat.updatedAt = now;
       // Check interrupted flag before clearing permissions (clear() wipes both).
       const wasInterrupted = permissions.clearInterrupted(chatId);
       // CLI process ended — clear stale permissions so displayStatus reflects

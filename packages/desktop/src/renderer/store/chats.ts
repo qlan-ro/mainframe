@@ -115,7 +115,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
       next.delete(chatId);
       return { unreadChatIds: next };
     }),
-  setChats: (chats) => set({ chats }),
+  setChats: (chats) => set({ chats: sortChats([...chats]) }),
   setFilterProjectId: (id) => {
     if (id) {
       localStorage.setItem('mf:filterProjectId', id);
@@ -150,7 +150,9 @@ export const useChatsStore = create<ChatsState>((set) => ({
   updateChat: (chat) =>
     set((state) => {
       const idx = state.chats.findIndex((c) => c.id === chat.id);
-      if (idx === -1) return { chats: sortChats([chat, ...state.chats]) };
+      // Do not re-insert a chat that was intentionally removed (e.g. optimistic
+      // archive). Updates for unknown chats are silently dropped.
+      if (idx === -1) return state;
       const prev = state.chats[idx]!;
       // Only re-sort when updatedAt or pinned changed
       if (chat.updatedAt !== prev.updatedAt || chat.pinned !== prev.pinned) {
