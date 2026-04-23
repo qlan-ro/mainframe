@@ -199,7 +199,7 @@ describe('WS inbound flows', () => {
     expect(events.length).toBe(countBefore);
   }, 10_000);
 
-  it('EnterPlanMode in message switches permissionMode to plan and emits chat.updated', async () => {
+  it('EnterPlanMode in message flips planMode=true and emits chat.updated', async () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
@@ -208,7 +208,7 @@ describe('WS inbound flows', () => {
     ]);
     await sleep(50);
 
-    const chatUpdated = events.find((e) => e.type === 'chat.updated' && (e as any).chat?.permissionMode === 'plan');
+    const chatUpdated = events.find((e) => e.type === 'chat.updated' && (e as any).chat?.planMode === true);
     expect(chatUpdated).toBeDefined();
   }, 10_000);
 

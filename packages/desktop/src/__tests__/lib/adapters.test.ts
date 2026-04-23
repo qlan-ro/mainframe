@@ -8,6 +8,7 @@ const mockAdapters: AdapterInfo[] = [
     name: 'Claude CLI',
     description: 'Claude CLI adapter',
     installed: true,
+    capabilities: { planMode: true },
     models: [
       { id: 'claude-opus-4-6', label: 'Opus 4.6', contextWindow: 200_000 },
       { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', contextWindow: 200_000 },

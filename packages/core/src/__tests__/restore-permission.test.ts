@@ -3,6 +3,7 @@ import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
 import { MockBaseAdapter } from './helpers/mock-adapter.js';
 import { MockBaseSession } from './helpers/mock-session.js';
+import { ClaudePlanModeHandler } from '../plugins/builtin/claude/plan-mode-handler.js';
 import type {
   Chat,
   ChatMessage,
@@ -59,6 +60,13 @@ class MockAdapterImpl extends MockBaseAdapter {
   override createSession(_options: SessionOptions): AdapterSession {
     this.currentSession = new MockSession(this);
     return this.currentSession;
+  }
+
+  // The dispatcher delegates plan-mode actions to the adapter. These tests
+  // assert Claude-style behavior (respondToPermission(deny) + kill + restart),
+  // so reuse ClaudePlanModeHandler to produce that behavior on the mock.
+  createPlanModeHandler(): unknown {
+    return new ClaudePlanModeHandler();
   }
 }
 

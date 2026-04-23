@@ -1,11 +1,22 @@
 import React from 'react';
 import { Bot } from 'lucide-react';
-import { MessagePrimitive } from '@assistant-ui/react';
+import { MessagePrimitive, useMessage } from '@assistant-ui/react';
+import { getExternalStoreMessages } from '@assistant-ui/react';
 import { MainframeText } from '../parts/MainframeText';
 import { DefaultToolCard } from '../parts/tools/DefaultToolCard';
 import { TurnFooter } from './TurnFooter';
+import { ImageThumbs } from './ImageThumbs';
+import { useMainframeRuntime } from '../MainframeRuntimeProvider';
+import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 
 export function AssistantMessage() {
+  const message = useMessage();
+  const { openLightbox } = useMainframeRuntime();
+
+  const [original] = getExternalStoreMessages<DisplayMessage>(message);
+  const imageBlocks = (original?.content?.filter((c): c is DisplayContent & { type: 'image' } => c.type === 'image') ??
+    []) as { type: 'image'; mediaType: string; data: string }[];
+
   return (
     <MessagePrimitive.Root className="group relative">
       <div className="flex gap-3">
@@ -30,6 +41,7 @@ export function AssistantMessage() {
               },
             }}
           />
+          <ImageThumbs imageBlocks={imageBlocks} openLightbox={openLightbox} />
           <TurnFooter />
         </div>
       </div>

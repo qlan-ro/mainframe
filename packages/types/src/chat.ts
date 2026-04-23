@@ -13,7 +13,8 @@ export interface Chat {
   title?: string;
   claudeSessionId?: string;
   model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
+  permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+  planMode?: boolean;
   status: 'active' | 'paused' | 'ended' | 'archived';
   createdAt: string;
   updatedAt: string;
