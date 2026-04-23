@@ -196,7 +196,7 @@ export function TodoModal({
         aria-modal="true"
         aria-label={todo ? 'Edit Task' : 'New Task'}
         className="bg-mf-panel-bg rounded-mf-panel border border-mf-border mx-4 shadow-xl relative flex flex-col overflow-hidden"
-        style={{ width: size.width, maxHeight: '90vh' }}
+        style={{ width: size.width, height: size.height, maxHeight: '90vh' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border">
