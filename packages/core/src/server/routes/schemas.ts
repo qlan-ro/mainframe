@@ -32,6 +32,7 @@ export const AddMentionBody = z.object({
 export const UpdateProviderSettingsBody = z.object({
   defaultModel: z.string().optional(),
   defaultMode: z.string().optional(),
+  defaultPlanMode: z.enum(['true', 'false']).optional(),
   executablePath: z.string().optional(),
   systemPrompt: z.string().optional(),
 });

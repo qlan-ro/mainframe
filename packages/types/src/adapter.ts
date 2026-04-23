@@ -30,7 +30,8 @@ export interface SessionOptions {
 
 export interface SessionSpawnOptions {
   model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
+  permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+  planMode?: boolean;
   executablePath?: string;
   systemPrompt?: string;
 }
@@ -141,6 +142,7 @@ export interface AdapterSession {
   interrupt(): Promise<void>;
   setModel(model: string): Promise<void>;
   setPermissionMode(mode: string): Promise<void>;
+  setPlanMode(on: boolean): Promise<void>;
   sendCommand(command: string, args?: string): Promise<void>;
   cancelQueuedMessage(uuid: string): Promise<boolean>;
 
@@ -157,6 +159,9 @@ export interface AdapterInfo {
   installed: boolean;
   version?: string;
   models: AdapterModel[];
+  capabilities: {
+    planMode: boolean;
+  };
 }
 
 export interface AdapterModel {
@@ -187,6 +192,9 @@ export interface ExternalSession {
 export interface Adapter {
   id: string;
   name: string;
+  readonly capabilities: {
+    planMode: boolean;
+  };
 
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
@@ -215,4 +223,13 @@ export interface Adapter {
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
   listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
+
+  /**
+   * Factory for an adapter-specific plan-mode action handler.
+   *
+   * Returns `unknown` here to avoid a core→types dependency cycle — core casts
+   * the result to `PlanModeActionHandler` (defined in
+   * `packages/core/src/chat/plan-mode-actions.ts`).
+   */
+  createPlanModeHandler?(): unknown;
 }

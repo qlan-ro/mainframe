@@ -181,11 +181,31 @@ describe('useChatsStore', () => {
       expect(state.chats).toHaveLength(2);
     });
 
-    it('adds a chat if it does not exist', () => {
+    it('is a no-op when the chat is not in the store', () => {
+      // updateChat must not re-insert a chat that was intentionally removed
+      // (e.g. optimistic archive). chat.created / addChat handle insertion.
       const chat = makeChat({ id: 'new' });
       useChatsStore.getState().updateChat(chat);
-      expect(useChatsStore.getState().chats).toHaveLength(1);
-      expect(useChatsStore.getState().chats[0]!.id).toBe('new');
+      expect(useChatsStore.getState().chats).toHaveLength(0);
+    });
+
+    it('does not re-insert a running chat after optimistic archive removal', () => {
+      // Regression: archiving a running chat triggers a chat.updated daemon event
+      // (from the dying CLI process). updateChat must not re-add the chat after
+      // removeChat has already removed it.
+      const chat = makeChat({ id: 'running', processState: 'working' as const });
+      useChatsStore.getState().setChats([chat]);
+
+      // Simulate optimistic archive removal
+      useChatsStore.getState().removeChat('running');
+      expect(useChatsStore.getState().chats).toHaveLength(0);
+
+      // Simulate chat.updated WebSocket event arriving from the dying CLI
+      const updatedChat = { ...chat, processState: null };
+      useChatsStore.getState().updateChat(updatedChat);
+
+      // Chat must remain removed
+      expect(useChatsStore.getState().chats).toHaveLength(0);
     });
   });
 

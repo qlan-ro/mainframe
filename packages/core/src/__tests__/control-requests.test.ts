@@ -221,6 +221,15 @@ class MockClaudeSession extends MockBaseSession {
     this.written.push(JSON.stringify(payload) + '\n');
   }
 
+  readonly setPlanModeCalls: boolean[] = [];
+
+  override async setPlanMode(on: boolean): Promise<void> {
+    this.setPlanModeCalls.push(on);
+    // Mirror Claude's behavior: setPlanMode(on) delegates to setPermissionMode
+    // with 'plan' when on, or the stored base mode when off.
+    await this.setPermissionMode(on ? 'plan' : 'default');
+  }
+
   override async sendMessage(): Promise<void> {}
   override async loadHistory(): Promise<ChatMessage[]> {
     return [];
@@ -328,5 +337,19 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
     expect(killSpy).not.toHaveBeenCalled();
     expect(spawnCount).toBe(0);
     expect(db.chats.update).not.toHaveBeenCalledWith(chatId, expect.anything());
+  });
+
+  it('updateChatConfig toggles planMode via session.setPlanMode', async () => {
+    await manager.updateChatConfig(chatId, undefined, undefined, undefined, true);
+
+    expect(killSpy).not.toHaveBeenCalled();
+    expect(spawnCount).toBe(0);
+    expect(currentMockSession!.setPlanModeCalls).toEqual([true]);
+    expect(db.chats.update).toHaveBeenCalledWith(chatId, expect.objectContaining({ planMode: true }));
+
+    await manager.updateChatConfig(chatId, undefined, undefined, undefined, false);
+
+    expect(currentMockSession!.setPlanModeCalls).toEqual([true, false]);
+    expect(db.chats.update).toHaveBeenLastCalledWith(chatId, expect.objectContaining({ planMode: false }));
   });
 });

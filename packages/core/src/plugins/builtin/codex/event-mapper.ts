@@ -14,6 +14,7 @@ const log = createChildLogger('codex:events');
 export interface CodexSessionState {
   threadId: string | null;
   currentTurnId: string | null;
+  currentTurnPlan: { id: string; text: string } | null;
   lastUsage?: {
     input_tokens: number;
     output_tokens: number;
@@ -30,7 +31,9 @@ export function handleNotification(method: string, params: unknown, sink: Sessio
     case 'turn/started':
       return handleTurnStarted(params as TurnStartedParams, state);
     case 'item/completed':
-      return handleItemCompleted(params as ItemCompletedParams, sink);
+      return handleItemCompleted(params as ItemCompletedParams, sink, state);
+    case 'item/plan/delta':
+      return handlePlanDelta(params as { itemId: string; delta: string }, state);
     case 'turn/completed':
       return handleTurnCompleted(params as TurnCompletedParams, sink, state);
     case 'thread/tokenUsage/updated':
@@ -50,7 +53,6 @@ export function handleNotification(method: string, params: unknown, sink: Sessio
     case 'item/fileChange/outputDelta':
     case 'item/reasoning/summaryTextDelta':
     case 'item/reasoning/textDelta':
-    case 'item/plan/delta':
     case 'account/rateLimits/updated':
     case 'thread/name/updated':
       return; // silently ignore known-but-unhandled notifications
@@ -66,11 +68,31 @@ function handleThreadStarted(params: ThreadStartedParams, sink: SessionSink, sta
 }
 
 function handleTurnStarted(params: TurnStartedParams, state: CodexSessionState): void {
+  state.currentTurnPlan = null;
   state.currentTurnId = params.turn.id;
 }
 
-function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink): void {
+function handlePlanDelta(params: { itemId: string; delta: string }, state: CodexSessionState): void {
+  const { itemId, delta } = params;
+  const prev = state.currentTurnPlan;
+  if (prev && prev.id === itemId) {
+    state.currentTurnPlan = { id: itemId, text: prev.text + delta };
+  } else {
+    state.currentTurnPlan = { id: itemId, text: delta };
+  }
+}
+
+function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, state: CodexSessionState): void {
   const { item } = params;
+
+  // Plan items arrive as a terminal `item/completed` with type === 'plan'.
+  // They aren't part of the formal ThreadItem union (yet), so branch defensively
+  // before the typed switch below.
+  const itemAsUnknown = item as { id?: string; type?: string; text?: string };
+  if (itemAsUnknown.type === 'plan' && typeof itemAsUnknown.text === 'string' && itemAsUnknown.id) {
+    state.currentTurnPlan = { id: itemAsUnknown.id, text: itemAsUnknown.text };
+    return;
+  }
 
   switch (item.type) {
     case 'agentMessage':
@@ -148,6 +170,7 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink): vo
 }
 
 function handleTurnCompleted(params: TurnCompletedParams, sink: SessionSink, state: CodexSessionState): void {
+  state.currentTurnPlan = null;
   state.currentTurnId = null;
   const { turn } = params;
   const isError = turn.status === 'failed' || turn.status === 'interrupted';

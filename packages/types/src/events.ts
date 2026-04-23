@@ -1,6 +1,5 @@
 import type { Chat, ChatMessage, QueuedMessageRef } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
-import type { PermissionMode } from './settings.js';
 import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
 
@@ -56,6 +55,7 @@ export type DaemonEvent =
   | { type: 'message.queued.cancelled'; chatId: string; uuid: string }
   | { type: 'message.queued.cancel_failed'; chatId: string; uuid: string }
   | { type: 'message.queued.cleared'; chatId: string }
+  | { type: 'message.queued.snapshot'; chatId: string; refs: QueuedMessageRef[] }
   | { type: 'chat.notification'; chatId: string; title: string; body: string; level: 'success' | 'error' }
   | { type: 'chat.compacting'; chatId: string }
   | { type: 'chat.compactDone'; chatId: string }
@@ -70,7 +70,7 @@ export type ClientEvent =
       projectId: string;
       adapterId: string;
       model?: string;
-      permissionMode?: PermissionMode;
+      permissionMode?: 'default' | 'acceptEdits' | 'yolo';
       worktreePath?: string;
       branchName?: string;
     }
@@ -86,7 +86,14 @@ export type ClientEvent =
       };
     }
   | { type: 'permission.respond'; chatId: string; response: import('./adapter.js').ControlResponse }
-  | { type: 'chat.updateConfig'; chatId: string; adapterId?: string; model?: string; permissionMode?: PermissionMode }
+  | {
+      type: 'chat.updateConfig';
+      chatId: string;
+      adapterId?: string;
+      model?: string;
+      permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+      planMode?: boolean;
+    }
   | { type: 'chat.interrupt'; chatId: string }
   | { type: 'subscribe'; chatId: string }
   | { type: 'unsubscribe'; chatId: string }
