@@ -133,8 +133,7 @@ export function chatRoutes(ctx: RouteContext): Router {
   router.post('/api/chats/:id/unarchive', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
     try {
-      ctx.db.chats.update(chatId, { status: 'active' });
-      const chat = ctx.db.chats.get(chatId);
+      const chat = ctx.chats.unarchiveChat(chatId);
       if (!chat) {
         res.status(404).json({ success: false, error: 'Chat not found' });
         return;

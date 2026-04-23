@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { PanelLeftOpen } from 'lucide-react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 import { usePluginLayoutStore } from '../store';
 import { useLayoutStore } from '../store/layout';
@@ -11,6 +12,7 @@ import { PluginView } from './plugins/PluginView';
 import { Zone } from './zone/Zone';
 import { BottomResizeHandle } from './zone/BottomResizeHandle';
 import { DragProvider } from './zone/DragOverlay';
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { FileViewHeader } from './panels/FileViewHeader';
 import { FileViewContent } from './panels/FileViewContent';
 
@@ -32,10 +34,31 @@ function VerticalResizeHandle(): React.ReactElement {
 function CenterSplit({ centerPanel }: { centerPanel: React.ReactNode }): React.ReactElement {
   const fileView = useTabsStore((s) => s.fileView);
   const fileViewCollapsed = useTabsStore((s) => s.fileViewCollapsed);
+  const toggleFileViewCollapsed = useTabsStore((s) => s.toggleFileViewCollapsed);
   const showFileView = fileView != null && !fileViewCollapsed;
 
   if (!showFileView) {
-    return <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>;
+    return (
+      <div className="h-full flex gap-mf-gap">
+        <div className="flex-1 bg-mf-panel-bg rounded-mf-panel overflow-hidden">{centerPanel}</div>
+        {fileView != null && fileViewCollapsed && (
+          <div className="flex flex-col items-center justify-start pt-2 bg-mf-panel-bg rounded-mf-panel shrink-0 w-9">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleFileViewCollapsed}
+                  aria-label="Expand file view"
+                  className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                >
+                  <PanelLeftOpen size={14} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Expand file view</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (

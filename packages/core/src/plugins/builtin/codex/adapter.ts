@@ -2,6 +2,7 @@
 import { execFile, spawn } from 'node:child_process';
 import type { Adapter, AdapterModel, AdapterSession, ExternalSession, SessionOptions } from '@qlan-ro/mainframe-types';
 import { CodexSession } from './session.js';
+import { CodexPlanModeHandler } from './plan-mode-handler.js';
 import { JsonRpcClient } from './jsonrpc.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 import type { InitializeResult, ModelListResult, ThreadListResult } from './types.js';
@@ -12,8 +13,13 @@ const log = createChildLogger('codex:adapter');
 export class CodexAdapter implements Adapter {
   readonly id = 'codex';
   readonly name = 'Codex';
+  readonly capabilities = { planMode: true } as const;
 
   private sessions = new Set<CodexSession>();
+
+  createPlanModeHandler(): unknown {
+    return new CodexPlanModeHandler();
+  }
 
   async isInstalled(): Promise<boolean> {
     return new Promise((resolve) => {

@@ -50,15 +50,28 @@ export class EventHandler {
     private getActiveChat: (chatId: string) => ActiveChat | undefined,
     private emitEvent: (event: DaemonEvent) => void,
     private getToolCategories: (chatId: string) => ToolCategories | undefined = () => undefined,
+    private onQueuedProcessed: (chatId: string, uuid: string) => void = () => {},
+    private onQueuedCleared: (chatId: string) => void = () => {},
   ) {}
 
   setPushService(service: PushService): void {
     this.pushService = service;
   }
 
-  buildSink(chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>): SessionSink {
+  buildSink(
+    chatId: string,
+    sessionIdOrRespondToPermission: string | ((response: ControlResponse) => Promise<void>),
+    maybeRespondToPermission?: (response: ControlResponse) => Promise<void>,
+  ): SessionSink {
+    const builtForSessionId =
+      typeof sessionIdOrRespondToPermission === 'string' ? sessionIdOrRespondToPermission : undefined;
+    const respondToPermission =
+      typeof sessionIdOrRespondToPermission === 'string' ? maybeRespondToPermission : sessionIdOrRespondToPermission;
+    if (!respondToPermission) throw new Error('respondToPermission is required');
+
     return buildSessionSink(
       chatId,
+      builtForSessionId,
       this.db,
       this.messages,
       this.permissions,
@@ -67,6 +80,8 @@ export class EventHandler {
       respondToPermission,
       this.displayCache,
       this.getToolCategories,
+      this.onQueuedProcessed,
+      this.onQueuedCleared,
       this.pushService,
     );
   }
@@ -85,6 +100,7 @@ export class EventHandler {
 
 function buildSessionSink(
   chatId: string,
+  builtForSessionId: string | undefined,
   db: DatabaseManager,
   messages: MessageCache,
   permissions: PermissionManager,
@@ -93,6 +109,8 @@ function buildSessionSink(
   _respondToPermission: (response: ControlResponse) => Promise<void>,
   displayCache: Map<string, DisplayMessage[]>,
   getToolCategories: (chatId: string) => ToolCategories | undefined,
+  onQueuedProcessedCb: (chatId: string, uuid: string) => void,
+  onQueuedClearedCb: (chatId: string) => void,
   pushService?: PushService,
 ): SessionSink {
   function emitDisplay(): void {
@@ -131,9 +149,9 @@ function buildSessionSink(
       const hasEnterPlanMode = content.some((b: any) => b.type === 'tool_use' && b.name === 'EnterPlanMode');
       if (hasEnterPlanMode) {
         const active = getActiveChat(chatId);
-        if (active && active.chat.permissionMode !== 'plan') {
-          db.chats.update(chatId, { permissionMode: 'plan' });
-          active.chat.permissionMode = 'plan';
+        if (active && active.chat.planMode !== true) {
+          db.chats.update(chatId, { planMode: true });
+          active.chat.planMode = true;
           emitEvent({ type: 'chat.updated', chat: active.chat });
         }
       }
@@ -229,6 +247,9 @@ function buildSessionSink(
       const newCost = active.chat.totalCost + cost;
       const newInput = active.chat.totalTokensInput + tokensInput;
       const newOutput = active.chat.totalTokensOutput + tokensOutput;
+      // Bump updatedAt so the session resurfaces to the top of the list when
+      // the AI finishes a turn, not only when the user sends a message.
+      const now = new Date().toISOString();
 
       db.chats.update(chatId, {
         totalCost: newCost,
@@ -236,12 +257,14 @@ function buildSessionSink(
         totalTokensOutput: newOutput,
         lastContextTokensInput: tokensInput,
         processState: 'idle',
+        updatedAt: now,
       });
       active.chat.totalCost = newCost;
       active.chat.totalTokensInput = newInput;
       active.chat.totalTokensOutput = newOutput;
       active.chat.lastContextTokensInput = tokensInput;
       active.chat.processState = 'idle';
+      active.chat.updatedAt = now;
       // Check interrupted flag before clearing permissions (clear() wipes both).
       const wasInterrupted = permissions.clearInterrupted(chatId);
       // CLI process ended — clear stale permissions so displayStatus reflects
@@ -279,42 +302,52 @@ function buildSessionSink(
           .catch((err) => log.warn({ err }, 'push notification failed'));
       }
 
-      // Clear queued badges on turn completion — the CLI has processed all queued
-      // messages by this point. We can't rely on isReplay events in stream-json mode.
-      const allMsgs = messages.get(chatId);
-      if (allMsgs) {
-        let cleared = false;
-        for (const msg of allMsgs) {
-          if (msg.metadata?.queued) {
-            delete (msg.metadata as Record<string, unknown>).queued;
-            delete (msg.metadata as Record<string, unknown>).uuid;
-            cleared = true;
-          }
-        }
-        if (cleared) {
-          emitDisplay();
-          emitEvent({ type: 'message.queued.cleared', chatId });
-        }
-      }
+      // Per-queued-uuid cleanup happens in onQueuedProcessed (driven by the
+      // CLI's isReplay acks under --replay-user-messages). Don't bulk-clear
+      // on turn completion — that strips metadata.queued from messages the
+      // CLI hasn't dequeued yet.
     },
 
     onQueuedProcessed(uuid: string) {
       const msgs = messages.get(chatId);
-      if (!msgs) return;
-      const msg = msgs.find((m) => m.metadata?.uuid === uuid);
-      if (!msg) return;
-      if (msg.metadata) {
+      const msg = msgs?.find((m) => m.metadata?.uuid === uuid);
+      if (msg?.metadata) {
         delete (msg.metadata as Record<string, unknown>).queued;
         delete (msg.metadata as Record<string, unknown>).uuid;
+        emitDisplay();
       }
-      emitDisplay();
       emitEvent({ type: 'message.queued.processed', chatId, uuid });
+      onQueuedProcessedCb(chatId, uuid);
     },
 
     onExit(_code: number | null) {
       const active = getActiveChat(chatId);
+      if (builtForSessionId && active?.session && active.session.id !== builtForSessionId) {
+        return;
+      }
       const sessionId = active?.session?.id ?? '';
       log.debug({ sessionId, chatId }, 'session exited');
+
+      // Any messages still flagged as queued are stranded — the CLI process
+      // is gone and will never emit an isReplay ack for them. Clear here so
+      // the composer banner and the daemon's queuedRefs don't leak.
+      const cachedMsgs = messages.get(chatId);
+      let hadQueued = false;
+      if (cachedMsgs) {
+        for (const msg of cachedMsgs) {
+          if (msg.metadata?.queued) {
+            delete (msg.metadata as Record<string, unknown>).queued;
+            delete (msg.metadata as Record<string, unknown>).uuid;
+            hadQueued = true;
+          }
+        }
+      }
+      if (hadQueued) {
+        emitDisplay();
+        emitEvent({ type: 'message.queued.cleared', chatId });
+      }
+      onQueuedClearedCb(chatId);
+
       if (active) {
         active.chat.processState = null;
         db.chats.update(chatId, { processState: null });

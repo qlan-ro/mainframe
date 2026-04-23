@@ -102,15 +102,16 @@ describe('ChatsRepository', () => {
       expect(all[1].id).toBe(c2.id);
     });
 
-    it('excludes archived chats', () => {
+    it('includes archived chats', () => {
       const c1 = chats.create(projectId, 'claude');
       const c2 = chats.create(projectId, 'claude');
 
       chats.update(c2.id, { status: 'archived' });
 
       const all = chats.list(projectId);
-      expect(all).toHaveLength(1);
-      expect(all[0].id).toBe(c1.id);
+      expect(all).toHaveLength(2);
+      expect(all.map((c) => c.id)).toContain(c1.id);
+      expect(all.map((c) => c.id)).toContain(c2.id);
     });
 
     it('returns empty array for a project with no chats', () => {
@@ -178,10 +179,10 @@ describe('ChatsRepository', () => {
 
     it('updates permissionMode', () => {
       const chat = chats.create(projectId, 'claude');
-      chats.update(chat.id, { permissionMode: 'plan' });
+      chats.update(chat.id, { permissionMode: 'acceptEdits' });
 
       const fetched = chats.get(chat.id);
-      expect(fetched!.permissionMode).toBe('plan');
+      expect(fetched!.permissionMode).toBe('acceptEdits');
     });
 
     it('updates worktreePath and branchName', () => {
@@ -522,6 +523,20 @@ describe('ChatsRepository', () => {
       const fetched = chats.get(chat.id);
       expect(fetched!.worktreePath).toBe('/tmp/wt-123');
       expect(fetched!.branchName).toBe('feat/x');
+    });
+  });
+
+  describe('planMode', () => {
+    it('reads and writes planMode', () => {
+      const chat = chats.create(projectId, 'claude');
+      expect(chat.planMode).toBe(false);
+
+      chats.update(chat.id, { planMode: true });
+      const reread = chats.get(chat.id)!;
+      expect(reread.planMode).toBe(true);
+
+      chats.update(chat.id, { planMode: false });
+      expect(chats.get(chat.id)!.planMode).toBe(false);
     });
   });
 

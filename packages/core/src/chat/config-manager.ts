@@ -29,6 +29,7 @@ export class ChatConfigManager {
     adapterId?: string,
     model?: string,
     permissionMode?: Chat['permissionMode'],
+    planMode?: boolean,
   ): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
     if (!active) throw new Error(`Chat ${chatId} not found`);
@@ -40,11 +41,13 @@ export class ChatConfigManager {
     const adapterChanged = adapterId !== undefined && adapterId !== active.chat.adapterId;
     const modelChanged = model !== undefined && model !== active.chat.model;
     const modeChanged = permissionMode !== undefined && permissionMode !== active.chat.permissionMode;
-    if (!adapterChanged && !modelChanged && !modeChanged) return;
+    const planModeChanged = planMode !== undefined && planMode !== (active.chat.planMode ?? false);
+    if (!adapterChanged && !modelChanged && !modeChanged && !planModeChanged) return;
 
     if (active.session?.isSpawned && !adapterChanged) {
       if (modelChanged) await active.session.setModel(model!);
       if (modeChanged) await active.session.setPermissionMode(permissionMode!);
+      if (planModeChanged) await active.session.setPlanMode(planMode!);
       const updates: Partial<Chat> = {};
       if (modelChanged) {
         updates.model = model;
@@ -53,6 +56,10 @@ export class ChatConfigManager {
       if (modeChanged) {
         updates.permissionMode = permissionMode;
         active.chat.permissionMode = permissionMode;
+      }
+      if (planModeChanged) {
+        updates.planMode = planMode;
+        active.chat.planMode = planMode;
       }
       this.deps.db.chats.update(chatId, updates);
       this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
@@ -86,6 +93,10 @@ export class ChatConfigManager {
     if (modeChanged) {
       updates.permissionMode = permissionMode;
       active.chat.permissionMode = permissionMode;
+    }
+    if (planModeChanged) {
+      updates.planMode = planMode;
+      active.chat.planMode = planMode;
     }
 
     this.deps.db.chats.update(chatId, updates);

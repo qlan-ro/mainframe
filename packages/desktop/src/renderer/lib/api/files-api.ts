@@ -46,6 +46,15 @@ export async function saveFileContent(
   await putJson(`${API_BASE}/api/projects/${projectId}/files`, { path: filePath, content, chatId });
 }
 
+/**
+ * Reads a file at an absolute path that may live outside any project root.
+ * Used by the editor when the user explicitly opens an external file.
+ */
+export async function getExternalFileContent(absolutePath: string): Promise<{ path: string; content: string }> {
+  const params = new URLSearchParams({ path: absolutePath });
+  return fetchJson(`${API_BASE}/api/files/external?${params}`);
+}
+
 export async function getFileBinary(
   projectId: string,
   filePath: string,

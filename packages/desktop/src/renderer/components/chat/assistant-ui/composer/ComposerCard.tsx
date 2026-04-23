@@ -19,13 +19,13 @@ import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
 import { QueuedMessageBanner } from './QueuedMessageBanner';
+import { PlanModeToggle } from './PlanModeToggle';
 import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
-  { id: 'plan', label: 'Plan' },
   { id: 'acceptEdits', label: 'Auto-Edits' },
   { id: 'yolo', label: 'Unattended' },
 ];
@@ -217,6 +217,7 @@ export function ComposerCard() {
   }, [chat?.projectId]);
 
   const currentAdapter = chat?.adapterId ?? 'claude';
+  const currentAdapterInfo = adapters.find((adapter) => adapter.id === currentAdapter);
   const adapterOptions = getAdapterOptions(adapters);
   const modelOptions = getModelOptions(currentAdapter, adapters);
   const currentModel = chat?.model ?? modelOptions[0]?.id ?? '';
@@ -249,7 +250,16 @@ export function ComposerCard() {
   const handleModeChange = useCallback(
     (mode: string) => {
       if (!chatId) return;
-      daemonClient.updateChatConfig(chatId, undefined, undefined, mode as 'default' | 'acceptEdits' | 'plan' | 'yolo');
+      const typedMode = mode as 'default' | 'acceptEdits' | 'yolo';
+      daemonClient.updateChatConfig(chatId, undefined, undefined, typedMode);
+    },
+    [chatId],
+  );
+
+  const handlePlanToggle = useCallback(
+    (enable: boolean) => {
+      if (!chatId) return;
+      daemonClient.updateChatConfig(chatId, undefined, undefined, undefined, enable);
     },
     [chatId],
   );
@@ -393,10 +403,11 @@ export function ComposerCard() {
             value={currentMode}
             onChange={handleModeChange}
             icon={<Shield size={14} />}
-            className={
-              currentMode === 'yolo' ? 'text-mf-destructive' : currentMode === 'plan' ? 'text-mf-accent' : undefined
-            }
+            className={currentMode === 'yolo' ? 'text-mf-destructive' : undefined}
           />
+          {currentAdapterInfo?.capabilities.planMode && (
+            <PlanModeToggle active={chat?.planMode === true} onToggle={handlePlanToggle} />
+          )}
           {chat && <EffortPicker chat={chat} adapters={adapters} modelId={currentModel} disabled={!!chat.isRunning} />}
           {isGitProject && (
             <div className="relative">
