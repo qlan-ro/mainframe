@@ -31,6 +31,8 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
   const [comments, setComments] = useState<CommentEntry[]>([]);
   const commentsRef = useRef(comments);
   commentsRef.current = comments;
+  // Tracks per-comment layout listeners so they can be disposed on close.
+  const layoutListenersRef = useRef<Map<string, monacoType.IDisposable>>(new Map());
 
   const openComment = useCallback(
     (editor: monacoType.editor.ICodeEditor, targetLine?: number) => {
@@ -59,6 +61,16 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
 
       const domNode = document.createElement('div');
       domNode.style.zIndex = '10';
+      domNode.style.overflow = 'hidden';
+      domNode.style.boxSizing = 'border-box';
+
+      // Pin the view-zone node width to the editor's content column so it never
+      // inflates Monaco's scrollWidth and causes the horizontal scrollbar to diverge.
+      const layoutInfo = editor.getLayoutInfo();
+      domNode.style.width = `${layoutInfo.contentWidth}px`;
+      const layoutListener = editor.onDidLayoutChange((info) => {
+        domNode.style.width = `${info.contentWidth}px`;
+      });
 
       let zoneId = '';
       changeViewZones((accessor) => {
@@ -70,6 +82,7 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       });
 
       const id = `comment-${++nextId}`;
+      layoutListenersRef.current.set(id, layoutListener);
       setComments((prev) => [...prev, { id, startLine, endLine, lineContent, zoneId, domNode, text: '' }]);
     },
     [changeViewZones, getModel],
@@ -81,6 +94,8 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       if (entry && changeViewZones) {
         changeViewZones((accessor) => accessor.removeZone(entry.zoneId));
       }
+      layoutListenersRef.current.get(id)?.dispose();
+      layoutListenersRef.current.delete(id);
       setComments((prev) => prev.filter((c) => c.id !== id));
     },
     [changeViewZones],
@@ -94,6 +109,10 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
         }
       });
     }
+    for (const listener of layoutListenersRef.current.values()) {
+      listener.dispose();
+    }
+    layoutListenersRef.current.clear();
     setComments([]);
   }, [changeViewZones]);
 
