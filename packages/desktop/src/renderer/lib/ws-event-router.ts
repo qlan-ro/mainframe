@@ -190,6 +190,9 @@ export function routeEvent(event: DaemonEvent): void {
     case 'message.queued.cleared':
       chats.clearQueuedMessages(event.chatId);
       break;
+    case 'message.queued.snapshot':
+      chats.setQueuedMessages(event.chatId, event.refs);
+      break;
     case 'adapter.models.updated':
       log.info('event:adapter.models.updated', { adapterId: event.adapterId, count: event.models.length });
       useAdaptersStore.getState().updateAdapterModels(event.adapterId, event.models);

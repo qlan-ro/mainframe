@@ -17,7 +17,6 @@ export const MODE_OPTIONS: {
     description: 'Auto-approves everything — use in isolated environments only',
     danger: true,
   },
-  { id: 'plan', label: 'Plan Mode', description: 'Research only until plan is approved' },
 ];
 
 export const SIDEBAR_TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [

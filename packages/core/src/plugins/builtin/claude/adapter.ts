@@ -15,6 +15,7 @@ import { ClaudeSession } from './session.js';
 import { probeModels as doProbeModels } from './probe-models.js';
 import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';
+import { ClaudePlanModeHandler } from './plan-mode-handler.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 import manifest from './manifest.json' with { type: 'json' };
 
@@ -113,9 +114,14 @@ const CLAUDE_MODELS: AdapterModel[] = [
 export class ClaudeAdapter implements Adapter {
   id = 'claude';
   name = 'Claude CLI';
+  readonly capabilities = { planMode: true } as const;
 
   private sessions = new Set<ClaudeSession>();
   private dynamicModels: AdapterModel[] | null = null;
+
+  createPlanModeHandler(): unknown {
+    return new ClaudePlanModeHandler();
+  }
 
   async isInstalled(): Promise<boolean> {
     return new Promise((resolve) => {

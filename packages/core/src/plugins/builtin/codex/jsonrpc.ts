@@ -26,6 +26,7 @@ export class JsonRpcClient {
   private buffer = '';
   private pending = new Map<RequestId, PendingRequest>();
   private closed = false;
+  private closeListeners = new Set<() => void>();
 
   constructor(
     private readonly process: ChildProcess,
@@ -36,6 +37,7 @@ export class JsonRpcClient {
     process.stderr?.on('data', (chunk: Buffer) => this.handleStderr(chunk));
     process.on('close', (code: number | null) => {
       this.rejectAllPending(new Error(`Process exited with code ${code}`));
+      for (const listener of this.closeListeners) listener();
       this.handlers.onExit(code);
     });
     process.on('error', (err: Error) => {
@@ -84,6 +86,13 @@ export class JsonRpcClient {
     } catch {
       /* already dead */
     }
+  }
+
+  onClose(listener: () => void): () => void {
+    this.closeListeners.add(listener);
+    return () => {
+      this.closeListeners.delete(listener);
+    };
   }
 
   private write(msg: Record<string, unknown>): void {
