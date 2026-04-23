@@ -6,6 +6,7 @@ import { todosApi } from '../../lib/api/todos-api';
 import { TodoAttachments } from './TodoAttachments';
 import { DependencyPicker } from './DependencyPicker';
 import { LabelAutocomplete } from './LabelAutocomplete';
+import { ImageLightbox } from '../chat/ImageLightbox';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:todo-modal');
@@ -95,6 +96,7 @@ export function TodoModal({
 
   // Attachments for new todos (buffered locally)
   const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   // Key to force-refresh TodoAttachments after paste-upload on existing todo
   const [attachRefresh, setAttachRefresh] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -308,17 +310,24 @@ export function TodoModal({
               <label className="text-mf-small text-mf-text-secondary">Attachments</label>
               {pendingFiles.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {pendingFiles.map((f) => (
+                  {pendingFiles.map((f, i) => (
                     <div
                       key={f.id}
                       className="relative group rounded-mf-input border border-mf-border overflow-hidden bg-mf-app-bg"
                     >
-                      <img
-                        src={`data:${f.mimeType};base64,${f.data}`}
-                        alt={f.filename}
-                        className="w-20 h-20 object-cover"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setLightboxIndex(i)}
+                        className="block w-20 h-20 focus:outline-none focus:ring-1 focus:ring-mf-accent"
+                        aria-label={`Preview ${f.filename}`}
+                      >
+                        <img
+                          src={`data:${f.mimeType};base64,${f.data}`}
+                          alt={f.filename}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 pointer-events-none">
                         <span className="text-mf-status text-white truncate block">{f.filename}</span>
                       </div>
                       <button
@@ -332,6 +341,14 @@ export function TodoModal({
                     </div>
                   ))}
                 </div>
+              )}
+              {lightboxIndex !== null && pendingFiles.length > 0 && (
+                <ImageLightbox
+                  images={pendingFiles.map((f) => ({ mediaType: f.mimeType, data: f.data }))}
+                  index={lightboxIndex}
+                  onClose={() => setLightboxIndex(null)}
+                  onNavigate={setLightboxIndex}
+                />
               )}
               <input
                 ref={fileInputRef}
