@@ -76,6 +76,12 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
         domNode.style.width = `${computeWidth(info)}px`;
       });
 
+      // Monaco swallows wheel events inside view zones and drives its own
+      // scroll. Treat the widget as an island: stop propagation so the
+      // textarea (and any future scrollable children) handle the wheel
+      // natively without scrolling the editor underneath.
+      domNode.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+
       let zoneId = '';
       changeViewZones((accessor) => {
         zoneId = accessor.addZone({
