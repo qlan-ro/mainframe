@@ -152,6 +152,7 @@ export class ClaudeSession implements AdapterSession {
 
     if (this.resumeSessionId) args.push('--resume', this.resumeSessionId);
     if (options.model) args.push('--model', options.model);
+    if (options.effort) args.push('--effort', options.effort);
     // Remember the base (non-plan) mode so setPlanMode(false) can restore it.
     const baseMode = options.permissionMode === 'yolo' ? 'bypassPermissions' : (options.permissionMode ?? 'default');
     this.basePermissionMode = baseMode;
@@ -190,6 +191,7 @@ export class ClaudeSession implements AdapterSession {
         resume: !!this.resumeSessionId,
         model: options.model ?? 'default',
         permissionMode: options.permissionMode ?? 'default',
+        effort: options.effort ?? null,
       },
       'claude session spawned',
     );

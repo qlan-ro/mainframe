@@ -34,6 +34,8 @@ export interface SessionSpawnOptions {
   planMode?: boolean;
   executablePath?: string;
   systemPrompt?: string;
+  /** Reasoning effort passed as --effort to the CLI. Only honored by adapters whose selected model supports it. */
+  effort?: import('./chat.js').ChatEffort;
 }
 
 export interface AdapterProcess {
