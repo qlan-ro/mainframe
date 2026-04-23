@@ -254,6 +254,85 @@ describe('ChatsRepository', () => {
     });
   });
 
+  describe('effort', () => {
+    it('defaults to undefined on a new chat', () => {
+      const chat = chats.create(projectId, 'claude');
+      expect(chats.get(chat.id)!.effort).toBeUndefined();
+    });
+
+    it('persists each valid effort level', () => {
+      const chat = chats.create(projectId, 'claude');
+
+      chats.update(chat.id, { effort: 'low' });
+      expect(chats.get(chat.id)!.effort).toBe('low');
+
+      chats.update(chat.id, { effort: 'medium' });
+      expect(chats.get(chat.id)!.effort).toBe('medium');
+
+      chats.update(chat.id, { effort: 'high' });
+      expect(chats.get(chat.id)!.effort).toBe('high');
+    });
+
+    it('clears effort when null is passed', () => {
+      const chat = chats.create(projectId, 'claude');
+      chats.update(chat.id, { effort: 'high' });
+      expect(chats.get(chat.id)!.effort).toBe('high');
+
+      // Route passes null to clear — cast mirrors the route handler's behavior.
+      chats.update(chat.id, { effort: null as unknown as 'high' });
+      expect(chats.get(chat.id)!.effort).toBeUndefined();
+    });
+
+    it('returns undefined for unexpected stored values', () => {
+      const chat = chats.create(projectId, 'claude');
+      // Legacy / corrupted rows: the parser must coerce to undefined.
+      db.prepare('UPDATE chats SET effort = ? WHERE id = ?').run('max', chat.id);
+      expect(chats.get(chat.id)!.effort).toBeUndefined();
+    });
+
+    it('includes effort in list() and listAll() results', () => {
+      const chat = chats.create(projectId, 'claude');
+      chats.update(chat.id, { effort: 'medium' });
+
+      const listed = chats.list(projectId).find((c) => c.id === chat.id);
+      expect(listed?.effort).toBe('medium');
+
+      const listedAll = chats.listAll().find((c) => c.id === chat.id);
+      expect(listedAll?.effort).toBe('medium');
+    });
+  });
+
+  describe('schema migration', () => {
+    it('initializeSchema adds the effort column to an existing chats table without it', () => {
+      // Simulate pre-migration DB by starting from a fresh in-memory DB, creating
+      // chats without effort, then running initializeSchema again (idempotent).
+      const legacy = new Database(':memory:');
+      legacy.exec(`
+        CREATE TABLE chats (
+          id TEXT PRIMARY KEY,
+          adapter_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          title TEXT,
+          claude_session_id TEXT,
+          model TEXT,
+          status TEXT NOT NULL DEFAULT 'active',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          total_cost REAL DEFAULT 0,
+          total_tokens_input INTEGER DEFAULT 0,
+          total_tokens_output INTEGER DEFAULT 0
+        );
+      `);
+      const before = legacy.pragma('table_info(chats)') as { name: string }[];
+      expect(before.some((c) => c.name === 'effort')).toBe(false);
+
+      initializeSchema(legacy);
+      const after = legacy.pragma('table_info(chats)') as { name: string }[];
+      expect(after.some((c) => c.name === 'effort')).toBe(true);
+      legacy.close();
+    });
+  });
+
   describe('pinned ordering', () => {
     it('list() returns pinned chats before unpinned ones', () => {
       const older = chats.create(projectId, 'claude');
