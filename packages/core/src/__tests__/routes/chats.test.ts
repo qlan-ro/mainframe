@@ -16,6 +16,7 @@ function createMockContext(): RouteContext {
       listChats: vi.fn(),
       listAllChats: vi.fn(),
       archiveChat: vi.fn(),
+      unarchiveChat: vi.fn(),
       getMessages: vi.fn(),
       getMessagesFromDisk: vi.fn(),
       getDisplayMessages: vi.fn(),
@@ -138,6 +139,35 @@ describe('chatRoutes', () => {
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Operation failed' });
+    });
+  });
+
+  describe('POST /api/chats/:id/unarchive', () => {
+    it('delegates to ctx.chats.unarchiveChat and returns the updated chat', () => {
+      const chat = { id: 'c1', projectId: 'p1', status: 'active' };
+      (ctx.chats.unarchiveChat as any).mockReturnValue(chat);
+
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'post', '/api/chats/:id/unarchive');
+      const res = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: {} }, res, vi.fn());
+
+      expect(ctx.chats.unarchiveChat).toHaveBeenCalledWith('c1');
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: chat });
+    });
+
+    it('returns 404 when chat does not exist', () => {
+      (ctx.chats.unarchiveChat as any).mockReturnValue(null);
+
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'post', '/api/chats/:id/unarchive');
+      const res = mockRes();
+
+      handler({ params: { id: 'missing' }, query: {}, body: {} }, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Chat not found' });
     });
   });
 

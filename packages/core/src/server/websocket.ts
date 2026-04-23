@@ -125,7 +125,13 @@ export class WebSocketManager {
       }
 
       case 'chat.updateConfig': {
-        await this.chats.updateChatConfig(event.chatId, event.adapterId, event.model, event.permissionMode);
+        await this.chats.updateChatConfig(
+          event.chatId,
+          event.adapterId,
+          event.model,
+          event.permissionMode,
+          event.planMode,
+        );
         break;
       }
 
@@ -175,6 +181,18 @@ export class WebSocketManager {
 
       case 'subscribe': {
         client.subscriptions.add(event.chatId);
+        // Rehydrate queued-message state for this client — the daemon is the
+        // source of truth; the renderer's Zustand store may have drifted
+        // during a WS disconnect.
+        const refs = this.chats.getQueuedForChat(event.chatId);
+        const snapshot: DaemonEvent = {
+          type: 'message.queued.snapshot',
+          chatId: event.chatId,
+          refs,
+        };
+        if (client.ws.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify(snapshot));
+        }
         break;
       }
 

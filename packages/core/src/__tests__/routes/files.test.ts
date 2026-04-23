@@ -563,3 +563,69 @@ describe('GET /api/projects/:id/files', () => {
     expect(res.status).toHaveBeenCalledWith(403);
   });
 });
+
+describe('GET /api/files/external', () => {
+  it('returns content of an absolute path file', async () => {
+    const extFile = join(projectDir, 'external.md');
+    await writeFile(extFile, '# External');
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    handler({ query: { path: extFile } } as any, res, vi.fn());
+    await flushPromises();
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ content: '# External' }));
+  });
+
+  it('returns 404 for a non-existent file', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    handler({ query: { path: join(projectDir, 'does-not-exist.txt') } } as any, res, vi.fn());
+    await flushPromises();
+
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('returns 400 when path query is missing', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    handler({ query: {} } as any, res, vi.fn());
+    await flushPromises();
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('returns 400 for a directory path', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    handler({ query: { path: projectDir } } as any, res, vi.fn());
+    await flushPromises();
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('blocks sensitive SSH private key paths', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    // Path doesn't need to exist — the block check runs before realpath
+    handler({ query: { path: join(homedir(), '.ssh', 'id_rsa') } } as any, res, vi.fn());
+    await flushPromises();
+
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+});
