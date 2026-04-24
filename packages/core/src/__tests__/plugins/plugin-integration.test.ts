@@ -167,6 +167,7 @@ describe('Plugin System — integration', () => {
         pluginId: 'ui-plugin',
         zone: 'left-panel',
         label: 'My Panel',
+        panelId: expect.any(String),
       }),
     );
   });
