@@ -14,6 +14,7 @@ import { getGitBranch } from '../../../../lib/api';
 import { focusComposerInput } from '../../../../lib/focus';
 import { ContextPickerMenu } from '../../ContextPickerMenu';
 import { ComposerDropdown } from './ComposerDropdown';
+import { EffortPicker } from './EffortPicker';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
@@ -407,6 +408,7 @@ export function ComposerCard() {
           {currentAdapterInfo?.capabilities.planMode && (
             <PlanModeToggle active={chat?.planMode === true} onToggle={handlePlanToggle} />
           )}
+          {chat && <EffortPicker chat={chat} adapters={adapters} modelId={currentModel} disabled={!!chat.isRunning} />}
           {isGitProject && (
             <div className="relative">
               <Tooltip>

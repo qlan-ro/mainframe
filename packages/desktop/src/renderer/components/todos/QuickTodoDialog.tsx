@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { usePluginLayoutStore } from '../../store/plugins';
 import { LabelAutocomplete } from './LabelAutocomplete';
+import { ImageLightbox } from '../chat/ImageLightbox';
 import { todosApi } from '../../lib/api/todos-api';
 import { getActiveProjectId } from '../../hooks/useActiveProjectId';
 import { toast } from '../../lib/toast';
@@ -86,6 +87,7 @@ export function QuickTodoDialog() {
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -260,16 +262,23 @@ export function QuickTodoDialog() {
           {/* Pending attachments */}
           {pendingFiles.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {pendingFiles.map((f) => (
+              {pendingFiles.map((f, i) => (
                 <div
                   key={f.id}
                   className="relative group rounded-mf-input border border-mf-border overflow-hidden bg-mf-app-bg"
                 >
-                  <img
-                    src={`data:${f.mimeType};base64,${f.data}`}
-                    alt={f.filename}
-                    className="w-16 h-16 object-cover"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setLightboxIndex(i)}
+                    className="block w-16 h-16 focus:outline-none focus:ring-1 focus:ring-mf-accent"
+                    aria-label={`Preview ${f.filename}`}
+                  >
+                    <img
+                      src={`data:${f.mimeType};base64,${f.data}`}
+                      alt={f.filename}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setPendingFiles((prev) => prev.filter((p) => p.id !== f.id))}
@@ -281,6 +290,14 @@ export function QuickTodoDialog() {
                 </div>
               ))}
             </div>
+          )}
+          {lightboxIndex !== null && pendingFiles.length > 0 && (
+            <ImageLightbox
+              images={pendingFiles.map((f) => ({ mediaType: f.mimeType, data: f.data }))}
+              index={lightboxIndex}
+              onClose={() => setLightboxIndex(null)}
+              onNavigate={setLightboxIndex}
+            />
           )}
 
           {/* Priority toggle */}

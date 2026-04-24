@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, X, Image } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 import { todosApi, type AttachmentMeta } from '../../lib/api/todos-api';
+import { ImageLightbox } from '../chat/ImageLightbox';
 
 const log = createLogger('renderer:todo-attachments');
 
@@ -26,11 +27,32 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-function AttachmentThumbnail({ att, onDelete }: { att: AttachmentMeta; onDelete: () => void }) {
+function AttachmentThumbnail({
+  att,
+  onDelete,
+  onPreview,
+}: {
+  att: AttachmentMeta;
+  onDelete: () => void;
+  onPreview?: () => void;
+}) {
   const isImage = att.mimeType.startsWith('image/');
   return (
     <div className="relative group rounded-mf-input border border-mf-border overflow-hidden bg-mf-app-bg">
-      {isImage ? (
+      {isImage && onPreview ? (
+        <button
+          type="button"
+          onClick={onPreview}
+          className="block w-20 h-20 focus:outline-none focus:ring-1 focus:ring-mf-accent"
+          aria-label={`Preview ${att.filename}`}
+        >
+          <img
+            src={`data:${att.mimeType};base64,${(att as AttachmentMeta & { data?: string }).data ?? ''}`}
+            alt={att.filename}
+            className="w-full h-full object-cover"
+          />
+        </button>
+      ) : isImage ? (
         <img
           src={`data:${att.mimeType};base64,${(att as AttachmentMeta & { data?: string }).data ?? ''}`}
           alt={att.filename}
@@ -41,7 +63,7 @@ function AttachmentThumbnail({ att, onDelete }: { att: AttachmentMeta; onDelete:
           <Image size={20} className="text-mf-text-secondary" />
         </div>
       )}
-      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5">
+      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 pointer-events-none">
         <span className="text-mf-status text-white truncate block">{att.filename}</span>
       </div>
       <button
@@ -59,7 +81,11 @@ function AttachmentThumbnail({ att, onDelete }: { att: AttachmentMeta; onDelete:
 export function TodoAttachments({ todoId }: Props): React.ReactElement {
   const [attachments, setAttachments] = useState<(AttachmentMeta & { data?: string })[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Only image attachments are lightbox-eligible; index maps to this filtered list.
+  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith('image/') && a.data);
 
   const loadAttachments = useCallback(async () => {
     try {
@@ -128,10 +154,26 @@ export function TodoAttachments({ todoId }: Props): React.ReactElement {
       <label className="text-mf-small text-mf-text-secondary">Attachments</label>
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {attachments.map((att) => (
-            <AttachmentThumbnail key={att.id} att={att} onDelete={() => void handleDelete(att.id)} />
-          ))}
+          {attachments.map((att) => {
+            const imageIndex = att.mimeType.startsWith('image/') && att.data ? imageAttachments.indexOf(att) : -1;
+            return (
+              <AttachmentThumbnail
+                key={att.id}
+                att={att}
+                onDelete={() => void handleDelete(att.id)}
+                onPreview={imageIndex >= 0 ? () => setLightboxIndex(imageIndex) : undefined}
+              />
+            );
+          })}
         </div>
+      )}
+      {lightboxIndex !== null && imageAttachments.length > 0 && (
+        <ImageLightbox
+          images={imageAttachments.map((a) => ({ mediaType: a.mimeType, data: a.data as string }))}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+        />
       )}
       <input ref={inputRef} type="file" accept={IMAGE_ACCEPT} onChange={handleUpload} className="hidden" />
       <button
