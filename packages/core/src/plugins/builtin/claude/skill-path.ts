@@ -9,24 +9,36 @@ import { accessSync, readdirSync, readFileSync } from 'node:fs';
  * to fire skill detection if a real skill file exists.
  */
 export function resolveExistingSkillPath(projectPath: string | undefined, skillName: string): string | null {
+  // `plugin:skill` qualifies the skill under a specific plugin. Split so we
+  // probe the plugin dir by name, not the full qualified string.
+  const colonIdx = skillName.indexOf(':');
+  const pluginPrefix = colonIdx >= 0 ? skillName.slice(0, colonIdx) : null;
+  const leafName = colonIdx >= 0 ? skillName.slice(colonIdx + 1) : skillName;
+
   const candidates: string[] = [];
-  if (projectPath) {
-    candidates.push(path.join(projectPath, '.claude', 'skills', skillName, 'SKILL.md'));
-  }
-  candidates.push(path.join(homedir(), '.claude', 'skills', skillName, 'SKILL.md'));
 
-  const pluginsDir = path.join(homedir(), '.claude', 'plugins');
-  try {
-    for (const entry of readdirSync(pluginsDir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        candidates.push(path.join(pluginsDir, entry.name, 'skills', skillName, 'SKILL.md'));
-      }
+  // Plain (unqualified) skills: project → user home → every plugin dir.
+  if (!pluginPrefix) {
+    if (projectPath) {
+      candidates.push(path.join(projectPath, '.claude', 'skills', leafName, 'SKILL.md'));
     }
-  } catch {
-    /* no plugins dir */
+    candidates.push(path.join(homedir(), '.claude', 'skills', leafName, 'SKILL.md'));
+
+    const pluginsDir = path.join(homedir(), '.claude', 'plugins');
+    try {
+      for (const entry of readdirSync(pluginsDir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          candidates.push(path.join(pluginsDir, entry.name, 'skills', leafName, 'SKILL.md'));
+        }
+      }
+    } catch {
+      /* no plugins dir */
+    }
   }
 
-  // Plugin cache path: ~/.claude/plugins/cache/<owner>-plugins-marketplace/<plugin>/<version>/skills/<name>/SKILL.md
+  // Plugin-qualified skills: look up the prefix. Unqualified also falls into
+  // the cache walker below so a bare name can still be found there.
+  // Cache layout: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/SKILL.md
   const cacheDir = path.join(homedir(), '.claude', 'plugins', 'cache');
   try {
     for (const marketplace of readdirSync(cacheDir, { withFileTypes: true })) {
@@ -34,15 +46,32 @@ export function resolveExistingSkillPath(projectPath: string | undefined, skillN
       const marketDir = path.join(cacheDir, marketplace.name);
       for (const plugin of readdirSync(marketDir, { withFileTypes: true })) {
         if (!plugin.isDirectory()) continue;
+        if (pluginPrefix && plugin.name !== pluginPrefix) continue;
         const pluginDir = path.join(marketDir, plugin.name);
         for (const version of readdirSync(pluginDir, { withFileTypes: true })) {
           if (!version.isDirectory()) continue;
-          candidates.push(path.join(pluginDir, version.name, 'skills', skillName, 'SKILL.md'));
+          candidates.push(path.join(pluginDir, version.name, 'skills', leafName, 'SKILL.md'));
         }
       }
     }
   } catch {
     /* no cache dir */
+  }
+
+  // Also check non-cache plugin dirs for plugin-qualified skills.
+  if (pluginPrefix) {
+    const pluginsDir = path.join(homedir(), '.claude', 'plugins');
+    try {
+      for (const entry of readdirSync(pluginsDir, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.name === 'cache') continue;
+        // Match either exact plugin-name dir or "<plugin>-plugin" convention.
+        if (entry.name === pluginPrefix || entry.name === `${pluginPrefix}-plugin`) {
+          candidates.push(path.join(pluginsDir, entry.name, 'skills', leafName, 'SKILL.md'));
+        }
+      }
+    } catch {
+      /* no plugins dir */
+    }
   }
 
   for (const candidate of candidates) {
