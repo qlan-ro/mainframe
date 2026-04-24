@@ -233,6 +233,16 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
         sink.onSkillLoaded({ skillName, path: skillPath, content });
         sink.onSkillFile({ path: skillPath, displayName: skillName });
       }
+      return;
+    }
+
+    // Any other string-content user event is CLI feedback that doesn't belong
+    // to a skill/command echo — e.g. "Unknown command: /foo". Surface it as a
+    // system pill so the user sees why their input had no effect. The user's
+    // original text already exists as a transient from chat-manager.sendMessage.
+    if (!isReplay && !isMeta) {
+      const trimmed = message.content.trim();
+      if (trimmed) sink.onCliMessage(trimmed);
     }
     return;
   }
@@ -373,6 +383,17 @@ function handleControlResponseEvent(session: ClaudeSession, event: Record<string
 }
 
 function handleResultEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+  // Surface CLI slash-command errors that reach us only via the `result`
+  // event. When `shouldQuery: false` (unknown /cmd, bad /cmd args), the CLI
+  // filters the "Unknown skill: /X" user message out of stream-json
+  // (QueryEngine.ts:556-605 only yields <local-command-stdout|stderr> entries)
+  // but the error text survives on `result.result`. We forward it as a
+  // system pill so the user sees why their input had no effect.
+  const resultText = typeof event.result === 'string' ? event.result.trim() : '';
+  if (resultText && /^Unknown (command|skill):/i.test(resultText)) {
+    sink.onCliMessage(resultText);
+  }
+
   const lastUsage = session.state.lastAssistantUsage;
   const usage =
     lastUsage ??

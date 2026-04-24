@@ -34,6 +34,39 @@ const log = createChildLogger('claude:history');
  * synthesize a transient system message with a `skill_loaded` block so
  * SkillLoadedCard renders on history replay.
  */
+/**
+ * "Unknown command: /X" user entries are CLI feedback — the CLI never writes
+ * the original user-typed /X to JSONL, so on replay the typed bubble is lost.
+ * Synthesize both components: the invocation bubble and the error pill, so
+ * history mirrors what the user saw live.
+ */
+function synthesizeUnknownCommandFromUserEntry(entry: Record<string, unknown>, chatId: string): ChatMessage[] | null {
+  const message = entry.message as { content?: unknown } | undefined;
+  const content = message?.content;
+  if (typeof content !== 'string') return null;
+  const match = /^Unknown command:\s+(\/\S+)/.exec(content.trim());
+  if (!match?.[1]) return null;
+  const cmd = match[1];
+  const uuid = (entry.uuid as string) ?? nanoid();
+  const timestamp = (entry.timestamp as string) ?? new Date().toISOString();
+  return [
+    {
+      id: `unknown-cmd-user-${uuid}`,
+      chatId,
+      type: 'user',
+      content: [{ type: 'text', text: cmd }],
+      timestamp,
+    },
+    {
+      id: `unknown-cmd-err-${uuid}`,
+      chatId,
+      type: 'system',
+      content: [{ type: 'text', text: content.trim() }],
+      timestamp,
+    },
+  ];
+}
+
 function synthesizeSkillLoadedFromUserEntry(entry: Record<string, unknown>, chatId: string): ChatMessage | null {
   const message = entry.message as { content?: unknown } | undefined;
   const content = message?.content;
@@ -413,6 +446,20 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
 
           if (entry.isMeta === true) continue;
           if (entry.isCompactSummary === true || entry.isVisibleInTranscriptOnly === true) continue;
+
+          // "Unknown command: /X" — CLI feedback for slash commands that don't
+          // resolve. Split into invocation bubble + error pill on replay.
+          if (entry.type === 'user') {
+            const synthesized = synthesizeUnknownCommandFromUserEntry(entry, sessionId);
+            if (synthesized) {
+              for (const m of synthesized) {
+                if (seenUuids.has(m.id)) continue;
+                seenUuids.add(m.id);
+                messages.push(m);
+              }
+              continue;
+            }
+          }
 
           // Collect tool_use blocks from agent_progress events
           if (entry.type === 'progress' && entry.data?.type === 'agent_progress') {
