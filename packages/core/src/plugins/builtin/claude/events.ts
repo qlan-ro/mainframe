@@ -285,8 +285,20 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
 
       // CLI-synthesized feedback (e.g. unknown-command errors, notices).
       // Discriminator: not a replay of user-typed text AND not a CLI meta wrapper.
+      //
+      // Additional filter: suppress messages whose WHOLE payload is a
+      // <local-command-*> wrapper. Those tags (stdout, stderr, caveat) hold
+      // CLI-internal output fed back to the model for context, not for the
+      // user. Example: the model-picker feature sends `/model X` and gets
+      // `<local-command-stdout>Set model to X</local-command-stdout>` back.
       if (!isReplay && !isMeta) {
-        sink.onCliMessage(text.trim());
+        const isLocalCommandWrapper =
+          /^<local-command-(?:stdout|stderr|caveat)>[\s\S]*<\/local-command-(?:stdout|stderr|caveat)>\s*$/.test(
+            text.trim(),
+          );
+        if (!isLocalCommandWrapper) {
+          sink.onCliMessage(text.trim());
+        }
       }
     }
   }
