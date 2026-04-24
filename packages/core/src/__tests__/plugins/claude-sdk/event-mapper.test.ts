@@ -221,22 +221,28 @@ describe('mapSdkMessage', () => {
     expect(sink.onPlanFile).toHaveBeenCalledWith('/tmp/plan.md');
   });
 
-  it('detects skill file entries in tool_result content', () => {
+  it('detects skill from SkillTool tool_use in assistant messages', async () => {
+    const { homedir } = await import('node:os');
+    const pathMod = await import('node:path');
+    // Use a name guaranteed not to exist on disk so resolveSkillPath returns
+    // the deterministic homedir fallback rather than a real skill from the
+    // developer's actual ~/.claude/plugins cache.
+    const SKILL = 'nonexistent-test-skill-xyzabc';
     const sink = createMockSink();
     mapSdkMessage(
       {
-        type: 'user',
-        uuid: 'uuid-9',
+        type: 'assistant',
+        uuid: 'uuid-10',
         session_id: 'sess-1',
         parent_tool_use_id: null,
         message: {
-          role: 'user',
+          model: 'claude',
           content: [
             {
-              type: 'tool_result',
-              tool_use_id: 'tu-3',
-              content: 'Base directory for this skill: /home/user/.claude/skills/my-skill',
-              is_error: false,
+              type: 'tool_use',
+              id: 'toolu_s1',
+              name: 'Skill',
+              input: { skill: SKILL },
             },
           ],
         },
@@ -245,8 +251,34 @@ describe('mapSdkMessage', () => {
     );
 
     expect(sink.onSkillFile).toHaveBeenCalledWith({
-      path: '/home/user/.claude/skills/my-skill',
-      displayName: 'my-skill',
+      path: pathMod.join(homedir(), '.claude', 'skills', SKILL, 'SKILL.md'),
+      displayName: SKILL,
     });
+  });
+
+  it('does NOT fire onSkillFile for plain prose mentioning "Base directory for this skill"', () => {
+    const sink = createMockSink();
+    mapSdkMessage(
+      {
+        type: 'user',
+        uuid: 'uuid-11',
+        session_id: 'sess-1',
+        parent_tool_use_id: null,
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tu-4',
+              content: 'Base directory for this skill: /fake/path',
+              is_error: false,
+            },
+          ],
+        },
+      } as any,
+      sink,
+    );
+
+    expect(sink.onSkillFile).not.toHaveBeenCalled();
   });
 });

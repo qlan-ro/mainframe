@@ -43,6 +43,8 @@ const nullSink: SessionSink = {
   onQueuedProcessed: () => {},
   onTodoUpdate: () => {},
   onPrDetected: () => {},
+  onCliMessage: () => {},
+  onSkillLoaded: () => {},
 };
 
 export interface ClaudeSessionState {
@@ -63,6 +65,9 @@ export interface ClaudeSessionState {
   pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
   /** Tool_use IDs for Bash commands that match PR-create patterns (gh pr create, etc.) */
   pendingPrCreates: Set<string>;
+  // Cached skill-name → resolved SKILL.md path, populated lazily on SkillTool
+  // detection to avoid re-probing the filesystem for the same skill.
+  skillPathCache: Map<string, string>;
 }
 
 /**
@@ -105,6 +110,7 @@ export class ClaudeSession implements AdapterSession {
       interruptTimer: null,
       pendingCancelCallbacks: new Map(),
       pendingPrCreates: new Set(),
+      skillPathCache: new Map(),
     };
   }
 

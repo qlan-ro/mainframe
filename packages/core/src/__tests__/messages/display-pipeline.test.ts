@@ -118,14 +118,33 @@ describe('prepareMessagesForClient', () => {
     expect(result[0]!.type).toBe('assistant');
   });
 
-  it('filters out internal user messages with command-name skill marker', () => {
+  it('renders user-typed /skill-name as a /skill-name bubble', () => {
     const messages = [
-      rawMsg('user', [txt('<command-name>systematic-debugging</command-name> some text')]),
+      rawMsg('user', [
+        txt(
+          '<command-message>systematic-debugging</command-message>\n<command-name>/systematic-debugging</command-name>',
+        ),
+      ]),
       rawMsg('assistant', [txt('response')]),
     ];
     const result = prepareMessagesForClient(messages);
+    expect(result).toHaveLength(2);
+    expect(result[0]!.type).toBe('user');
+    expect(result[0]!.content).toEqual([{ type: 'text', text: '/systematic-debugging' }]);
+  });
+
+  it('renders user-typed /skill-name with <command-args> as /skill-name args bubble', () => {
+    const messages = [
+      rawMsg('user', [
+        txt(
+          '<command-message>work-logger:slack-status-writer</command-message>\n<command-name>/work-logger:slack-status-writer</command-name>\n<command-args>how are you</command-args>',
+        ),
+      ]),
+    ];
+    const result = prepareMessagesForClient(messages);
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('assistant');
+    expect(result[0]!.type).toBe('user');
+    expect(result[0]!.content).toEqual([{ type: 'text', text: '/work-logger:slack-status-writer how are you' }]);
   });
 
   it('deduplicates tool_use blocks by id (keeps first occurrence)', () => {

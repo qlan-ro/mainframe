@@ -80,7 +80,8 @@ export type MessageContent =
       modifiedFile?: string;
     }
   | { type: 'permission_request'; request: import('./adapter.js').ControlRequest }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
 

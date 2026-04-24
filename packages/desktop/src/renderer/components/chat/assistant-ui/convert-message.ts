@@ -52,15 +52,29 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
       };
     }
 
-    case 'system':
+    case 'system': {
+      // Skill-loaded blocks are passed through message metadata so the SystemMessage
+      // component can render a SkillLoadedCard rather than a plain text bubble.
+      const skillBlock = message.content.find(
+        (c): c is DisplayContent & { type: 'skill_loaded' } => c.type === 'skill_loaded',
+      );
+      const textParts = message.content
+        .filter((c): c is DisplayContent & { type: 'text' } => c.type === 'text')
+        .map((c) => ({ type: 'text' as const, text: c.text }));
+
+      const meta: Record<string, unknown> = { ...(message.metadata ?? {}) };
+      if (skillBlock) {
+        meta.skillLoaded = { skillName: skillBlock.skillName, path: skillBlock.path, content: skillBlock.content };
+      }
+
       return {
         role: 'system',
-        content: message.content
-          .filter((c): c is DisplayContent & { type: 'text' } => c.type === 'text')
-          .map((c) => ({ type: 'text' as const, text: c.text })),
+        content: textParts.length > 0 ? textParts : [{ type: 'text' as const, text: '' }],
         id: message.id,
         createdAt: new Date(message.timestamp),
+        ...(Object.keys(meta).length > 0 && { metadata: meta }),
       };
+    }
 
     case 'assistant': {
       const parts: ContentPart[] = [];

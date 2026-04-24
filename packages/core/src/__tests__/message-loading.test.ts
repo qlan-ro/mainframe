@@ -340,7 +340,7 @@ describe('loadHistory', () => {
     }
   });
 
-  it('filters slash-command invocation markers containing <command-name> tags', async () => {
+  it('preserves slash-command invocation markers so display-pipeline can render them', async () => {
     writeJsonl(SESSION_ID, [
       userTextEntry('<command-name>commit</command-name>\n/commit'),
       userTextEntry('You are a commit message generator. Analyze the staged changes...'),
@@ -349,13 +349,51 @@ describe('loadHistory', () => {
 
     const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
-    // The command marker (first user message) is filtered; skill expansion content + assistant remain
-    expect(messages).toHaveLength(2);
+    // History keeps <command-name> entries so the display pipeline can render
+    // them as "/commit" bubbles instead of silently dropping the user's typed command.
+    expect(messages).toHaveLength(3);
     expect(messages[0].type).toBe('user');
-    expect(messages[1].type).toBe('assistant');
+    expect(messages[1].type).toBe('user');
+    expect(messages[2].type).toBe('assistant');
   });
 
-  it('skips isMeta=true entries (skill content injections)', async () => {
+  it('synthesizes user + system messages for "Unknown command: /X" string entries', async () => {
+    writeJsonl(SESSION_ID, [
+      jsonlEntry({
+        type: 'user',
+        message: { role: 'user', content: 'Unknown command: /non-existent-skill' },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0].type).toBe('user');
+    expect(messages[0].content[0]).toMatchObject({ type: 'text', text: '/non-existent-skill' });
+    expect(messages[1].type).toBe('system');
+    expect(messages[1].content[0]).toMatchObject({
+      type: 'text',
+      text: 'Unknown command: /non-existent-skill',
+    });
+  });
+
+  it('synthesizes user + system messages for "Unknown skill: X" string entries (no leading slash)', async () => {
+    writeJsonl(SESSION_ID, [
+      jsonlEntry({
+        type: 'user',
+        message: { role: 'user', content: 'Unknown skill: missing-skill' },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0].type).toBe('user');
+    expect(messages[0].content[0]).toMatchObject({ type: 'text', text: '/missing-skill' });
+    expect(messages[1].type).toBe('system');
+  });
+
+  it('converts isMeta skill-content entries into a synthetic system/skill_loaded message', async () => {
     const toolUseId = 'toolu_skill_1';
     writeJsonl(SESSION_ID, [
       userTextEntry('Use the brainstorming skill'),
@@ -367,16 +405,21 @@ describe('loadHistory', () => {
 
     const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
-    // isMeta=true entry is skipped; 4 real messages remain
-    expect(messages).toHaveLength(4);
+    // isMeta entry is converted to a system message with a skill_loaded block → 5 messages.
+    expect(messages).toHaveLength(5);
     const types = messages.map((m) => m.type);
-    expect(types).toEqual(['user', 'assistant', 'tool_result', 'assistant']);
+    expect(types).toEqual(['user', 'assistant', 'tool_result', 'system', 'assistant']);
+    const skillMsg = messages[3];
+    expect(skillMsg.content[0]).toMatchObject({
+      type: 'skill_loaded',
+      skillName: 'brainstorming',
+    });
   });
 
-  it('preserves assistant turn continuity when isMeta entry is skipped', async () => {
-    // Bug 1 regression: isMeta entries between two assistant entries were splitting
-    // the consecutive assistant chain in groupMessages(), causing the first assistant
-    // text to appear as a separate message from the announcement.
+  it('preserves assistant turn continuity around the synthesized skill_loaded message', async () => {
+    // Regression guard: isMeta entries between two assistant entries were splitting
+    // the consecutive assistant chain in groupMessages(). The synthesized system
+    // message is its own role, so grouping must still work correctly.
     const toolUseId = 'toolu_skill_2';
     writeJsonl(SESSION_ID, [
       userTextEntry('Let me start working on this'),
@@ -389,12 +432,11 @@ describe('loadHistory', () => {
 
     const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
-    // isMeta entry is gone → 5 messages, no spurious user message splitting the assistant turns
-    expect(messages).toHaveLength(5);
+    // synthesized system msg sits between tool_result and the next assistant text.
+    expect(messages).toHaveLength(6);
     const types = messages.map((m) => m.type);
-    // user, assistant (pre-text), assistant (Skill tool_use), tool_result, assistant (announcement)
-    expect(types).toEqual(['user', 'assistant', 'assistant', 'tool_result', 'assistant']);
-    // No user or error message should appear at any point
+    expect(types).toEqual(['user', 'assistant', 'assistant', 'tool_result', 'system', 'assistant']);
+    // No extra user messages leaked in
     expect(types.filter((t) => t === 'user')).toHaveLength(1);
   });
 

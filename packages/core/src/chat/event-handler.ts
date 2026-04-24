@@ -379,25 +379,8 @@ function buildSessionSink(
     },
 
     onSkillFile(entry: SkillFileEntry) {
-      // Autonomous Skill-tool flows emit a tool_result containing "Launching skill:" before
-      // the isMeta skill content arrives. Slash-command flows do not, so we add an
-      // announcement message to confirm the skill was loaded.
-      const cachedMessages = messages.get(chatId) ?? [];
-      const lastMsg = cachedMessages[cachedMessages.length - 1];
-      const isAutonomousFlow =
-        lastMsg?.type === 'tool_result' &&
-        lastMsg.content.some(
-          (b) => b.type === 'tool_result' && typeof b.content === 'string' && b.content.startsWith('Launching skill:'),
-        );
-      if (!isAutonomousFlow) {
-        const announcement = messages.createTransientMessage(chatId, 'system', [
-          { type: 'text', text: `Using skill: ${entry.displayName}` },
-        ]);
-        messages.append(chatId, announcement);
-        emitEvent({ type: 'message.added', chatId, message: announcement });
-        emitDisplay();
-      }
-
+      // The SkillLoadedCard (emitted via onSkillLoaded) already tells the user
+      // which skill was loaded — no separate announcement message needed.
       if (db.chats.addSkillFile(chatId, entry)) {
         emitEvent({ type: 'context.updated', chatId });
       }
@@ -412,6 +395,22 @@ function buildSessionSink(
 
     onPrDetected(pr: import('@qlan-ro/mainframe-types').DetectedPr) {
       emitEvent({ type: 'chat.prDetected', chatId, pr });
+    },
+
+    onCliMessage(text: string) {
+      const message = messages.createTransientMessage(chatId, 'system', [{ type: 'text', text }]);
+      messages.append(chatId, message);
+      emitEvent({ type: 'message.added', chatId, message });
+      emitDisplay();
+    },
+
+    onSkillLoaded(entry: { skillName: string; path: string; content: string }) {
+      const message = messages.createTransientMessage(chatId, 'system', [
+        { type: 'skill_loaded', skillName: entry.skillName, path: entry.path, content: entry.content },
+      ]);
+      messages.append(chatId, message);
+      emitEvent({ type: 'message.added', chatId, message });
+      emitDisplay();
     },
 
     onError(error: Error) {

@@ -36,7 +36,8 @@ export type DisplayContent =
       result?: ToolCallResult;
     }
   | { type: 'permission_request'; request: unknown }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string };
 
 export interface DisplayMessage {
   id: string;

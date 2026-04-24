@@ -42,7 +42,11 @@ function dailyDestination(): pino.DestinationStream {
 
 const VALID_LEVELS = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal']);
 const rawLevel = process.env.LOG_LEVEL?.trim().toLowerCase() ?? 'info';
-const isTest = process.env.NODE_ENV === 'test';
+// Detect vitest directly — it sets VITEST=true — in addition to NODE_ENV=test,
+// because projects running vitest don't always set NODE_ENV. Without this,
+// ensureLogDir() runs at module import time and trips any test that mocks
+// node:os via vi.mock (e.g. message-loading.test.ts).
+const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
 const isProd = process.env.NODE_ENV === 'production';
 const forceStdout = process.env['LOG_TO_STDOUT'] === 'true';
 const logLevel: pino.Level = VALID_LEVELS.has(rawLevel) ? (rawLevel as pino.Level) : 'info';

@@ -225,9 +225,14 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
 
       const commandMatch = userText.match(/^\/(\S+)/);
       const matchedCommand = commandMatch ? commands.find((c) => c.name === commandMatch[1]) : undefined;
-      const metadata = matchedCommand
-        ? { command: { name: matchedCommand.name, source: matchedCommand.source } }
-        : undefined;
+      // Only set metadata for mainframe-sourced commands (which need XML wrapping).
+      // CLI-native slash commands (e.g. /compact, /insights, /branch) and unknown ones
+      // are forwarded as plain user text so the CLI's own processUserInput handles them,
+      // including "Unknown command: X" feedback for typos.
+      const metadata =
+        matchedCommand?.source === 'mainframe'
+          ? { command: { name: matchedCommand.name, source: matchedCommand.source } }
+          : undefined;
 
       try {
         setComposerError(null);

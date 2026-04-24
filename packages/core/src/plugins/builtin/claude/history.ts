@@ -22,16 +22,76 @@ export function deriveModifiedFile(
   return undefined;
 }
 
-function extractSkillPathFromText(content: Array<Record<string, unknown>>): string | null {
-  for (const block of content) {
-    if (block.type !== 'text') continue;
-    const text = block.text as string;
-    const match = text.match(/^Base directory for this skill: (.+)/);
-    if (match?.[1]) {
-      return path.join(match[1].trim(), 'SKILL.md');
-    }
-  }
-  return null;
+import { resolveSkillPath } from './skill-path.js';
+import { createChildLogger } from '../../../logger.js';
+
+const log = createChildLogger('claude:history');
+
+/**
+ * isMeta user entries whose first text block starts with
+ * "Base directory for this skill: <dir>" are the CLI's skill-content
+ * injections. We keep them out of the chat transcript (as before) but
+ * synthesize a transient system message with a `skill_loaded` block so
+ * SkillLoadedCard renders on history replay.
+ */
+/**
+ * "Unknown command: /X" user entries are CLI feedback — the CLI never writes
+ * the original user-typed /X to JSONL, so on replay the typed bubble is lost.
+ * Synthesize both components: the invocation bubble and the error pill, so
+ * history mirrors what the user saw live.
+ */
+function synthesizeUnknownCommandFromUserEntry(entry: Record<string, unknown>, chatId: string): ChatMessage[] | null {
+  const message = entry.message as { content?: unknown } | undefined;
+  const content = message?.content;
+  if (typeof content !== 'string') return null;
+  // Match both CLI error variants. "Unknown command:" comes from the
+  // MalformedCommandError path (processSlashCommand.tsx:820) and retains the
+  // leading slash. "Unknown skill:" comes from the !hasCommand path
+  // (processSlashCommand.tsx:347) and omits the slash — we add it back so the
+  // synthesized user bubble consistently reads like "/foo".
+  const match = /^Unknown (?:command|skill):\s+\/?(\S+)/.exec(content.trim());
+  if (!match?.[1]) return null;
+  const cmd = `/${match[1]}`;
+  const uuid = (entry.uuid as string) ?? nanoid();
+  const timestamp = (entry.timestamp as string) ?? new Date().toISOString();
+  return [
+    {
+      id: `unknown-cmd-user-${uuid}`,
+      chatId,
+      type: 'user',
+      content: [{ type: 'text', text: cmd }],
+      timestamp,
+    },
+    {
+      id: `unknown-cmd-err-${uuid}`,
+      chatId,
+      type: 'system',
+      content: [{ type: 'text', text: content.trim() }],
+      timestamp,
+    },
+  ];
+}
+
+function synthesizeSkillLoadedFromUserEntry(entry: Record<string, unknown>, chatId: string): ChatMessage | null {
+  const message = entry.message as { content?: unknown } | undefined;
+  const content = message?.content;
+  if (!Array.isArray(content) || content.length === 0) return null;
+  const first = content[0] as { type?: string; text?: string } | undefined;
+  if (first?.type !== 'text' || typeof first.text !== 'string') return null;
+  const match = /^Base directory for this skill:\s*(.+?)(?:\n|$)/m.exec(first.text);
+  if (!match?.[1]) return null;
+  const baseDir = match[1].trim();
+  const skillName = path.basename(baseDir);
+  const skillPath = path.extname(baseDir) ? baseDir : path.join(baseDir, 'SKILL.md');
+  const skillContent = first.text.replace(/^Base directory for this skill:[^\n]*\n?/m, '').trim();
+  const uuid = (entry.uuid as string) ?? nanoid();
+  return {
+    id: `skill-loaded-${uuid}`,
+    chatId,
+    type: 'system',
+    content: [{ type: 'skill_loaded', skillName, path: skillPath, content: skillContent }],
+    timestamp: (entry.timestamp as string) ?? new Date().toISOString(),
+  };
 }
 
 function extractToolResultContent(content: unknown): string {
@@ -213,15 +273,6 @@ export function convertHistoryEntry(entry: Record<string, unknown>, chatId: stri
   return null;
 }
 
-export function filterSkillExpansions(messages: ChatMessage[]): ChatMessage[] {
-  return messages.filter((msg) => {
-    if (msg.type !== 'user') return true;
-    // Filter slash-command invocation markers — they contain <command-name> tags and
-    // are purely CLI metadata that should never appear in the rendered conversation.
-    return !msg.content.some((b) => b.type === 'text' && /<command-name>/.test((b as { text: string }).text));
-  });
-}
-
 function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: Map<string, MessageContent[]>): void {
   const parentId = entry.parentToolUseID as string | undefined;
   if (!parentId) return;
@@ -378,10 +429,42 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
       const rl = createInterface({ input: stream, crlfDelay: Infinity });
       for await (const line of rl) {
         if (!line.trim()) continue;
+        log.trace({ sessionId, file, line }, '[jsonl]');
         try {
           const entry = JSON.parse(line);
+
+          // isMeta user messages carrying skill content are written to JSONL
+          // only (never emitted over stream-json), so history replay is the
+          // only chance to surface a SkillLoadedCard for these turns. Detect
+          // and synthesize a system 'skill_loaded' message BEFORE the generic
+          // isMeta filter drops them below.
+          if (entry.isMeta === true && entry.type === 'user') {
+            const synthesized = synthesizeSkillLoadedFromUserEntry(entry, sessionId);
+            if (synthesized) {
+              if (!seenUuids.has(synthesized.id)) {
+                seenUuids.add(synthesized.id);
+                messages.push(synthesized);
+              }
+              continue;
+            }
+          }
+
           if (entry.isMeta === true) continue;
           if (entry.isCompactSummary === true || entry.isVisibleInTranscriptOnly === true) continue;
+
+          // "Unknown command: /X" — CLI feedback for slash commands that don't
+          // resolve. Split into invocation bubble + error pill on replay.
+          if (entry.type === 'user') {
+            const synthesized = synthesizeUnknownCommandFromUserEntry(entry, sessionId);
+            if (synthesized) {
+              for (const m of synthesized) {
+                if (seenUuids.has(m.id)) continue;
+                seenUuids.add(m.id);
+                messages.push(m);
+              }
+              continue;
+            }
+          }
 
           // Collect tool_use blocks from agent_progress events
           if (entry.type === 'progress' && entry.data?.type === 'agent_progress') {
@@ -423,7 +506,7 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
     attachSubagentToolResults(messages, subagentToolResults);
   }
 
-  return filterSkillExpansions(messages);
+  return messages;
 }
 
 export async function extractPlanFilePaths(sessionId: string, projectPath: string): Promise<string[]> {
@@ -462,7 +545,15 @@ export async function extractSkillFilePaths(sessionId: string, projectPath: stri
   const { allFiles: jsonlFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
   if (jsonlFiles.length === 0) return [];
 
+  const seen = new Set<string>();
+  const cache = new Map<string, string>();
   const skillFiles: SkillFileEntry[] = [];
+  const push = (name: string): void => {
+    const trimmed = name.trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    skillFiles.push({ path: resolveSkillPath(projectPath, trimmed, cache), displayName: trimmed });
+  };
 
   for (const file of jsonlFiles) {
     const stream = createReadStream(file);
@@ -472,15 +563,14 @@ export async function extractSkillFilePaths(sessionId: string, projectPath: stri
         if (!line.trim()) continue;
         try {
           const entry = JSON.parse(line);
-          if (entry.type !== 'user' || entry.isMeta !== true) continue;
+          if (entry.type !== 'assistant') continue;
           const content = entry.message?.content;
           if (!Array.isArray(content)) continue;
-          const skillPath = extractSkillPathFromText(content);
-          if (skillPath) {
-            const segments = skillPath.split('/');
-            const file = segments.pop() ?? skillPath;
-            const displayName = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
-            skillFiles.push({ path: skillPath, displayName });
+          for (const block of content) {
+            if (block?.type === 'tool_use' && block.name === 'Skill') {
+              const skill = (block.input as { skill?: unknown } | undefined)?.skill;
+              if (typeof skill === 'string' && skill) push(skill);
+            }
           }
         } catch {
           /* skip malformed */
