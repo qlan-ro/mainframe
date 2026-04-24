@@ -149,6 +149,18 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'sessions.external.count':
       break;
+    case 'plugin.panel.registered':
+      usePluginLayoutStore.getState().registerContribution({
+        pluginId: event.pluginId,
+        panelId: event.panelId,
+        zone: event.zone,
+        label: event.label,
+        icon: event.icon,
+      });
+      break;
+    case 'plugin.panel.unregistered':
+      usePluginLayoutStore.getState().unregisterContribution(event.pluginId, event.panelId);
+      break;
     case 'plugin.notification':
       notify({
         type:

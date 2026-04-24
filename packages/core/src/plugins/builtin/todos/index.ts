@@ -358,10 +358,17 @@ export function activate(ctx: PluginContext): void {
   registerTodoRoutes(ctx);
   registerSessionRoute(ctx);
   registerAttachmentRoutes(ctx);
-  ctx.ui.addPanel({ zone: 'fullview', label: 'Tasks', icon: 'square-check' });
+
+  // Primary fullview: Kanban board.
+  const kanbanPanelId = ctx.ui.addPanel({ zone: 'fullview', label: 'Tasks', icon: 'square-check' });
+  // Secondary right-top zone: quick-add summary sidebar (stub — wired up for plumbing demo).
+  const sidebarPanelId = ctx.ui.addPanel({ zone: 'right-top', label: 'Tasks Sidebar', icon: 'list-todo' });
+
   ctx.ui.addAction({ id: 'quick-create', label: 'New Task', shortcut: 'mod+t', icon: 'plus' });
+
   ctx.onUnload(() => {
-    ctx.ui.removePanel();
+    ctx.ui.removePanel(kanbanPanelId);
+    ctx.ui.removePanel(sidebarPanelId);
     ctx.ui.removeAction('quick-create');
   });
   ctx.logger.info('TODO Kanban plugin activated');
