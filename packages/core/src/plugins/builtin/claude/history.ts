@@ -44,9 +44,14 @@ function synthesizeUnknownCommandFromUserEntry(entry: Record<string, unknown>, c
   const message = entry.message as { content?: unknown } | undefined;
   const content = message?.content;
   if (typeof content !== 'string') return null;
-  const match = /^Unknown command:\s+(\/\S+)/.exec(content.trim());
+  // Match both CLI error variants. "Unknown command:" comes from the
+  // MalformedCommandError path (processSlashCommand.tsx:820) and retains the
+  // leading slash. "Unknown skill:" comes from the !hasCommand path
+  // (processSlashCommand.tsx:347) and omits the slash — we add it back so the
+  // synthesized user bubble consistently reads like "/foo".
+  const match = /^Unknown (?:command|skill):\s+\/?(\S+)/.exec(content.trim());
   if (!match?.[1]) return null;
-  const cmd = match[1];
+  const cmd = `/${match[1]}`;
   const uuid = (entry.uuid as string) ?? nanoid();
   const timestamp = (entry.timestamp as string) ?? new Date().toISOString();
   return [

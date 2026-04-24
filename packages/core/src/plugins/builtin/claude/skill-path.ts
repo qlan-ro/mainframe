@@ -2,6 +2,16 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import { accessSync, readdirSync, readFileSync } from 'node:fs';
 
+// Claude CLI only accepts slash-command names matching /^[a-zA-Z0-9:_-]+$/
+// (processSlashCommand.tsx:307). Mirror that here so any skillName we feed
+// into path.join cannot contain "..", "/", or other path-traversal metachars.
+// Plugin-qualified names use a single colon, e.g. "work-logger:slack-writer".
+const VALID_SKILL_NAME_RE = /^[a-zA-Z0-9_-]+(?::[a-zA-Z0-9_-]+)?$/;
+
+function isValidSkillName(name: string): boolean {
+  return VALID_SKILL_NAME_RE.test(name);
+}
+
 /**
  * Like resolveSkillPath but returns null when no SKILL.md is found on disk.
  * Use when you need to distinguish "genuine skill invocation" from "some other
@@ -9,6 +19,7 @@ import { accessSync, readdirSync, readFileSync } from 'node:fs';
  * to fire skill detection if a real skill file exists.
  */
 export function resolveExistingSkillPath(projectPath: string | undefined, skillName: string): string | null {
+  if (!isValidSkillName(skillName)) return null;
   // `plugin:skill` qualifies the skill under a specific plugin. Split so we
   // probe the plugin dir by name, not the full qualified string.
   const colonIdx = skillName.indexOf(':');
@@ -115,37 +126,24 @@ export function resolveSkillPath(
   const cached = cache?.get(skillName);
   if (cached) return cached;
 
-  const candidates: string[] = [];
-  if (projectPath) {
-    candidates.push(path.join(projectPath, '.claude', 'skills', skillName, 'SKILL.md'));
-  }
-  candidates.push(path.join(homedir(), '.claude', 'skills', skillName, 'SKILL.md'));
-
-  const pluginsDir = path.join(homedir(), '.claude', 'plugins');
-  try {
-    for (const entry of readdirSync(pluginsDir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        candidates.push(path.join(pluginsDir, entry.name, 'skills', skillName, 'SKILL.md'));
-      }
-    }
-  } catch {
-    /* no plugins dir — expected on fresh installs */
+  // Defer to the validating/plugin-aware probe — handles plugin:skill,
+  // the marketplace cache layout, and name validation in one place.
+  const existing = resolveExistingSkillPath(projectPath, skillName);
+  if (existing) {
+    cache?.set(skillName, existing);
+    return existing;
   }
 
-  for (const candidate of candidates) {
-    try {
-      accessSync(candidate);
-      cache?.set(skillName, candidate);
-      return candidate;
-    } catch {
-      /* not at this location, try next */
-    }
+  // Nothing on disk — fall back to a conventional path so Context can still
+  // show the name. Use the leaf for plugin-qualified names to avoid a colon
+  // in the directory path (which macOS/Linux allow but looks broken).
+  if (!isValidSkillName(skillName)) {
+    // Invalid input — return a harmless sentinel that won't resolve anywhere.
+    return '';
   }
-
-  // Nothing on disk — fall back to the user-home convention so Context shows
-  // the name without a broken-looking empty field. ContextFileItem renders a
-  // "file not found" state on click, which is honest.
-  const fallback = path.join(homedir(), '.claude', 'skills', skillName, 'SKILL.md');
+  const colonIdx = skillName.indexOf(':');
+  const leafName = colonIdx >= 0 ? skillName.slice(colonIdx + 1) : skillName;
+  const fallback = path.join(homedir(), '.claude', 'skills', leafName, 'SKILL.md');
   cache?.set(skillName, fallback);
   return fallback;
 }

@@ -4,7 +4,7 @@ import { getExternalStoreMessages } from '@assistant-ui/react';
 import { SkillLoadedCard } from '../parts/tools/SkillLoadedCard';
 import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 
-const CLI_ERROR_PREFIXES = [/^Unknown command:/];
+const CLI_ERROR_PREFIXES = [/^Unknown (?:command|skill):/i];
 
 function isCliError(text: string): boolean {
   return CLI_ERROR_PREFIXES.some((re) => re.test(text));

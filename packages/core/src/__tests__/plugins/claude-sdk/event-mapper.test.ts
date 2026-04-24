@@ -224,6 +224,10 @@ describe('mapSdkMessage', () => {
   it('detects skill from SkillTool tool_use in assistant messages', async () => {
     const { homedir } = await import('node:os');
     const pathMod = await import('node:path');
+    // Use a name guaranteed not to exist on disk so resolveSkillPath returns
+    // the deterministic homedir fallback rather than a real skill from the
+    // developer's actual ~/.claude/plugins cache.
+    const SKILL = 'nonexistent-test-skill-xyzabc';
     const sink = createMockSink();
     mapSdkMessage(
       {
@@ -238,7 +242,7 @@ describe('mapSdkMessage', () => {
               type: 'tool_use',
               id: 'toolu_s1',
               name: 'Skill',
-              input: { skill: 'brainstorming' },
+              input: { skill: SKILL },
             },
           ],
         },
@@ -247,8 +251,8 @@ describe('mapSdkMessage', () => {
     );
 
     expect(sink.onSkillFile).toHaveBeenCalledWith({
-      path: pathMod.join(homedir(), '.claude', 'skills', 'brainstorming', 'SKILL.md'),
-      displayName: 'brainstorming',
+      path: pathMod.join(homedir(), '.claude', 'skills', SKILL, 'SKILL.md'),
+      displayName: SKILL,
     });
   });
 

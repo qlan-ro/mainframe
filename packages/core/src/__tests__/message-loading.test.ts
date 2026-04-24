@@ -357,6 +357,42 @@ describe('loadHistory', () => {
     expect(messages[2].type).toBe('assistant');
   });
 
+  it('synthesizes user + system messages for "Unknown command: /X" string entries', async () => {
+    writeJsonl(SESSION_ID, [
+      jsonlEntry({
+        type: 'user',
+        message: { role: 'user', content: 'Unknown command: /non-existent-skill' },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0].type).toBe('user');
+    expect(messages[0].content[0]).toMatchObject({ type: 'text', text: '/non-existent-skill' });
+    expect(messages[1].type).toBe('system');
+    expect(messages[1].content[0]).toMatchObject({
+      type: 'text',
+      text: 'Unknown command: /non-existent-skill',
+    });
+  });
+
+  it('synthesizes user + system messages for "Unknown skill: X" string entries (no leading slash)', async () => {
+    writeJsonl(SESSION_ID, [
+      jsonlEntry({
+        type: 'user',
+        message: { role: 'user', content: 'Unknown skill: missing-skill' },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0].type).toBe('user');
+    expect(messages[0].content[0]).toMatchObject({ type: 'text', text: '/missing-skill' });
+    expect(messages[1].type).toBe('system');
+  });
+
   it('converts isMeta skill-content entries into a synthetic system/skill_loaded message', async () => {
     const toolUseId = 'toolu_skill_1';
     writeJsonl(SESSION_ID, [
