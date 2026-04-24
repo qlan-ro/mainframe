@@ -286,18 +286,22 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       // CLI-synthesized feedback (e.g. unknown-command errors, notices).
       // Discriminator: not a replay of user-typed text AND not a CLI meta wrapper.
       //
-      // Additional filter: suppress messages whose WHOLE payload is a
-      // <local-command-*> wrapper. Those tags (stdout, stderr, caveat) hold
-      // CLI-internal output fed back to the model for context, not for the
-      // user. Example: the model-picker feature sends `/model X` and gets
-      // `<local-command-stdout>Set model to X</local-command-stdout>` back.
+      // Additional suppress list — CLI-internal notifications that Mainframe
+      // either already handles via its own UI (interrupts, permissions) or that
+      // carry context for the model, not the user:
+      //   • <local-command-stdout|stderr|caveat> wrappers (e.g. /model reply)
+      //   • "[Request interrupted by user]" /
+      //     "[Request interrupted by user for tool use]"
+      //     (Claude source: utils/messages.ts:207-209)
       if (!isReplay && !isMeta) {
+        const trimmed = text.trim();
         const isLocalCommandWrapper =
           /^<local-command-(?:stdout|stderr|caveat)>[\s\S]*<\/local-command-(?:stdout|stderr|caveat)>\s*$/.test(
-            text.trim(),
+            trimmed,
           );
-        if (!isLocalCommandWrapper) {
-          sink.onCliMessage(text.trim());
+        const isInterruptMarker = /^\[Request interrupted by user[^\]]*\]\s*$/.test(trimmed);
+        if (!isLocalCommandWrapper && !isInterruptMarker) {
+          sink.onCliMessage(trimmed);
         }
       }
     }
