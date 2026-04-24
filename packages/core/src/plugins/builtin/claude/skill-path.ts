@@ -1,6 +1,69 @@
 import path from 'node:path';
 import { homedir } from 'node:os';
-import { accessSync, readdirSync } from 'node:fs';
+import { accessSync, readdirSync, readFileSync } from 'node:fs';
+
+/**
+ * Like resolveSkillPath but returns null when no SKILL.md is found on disk.
+ * Use when you need to distinguish "genuine skill invocation" from "some other
+ * slash command that happens to share a name pattern" — the caller only wants
+ * to fire skill detection if a real skill file exists.
+ */
+export function resolveExistingSkillPath(projectPath: string | undefined, skillName: string): string | null {
+  const candidates: string[] = [];
+  if (projectPath) {
+    candidates.push(path.join(projectPath, '.claude', 'skills', skillName, 'SKILL.md'));
+  }
+  candidates.push(path.join(homedir(), '.claude', 'skills', skillName, 'SKILL.md'));
+
+  const pluginsDir = path.join(homedir(), '.claude', 'plugins');
+  try {
+    for (const entry of readdirSync(pluginsDir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        candidates.push(path.join(pluginsDir, entry.name, 'skills', skillName, 'SKILL.md'));
+      }
+    }
+  } catch {
+    /* no plugins dir */
+  }
+
+  // Plugin cache path: ~/.claude/plugins/cache/<owner>-plugins-marketplace/<plugin>/<version>/skills/<name>/SKILL.md
+  const cacheDir = path.join(homedir(), '.claude', 'plugins', 'cache');
+  try {
+    for (const marketplace of readdirSync(cacheDir, { withFileTypes: true })) {
+      if (!marketplace.isDirectory()) continue;
+      const marketDir = path.join(cacheDir, marketplace.name);
+      for (const plugin of readdirSync(marketDir, { withFileTypes: true })) {
+        if (!plugin.isDirectory()) continue;
+        const pluginDir = path.join(marketDir, plugin.name);
+        for (const version of readdirSync(pluginDir, { withFileTypes: true })) {
+          if (!version.isDirectory()) continue;
+          candidates.push(path.join(pluginDir, version.name, 'skills', skillName, 'SKILL.md'));
+        }
+      }
+    }
+  } catch {
+    /* no cache dir */
+  }
+
+  for (const candidate of candidates) {
+    try {
+      accessSync(candidate);
+      return candidate;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+/** Read SKILL.md content synchronously; returns null if unreadable. */
+export function readSkillContent(skillPath: string): string | null {
+  try {
+    return readFileSync(skillPath, 'utf8');
+  } catch {
+    return null;
+  }
+}
 
 // Resolve a skill name to its SKILL.md by probing the three locations the
 // Claude CLI supports, in priority order: project-local > user > plugin.

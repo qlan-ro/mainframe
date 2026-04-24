@@ -355,7 +355,7 @@ describe('loadHistory', () => {
     expect(messages[1].type).toBe('assistant');
   });
 
-  it('skips isMeta=true entries (skill content injections)', async () => {
+  it('converts isMeta skill-content entries into a synthetic system/skill_loaded message', async () => {
     const toolUseId = 'toolu_skill_1';
     writeJsonl(SESSION_ID, [
       userTextEntry('Use the brainstorming skill'),
@@ -367,16 +367,21 @@ describe('loadHistory', () => {
 
     const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
-    // isMeta=true entry is skipped; 4 real messages remain
-    expect(messages).toHaveLength(4);
+    // isMeta entry is converted to a system message with a skill_loaded block → 5 messages.
+    expect(messages).toHaveLength(5);
     const types = messages.map((m) => m.type);
-    expect(types).toEqual(['user', 'assistant', 'tool_result', 'assistant']);
+    expect(types).toEqual(['user', 'assistant', 'tool_result', 'system', 'assistant']);
+    const skillMsg = messages[3];
+    expect(skillMsg.content[0]).toMatchObject({
+      type: 'skill_loaded',
+      skillName: 'brainstorming',
+    });
   });
 
-  it('preserves assistant turn continuity when isMeta entry is skipped', async () => {
-    // Bug 1 regression: isMeta entries between two assistant entries were splitting
-    // the consecutive assistant chain in groupMessages(), causing the first assistant
-    // text to appear as a separate message from the announcement.
+  it('preserves assistant turn continuity around the synthesized skill_loaded message', async () => {
+    // Regression guard: isMeta entries between two assistant entries were splitting
+    // the consecutive assistant chain in groupMessages(). The synthesized system
+    // message is its own role, so grouping must still work correctly.
     const toolUseId = 'toolu_skill_2';
     writeJsonl(SESSION_ID, [
       userTextEntry('Let me start working on this'),
@@ -389,12 +394,11 @@ describe('loadHistory', () => {
 
     const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
-    // isMeta entry is gone → 5 messages, no spurious user message splitting the assistant turns
-    expect(messages).toHaveLength(5);
+    // synthesized system msg sits between tool_result and the next assistant text.
+    expect(messages).toHaveLength(6);
     const types = messages.map((m) => m.type);
-    // user, assistant (pre-text), assistant (Skill tool_use), tool_result, assistant (announcement)
-    expect(types).toEqual(['user', 'assistant', 'assistant', 'tool_result', 'assistant']);
-    // No user or error message should appear at any point
+    expect(types).toEqual(['user', 'assistant', 'assistant', 'tool_result', 'system', 'assistant']);
+    // No extra user messages leaked in
     expect(types.filter((t) => t === 'user')).toHaveLength(1);
   });
 

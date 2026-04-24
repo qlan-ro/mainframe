@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { resolveSkillPath } from './skill-path.js';
+import { resolveSkillPath, resolveExistingSkillPath, readSkillContent } from './skill-path.js';
 import type {
   ContextUsage,
   ControlRequest,
@@ -213,8 +213,29 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   // has no sendMessage() counterpart. See docs/plans/2026-02-17-unified-event-pipeline.md.
   // TODO(task-support): handle <task-notification> string content as TaskGroupCard
   const isMeta = event.isMeta === true || event.is_meta === true;
-  const message = event.message as { content: Array<Record<string, unknown>> } | undefined;
+  const message = event.message as { content: Array<Record<string, unknown>> | string } | undefined;
   if (!message?.content) return;
+
+  // User-typed /skill-name path: the CLI emits a string-content metadata
+  // event (<command-message>+<command-name>) over stream-json, but it writes
+  // the isMeta:true skill-content to JSONL only — stream-json never shows
+  // the skill body. Detect here from the <command-name> XML and read the
+  // SKILL.md off disk ourselves so the card renders live.
+  if (typeof message.content === 'string') {
+    const nameMatch = /<command-name>\/?([^<]+)<\/command-name>/.exec(message.content);
+    if (nameMatch?.[1]) {
+      const skillName = nameMatch[1].trim();
+      const cached = session.state.skillPathCache.get(skillName);
+      const skillPath = cached ?? resolveExistingSkillPath(session.projectPath, skillName);
+      if (skillPath) {
+        session.state.skillPathCache.set(skillName, skillPath);
+        const content = readSkillContent(skillPath) ?? '';
+        sink.onSkillLoaded({ skillName, path: skillPath, content });
+        sink.onSkillFile({ path: skillPath, displayName: skillName });
+      }
+    }
+    return;
+  }
 
   // Stream-json uses snake_case; JSONL uses camelCase
   const tur = (event.tool_use_result ?? event.toolUseResult) as Record<string, unknown> | undefined;

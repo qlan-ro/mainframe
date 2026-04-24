@@ -24,6 +24,35 @@ export function deriveModifiedFile(
 
 import { resolveSkillPath } from './skill-path.js';
 
+/**
+ * isMeta user entries whose first text block starts with
+ * "Base directory for this skill: <dir>" are the CLI's skill-content
+ * injections. We keep them out of the chat transcript (as before) but
+ * synthesize a transient system message with a `skill_loaded` block so
+ * SkillLoadedCard renders on history replay.
+ */
+function synthesizeSkillLoadedFromUserEntry(entry: Record<string, unknown>, chatId: string): ChatMessage | null {
+  const message = entry.message as { content?: unknown } | undefined;
+  const content = message?.content;
+  if (!Array.isArray(content) || content.length === 0) return null;
+  const first = content[0] as { type?: string; text?: string } | undefined;
+  if (first?.type !== 'text' || typeof first.text !== 'string') return null;
+  const match = /^Base directory for this skill:\s*(.+?)(?:\n|$)/m.exec(first.text);
+  if (!match?.[1]) return null;
+  const baseDir = match[1].trim();
+  const skillName = path.basename(baseDir);
+  const skillPath = path.extname(baseDir) ? baseDir : path.join(baseDir, 'SKILL.md');
+  const skillContent = first.text.replace(/^Base directory for this skill:[^\n]*\n?/m, '').trim();
+  const uuid = (entry.uuid as string) ?? nanoid();
+  return {
+    id: `skill-loaded-${uuid}`,
+    chatId,
+    type: 'system',
+    content: [{ type: 'skill_loaded', skillName, path: skillPath, content: skillContent }],
+    timestamp: (entry.timestamp as string) ?? new Date().toISOString(),
+  };
+}
+
 function extractToolResultContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
@@ -370,6 +399,23 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
         if (!line.trim()) continue;
         try {
           const entry = JSON.parse(line);
+
+          // isMeta user messages carrying skill content are written to JSONL
+          // only (never emitted over stream-json), so history replay is the
+          // only chance to surface a SkillLoadedCard for these turns. Detect
+          // and synthesize a system 'skill_loaded' message BEFORE the generic
+          // isMeta filter drops them below.
+          if (entry.isMeta === true && entry.type === 'user') {
+            const synthesized = synthesizeSkillLoadedFromUserEntry(entry, sessionId);
+            if (synthesized) {
+              if (!seenUuids.has(synthesized.id)) {
+                seenUuids.add(synthesized.id);
+                messages.push(synthesized);
+              }
+              continue;
+            }
+          }
+
           if (entry.isMeta === true) continue;
           if (entry.isCompactSummary === true || entry.isVisibleInTranscriptOnly === true) continue;
 
