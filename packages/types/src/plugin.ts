@@ -23,6 +23,9 @@ export interface ToolWindowManifest {
   label: string;
   icon?: string;
   defaultZone: ZoneId;
+  /** Owning plugin id (empty for built-in tool windows). Lets the desktop
+   *  layout dispatch rendering to PluginView with a zone-scoped component. */
+  pluginId?: string;
 }
 
 export interface PluginUIContribution {

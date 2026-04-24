@@ -41,7 +41,12 @@ export const usePluginLayoutStore = create<PluginLayoutState>((set) => ({
       contributions: [...s.contributions.filter((x) => panelKey(x.pluginId, x.panelId) !== key), c],
     }));
     if (c.zone !== 'fullview') {
-      registerPluginToolWindow({ id: key, label: c.label, defaultZone: c.zone as ZoneId });
+      registerPluginToolWindow({
+        id: key,
+        label: c.label,
+        defaultZone: c.zone as ZoneId,
+        pluginId: c.pluginId,
+      });
       useLayoutStore.getState().registerToolWindow(key, c.zone as ZoneId);
     }
   },
