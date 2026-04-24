@@ -85,10 +85,14 @@ export function resolveExistingSkillPath(projectPath: string | undefined, skillN
   return null;
 }
 
-/** Read SKILL.md content synchronously; returns null if unreadable. */
+/** Read SKILL.md content synchronously, stripping any leading YAML frontmatter
+ * so the markdown renderer doesn't emit `<hr>` + `name: …` lines. Returns null
+ * if unreadable. Matches what the history path does (history's skillContent
+ * comes from the CLI-expanded isMeta body which has no frontmatter). */
 export function readSkillContent(skillPath: string): string | null {
   try {
-    return readFileSync(skillPath, 'utf8');
+    const raw = readFileSync(skillPath, 'utf8');
+    return raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim();
   } catch {
     return null;
   }

@@ -90,7 +90,7 @@ export function handleStdout(session: ClaudeSession, chunk: Buffer, sink: Sessio
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    log.trace({ sessionId: session.id, line }, 'adapter stdout');
+    log.trace({ sessionId: session.id, line }, '[stream-json]');
     try {
       const event = JSON.parse(line.trim());
       handleEvent(session, event, sink);

@@ -340,7 +340,7 @@ describe('loadHistory', () => {
     }
   });
 
-  it('filters slash-command invocation markers containing <command-name> tags', async () => {
+  it('preserves slash-command invocation markers so display-pipeline can render them', async () => {
     writeJsonl(SESSION_ID, [
       userTextEntry('<command-name>commit</command-name>\n/commit'),
       userTextEntry('You are a commit message generator. Analyze the staged changes...'),
@@ -349,10 +349,12 @@ describe('loadHistory', () => {
 
     const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
-    // The command marker (first user message) is filtered; skill expansion content + assistant remain
-    expect(messages).toHaveLength(2);
+    // History keeps <command-name> entries so the display pipeline can render
+    // them as "/commit" bubbles instead of silently dropping the user's typed command.
+    expect(messages).toHaveLength(3);
     expect(messages[0].type).toBe('user');
-    expect(messages[1].type).toBe('assistant');
+    expect(messages[1].type).toBe('user');
+    expect(messages[2].type).toBe('assistant');
   });
 
   it('converts isMeta skill-content entries into a synthetic system/skill_loaded message', async () => {

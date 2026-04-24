@@ -4,7 +4,7 @@ import type { GroupedMessage } from './message-grouping.js';
 import type { PartEntry } from './tool-grouping.js';
 import { groupToolCallParts, groupTaskChildren } from './tool-grouping.js';
 
-const INTERNAL_USER_RE = /<command-name>|<mainframe-command[\s>]/;
+const INTERNAL_USER_RE = /<mainframe-command[\s>]/;
 
 /** Returns true if a user message is internal (mainframe commands or skill invocations). */
 export function isInternalUserMessage(content: MessageContent[]): boolean {
@@ -79,13 +79,21 @@ export function convertUserContent(content: MessageContent[]): {
       if (!block.text || block.text.startsWith('[Request interrupted')) continue;
 
       const cmdInfo = parseCommandMessage(block.text);
-      if (cmdInfo) metadata.command = { name: cmdInfo.commandName, userText: cmdInfo.userText };
+      if (cmdInfo) {
+        metadata.command = { name: cmdInfo.commandName, userText: cmdInfo.userText };
+        metadata.cleanText = cmdInfo.userText;
+        // Synthesize a readable bubble from the CLI's <command-name>/<command-args>
+        // echo. The raw XML is pure CLI metadata — users want to see what they typed.
+        const args = cmdInfo.userText.trim();
+        const rendered = args ? `/${cmdInfo.commandName} ${args}` : `/${cmdInfo.commandName}`;
+        displayContent.push({ type: 'text', text: rendered });
+        continue;
+      }
 
       const { files, cleanText } = parseAttachedFilePathTags(block.text);
       if (files.length > 0) metadata.attachedFiles = files;
 
       const textToStore = files.length > 0 ? cleanText : block.text;
-      if (cmdInfo) metadata.cleanText = cmdInfo.userText;
 
       if (textToStore) displayContent.push({ type: 'text', text: textToStore });
     } else if (block.type === 'image') {

@@ -14,3 +14,4 @@ Replace skill-injection grey bubble with a collapsible SkillLoadedCard
 - Pass `skill_loaded` blocks through `display-pipeline.ts` and `convert-message.ts` via message metadata
 - Render skill messages as a `SkillLoadedCard` (collapsible, `defaultOpen={false}`) in `SystemMessage.tsx`
 - New `SkillLoadedCard.tsx`: Zap icon + `/skillName` header with path tooltip; markdown body inside `max-h-[480px]` scrollable pane
+- Preserve user-typed `/skill-name` (and `/skill-name args`) bubbles: display-pipeline now synthesizes a readable `/cmd args` bubble from the CLI's `<command-name>`/`<command-args>` echo instead of dropping the entry

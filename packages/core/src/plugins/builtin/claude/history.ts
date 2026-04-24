@@ -23,6 +23,9 @@ export function deriveModifiedFile(
 }
 
 import { resolveSkillPath } from './skill-path.js';
+import { createChildLogger } from '../../../logger.js';
+
+const log = createChildLogger('claude:history');
 
 /**
  * isMeta user entries whose first text block starts with
@@ -232,15 +235,6 @@ export function convertHistoryEntry(entry: Record<string, unknown>, chatId: stri
   return null;
 }
 
-export function filterSkillExpansions(messages: ChatMessage[]): ChatMessage[] {
-  return messages.filter((msg) => {
-    if (msg.type !== 'user') return true;
-    // Filter slash-command invocation markers — they contain <command-name> tags and
-    // are purely CLI metadata that should never appear in the rendered conversation.
-    return !msg.content.some((b) => b.type === 'text' && /<command-name>/.test((b as { text: string }).text));
-  });
-}
-
 function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: Map<string, MessageContent[]>): void {
   const parentId = entry.parentToolUseID as string | undefined;
   if (!parentId) return;
@@ -397,6 +391,7 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
       const rl = createInterface({ input: stream, crlfDelay: Infinity });
       for await (const line of rl) {
         if (!line.trim()) continue;
+        log.trace({ sessionId, file, line }, '[jsonl]');
         try {
           const entry = JSON.parse(line);
 
@@ -459,7 +454,7 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
     attachSubagentToolResults(messages, subagentToolResults);
   }
 
-  return filterSkillExpansions(messages);
+  return messages;
 }
 
 export async function extractPlanFilePaths(sessionId: string, projectPath: string): Promise<string[]> {

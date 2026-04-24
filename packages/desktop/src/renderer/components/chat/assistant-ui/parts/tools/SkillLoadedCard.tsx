@@ -1,9 +1,10 @@
-import React from 'react';
-import { Zap } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronRight, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { CollapsibleToolCard } from './CollapsibleToolCard';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
+import { markdownComponents } from '../markdown-text';
+import { urlTransform } from '../../../../../lib/markdown-url-transform';
 
 interface SkillLoadedCardProps {
   skillName: string;
@@ -11,34 +12,54 @@ interface SkillLoadedCardProps {
   content: string;
 }
 
-function SkillHeader({ skillName, path }: { skillName: string; path: string }) {
+// Pill-style collapsible for skill invocations. Intentionally rolls its own
+// layout instead of using CollapsibleToolCard because:
+//   - the pill is centered + rounded-full, not a full-width row
+//   - the expanded body is visually detached (markdown panel below the pill)
+//   - changing CollapsibleToolCard's button styling would regress every other
+//     tool card that uses it
+export function SkillLoadedCard({ skillName, path, content }: SkillLoadedCardProps) {
+  const [open, setOpen] = useState(false);
+  const Chevron = open ? ChevronDown : ChevronRight;
+
+  const pill = (
+    <button
+      type="button"
+      onClick={() => setOpen((v) => !v)}
+      className="inline-flex items-center gap-1.5 rounded-full bg-mf-hover/50 px-3 py-1 hover:bg-mf-hover/70 transition-colors"
+      aria-expanded={open}
+    >
+      <Zap size={12} className="text-mf-text-secondary shrink-0" />
+      <span className="font-mono text-[11px] text-mf-text-secondary">
+        Using skill: <span className="text-mf-accent">{skillName}</span>
+      </span>
+      <Chevron size={12} className="text-mf-text-secondary/60 shrink-0" />
+    </button>
+  );
+
   return (
-    <div className="flex items-center gap-1.5 min-w-0">
-      <Zap size={14} className="text-mf-accent shrink-0" />
-      <span className="font-mono text-mf-body text-mf-accent">/{skillName}</span>
-      {path && (
+    <div className="flex flex-col items-center gap-2">
+      {path ? (
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="font-mono text-mf-small text-mf-text-secondary/60 truncate max-w-[300px]" tabIndex={0}>
-              {path}
-            </span>
-          </TooltipTrigger>
+          <TooltipTrigger asChild>{pill}</TooltipTrigger>
           <TooltipContent>{path}</TooltipContent>
         </Tooltip>
+      ) : (
+        pill
+      )}
+      {open && (
+        <div className="w-full max-h-[480px] overflow-y-auto rounded-mf-card border border-mf-divider bg-mf-hover/20 px-3 py-2">
+          <div className="aui-md text-mf-text-primary">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents as Parameters<typeof ReactMarkdown>[0]['components']}
+              urlTransform={urlTransform}
+            >
+              {content}
+            </ReactMarkdown>
+          </div>
+        </div>
       )}
     </div>
-  );
-}
-
-export function SkillLoadedCard({ skillName, path, content }: SkillLoadedCardProps) {
-  return (
-    <CollapsibleToolCard defaultOpen={false} header={<SkillHeader skillName={skillName} path={path} />}>
-      <div className="max-h-[480px] overflow-y-auto px-3 pb-3 pt-1">
-        {/* react-markdown dropped its className prop in v9; wrap the output instead. */}
-        <div className="prose prose-sm dark:prose-invert max-w-none text-mf-text-primary text-mf-body">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-        </div>
-      </div>
-    </CollapsibleToolCard>
   );
 }
