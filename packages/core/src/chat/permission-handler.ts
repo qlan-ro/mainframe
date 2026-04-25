@@ -5,6 +5,7 @@ import type { PlanModeHandler } from './plan-mode-handler.js';
 import type { MessageCache } from './message-cache.js';
 import type { ActiveChat } from './types.js';
 import { createChildLogger } from '../logger.js';
+import { readNotificationConfig, shouldNotifyPermission } from '../notifications/notification-config.js';
 
 const log = createChildLogger('chat:permissions');
 
@@ -124,7 +125,8 @@ export class ChatPermissionHandler {
 
     const nextRequest = this.deps.permissions.shift(chatId);
     if (nextRequest) {
-      this.deps.emitEvent({ type: 'permission.requested', chatId, request: nextRequest });
+      const notify = shouldNotifyPermission(readNotificationConfig(this.deps.db), nextRequest.toolName);
+      this.deps.emitEvent({ type: 'permission.requested', chatId, request: nextRequest, notify });
     }
 
     // Emit chat.updated so displayStatus reflects the new permission state

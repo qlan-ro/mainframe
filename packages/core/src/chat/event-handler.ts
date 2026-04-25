@@ -17,6 +17,7 @@ import type { PushService } from '../push/push-service.js';
 import { stripMainframeCommandTags } from '../messages/message-parsing.js';
 import { emitDisplayDelta } from './display-emitter.js';
 import { createChildLogger } from '../logger.js';
+import { readNotificationConfig, shouldNotifyPermission } from '../notifications/notification-config.js';
 
 const log = createChildLogger('chat:events');
 
@@ -212,7 +213,9 @@ function buildSessionSink(
           { chatId, requestId: request.requestId, toolName: request.toolName },
           'permission.requested emitted to clients',
         );
-        emitEvent({ type: 'permission.requested', chatId, request });
+        const notifyConfig = readNotificationConfig(db);
+        const notify = shouldNotifyPermission(notifyConfig, request.toolName);
+        emitEvent({ type: 'permission.requested', chatId, request, notify });
 
         // Emit chat.updated so displayStatus flips to 'waiting' on clients
         const active = getActiveChat(chatId);
@@ -220,14 +223,16 @@ function buildSessionSink(
           emitEvent({ type: 'chat.updated', chat: active.chat });
         }
 
-        pushService
-          ?.sendPush({
-            title: 'Permission Required',
-            body: `Agent wants to run: ${request.toolName ?? 'unknown tool'}`,
-            data: { chatId, type: 'permission' },
-            priority: 'high',
-          })
-          .catch((err) => log.warn({ err }, 'push notification failed'));
+        if (notify) {
+          pushService
+            ?.sendPush({
+              title: 'Permission Required',
+              body: `Agent wants to run: ${request.toolName ?? 'unknown tool'}`,
+              data: { chatId, type: 'permission' },
+              priority: 'high',
+            })
+            .catch((err) => log.warn({ err }, 'push notification failed'));
+        }
       } else {
         log.info(
           { chatId, requestId: request.requestId, toolName: request.toolName },
@@ -275,6 +280,7 @@ function buildSessionSink(
       const reason = wasInterrupted ? 'interrupted' : isError ? 'error' : 'completed';
       emitEvent({ type: 'chat.updated', chat: active.chat, reason });
 
+      const notifyConfig = readNotificationConfig(db);
       if (isError) {
         if (!wasInterrupted) {
           const message = messages.createTransientMessage(chatId, 'error', [
@@ -284,13 +290,15 @@ function buildSessionSink(
           emitEvent({ type: 'message.added', chatId, message });
           emitDisplay();
 
-          const notification = { title: 'Session Error', body: 'A session ended unexpectedly' };
-          emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'error' });
-          pushService
-            ?.sendPush({ ...notification, data: { chatId, type: 'error' }, priority: 'high' })
-            .catch((err) => log.warn({ err }, 'push notification failed'));
+          if (notifyConfig.chat.sessionError) {
+            const notification = { title: 'Session Error', body: 'A session ended unexpectedly' };
+            emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'error' });
+            pushService
+              ?.sendPush({ ...notification, data: { chatId, type: 'error' }, priority: 'high' })
+              .catch((err) => log.warn({ err }, 'push notification failed'));
+          }
         }
-      } else {
+      } else if (notifyConfig.chat.taskComplete) {
         const lastText = getLastAssistantText(messages.get(chatId));
         const notification = {
           title: 'Task Complete',

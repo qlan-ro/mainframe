@@ -5,29 +5,11 @@ import { useProjectsStore } from '../store/projects';
 import { usePluginLayoutStore } from '../store/plugins';
 import { useSandboxStore } from '../store/sandbox';
 import { useAdaptersStore } from '../store/adapters';
-import { useSettingsStore } from '../store/settings';
 import { createLogger } from './logger';
 import { buildLaunchScope } from './launch-scope.js';
 import { notify } from './notify';
 
 const log = createLogger('renderer:ws');
-
-function isNotificationEnabled(event: DaemonEvent): boolean {
-  const { notifications } = useSettingsStore.getState().general;
-  if (event.type === 'chat.notification') {
-    return event.level === 'success' ? notifications.chat.taskComplete : notifications.chat.sessionError;
-  }
-  if (event.type === 'permission.requested') {
-    const tool = event.request.toolName;
-    if (tool === 'AskUserQuestion') return notifications.permission.userQuestion;
-    if (tool === 'ExitPlanMode') return notifications.permission.planApproval;
-    return notifications.permission.toolRequest;
-  }
-  if (event.type === 'plugin.notification') {
-    return notifications.other.plugin;
-  }
-  return true;
-}
 
 export function routeEvent(event: DaemonEvent): void {
   const chats = useChatsStore.getState();
@@ -52,15 +34,15 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     }
     case 'chat.notification': {
+      // Daemon already gates emission on the user's notification settings,
+      // so seeing this event means the OS notification should fire.
       const chat = chats.chats.find((c) => c.id === event.chatId);
-      if (isNotificationEnabled(event)) {
-        notify({
-          type: event.level,
-          title: chat?.title ?? event.title,
-          body: event.body,
-          chatId: event.chatId,
-        });
-      }
+      notify({
+        type: event.level,
+        title: chat?.title ?? event.title,
+        body: event.body,
+        chatId: event.chatId,
+      });
       break;
     }
     case 'chat.ended':
@@ -91,7 +73,10 @@ export function routeEvent(event: DaemonEvent): void {
         toolName: event.request.toolName,
       });
       chats.addPendingPermission(event.chatId, event.request);
-      if (isNotificationEnabled(event)) {
+      // The daemon evaluates the user's settings and tells us whether to
+      // surface an OS notification via `event.notify`. The in-app permission
+      // card is always rendered (above) regardless of that flag.
+      if (event.notify) {
         const chat = chats.chats.find((c) => c.id === event.chatId);
         notify({
           type: 'info',
@@ -182,7 +167,8 @@ export function routeEvent(event: DaemonEvent): void {
       usePluginLayoutStore.getState().unregisterContribution(event.pluginId, event.panelId);
       break;
     case 'plugin.notification':
-      if (isNotificationEnabled(event)) {
+      // Daemon already gates emission on the user's notification settings.
+      {
         notify({
           type:
             event.level === 'error'
