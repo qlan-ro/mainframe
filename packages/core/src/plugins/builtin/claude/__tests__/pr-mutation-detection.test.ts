@@ -228,3 +228,266 @@ describe('handleAssistantEvent stashes pending mutations', () => {
     expect(session.state.pendingPrMutations.has('tu_mut_4')).toBe(false);
   });
 });
+
+describe('handleUserEvent consumes pending mutations', () => {
+  it('emits source:mentioned when tool_result matches a pending mutation', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    // Simulate stash
+    session.state.pendingPrMutations.set('tu_mut_ok', {
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+    });
+
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_mut_ok',
+            content: 'OK',
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    expect(sink.onPrDetected).toHaveBeenCalledWith({
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+      source: 'mentioned',
+    });
+    expect(session.state.pendingPrMutations.has('tu_mut_ok')).toBe(false);
+  });
+
+  it('does not emit when tool_result has is_error: true', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    session.state.pendingPrMutations.set('tu_mut_err', {
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+    });
+
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_mut_err',
+            content: 'authentication failed',
+            is_error: true,
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    expect(sink.onPrDetected).not.toHaveBeenCalled();
+    expect(session.state.pendingPrMutations.has('tu_mut_err')).toBe(false);
+  });
+
+  it('end-to-end: gh pr edit with URL arg emits source:mentioned after success', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const assistantEvent = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_e2e_1',
+            name: 'Bash',
+            input: { command: 'gh pr edit https://github.com/org/repo/pull/42 --add-label bug' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(assistantEvent) + '\n'), sink);
+
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_e2e_1',
+            content: '✓ Edited pull request #42',
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    expect(sink.onPrDetected).toHaveBeenCalledWith({
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+      source: 'mentioned',
+    });
+  });
+
+  it('number-only gh pr edit 42 still detected via Path A when output contains URL', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    // tool_use with number-only arg → Path B does NOT stash
+    const assistantEvent = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_num_1',
+            name: 'Bash',
+            input: { command: 'gh pr edit 42 --title new' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(assistantEvent) + '\n'), sink);
+    expect(session.state.pendingPrMutations.has('tu_num_1')).toBe(false);
+
+    // tool_result contains URL → Path A emits as 'mentioned' (not in pendingPrCreates)
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_num_1',
+            content: 'https://github.com/org/repo/pull/42',
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    expect(sink.onPrDetected).toHaveBeenCalledWith({
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+      source: 'mentioned',
+    });
+  });
+
+  it('create and mutate in the same assistant turn are handled independently', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const assistantEvent = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_create',
+            name: 'Bash',
+            input: { command: 'gh pr create --title "feat"' },
+          },
+          {
+            type: 'tool_use',
+            id: 'tu_edit',
+            name: 'Bash',
+            input: { command: 'gh pr edit https://github.com/org/repo/pull/10 --add-label priority' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(assistantEvent) + '\n'), sink);
+
+    expect(session.state.pendingPrCreates.has('tu_create')).toBe(true);
+    expect(session.state.pendingPrMutations.has('tu_edit')).toBe(true);
+
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_create',
+            content: 'https://github.com/org/repo/pull/11',
+          },
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_edit',
+            content: '✓ Edited',
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    expect(sink.onPrDetected).toHaveBeenCalledWith({
+      url: 'https://github.com/org/repo/pull/11',
+      owner: 'org',
+      repo: 'repo',
+      number: 11,
+      source: 'created',
+    });
+    expect(sink.onPrDetected).toHaveBeenCalledWith({
+      url: 'https://github.com/org/repo/pull/10',
+      owner: 'org',
+      repo: 'repo',
+      number: 10,
+      source: 'mentioned',
+    });
+  });
+
+  it('emits twice when tool_result output contains the same URL — frontend dedup absorbs', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    session.state.pendingPrMutations.set('tu_overlap', {
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+    });
+
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_overlap',
+            content: '✓ https://github.com/org/repo/pull/42',
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    // Path A emits 'mentioned' from the URL in output; Path B also emits 'mentioned'.
+    // Both calls are to onPrDetected with source:'mentioned' for the same PR.
+    // The frontend dedup (chats.addDetectedPr) collapses them; core does not.
+    expect(sink.onPrDetected).toHaveBeenCalledTimes(2);
+    expect(sink.onPrDetected).toHaveBeenNthCalledWith(1, {
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+      source: 'mentioned',
+    });
+    expect(sink.onPrDetected).toHaveBeenNthCalledWith(2, {
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+      source: 'mentioned',
+    });
+  });
+});

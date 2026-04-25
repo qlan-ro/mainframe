@@ -264,6 +264,17 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
         if (source === 'created') session.state.pendingPrCreates.delete(toolUseId!);
         sink.onPrDetected({ ...pr, source });
       }
+
+      // Path B: command-arg-based mutation detection. Consume any pending stash
+      // keyed by this tool_use_id, regardless of whether the output contained a URL.
+      const mutationToolUseId = block.tool_use_id as string | undefined;
+      if (mutationToolUseId && session.state.pendingPrMutations.has(mutationToolUseId)) {
+        const stashed = session.state.pendingPrMutations.get(mutationToolUseId)!;
+        session.state.pendingPrMutations.delete(mutationToolUseId);
+        if (block.is_error !== true) {
+          sink.onPrDetected({ ...stashed, source: 'mentioned' });
+        }
+      }
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';
       const skillMatch = text.match(/^Base directory for this skill: (.+)/m);
