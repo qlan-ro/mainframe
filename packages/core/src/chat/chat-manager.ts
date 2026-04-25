@@ -120,6 +120,7 @@ export class ChatManager {
 
   setPushService(service: import('../push/push-service.js').PushService): void {
     this.eventHandler.setPushService(service);
+    this.permissionHandler.setPushService(service);
   }
 
   getExternalSessionService(): ExternalSessionService {

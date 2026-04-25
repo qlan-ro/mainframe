@@ -15,7 +15,7 @@ export type DaemonEvent =
   | { type: 'display.message.updated'; chatId: string; message: import('./display.js').DisplayMessage }
   | { type: 'display.messages.set'; chatId: string; messages: import('./display.js').DisplayMessage[] }
   | { type: 'messages.cleared'; chatId: string }
-  | { type: 'permission.requested'; chatId: string; request: ControlRequest }
+  | { type: 'permission.requested'; chatId: string; request: ControlRequest; notify: boolean }
   | { type: 'permission.resolved'; chatId: string; requestId: string }
   | { type: 'context.updated'; chatId: string; filePaths?: string[] }
   | { type: 'error'; chatId?: string; error: string }

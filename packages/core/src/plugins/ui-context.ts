@@ -1,7 +1,16 @@
 import { nanoid } from 'nanoid';
 import type { PluginUIContext, UIZone, DaemonEvent } from '@qlan-ro/mainframe-types';
 
-export function createPluginUIContext(pluginId: string, emitEvent: (event: DaemonEvent) => void): PluginUIContext {
+interface UIContextDeps {
+  /** Optional gate — when provided and returns false, plugin.notification emissions are dropped. */
+  isPluginNotifyEnabled?: () => boolean;
+}
+
+export function createPluginUIContext(
+  pluginId: string,
+  emitEvent: (event: DaemonEvent) => void,
+  deps: UIContextDeps = {},
+): PluginUIContext {
   /** Track live panel ids so removePanel() (no args) can clean them all up. */
   const activePanelIds = new Set<string>();
 
@@ -53,6 +62,7 @@ export function createPluginUIContext(pluginId: string, emitEvent: (event: Daemo
     },
 
     notify(options): void {
+      if (deps.isPluginNotifyEnabled && !deps.isPluginNotifyEnabled()) return;
       emitEvent({
         type: 'plugin.notification',
         pluginId,

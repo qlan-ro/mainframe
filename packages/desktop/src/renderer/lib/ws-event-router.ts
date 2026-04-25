@@ -34,6 +34,8 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     }
     case 'chat.notification': {
+      // Daemon already gates emission on the user's notification settings,
+      // so seeing this event means the OS notification should fire.
       const chat = chats.chats.find((c) => c.id === event.chatId);
       notify({
         type: event.level,
@@ -71,7 +73,10 @@ export function routeEvent(event: DaemonEvent): void {
         toolName: event.request.toolName,
       });
       chats.addPendingPermission(event.chatId, event.request);
-      {
+      // The daemon evaluates the user's settings and tells us whether to
+      // surface an OS notification via `event.notify`. The in-app permission
+      // card is always rendered (above) regardless of that flag.
+      if (event.notify) {
         const chat = chats.chats.find((c) => c.id === event.chatId);
         notify({
           type: 'info',
@@ -162,18 +167,21 @@ export function routeEvent(event: DaemonEvent): void {
       usePluginLayoutStore.getState().unregisterContribution(event.pluginId, event.panelId);
       break;
     case 'plugin.notification':
-      notify({
-        type:
-          event.level === 'error'
-            ? 'error'
-            : event.level === 'warning'
-              ? 'warning'
-              : event.level === 'success'
-                ? 'success'
-                : 'info',
-        title: event.title,
-        body: event.body,
-      });
+      // Daemon already gates emission on the user's notification settings.
+      {
+        notify({
+          type:
+            event.level === 'error'
+              ? 'error'
+              : event.level === 'warning'
+                ? 'warning'
+                : event.level === 'success'
+                  ? 'success'
+                  : 'info',
+          title: event.title,
+          body: event.body,
+        });
+      }
       break;
     case 'plugin.action.registered':
       usePluginLayoutStore.getState().registerAction({

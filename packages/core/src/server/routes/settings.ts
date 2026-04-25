@@ -2,10 +2,68 @@ import { Router, Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { homedir } from 'node:os';
-import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
+import { z } from 'zod';
+import { GENERAL_DEFAULTS, NOTIFICATION_DEFAULTS, type NotificationConfig } from '@qlan-ro/mainframe-types';
 import type { RouteContext } from './types.js';
 import { validate, UpdateProviderSettingsBody, UpdateGeneralSettingsBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';
+
+// Per-group validation so a single bad leaf doesn't discard the user's other
+// valid overrides on read.
+const ChatReadGroup = z.object({ taskComplete: z.boolean(), sessionError: z.boolean() }).partial();
+const PermissionReadGroup = z
+  .object({ toolRequest: z.boolean(), userQuestion: z.boolean(), planApproval: z.boolean() })
+  .partial();
+const OtherReadGroup = z.object({ plugin: z.boolean() }).partial();
+
+function salvage<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> | undefined {
+  const result = schema.safeParse(value);
+  return result.success ? result.data : undefined;
+}
+
+/**
+ * The PUT route below validates incoming patches with Zod, so the stored JSON
+ * is always well-typed under normal operation. We still re-validate on read as
+ * defense-in-depth: a future migration, downgraded daemon, or a hand-edit could
+ * otherwise leak a string `"false"` (truthy) into a boolean gate.
+ */
+function parseNotifications(raw: string | undefined): NotificationConfig {
+  if (!raw) return NOTIFICATION_DEFAULTS;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    /* expected: malformed stored JSON → fall back to defaults */
+    return NOTIFICATION_DEFAULTS;
+  }
+  const root = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  return {
+    chat: { ...NOTIFICATION_DEFAULTS.chat, ...salvage(ChatReadGroup, root.chat) },
+    permission: { ...NOTIFICATION_DEFAULTS.permission, ...salvage(PermissionReadGroup, root.permission) },
+    other: { ...NOTIFICATION_DEFAULTS.other, ...salvage(OtherReadGroup, root.other) },
+  };
+}
+
+/**
+ * Patch shape accepted by the route. Each subgroup is partial so callers can
+ * flip a single leaf without restating siblings — keeps PUTs commutative
+ * across independent leaves under concurrent writes.
+ */
+type NotificationPatch = {
+  chat?: Partial<NotificationConfig['chat']>;
+  permission?: Partial<NotificationConfig['permission']>;
+  other?: Partial<NotificationConfig['other']>;
+};
+
+function persistNotifications(ctx: RouteContext, patch: NotificationPatch): void {
+  const existing = parseNotifications(ctx.db.settings.get('general', 'notifications') ?? undefined);
+  const merged: NotificationConfig = {
+    chat: { ...existing.chat, ...patch.chat },
+    permission: { ...existing.permission, ...patch.permission },
+    other: { ...existing.other, ...patch.other },
+  };
+  ctx.db.settings.set('general', 'notifications', JSON.stringify(merged));
+}
 
 export function settingRoutes(ctx: RouteContext): Router {
   const router = Router();
@@ -13,9 +71,11 @@ export function settingRoutes(ctx: RouteContext): Router {
   // General settings
   router.get('/api/settings/general', (_req: Request, res: Response) => {
     const raw = ctx.db.settings.getByCategory('general');
+    const notifications = parseNotifications(raw['notifications']);
+    const { notifications: _n, ...scalars } = raw;
     res.json({
       success: true,
-      data: { ...GENERAL_DEFAULTS, ...raw },
+      data: { ...GENERAL_DEFAULTS, ...scalars, notifications },
     });
   });
 
@@ -25,12 +85,16 @@ export function settingRoutes(ctx: RouteContext): Router {
       res.status(400).json({ success: false, error: parsed.error });
       return;
     }
-    for (const [key, value] of Object.entries(parsed.data)) {
+    const { notifications, ...scalars } = parsed.data;
+    for (const [key, value] of Object.entries(scalars)) {
       if (value !== undefined) {
         const defaultVal = GENERAL_DEFAULTS[key as keyof typeof GENERAL_DEFAULTS];
         if (value === defaultVal) ctx.db.settings.delete('general', key);
-        else ctx.db.settings.set('general', key, value);
+        else ctx.db.settings.set('general', key, String(value));
       }
+    }
+    if (notifications !== undefined) {
+      persistNotifications(ctx, notifications);
     }
     res.json({ success: true });
   });
