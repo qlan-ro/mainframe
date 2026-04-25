@@ -8,16 +8,18 @@ import type { RouteContext } from './types.js';
 import { validate, UpdateProviderSettingsBody, UpdateGeneralSettingsBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';
 
-const StoredNotificationsReadSchema = z
-  .object({
-    chat: z.object({ taskComplete: z.boolean(), sessionError: z.boolean() }).partial().optional(),
-    permission: z
-      .object({ toolRequest: z.boolean(), userQuestion: z.boolean(), planApproval: z.boolean() })
-      .partial()
-      .optional(),
-    other: z.object({ plugin: z.boolean() }).partial().optional(),
-  })
+// Per-group validation so a single bad leaf doesn't discard the user's other
+// valid overrides on read.
+const ChatReadGroup = z.object({ taskComplete: z.boolean(), sessionError: z.boolean() }).partial();
+const PermissionReadGroup = z
+  .object({ toolRequest: z.boolean(), userQuestion: z.boolean(), planApproval: z.boolean() })
   .partial();
+const OtherReadGroup = z.object({ plugin: z.boolean() }).partial();
+
+function salvage<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> | undefined {
+  const result = schema.safeParse(value);
+  return result.success ? result.data : undefined;
+}
 
 /**
  * The PUT route below validates incoming patches with Zod, so the stored JSON
@@ -34,12 +36,11 @@ function parseNotifications(raw: string | undefined): NotificationConfig {
     /* expected: malformed stored JSON → fall back to defaults */
     return NOTIFICATION_DEFAULTS;
   }
-  const checked = StoredNotificationsReadSchema.safeParse(parsed);
-  const data = checked.success ? checked.data : {};
+  const root = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
   return {
-    chat: { ...NOTIFICATION_DEFAULTS.chat, ...data.chat },
-    permission: { ...NOTIFICATION_DEFAULTS.permission, ...data.permission },
-    other: { ...NOTIFICATION_DEFAULTS.other, ...data.other },
+    chat: { ...NOTIFICATION_DEFAULTS.chat, ...salvage(ChatReadGroup, root.chat) },
+    permission: { ...NOTIFICATION_DEFAULTS.permission, ...salvage(PermissionReadGroup, root.permission) },
+    other: { ...NOTIFICATION_DEFAULTS.other, ...salvage(OtherReadGroup, root.other) },
   };
 }
 

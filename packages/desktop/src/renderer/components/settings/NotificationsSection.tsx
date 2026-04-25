@@ -47,10 +47,11 @@ export function NotificationsSection(): React.ReactElement {
   const notifications = general.notifications;
 
   // Read latest from the store inside the callback so rapid toggles compose
-  // correctly: the merge target is always the current state, not a closure
-  // snapshot. On failure we refetch the canonical config from the daemon
-  // rather than rolling back to a stale optimistic value (which could clobber
-  // a later in-flight toggle that did succeed).
+  // against the current UI state, not a stale closure snapshot. The PUT body
+  // stays a deep-partial patch so concurrent writes from different groups
+  // remain commutative — full-object writes would let an older request
+  // overwrite a newer one's changes. On failure we refetch the canonical
+  // config from the daemon rather than rolling back to a stale value.
   const applyPatch = useCallback(
     async (patch: Partial<NotificationConfig>) => {
       const current = useSettingsStore.getState().general.notifications;
@@ -61,7 +62,7 @@ export function NotificationsSection(): React.ReactElement {
       };
       setNotifications(merged);
       try {
-        await updateGeneralSettings({ notifications: merged });
+        await updateGeneralSettings({ notifications: patch });
       } catch (err) {
         log.warn('save notifications failed; resyncing from daemon', { err: String(err) });
         try {

@@ -1,8 +1,22 @@
-import type { ProviderConfig, GeneralConfig } from '@qlan-ro/mainframe-types';
+import type { ProviderConfig, GeneralConfig, NotificationConfig } from '@qlan-ro/mainframe-types';
 import { fetchJson, putJson, API_BASE } from './http';
 import { createLogger } from '../logger';
 
 const log = createLogger('renderer:api');
+
+/**
+ * General-settings patch payload. `notifications` is deep-partial because the
+ * server merges patches at the sub-group level, which keeps writes commutative
+ * across independent groups (toggling `chat.taskComplete` does not stomp a
+ * concurrent in-flight `permission.toolRequest` toggle).
+ */
+export type GeneralSettingsPatch = Partial<Omit<GeneralConfig, 'notifications'>> & {
+  notifications?: {
+    chat?: Partial<NotificationConfig['chat']>;
+    permission?: Partial<NotificationConfig['permission']>;
+    other?: Partial<NotificationConfig['other']>;
+  };
+};
 
 export async function getProviderSettings(): Promise<Record<string, ProviderConfig>> {
   const json = await fetchJson<{ success: boolean; data: Record<string, ProviderConfig> }>(
@@ -21,7 +35,7 @@ export async function getGeneralSettings(): Promise<GeneralConfig> {
   return json.data;
 }
 
-export async function updateGeneralSettings(settings: Partial<GeneralConfig>): Promise<void> {
+export async function updateGeneralSettings(settings: GeneralSettingsPatch): Promise<void> {
   log.info('updateGeneralSettings');
   await putJson(`${API_BASE}/api/settings/general`, settings);
 }

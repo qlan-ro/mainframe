@@ -3,26 +3,28 @@ import { NOTIFICATION_DEFAULTS, type NotificationConfig } from '@qlan-ro/mainfra
 import type { DatabaseManager } from '../db/index.js';
 
 /**
- * Defensive runtime-shape validation for the stored JSON blob. The PUT route
- * already runs Zod, but a future migration, hand-edit, or downgraded daemon
- * could leave a value of the wrong shape in the DB and we don't want JS
- * truthiness coercing a string `"false"` into a `true` notification gate.
+ * Per-group runtime-shape validation for the stored JSON blob. We validate
+ * each group independently so a single bad leaf (e.g. someone hand-edits
+ * `permission.toolRequest` to a string) doesn't make us discard the user's
+ * other valid overrides — which would silently re-enable notifications they
+ * had turned off.
  */
-const StoredNotificationsSchema = z
-  .object({
-    chat: z.object({ taskComplete: z.boolean(), sessionError: z.boolean() }).partial().optional(),
-    permission: z
-      .object({ toolRequest: z.boolean(), userQuestion: z.boolean(), planApproval: z.boolean() })
-      .partial()
-      .optional(),
-    other: z.object({ plugin: z.boolean() }).partial().optional(),
-  })
+const ChatGroupSchema = z.object({ taskComplete: z.boolean(), sessionError: z.boolean() }).partial();
+const PermissionGroupSchema = z
+  .object({ toolRequest: z.boolean(), userQuestion: z.boolean(), planApproval: z.boolean() })
   .partial();
+const OtherGroupSchema = z.object({ plugin: z.boolean() }).partial();
+
+function salvage<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> | undefined {
+  const result = schema.safeParse(value);
+  return result.success ? result.data : undefined;
+}
 
 /**
  * Read the notification config from the settings DB. Falls back to defaults
- * (everything enabled) if no row exists, the JSON is malformed, OR the parsed
- * shape doesn't match — invalid sub-fields are dropped, valid ones survive.
+ * (everything enabled) if no row exists or the JSON is malformed. Each group
+ * (chat / permission / other) is validated independently; corruption in one
+ * group falls back to that group's defaults without disturbing the others.
  *
  * Synchronous: settings reads are a single SQLite point lookup, called from
  * event-handler hot paths.
@@ -37,12 +39,11 @@ export function readNotificationConfig(db: DatabaseManager): NotificationConfig 
     /* expected: malformed stored JSON → fall back to defaults */
     return NOTIFICATION_DEFAULTS;
   }
-  const checked = StoredNotificationsSchema.safeParse(parsed);
-  const data = checked.success ? checked.data : {};
+  const root = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
   return {
-    chat: { ...NOTIFICATION_DEFAULTS.chat, ...data.chat },
-    permission: { ...NOTIFICATION_DEFAULTS.permission, ...data.permission },
-    other: { ...NOTIFICATION_DEFAULTS.other, ...data.other },
+    chat: { ...NOTIFICATION_DEFAULTS.chat, ...salvage(ChatGroupSchema, root.chat) },
+    permission: { ...NOTIFICATION_DEFAULTS.permission, ...salvage(PermissionGroupSchema, root.permission) },
+    other: { ...NOTIFICATION_DEFAULTS.other, ...salvage(OtherGroupSchema, root.other) },
   };
 }
 
