@@ -316,7 +316,8 @@ export function ComposerCard() {
             >
               <img
                 src={c.imageDataUrl}
-                alt={c.type === 'screenshot' ? 'screenshot' : (c.selector ?? 'element')}
+                alt={c.annotation ?? (c.type === 'screenshot' ? 'screenshot' : (c.selector ?? 'element'))}
+                title={c.annotation}
                 className="w-full h-full object-cover"
               />
             </button>

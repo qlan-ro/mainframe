@@ -214,7 +214,10 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
             data: base64,
           });
         }
-        const labels = captures.map((c) => (c.type === 'element' ? `element \`${c.selector ?? ''}\`` : 'screenshot'));
+        const labels = captures.map((c) => {
+          const base = c.type === 'element' ? `element \`${c.selector ?? ''}\`` : 'screenshot';
+          return c.annotation ? `${base} — "${c.annotation}"` : base;
+        });
         capturePreamble = `[Preview captures: ${labels.join(', ')}]\n\n`;
       }
 

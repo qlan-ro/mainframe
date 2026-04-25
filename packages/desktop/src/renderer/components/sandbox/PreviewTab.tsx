@@ -10,7 +10,10 @@ import {
   ChevronDown,
   ChevronUp,
   Smartphone,
+  Frame,
 } from 'lucide-react';
+import { RegionCaptureOverlay, type CaptureRect } from './RegionCaptureOverlay.js';
+import { CaptureAnnotationPopover } from './CaptureAnnotationPopover.js';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useSandboxStore } from '../../store/sandbox';
@@ -128,6 +131,9 @@ export function scaleCropRect(rect: CropRect, zoom: number): CropRect {
 export function PreviewTab(): React.ReactElement {
   const webviewRef = useRef<HTMLElement>(null);
   const [inspecting, setInspecting] = useState(false);
+  const [capturingRegion, setCapturingRegion] = useState(false);
+  const [pendingCapture, setPendingCapture] = useState<{ rect: CaptureRect; dataUrl: string } | null>(null);
+  const webviewWrapperRef = useRef<HTMLDivElement>(null);
   const [mobileView, setMobileView] = useState(false);
   const addCapture = useSandboxStore((s) => s.addCapture);
   const logsOutput = useSandboxStore((s) => s.logsOutput);
@@ -300,6 +306,41 @@ export function PreviewTab(): React.ReactElement {
       console.warn('[sandbox] full screenshot failed', err);
     }
   }, [addCapture]);
+
+  const handleRegionComplete = useCallback(async (rect: CaptureRect | null) => {
+    setCapturingRegion(false);
+    if (!rect) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wv = webviewRef.current as any;
+    if (!wv) return;
+    try {
+      const zoom: number = (wv.getZoomFactor?.() as number | undefined) ?? 1;
+      const cropRect = scaleCropRect(rect, zoom);
+      const image = (await wv.capturePage(cropRect)) as { toDataURL: () => string };
+      const dataUrl = image.toDataURL();
+      setPendingCapture({ rect, dataUrl });
+
+      if (!useChatsStore.getState().activeChatId) {
+        const projectId = getActiveProjectId();
+        if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+      }
+    } catch (err) {
+      console.warn('[sandbox] region capture failed', err);
+    }
+  }, []);
+
+  const handleAnnotationSubmit = useCallback(
+    (annotation: string) => {
+      if (!pendingCapture) return;
+      addCapture({ type: 'screenshot', imageDataUrl: pendingCapture.dataUrl, annotation: annotation || undefined });
+      setPendingCapture(null);
+    },
+    [addCapture, pendingCapture],
+  );
+
+  const handleAnnotationClose = useCallback(() => {
+    setPendingCapture(null);
+  }, []);
 
   const handleInspect = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -474,6 +515,22 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  onClick={() => setCapturingRegion((v) => !v)}
+                  className={[
+                    'p-1 rounded transition-colors',
+                    capturingRegion
+                      ? 'bg-mf-hover text-mf-accent'
+                      : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                  ].join(' ')}
+                >
+                  <Frame size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Region capture</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
                   onClick={() => setMobileView((v) => !v)}
                   className={[
                     'p-1 rounded transition-colors',
@@ -518,6 +575,7 @@ export function PreviewTab(): React.ReactElement {
                when display:none, breaking loadURL and did-finish-load events. */}
           {previewConfig ? (
             <div
+              ref={webviewWrapperRef}
               className={
                 hasPreview ? 'flex-1 overflow-hidden min-h-0 relative mx-2 my-2 flex items-start justify-center' : ''
               }
@@ -564,6 +622,25 @@ export function PreviewTab(): React.ReactElement {
                     </span>
                   )}
                 </div>
+              )}
+              {/* Region capture overlay — shown when region capture mode is active */}
+              {capturingRegion && webviewReady && (
+                <RegionCaptureOverlay
+                  containerRef={webviewWrapperRef}
+                  onComplete={(rect) => {
+                    void handleRegionComplete(rect);
+                  }}
+                />
+              )}
+              {/* Annotation popover — shown after a region has been captured */}
+              {pendingCapture && (
+                <CaptureAnnotationPopover
+                  anchorRect={pendingCapture.rect}
+                  containerRef={webviewWrapperRef}
+                  imageDataUrl={pendingCapture.dataUrl}
+                  onSubmit={handleAnnotationSubmit}
+                  onClose={handleAnnotationClose}
+                />
               )}
             </div>
           ) : null}
