@@ -626,7 +626,6 @@ export function PreviewTab(): React.ReactElement {
               {/* Region capture overlay — shown when region capture mode is active */}
               {capturingRegion && webviewReady && (
                 <RegionCaptureOverlay
-                  containerRef={webviewWrapperRef}
                   onComplete={(rect) => {
                     void handleRegionComplete(rect);
                   }}

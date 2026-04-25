@@ -8,8 +8,6 @@ export interface CaptureRect {
 }
 
 interface Props {
-  /** Bounding element the overlay covers — used to resolve pointer coords. */
-  containerRef: React.RefObject<HTMLElement | null>;
   onComplete: (rect: CaptureRect | null) => void;
 }
 
@@ -31,7 +29,7 @@ export function normaliseRect(x1: number, y1: number, x2: number, y2: number): C
 const MIN_SIZE = 4;
 
 /** Transparent full-cover overlay that lets the user drag a selection rectangle. */
-export function RegionCaptureOverlay({ containerRef, onComplete }: Props): React.ReactElement {
+export function RegionCaptureOverlay({ onComplete }: Props): React.ReactElement {
   const overlayRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const [rect, setRect] = useState<CaptureRect | null>(null);
