@@ -49,6 +49,7 @@ interface ChatsState {
   processes: Map<string, AdapterProcess>;
   queuedMessages: Map<string, QueuedMessageRef[]>;
   compactingChats: Set<string>;
+  loadingChats: Set<string>;
   contextUsage: Map<string, ContextUsageState>;
   unreadChatIds: Set<string>;
   todos: Map<string, TodoItem[]>;
@@ -75,6 +76,7 @@ interface ChatsState {
   clearQueuedMessages: (chatId: string) => void;
   setQueuedMessages: (chatId: string, refs: QueuedMessageRef[]) => void;
   setCompacting: (chatId: string, compacting: boolean) => void;
+  setLoadingChat: (chatId: string, loading: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
   setTodos: (chatId: string, todos: TodoItem[]) => void;
   addDetectedPr: (chatId: string, pr: DetectedPr) => void;
@@ -97,6 +99,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   processes: new Map(),
   queuedMessages: new Map(),
   compactingChats: new Set(),
+  loadingChats: new Set(),
   contextUsage: new Map(),
   unreadChatIds: new Set(),
   todos: new Map(),
@@ -299,6 +302,16 @@ export const useChatsStore = create<ChatsState>((set) => ({
         next.delete(chatId);
       }
       return { compactingChats: next };
+    }),
+  setLoadingChat: (chatId, loading) =>
+    set((state) => {
+      const next = new Set(state.loadingChats);
+      if (loading) {
+        next.add(chatId);
+      } else {
+        next.delete(chatId);
+      }
+      return { loadingChats: next };
     }),
   setContextUsage: (chatId, usage) =>
     set((state) => {
