@@ -224,185 +224,187 @@ export function TodoModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-3 overflow-y-auto scrollbar-none flex-1 min-h-0">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="todo-title" className="text-mf-small text-mf-text-secondary">
-              Title *
-            </label>
-            <input
-              id="todo-title"
-              className={input}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Task title"
-              autoFocus
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="p-4 space-y-3 overflow-y-auto scrollbar-none flex-1 min-h-0">
             <div className="flex flex-col gap-1">
-              <label className="text-mf-small text-mf-text-secondary">Type</label>
-              <select
-                className={cn(input, 'cursor-pointer capitalize')}
-                value={type}
-                onChange={(e) => setType(e.target.value as TodoType)}
-              >
-                {TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t.replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-mf-small text-mf-text-secondary">Priority</label>
-              <select
-                className={cn(input, 'cursor-pointer capitalize')}
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as TodoPriority)}
-              >
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-mf-small text-mf-text-secondary">Status</label>
-              <select
-                className={cn(input, 'cursor-pointer capitalize')}
-                value={status}
-                onChange={(e) => setStatus(e.target.value as TodoStatus)}
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between">
-              <label className="text-mf-small text-mf-text-secondary">Description (markdown)</label>
-              <span className="text-mf-status text-mf-text-secondary opacity-60">Paste image to attach</span>
-            </div>
-            <div className={textareaWrap}>
-              <textarea
-                className={textareaInner}
-                rows={4}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                onPaste={handlePaste}
-                placeholder="Describe the task..."
-              />
-            </div>
-          </div>
-
-          {/* Attachments: existing todo uses TodoAttachments, new todo shows pending previews */}
-          {todo ? (
-            <TodoAttachments key={attachRefresh} todoId={todo.id} />
-          ) : (
-            <div className="flex flex-col gap-1">
-              <label className="text-mf-small text-mf-text-secondary">Attachments</label>
-              {pendingFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {pendingFiles.map((f, i) => (
-                    <div
-                      key={f.id}
-                      className="relative group rounded-mf-input border border-mf-border overflow-hidden bg-mf-app-bg"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setLightboxIndex(i)}
-                        className="block w-20 h-20 focus:outline-none focus:ring-1 focus:ring-mf-accent"
-                        aria-label={`Preview ${f.filename}`}
-                      >
-                        <img
-                          src={`data:${f.mimeType};base64,${f.data}`}
-                          alt={f.filename}
-                          className="w-full h-full object-cover"
-                        />
-                      </button>
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 pointer-events-none">
-                        <span className="text-mf-status text-white truncate block">{f.filename}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removePending(f.id)}
-                        className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label={`Remove ${f.filename}`}
-                      >
-                        <X size={10} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {lightboxIndex !== null && pendingFiles.length > 0 && (
-                <ImageLightbox
-                  images={pendingFiles.map((f) => ({ mediaType: f.mimeType, data: f.data }))}
-                  index={lightboxIndex}
-                  onClose={() => setLightboxIndex(null)}
-                  onNavigate={setLightboxIndex}
-                />
-              )}
+              <label htmlFor="todo-title" className="text-mf-small text-mf-text-secondary">
+                Title *
+              </label>
               <input
-                ref={fileInputRef}
-                type="file"
-                accept={IMAGE_ACCEPT}
-                onChange={handleFilePick}
-                className="hidden"
+                id="todo-title"
+                className={input}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Task title"
+                autoFocus
+                required
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1 w-fit px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
-              >
-                <Upload size={12} />
-                Add image
-              </button>
             </div>
-          )}
 
-          <div className="flex flex-col gap-1">
-            <label className="text-mf-small text-mf-text-secondary">Labels</label>
-            <LabelAutocomplete value={labelList} onChange={setLabelList} allLabels={allLabels} />
-          </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-mf-small text-mf-text-secondary">Type</label>
+                <select
+                  className={cn(input, 'cursor-pointer capitalize')}
+                  value={type}
+                  onChange={(e) => setType(e.target.value as TodoType)}
+                >
+                  {TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t.replace('_', ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-mf-small text-mf-text-secondary">Priority</label>
+                <select
+                  className={cn(input, 'cursor-pointer capitalize')}
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as TodoPriority)}
+                >
+                  {PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-mf-small text-mf-text-secondary">Status</label>
+                <select
+                  className={cn(input, 'cursor-pointer capitalize')}
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as TodoStatus)}
+                >
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s.replace('_', ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-mf-small text-mf-text-secondary">Assignees (comma-separated)</label>
-            <input
-              className={input}
-              value={assignees}
-              onChange={(e) => setAssignees(e.target.value)}
-              placeholder="e.g. alice, bob"
+            <div className="flex flex-col gap-1">
+              <div className="flex items-baseline justify-between">
+                <label className="text-mf-small text-mf-text-secondary">Description (markdown)</label>
+                <span className="text-mf-status text-mf-text-secondary opacity-60">Paste image to attach</span>
+              </div>
+              <div className={textareaWrap}>
+                <textarea
+                  className={textareaInner}
+                  rows={4}
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  onPaste={handlePaste}
+                  placeholder="Describe the task..."
+                />
+              </div>
+            </div>
+
+            {/* Attachments: existing todo uses TodoAttachments, new todo shows pending previews */}
+            {todo ? (
+              <TodoAttachments key={attachRefresh} todoId={todo.id} />
+            ) : (
+              <div className="flex flex-col gap-1">
+                <label className="text-mf-small text-mf-text-secondary">Attachments</label>
+                {pendingFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {pendingFiles.map((f, i) => (
+                      <div
+                        key={f.id}
+                        className="relative group rounded-mf-input border border-mf-border overflow-hidden bg-mf-app-bg"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setLightboxIndex(i)}
+                          className="block w-20 h-20 focus:outline-none focus:ring-1 focus:ring-mf-accent"
+                          aria-label={`Preview ${f.filename}`}
+                        >
+                          <img
+                            src={`data:${f.mimeType};base64,${f.data}`}
+                            alt={f.filename}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                        <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 pointer-events-none">
+                          <span className="text-mf-status text-white truncate block">{f.filename}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removePending(f.id)}
+                          className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label={`Remove ${f.filename}`}
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {lightboxIndex !== null && pendingFiles.length > 0 && (
+                  <ImageLightbox
+                    images={pendingFiles.map((f) => ({ mediaType: f.mimeType, data: f.data }))}
+                    index={lightboxIndex}
+                    onClose={() => setLightboxIndex(null)}
+                    onNavigate={setLightboxIndex}
+                  />
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={IMAGE_ACCEPT}
+                  onChange={handleFilePick}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1 w-fit px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
+                >
+                  <Upload size={12} />
+                  Add image
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1">
+              <label className="text-mf-small text-mf-text-secondary">Labels</label>
+              <LabelAutocomplete value={labelList} onChange={setLabelList} allLabels={allLabels} />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-mf-small text-mf-text-secondary">Assignees (comma-separated)</label>
+              <input
+                className={input}
+                value={assignees}
+                onChange={(e) => setAssignees(e.target.value)}
+                placeholder="e.g. alice, bob"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-mf-small text-mf-text-secondary">Milestone</label>
+              <input
+                className={input}
+                value={milestone}
+                onChange={(e) => setMilestone(e.target.value)}
+                placeholder="e.g. v1.0, Q1 2026"
+              />
+            </div>
+
+            <DependencyPicker
+              currentId={todo?.id}
+              currentNumber={todo?.number}
+              allTodos={allTodos}
+              value={dependencies}
+              onChange={setDependencies}
+              inputClass={input}
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-mf-small text-mf-text-secondary">Milestone</label>
-            <input
-              className={input}
-              value={milestone}
-              onChange={(e) => setMilestone(e.target.value)}
-              placeholder="e.g. v1.0, Q1 2026"
-            />
-          </div>
-
-          <DependencyPicker
-            currentId={todo?.id}
-            currentNumber={todo?.number}
-            allTodos={allTodos}
-            value={dependencies}
-            onChange={setDependencies}
-            inputClass={input}
-          />
-
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end gap-2 px-4 py-3 border-t border-mf-border shrink-0">
             {todo && todo.status === 'in_progress' && onStartSession && (
               <button
                 type="button"

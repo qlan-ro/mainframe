@@ -216,16 +216,16 @@ export function QuickTodoDialog() {
       <div
         role="dialog"
         aria-modal="true"
-        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border w-full max-w-md mx-4 shadow-xl"
+        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border w-full max-w-md mx-4 shadow-xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border shrink-0">
           <h2 className="text-mf-small font-medium text-mf-text-primary">Quick Task</h2>
         </div>
 
         {/* Body */}
-        <div className="px-4 py-3 space-y-3">
+        <div className="px-4 py-3 space-y-3 overflow-y-auto flex-1 min-h-0">
           {/* Type toggle */}
           <div className="flex gap-2">
             <Pill label="Feature" active={type === 'feature'} onClick={() => setType('feature')} />
@@ -315,7 +315,7 @@ export function QuickTodoDialog() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-mf-border">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-mf-border shrink-0">
           <span className="text-mf-tiny text-mf-text-tertiary">
             <kbd className="px-1 py-0.5 bg-mf-app-bg rounded border border-mf-border text-mf-tiny">Esc</kbd> to cancel
           </span>
