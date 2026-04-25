@@ -253,13 +253,13 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   for (const block of message.content) {
     if (block.type === 'tool_result') {
       const text = typeof block.content === 'string' ? block.content : '';
+      const toolUseId = block.tool_use_id as string | undefined;
       const planMatch = text.match(/Your plan has been saved to: (\/\S+\.md)/);
       if (planMatch?.[1]) {
         sink.onPlanFile(planMatch[1].trim());
       }
       const pr = extractPrFromToolResult(text);
       if (pr) {
-        const toolUseId = block.tool_use_id as string | undefined;
         const source = toolUseId && session.state.pendingPrCreates.has(toolUseId) ? 'created' : 'mentioned';
         if (source === 'created') session.state.pendingPrCreates.delete(toolUseId!);
         sink.onPrDetected({ ...pr, source });
@@ -267,10 +267,9 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
 
       // Path B: command-arg-based mutation detection. Consume any pending stash
       // keyed by this tool_use_id, regardless of whether the output contained a URL.
-      const mutationToolUseId = block.tool_use_id as string | undefined;
-      if (mutationToolUseId && session.state.pendingPrMutations.has(mutationToolUseId)) {
-        const stashed = session.state.pendingPrMutations.get(mutationToolUseId)!;
-        session.state.pendingPrMutations.delete(mutationToolUseId);
+      if (toolUseId && session.state.pendingPrMutations.has(toolUseId)) {
+        const stashed = session.state.pendingPrMutations.get(toolUseId)!;
+        session.state.pendingPrMutations.delete(toolUseId);
         if (block.is_error !== true) {
           sink.onPrDetected({ ...stashed, source: 'mentioned' });
         }
