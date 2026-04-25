@@ -37,7 +37,11 @@ export const UpdateProviderSettingsBody = z.object({
   systemPrompt: z.string().optional(),
 });
 
-// Settings — general update
+// Settings — general update.
+// Each subgroup is `.partial()` so callers can patch a single leaf
+// (e.g. `{ notifications: { chat: { taskComplete: false } } }`). That keeps
+// per-toggle PUTs commutative across independent leaves; concurrent writes
+// from different leaves never overwrite each other's fields.
 const NotificationConfigSchema = z
   .object({
     chat: z
@@ -45,6 +49,7 @@ const NotificationConfigSchema = z
         taskComplete: z.boolean(),
         sessionError: z.boolean(),
       })
+      .partial()
       .optional(),
     permission: z
       .object({
@@ -52,11 +57,13 @@ const NotificationConfigSchema = z
         userQuestion: z.boolean(),
         planApproval: z.boolean(),
       })
+      .partial()
       .optional(),
     other: z
       .object({
         plugin: z.boolean(),
       })
+      .partial()
       .optional(),
   })
   .optional();

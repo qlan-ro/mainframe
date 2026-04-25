@@ -44,7 +44,18 @@ function parseNotifications(raw: string | undefined): NotificationConfig {
   };
 }
 
-function persistNotifications(ctx: RouteContext, patch: Partial<NotificationConfig>): void {
+/**
+ * Patch shape accepted by the route. Each subgroup is partial so callers can
+ * flip a single leaf without restating siblings — keeps PUTs commutative
+ * across independent leaves under concurrent writes.
+ */
+type NotificationPatch = {
+  chat?: Partial<NotificationConfig['chat']>;
+  permission?: Partial<NotificationConfig['permission']>;
+  other?: Partial<NotificationConfig['other']>;
+};
+
+function persistNotifications(ctx: RouteContext, patch: NotificationPatch): void {
   const existing = parseNotifications(ctx.db.settings.get('general', 'notifications') ?? undefined);
   const merged: NotificationConfig = {
     chat: { ...existing.chat, ...patch.chat },
