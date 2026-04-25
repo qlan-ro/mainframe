@@ -87,6 +87,16 @@ function SendButton({
       disabled={disabled}
       onClick={() => {
         try {
+          // assistant-ui's runtime.send() no-ops when the composer is empty, but
+          // we still want to dispatch when the user has only captures attached
+          // (the preamble will fill in the text on the runtime side).
+          if (composerEmpty && hasCaptures) {
+            try {
+              composerRuntime.setText(' ');
+            } catch (err) {
+              log.warn('failed to seed composer text for capture-only send', { err: String(err) });
+            }
+          }
           composerRuntime.send();
           deleteDraft(chatId);
         } catch (err) {

@@ -204,20 +204,30 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
       const captureCount = captures.length;
       let capturePreamble = '';
       if (captureCount > 0) {
+        let screenshotIdx = 0;
+        let elementIdx = 0;
+        const labels: string[] = [];
         for (const c of captures) {
           const base64 = c.imageDataUrl.split(',')[1] ?? '';
+          let identifier: string;
+          if (c.type === 'element') {
+            elementIdx += 1;
+            identifier = `element${elementIdx}`;
+          } else {
+            screenshotIdx += 1;
+            identifier = `screenshot${screenshotIdx}`;
+          }
           attachmentItems.push({
-            name: c.type === 'element' ? `element-${c.selector ?? 'capture'}.png` : 'screenshot.png',
+            name: `${identifier}.png`,
             mediaType: 'image/png',
             sizeBytes: Math.floor((base64.length * 3) / 4),
             kind: 'image',
             data: base64,
           });
+          const selectorSuffix = c.type === 'element' && c.selector ? ` (\`${c.selector}\`)` : '';
+          const annotationSuffix = c.annotation ? ` — "${c.annotation}"` : '';
+          labels.push(`${identifier}${selectorSuffix}${annotationSuffix}`);
         }
-        const labels = captures.map((c) => {
-          const base = c.type === 'element' ? `element \`${c.selector ?? ''}\`` : 'screenshot';
-          return c.annotation ? `${base} — "${c.annotation}"` : base;
-        });
         capturePreamble = `[Preview captures: ${labels.join(', ')}]\n\n`;
       }
 
