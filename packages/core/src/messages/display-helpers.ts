@@ -80,6 +80,14 @@ export function convertUserContent(content: MessageContent[]): {
 
       const cmdInfo = parseCommandMessage(block.text);
       if (cmdInfo) {
+        // Only synthesize a user bubble when the raw text includes a <command-message>
+        // tag — that tag is present exclusively for user-typed slash commands. Subagent
+        // and replay CLI echoes emit bare <command-name>…</command-name> with no
+        // <command-message> wrapper; those are internal CLI metadata, not user input,
+        // so we suppress them to avoid a spurious empty bubble in the Explore thread.
+        const hasCommandMessage = block.text.includes('<command-message>');
+        if (!hasCommandMessage) continue;
+
         metadata.command = { name: cmdInfo.commandName, userText: cmdInfo.userText };
         metadata.cleanText = cmdInfo.userText;
         // Synthesize a readable bubble from the CLI's <command-name>/<command-args>
