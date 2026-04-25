@@ -132,7 +132,10 @@ export function PreviewTab(): React.ReactElement {
   const webviewRef = useRef<HTMLElement>(null);
   const [inspecting, setInspecting] = useState(false);
   const [capturingRegion, setCapturingRegion] = useState(false);
-  const [pendingCapture, setPendingCapture] = useState<{ rect: CaptureRect; dataUrl: string } | null>(null);
+  const [pendingCaptures, setPendingCaptures] = useState<
+    Array<{ id: string; rect: CaptureRect; dataUrl: string; annotation: string }>
+  >([]);
+  const [autoFocusId, setAutoFocusId] = useState<string | null>(null);
   const webviewWrapperRef = useRef<HTMLDivElement>(null);
   const [mobileView, setMobileView] = useState(false);
   const addCapture = useSandboxStore((s) => s.addCapture);
@@ -307,9 +310,7 @@ export function PreviewTab(): React.ReactElement {
     }
   }, [addCapture]);
 
-  const handleRegionComplete = useCallback(async (rect: CaptureRect | null) => {
-    setCapturingRegion(false);
-    if (!rect) return;
+  const handleRegionCapture = useCallback(async (rect: CaptureRect) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wv = webviewRef.current as any;
     if (!wv) return;
@@ -318,29 +319,43 @@ export function PreviewTab(): React.ReactElement {
       const cropRect = scaleCropRect(rect, zoom);
       const image = (await wv.capturePage(cropRect)) as { toDataURL: () => string };
       const dataUrl = image.toDataURL();
-      setPendingCapture({ rect, dataUrl });
-
-      if (!useChatsStore.getState().activeChatId) {
-        const projectId = getActiveProjectId();
-        if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
-      }
+      const id = `cap-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setPendingCaptures((prev) => [...prev, { id, rect, dataUrl, annotation: '' }]);
+      setAutoFocusId(id);
     } catch (err) {
       console.warn('[sandbox] region capture failed', err);
     }
   }, []);
 
-  const handleAnnotationSubmit = useCallback(
-    (annotation: string) => {
-      if (!pendingCapture) return;
-      addCapture({ type: 'screenshot', imageDataUrl: pendingCapture.dataUrl, annotation: annotation || undefined });
-      setPendingCapture(null);
-    },
-    [addCapture, pendingCapture],
-  );
-
-  const handleAnnotationClose = useCallback(() => {
-    setPendingCapture(null);
+  const updateAnnotation = useCallback((id: string, next: string) => {
+    setPendingCaptures((prev) => prev.map((c) => (c.id === id ? { ...c, annotation: next } : c)));
   }, []);
+
+  const removePendingCapture = useCallback((id: string) => {
+    setPendingCaptures((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const exitCaptureMode = useCallback(() => {
+    setCapturingRegion(false);
+    setPendingCaptures([]);
+    setAutoFocusId(null);
+  }, []);
+
+  const submitAllCaptures = useCallback(() => {
+    if (pendingCaptures.length === 0) return;
+    for (const c of pendingCaptures) {
+      addCapture({
+        type: 'screenshot',
+        imageDataUrl: c.dataUrl,
+        annotation: c.annotation.trim() || undefined,
+      });
+    }
+    if (!useChatsStore.getState().activeChatId) {
+      const projectId = getActiveProjectId();
+      if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+    }
+    exitCaptureMode();
+  }, [addCapture, pendingCaptures, exitCaptureMode]);
 
   const handleInspect = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -515,7 +530,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={() => setCapturingRegion((v) => !v)}
+                  onClick={() => (capturingRegion ? exitCaptureMode() : setCapturingRegion(true))}
                   className={[
                     'p-1 rounded transition-colors',
                     capturingRegion
@@ -623,23 +638,30 @@ export function PreviewTab(): React.ReactElement {
                   )}
                 </div>
               )}
-              {/* Region capture overlay — shown when region capture mode is active */}
+              {/* Region capture overlay + per-capture annotation popovers */}
               {capturingRegion && webviewReady && (
-                <RegionCaptureOverlay
-                  onComplete={(rect) => {
-                    void handleRegionComplete(rect);
-                  }}
-                />
-              )}
-              {/* Annotation popover — shown after a region has been captured */}
-              {pendingCapture && (
-                <CaptureAnnotationPopover
-                  anchorRect={pendingCapture.rect}
-                  containerRef={webviewWrapperRef}
-                  imageDataUrl={pendingCapture.dataUrl}
-                  onSubmit={handleAnnotationSubmit}
-                  onClose={handleAnnotationClose}
-                />
+                <>
+                  <RegionCaptureOverlay
+                    captured={pendingCaptures.map((c) => ({ id: c.id, rect: c.rect }))}
+                    onCapture={(rect) => {
+                      void handleRegionCapture(rect);
+                    }}
+                    onSubmitAll={submitAllCaptures}
+                    onCancel={exitCaptureMode}
+                  />
+                  {pendingCaptures.map((c, idx) => (
+                    <CaptureAnnotationPopover
+                      key={c.id}
+                      anchorRect={c.rect}
+                      containerRef={webviewWrapperRef}
+                      index={idx + 1}
+                      value={c.annotation}
+                      autoFocus={autoFocusId === c.id}
+                      onChange={(next) => updateAnnotation(c.id, next)}
+                      onRemove={() => removePendingCapture(c.id)}
+                    />
+                  ))}
+                </>
               )}
             </div>
           ) : null}
