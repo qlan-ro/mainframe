@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import type { ProviderConfig, GeneralConfig } from '@qlan-ro/mainframe-types';
+import type { ProviderConfig, GeneralConfig, NotificationConfig } from '@qlan-ro/mainframe-types';
 import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 
-export type SettingsTab = 'providers' | 'general' | 'keybindings' | 'remote-access' | 'about';
+export type SettingsTab = 'providers' | 'general' | 'keybindings' | 'remote-access' | 'about' | 'notifications';
 
 interface SettingsState {
   isOpen: boolean;
@@ -20,6 +20,7 @@ interface SettingsState {
   loadProviders: (providers: Record<string, ProviderConfig>) => void;
   loadGeneral: (general: GeneralConfig) => void;
   setLoading: (loading: boolean) => void;
+  setNotifications: (notifications: NotificationConfig) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -46,4 +47,5 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   loadProviders: (providers) => set({ providers }),
   loadGeneral: (general) => set({ general }),
   setLoading: (loading) => set({ loading }),
+  setNotifications: (notifications) => set((state) => ({ general: { ...state.general, notifications } })),
 }));

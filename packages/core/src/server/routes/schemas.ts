@@ -38,12 +38,36 @@ export const UpdateProviderSettingsBody = z.object({
 });
 
 // Settings — general update
+const NotificationConfigSchema = z
+  .object({
+    chat: z
+      .object({
+        taskComplete: z.boolean(),
+        sessionError: z.boolean(),
+      })
+      .optional(),
+    permission: z
+      .object({
+        toolRequest: z.boolean(),
+        userQuestion: z.boolean(),
+        planApproval: z.boolean(),
+      })
+      .optional(),
+    other: z
+      .object({
+        plugin: z.boolean(),
+      })
+      .optional(),
+  })
+  .optional();
+
 export const UpdateGeneralSettingsBody = z.object({
   worktreeDir: z
     .string()
     .min(1)
     .regex(/^[a-zA-Z0-9._-]+$/, 'Must be a simple directory name')
     .optional(),
+  notifications: NotificationConfigSchema,
 });
 
 // Filesystem browsing

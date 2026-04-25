@@ -5,11 +5,29 @@ import { useProjectsStore } from '../store/projects';
 import { usePluginLayoutStore } from '../store/plugins';
 import { useSandboxStore } from '../store/sandbox';
 import { useAdaptersStore } from '../store/adapters';
+import { useSettingsStore } from '../store/settings';
 import { createLogger } from './logger';
 import { buildLaunchScope } from './launch-scope.js';
 import { notify } from './notify';
 
 const log = createLogger('renderer:ws');
+
+function isNotificationEnabled(event: DaemonEvent): boolean {
+  const { notifications } = useSettingsStore.getState().general;
+  if (event.type === 'chat.notification') {
+    return event.level === 'success' ? notifications.chat.taskComplete : notifications.chat.sessionError;
+  }
+  if (event.type === 'permission.requested') {
+    const tool = event.request.toolName;
+    if (tool === 'AskUserQuestion') return notifications.permission.userQuestion;
+    if (tool === 'ExitPlanMode') return notifications.permission.planApproval;
+    return notifications.permission.toolRequest;
+  }
+  if (event.type === 'plugin.notification') {
+    return notifications.other.plugin;
+  }
+  return true;
+}
 
 export function routeEvent(event: DaemonEvent): void {
   const chats = useChatsStore.getState();
@@ -35,12 +53,14 @@ export function routeEvent(event: DaemonEvent): void {
     }
     case 'chat.notification': {
       const chat = chats.chats.find((c) => c.id === event.chatId);
-      notify({
-        type: event.level,
-        title: chat?.title ?? event.title,
-        body: event.body,
-        chatId: event.chatId,
-      });
+      if (isNotificationEnabled(event)) {
+        notify({
+          type: event.level,
+          title: chat?.title ?? event.title,
+          body: event.body,
+          chatId: event.chatId,
+        });
+      }
       break;
     }
     case 'chat.ended':
@@ -71,7 +91,7 @@ export function routeEvent(event: DaemonEvent): void {
         toolName: event.request.toolName,
       });
       chats.addPendingPermission(event.chatId, event.request);
-      {
+      if (isNotificationEnabled(event)) {
         const chat = chats.chats.find((c) => c.id === event.chatId);
         notify({
           type: 'info',
@@ -162,18 +182,20 @@ export function routeEvent(event: DaemonEvent): void {
       usePluginLayoutStore.getState().unregisterContribution(event.pluginId, event.panelId);
       break;
     case 'plugin.notification':
-      notify({
-        type:
-          event.level === 'error'
-            ? 'error'
-            : event.level === 'warning'
-              ? 'warning'
-              : event.level === 'success'
-                ? 'success'
-                : 'info',
-        title: event.title,
-        body: event.body,
-      });
+      if (isNotificationEnabled(event)) {
+        notify({
+          type:
+            event.level === 'error'
+              ? 'error'
+              : event.level === 'warning'
+                ? 'warning'
+                : event.level === 'success'
+                  ? 'success'
+                  : 'info',
+          title: event.title,
+          body: event.body,
+        });
+      }
       break;
     case 'plugin.action.registered':
       usePluginLayoutStore.getState().registerAction({
