@@ -63,6 +63,8 @@ export interface ClaudeSessionState {
   pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
   /** Tool_use IDs for Bash commands that match PR-create patterns (gh pr create, etc.) */
   pendingPrCreates: Set<string>;
+  /** Tool_use IDs → parsed PR info for mutation commands (gh pr edit/ready/merge/close/reopen/comment/review, etc.) */
+  pendingPrMutations: Map<string, { url: string; owner: string; repo: string; number: number }>;
 }
 
 /**
@@ -101,6 +103,7 @@ export class ClaudeSession implements AdapterSession {
       interruptTimer: null,
       pendingCancelCallbacks: new Map(),
       pendingPrCreates: new Set(),
+      pendingPrMutations: new Map(),
     };
   }
 
