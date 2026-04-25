@@ -6,6 +6,7 @@ import { useChatsStore } from '../../../store/chats';
 import { ImageLightbox } from '../ImageLightbox';
 import { UserMessage, AssistantMessage, SystemMessage } from './messages';
 import { ComposerCard } from './composer';
+import { QuoteOnSelectionButton } from './QuoteOnSelectionButton';
 
 const PermissionCard = React.lazy(() => import('../PermissionCard').then((m) => ({ default: m.PermissionCard })));
 const AskUserQuestionCard = React.lazy(() =>
@@ -70,7 +71,7 @@ export function MainframeThread() {
     <ThreadPrimitive.Root className="h-full flex flex-col">
       <ThreadPrimitive.Viewport autoScroll className="flex-1 overflow-y-auto scrollbar-on-hover">
         <EmptyState />
-        <div className="px-6 py-6 space-y-5">
+        <div data-mf-chat-thread className="px-6 py-6 space-y-5">
           <ThreadPrimitive.Messages
             components={{
               UserMessage,
@@ -81,6 +82,7 @@ export function MainframeThread() {
           <GeneratingIndicator />
         </div>
       </ThreadPrimitive.Viewport>
+      <QuoteOnSelectionButton />
       <div className="shrink-0 px-6 pb-5 pt-2">
         <BottomCard />
       </div>

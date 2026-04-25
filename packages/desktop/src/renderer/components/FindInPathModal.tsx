@@ -141,7 +141,7 @@ export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathMod
   return (
     <div className="fixed inset-0 z-50 flex justify-center" style={{ paddingTop: '15%' }} onClick={onClose}>
       <div
-        className="w-[560px] max-w-[90%] h-fit max-h-[60vh] bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-2xl flex flex-col overflow-hidden"
+        className="w-[960px] max-w-[90%] h-fit max-h-[60vh] bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -150,7 +150,7 @@ export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathMod
             <h2 className="text-mf-body font-semibold text-mf-text-primary">{title}</h2>
             <Tooltip>
               <TooltipTrigger asChild>
-                <p className="text-mf-small text-mf-text-secondary truncate max-w-[420px]" tabIndex={0}>
+                <p className="text-mf-small text-mf-text-secondary truncate max-w-[820px]" tabIndex={0}>
                   {scopePath}
                 </p>
               </TooltipTrigger>
