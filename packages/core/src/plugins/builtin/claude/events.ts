@@ -207,6 +207,10 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
           if (input?.command && isPrCreateCommand(input.command)) {
             session.state.pendingPrCreates.add(block.id as string);
           }
+          if (input?.command && isPrMutationCommand(input.command)) {
+            const pr = parsePrIdentifierFromArgs(input.command);
+            if (pr) session.state.pendingPrMutations.set(block.id as string, pr);
+          }
         }
       }
     }

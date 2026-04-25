@@ -128,3 +128,103 @@ describe('parsePrIdentifierFromArgs', () => {
     expect(parsePrIdentifierFromArgs('glab mr update org/repo#42')).toBeNull();
   });
 });
+
+describe('handleAssistantEvent stashes pending mutations', () => {
+  it('stashes tool_use_id and PR info for gh pr edit with URL arg', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const event = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_mut_1',
+            name: 'Bash',
+            input: { command: 'gh pr edit https://github.com/org/repo/pull/42 --add-label bug' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
+
+    expect(session.state.pendingPrMutations.get('tu_mut_1')).toEqual({
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+    });
+  });
+
+  it('stashes with gh compact syntax', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const event = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_mut_2',
+            name: 'BashTool',
+            input: { command: 'gh pr ready org/repo#42' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
+
+    expect(session.state.pendingPrMutations.get('tu_mut_2')).toEqual({
+      url: 'https://github.com/org/repo/pull/42',
+      owner: 'org',
+      repo: 'repo',
+      number: 42,
+    });
+  });
+
+  it('does not stash number-only args (gh pr edit 42)', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const event = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_mut_3',
+            name: 'Bash',
+            input: { command: 'gh pr edit 42 --title new' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
+
+    expect(session.state.pendingPrMutations.has('tu_mut_3')).toBe(false);
+  });
+
+  it('does not stash non-mutation commands even with PR URL in args', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const event = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_mut_4',
+            name: 'Bash',
+            input: { command: 'echo https://github.com/org/repo/pull/42' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(event) + '\n'), sink);
+
+    expect(session.state.pendingPrMutations.has('tu_mut_4')).toBe(false);
+  });
+});
