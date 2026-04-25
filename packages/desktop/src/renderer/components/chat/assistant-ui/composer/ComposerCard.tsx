@@ -73,11 +73,13 @@ function SendButton({
   hasCaptures,
   disabled: externalDisabled,
   chatId,
+  onSendPendingCaptures,
 }: {
   composerRuntime: ComposerRuntime;
   hasCaptures: boolean;
   disabled?: boolean;
   chatId: string;
+  onSendPendingCaptures: () => Promise<void>;
 }) {
   const composerEmpty = useComposerEmpty(composerRuntime);
   const disabled = externalDisabled || (composerEmpty && !hasCaptures);
@@ -87,15 +89,14 @@ function SendButton({
       disabled={disabled}
       onClick={() => {
         try {
-          // assistant-ui's runtime.send() no-ops when the composer is empty, but
-          // we still want to dispatch when the user has only captures attached
-          // (the preamble will fill in the text on the runtime side).
+          // assistant-ui's runtime.send() short-circuits on empty composer text,
+          // so when the user has only captures we dispatch through our own path.
           if (composerEmpty && hasCaptures) {
-            try {
-              composerRuntime.setText(' ');
-            } catch (err) {
-              log.warn('failed to seed composer text for capture-only send', { err: String(err) });
-            }
+            void onSendPendingCaptures().catch((err) => {
+              log.warn('failed to send pending captures', { err: String(err) });
+            });
+            deleteDraft(chatId);
+            return;
           }
           composerRuntime.send();
           deleteDraft(chatId);
@@ -113,7 +114,7 @@ function SendButton({
 }
 
 export function ComposerCard() {
-  const { chatId, composerError, dismissComposerError, openLightbox } = useMainframeRuntime();
+  const { chatId, composerError, dismissComposerError, openLightbox, sendPendingCaptures } = useMainframeRuntime();
   const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
   const adapters = useAdaptersStore((s) => s.adapters);
   const messages = useChatsStore((s) => s.messages.get(chatId));
@@ -458,6 +459,7 @@ export function ComposerCard() {
             hasCaptures={captures.length > 0}
             disabled={chat?.worktreeMissing}
             chatId={chatId}
+            onSendPendingCaptures={sendPendingCaptures}
           />
         </div>
       </div>
