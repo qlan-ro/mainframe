@@ -70,6 +70,11 @@ function convertGroupedToDisplay(
 
     case 'user': {
       const { displayContent, metadata: extraMeta } = convertUserContent(msg.content);
+      // Suppress user messages whose entire content was stripped to nothing
+      // (e.g. bare <command-name> CLI echoes from subagent/replay paths that
+      // contain no visible text, no images, and no tool results). Returning
+      // null here prevents an empty bubble from appearing in the chat thread.
+      if (displayContent.length === 0 && Object.keys(extraMeta).length === 0) return null;
       const metadata = {
         ...(msg.metadata ?? {}),
         ...extraMeta,
