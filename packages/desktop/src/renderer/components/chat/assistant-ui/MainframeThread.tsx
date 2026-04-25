@@ -27,6 +27,15 @@ function EmptyState() {
   );
 }
 
+function LoadingState() {
+  return (
+    <div className="h-full flex flex-col items-center justify-center gap-3 text-mf-text-secondary">
+      <Loader2 size={24} className="animate-spin motion-reduce:animate-none text-mf-accent" />
+      <span className="text-mf-body">Loading messages…</span>
+    </div>
+  );
+}
+
 function GeneratingIndicator() {
   const thread = useThread();
   const activeChatId = useChatsStore((s) => s.activeChatId);
@@ -66,21 +75,29 @@ function BottomCard() {
 
 export function MainframeThread() {
   const { lightbox, closeLightbox, navigateLightbox } = useMainframeRuntime();
+  const activeChatId = useChatsStore((s) => s.activeChatId);
+  const isLoading = useChatsStore((s) => (activeChatId ? s.loadingChats.has(activeChatId) : false));
 
   return (
     <ThreadPrimitive.Root className="h-full flex flex-col">
       <ThreadPrimitive.Viewport autoScroll className="flex-1 overflow-y-auto scrollbar-on-hover">
-        <EmptyState />
-        <div data-mf-chat-thread className="px-6 py-6 space-y-5">
-          <ThreadPrimitive.Messages
-            components={{
-              UserMessage,
-              AssistantMessage,
-              SystemMessage,
-            }}
-          />
-          <GeneratingIndicator />
-        </div>
+        {isLoading ? (
+          <LoadingState />
+        ) : (
+          <>
+            <EmptyState />
+            <div data-mf-chat-thread className="px-6 py-6 space-y-5">
+              <ThreadPrimitive.Messages
+                components={{
+                  UserMessage,
+                  AssistantMessage,
+                  SystemMessage,
+                }}
+              />
+              <GeneratingIndicator />
+            </div>
+          </>
+        )}
       </ThreadPrimitive.Viewport>
       <QuoteOnSelectionButton />
       <div className="shrink-0 px-6 pb-5 pt-2">
