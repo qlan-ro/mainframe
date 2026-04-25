@@ -127,13 +127,12 @@ export function QuoteOnSelectionButton(): React.ReactElement | null {
       // mousedown in capture would clear the selection; prevent default to keep it.
       onMouseDown={(e) => e.preventDefault()}
       onClick={onQuote}
-      style={{ position: 'fixed', top: pos.top, left: pos.left, height: BUTTON_HEIGHT }}
-      className="z-50 flex items-center gap-1 px-2 rounded-mf-input bg-mf-panel-bg border border-mf-border shadow-lg text-mf-small text-mf-text-primary hover:bg-mf-hover transition-colors"
+      style={{ position: 'fixed', top: pos.top, left: pos.left, height: BUTTON_HEIGHT, width: BUTTON_HEIGHT }}
+      className="z-50 flex items-center justify-center rounded-mf-input bg-mf-panel-bg border border-mf-border shadow-lg text-mf-text-primary hover:bg-mf-hover transition-colors"
       aria-label="Quote selection in composer"
       title="Quote selection"
     >
-      <Quote size={12} />
-      <span>Quote</span>
+      <Quote size={14} />
     </button>
   );
 }
