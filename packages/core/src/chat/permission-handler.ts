@@ -4,6 +4,7 @@ import type { PermissionManager } from './permission-manager.js';
 import type { PlanModeHandler } from './plan-mode-handler.js';
 import type { MessageCache } from './message-cache.js';
 import type { ActiveChat } from './types.js';
+import type { PushService } from '../push/push-service.js';
 import { createChildLogger } from '../logger.js';
 import { readNotificationConfig, shouldNotifyPermission } from '../notifications/notification-config.js';
 
@@ -23,7 +24,13 @@ export interface PermissionHandlerDeps {
 }
 
 export class ChatPermissionHandler {
+  private pushService?: PushService;
+
   constructor(private deps: PermissionHandlerDeps) {}
+
+  setPushService(service: PushService): void {
+    this.pushService = service;
+  }
 
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
     const active = this.deps.getActiveChat(chatId);
@@ -127,6 +134,16 @@ export class ChatPermissionHandler {
     if (nextRequest) {
       const notify = shouldNotifyPermission(readNotificationConfig(this.deps.db), nextRequest.toolName);
       this.deps.emitEvent({ type: 'permission.requested', chatId, request: nextRequest, notify });
+      if (notify) {
+        this.pushService
+          ?.sendPush({
+            title: 'Permission Required',
+            body: `Agent wants to run: ${nextRequest.toolName ?? 'unknown tool'}`,
+            data: { chatId, type: 'permission' },
+            priority: 'high',
+          })
+          .catch((err) => log.warn({ err }, 'push notification failed'));
+      }
     }
 
     // Emit chat.updated so displayStatus reflects the new permission state

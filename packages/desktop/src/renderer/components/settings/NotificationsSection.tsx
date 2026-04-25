@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import type { NotificationConfig } from '@qlan-ro/mainframe-types';
 import { useSettingsStore } from '../../store/settings';
-import { updateGeneralSettings } from '../../lib/api';
+import { updateGeneralSettings, getGeneralSettings } from '../../lib/api';
 import { Toggle } from '../ui/toggle';
 import { createLogger } from '../../lib/logger';
 
@@ -43,24 +43,36 @@ function Group({ title, children }: GroupProps): React.ReactElement {
 export function NotificationsSection(): React.ReactElement {
   const general = useSettingsStore((s) => s.general);
   const setNotifications = useSettingsStore((s) => s.setNotifications);
+  const loadGeneral = useSettingsStore((s) => s.loadGeneral);
   const notifications = general.notifications;
 
+  // Read latest from the store inside the callback so rapid toggles compose
+  // correctly: the merge target is always the current state, not a closure
+  // snapshot. On failure we refetch the canonical config from the daemon
+  // rather than rolling back to a stale optimistic value (which could clobber
+  // a later in-flight toggle that did succeed).
   const applyPatch = useCallback(
     async (patch: Partial<NotificationConfig>) => {
+      const current = useSettingsStore.getState().general.notifications;
       const merged: NotificationConfig = {
-        chat: { ...notifications.chat, ...patch.chat },
-        permission: { ...notifications.permission, ...patch.permission },
-        other: { ...notifications.other, ...patch.other },
+        chat: { ...current.chat, ...patch.chat },
+        permission: { ...current.permission, ...patch.permission },
+        other: { ...current.other, ...patch.other },
       };
       setNotifications(merged);
       try {
-        await updateGeneralSettings({ notifications: patch });
+        await updateGeneralSettings({ notifications: merged });
       } catch (err) {
-        log.warn('save notifications failed', { err: String(err) });
-        setNotifications(notifications);
+        log.warn('save notifications failed; resyncing from daemon', { err: String(err) });
+        try {
+          const fresh = await getGeneralSettings();
+          loadGeneral(fresh);
+        } catch (refetchErr) {
+          log.warn('resync after failed save also failed', { err: String(refetchErr) });
+        }
       }
     },
-    [notifications, setNotifications],
+    [setNotifications, loadGeneral],
   );
 
   const patchChat = useCallback(

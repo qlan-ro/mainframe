@@ -2,24 +2,45 @@ import { Router, Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { homedir } from 'node:os';
+import { z } from 'zod';
 import { GENERAL_DEFAULTS, NOTIFICATION_DEFAULTS, type NotificationConfig } from '@qlan-ro/mainframe-types';
 import type { RouteContext } from './types.js';
 import { validate, UpdateProviderSettingsBody, UpdateGeneralSettingsBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';
 
+const StoredNotificationsReadSchema = z
+  .object({
+    chat: z.object({ taskComplete: z.boolean(), sessionError: z.boolean() }).partial().optional(),
+    permission: z
+      .object({ toolRequest: z.boolean(), userQuestion: z.boolean(), planApproval: z.boolean() })
+      .partial()
+      .optional(),
+    other: z.object({ plugin: z.boolean() }).partial().optional(),
+  })
+  .partial();
+
+/**
+ * The PUT route below validates incoming patches with Zod, so the stored JSON
+ * is always well-typed under normal operation. We still re-validate on read as
+ * defense-in-depth: a future migration, downgraded daemon, or a hand-edit could
+ * otherwise leak a string `"false"` (truthy) into a boolean gate.
+ */
 function parseNotifications(raw: string | undefined): NotificationConfig {
   if (!raw) return NOTIFICATION_DEFAULTS;
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw) as Partial<NotificationConfig>;
-    return {
-      chat: { ...NOTIFICATION_DEFAULTS.chat, ...parsed.chat },
-      permission: { ...NOTIFICATION_DEFAULTS.permission, ...parsed.permission },
-      other: { ...NOTIFICATION_DEFAULTS.other, ...parsed.other },
-    };
+    parsed = JSON.parse(raw);
   } catch {
     /* expected: malformed stored JSON → fall back to defaults */
     return NOTIFICATION_DEFAULTS;
   }
+  const checked = StoredNotificationsReadSchema.safeParse(parsed);
+  const data = checked.success ? checked.data : {};
+  return {
+    chat: { ...NOTIFICATION_DEFAULTS.chat, ...data.chat },
+    permission: { ...NOTIFICATION_DEFAULTS.permission, ...data.permission },
+    other: { ...NOTIFICATION_DEFAULTS.other, ...data.other },
+  };
 }
 
 function persistNotifications(ctx: RouteContext, patch: Partial<NotificationConfig>): void {
