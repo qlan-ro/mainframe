@@ -18,8 +18,8 @@ interface Props {
   autoFocus?: boolean;
 }
 
-const POPOVER_WIDTH = 280;
-const POPOVER_HEIGHT = 140;
+const POPOVER_WIDTH = 240;
+const POPOVER_HEIGHT = 96;
 
 function computePosition(
   anchorRect: CaptureRect,
@@ -62,38 +62,33 @@ export function CaptureAnnotationPopover({
 
   return (
     <div
-      className="fixed z-50 rounded-lg border border-mf-divider bg-mf-sidebar shadow-xl shadow-black/40"
+      className="fixed z-50 flex flex-col rounded-md bg-mf-input-bg border border-mf-divider shadow-lg shadow-black/30"
       style={{ top, left, width: POPOVER_WIDTH }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-mf-divider">
-        <span className="flex items-center gap-1.5 text-[11px] text-mf-text-secondary font-medium">
-          <span
-            className="flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold"
-            style={{ background: '#f59e0b', color: '#1a1a1a' }}
-          >
-            {index}
-          </span>
-          Annotation
+      <div className="flex items-center justify-between px-2 pt-1.5">
+        <span
+          className="flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold"
+          style={{ background: '#f59e0b', color: '#1a1a1a' }}
+        >
+          {index}
         </span>
         <button
           type="button"
           onClick={onRemove}
-          className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary"
+          className="p-0.5 rounded text-mf-text-secondary hover:text-mf-text-primary"
           aria-label={`Remove capture ${index}`}
         >
-          <X size={14} />
+          <X size={12} />
         </button>
       </div>
-      <div className="p-2">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Annotation (optional)…"
-          className="w-full h-16 resize-none rounded-md border border-mf-divider bg-mf-input-bg px-2.5 py-2 text-mf-body font-mono text-mf-text-primary placeholder-mf-text-secondary/40 focus:outline-none focus:border-mf-accent/50"
-        />
-      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Annotation (optional)…"
+        className="w-full h-14 resize-none bg-transparent border-0 px-2.5 pb-2 pt-1 text-mf-body font-mono text-mf-text-primary placeholder-mf-text-secondary/40 focus:outline-none"
+      />
     </div>
   );
 }
