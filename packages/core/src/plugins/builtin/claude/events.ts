@@ -3,6 +3,7 @@ import type {
   ContextUsage,
   ControlRequest,
   ControlUpdate,
+  DetectedPr,
   MessageContent,
   SessionSink,
 } from '@qlan-ro/mainframe-types';
@@ -31,7 +32,7 @@ function isPrCreateCommand(command: string): boolean {
 }
 
 /** PR info without the `source` field — used as the value shape for stashed mutations and as the parser return type. */
-export type DetectedPrCore = { url: string; owner: string; repo: string; number: number };
+export type DetectedPrCore = Omit<DetectedPr, 'source'>;
 
 export const PR_MUTATION_COMMANDS: RegExp[] = [
   /\bgh\s+pr\s+(edit|ready|merge|close|reopen|comment|review)\b/,
