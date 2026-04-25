@@ -70,6 +70,36 @@ describe('chat ordering', () => {
   });
 });
 
+describe('loadingChats', () => {
+  beforeEach(() => {
+    useChatsStore.setState({ loadingChats: new Set() });
+  });
+
+  it('setLoadingChat(true) marks chat as loading', () => {
+    useChatsStore.getState().setLoadingChat('chat-1', true);
+    expect(useChatsStore.getState().loadingChats.has('chat-1')).toBe(true);
+  });
+
+  it('setLoadingChat(false) removes chat from loading set', () => {
+    useChatsStore.getState().setLoadingChat('chat-1', true);
+    useChatsStore.getState().setLoadingChat('chat-1', false);
+    expect(useChatsStore.getState().loadingChats.has('chat-1')).toBe(false);
+  });
+
+  it('tracks multiple chats independently', () => {
+    useChatsStore.getState().setLoadingChat('chat-1', true);
+    useChatsStore.getState().setLoadingChat('chat-2', true);
+    useChatsStore.getState().setLoadingChat('chat-1', false);
+    expect(useChatsStore.getState().loadingChats.has('chat-1')).toBe(false);
+    expect(useChatsStore.getState().loadingChats.has('chat-2')).toBe(true);
+  });
+
+  it('setLoadingChat(false) on unknown chat is a no-op', () => {
+    useChatsStore.getState().setLoadingChat('chat-x', false);
+    expect(useChatsStore.getState().loadingChats.size).toBe(0);
+  });
+});
+
 describe('unread state', () => {
   beforeEach(() => {
     useChatsStore.setState({

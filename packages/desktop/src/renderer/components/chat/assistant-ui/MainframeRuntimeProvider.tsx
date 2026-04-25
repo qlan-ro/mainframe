@@ -45,6 +45,8 @@ interface MainframeRuntimeContextValue {
   ) => void;
   composerError: string | null;
   dismissComposerError: () => void;
+  /** Send pending sandbox captures with no user text. Used when the composer is empty but captures exist. */
+  sendPendingCaptures: () => Promise<void>;
   lightbox: { images: { mediaType: string; data: string }[]; index: number } | null;
   openLightbox: (images: { mediaType: string; data: string }[], index: number) => void;
   closeLightbox: () => void;
@@ -57,6 +59,52 @@ export function useMainframeRuntime() {
   const ctx = React.useContext(MainframeRuntimeContext);
   if (!ctx) throw new Error('useMainframeRuntime must be used within MainframeRuntimeProvider');
   return ctx;
+}
+
+interface AttachmentItem {
+  name: string;
+  mediaType: string;
+  sizeBytes: number;
+  kind: 'image' | 'file';
+  data: string;
+  originalPath?: string;
+}
+
+interface SandboxCaptureLike {
+  type: 'screenshot' | 'element';
+  imageDataUrl: string;
+  selector?: string;
+  annotation?: string;
+}
+
+/** Pushes captures onto the attachment list and returns the preamble text. Mutates `out`. */
+function appendCapturesToAttachments(captures: ReadonlyArray<SandboxCaptureLike>, out: AttachmentItem[]): string {
+  if (captures.length === 0) return '';
+  let screenshotIdx = 0;
+  let elementIdx = 0;
+  const labels: string[] = [];
+  for (const c of captures) {
+    const base64 = c.imageDataUrl.split(',')[1] ?? '';
+    let identifier: string;
+    if (c.type === 'element') {
+      elementIdx += 1;
+      identifier = `element${elementIdx}`;
+    } else {
+      screenshotIdx += 1;
+      identifier = `screenshot${screenshotIdx}`;
+    }
+    out.push({
+      name: `${identifier}.png`,
+      mediaType: 'image/png',
+      sizeBytes: Math.floor((base64.length * 3) / 4),
+      kind: 'image',
+      data: base64,
+    });
+    const selectorSuffix = c.type === 'element' && c.selector ? ` (\`${c.selector}\`)` : '';
+    const annotationSuffix = c.annotation ? ` — "${c.annotation}"` : '';
+    labels.push(`${identifier}${selectorSuffix}${annotationSuffix}`);
+  }
+  return `[Preview captures: ${labels.join(', ')}]\n\n`;
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -202,21 +250,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
       // Collect pending captures from sandbox store; clear only after sendMessage succeeds.
       const { captures, clearCaptures } = useSandboxStore.getState();
       const captureCount = captures.length;
-      let capturePreamble = '';
-      if (captureCount > 0) {
-        for (const c of captures) {
-          const base64 = c.imageDataUrl.split(',')[1] ?? '';
-          attachmentItems.push({
-            name: c.type === 'element' ? `element-${c.selector ?? 'capture'}.png` : 'screenshot.png',
-            mediaType: 'image/png',
-            sizeBytes: Math.floor((base64.length * 3) / 4),
-            kind: 'image',
-            data: base64,
-          });
-        }
-        const labels = captures.map((c) => (c.type === 'element' ? `element \`${c.selector ?? ''}\`` : 'screenshot'));
-        capturePreamble = `[Preview captures: ${labels.join(', ')}]\n\n`;
-      }
+      const capturePreamble = appendCapturesToAttachments(captures, attachmentItems);
 
       const userText = textPart?.type === 'text' ? textPart.text.replace(IMAGE_COORDINATE_NOTE_RE, '').trim() : '';
       const finalText = capturePreamble + userText;
@@ -306,6 +340,23 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
     },
   });
 
+  const sendPendingCaptures = useCallback(async () => {
+    if (pendingPermission) return;
+    const { captures, clearCaptures } = useSandboxStore.getState();
+    if (captures.length === 0) return;
+    const attachmentItems: AttachmentItem[] = [];
+    const preamble = appendCapturesToAttachments(captures, attachmentItems);
+    if (attachmentItems.length === 0) return;
+    try {
+      setComposerError(null);
+      await sendMessage(preamble.trim(), attachmentItems);
+      clearCaptures();
+    } catch (error) {
+      setComposerError(formatComposerError(error));
+      throw error;
+    }
+  }, [sendMessage, pendingPermission, setComposerError]);
+
   const contextValue = useMemo<MainframeRuntimeContextValue>(
     () => ({
       chatId,
@@ -313,6 +364,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
       respondToPermission,
       composerError,
       dismissComposerError,
+      sendPendingCaptures,
       lightbox,
       openLightbox,
       closeLightbox,
@@ -324,6 +376,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
       respondToPermission,
       composerError,
       dismissComposerError,
+      sendPendingCaptures,
       lightbox,
       openLightbox,
       closeLightbox,
