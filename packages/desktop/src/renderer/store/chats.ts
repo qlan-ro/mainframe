@@ -142,7 +142,18 @@ export const useChatsStore = create<ChatsState>((set) => ({
               return s;
             })()
           : state.unreadChatIds;
-      return { activeChatId: id, unreadChatIds };
+      // Reconcile the sidebar project filter with the new active chat. If the
+      // chat's project differs from the persisted filter, clear it so the
+      // badge stops pointing at a project the user is not actually viewing.
+      let filterProjectId = state.filterProjectId;
+      if (id && filterProjectId !== null) {
+        const target = state.chats.find((c) => c.id === id);
+        if (target && target.projectId !== filterProjectId) {
+          localStorage.removeItem('mf:filterProjectId');
+          filterProjectId = null;
+        }
+      }
+      return { activeChatId: id, unreadChatIds, filterProjectId };
     });
   },
   addChat: (chat) =>

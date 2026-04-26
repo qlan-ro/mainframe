@@ -112,16 +112,8 @@ export function useAppInit(): void {
             localStorage.removeItem('mf:activeChatId');
           }
 
-          // Keep the project badge in sync with the restored active chat.
-          // If the persisted filterProjectId disagrees with the active chat's
-          // project (e.g. user reloaded after switching chats without clicking
-          // the badge), update the filter so both stay consistent.
-          if (restoredChat) {
-            const { filterProjectId, setFilterProjectId } = useChatsStore.getState();
-            if (filterProjectId !== null && filterProjectId !== restoredChat.projectId) {
-              setFilterProjectId(restoredChat.projectId);
-            }
-          }
+          // setActiveChat reconciles filterProjectId on its own: it clears the
+          // filter to null when the new active chat lives in a different project.
         } else {
           log.warn('chat fetch failed', { err: String(chatsResult.reason) });
         }
