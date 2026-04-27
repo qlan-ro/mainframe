@@ -1,6 +1,6 @@
-import { Eye } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { ClickableFilePath, ErrorDot, stripErrorXml, type ToolCardProps } from './shared';
+import { ClickableFilePath, StatusDot, stripErrorXml, type ToolCardProps } from './shared';
 
 export function ReadFileCard({ args, result, isError }: ToolCardProps) {
   const filePath = (args.file_path as string) || '';
@@ -10,13 +10,16 @@ export function ReadFileCard({ args, result, isError }: ToolCardProps) {
   return (
     <CollapsibleToolCard
       variant="compact"
+      wrapperClassName="border border-mf-divider rounded-mf-card overflow-hidden"
+      hideToggle
       header={
         <>
-          <Eye size={15} className="text-mf-text-secondary/40 shrink-0" />
+          <FileText size={15} className="text-mf-text-secondary/40 shrink-0" />
+          <span className="text-mf-body text-mf-text-secondary/60">Read</span>
           <ClickableFilePath filePath={filePath} />
         </>
       }
-      statusDot={<ErrorDot isError={isError} />}
+      trailing={<StatusDot result={result} isError={isError} />}
     >
       {resultText && (
         <div className="border-t border-mf-divider/50 ml-5">
