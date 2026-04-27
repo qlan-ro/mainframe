@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, Maximize2, Minimize2 } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { ErrorDot, type ToolCardProps } from './shared';
 import { renderToolCard } from './render-tool-card';
@@ -91,17 +91,6 @@ export function TaskGroupCard({ args, result, isError }: ToolCardProps) {
         <span className="flex-1" />
         {summary && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{summary}</span>}
         <ErrorDot isError={isError} />
-        {open ? (
-          <Minimize2
-            size={14}
-            className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors shrink-0"
-          />
-        ) : (
-          <Maximize2
-            size={14}
-            className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors shrink-0"
-          />
-        )}
       </button>
       {open && (
         <>
