@@ -12,6 +12,7 @@ import { PlanCard } from './tools/PlanCard';
 import { SlashCommandCard } from './tools/SlashCommandCard';
 import { AskUserQuestionToolCard } from './tools/AskUserQuestionToolCard';
 import { WorktreeStatusPill } from './tools/WorktreeStatusPill';
+import { SchedulePill } from './tools/SchedulePill';
 
 export const EditToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Edit',
@@ -100,6 +101,16 @@ export const ExitWorktreeToolUI = makeAssistantToolUI<Record<string, unknown>, u
   ),
 });
 
+const SCHEDULE_TOOLS = ['ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList', 'Monitor'] as const;
+export const ScheduleToolUIs = SCHEDULE_TOOLS.map((toolName) =>
+  makeAssistantToolUI<Record<string, unknown>, unknown>({
+    toolName,
+    render: ({ args, result, isError }) => (
+      <SchedulePill toolName={toolName} args={args} result={result as never} isError={isError} />
+    ),
+  }),
+);
+
 export const AllToolUIs = [
   EditToolUI,
   WriteToolUI,
@@ -117,4 +128,5 @@ export const AllToolUIs = [
   ToolGroupUI,
   TaskGroupUI,
   TaskProgressUI,
+  ...ScheduleToolUIs,
 ];
