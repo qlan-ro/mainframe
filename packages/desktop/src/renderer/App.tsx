@@ -1,8 +1,6 @@
 import React, { useEffect } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
-import { LeftPanel } from './components/panels/LeftPanel';
-import { RightPanel } from './components/panels/RightPanel';
 import { CenterPanel } from './components/center/CenterPanel';
 import { SearchPalette } from './components/SearchPalette';
 import { SettingsModal } from './components/SettingsModal';
@@ -15,6 +13,7 @@ import { usePluginShortcuts } from './hooks/usePluginShortcuts';
 import { useSettingsStore } from './store';
 import { getActiveProjectId } from './hooks/useActiveProjectId.js';
 import { daemonClient } from './lib/client';
+import { getDefaultModelForAdapter } from './lib/adapters';
 import { PluginGlobalComponents } from './components/plugins/PluginGlobalComponents';
 
 export default function App(): React.ReactElement {
@@ -28,7 +27,7 @@ export default function App(): React.ReactElement {
         e.preventDefault();
         const projectId = getActiveProjectId();
         if (projectId) {
-          daemonClient.createChat(projectId, 'claude');
+          daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
         }
       }
     };
@@ -51,7 +50,7 @@ export default function App(): React.ReactElement {
   return (
     <ErrorBoundary>
       <TooltipProvider delayDuration={200} skipDelayDuration={100} disableHoverableContent>
-        <Layout leftPanel={<LeftPanel />} centerPanel={<CenterPanel />} rightPanel={<RightPanel />} />
+        <Layout centerPanel={<CenterPanel />} />
         <SearchPalette />
         <SettingsModal />
         <TutorialOverlay />

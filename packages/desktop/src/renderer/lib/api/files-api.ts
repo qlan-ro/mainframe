@@ -46,6 +46,15 @@ export async function saveFileContent(
   await putJson(`${API_BASE}/api/projects/${projectId}/files`, { path: filePath, content, chatId });
 }
 
+/**
+ * Reads a file at an absolute path that may live outside any project root.
+ * Used by the editor when the user explicitly opens an external file.
+ */
+export async function getExternalFileContent(absolutePath: string): Promise<{ path: string; content: string }> {
+  const params = new URLSearchParams({ path: absolutePath });
+  return fetchJson(`${API_BASE}/api/files/external?${params}`);
+}
+
 export async function getFileBinary(
   projectId: string,
   filePath: string,
@@ -63,15 +72,8 @@ export async function getPendingPermission(chatId: string): Promise<ControlReque
   return json.data;
 }
 
-export interface SessionFileDiff {
-  filePath: string;
-  original: string | null;
-  modified: string;
-  status: 'added' | 'modified';
-}
-
-export async function getSessionDiffs(chatId: string): Promise<{ files: SessionFileDiff[] }> {
-  return fetchJson(`${API_BASE}/api/chats/${chatId}/session-diffs`);
+export async function getSessionFiles(chatId: string): Promise<{ files: string[] }> {
+  return fetchJson(`${API_BASE}/api/chats/${chatId}/session-files`);
 }
 
 export async function getSessionContext(chatId: string): Promise<SessionContext> {
@@ -93,11 +95,19 @@ export async function addMention(
 export interface BrowseEntry {
   name: string;
   path: string;
+  type?: 'file' | 'directory';
 }
 
-export async function browseFilesystem(dirPath?: string): Promise<{ path: string; entries: BrowseEntry[] }> {
-  const params = dirPath ? `?path=${encodeURIComponent(dirPath)}` : '';
-  return fetchJson(`${API_BASE}/api/filesystem/browse${params}`);
+export async function browseFilesystem(
+  dirPath?: string,
+  opts?: { includeFiles?: boolean; includeHidden?: boolean },
+): Promise<{ path: string; entries: BrowseEntry[] }> {
+  const params = new URLSearchParams();
+  if (dirPath) params.set('path', dirPath);
+  if (opts?.includeFiles) params.set('includeFiles', 'true');
+  if (opts?.includeHidden) params.set('includeHidden', 'true');
+  const qs = params.toString();
+  return fetchJson(`${API_BASE}/api/filesystem/browse${qs ? `?${qs}` : ''}`);
 }
 
 export async function searchContent(

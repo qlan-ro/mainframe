@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Save } from 'lucide-react';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
-import { getFileContent, saveFileContent } from '../../lib/api';
+import { getFileContent, getExternalFileContent, saveFileContent } from '../../lib/api';
 import { daemonClient } from '../../lib/client';
 import { sendCommentMessage } from '../../lib/send-comment-message';
 import { MonacoEditor } from '../editor/MonacoEditor';
@@ -67,10 +67,22 @@ export function EditorTab({
       setCurrentContent(providedContent);
       return;
     }
-    if (!activeProjectId) return;
     setSavedContent(null);
     setCurrentContent(null);
     setError(null);
+
+    // Absolute paths live outside the project root — use the external file endpoint.
+    if (filePath.startsWith('/')) {
+      getExternalFileContent(filePath)
+        .then((result) => {
+          setSavedContent(result.content);
+          setCurrentContent(result.content);
+        })
+        .catch(() => setError('Failed to load file'));
+      return;
+    }
+
+    if (!activeProjectId) return;
     getFileContent(activeProjectId, filePath, activeChatId ?? undefined)
       .then((result) => {
         setSavedContent(result.content);
@@ -108,7 +120,8 @@ export function EditorTab({
 
   // Re-fetch file content when any agent edits this file
   useEffect(() => {
-    if (!activeProjectId || providedContent !== undefined) return;
+    // External files (absolute paths) are not managed by the project agent.
+    if (!activeProjectId || providedContent !== undefined || filePath.startsWith('/')) return;
     return daemonClient.onEvent((event) => {
       if (event.type !== 'context.updated' || !event.filePaths) return;
       const match = event.filePaths.some((fp) => filePath.endsWith(fp) || fp.endsWith(filePath));

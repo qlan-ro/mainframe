@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { Chat, ChatMessage, ControlRequest, AdapterProcess } from '@qlan-ro/mainframe-types';
+import type { Chat, ControlRequest, AdapterProcess, DisplayMessage } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../renderer/store/chats.js';
 
 function makeChat(overrides: Partial<Chat> = {}): Chat {
@@ -13,11 +13,12 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
     totalCost: 0,
     totalTokensInput: 0,
     totalTokensOutput: 0,
+    lastContextTokensInput: 0,
     ...overrides,
   };
 }
 
-function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
+function makeMessage(overrides: Partial<DisplayMessage> = {}): DisplayMessage {
   return {
     id: 'msg-1',
     chatId: 'chat-1',
@@ -59,6 +60,9 @@ function resetStore(): void {
     messages: new Map(),
     pendingPermissions: new Map(),
     processes: new Map(),
+    queuedMessages: new Map(),
+    compactingChats: new Set(),
+    contextUsage: new Map(),
   });
 }
 
@@ -177,11 +181,31 @@ describe('useChatsStore', () => {
       expect(state.chats).toHaveLength(2);
     });
 
-    it('adds a chat if it does not exist', () => {
+    it('is a no-op when the chat is not in the store', () => {
+      // updateChat must not re-insert a chat that was intentionally removed
+      // (e.g. optimistic archive). chat.created / addChat handle insertion.
       const chat = makeChat({ id: 'new' });
       useChatsStore.getState().updateChat(chat);
-      expect(useChatsStore.getState().chats).toHaveLength(1);
-      expect(useChatsStore.getState().chats[0]!.id).toBe('new');
+      expect(useChatsStore.getState().chats).toHaveLength(0);
+    });
+
+    it('does not re-insert a running chat after optimistic archive removal', () => {
+      // Regression: archiving a running chat triggers a chat.updated daemon event
+      // (from the dying CLI process). updateChat must not re-add the chat after
+      // removeChat has already removed it.
+      const chat = makeChat({ id: 'running', processState: 'working' as const });
+      useChatsStore.getState().setChats([chat]);
+
+      // Simulate optimistic archive removal
+      useChatsStore.getState().removeChat('running');
+      expect(useChatsStore.getState().chats).toHaveLength(0);
+
+      // Simulate chat.updated WebSocket event arriving from the dying CLI
+      const updatedChat = { ...chat, processState: null };
+      useChatsStore.getState().updateChat(updatedChat);
+
+      // Chat must remain removed
+      expect(useChatsStore.getState().chats).toHaveLength(0);
     });
   });
 
@@ -205,6 +229,44 @@ describe('useChatsStore', () => {
       useChatsStore.getState().setActiveChat('a');
       useChatsStore.getState().removeChat('b');
       expect(useChatsStore.getState().activeChatId).toBe('a');
+    });
+
+    it('cleans up messages for removed chat', () => {
+      useChatsStore.getState().addMessage('chat-a', makeMessage({ id: 'msg-1', chatId: 'chat-a' }));
+      useChatsStore.getState().addMessage('chat-b', makeMessage({ id: 'msg-2', chatId: 'chat-b' }));
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().messages.has('chat-a')).toBe(false);
+      expect(useChatsStore.getState().messages.has('chat-b')).toBe(true);
+    });
+
+    it('cleans up pendingPermissions for removed chat', () => {
+      useChatsStore.getState().addPendingPermission('chat-a', makePermission());
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().pendingPermissions.has('chat-a')).toBe(false);
+    });
+
+    it('cleans up processes for removed chat', () => {
+      useChatsStore.getState().setProcess('chat-a', makeProcess({ chatId: 'chat-a' }));
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().processes.has('chat-a')).toBe(false);
+    });
+
+    it('cleans up queuedMessages for removed chat', () => {
+      useChatsStore.getState().addQueuedMessage('chat-a', { uuid: 'q1', content: 'hi' } as any);
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().queuedMessages.has('chat-a')).toBe(false);
+    });
+
+    it('cleans up contextUsage for removed chat', () => {
+      useChatsStore.getState().setContextUsage('chat-a', { percentage: 50, totalTokens: 100, maxTokens: 200 });
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().contextUsage.has('chat-a')).toBe(false);
+    });
+
+    it('cleans up compactingChats for removed chat', () => {
+      useChatsStore.getState().setCompacting('chat-a', true);
+      useChatsStore.getState().removeChat('chat-a');
+      expect(useChatsStore.getState().compactingChats.has('chat-a')).toBe(false);
     });
   });
 
@@ -290,6 +352,84 @@ describe('useChatsStore', () => {
       useChatsStore.getState().setProcess('chat-1', proc);
       useChatsStore.getState().updateProcessStatus('nonexistent', 'stopped');
       expect(useChatsStore.getState().processes.get('chat-1')!.status).toBe('running');
+    });
+  });
+
+  describe('message eviction', () => {
+    it('caps messages per chat at MAX_MESSAGES_PER_CHAT', () => {
+      const chatId = 'chat-1';
+      for (let i = 0; i < 2001; i++) {
+        useChatsStore.getState().addMessage(chatId, makeMessage({ id: `msg-${i}`, chatId }));
+      }
+      const msgs = useChatsStore.getState().messages.get(chatId)!;
+      expect(msgs).toHaveLength(2000);
+      expect(msgs[msgs.length - 1]!.id).toBe('msg-2000');
+      expect(msgs[0]!.id).toBe('msg-1');
+    });
+
+    it('setMessages caps at MAX_MESSAGES_PER_CHAT', () => {
+      const msgs = Array.from({ length: 2500 }, (_, i) => makeMessage({ id: `msg-${i}`, chatId: 'chat-1' }));
+      useChatsStore.getState().setMessages('chat-1', msgs);
+      expect(useChatsStore.getState().messages.get('chat-1')).toHaveLength(2000);
+    });
+
+    it('evicts oldest chat messages when MAX_DISPLAY_CHATS exceeded', () => {
+      for (let i = 0; i < 51; i++) {
+        useChatsStore.getState().addMessage(`chat-${i}`, makeMessage({ id: `msg-${i}`, chatId: `chat-${i}` }));
+      }
+      expect(useChatsStore.getState().messages.size).toBeLessThanOrEqual(50);
+    });
+  });
+
+  describe('filterProjectId / activeChatId boot-time reconciliation', () => {
+    // setActiveChat clears filterProjectId to null when the new active chat
+    // lives in a different project than the persisted filter. This keeps the
+    // sidebar badge from pointing at a project the user is no longer viewing
+    // and avoids yanking the filter to an unrelated project the user did not
+    // explicitly choose.
+
+    it('clears filterProjectId when restored active chat is in a different project', () => {
+      const chatA = makeChat({ id: 'chat-a', projectId: 'proj-a' });
+      const chatB = makeChat({ id: 'chat-b', projectId: 'proj-b' });
+      useChatsStore.setState({ filterProjectId: 'proj-a' });
+      useChatsStore.getState().setChats([chatA, chatB]);
+
+      useChatsStore.getState().setActiveChat('chat-b');
+
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
+      expect(useChatsStore.getState().activeChatId).toBe('chat-b');
+    });
+
+    it('leaves filterProjectId unchanged when it already matches the restored active chat', () => {
+      const chatA = makeChat({ id: 'chat-a', projectId: 'proj-a' });
+      useChatsStore.setState({ filterProjectId: 'proj-a' });
+      useChatsStore.getState().setChats([chatA]);
+
+      useChatsStore.getState().setActiveChat('chat-a');
+
+      expect(useChatsStore.getState().filterProjectId).toBe('proj-a');
+    });
+
+    it('leaves filterProjectId null (All) untouched regardless of active chat project', () => {
+      const chatA = makeChat({ id: 'chat-a', projectId: 'proj-a' });
+      useChatsStore.setState({ filterProjectId: null });
+      useChatsStore.getState().setChats([chatA]);
+
+      useChatsStore.getState().setActiveChat('chat-a');
+
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
+    });
+
+    it('clears filterProjectId on fall-back-to-most-recent across projects', () => {
+      const chatOld = makeChat({ id: 'chat-old', projectId: 'proj-a', updatedAt: '2026-01-01T00:00:00Z' });
+      const chatNew = makeChat({ id: 'chat-new', projectId: 'proj-b', updatedAt: '2026-01-02T00:00:00Z' });
+      useChatsStore.setState({ filterProjectId: 'proj-a' });
+      useChatsStore.getState().setChats([chatOld, chatNew]);
+
+      useChatsStore.getState().setActiveChat('chat-new');
+
+      expect(useChatsStore.getState().activeChatId).toBe('chat-new');
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
     });
   });
 });

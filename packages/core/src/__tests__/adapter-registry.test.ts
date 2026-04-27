@@ -31,6 +31,40 @@ describe('ClaudeAdapter.getToolCategories', () => {
   });
 });
 
+describe('ClaudeAdapter.listModels', () => {
+  it('returns the hardcoded Claude model catalog', async () => {
+    const adapter = new ClaudeAdapter();
+    const models = await adapter.listModels();
+    expect(models.length).toBe(14);
+    const ids = models.map((m) => m.id);
+    expect(ids).toContain('default');
+    expect(ids).toContain('claude-opus-4-6');
+    expect(ids).toContain('opus[1m]');
+    expect(ids).toContain('claude-sonnet-4-6');
+    expect(ids).toContain('sonnet[1m]');
+    expect(ids).toContain('claude-3-5-haiku-20241022');
+    expect(ids).toContain('claude-3-5-sonnet-20241022');
+  });
+
+  it('marks a single entry as the fallback default', async () => {
+    const adapter = new ClaudeAdapter();
+    const models = await adapter.listModels();
+    const defaults = models.filter((m) => m.isDefault);
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0]?.id).toBe('default');
+    expect(defaults[0]?.description).toBeTruthy();
+  });
+
+  it('includes capability flags on supported models', async () => {
+    const adapter = new ClaudeAdapter();
+    const models = await adapter.listModels();
+    const opus46 = models.find((m) => m.id === 'claude-opus-4-6');
+    expect(opus46?.supportsEffort).toBe(true);
+    expect(opus46?.supportsFastMode).toBe(true);
+    expect(opus46?.supportsAutoMode).toBe(true);
+  });
+});
+
 describe('AdapterRegistry', () => {
   it('includes adapter models in list output', async () => {
     const registry = new AdapterRegistry();
@@ -42,5 +76,51 @@ describe('AdapterRegistry', () => {
 
     expect(mock).toBeDefined();
     expect(mock?.models).toEqual(mockModels);
+  });
+});
+
+describe('AdapterRegistry.probeAllModels', () => {
+  it('calls probeModels on adapters that support it and emits event', async () => {
+    const probedModels: AdapterModel[] = [{ id: 'probed-model', label: 'Probed' }];
+    const adapter = createMockAdapter([{ id: 'fallback', label: 'Fallback' }]);
+    (adapter as any).probeModels = vi.fn().mockResolvedValue(probedModels);
+
+    const registry = new AdapterRegistry();
+    registry.register(adapter);
+
+    const events: any[] = [];
+    await registry.probeAllModels((event) => events.push(event));
+
+    expect((adapter as any).probeModels).toHaveBeenCalled();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({
+      type: 'adapter.models.updated',
+      adapterId: 'mock',
+      models: probedModels,
+    });
+  });
+
+  it('skips adapters without probeModels', async () => {
+    const adapter = createMockAdapter([]);
+    const registry = new AdapterRegistry();
+    registry.register(adapter);
+
+    const events: any[] = [];
+    await registry.probeAllModels((event) => events.push(event));
+
+    expect(events).toHaveLength(0);
+  });
+
+  it('handles probe failure gracefully', async () => {
+    const adapter = createMockAdapter([]);
+    (adapter as any).probeModels = vi.fn().mockResolvedValue(null);
+
+    const registry = new AdapterRegistry();
+    registry.register(adapter);
+
+    const events: any[] = [];
+    await registry.probeAllModels((event) => events.push(event));
+
+    expect(events).toHaveLength(0);
   });
 });

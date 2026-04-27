@@ -51,4 +51,7 @@ release/
 # Superpowers brainstorm artifacts
 .superpowers/
 
+# Codex-review local session state (per-branch, not shared)
+.claude/codex-review/
+
 /packages/e2e/playwright-report/

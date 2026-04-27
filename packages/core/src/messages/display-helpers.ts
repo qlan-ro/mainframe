@@ -4,7 +4,7 @@ import type { GroupedMessage } from './message-grouping.js';
 import type { PartEntry } from './tool-grouping.js';
 import { groupToolCallParts, groupTaskChildren } from './tool-grouping.js';
 
-const INTERNAL_USER_RE = /<command-name>|<mainframe-command[\s>]/;
+const INTERNAL_USER_RE = /<mainframe-command[\s>]/;
 
 /** Returns true if a user message is internal (mainframe commands or skill invocations). */
 export function isInternalUserMessage(content: MessageContent[]): boolean {
@@ -79,13 +79,29 @@ export function convertUserContent(content: MessageContent[]): {
       if (!block.text || block.text.startsWith('[Request interrupted')) continue;
 
       const cmdInfo = parseCommandMessage(block.text);
-      if (cmdInfo) metadata.command = { name: cmdInfo.commandName, userText: cmdInfo.userText };
+      if (cmdInfo) {
+        // Only synthesize a user bubble when the raw text includes a <command-message>
+        // tag — that tag is present exclusively for user-typed slash commands. Subagent
+        // and replay CLI echoes emit bare <command-name>…</command-name> with no
+        // <command-message> wrapper; those are internal CLI metadata, not user input,
+        // so we suppress them to avoid a spurious empty bubble in the Explore thread.
+        const hasCommandMessage = block.text.includes('<command-message>');
+        if (!hasCommandMessage) continue;
+
+        metadata.command = { name: cmdInfo.commandName, userText: cmdInfo.userText };
+        metadata.cleanText = cmdInfo.userText;
+        // Synthesize a readable bubble from the CLI's <command-name>/<command-args>
+        // echo. The raw XML is pure CLI metadata — users want to see what they typed.
+        const args = cmdInfo.userText.trim();
+        const rendered = args ? `/${cmdInfo.commandName} ${args}` : `/${cmdInfo.commandName}`;
+        displayContent.push({ type: 'text', text: rendered });
+        continue;
+      }
 
       const { files, cleanText } = parseAttachedFilePathTags(block.text);
       if (files.length > 0) metadata.attachedFiles = files;
 
       const textToStore = files.length > 0 ? cleanText : block.text;
-      if (cmdInfo) metadata.cleanText = cmdInfo.userText;
 
       if (textToStore) displayContent.push({ type: 'text', text: textToStore });
     } else if (block.type === 'image') {

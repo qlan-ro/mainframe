@@ -1,6 +1,8 @@
 import React from 'react';
+import { Loader2 } from 'lucide-react';
 import { useTabsStore } from '../../store/tabs';
 import { useChatsStore } from '../../store';
+import { useProjectsStore } from '../../store/projects';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useProject } from '../../hooks/useAppInit';
 import { ChatContainer } from '../chat/ChatContainer';
@@ -27,9 +29,12 @@ function ChatTabDot({ chatId }: { chatId: string }): React.ReactElement {
 }
 
 export function CenterPanel(): React.ReactElement {
-  const { tabs, activePrimaryTabId } = useTabsStore();
+  const tabs = useTabsStore((s) => s.tabs);
+  const activePrimaryTabId = useTabsStore((s) => s.activePrimaryTabId);
   const activeProjectId = useActiveProjectId();
-  const { activeChatId, addPendingPermission } = useChatsStore();
+  const activeChatId = useChatsStore((s) => s.activeChatId);
+  const addPendingPermission = useChatsStore((s) => s.addPendingPermission);
+  const isAppLoading = useProjectsStore((s) => s.loading);
   const { createChat } = useProject(activeProjectId);
 
   React.useEffect(() => {
@@ -75,7 +80,12 @@ export function CenterPanel(): React.ReactElement {
   return (
     <div className="h-full flex flex-col">
       <div className="flex-1 overflow-hidden">
-        {!activePrimaryTab ? (
+        {isAppLoading ? (
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-mf-text-secondary">
+            <Loader2 size={24} className="animate-spin motion-reduce:animate-none text-mf-accent" />
+            <span className="text-mf-body">Loading…</span>
+          </div>
+        ) : !activePrimaryTab ? (
           <div className="h-full flex flex-col items-center justify-center text-mf-text-secondary gap-4">
             <div className="w-14 h-14 rounded-full bg-mf-accent/10 flex items-center justify-center">
               <span className="text-2xl font-bold text-mf-accent">M</span>

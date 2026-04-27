@@ -28,28 +28,35 @@ interface ContextMenuState {
   items: ContextMenuItem[];
 }
 
+interface FileTreeNodeProps {
+  entry: FileEntry;
+  depth: number;
+  projectPath: string;
+  activeProjectId: string | null;
+  activeChatId: string | null;
+  revealPath: string | null;
+  onContextMenu: (e: React.MouseEvent, entryPath: string, entryType: 'file' | 'directory') => void;
+  onOpenEditorTab: (path: string) => void;
+  onToggleTreePath: (path: string) => void;
+  onClearRevealPath: () => void;
+  refreshKey: number;
+}
+
 function FileTreeNode({
   entry,
   depth,
   projectPath,
+  activeProjectId,
+  activeChatId,
+  revealPath,
   onContextMenu,
+  onOpenEditorTab,
+  onToggleTreePath,
+  onClearRevealPath,
   refreshKey,
-}: {
-  entry: FileEntry;
-  depth: number;
-  projectPath: string;
-  onContextMenu: (e: React.MouseEvent, entryPath: string, entryType: 'file' | 'directory') => void;
-  refreshKey: number;
-}): React.ReactElement {
+}: FileTreeNodeProps): React.ReactElement {
   const [children, setChildren] = useState<FileEntry[]>([]);
-  const activeProjectId = useActiveProjectId();
-  const activeChatId = useChatsStore((s) => s.activeChatId);
-  const openEditorTab = useTabsStore((s) => s.openEditorTab);
   const expanded = useTabsStore((s) => entry.type === 'directory' && s.expandedPaths.includes(entry.path));
-  const toggleTreePath = useTabsStore((s) => s.toggleTreePath);
-  const revealPath = useTabsStore((s) => s.revealPath);
-  const clearRevealPath = useTabsStore((s) => s.clearRevealPath);
-
   const isActive = useTabsStore(
     (s) => entry.type === 'file' && s.fileView?.type === 'editor' && s.fileView.filePath === entry.path,
   );
@@ -76,15 +83,15 @@ function FileTreeNode({
   useEffect(() => {
     if (revealPath === entry.path && nodeRef.current) {
       nodeRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      clearRevealPath();
+      onClearRevealPath();
     }
-  }, [revealPath, entry.path, clearRevealPath]);
+  }, [revealPath, entry.path, onClearRevealPath]);
 
   const handleClick = (): void => {
     if (entry.type === 'directory') {
-      toggleTreePath(entry.path);
+      onToggleTreePath(entry.path);
     } else {
-      openEditorTab(entry.path);
+      onOpenEditorTab(entry.path);
     }
   };
 
@@ -130,7 +137,13 @@ function FileTreeNode({
             entry={child}
             depth={depth + 1}
             projectPath={projectPath}
+            activeProjectId={activeProjectId}
+            activeChatId={activeChatId}
+            revealPath={revealPath}
             onContextMenu={onContextMenu}
+            onOpenEditorTab={onOpenEditorTab}
+            onToggleTreePath={onToggleTreePath}
+            onClearRevealPath={onClearRevealPath}
             refreshKey={refreshKey}
           />
         ))}
@@ -140,13 +153,15 @@ function FileTreeNode({
 
 export function FilesTab(): React.ReactElement {
   const activeProjectId = useActiveProjectId();
-  const { projects } = useProjectsStore();
+  const activeProject = useProjectsStore((s) => s.projects.find((p) => p.id === activeProjectId));
   const activeChatId = useChatsStore((s) => s.activeChatId);
-  const activeProject = projects.find((p) => p.id === activeProjectId);
-  const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
+  const activeChatWorktreePath = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId)?.worktreePath);
   const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);
   const rootExpanded = useTabsStore((s) => s.expandedPaths.includes('.'));
   const toggleTreePath = useTabsStore((s) => s.toggleTreePath);
+  const revealPath = useTabsStore((s) => s.revealPath);
+  const openEditorTab = useTabsStore((s) => s.openEditorTab);
+  const clearRevealPath = useTabsStore((s) => s.clearRevealPath);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [findInPath, setFindInPath] = useState<{ scopePath: string; scopeType: 'file' | 'directory' } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -186,8 +201,9 @@ export function FilesTab(): React.ReactElement {
       e.preventDefault();
       if (!activeProject) return;
 
-      const sep = activeProject.path.includes('\\') ? '\\' : '/';
-      const fullPath = `${activeProject.path}${sep}${entryPath}`;
+      const basePath = activeChatWorktreePath ?? activeProject.path;
+      const sep = basePath.includes('\\') ? '\\' : '/';
+      const fullPath = `${basePath}${sep}${entryPath}`;
 
       setContextMenu({
         x: e.clientX,
@@ -223,36 +239,34 @@ export function FilesTab(): React.ReactElement {
         ],
       });
     },
-    [activeProject],
+    [activeProject, activeChatWorktreePath],
   );
 
   if (!activeProject) {
     return <div className="text-mf-small text-mf-text-secondary text-center py-4">No project selected</div>;
   }
 
-  const displayPath = activeChat?.worktreePath ?? activeProject.path;
+  const displayPath = activeChatWorktreePath ?? activeProject.path;
 
   return (
     <>
       <ScrollArea className="h-full">
         <div className="py-1">
           <div className="@container flex items-center">
-            <button
-              onClick={() => toggleTreePath('.')}
-              onContextMenu={(e) => handleContextMenu(e, '.', 'directory')}
-              className="flex-1 flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary min-w-0"
-            >
-              {rootExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              <Folder size={14} className="text-mf-accent shrink-0" />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="truncate" tabIndex={0}>
-                    {displayPath}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{displayPath}</TooltipContent>
-              </Tooltip>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => toggleTreePath('.')}
+                  onContextMenu={(e) => handleContextMenu(e, '.', 'directory')}
+                  className="flex-1 flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary min-w-0"
+                >
+                  {rootExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  <Folder size={14} className="text-mf-accent shrink-0" />
+                  <span className="truncate">{displayPath}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{displayPath}</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -273,7 +287,13 @@ export function FilesTab(): React.ReactElement {
                 entry={entry}
                 depth={1}
                 projectPath={activeProject.path}
+                activeProjectId={activeProjectId}
+                activeChatId={activeChatId}
+                revealPath={revealPath}
                 onContextMenu={handleContextMenu}
+                onOpenEditorTab={openEditorTab}
+                onToggleTreePath={toggleTreePath}
+                onClearRevealPath={clearRevealPath}
                 refreshKey={refreshKey}
               />
             ))}

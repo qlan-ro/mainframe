@@ -1,0 +1,130 @@
+import { ipcMain } from 'electron';
+import type { IpcMainInvokeEvent } from 'electron';
+import { randomUUID } from 'crypto';
+import { statSync } from 'fs';
+import pty from 'node-pty';
+import type { IPty } from 'node-pty';
+import { createMainLogger } from './logger.js';
+
+const log = createMainLogger('terminal');
+
+interface ManagedTerminal {
+  pty: IPty;
+  /** webContents.id that owns this terminal — used to route data events */
+  webContentsId: number;
+}
+
+const terminals = new Map<string, ManagedTerminal>();
+const resizeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const PTY_RESIZE_DEBOUNCE_MS = 100;
+
+export function setupTerminalIPC(shellEnv: Record<string, string>): void {
+  const defaultShell =
+    process.platform === 'win32' ? 'powershell.exe' : shellEnv['SHELL'] || process.env.SHELL || '/bin/zsh';
+
+  ipcMain.handle(
+    'terminal:create',
+    (event: IpcMainInvokeEvent, options: { cwd: string; cols?: number; rows?: number }) => {
+      try {
+        const st = statSync(options.cwd);
+        if (!st.isDirectory()) {
+          throw new Error(`Not a directory: ${options.cwd}`);
+        }
+      } catch (err) {
+        log.warn({ cwd: options.cwd, err }, 'terminal:create invalid cwd');
+        throw new Error(`Invalid terminal cwd: ${options.cwd}`);
+      }
+
+      const id = randomUUID();
+      const cols = options.cols ?? 80;
+      const rows = options.rows ?? 24;
+
+      const term = pty.spawn(defaultShell, [], {
+        name: 'xterm-256color',
+        cols,
+        rows,
+        cwd: options.cwd,
+        env: { ...process.env, ...shellEnv, TERM_PROGRAM: 'Mainframe', ZSH_DOTENV_PROMPT: 'false' },
+      });
+
+      const webContentsId = event.sender.id;
+      terminals.set(id, { pty: term, webContentsId });
+
+      term.onData((data: string) => {
+        try {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('terminal:data', id, data);
+          }
+        } catch {
+          /* webContents destroyed — terminal will be cleaned up on quit */
+        }
+      });
+
+      term.onExit(({ exitCode }) => {
+        try {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('terminal:exit', id, exitCode);
+          }
+        } catch {
+          /* webContents destroyed */
+        }
+        terminals.delete(id);
+      });
+
+      log.info({ id, cwd: options.cwd, shell: defaultShell }, 'terminal created');
+      return { id };
+    },
+  );
+
+  ipcMain.handle('terminal:write', (_event: IpcMainInvokeEvent, id: string, data: string) => {
+    const entry = terminals.get(id);
+    if (!entry) return;
+    entry.pty.write(data);
+  });
+
+  ipcMain.handle('terminal:resize', (_event: IpcMainInvokeEvent, id: string, cols: number, rows: number) => {
+    const entry = terminals.get(id);
+    if (!entry) return;
+    clearTimeout(resizeTimers.get(id));
+    resizeTimers.set(
+      id,
+      setTimeout(() => {
+        resizeTimers.delete(id);
+        try {
+          entry.pty.resize(cols, rows);
+        } catch {
+          /* resize can throw if process already exited */
+        }
+      }, PTY_RESIZE_DEBOUNCE_MS),
+    );
+  });
+
+  ipcMain.handle('terminal:kill', (_event: IpcMainInvokeEvent, id: string) => {
+    const entry = terminals.get(id);
+    if (!entry) return;
+    clearTimeout(resizeTimers.get(id));
+    resizeTimers.delete(id);
+    try {
+      entry.pty.kill();
+    } catch {
+      /* already dead */
+    }
+    terminals.delete(id);
+    log.info({ id }, 'terminal killed');
+  });
+}
+
+export function killAllTerminals(): void {
+  const count = terminals.size;
+  for (const [id, entry] of terminals) {
+    clearTimeout(resizeTimers.get(id));
+    try {
+      entry.pty.kill();
+    } catch {
+      /* already dead */
+    }
+  }
+  terminals.clear();
+  resizeTimers.clear();
+  log.info({ count }, 'all terminals killed');
+}

@@ -7,7 +7,9 @@ import {
 } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../../../lib/utils';
+import { urlTransform as markdownUrlTransform, remarkAppLinks } from '../../../../lib/markdown-url-transform';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
+import { ContextMenu, type ContextMenuItem } from '../../../ui/context-menu';
 import { CodeHeader } from './CodeHeader';
 import { SyntaxHighlightedCode } from './SyntaxHighlightedCode';
 
@@ -88,44 +90,64 @@ function LinkWithPreview({
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
   const [copied, setCopied] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
-  const copyUrl = (e: React.MouseEvent): void => {
-    e.preventDefault();
-    e.stopPropagation();
+  const copyHref = (): void => {
     if (!href) return;
     navigator.clipboard.writeText(href);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const copyUrl = (e: React.MouseEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    copyHref();
+  };
+
+  const handleContextMenu = (e: React.MouseEvent): void => {
+    if (!href) return;
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+
   if (!href) {
     return <a className={cn('aui-md-a', className)} href={href} {...props} />;
   }
 
+  const menuItems: ContextMenuItem[] = [
+    { label: 'Copy link', onClick: copyHref },
+    { label: 'Open link', onClick: () => window.mainframe.openExternal(href) },
+  ];
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <a
-          className={cn('aui-md-a', className)}
-          href={href}
-          onClick={(e) => {
-            e.preventDefault();
-            window.mainframe.openExternal(href);
-          }}
-          {...props}
-        />
-      </TooltipTrigger>
-      <TooltipContent className="flex items-center gap-1.5 max-w-[400px]">
-        <span className="truncate min-w-0">{href}</span>
-        <button
-          type="button"
-          onClick={copyUrl}
-          className="shrink-0 px-1.5 py-0.5 rounded bg-mf-hover hover:bg-mf-border text-mf-text-secondary hover:text-mf-text-primary transition-colors text-[10px]"
-        >
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </TooltipContent>
-    </Tooltip>
+    <>
+      <Tooltip disableHoverableContent={false}>
+        <TooltipTrigger asChild>
+          <a
+            className={cn('aui-md-a', className)}
+            href={href}
+            onClick={(e) => {
+              e.preventDefault();
+              window.mainframe.openExternal(href);
+            }}
+            onContextMenu={handleContextMenu}
+            {...props}
+          />
+        </TooltipTrigger>
+        <TooltipContent className="flex items-center gap-1.5 max-w-[400px]">
+          <span className="truncate min-w-0">{href}</span>
+          <button
+            type="button"
+            onClick={copyUrl}
+            className="shrink-0 px-1.5 py-0.5 rounded bg-mf-hover hover:bg-mf-border text-mf-text-secondary hover:text-mf-text-primary transition-colors text-[10px]"
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </TooltipContent>
+      </Tooltip>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
+    </>
   );
 }
 
@@ -153,10 +175,17 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
   CodeHeader,
 });
 
-const REMARK_PLUGINS = [remarkGfm];
+const REMARK_PLUGINS = [remarkGfm, remarkAppLinks];
 
 export const MarkdownText: TextMessagePartComponent = memo(() => {
-  return <MarkdownTextPrimitive className="aui-md" remarkPlugins={REMARK_PLUGINS} components={markdownComponents} />;
+  return (
+    <MarkdownTextPrimitive
+      className="aui-md"
+      remarkPlugins={REMARK_PLUGINS}
+      urlTransform={markdownUrlTransform}
+      components={markdownComponents}
+    />
+  );
 });
 
 MarkdownText.displayName = 'MarkdownText';

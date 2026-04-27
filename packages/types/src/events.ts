@@ -1,6 +1,5 @@
 import type { Chat, ChatMessage, QueuedMessageRef } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
-import type { PermissionMode } from './settings.js';
 import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
 
@@ -16,18 +15,19 @@ export type DaemonEvent =
   | { type: 'display.message.updated'; chatId: string; message: import('./display.js').DisplayMessage }
   | { type: 'display.messages.set'; chatId: string; messages: import('./display.js').DisplayMessage[] }
   | { type: 'messages.cleared'; chatId: string }
-  | { type: 'permission.requested'; chatId: string; request: ControlRequest }
+  | { type: 'permission.requested'; chatId: string; request: ControlRequest; notify: boolean }
   | { type: 'permission.resolved'; chatId: string; requestId: string }
   | { type: 'context.updated'; chatId: string; filePaths?: string[] }
   | { type: 'error'; chatId?: string; error: string }
   | {
       type: 'plugin.panel.registered';
       pluginId: string;
+      panelId: string;
       zone: UIZone;
       label: string;
       icon?: string;
     }
-  | { type: 'plugin.panel.unregistered'; pluginId: string }
+  | { type: 'plugin.panel.unregistered'; pluginId: string; panelId?: string }
   | {
       type: 'plugin.action.registered';
       pluginId: string;
@@ -56,12 +56,25 @@ export type DaemonEvent =
   | { type: 'message.queued.cancelled'; chatId: string; uuid: string }
   | { type: 'message.queued.cancel_failed'; chatId: string; uuid: string }
   | { type: 'message.queued.cleared'; chatId: string }
+  | { type: 'message.queued.snapshot'; chatId: string; refs: QueuedMessageRef[] }
+  | { type: 'chat.notification'; chatId: string; title: string; body: string; level: 'success' | 'error' }
   | { type: 'chat.compacting'; chatId: string }
   | { type: 'chat.compactDone'; chatId: string }
-  | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number };
+  | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number }
+  | { type: 'adapter.models.updated'; adapterId: string; models: import('./adapter.js').AdapterModel[] }
+  | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] }
+  | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr };
 
 export type ClientEvent =
-  | { type: 'chat.create'; projectId: string; adapterId: string; model?: string; permissionMode?: PermissionMode }
+  | {
+      type: 'chat.create';
+      projectId: string;
+      adapterId: string;
+      model?: string;
+      permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+      worktreePath?: string;
+      branchName?: string;
+    }
   | { type: 'chat.resume'; chatId: string }
   | { type: 'chat.end'; chatId: string }
   | {
@@ -74,7 +87,14 @@ export type ClientEvent =
       };
     }
   | { type: 'permission.respond'; chatId: string; response: import('./adapter.js').ControlResponse }
-  | { type: 'chat.updateConfig'; chatId: string; adapterId?: string; model?: string; permissionMode?: PermissionMode }
+  | {
+      type: 'chat.updateConfig';
+      chatId: string;
+      adapterId?: string;
+      model?: string;
+      permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+      planMode?: boolean;
+    }
   | { type: 'chat.interrupt'; chatId: string }
   | { type: 'subscribe'; chatId: string }
   | { type: 'unsubscribe'; chatId: string }

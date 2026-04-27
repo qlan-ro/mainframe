@@ -8,22 +8,24 @@ import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useChatsStore } from '../../../../store/chats';
 import { useSkillsStore } from '../../../../store/skills';
 import { useAdaptersStore } from '../../../../store/adapters';
-import { getAdapterOptions, getModelOptions } from '../../../../lib/adapters';
+import { getAdapterOptions, getModelOptions, getModelLabel } from '../../../../lib/adapters';
 import { daemonClient } from '../../../../lib/client';
 import { getGitBranch } from '../../../../lib/api';
 import { focusComposerInput } from '../../../../lib/focus';
 import { ContextPickerMenu } from '../../ContextPickerMenu';
 import { ComposerDropdown } from './ComposerDropdown';
+import { EffortPicker } from './EffortPicker';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
 import { QueuedMessageBanner } from './QueuedMessageBanner';
+import { PlanModeToggle } from './PlanModeToggle';
 import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
-  { id: 'plan', label: 'Plan' },
   { id: 'acceptEdits', label: 'Auto-Edits' },
   { id: 'yolo', label: 'Unattended' },
 ];
@@ -71,11 +73,13 @@ function SendButton({
   hasCaptures,
   disabled: externalDisabled,
   chatId,
+  onSendPendingCaptures,
 }: {
   composerRuntime: ComposerRuntime;
   hasCaptures: boolean;
   disabled?: boolean;
   chatId: string;
+  onSendPendingCaptures: () => Promise<void>;
 }) {
   const composerEmpty = useComposerEmpty(composerRuntime);
   const disabled = externalDisabled || (composerEmpty && !hasCaptures);
@@ -85,6 +89,15 @@ function SendButton({
       disabled={disabled}
       onClick={() => {
         try {
+          // assistant-ui's runtime.send() short-circuits on empty composer text,
+          // so when the user has only captures we dispatch through our own path.
+          if (composerEmpty && hasCaptures) {
+            void onSendPendingCaptures().catch((err) => {
+              log.warn('failed to send pending captures', { err: String(err) });
+            });
+            deleteDraft(chatId);
+            return;
+          }
           composerRuntime.send();
           deleteDraft(chatId);
         } catch (err) {
@@ -101,7 +114,7 @@ function SendButton({
 }
 
 export function ComposerCard() {
-  const { chatId, composerError, dismissComposerError, openLightbox } = useMainframeRuntime();
+  const { chatId, composerError, dismissComposerError, openLightbox, sendPendingCaptures } = useMainframeRuntime();
   const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
   const adapters = useAdaptersStore((s) => s.adapters);
   const messages = useChatsStore((s) => s.messages.get(chatId));
@@ -215,9 +228,16 @@ export function ComposerCard() {
   }, [chat?.projectId]);
 
   const currentAdapter = chat?.adapterId ?? 'claude';
+  const currentAdapterInfo = adapters.find((adapter) => adapter.id === currentAdapter);
   const adapterOptions = getAdapterOptions(adapters);
   const modelOptions = getModelOptions(currentAdapter, adapters);
   const currentModel = chat?.model ?? modelOptions[0]?.id ?? '';
+  // Legacy / tier-specific IDs may not be present in the probed catalog.
+  // Keep the stored id, but inject a synthetic entry so the trigger and list show a readable label.
+  const dropdownOptions =
+    currentModel && !modelOptions.some((o) => o.id === currentModel)
+      ? [{ id: currentModel, label: getModelLabel(currentModel, adapters) }, ...modelOptions]
+      : modelOptions;
 
   const handleAdapterChange = useCallback(
     (adapterId: string) => {
@@ -241,7 +261,16 @@ export function ComposerCard() {
   const handleModeChange = useCallback(
     (mode: string) => {
       if (!chatId) return;
-      daemonClient.updateChatConfig(chatId, undefined, undefined, mode as 'default' | 'acceptEdits' | 'plan' | 'yolo');
+      const typedMode = mode as 'default' | 'acceptEdits' | 'yolo';
+      daemonClient.updateChatConfig(chatId, undefined, undefined, typedMode);
+    },
+    [chatId],
+  );
+
+  const handlePlanToggle = useCallback(
+    (enable: boolean) => {
+      if (!chatId) return;
+      daemonClient.updateChatConfig(chatId, undefined, undefined, undefined, enable);
     },
     [chatId],
   );
@@ -298,7 +327,8 @@ export function ComposerCard() {
             >
               <img
                 src={c.imageDataUrl}
-                alt={c.type === 'screenshot' ? 'screenshot' : (c.selector ?? 'element')}
+                alt={c.annotation ?? (c.type === 'screenshot' ? 'screenshot' : (c.selector ?? 'element'))}
+                title={c.annotation}
                 className="w-full h-full object-cover"
               />
             </button>
@@ -337,28 +367,37 @@ export function ComposerCard() {
       )}
 
       <QueuedMessageBanner chatId={chatId} />
-      <div className="relative">
-        <ComposerHighlight />
-        <ComposerPrimitive.Input
-          data-mf-composer-input
-          rows={2}
-          autoFocus
-          spellCheck={false}
-          disabled={chat?.worktreeMissing}
-          placeholder="Type @ to search files, / for skills… (Enter to send)"
-          className="w-full bg-transparent border-none px-3 py-2 font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && chat?.isRunning) {
-              e.preventDefault();
-              try {
-                composerRuntime.send();
-                deleteDraft(chatId);
-              } catch (err) {
-                log.warn('failed to send from composer', { err: String(err) });
+      {/*
+        Scroll wrapper (outer) owns max-h + overflow. The textarea grows naturally inside
+        the inner wrapper; both textarea and overlay then share the same wrapping width
+        and move together under a single scrollbar. If max-h lived on the textarea, its
+        own scrollbar would shave 8px off its content width, making it wrap at a narrower
+        width than the overlay and drift the caret away from the visible text.
+      */}
+      <div className="relative max-h-[200px] overflow-y-auto">
+        <div className="relative">
+          <ComposerHighlight />
+          <ComposerPrimitive.Input
+            data-mf-composer-input
+            rows={2}
+            autoFocus
+            spellCheck={false}
+            disabled={chat?.worktreeMissing}
+            placeholder="Type @ to search files, / for skills… (Enter to send)"
+            className="block w-full bg-transparent border-none px-3 py-2 font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && chat?.isRunning) {
+                e.preventDefault();
+                try {
+                  composerRuntime.send();
+                  deleteDraft(chatId);
+                } catch (err) {
+                  log.warn('failed to send from composer', { err: String(err) });
+                }
               }
-            }
-          }}
-        />
+            }}
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-between px-2 pb-2">
@@ -370,31 +409,39 @@ export function ComposerCard() {
             onChange={handleAdapterChange}
             disabled={hasMessages}
           />
-          <ComposerDropdown items={modelOptions} value={currentModel} onChange={handleModelChange} />
+          <ComposerDropdown items={dropdownOptions} value={currentModel} onChange={handleModelChange} />
           <ComposerDropdown
             items={PERMISSION_MODES}
             value={currentMode}
             onChange={handleModeChange}
             icon={<Shield size={14} />}
-            className={
-              currentMode === 'yolo' ? 'text-mf-destructive' : currentMode === 'plan' ? 'text-mf-accent' : undefined
-            }
+            className={currentMode === 'yolo' ? 'text-mf-destructive' : undefined}
           />
+          {currentAdapterInfo?.capabilities.planMode && (
+            <PlanModeToggle active={chat?.planMode === true} onToggle={handlePlanToggle} />
+          )}
+          {chat && <EffortPicker chat={chat} adapters={adapters} modelId={currentModel} disabled={!!chat.isRunning} />}
           {isGitProject && (
             <div className="relative">
-              <button
-                type="button"
-                onClick={() => setWorktreePopoverOpen((o) => !o)}
-                className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
-                  chat?.worktreePath
-                    ? 'text-mf-accent bg-mf-hover'
-                    : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
-                }`}
-                title={chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
-                aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
-              >
-                {chat?.worktreePath ? <FolderGit size={14} /> : <GitBranch size={14} />}
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setWorktreePopoverOpen((o) => !o)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
+                      chat?.worktreePath
+                        ? 'text-mf-accent bg-mf-hover'
+                        : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
+                    }`}
+                    aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
+                  >
+                    {chat?.worktreePath ? <FolderGit size={14} /> : <GitBranch size={14} />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {chat?.worktreePath ? `Branch: ${chat.branchName}` : 'Worktree isolation'}
+                </TooltipContent>
+              </Tooltip>
               {worktreePopoverOpen && chatId && (
                 <WorktreePopover
                   chatId={chatId}
@@ -412,6 +459,7 @@ export function ComposerCard() {
             hasCaptures={captures.length > 0}
             disabled={chat?.worktreeMissing}
             chatId={chatId}
+            onSendPendingCaptures={sendPendingCaptures}
           />
         </div>
       </div>

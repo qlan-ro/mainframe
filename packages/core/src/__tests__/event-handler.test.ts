@@ -135,56 +135,25 @@ describe('EventHandler skill_file announcement', () => {
     });
   });
 
-  it('emits a system announcement for slash-command skill flows', () => {
+  it('does not emit any system announcement — SkillLoadedCard covers both flows', () => {
     const handler = new EventHandler(db, msgCache, permissions, (id) => activeChats.get(id), emitEvent);
     const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
 
-    // No preceding tool_result in cache → slash-command flow
+    // Slash-command flow: no preceding tool_result in cache
     sink.onSkillFile({ path: '/home/user/.claude/skills/brainstorming/SKILL.md', displayName: 'brainstorming' });
 
-    const systemEvents = emitEvent.mock.calls.filter(
-      (call) => call[0].type === 'message.added' && call[0].message?.type === 'system',
-    );
-
-    expect(systemEvents).toHaveLength(1);
-    const msg = systemEvents[0][0].message;
-    expect(msg.content[0]).toMatchObject({ type: 'text', text: 'Using skill: brainstorming' });
-  });
-
-  it('does not emit an announcement for autonomous Skill-tool flows', () => {
-    const handler = new EventHandler(db, msgCache, permissions, (id) => activeChats.get(id), emitEvent);
-    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
-
-    // Seed cache with a tool_result message starting with "Launching skill:"
+    // Autonomous Skill-tool flow: preceding tool_result with "Launching skill:"
     const toolResultMsg = msgCache.createTransientMessage(chatId, 'tool_result', [
-      { type: 'tool_result', toolUseId: 'toolu_123', content: 'Launching skill: brainstorming', isError: false },
+      { type: 'tool_result', toolUseId: 'toolu_123', content: 'Launching skill: other', isError: false },
     ]);
     msgCache.append(chatId, toolResultMsg);
-
-    sink.onSkillFile({ path: '/home/user/.claude/skills/brainstorming/SKILL.md', displayName: 'brainstorming' });
+    sink.onSkillFile({ path: '/home/user/.claude/skills/other/SKILL.md', displayName: 'other' });
 
     const systemEvents = emitEvent.mock.calls.filter(
       (call) => call[0].type === 'message.added' && call[0].message?.type === 'system',
     );
 
     expect(systemEvents).toHaveLength(0);
-  });
-
-  it('derives display name from parent directory when file is SKILL.md', () => {
-    const handler = new EventHandler(db, msgCache, permissions, (id) => activeChats.get(id), emitEvent);
-    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
-
-    sink.onSkillFile({
-      path: '/home/user/.claude/plugins/my-plugin/skills/my-skill/SKILL.md',
-      displayName: 'my-skill',
-    });
-
-    const systemEvents = emitEvent.mock.calls.filter(
-      (call) => call[0].type === 'message.added' && call[0].message?.type === 'system',
-    );
-
-    expect(systemEvents).toHaveLength(1);
-    expect(systemEvents[0][0].message.content[0]).toMatchObject({ text: 'Using skill: my-skill' });
   });
 });
 
@@ -265,6 +234,109 @@ describe('EventHandler context.updated timing', () => {
 
     const ctxEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'context.updated');
     expect(ctxEvents).toHaveLength(0);
+  });
+
+  it('emits context.updated (without filePaths) when a subagent tool result completes', () => {
+    const subagentCategories = {
+      subagent: new Set(['Task', 'Agent']),
+      explore: new Set<string>(),
+      hidden: new Set<string>(),
+      progress: new Set<string>(),
+    };
+    const handler = new EventHandler(
+      db,
+      messages,
+      permissions,
+      (id) => activeChats.get(id),
+      emitEvent,
+      () => subagentCategories,
+    );
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
+
+    sink.onMessage([{ type: 'tool_use', id: 'toolu_task', name: 'Task', input: { prompt: 'do work' } }]);
+
+    sink.onToolResult([{ type: 'tool_result', toolUseId: 'toolu_task', content: 'done', isError: false }]);
+
+    const ctxEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'context.updated');
+    expect(ctxEvents).toHaveLength(1);
+    // No filePaths — the frontend will load from disk to get subagent changes
+    expect(ctxEvents[0]![0].filePaths).toBeUndefined();
+    expect(ctxEvents[0]![0].chatId).toBe(chatId);
+  });
+
+  it('does not emit duplicate context.updated when subagent tool also matches file tool', () => {
+    // Edge case: if somehow a tool is both a file tool and subagent, only one event
+    const subagentCategories = {
+      subagent: new Set(['Task']),
+      explore: new Set<string>(),
+      hidden: new Set<string>(),
+      progress: new Set<string>(),
+    };
+    const handler = new EventHandler(
+      db,
+      messages,
+      permissions,
+      (id) => activeChats.get(id),
+      emitEvent,
+      () => subagentCategories,
+    );
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
+
+    sink.onMessage([{ type: 'tool_use', id: 'toolu_task', name: 'Task', input: { prompt: 'do work' } }]);
+    emitEvent.mockClear();
+
+    sink.onToolResult([{ type: 'tool_result', toolUseId: 'toolu_task', content: 'done', isError: false }]);
+
+    const ctxEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'context.updated');
+    expect(ctxEvents).toHaveLength(1);
+  });
+});
+
+describe('EventHandler onSkillLoaded', () => {
+  let db: any;
+  let msgCache: MessageCache;
+  let permissions: PermissionManager;
+  let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
+  let activeChats: Map<string, any>;
+
+  const chatId = 'chat-skill-loaded';
+
+  beforeEach(() => {
+    db = {
+      chats: { update: vi.fn(), get: vi.fn(), addSkillFile: vi.fn().mockReturnValue(false) },
+      projects: { get: vi.fn() },
+      settings: { get: vi.fn() },
+    };
+    msgCache = new MessageCache();
+    permissions = new PermissionManager();
+    emitEvent = vi.fn();
+    activeChats = new Map();
+    activeChats.set(chatId, {
+      chat: { id: chatId, totalCost: 0, totalTokensInput: 0, totalTokensOutput: 0, processState: 'working' },
+      session: null,
+    });
+  });
+
+  it('emits message.added with skill_loaded content block', () => {
+    const handler = new EventHandler(db, msgCache, permissions, (id) => activeChats.get(id), emitEvent);
+    const sink: SessionSink = handler.buildSink(chatId, () => Promise.resolve());
+
+    sink.onSkillLoaded({
+      skillName: 'brainstorming',
+      path: '/home/user/.claude/skills/brainstorming/SKILL.md',
+      content: '# brainstorming\n\nThink broadly.',
+    });
+
+    const addedEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'message.added');
+    expect(addedEvents).toHaveLength(1);
+    const msg = addedEvents[0]![0].message;
+    expect(msg.type).toBe('system');
+    expect(msg.content[0]).toMatchObject({
+      type: 'skill_loaded',
+      skillName: 'brainstorming',
+      path: '/home/user/.claude/skills/brainstorming/SKILL.md',
+      content: '# brainstorming\n\nThink broadly.',
+    });
   });
 });
 

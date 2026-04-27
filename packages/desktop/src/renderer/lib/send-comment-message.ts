@@ -1,6 +1,7 @@
 import { daemonClient } from './client';
 import { useChatsStore } from '../store/chats';
 import { getActiveProjectId } from '../hooks/useActiveProjectId.js';
+import { getDefaultModelForAdapter } from './adapters';
 import { createLogger } from './logger';
 
 const log = createLogger('renderer:chat');
@@ -37,7 +38,7 @@ export function sendCommentMessage(formatted: string, explicitChatId?: string): 
     }
   });
 
-  daemonClient.createChat(projectId, 'claude');
+  daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
 }
 
 function ensureResumedAndSend(chatId: string, content: string): void {

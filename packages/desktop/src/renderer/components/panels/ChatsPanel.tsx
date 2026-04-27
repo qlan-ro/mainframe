@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderPlus, List, LayoutList, Plus, Download } from 'lucide-react';
+import { FolderPlus, Plus, Download, Archive, ChevronDown } from 'lucide-react';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:panels');
@@ -7,21 +7,23 @@ import { useChatsStore, useProjectsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { createProject } from '../../lib/api';
+import { deleteProjectWithCleanup } from '../../lib/delete-project';
 import { ContextMenu } from '../ui/context-menu';
 import type { ContextMenuItem } from '../ui/context-menu';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
 import { daemonClient } from '../../lib/client';
+import { getDefaultModelForAdapter } from '../../lib/adapters';
+import { pinChat } from '../../lib/api';
 import { ProjectGroup } from './ProjectGroup';
 import { FlatSessionRow } from './FlatSessionRow';
 import { ImportSessionsPopover } from './ImportSessionsPopover';
+import { ArchivedSessionsPopover } from './ArchivedSessionsPopover';
+import { useZoneHeaderActions } from '../zone/ZoneHeaderSlot.js';
 import type { Chat, Project } from '@qlan-ro/mainframe-types';
 
 const STORAGE_KEY = 'mf:collapsedProjects';
-const VIEW_MODE_KEY = 'mf:sessionsViewMode';
-
-type ViewMode = 'grouped' | 'flat';
 
 function loadCollapsed(): Set<string> {
   try {
@@ -93,29 +95,46 @@ function FilterPillBadge({
   onClick,
   label,
   truncate: shouldTruncate,
+  onDropdownClick,
 }: {
   count: number;
   isActive: boolean;
   onClick: () => void;
   label: string;
   truncate?: boolean;
+  onDropdownClick?: (e: React.MouseEvent) => void;
 }) {
+  const showCaret = isActive && onDropdownClick !== undefined;
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       className={cn(
-        'shrink-0 px-2.5 py-1 rounded-full text-mf-status transition-colors inline-flex items-center gap-1.5',
+        'shrink-0 rounded-full text-mf-status inline-flex items-center transition-colors',
         isActive ? 'bg-mf-accent text-white' : 'bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
       )}
     >
-      {shouldTruncate ? <span className="truncate max-w-[140px]">{label}</span> : label}
-      {count > 0 && (
-        <span className={cn(BADGE_BASE, isActive ? 'bg-mf-hover text-mf-text-secondary' : 'bg-mf-accent text-white')}>
-          {count}
-        </span>
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn('inline-flex items-center gap-1.5 py-1 rounded-full', showCaret ? 'pl-2.5 pr-1' : 'px-2.5')}
+      >
+        {shouldTruncate ? <span className="truncate max-w-[140px]">{label}</span> : label}
+        {count > 0 && (
+          <span className={cn(BADGE_BASE, isActive ? 'bg-mf-hover text-mf-text-secondary' : 'bg-mf-accent text-white')}>
+            {count}
+          </span>
+        )}
+      </button>
+      {showCaret && (
+        <button
+          type="button"
+          onClick={onDropdownClick}
+          aria-label={`Options for ${label}`}
+          className="p-1 mr-1 rounded-full hover:bg-mf-hover text-white/80 hover:text-white transition-colors"
+        >
+          <ChevronDown size={12} />
+        </button>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -171,18 +190,17 @@ function NewSessionPopover({
 export function ChatsPanel(): React.ReactElement {
   const projects = useProjectsStore((s) => s.projects);
   const addProject = useProjectsStore((s) => s.addProject);
-  const chats = useChatsStore((s) => s.chats);
+  const allChats = useChatsStore((s) => s.chats);
+  const chats = useMemo(() => allChats.filter((c) => c.status !== 'archived'), [allChats]);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const pendingPermissions = useChatsStore((s) => s.pendingPermissions);
 
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) || 'grouped',
-  );
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [showDirPicker, setShowDirPicker] = useState(false);
   const [showNewSessionPopover, setShowNewSessionPopover] = useState(false);
   const [showImportPopover, setShowImportPopover] = useState(false);
+  const [showArchivedPopover, setShowArchivedPopover] = useState(false);
   const filterProjectId = useChatsStore((s) => s.filterProjectId);
   const _setFilterProjectId = useChatsStore((s) => s.setFilterProjectId);
   const setActiveChat = useChatsStore((s) => s.setActiveChat);
@@ -213,29 +231,29 @@ export function ChatsPanel(): React.ReactElement {
     }
   }, []);
 
-  const toggleViewMode = useCallback(() => {
-    setViewMode((prev) => {
-      const next = prev === 'grouped' ? 'flat' : 'grouped';
-      localStorage.setItem(VIEW_MODE_KEY, next);
-      return next;
-    });
+  // Clean up stale localStorage key from old manual toggle feature
+  useEffect(() => {
+    localStorage.removeItem('mf:sessionsViewMode');
   }, []);
+
+  // View mode is derived from the filter: 'All' → grouped, specific project → flat
+  const viewMode = filterProjectId === null ? 'grouped' : 'flat';
 
   const handleNewSessionClick = useCallback(() => {
     if (projects.length === 0) return;
     if (filterProjectId) {
-      daemonClient.createChat(filterProjectId, 'claude');
+      daemonClient.createChat(filterProjectId, 'claude', getDefaultModelForAdapter('claude'));
       return;
     }
     if (projects.length === 1) {
-      daemonClient.createChat(projects[0]!.id, 'claude');
+      daemonClient.createChat(projects[0]!.id, 'claude', getDefaultModelForAdapter('claude'));
       return;
     }
     setShowNewSessionPopover((prev) => !prev);
   }, [projects, filterProjectId]);
 
   const handleNewSessionInProject = useCallback((projectId: string) => {
-    daemonClient.createChat(projectId, 'claude');
+    daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
     setShowNewSessionPopover(false);
   }, []);
 
@@ -247,7 +265,12 @@ export function ChatsPanel(): React.ReactElement {
   const groups = useMemo(() => buildGroups(projects, chats), [projects, chats]);
   const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   const flatChats = useMemo(
-    () => [...chats].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    () =>
+      [...chats].sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }),
     [chats],
   );
 
@@ -303,37 +326,73 @@ export function ChatsPanel(): React.ReactElement {
     renameCallbacks.current.delete(chatId);
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => {
-    e.preventDefault();
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      items: [
-        ...(chatId
-          ? [
-              {
-                label: 'Rename',
-                onClick: () => {
-                  renameCallbacks.current.get(chatId)?.();
+  const updateChat = useChatsStore((s) => s.updateChat);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => {
+      e.preventDefault();
+      const chat = chatId ? chats.find((c) => c.id === chatId) : undefined;
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          ...(chat
+            ? [
+                {
+                  label: 'Rename',
+                  onClick: () => {
+                    renameCallbacks.current.get(chat.id)?.();
+                  },
                 },
-              },
-            ]
-          : []),
-        ...(sessionId
-          ? [
-              {
-                label: 'Copy Session ID',
-                onClick: () => {
-                  navigator.clipboard.writeText(sessionId).catch((err) => {
-                    log.warn('failed to copy session id', { err: String(err) });
-                  });
+                {
+                  label: chat.pinned ? 'Unpin' : 'Pin',
+                  onClick: () => {
+                    const newPinned = !chat.pinned;
+                    updateChat({ ...chat, pinned: newPinned });
+                    pinChat(chat.id, newPinned).catch((err) => log.warn('pin failed', { err: String(err) }));
+                  },
                 },
-              },
-            ]
-          : []),
-      ],
-    });
-  }, []);
+              ]
+            : []),
+          ...(sessionId
+            ? [
+                {
+                  label: 'Copy Session ID',
+                  onClick: () => {
+                    navigator.clipboard.writeText(sessionId).catch((err) => {
+                      log.warn('failed to copy session id', { err: String(err) });
+                    });
+                  },
+                },
+              ]
+            : []),
+        ],
+      });
+    },
+    [chats, updateChat],
+  );
+
+  const handleProjectContextMenu = useCallback(
+    (e: React.MouseEvent, projectId: string) => {
+      e.preventDefault();
+      const proj = projectMap.get(projectId);
+      if (!proj) return;
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          {
+            label: `Delete Project "${proj.name}"`,
+            destructive: true,
+            onClick: () => {
+              void deleteProjectWithCleanup(proj);
+            },
+          },
+        ],
+      });
+    },
+    [projectMap],
+  );
 
   const handleAddProject = useCallback(
     async (path: string) => {
@@ -348,87 +407,110 @@ export function ChatsPanel(): React.ReactElement {
     [addProject],
   );
 
+  const headerActions = useMemo(
+    () => (
+      <>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setShowDirPicker(true)}
+              className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+            >
+              <FolderPlus size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Add project</TooltipContent>
+        </Tooltip>
+        <div className="relative" data-new-session-popover>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleNewSessionClick}
+                disabled={projects.length === 0}
+                className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <Plus size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">New session</TooltipContent>
+          </Tooltip>
+          {showNewSessionPopover && (
+            <NewSessionPopover
+              projects={projects}
+              activeProjectId={activeProjectId}
+              onSelect={handleNewSessionInProject}
+              onClose={() => setShowNewSessionPopover(false)}
+            />
+          )}
+        </div>
+        <div className="relative" data-archived-popover>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setShowArchivedPopover((prev) => !prev)}
+                className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                data-testid="archived-sessions-btn"
+              >
+                <Archive size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Archived sessions</TooltipContent>
+          </Tooltip>
+          {showArchivedPopover && (
+            <ArchivedSessionsPopover
+              chats={allChats}
+              projects={projects}
+              filterProjectId={filterProjectId}
+              onClose={() => setShowArchivedPopover(false)}
+            />
+          )}
+        </div>
+        <div className="relative" data-import-popover>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setShowImportPopover((prev) => !prev)}
+                disabled={projects.length === 0}
+                className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                data-testid="import-sessions-btn"
+              >
+                <Download size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Import external sessions</TooltipContent>
+          </Tooltip>
+          {showImportPopover && (
+            <ImportSessionsPopover
+              projects={projects}
+              activeProjectId={activeProjectId}
+              filterProjectId={filterProjectId}
+              onClose={() => setShowImportPopover(false)}
+            />
+          )}
+        </div>
+      </>
+    ),
+    [
+      handleNewSessionClick,
+      handleNewSessionInProject,
+      projects,
+      activeProjectId,
+      showNewSessionPopover,
+      showImportPopover,
+      showArchivedPopover,
+      filterProjectId,
+      allChats,
+    ],
+  );
+
+  useZoneHeaderActions(headerActions);
+
   return (
     <div className="h-full flex flex-col">
-      <div className="h-11 px-[10px] flex items-center justify-between">
-        <div className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Sessions</div>
-        <div className="flex items-center gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => setShowDirPicker(true)}
-                className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
-              >
-                <FolderPlus size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Add project</TooltipContent>
-          </Tooltip>
-          <div className="relative" data-new-session-popover>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleNewSessionClick}
-                  disabled={projects.length === 0}
-                  className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-                >
-                  <Plus size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">New session</TooltipContent>
-            </Tooltip>
-            {showNewSessionPopover && (
-              <NewSessionPopover
-                projects={projects}
-                activeProjectId={activeProjectId}
-                onSelect={handleNewSessionInProject}
-                onClose={() => setShowNewSessionPopover(false)}
-              />
-            )}
-          </div>
-          <div className="relative" data-import-popover>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setShowImportPopover((prev) => !prev)}
-                  disabled={projects.length === 0}
-                  className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-                  data-testid="import-sessions-btn"
-                >
-                  <Download size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Import external sessions</TooltipContent>
-            </Tooltip>
-            {showImportPopover && (
-              <ImportSessionsPopover
-                projects={projects}
-                activeProjectId={activeProjectId}
-                filterProjectId={filterProjectId}
-                onClose={() => setShowImportPopover(false)}
-              />
-            )}
-          </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={toggleViewMode}
-                className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover/50 transition-colors"
-              >
-                {viewMode === 'grouped' ? <List size={14} /> : <LayoutList size={14} />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {viewMode === 'grouped' ? 'Switch to flat view' : 'Switch to grouped view'}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
       {/* Project filter badges */}
       {projects.length > 1 && (
         <div className="px-2.5 py-2 overflow-hidden">
@@ -448,6 +530,10 @@ export function ChatsPanel(): React.ReactElement {
                     onClick={() => handleFilterSelect(filterProjectId === p.id ? null : p.id)}
                     label={p.name}
                     truncate
+                    onDropdownClick={(e) => {
+                      e.stopPropagation();
+                      handleProjectContextMenu(e, p.id);
+                    }}
                   />
                 </TooltipTrigger>
                 <TooltipContent>{p.name}</TooltipContent>

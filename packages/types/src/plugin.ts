@@ -14,15 +14,23 @@ export type PluginCapability =
   | 'process:exec'
   | 'http:outbound';
 
-export type UIZone =
-  | 'fullview' // replaces Left + Center + Right; trigger in TitleBar
-  | 'left-panel' // replaces entire LeftPanel; trigger icon in Left Rail
-  | 'right-panel' // replaces entire RightPanel; trigger icon in Right Rail
-  | 'left-tab' // tab appended to LeftPanel tab strip
-  | 'right-tab'; // tab appended to RightPanel tab strip
+export type ZoneId = 'left-top' | 'left-bottom' | 'right-top' | 'right-bottom' | 'bottom-left' | 'bottom-right';
+
+export type UIZone = ZoneId | 'fullview';
+
+export interface ToolWindowManifest {
+  id: string;
+  label: string;
+  icon?: string;
+  defaultZone: ZoneId;
+  /** Owning plugin id (empty for built-in tool windows). Lets the desktop
+   *  layout dispatch rendering to PluginView with a zone-scoped component. */
+  pluginId?: string;
+}
 
 export interface PluginUIContribution {
   pluginId: string;
+  panelId: string;
   zone: UIZone;
   label: string;
   icon?: string;
@@ -36,6 +44,13 @@ export interface PluginAction {
   icon?: string;
 }
 
+export interface PluginUIZoneContribution {
+  zone: UIZone;
+  label: string; // tooltip for rail icons; tab text for tab zones
+  icon?: string; // Lucide icon name; required for fullview/left-panel/right-panel
+  toolWindows?: ToolWindowManifest[];
+}
+
 export interface PluginManifest {
   id: string;
   name: string;
@@ -44,12 +59,11 @@ export interface PluginManifest {
   author?: string;
   license?: string;
   capabilities: PluginCapability[];
-  /** UI contribution — required when plugin adds a panel or fullview */
-  ui?: {
-    zone: UIZone;
-    label: string; // tooltip for rail icons; tab text for tab zones
-    icon?: string; // Lucide icon name; required for fullview/left-panel/right-panel
-  };
+  /**
+   * UI contributions — one object (legacy single-zone) or array (multi-zone).
+   * Both forms are accepted and normalized to an array internally.
+   */
+  ui?: PluginUIZoneContribution | PluginUIZoneContribution[];
   /** Adapter plugins only */
   adapter?: {
     binaryName: string;
@@ -144,8 +158,10 @@ export interface PluginEventBus {
 }
 
 export interface PluginUIContext {
-  addPanel(opts: { zone: UIZone; label: string; icon?: string }): void;
-  removePanel(): void;
+  /** Registers a panel contribution and returns a stable panelId for later removal. */
+  addPanel(opts: { zone: UIZone; label: string; icon?: string }): string;
+  /** Remove a specific panel by id, or (omit id) remove all panels for this plugin. */
+  removePanel(id?: string): void;
   addAction(opts: { id: string; label: string; shortcut: string; icon?: string }): void;
   removeAction(id: string): void;
   notify(options: { title: string; body: string; level?: 'info' | 'success' | 'warning' | 'error' }): void;

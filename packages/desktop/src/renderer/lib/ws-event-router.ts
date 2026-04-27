@@ -4,6 +4,7 @@ import { useTabsStore } from '../store/tabs';
 import { useProjectsStore } from '../store/projects';
 import { usePluginLayoutStore } from '../store/plugins';
 import { useSandboxStore } from '../store/sandbox';
+import { useAdaptersStore } from '../store/adapters';
 import { createLogger } from './logger';
 import { buildLaunchScope } from './launch-scope.js';
 import { notify } from './notify';
@@ -30,21 +31,18 @@ export function routeEvent(event: DaemonEvent): void {
         tabs.updateTabLabel(`chat:${event.chat.id}`, event.chat.title);
       }
 
-      if (event.reason === 'completed') {
-        notify({
-          type: 'success',
-          title: event.chat.title ?? 'Session',
-          body: 'Agent responded',
-          chatId: event.chat.id,
-        });
-      } else if (event.reason === 'error') {
-        notify({
-          type: 'error',
-          title: event.chat.title ?? 'Session',
-          body: 'Agent error',
-          chatId: event.chat.id,
-        });
-      }
+      break;
+    }
+    case 'chat.notification': {
+      // Daemon already gates emission on the user's notification settings,
+      // so seeing this event means the OS notification should fire.
+      const chat = chats.chats.find((c) => c.id === event.chatId);
+      notify({
+        type: event.level,
+        title: chat?.title ?? event.title,
+        body: event.body,
+        chatId: event.chatId,
+      });
       break;
     }
     case 'chat.ended':
@@ -75,7 +73,10 @@ export function routeEvent(event: DaemonEvent): void {
         toolName: event.request.toolName,
       });
       chats.addPendingPermission(event.chatId, event.request);
-      {
+      // The daemon evaluates the user's settings and tells us whether to
+      // surface an OS notification via `event.notify`. The in-app permission
+      // card is always rendered (above) regardless of that flag.
+      if (event.notify) {
         const chat = chats.chats.find((c) => c.id === event.chatId);
         notify({
           type: 'info',
@@ -143,21 +144,44 @@ export function routeEvent(event: DaemonEvent): void {
         maxTokens: event.maxTokens,
       });
       break;
+    case 'todos.updated':
+      log.debug('event:todos.updated', { chatId: event.chatId, count: event.todos.length });
+      chats.setTodos(event.chatId, event.todos);
+      break;
+    case 'chat.prDetected':
+      log.info('event:chat.prDetected', { chatId: event.chatId, prNumber: event.pr.number, repo: event.pr.repo });
+      chats.addDetectedPr(event.chatId, event.pr);
+      break;
     case 'sessions.external.count':
       break;
-    case 'plugin.notification':
-      notify({
-        type:
-          event.level === 'error'
-            ? 'error'
-            : event.level === 'warning'
-              ? 'warning'
-              : event.level === 'success'
-                ? 'success'
-                : 'info',
-        title: event.title,
-        body: event.body,
+    case 'plugin.panel.registered':
+      usePluginLayoutStore.getState().registerContribution({
+        pluginId: event.pluginId,
+        panelId: event.panelId,
+        zone: event.zone,
+        label: event.label,
+        icon: event.icon,
       });
+      break;
+    case 'plugin.panel.unregistered':
+      usePluginLayoutStore.getState().unregisterContribution(event.pluginId, event.panelId);
+      break;
+    case 'plugin.notification':
+      // Daemon already gates emission on the user's notification settings.
+      {
+        notify({
+          type:
+            event.level === 'error'
+              ? 'error'
+              : event.level === 'warning'
+                ? 'warning'
+                : event.level === 'success'
+                  ? 'success'
+                  : 'info',
+          title: event.title,
+          body: event.body,
+        });
+      }
       break;
     case 'plugin.action.registered':
       usePluginLayoutStore.getState().registerAction({
@@ -185,6 +209,13 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'message.queued.cleared':
       chats.clearQueuedMessages(event.chatId);
+      break;
+    case 'message.queued.snapshot':
+      chats.setQueuedMessages(event.chatId, event.refs);
+      break;
+    case 'adapter.models.updated':
+      log.info('event:adapter.models.updated', { adapterId: event.adapterId, count: event.models.length });
+      useAdaptersStore.getState().updateAdapterModels(event.adapterId, event.models);
       break;
     case 'error':
       log.error('daemon error event', { error: event.error });

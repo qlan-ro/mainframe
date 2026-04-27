@@ -1,17 +1,100 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, FolderGit, GitBranch } from 'lucide-react';
+import { AlertTriangle, ArrowDownCircle, Download, FolderGit, GitBranch, RotateCcw } from 'lucide-react';
 import { createLogger } from '../lib/logger';
 
 const log = createLogger('renderer:statusbar');
 import { useChatsStore } from '../store';
 import { useActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { useConnectionState } from '../hooks/useConnectionState';
+import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
 import { getGitBranch, getGitStatus } from '../lib/api';
 import { isConflictStatus } from '../lib/git-utils';
 import { cn } from '../lib/utils';
 import { BranchPopover } from './git/BranchPopover';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 const GIT_POLL_INTERVAL = 60_000;
+
+function UpdateIndicator(): React.ReactElement | null {
+  const status = useUpdateStatus();
+
+  if (!status || status.state === 'not-available' || status.state === 'checking') {
+    return null;
+  }
+
+  if (status.state === 'available') {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            className="flex items-center gap-1 text-mf-accent hover:text-mf-text-primary transition-colors"
+            onClick={() => {
+              try {
+                window.mainframe.updates.download();
+              } catch (err) {
+                console.warn('[UpdateIndicator] download failed', err);
+              }
+            }}
+          >
+            <Download size={12} />
+            <span>Update v{status.version}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">Download update v{status.version}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  if (status.state === 'downloading') {
+    return (
+      <span className="flex items-center gap-1 text-mf-text-secondary">
+        <ArrowDownCircle size={12} />
+        <span>Downloading… {status.percent}%</span>
+      </span>
+    );
+  }
+
+  if (status.state === 'downloaded') {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            className="flex items-center gap-1 text-mf-success hover:text-mf-text-primary transition-colors"
+            onClick={() => {
+              try {
+                window.mainframe.updates.install();
+              } catch (err) {
+                console.warn('[UpdateIndicator] install failed', err);
+              }
+            }}
+          >
+            <RotateCcw size={12} />
+            <span>Restart to update</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">Restart to install v{status.version}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  if (status.state === 'error') {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="flex items-center gap-1 text-mf-destructive cursor-default">
+            <AlertTriangle size={12} />
+            <span>Update error</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap break-words">
+          {status.message}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return null;
+}
 
 export function StatusBar(): React.ReactElement {
   const connected = useConnectionState();
@@ -19,13 +102,14 @@ export function StatusBar(): React.ReactElement {
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const inWorktree = useChatsStore((s) => !!s.chats.find((c) => c.id === s.activeChatId)?.worktreePath);
+  const worktreeMissing = useChatsStore((s) => !!s.chats.find((c) => c.id === s.activeChatId)?.worktreeMissing);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [hasConflicts, setHasConflicts] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchBranchAndStatus = useCallback(() => {
-    if (!activeProjectId) {
+    if (!activeProjectId || worktreeMissing) {
       setGitBranch(null);
       setHasConflicts(false);
       return;
@@ -45,7 +129,7 @@ export function StatusBar(): React.ReactElement {
         console.warn('[StatusBar] git status fetch failed', err);
         setHasConflicts(false);
       });
-  }, [activeProjectId, activeChatId]);
+  }, [activeProjectId, activeChatId, worktreeMissing]);
 
   useEffect(() => {
     fetchBranchAndStatus();
@@ -113,6 +197,11 @@ export function StatusBar(): React.ReactElement {
             <span>{counts.idle} Idle</span>
           </div>
         )}
+      </div>
+
+      {/* Right side — update indicator */}
+      <div className="flex items-center gap-2 text-mf-body">
+        <UpdateIndicator />
       </div>
     </div>
   );

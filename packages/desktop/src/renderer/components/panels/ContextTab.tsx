@@ -10,9 +10,11 @@ import type { SessionContext } from '@qlan-ro/mainframe-types';
 import { ContextSection } from './ContextSection';
 import { ContextFileItem } from './ContextFileItem';
 import { SessionAttachmentsGrid } from './SessionAttachmentsGrid';
+import { TasksSection } from './TasksSection';
 
 export function ContextTab(): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
+  const todos = useChatsStore((s) => (s.activeChatId ? s.todos.get(s.activeChatId) : undefined));
   const [context, setContext] = useState<SessionContext | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -72,7 +74,8 @@ export function ContextTab(): React.ReactElement {
   const sessionCount = sessionFiles.size + attachments.length;
 
   return (
-    <div className="space-y-2">
+    <div className="h-full overflow-y-auto space-y-2">
+      {todos && todos.length > 0 && <TasksSection todos={todos} />}
       <ContextSection icon={Globe} title="Global" count={globalFiles.length} defaultOpen>
         {globalFiles.map((f) => (
           <ContextFileItem key={f.path} path={f.path} />

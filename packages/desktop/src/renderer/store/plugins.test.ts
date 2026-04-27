@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { usePluginLayoutStore } from './plugins';
 import type { PluginUIContribution } from '@qlan-ro/mainframe-types';
 
-const makeContrib = (pluginId: string, zone: PluginUIContribution['zone']): PluginUIContribution => ({
+const makeContrib = (pluginId: string, panelId: string, zone: PluginUIContribution['zone']): PluginUIContribution => ({
   pluginId,
+  panelId,
   zone,
   label: pluginId,
   icon: 'star',
@@ -13,32 +14,62 @@ beforeEach(() => {
   usePluginLayoutStore.setState({
     contributions: [],
     activeFullviewId: null,
-    activeLeftPanelId: null,
-    activeRightPanelId: null,
   });
 });
 
 describe('registerContribution', () => {
   it('adds a contribution', () => {
-    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'fullview'));
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-1', 'fullview'));
     expect(usePluginLayoutStore.getState().contributions).toHaveLength(1);
   });
 
-  it('replaces an existing contribution from the same plugin', () => {
-    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'fullview'));
-    usePluginLayoutStore.getState().registerContribution({ ...makeContrib('todos', 'fullview'), label: 'Updated' });
+  it('replaces an existing contribution with the same pluginId+panelId', () => {
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-1', 'fullview'));
+    usePluginLayoutStore
+      .getState()
+      .registerContribution({ ...makeContrib('todos', 'panel-1', 'fullview'), label: 'Updated' });
     expect(usePluginLayoutStore.getState().contributions).toHaveLength(1);
     expect(usePluginLayoutStore.getState().contributions[0]?.label).toBe('Updated');
+  });
+
+  it('allows multiple panels from the same plugin with different panelIds', () => {
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-1', 'fullview'));
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-2', 'right-top'));
+    expect(usePluginLayoutStore.getState().contributions).toHaveLength(2);
   });
 });
 
 describe('unregisterContribution', () => {
   it('removes the contribution and clears active state if that plugin was active', () => {
-    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'fullview'));
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-1', 'fullview'));
     usePluginLayoutStore.getState().activateFullview('todos');
     usePluginLayoutStore.getState().unregisterContribution('todos');
     expect(usePluginLayoutStore.getState().contributions).toHaveLength(0);
     expect(usePluginLayoutStore.getState().activeFullviewId).toBeNull();
+  });
+
+  it('removes only the specified panel when panelId is provided', () => {
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-1', 'fullview'));
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-2', 'right-top'));
+    usePluginLayoutStore.getState().unregisterContribution('todos', 'panel-1');
+    const remaining = usePluginLayoutStore.getState().contributions;
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.panelId).toBe('panel-2');
+  });
+
+  it('removes all panels for a plugin when panelId is omitted', () => {
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-1', 'fullview'));
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-2', 'right-top'));
+    usePluginLayoutStore.getState().unregisterContribution('todos');
+    expect(usePluginLayoutStore.getState().contributions).toHaveLength(0);
+  });
+
+  it('does not remove panels from other plugins', () => {
+    usePluginLayoutStore.getState().registerContribution(makeContrib('todos', 'panel-1', 'fullview'));
+    usePluginLayoutStore.getState().registerContribution(makeContrib('other', 'panel-x', 'right-top'));
+    usePluginLayoutStore.getState().unregisterContribution('todos');
+    expect(usePluginLayoutStore.getState().contributions).toHaveLength(1);
+    expect(usePluginLayoutStore.getState().contributions[0]?.pluginId).toBe('other');
   });
 });
 
@@ -52,34 +83,5 @@ describe('activateFullview / deactivateFullview', () => {
     usePluginLayoutStore.getState().activateFullview('todos');
     usePluginLayoutStore.getState().activateFullview('todos');
     expect(usePluginLayoutStore.getState().activeFullviewId).toBeNull();
-  });
-
-  it('deactivates fullview when left panel is activated', () => {
-    usePluginLayoutStore.getState().activateFullview('todos');
-    usePluginLayoutStore.getState().setActiveLeftPanel('myPlugin');
-    expect(usePluginLayoutStore.getState().activeFullviewId).toBeNull();
-    expect(usePluginLayoutStore.getState().activeLeftPanelId).toBe('myPlugin');
-  });
-
-  it('deactivates fullview when right panel is activated', () => {
-    usePluginLayoutStore.getState().activateFullview('todos');
-    usePluginLayoutStore.getState().setActiveRightPanel('right-plugin');
-    expect(usePluginLayoutStore.getState().activeFullviewId).toBeNull();
-    expect(usePluginLayoutStore.getState().activeRightPanelId).toBe('right-plugin');
-  });
-});
-
-describe('setActiveLeftPanel / setActiveRightPanel', () => {
-  it('sets null to restore default', () => {
-    usePluginLayoutStore.getState().setActiveLeftPanel('p1');
-    usePluginLayoutStore.getState().setActiveLeftPanel(null);
-    expect(usePluginLayoutStore.getState().activeLeftPanelId).toBeNull();
-  });
-
-  it('left and right are independent', () => {
-    usePluginLayoutStore.getState().setActiveLeftPanel('p1');
-    usePluginLayoutStore.getState().setActiveRightPanel('p2');
-    expect(usePluginLayoutStore.getState().activeLeftPanelId).toBe('p1');
-    expect(usePluginLayoutStore.getState().activeRightPanelId).toBe('p2');
   });
 });

@@ -37,26 +37,39 @@ export function useAppInit(): void {
     const loadData = async () => {
       setLoading(true);
       try {
-        const projects = await getProjects();
-        setProjects(projects);
-        try {
-          const adapters = await getAdapters();
-          setAdapters(adapters);
-        } catch (err) {
-          log.warn('adapter fetch failed', { err: String(err) });
+        const [projectsResult, adaptersResult, providerResult, pluginsResult, chatsResult] = await Promise.allSettled([
+          getProjects(),
+          getAdapters(),
+          getProviderSettings(),
+          getPlugins(),
+          getAllChats(),
+        ]);
+
+        if (projectsResult.status === 'fulfilled') {
+          setProjects(projectsResult.value);
+        } else {
+          throw projectsResult.reason;
         }
-        try {
-          const providerSettings = await getProviderSettings();
-          loadProviders(providerSettings);
-        } catch {
+
+        if (adaptersResult.status === 'fulfilled') {
+          setAdapters(adaptersResult.value);
+        } else {
+          log.warn('adapter fetch failed', { err: String(adaptersResult.reason) });
+        }
+
+        if (providerResult.status === 'fulfilled') {
+          loadProviders(providerResult.value);
+        } else {
           // Keep booting even if provider settings fetch fails.
+          log.warn('provider settings fetch failed', { err: String(providerResult.reason) });
         }
-        try {
-          const plugins = await getPlugins();
+
+        if (pluginsResult.status === 'fulfilled') {
           const store = usePluginLayoutStore.getState();
-          for (const plugin of plugins) {
-            if (plugin.panel) {
-              store.registerContribution({ pluginId: plugin.id, ...plugin.panel });
+          for (const plugin of pluginsResult.value) {
+            const panels = plugin.panels ?? (plugin.panel ? [plugin.panel] : []);
+            for (const panel of panels) {
+              store.registerContribution({ pluginId: plugin.id, ...panel });
             }
             if (plugin.actions) {
               for (const action of plugin.actions) {
@@ -64,32 +77,45 @@ export function useAppInit(): void {
               }
             }
           }
-        } catch (err) {
-          log.warn('plugin fetch failed', { err: String(err) });
+        } else {
+          log.warn('plugin fetch failed', { err: String(pluginsResult.reason) });
         }
 
-        // Fetch all chats across all projects
-        try {
-          const chatsList = await getAllChats();
+        if (chatsResult.status === 'fulfilled') {
+          const chatsList = chatsResult.value;
           useChatsStore.getState().setChats(chatsList);
 
-          // Restore active chat from localStorage
+          // Restore active chat from localStorage. Archived chats are hidden
+          // from the flat list but still returned by the daemon, so we must
+          // skip them explicitly — otherwise activeChatId points to a chat
+          // the user cannot see or switch away from.
           const lastChatId = localStorage.getItem('mf:activeChatId');
-          if (lastChatId && chatsList.some((c) => c.id === lastChatId)) {
-            useChatsStore.getState().setActiveChat(lastChatId);
-            daemonClient.subscribe(lastChatId);
-          } else if (chatsList.length > 0) {
+          const visibleChats = chatsList.filter((c) => c.status !== 'archived');
+          let restoredChat: (typeof chatsList)[number] | undefined;
+          const lastChat = lastChatId ? visibleChats.find((c) => c.id === lastChatId) : undefined;
+          if (lastChat) {
+            restoredChat = lastChat;
+            useChatsStore.getState().setActiveChat(lastChat.id);
+            daemonClient.subscribe(lastChat.id);
+          } else if (visibleChats.length > 0) {
             // Fall back to most recently updated chat
-            const sorted = [...chatsList].sort(
+            const sorted = [...visibleChats].sort(
               (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
             );
-            const mostRecent = sorted[0]!;
-            useChatsStore.getState().setActiveChat(mostRecent.id);
-            useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
-            daemonClient.subscribe(mostRecent.id);
+            restoredChat = sorted[0]!;
+            useChatsStore.getState().setActiveChat(restoredChat.id);
+            useTabsStore.getState().openChatTab(restoredChat.id, restoredChat.title);
+            daemonClient.subscribe(restoredChat.id);
+          } else if (lastChatId) {
+            // No visible chats — clear the stale pointer so it doesn't
+            // resurface on a subsequent boot once data changes.
+            localStorage.removeItem('mf:activeChatId');
           }
-        } catch (err) {
-          log.warn('chat fetch failed', { err: String(err) });
+
+          // setActiveChat reconciles filterProjectId on its own: it clears the
+          // filter to null when the new active chat lives in a different project.
+        } else {
+          log.warn('chat fetch failed', { err: String(chatsResult.reason) });
         }
       } catch {
         setError('Failed to connect to daemon');

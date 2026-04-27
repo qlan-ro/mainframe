@@ -22,13 +22,17 @@ export function useChatSession(chatId: string | null) {
 
     // Always load messages from daemon — the store may have stale data from before
     // the WS subscription was dropped (e.g. user switched tabs/projects).
+    useChatsStore.getState().setLoadingChat(chatId, true);
     getChatMessages(chatId)
       .then((msgs) => {
         if (msgs.length > 0) {
           useChatsStore.getState().setMessages(chatId, msgs);
         }
       })
-      .catch((err) => log.warn('message fetch failed', { err: String(err) }));
+      .catch((err) => log.warn('message fetch failed', { err: String(err) }))
+      .finally(() => {
+        useChatsStore.getState().setLoadingChat(chatId, false);
+      });
 
     // Restore pending permission from daemon (survives desktop reloads)
     if (!useChatsStore.getState().pendingPermissions.has(chatId)) {
@@ -49,13 +53,17 @@ export function useChatSession(chatId: string | null) {
       if (daemonClient.connected) {
         daemonClient.resumeChat(chatId);
         reconnectTimer = setTimeout(() => {
+          useChatsStore.getState().setLoadingChat(chatId, true);
           getChatMessages(chatId)
             .then((msgs) => {
               if (msgs.length > 0) {
                 useChatsStore.getState().setMessages(chatId, msgs);
               }
             })
-            .catch((err) => log.warn('reconnect message fetch failed', { err: String(err) }));
+            .catch((err) => log.warn('reconnect message fetch failed', { err: String(err) }))
+            .finally(() => {
+              useChatsStore.getState().setLoadingChat(chatId, false);
+            });
           getPendingPermission(chatId)
             .then((permission) => {
               if (permission) {
@@ -71,6 +79,7 @@ export function useChatSession(chatId: string | null) {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (verifyPermissionTimerRef.current) clearTimeout(verifyPermissionTimerRef.current);
       unsubConnection();
+      daemonClient.unsubscribe(chatId);
     };
   }, [chatId]);
 

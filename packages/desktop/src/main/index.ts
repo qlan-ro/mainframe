@@ -12,6 +12,9 @@ if (process.env.NODE_ENV === 'development') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
 import { createMainLogger, logFromRenderer } from './logger.js';
+import { setupTerminalIPC, killAllTerminals } from './terminal-manager.js';
+import { initAutoUpdater } from './auto-updater.js';
+import { startIdleReporter, stopIdleReporter } from './idle-reporter.js';
 
 const log = createMainLogger('electron');
 
@@ -77,7 +80,7 @@ function resolveShellEnv(): Record<string, string> {
   return { PATH: additions.length ? `${additions.join(':')}:${fallback}` : fallback };
 }
 
-function startDaemon(): void {
+function startDaemon(shellEnv: Record<string, string>): void {
   if (process.env.NODE_ENV === 'development') {
     log.info('development mode: daemon assumed external');
     return;
@@ -89,7 +92,7 @@ function startDaemon(): void {
   log.info({ path: daemonPath }, 'daemon starting');
   daemon = utilityProcess.fork(daemonPath, [], {
     stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'production', ...resolveShellEnv() },
+    env: { ...process.env, NODE_ENV: 'production', ...shellEnv },
   });
 
   daemon.on('exit', (code) => {
@@ -216,6 +219,13 @@ function createWindow(): void {
     }
   });
 
+  // Capture renderer crashes (blank-screen bugs leave no other trace — the React
+  // ErrorBoundary only catches render errors, not process-level crashes like OOM
+  // or GPU-killed). Log the reason so we can diagnose recurring cases.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    log.error({ reason: details.reason, exitCode: details.exitCode }, 'renderer process gone');
+  });
+
   if (process.env.NODE_ENV !== 'development') {
     mainWindow.webContents.on('devtools-opened', () => {
       mainWindow?.webContents.closeDevTools();
@@ -247,14 +257,19 @@ app.whenReady().then(() => {
   };
   session.defaultSession.setPermissionRequestHandler(denyUnneededPermissions);
 
+  const shellEnv = resolveShellEnv();
   setupIPC();
-  startDaemon();
+  startDaemon(shellEnv);
+  setupTerminalIPC(shellEnv);
 
   if (process.env.NODE_ENV !== 'development') {
     setProductionMenu();
   }
 
   createWindow();
+  startIdleReporter();
+
+  if (mainWindow) initAutoUpdater(mainWindow);
 
   const configuredPartitions = new Set<string>();
   app.on('web-contents-created', (_event, contents) => {
@@ -305,6 +320,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('quit', () => {
+  stopIdleReporter();
+  killAllTerminals();
   if (daemon) {
     daemon.kill();
   }

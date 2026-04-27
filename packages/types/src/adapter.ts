@@ -30,8 +30,12 @@ export interface SessionOptions {
 
 export interface SessionSpawnOptions {
   model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
+  permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+  planMode?: boolean;
   executablePath?: string;
+  systemPrompt?: string;
+  /** Reasoning effort passed as --effort to the CLI. Only honored by adapters whose selected model supports it. */
+  effort?: import('./chat.js').ChatEffort;
 }
 
 export interface AdapterProcess {
@@ -99,6 +103,14 @@ export interface ContextUsage {
   maxTokens: number;
 }
 
+export interface DetectedPr {
+  url: string;
+  owner: string;
+  repo: string;
+  number: number;
+  source: 'created' | 'mentioned';
+}
+
 export interface SessionSink {
   onInit(sessionId: string): void;
   onMessage(content: import('./chat.js').MessageContent[], metadata?: MessageMetadata): void;
@@ -113,6 +125,12 @@ export interface SessionSink {
   onPlanFile(filePath: string): void;
   onSkillFile(entry: import('./context.js').SkillFileEntry): void;
   onQueuedProcessed(uuid: string): void;
+  onTodoUpdate(todos: import('./chat.js').TodoItem[]): void;
+  onPrDetected(pr: DetectedPr): void;
+  /** CLI-synthesized feedback text (e.g. unknown-command errors) shown as system messages. */
+  onCliMessage(text: string): void;
+  /** A skill was loaded via slash-command; show a collapsible skill card instead of raw text. */
+  onSkillLoaded(entry: { skillName: string; path: string; content: string }): void;
 }
 
 export interface AdapterSession {
@@ -130,6 +148,7 @@ export interface AdapterSession {
   interrupt(): Promise<void>;
   setModel(model: string): Promise<void>;
   setPermissionMode(mode: string): Promise<void>;
+  setPlanMode(on: boolean): Promise<void>;
   sendCommand(command: string, args?: string): Promise<void>;
   cancelQueuedMessage(uuid: string): Promise<boolean>;
 
@@ -146,12 +165,21 @@ export interface AdapterInfo {
   installed: boolean;
   version?: string;
   models: AdapterModel[];
+  capabilities: {
+    planMode: boolean;
+  };
 }
 
 export interface AdapterModel {
   id: string;
   label: string;
+  description?: string;
   contextWindow?: number;
+  supportsEffort?: boolean;
+  supportsFastMode?: boolean;
+  supportsAutoMode?: boolean;
+  /** Marks the provider default. When the user hasn't picked a specific model, this one is used. */
+  isDefault?: boolean;
 }
 
 export interface ExternalSession {
@@ -170,10 +198,14 @@ export interface ExternalSession {
 export interface Adapter {
   id: string;
   name: string;
+  readonly capabilities: {
+    planMode: boolean;
+  };
 
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
   listModels(): Promise<AdapterModel[]>;
+  probeModels?(): Promise<AdapterModel[] | null>;
 
   createSession(options: SessionOptions): AdapterSession;
   killAll(): void;
@@ -197,4 +229,13 @@ export interface Adapter {
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
   listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
+
+  /**
+   * Factory for an adapter-specific plan-mode action handler.
+   *
+   * Returns `unknown` here to avoid a core→types dependency cycle — core casts
+   * the result to `PlanModeActionHandler` (defined in
+   * `packages/core/src/chat/plan-mode-actions.ts`).
+   */
+  createPlanModeHandler?(): unknown;
 }

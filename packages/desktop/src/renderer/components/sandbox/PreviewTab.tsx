@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Trash2,
   RotateCw,
@@ -7,21 +7,23 @@ import {
   RefreshCw,
   Crosshair,
   Camera,
-  Minus,
   ChevronDown,
   ChevronUp,
   Smartphone,
+  Frame,
 } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
+import { RegionCaptureOverlay, type CaptureRect } from './RegionCaptureOverlay.js';
+import { CaptureAnnotationPopover } from './CaptureAnnotationPopover.js';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useSandboxStore } from '../../store/sandbox';
 import { useChatsStore } from '../../store/chats';
 import { useActiveProjectId, getActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useLaunchScopeKey } from '../../hooks/useLaunchScopeKey.js';
-import { useUIStore } from '../../store/ui';
 import { daemonClient } from '../../lib/client';
+import { getDefaultModelForAdapter } from '../../lib/adapters';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
+import { useZoneHeaderTabs } from '../zone/ZoneHeaderSlot.js';
 
 // CSS selector generator — injected into the webview page
 const GET_SELECTOR_FN = `
@@ -105,39 +107,59 @@ interface ElementPickResult {
   viewport: { width: number; height: number };
 }
 
+interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Converts a CSS-pixel crop rectangle to device pixels by multiplying by the zoom factor.
+ * capturePage() operates in device pixels; getBoundingClientRect() returns CSS pixels.
+ * At zoom != 1.0 (Cmd+/-), failing to scale causes an offset crop rectangle.
+ */
+export function scaleCropRect(rect: CropRect, zoom: number): CropRect {
+  return {
+    x: Math.round(rect.x * zoom),
+    y: Math.round(rect.y * zoom),
+    width: Math.round(rect.width * zoom),
+    height: Math.round(rect.height * zoom),
+  };
+}
+
 export function PreviewTab(): React.ReactElement {
   const webviewRef = useRef<HTMLElement>(null);
   const [inspecting, setInspecting] = useState(false);
+  const [capturingRegion, setCapturingRegion] = useState(false);
+  const [pendingCaptures, setPendingCaptures] = useState<
+    Array<{ id: string; rect: CaptureRect; dataUrl: string; annotation: string }>
+  >([]);
+  const [autoFocusId, setAutoFocusId] = useState<string | null>(null);
+  const webviewWrapperRef = useRef<HTMLDivElement>(null);
   const [mobileView, setMobileView] = useState(false);
   const addCapture = useSandboxStore((s) => s.addCapture);
   const logsOutput = useSandboxStore((s) => s.logsOutput);
   const clearLogsForProcess = useSandboxStore((s) => s.clearLogsForProcess);
   const setLastStartedProcess = useSandboxStore((s) => s.setLastStartedProcess);
   const scopeKey = useLaunchScopeKey();
-  const setPanelVisible = useUIStore((s) => s.setPanelVisible);
-
   const launchConfig = useLaunchConfig();
   const configs = launchConfig?.configurations ?? [];
 
-  // Selected process tab
-  const [selectedProcess, setSelectedProcess] = useState<string | null>(null);
+  // Selected process tab — single source of truth in sandbox store
+  const selectedConfigName = useSandboxStore((s) => s.selectedConfigName);
+  const setSelectedConfigName = useSandboxStore((s) => s.setSelectedConfigName);
 
-  // Switch to the tab when a process is started
-  const lastStartedProcess = useSandboxStore((s) => s.lastStartedProcess);
+  // Auto-select when configs load and nothing is selected yet
   useEffect(() => {
-    if (lastStartedProcess) {
-      setSelectedProcess(lastStartedProcess);
-      setLastStartedProcess(null); // Clear after switching
-    }
-  }, [lastStartedProcess, setLastStartedProcess]);
-
-  // Auto-select process when configs load and nothing is selected — prefer the preview config
-  useEffect(() => {
-    if (configs.length > 0 && !selectedProcess) {
+    if (configs.length > 0 && !selectedConfigName) {
       const preferred = configs.find((c) => c.preview) ?? configs[0]!;
-      setSelectedProcess(preferred.name);
+      setSelectedConfigName(preferred.name);
     }
-  }, [configs, selectedProcess]);
+  }, [configs, selectedConfigName, setSelectedConfigName]);
+
+  const selectedProcess = selectedConfigName;
+  const setSelectedProcess = setSelectedConfigName;
 
   // Selected tab's config — drives UI decisions (icons, log styling)
   const selectedProcessConfig = configs.find((c) => c.name === selectedProcess);
@@ -281,12 +303,59 @@ export function PreviewTab(): React.ReactElement {
 
       if (!useChatsStore.getState().activeChatId) {
         const projectId = getActiveProjectId();
-        if (projectId) daemonClient.createChat(projectId, 'claude');
+        if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
       }
     } catch (err) {
       console.warn('[sandbox] full screenshot failed', err);
     }
   }, [addCapture]);
+
+  const handleRegionCapture = useCallback(async (rect: CaptureRect) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wv = webviewRef.current as any;
+    if (!wv) return;
+    try {
+      const zoom: number = (wv.getZoomFactor?.() as number | undefined) ?? 1;
+      const cropRect = scaleCropRect(rect, zoom);
+      const image = (await wv.capturePage(cropRect)) as { toDataURL: () => string };
+      const dataUrl = image.toDataURL();
+      const id = `cap-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setPendingCaptures((prev) => [...prev, { id, rect, dataUrl, annotation: '' }]);
+      setAutoFocusId(id);
+    } catch (err) {
+      console.warn('[sandbox] region capture failed', err);
+    }
+  }, []);
+
+  const updateAnnotation = useCallback((id: string, next: string) => {
+    setPendingCaptures((prev) => prev.map((c) => (c.id === id ? { ...c, annotation: next } : c)));
+  }, []);
+
+  const removePendingCapture = useCallback((id: string) => {
+    setPendingCaptures((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const exitCaptureMode = useCallback(() => {
+    setCapturingRegion(false);
+    setPendingCaptures([]);
+    setAutoFocusId(null);
+  }, []);
+
+  const submitAllCaptures = useCallback(() => {
+    if (pendingCaptures.length === 0) return;
+    for (const c of pendingCaptures) {
+      addCapture({
+        type: 'screenshot',
+        imageDataUrl: c.dataUrl,
+        annotation: c.annotation.trim() || undefined,
+      });
+    }
+    if (!useChatsStore.getState().activeChatId) {
+      const projectId = getActiveProjectId();
+      if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+    }
+    exitCaptureMode();
+  }, [addCapture, pendingCaptures, exitCaptureMode]);
 
   const handleInspect = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -309,19 +378,18 @@ export function PreviewTab(): React.ReactElement {
       const right = Math.min(result.viewport.width, result.rect.x + result.rect.width + PAD);
       const bottom = Math.min(result.viewport.height, result.rect.y + result.rect.height + PAD);
 
-      const image = (await wv.capturePage({
-        x,
-        y,
-        width: Math.round(right - x),
-        height: Math.round(bottom - y),
-      })) as { toDataURL: () => string };
+      // getBoundingClientRect() returns CSS pixels, but capturePage() operates in device pixels.
+      // At non-1.0 zoom (Cmd+/Cmd-), we must scale the crop rect by the zoom factor to avoid offset captures.
+      const zoom: number = (wv.getZoomFactor?.() as number | undefined) ?? 1;
+      const cropRect = scaleCropRect({ x, y, width: right - x, height: bottom - y }, zoom);
+      const image = (await wv.capturePage(cropRect)) as { toDataURL: () => string };
       const dataUrl = image.toDataURL();
       addCapture({ type: 'element', imageDataUrl: dataUrl, selector: result.selector });
 
       // Auto-create a chat session if none is active so the composer appears
       if (!useChatsStore.getState().activeChatId) {
         const projectId = getActiveProjectId();
-        if (projectId) daemonClient.createChat(projectId, 'claude');
+        if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
       }
     } catch (err) {
       console.warn('[sandbox] inspect failed', err);
@@ -370,157 +438,144 @@ export function PreviewTab(): React.ReactElement {
 
   const isElectron = typeof window !== 'undefined' && 'mainframe' in window;
 
+  // Register process tabs with ZoneHeader
+  const processTabs = useMemo(() => configs.map((c) => ({ id: c.name, label: c.name })), [configs]);
+  const handleProcessTabChange = useCallback((tabId: string) => setSelectedProcess(tabId), []);
+  useZoneHeaderTabs(processTabs, selectedProcess, handleProcessTabChange);
+
   return (
-    <Tabs
-      data-testid="preview-tab"
-      value={selectedProcess ?? ''}
-      onValueChange={setSelectedProcess}
-      className="h-full flex flex-col"
-    >
-      {/* Header row: process tabs + actions */}
-      <div className="flex items-center justify-between shrink-0 border-b border-mf-divider">
-        <TabsList className="h-11 px-[10px] bg-transparent justify-start gap-1 shrink-0 rounded-none">
-          {configs.length === 0 ? (
-            <span className="text-mf-small text-mf-text-secondary">No processes running</span>
-          ) : (
-            configs.map((c) => (
-              <TabsTrigger key={c.name} value={c.name} className="text-mf-small">
-                {c.name}
-              </TabsTrigger>
-            ))
-          )}
-        </TabsList>
-        <div className="flex items-center pr-2">
-          {/* Process controls: play (stopped) or restart+stop (running) */}
-          {selectedProcess &&
-            (isSelectedRunning ? (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => void handleRestart()}
-                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                    >
-                      <RotateCw size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Restart</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => void handleStop()}
-                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-red-400 transition-colors"
-                    >
-                      <Square size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Stop</TooltipContent>
-                </Tooltip>
-              </>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => void handleStart()}
-                    className="p-1.5 rounded hover:bg-mf-hover text-mf-accent transition-colors"
-                  >
-                    <Play size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Start</TooltipContent>
-              </Tooltip>
-            ))}
-          {selectedProcess && <div className="w-px h-3.5 bg-mf-border mx-0.5" />}
-          {/* Preview controls: reload, inspect, screenshot */}
-          {hasPreview && (
+    <div data-testid="preview-tab" className="h-full flex flex-col">
+      {/* Action bar — process controls + preview tools */}
+      <div className="flex items-center h-7 px-2 shrink-0 border-b border-mf-divider gap-0.5">
+        {selectedProcess &&
+          (isSelectedRunning ? (
             <>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={handleReload}
-                    className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                    onClick={() => void handleRestart()}
+                    className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                   >
-                    <RefreshCw size={14} />
+                    <RotateCw size={13} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Reload</TooltipContent>
+                <TooltipContent side="bottom">Restart</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={() => void handleInspect()}
-                    className={[
-                      'p-1.5 rounded transition-colors',
-                      inspecting
-                        ? 'bg-mf-hover text-mf-accent'
-                        : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-                    ].join(' ')}
+                    onClick={() => void handleStop()}
+                    className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-red-400 transition-colors"
                   >
-                    <Crosshair size={14} />
+                    <Square size={13} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Pick element</TooltipContent>
+                <TooltipContent side="bottom">Stop</TooltipContent>
               </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => void handleFullScreenshot()}
-                    className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                  >
-                    <Camera size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Screenshot</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setMobileView((v) => !v)}
-                    className={[
-                      'p-1.5 rounded transition-colors',
-                      mobileView
-                        ? 'bg-mf-hover text-mf-accent'
-                        : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
-                    ].join(' ')}
-                  >
-                    <Smartphone size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Mobile view (390x844)</TooltipContent>
-              </Tooltip>
-              {isElectron && activeProjectId && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => {
-                        window.mainframe.clearSandboxSession(activeProjectId).then(() => handleReload());
-                      }}
-                      className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Clear cookies & session data</TooltipContent>
-                </Tooltip>
-              )}
-              <div className="w-px h-3.5 bg-mf-border mx-0.5" />
             </>
-          )}
-          {/* Window controls: minimize */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setPanelVisible(false)}
-                aria-label="Minimize"
-                className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
-              >
-                <Minus size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Minimize</TooltipContent>
-          </Tooltip>
-        </div>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => void handleStart()}
+                  className="p-1 rounded hover:bg-mf-hover text-mf-accent transition-colors"
+                >
+                  <Play size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Start</TooltipContent>
+            </Tooltip>
+          ))}
+        {hasPreview && (
+          <>
+            {selectedProcess && <div className="w-px h-3.5 bg-mf-border mx-0.5" />}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleReload}
+                  className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                >
+                  <RefreshCw size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Reload</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => void handleInspect()}
+                  className={[
+                    'p-1 rounded transition-colors',
+                    inspecting
+                      ? 'bg-mf-hover text-mf-accent'
+                      : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                  ].join(' ')}
+                >
+                  <Crosshair size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Pick element</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => void handleFullScreenshot()}
+                  className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                >
+                  <Camera size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Screenshot</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => (capturingRegion ? exitCaptureMode() : setCapturingRegion(true))}
+                  className={[
+                    'p-1 rounded transition-colors',
+                    capturingRegion
+                      ? 'bg-mf-hover text-mf-accent'
+                      : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                  ].join(' ')}
+                >
+                  <Frame size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Region capture</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setMobileView((v) => !v)}
+                  className={[
+                    'p-1 rounded transition-colors',
+                    mobileView
+                      ? 'bg-mf-hover text-mf-accent'
+                      : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                  ].join(' ')}
+                >
+                  <Smartphone size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Mobile view (390x844)</TooltipContent>
+            </Tooltip>
+            {isElectron && activeProjectId && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => {
+                      window.mainframe.clearSandboxSession(activeProjectId).then(() => handleReload());
+                    }}
+                    className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Clear cookies & session data</TooltipContent>
+              </Tooltip>
+            )}
+          </>
+        )}
       </div>
 
       {configs.length === 0 ? (
@@ -535,6 +590,7 @@ export function PreviewTab(): React.ReactElement {
                when display:none, breaking loadURL and did-finish-load events. */}
           {previewConfig ? (
             <div
+              ref={webviewWrapperRef}
               className={
                 hasPreview ? 'flex-1 overflow-hidden min-h-0 relative mx-2 my-2 flex items-start justify-center' : ''
               }
@@ -581,6 +637,31 @@ export function PreviewTab(): React.ReactElement {
                     </span>
                   )}
                 </div>
+              )}
+              {/* Region capture overlay + per-capture annotation popovers */}
+              {capturingRegion && webviewReady && (
+                <>
+                  <RegionCaptureOverlay
+                    captured={pendingCaptures.map((c) => ({ id: c.id, rect: c.rect }))}
+                    onCapture={(rect) => {
+                      void handleRegionCapture(rect);
+                    }}
+                    onSubmitAll={submitAllCaptures}
+                    onCancel={exitCaptureMode}
+                  />
+                  {pendingCaptures.map((c, idx) => (
+                    <CaptureAnnotationPopover
+                      key={c.id}
+                      anchorRect={c.rect}
+                      containerRef={webviewWrapperRef}
+                      index={idx + 1}
+                      value={c.annotation}
+                      autoFocus={autoFocusId === c.id}
+                      onChange={(next) => updateAnnotation(c.id, next)}
+                      onRemove={() => removePendingCapture(c.id)}
+                    />
+                  ))}
+                </>
               )}
             </div>
           ) : null}
@@ -653,6 +734,6 @@ export function PreviewTab(): React.ReactElement {
           </div>
         </>
       )}
-    </Tabs>
+    </div>
   );
 }

@@ -5,6 +5,7 @@ import { PermissionBridge } from './permission-bridge.js';
 import { getContextFilesForProject } from './context.js';
 import { convertSessionMessages } from './history.js';
 import { createChildLogger } from '../../../logger.js';
+import { MAINFRAME_SYSTEM_PROMPT_APPEND } from '../claude/constants.js';
 import type {
   AdapterProcess,
   AdapterSession,
@@ -95,6 +96,9 @@ export class ClaudeSdkSession implements AdapterSession {
       permissionMode: toSdkPermissionMode(this.spawnOptions.permissionMode),
       // Route all permission checks through our canUseTool bridge instead of SDK's built-in prompts
       allowDangerouslySkipPermissions: true,
+      ...(this.spawnOptions.systemPrompt === 'enabled' && {
+        appendSystemPrompt: MAINFRAME_SYSTEM_PROMPT_APPEND,
+      }),
       env: {
         ...process.env,
         FORCE_COLOR: '0',
@@ -197,6 +201,12 @@ export class ClaudeSdkSession implements AdapterSession {
   async setPermissionMode(mode: string): Promise<void> {
     if (this.queryHandle) {
       await this.queryHandle.setPermissionMode(toSdkPermissionMode(mode));
+    }
+  }
+
+  async setPlanMode(on: boolean): Promise<void> {
+    if (this.queryHandle) {
+      await this.queryHandle.setPermissionMode(on ? 'plan' : toSdkPermissionMode(this.spawnOptions.permissionMode));
     }
   }
 

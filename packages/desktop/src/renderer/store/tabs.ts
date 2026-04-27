@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { getEditorViewStateForNav, getCursorPositionForNav } from '../components/editor/editor-state';
-import { useUIStore } from './ui';
 import { useChatsStore } from './chats';
 
 export type ChatTab = { type: 'chat'; id: string; chatId: string; label: string };
@@ -76,6 +75,7 @@ interface NavEntry {
   cursorLine?: number;
   cursorColumn?: number;
 }
+const MAX_NAV_STACK = 100;
 const navBackStack: NavEntry[] = [];
 const navForwardStack: NavEntry[] = [];
 
@@ -91,13 +91,6 @@ function currentEditorNavEntry(fv: FileView & { type: 'editor' }): NavEntry {
     cursorLine: cursor?.line,
     cursorColumn: cursor?.column,
   };
-}
-
-function expandRightPanel(): void {
-  const ui = useUIStore.getState();
-  if (ui.panelCollapsed.right) {
-    ui.togglePanel('right');
-  }
 }
 
 export const useTabsStore = create<TabsState>((set, get) => ({
@@ -153,22 +146,23 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       const current = get().fileView;
       if (current?.type === 'editor') {
         navBackStack.push(currentEditorNavEntry(current));
+        if (navBackStack.length > MAX_NAV_STACK) navBackStack.splice(0, navBackStack.length - MAX_NAV_STACK);
         navForwardStack.length = 0;
       }
     }
-    expandRightPanel();
+
     set({ fileView: { type: 'editor', filePath, label, content, line, column }, fileViewCollapsed: false });
   },
 
   openDiffTab: (filePath, source, chatId, oldPath, base) => {
     const label = `${filePath.split('/').pop() || filePath} (diff)`;
-    expandRightPanel();
+
     set({ fileView: { type: 'diff', filePath, label, source, chatId, oldPath, base }, fileViewCollapsed: false });
   },
 
   openInlineDiffTab: (filePath, original, modified, startLine) => {
     const label = `${filePath.split('/').pop() || filePath} (diff)`;
-    expandRightPanel();
+
     set({
       fileView: { type: 'diff', filePath, label, source: 'inline', original, modified, startLine },
       fileViewCollapsed: false,
@@ -176,7 +170,6 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   },
 
   openSkillEditorTab: (skillId, adapterId, label) => {
-    expandRightPanel();
     set({ fileView: { type: 'skill-editor', skillId, adapterId, label }, fileViewCollapsed: false });
   },
 
@@ -195,6 +188,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     const current = get().fileView;
     if (current?.type === 'editor') {
       navForwardStack.push(currentEditorNavEntry(current));
+      if (navForwardStack.length > MAX_NAV_STACK) navForwardStack.splice(0, navForwardStack.length - MAX_NAV_STACK);
     }
     const label = entry.filePath.split('/').pop() || entry.filePath;
     set({
@@ -218,6 +212,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     const current = get().fileView;
     if (current?.type === 'editor') {
       navBackStack.push(currentEditorNavEntry(current));
+      if (navBackStack.length > MAX_NAV_STACK) navBackStack.splice(0, navBackStack.length - MAX_NAV_STACK);
     }
     const label = entry.filePath.split('/').pop() || entry.filePath;
     set({

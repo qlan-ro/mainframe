@@ -1,4 +1,4 @@
-import type { Project, Chat, DisplayMessage, AdapterInfo } from '@qlan-ro/mainframe-types';
+import type { Project, Chat, ChatEffort, DisplayMessage, AdapterInfo } from '@qlan-ro/mainframe-types';
 import { postJson, deleteRequest, API_BASE } from './http';
 import { createLogger } from '../logger';
 
@@ -52,10 +52,34 @@ export async function renameChat(chatId: string, title: string): Promise<void> {
   });
 }
 
+export async function pinChat(chatId: string, pinned: boolean): Promise<void> {
+  log.info('pinChat', { chatId, pinned });
+  await fetch(`${API_BASE}/api/chats/${chatId}/pinned`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pinned }),
+  });
+}
+
+export async function setChatEffort(chatId: string, effort: ChatEffort | null): Promise<void> {
+  log.info('setChatEffort', { chatId, effort });
+  const res = await fetch(`${API_BASE}/api/chats/${chatId}/effort`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ effort }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
 export async function archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
   log.info('archiveChat', { chatId, deleteWorktree });
   const params = deleteWorktree ? '' : '?deleteWorktree=false';
   await postJson(`${API_BASE}/api/chats/${chatId}/archive${params}`);
+}
+
+export async function unarchiveChat(chatId: string): Promise<void> {
+  log.info('unarchiveChat', { chatId });
+  await postJson(`${API_BASE}/api/chats/${chatId}/unarchive`);
 }
 
 export async function getChatMessages(chatId: string): Promise<DisplayMessage[]> {

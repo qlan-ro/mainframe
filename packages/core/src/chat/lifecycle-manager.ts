@@ -11,6 +11,7 @@ const execFileAsync = promisify(execFileCb);
 import { createChildLogger } from '../logger.js';
 import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
+import { extractPrFromToolResult, PR_CREATE_COMMANDS } from '../plugins/builtin/claude/events.js';
 import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
@@ -25,7 +26,11 @@ export interface LifecycleManagerDeps {
   messages: MessageCache;
   permissions: PermissionManager;
   emitEvent: (event: DaemonEvent) => void;
-  buildSink: (chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>) => SessionSink;
+  buildSink: (
+    chatId: string,
+    sessionId: string,
+    respondToPermission: (response: ControlResponse) => Promise<void>,
+  ) => SessionSink;
   /** Stop launch processes for a project+path pair (e.g. before worktree removal) */
   stopLaunchProcesses?: (projectId: string, projectPath: string) => Promise<void>;
 }
@@ -51,9 +56,21 @@ export class ChatLifecycleManager {
     return this.loadingChats;
   }
 
-  async createChat(projectId: string, adapterId: string, model?: string, permissionMode?: string): Promise<Chat> {
+  async createChat(
+    projectId: string,
+    adapterId: string,
+    model?: string,
+    permissionMode?: string,
+    worktreePath?: string,
+    branchName?: string,
+  ): Promise<Chat> {
     const chat = this.deps.db.chats.create(projectId, adapterId, model, permissionMode);
-    log.info({ chatId: chat.id, projectId, adapterId }, 'chat created');
+    if (worktreePath && branchName) {
+      this.deps.db.chats.update(chat.id, { worktreePath, branchName });
+      chat.worktreePath = worktreePath;
+      chat.branchName = branchName;
+    }
+    log.info({ chatId: chat.id, projectId, adapterId, worktreePath }, 'chat created');
     this.deps.activeChats.set(chat.id, { chat, session: null });
     this.deps.emitEvent({ type: 'chat.created', chat });
     return chat;
@@ -64,19 +81,30 @@ export class ChatLifecycleManager {
     adapterId: string,
     model?: string,
     permissionMode?: string,
+    worktreePath?: string,
+    branchName?: string,
   ): Promise<Chat> {
     let effectiveModel = model;
     let effectiveMode = permissionMode;
+    let effectivePlanMode = false;
 
-    if (!effectiveModel || !effectiveMode) {
+    if (!effectiveModel || !effectiveMode || !effectivePlanMode) {
       const defaultModel = this.deps.db.settings.get('provider', `${adapterId}.defaultModel`);
       const defaultMode = this.deps.db.settings.get('provider', `${adapterId}.defaultMode`);
+      const defaultPlanMode = this.deps.db.settings.get('provider', `${adapterId}.defaultPlanMode`);
 
       if (!effectiveModel && defaultModel) effectiveModel = defaultModel;
       if (!effectiveMode && defaultMode) effectiveMode = defaultMode;
+      if (defaultPlanMode === 'true') effectivePlanMode = true;
     }
 
-    return this.createChat(projectId, adapterId, effectiveModel, effectiveMode);
+    const chat = await this.createChat(projectId, adapterId, effectiveModel, effectiveMode, worktreePath, branchName);
+    if (effectivePlanMode) {
+      chat.planMode = true;
+      this.deps.db.chats.update(chat.id, { planMode: true });
+    }
+
+    return chat;
   }
 
   async resumeChat(chatId: string): Promise<void> {
@@ -96,6 +124,12 @@ export class ChatLifecycleManager {
     // Always push current state to the just-(re)subscribed client so it can
     // recover displayStatus/isRunning after a project switch.
     this.deps.emitEvent({ type: 'chat.updated', chat });
+
+    // Restore todo checklist state for the UI
+    const todos = chat.todos;
+    if (todos) {
+      this.deps.emitEvent({ type: 'todos.updated', chatId, todos });
+    }
   }
 
   async loadChat(chatId: string): Promise<void> {
@@ -322,6 +356,41 @@ export class ChatLifecycleManager {
             extractMentionsFromText(chatId, text, this.deps.db);
           }
         }
+
+        // Scan history for PR URLs with command-level correlation.
+        // Walk messages in order: assistant tool_use blocks identify PR-create
+        // commands; subsequent tool_result blocks with PR URLs are classified.
+        const seenPrs = new Set<string>();
+        const pendingCreates = new Set<string>();
+        for (const msg of cached) {
+          if (msg.type === 'assistant') {
+            for (const block of msg.content) {
+              if (block.type === 'tool_use') {
+                const name = (block as Record<string, unknown>).name as string | undefined;
+                if (name === 'Bash' || name === 'BashTool') {
+                  const input = (block as Record<string, unknown>).input as { command?: string } | undefined;
+                  if (input?.command && PR_CREATE_COMMANDS.some((re) => re.test(input.command!))) {
+                    pendingCreates.add((block as Record<string, unknown>).id as string);
+                  }
+                }
+              }
+            }
+          }
+          if (msg.type !== 'tool_result') continue;
+          for (const block of msg.content) {
+            if (block.type !== 'tool_result') continue;
+            const text = typeof block.content === 'string' ? block.content : '';
+            const pr = extractPrFromToolResult(text);
+            if (!pr) continue;
+            const key = `${pr.owner}/${pr.repo}/${pr.number}`;
+            if (seenPrs.has(key)) continue;
+            seenPrs.add(key);
+            const toolUseId = (block as Record<string, unknown>).toolUseId as string | undefined;
+            const source = toolUseId && pendingCreates.has(toolUseId) ? ('created' as const) : ('mentioned' as const);
+            if (source === 'created') pendingCreates.delete(toolUseId!);
+            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr: { ...pr, source } });
+          }
+        }
       }
 
       try {
@@ -363,11 +432,19 @@ export class ChatLifecycleManager {
     });
     active.session = session;
 
-    const sink = this.deps.buildSink(chatId, (response) => session.respondToPermission(response));
+    const sink = this.deps.buildSink(chatId, session.id, (response) => session.respondToPermission(response));
 
     const executablePath = this.deps.db.settings.get('provider', `${chat.adapterId}.executablePath`) ?? undefined;
+    const systemPrompt = this.deps.db.settings.get('provider', `${chat.adapterId}.systemPrompt`) ?? undefined;
     const processInfo = await session.spawn(
-      { model: chat.model, permissionMode: chat.permissionMode, executablePath },
+      {
+        model: chat.model,
+        permissionMode: chat.permissionMode,
+        planMode: chat.planMode ?? false,
+        executablePath,
+        systemPrompt,
+        effort: chat.effort,
+      },
       sink,
     );
     log.info({ chatId }, 'chat session started');

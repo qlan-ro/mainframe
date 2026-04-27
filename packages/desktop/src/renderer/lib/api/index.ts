@@ -8,6 +8,9 @@ export {
   getAllChats,
   renameChat,
   archiveChat,
+  unarchiveChat,
+  pinChat,
+  setChatEffort,
   getChatMessages,
   getAdapters,
 } from './projects-api';
@@ -17,9 +20,10 @@ export {
   getFilesList,
   searchFiles,
   getFileContent,
+  getExternalFileContent,
   getFileBinary,
   getPendingPermission,
-  getSessionDiffs,
+  getSessionFiles,
   getSessionContext,
   getSessionFile,
   addMention,
@@ -27,8 +31,6 @@ export {
   saveFileContent,
   searchContent,
 } from './files-api';
-
-export type { SessionFileDiff } from './files-api';
 
 export {
   getGitBranch,
@@ -94,4 +96,5 @@ export {
   forkToWorktree,
   getWorktrees as getProjectWorktrees,
   attachWorktree,
+  deleteWorktree,
 } from './worktree-api';

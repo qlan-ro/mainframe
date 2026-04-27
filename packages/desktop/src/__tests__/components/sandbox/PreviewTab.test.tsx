@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { PreviewTab } from '../../../renderer/components/sandbox/PreviewTab';
-import { useUIStore } from '../../../renderer/store/ui';
+import { PreviewTab, scaleCropRect } from '../../../renderer/components/sandbox/PreviewTab';
 import { useSandboxStore } from '../../../renderer/store/sandbox';
 import { useChatsStore } from '../../../renderer/store/chats';
 import { TooltipProvider } from '../../../renderer/components/ui/tooltip.js';
@@ -16,17 +14,32 @@ vi.mock('../../../renderer/hooks/useActiveProjectId.js', () => ({
   getActiveProjectId: vi.fn(() => 'proj-1'),
 }));
 
+describe('scaleCropRect', () => {
+  it('returns identical values at zoom 1.0', () => {
+    const rect = { x: 100, y: 200, width: 300, height: 150 };
+    expect(scaleCropRect(rect, 1.0)).toEqual({ x: 100, y: 200, width: 300, height: 150 });
+  });
+
+  it('scales up correctly at zoom 1.25', () => {
+    const rect = { x: 10, y: 20, width: 100, height: 50 };
+    expect(scaleCropRect(rect, 1.25)).toEqual({ x: 13, y: 25, width: 125, height: 63 });
+  });
+
+  it('scales down correctly at zoom 0.8', () => {
+    const rect = { x: 100, y: 200, width: 400, height: 200 };
+    expect(scaleCropRect(rect, 0.8)).toEqual({ x: 80, y: 160, width: 320, height: 160 });
+  });
+
+  it('rounds fractional device pixels', () => {
+    const rect = { x: 1, y: 1, width: 3, height: 3 };
+    // 1 * 1.5 = 1.5 → 2, 3 * 1.5 = 4.5 → 5
+    expect(scaleCropRect(rect, 1.5)).toEqual({ x: 2, y: 2, width: 5, height: 5 });
+  });
+});
+
 describe('PreviewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset stores to default state
-    useUIStore.setState({
-      panelSizes: { left: 240, right: 280, bottom: 200 },
-      panelCollapsed: { left: false, right: false, bottom: true },
-      panelVisible: false,
-      leftPanelTab: 'chats',
-      rightPanelTab: 'diff',
-    });
     useSandboxStore.setState({
       processStatuses: {},
       logsOutput: [],
@@ -37,23 +50,12 @@ describe('PreviewTab', () => {
     });
   });
 
-  it('minimize button calls setPanelVisible(false)', async () => {
-    const user = userEvent.setup();
+  it('renders the preview tab', () => {
     render(
       <TooltipProvider>
         <PreviewTab />
       </TooltipProvider>,
     );
-
-    // Find the minimize button by its aria-label
-    const minimizeButton = screen.getByRole('button', { name: 'Minimize' });
-    expect(minimizeButton).toBeInTheDocument();
-
-    // Click the minimize button
-    await user.click(minimizeButton);
-
-    // Verify that panelVisible was updated to false in the store
-    const state = useUIStore.getState();
-    expect(state.panelVisible).toBe(false);
+    expect(screen.getByTestId('preview-tab')).toBeInTheDocument();
   });
 });

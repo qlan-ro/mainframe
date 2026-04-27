@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { ClipboardList, ShieldOff, FileEdit, Shield, ChevronDown } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { urlTransform, remarkAppLinks } from '../../lib/markdown-url-transform';
 import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
 import { Button } from '../ui/button';
 
@@ -74,7 +75,9 @@ export function PlanApprovalCard({ request, onRespond }: PlanApprovalCardProps):
         {plan && (
           <div className="max-h-[300px] overflow-y-auto rounded-mf-input bg-mf-input-bg p-3">
             <div className="aui-md text-mf-chat text-mf-text-primary">
-              <Markdown remarkPlugins={[remarkGfm]}>{plan}</Markdown>
+              <Markdown remarkPlugins={[remarkGfm, remarkAppLinks]} urlTransform={urlTransform}>
+                {plan}
+              </Markdown>
             </div>
           </div>
         )}

@@ -488,6 +488,18 @@ ctx.router.get('/ui', (_req, res) => {
 });
 ```
 
+### Builtin UI rendering (current state)
+
+Per the [2026-02-22 plugin design](./plans/completed/2026-02-22-plugin-system-design.md), builtin plugins colocate their React components inside the desktop package (e.g. `QuickTodoDialog` for the `todos` plugin), and the desktop shell renders them from a hardcoded map — `BUILTIN_GLOBAL_COMPONENTS` in `packages/desktop/src/renderer/components/plugins/PluginGlobalComponents.tsx`. This is deliberate: external plugin packaging and loading are not implemented yet, so there is nowhere else for that UI to live.
+
+The backend already emits the events that a future loader would consume:
+
+- `plugin.panel.registered` / `plugin.panel.unregistered` — emitted by `ctx.ui.addPanel` / `removePanel`
+- `plugin.action.registered` / `plugin.action.unregistered` — emitted by `ctx.ui.addAction` / `removeAction`
+- `plugin.notification` — emitted by `ctx.ui.notify`
+
+Once a plugin-packaging / external-plugin loading mechanism lands, the renderer will subscribe to those events and mount any plugin's UI dynamically (same `ctx.ui.*` API, just sourced from a real plugin bundle instead of a hardcoded map). Until then, adding UI for a new builtin plugin means editing `BUILTIN_GLOBAL_COMPONENTS` — and that's the expected seam, not a bug.
+
 ---
 
 ## Event Bus
