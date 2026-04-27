@@ -267,3 +267,26 @@ control_response (stdin)
 | Permission route | `Rc(update)` — routes by `update.type` after destination check (v2.1.83) |
 | Destination check | `e_8(dest)` — returns `true` for persistent destinations (v2.1.83) |
 | Settings write | `f8(dest, settings)` — writes settings JSON to disk (v2.1.83) |
+
+## Tools Added Post-Leak (verified in v2.1.118 binary)
+
+The 2026-03-31 source leak does NOT include all tools shipping in current
+binaries. Examples confirmed via binary string-extraction in v2.1.118:
+
+### `ScheduleWakeup` (powers `/loop` dynamic mode)
+
+- **Tool name constant**: `SCHEDULE_WAKEUP_TOOL_NAME = "ScheduleWakeup"` (mangled `Xj`)
+- **Tool class**: `ScheduleWakeupTool` (mangled `vA5`, exported from module `H27`)
+- **Constants module** exports: `SCHEDULE_WAKEUP_TOOL_NAME`, `PROMPT`, `DESCRIPTION`, `AUTONOMOUS_LOOP_SENTINEL`, `AUTONOMOUS_LOOP_DYNAMIC_SENTINEL`
+- **Schema** (Zod `strictObject`):
+  - `delaySeconds: z.number().describe("Seconds from now to wake up. Clamped to [60, 3600] by the runtime.")`
+  - `reason: z.string().describe("One short sentence explaining the chosen delay. Goes to telemetry and is shown to the user. Be specific.")`
+  - `prompt: z.string().describe("The /loop input to fire on wake-up...")`
+- **Sentinels**:
+  - `<<autonomous-loop>>` — for CronCreate-based autonomous loops
+  - `<<autonomous-loop-dynamic>>` — for ScheduleWakeup-based dynamic loops
+- **Registration**: in default toolset alongside `CronCreateTool`/`CronDeleteTool`/`CronListTool`/`RemoteTriggerTool`/`MonitorTool`/`PushNotificationTool`
+
+**Lesson**: when a tool is missing from the leaked source but appears in
+sessions, search the installed binary (`~/.local/share/claude/versions/<v>`)
+with Python `re.finditer` before assuming it's harness-injected.
