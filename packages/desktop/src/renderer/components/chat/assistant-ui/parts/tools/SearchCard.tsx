@@ -1,8 +1,7 @@
 import { Search } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
-import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { ErrorDot, stripErrorXml } from './shared';
+import { StatusDot, stripErrorXml } from './shared';
 
 export function SearchCard({
   toolName,
@@ -16,28 +15,32 @@ export function SearchCard({
   isError: boolean | undefined;
 }) {
   const pattern = (args.pattern as string) || (args.glob as string) || '';
+  const path = args.path ? String(args.path) : '';
   const rawResultText =
     typeof result === 'string' ? result : result !== undefined ? JSON.stringify(result, null, 2) : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
 
+  const subHeaderText = pattern ? `"${pattern}"${path ? ` · in ${path}` : ''}` : undefined;
+
   return (
     <CollapsibleToolCard
       variant="compact"
+      wrapperClassName="border border-mf-divider rounded-mf-card overflow-hidden"
+      hideToggle
       header={
         <>
           <Search size={15} className="text-mf-text-secondary/40 shrink-0" />
           <span className="text-mf-body text-mf-text-secondary/60">{toolName}</span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="font-mono text-mf-small text-mf-text-secondary/60 truncate" tabIndex={0}>
-                {pattern}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{pattern}</TooltipContent>
-          </Tooltip>
         </>
       }
-      statusDot={<ErrorDot isError={isError} />}
+      trailing={<StatusDot result={result} isError={isError} />}
+      subHeader={
+        subHeaderText ? (
+          <div className="px-3 pb-0.5">
+            <span className="font-mono text-mf-small text-mf-text-secondary/60 truncate block">{subHeaderText}</span>
+          </div>
+        ) : undefined
+      }
     >
       {resultText && (
         <div className="border-t border-mf-divider/50 ml-5">
