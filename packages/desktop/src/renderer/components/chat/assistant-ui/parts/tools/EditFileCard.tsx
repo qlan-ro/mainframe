@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink, Pencil } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { useTabsStore } from '../../../../../store/tabs';
 import { FileTypeIcon } from '../FileTypeIcon';
@@ -54,8 +54,8 @@ export function EditFileCard({ args, result, isError }: ToolCardProps) {
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
-          <Pencil size={15} className="text-mf-text-secondary shrink-0" />
           <FileTypeIcon filePath={filePath} />
+          <span className="text-mf-body text-mf-text-secondary/60">Edit</span>
           <ClickableFilePath filePath={filePath} />
         </>
       }

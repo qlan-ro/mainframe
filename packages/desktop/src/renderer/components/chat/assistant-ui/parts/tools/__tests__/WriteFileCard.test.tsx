@@ -6,8 +6,8 @@ import { WriteFileCard } from '../WriteFileCard.js';
 const wrap = (ui: React.ReactNode) => <TooltipProvider>{ui}</TooltipProvider>;
 
 describe('WriteFileCard (U3 unified)', () => {
-  it('renders both Pencil action icon and FileTypeIcon', () => {
-    const { container } = render(
+  it('renders FileTypeIcon and "Write" label (no Pencil action icon)', () => {
+    const { container, getByText } = render(
       wrap(
         <WriteFileCard
           args={{ file_path: '/x/y/foo.ts', content: 'hello\nworld' }}
@@ -16,7 +16,8 @@ describe('WriteFileCard (U3 unified)', () => {
         />,
       ),
     );
-    expect(container.querySelector('svg.lucide-pencil, svg[class*="pencil"]')).toBeTruthy();
+    expect(container.querySelector('svg.lucide-pencil, svg[class*="pencil"]')).toBeNull();
+    expect(getByText('Write')).toBeTruthy();
   });
 
   it('does not render Maximize2 toggle icon', () => {

@@ -1,5 +1,5 @@
-import { FileText } from 'lucide-react';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
+import { FileTypeIcon } from '../FileTypeIcon';
 import { ClickableFilePath, StatusDot, stripErrorXml, type ToolCardProps } from './shared';
 
 export function ReadFileCard({ args, result, isError }: ToolCardProps) {
@@ -14,7 +14,7 @@ export function ReadFileCard({ args, result, isError }: ToolCardProps) {
       hideToggle
       header={
         <>
-          <FileText size={15} className="text-mf-text-secondary/40 shrink-0" />
+          <FileTypeIcon filePath={filePath} />
           <span className="text-mf-body text-mf-text-secondary/60">Read</span>
           <ClickableFilePath filePath={filePath} />
         </>

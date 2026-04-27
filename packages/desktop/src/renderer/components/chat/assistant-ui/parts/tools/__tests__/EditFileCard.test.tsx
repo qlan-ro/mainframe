@@ -6,8 +6,8 @@ import { EditFileCard } from '../EditFileCard.js';
 const wrap = (ui: React.ReactNode) => <TooltipProvider>{ui}</TooltipProvider>;
 
 describe('EditFileCard (U2 unified)', () => {
-  it('renders both Pencil action icon and FileTypeIcon', () => {
-    const { container } = render(
+  it('renders FileTypeIcon and "Edit" label (no Pencil action icon)', () => {
+    const { container, getByText } = render(
       wrap(
         <EditFileCard
           args={{ file_path: '/x/y/foo.ts', old_string: 'a', new_string: 'b' }}
@@ -16,7 +16,8 @@ describe('EditFileCard (U2 unified)', () => {
         />,
       ),
     );
-    expect(container.querySelector('svg.lucide-pencil, svg[class*="pencil"]')).toBeTruthy();
+    expect(container.querySelector('svg.lucide-pencil, svg[class*="pencil"]')).toBeNull();
+    expect(getByText('Edit')).toBeTruthy();
   });
 
   it('does not render Maximize2 toggle icon', () => {
