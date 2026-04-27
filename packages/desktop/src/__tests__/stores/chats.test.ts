@@ -382,76 +382,54 @@ describe('useChatsStore', () => {
   });
 
   describe('filterProjectId / activeChatId boot-time reconciliation', () => {
-    // Simulates the sequence executed by useAppInit.loadData() on startup.
-    // The fix ensures that when the restored active chat belongs to a different
-    // project than the persisted filterProjectId, the filter is updated to match
-    // the active chat so the badge and the chat list stay in sync.
+    // setActiveChat clears filterProjectId to null when the new active chat
+    // lives in a different project than the persisted filter. This keeps the
+    // sidebar badge from pointing at a project the user is no longer viewing
+    // and avoids yanking the filter to an unrelated project the user did not
+    // explicitly choose.
 
-    function simulateBoot(chats: Chat[], activeChatId: string, initialFilterProjectId: string | null): void {
-      useChatsStore.setState({ filterProjectId: initialFilterProjectId });
-      useChatsStore.getState().setChats(chats);
-      useChatsStore.getState().setActiveChat(activeChatId);
-
-      // Reconciliation logic (mirrors useAppInit loadData)
-      const restoredChat = chats.find((c) => c.id === activeChatId);
-      if (restoredChat) {
-        const { filterProjectId, setFilterProjectId } = useChatsStore.getState();
-        if (filterProjectId !== null && filterProjectId !== restoredChat.projectId) {
-          setFilterProjectId(restoredChat.projectId);
-        }
-      }
-    }
-
-    it('updates filterProjectId when it disagrees with the restored active chat project', () => {
+    it('clears filterProjectId when restored active chat is in a different project', () => {
       const chatA = makeChat({ id: 'chat-a', projectId: 'proj-a' });
       const chatB = makeChat({ id: 'chat-b', projectId: 'proj-b' });
+      useChatsStore.setState({ filterProjectId: 'proj-a' });
+      useChatsStore.getState().setChats([chatA, chatB]);
 
-      // User had proj-a filtered, but last active chat is in proj-b
-      simulateBoot([chatA, chatB], 'chat-b', 'proj-a');
+      useChatsStore.getState().setActiveChat('chat-b');
 
-      expect(useChatsStore.getState().filterProjectId).toBe('proj-b');
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
       expect(useChatsStore.getState().activeChatId).toBe('chat-b');
     });
 
     it('leaves filterProjectId unchanged when it already matches the restored active chat', () => {
       const chatA = makeChat({ id: 'chat-a', projectId: 'proj-a' });
+      useChatsStore.setState({ filterProjectId: 'proj-a' });
+      useChatsStore.getState().setChats([chatA]);
 
-      simulateBoot([chatA], 'chat-a', 'proj-a');
+      useChatsStore.getState().setActiveChat('chat-a');
 
       expect(useChatsStore.getState().filterProjectId).toBe('proj-a');
     });
 
     it('leaves filterProjectId null (All) untouched regardless of active chat project', () => {
       const chatA = makeChat({ id: 'chat-a', projectId: 'proj-a' });
+      useChatsStore.setState({ filterProjectId: null });
+      useChatsStore.getState().setChats([chatA]);
 
-      // filterProjectId === null means "All" — not a user-set project filter,
-      // so no reconciliation should occur.
-      simulateBoot([chatA], 'chat-a', null);
+      useChatsStore.getState().setActiveChat('chat-a');
 
       expect(useChatsStore.getState().filterProjectId).toBeNull();
     });
 
-    it('handles fall-back-to-most-recent path: filter updated to match most recent chat project', () => {
+    it('clears filterProjectId on fall-back-to-most-recent across projects', () => {
       const chatOld = makeChat({ id: 'chat-old', projectId: 'proj-a', updatedAt: '2026-01-01T00:00:00Z' });
       const chatNew = makeChat({ id: 'chat-new', projectId: 'proj-b', updatedAt: '2026-01-02T00:00:00Z' });
-
-      // Simulate: stale activeChatId not in list → fall back to most recent
-      const chatsList = [chatOld, chatNew];
       useChatsStore.setState({ filterProjectId: 'proj-a' });
-      useChatsStore.getState().setChats(chatsList);
+      useChatsStore.getState().setChats([chatOld, chatNew]);
 
-      const sorted = [...chatsList].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-      const mostRecent = sorted[0]!;
-      useChatsStore.getState().setActiveChat(mostRecent.id);
-
-      // Reconciliation
-      const { filterProjectId, setFilterProjectId } = useChatsStore.getState();
-      if (filterProjectId !== null && filterProjectId !== mostRecent.projectId) {
-        setFilterProjectId(mostRecent.projectId);
-      }
+      useChatsStore.getState().setActiveChat('chat-new');
 
       expect(useChatsStore.getState().activeChatId).toBe('chat-new');
-      expect(useChatsStore.getState().filterProjectId).toBe('proj-b');
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
     });
   });
 });
