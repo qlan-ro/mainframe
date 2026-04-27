@@ -67,14 +67,13 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       // Pin the view-zone node width to the editor's content column so it never
       // inflates Monaco's scrollWidth and causes the horizontal scrollbar to
       // diverge. Leave a small gap before the vertical scrollbar — contentWidth
-      // in side-by-side diff editors can abut the scrollbar track, and without
-      // clearance the two hit-regions conflict visually and on hover.
+      // can abut the scrollbar track, and without clearance the two hit-regions
+      // conflict visually and on hover.
       const SCROLLBAR_CLEARANCE = 12;
-      const computeWidth = (info: { contentWidth: number }) => Math.max(0, info.contentWidth - SCROLLBAR_CLEARANCE);
-      domNode.style.width = `${computeWidth(editor.getLayoutInfo())}px`;
-      const layoutListener = editor.onDidLayoutChange((info) => {
-        domNode.style.width = `${computeWidth(info)}px`;
-      });
+      const updateWidth = () => {
+        const info = editor.getLayoutInfo();
+        domNode.style.width = `${Math.max(0, info.contentWidth - SCROLLBAR_CLEARANCE)}px`;
+      };
 
       // Monaco swallows wheel events inside view zones and drives its own
       // scroll. Treat the widget as an island: stop propagation so the
@@ -91,8 +90,31 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
         });
       });
 
+      // Monaco's _addZone sets domNode.style.width = '100%' synchronously
+      // (monaco-editor/.../viewZones.js), clobbering anything we set before
+      // addZone. Apply our width AFTER addZone so it sticks. Without this the
+      // first widget happens to get corrected by a later layout event, but the
+      // second widget stays at 100% because nothing fires after its addZone.
+      updateWidth();
+
+      // onDidLayoutChange covers outer-container changes (splitter drag, window
+      // resize, sidebar toggle, font/option change). onDidContentSizeChange
+      // covers internal content-size changes — most importantly when a vertical
+      // scrollbar appears/disappears as a side effect of addZone shrinking
+      // contentWidth. Together they keep every open widget in lockstep.
+      const layoutListener = editor.onDidLayoutChange(updateWidth);
+      const contentSizeListener = editor.onDidContentSizeChange((e) => {
+        if (e.contentWidthChanged) updateWidth();
+      });
+      const composite: monacoType.IDisposable = {
+        dispose: () => {
+          layoutListener.dispose();
+          contentSizeListener.dispose();
+        },
+      };
+
       const id = `comment-${++nextId}`;
-      layoutListenersRef.current.set(id, layoutListener);
+      layoutListenersRef.current.set(id, composite);
       setComments((prev) => [...prev, { id, startLine, endLine, lineContent, zoneId, domNode, text: '' }]);
     },
     [changeViewZones, getModel],
