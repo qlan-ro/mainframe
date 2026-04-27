@@ -49,6 +49,8 @@ export function AskUserQuestionToolCard({ args, result }: AskUserQuestionToolCar
     <CollapsibleToolCard
       variant="compact"
       disabled={!answered}
+      hideToggle
+      wrapperClassName="border border-mf-divider rounded-mf-card overflow-hidden"
       header={
         <>
           <MessageCircleQuestion size={15} className="text-mf-accent/60 shrink-0" />
@@ -63,7 +65,7 @@ export function AskUserQuestionToolCard({ args, result }: AskUserQuestionToolCar
           </span>
         </>
       }
-      statusDot={<StatusDot result={result} isError={false} />}
+      trailing={<StatusDot result={result} isError={false} />}
     >
       <div className="px-3 py-2 space-y-3">
         {questions.map((q, i) => (
