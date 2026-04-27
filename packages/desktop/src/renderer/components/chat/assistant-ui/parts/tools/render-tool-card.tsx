@@ -12,6 +12,7 @@ import { TaskProgressCard } from './TaskProgressCard';
 import { PlanCard } from './PlanCard';
 import { SlashCommandCard } from './SlashCommandCard';
 import { WorktreeStatusPill } from './WorktreeStatusPill';
+import { MCPToolCard } from './MCPToolCard';
 
 export function renderToolCard(
   toolName: string,
@@ -20,6 +21,9 @@ export function renderToolCard(
   result: unknown,
   isError: boolean | undefined,
 ): React.ReactElement | null {
+  if (toolName.startsWith('mcp__')) {
+    return <MCPToolCard toolName={toolName} args={args} result={result as never} isError={isError} />;
+  }
   if (toolName === 'EnterWorktree' || toolName === 'ExitWorktree') {
     return <WorktreeStatusPill toolName={toolName} args={args} result={result as never} isError={isError} />;
   }
