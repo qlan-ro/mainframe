@@ -77,8 +77,13 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
             // Images in user messages are handled by UserMessage component; skip here
             break;
           case 'tool_call':
-            parts.push(mapDisplayContentToToolCall(block));
+            if (block.category !== 'hidden') {
+              parts.push(mapDisplayContentToToolCall(block));
+            }
             break;
+          // tool_group and task_group inner calls are not filtered here — hidden
+          // tools should not appear in pre-grouped output; if they do, that is a
+          // daemon pipeline bug.
           case 'tool_group': {
             const calls = block.calls.filter(
               (c): c is DisplayContent & { type: 'tool_call' } => c.type === 'tool_call',
