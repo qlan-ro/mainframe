@@ -32,6 +32,7 @@ const AttachWorktreeBody = z.object({
 });
 
 async function validateAndDeleteWorktree(
+  ctx: RouteContext,
   projectPath: string,
   worktreePath: string,
   branchName: string | undefined,
@@ -62,6 +63,7 @@ async function validateAndDeleteWorktree(
     throw new Error('Cannot determine branch name for worktree');
   }
   removeWorktree(projectPath, worktreePath, resolvedBranch);
+  ctx.chats.notifyWorktreeDeleted(worktreePath);
 }
 
 export function worktreeRoutes(ctx: RouteContext): Router {
@@ -173,7 +175,7 @@ export function worktreeRoutes(ctx: RouteContext): Router {
       }
       const { worktreePath, branchName } = parsed.data;
       try {
-        await validateAndDeleteWorktree(projectPath, worktreePath, branchName);
+        await validateAndDeleteWorktree(ctx, projectPath, worktreePath, branchName);
         res.json({ success: true });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to delete worktree';

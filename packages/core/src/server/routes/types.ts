@@ -36,7 +36,10 @@ export function getEffectivePath(ctx: RouteContext, projectId: string, chatId?: 
   if (!project) return null;
   if (chatId) {
     const chat = ctx.chats.getChat(chatId);
-    if (chat?.worktreePath) return chat.worktreePath;
+    if (chat?.worktreePath) {
+      if (chat.worktreeMissing) return null;
+      return chat.worktreePath;
+    }
   }
   return project.path;
 }

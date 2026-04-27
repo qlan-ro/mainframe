@@ -468,6 +468,47 @@ describe('loadHistory', () => {
     expect(messages[3].content[0]).toMatchObject({ text: 'Continued response' });
   });
 
+  it('drops isSidechain=true entries from sibling JSONL files (subagent prompts)', async () => {
+    // Regression: when the parent CLI session spawns a subagent (Task/Agent tool),
+    // the subagent's CLI process writes its own messages — including its dispatch
+    // prompt as a `user` entry — to a sibling JSONL marked with isSidechain:true.
+    // Discovering sibling JSONLs by sessionId pulls these in, and without filtering,
+    // the subagent's prompt rendered as a ghost user bubble in the parent thread.
+    writeJsonl(SESSION_ID, [userTextEntry('Run a search'), assistantTextEntry('Dispatching the search agent.')]);
+
+    const sidechainId = 'sidechain-session-xyz';
+    writeJsonl(sidechainId, [
+      jsonlEntry({
+        type: 'user',
+        sessionId: SESSION_ID,
+        isSidechain: true,
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Subagent prompt: search for monaco scrollbar fixes...' }],
+        },
+      }),
+      jsonlEntry({
+        type: 'assistant',
+        sessionId: SESSION_ID,
+        isSidechain: true,
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Searching...' }] },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages).toHaveLength(2);
+    expect(messages.map((m) => m.type)).toEqual(['user', 'assistant']);
+    // No subagent prompt leaks into the parent thread
+    for (const m of messages) {
+      for (const block of m.content) {
+        if (block.type === 'text') {
+          expect(block.text).not.toMatch(/Subagent prompt/);
+        }
+      }
+    }
+  });
+
   it('returns empty array for non-existent session', async () => {
     const messages = await loadHistory('nonexistent-session', PROJECT_PATH);
     expect(messages).toEqual([]);

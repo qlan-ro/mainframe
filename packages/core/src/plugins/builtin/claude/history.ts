@@ -452,6 +452,16 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
           if (entry.isMeta === true) continue;
           if (entry.isCompactSummary === true || entry.isVisibleInTranscriptOnly === true) continue;
 
+          // Sidechain entries are subagent activity (Task/Agent tool spawns its
+          // own CLI session whose messages share our sessionId but live in a
+          // sibling JSONL). The subagent's first user message is its dispatch
+          // prompt — converting it would render a ghost user bubble in the
+          // parent thread. Tool_results we still want are attached to the
+          // parent's Task tool_use via collectSubagentToolResults below.
+          // Skill-loaded synthesis above runs first so user-typed /skill
+          // invocations are preserved.
+          if (entry.isSidechain === true) continue;
+
           // "Unknown command: /X" — CLI feedback for slash commands that don't
           // resolve. Split into invocation bubble + error pill on replay.
           if (entry.type === 'user') {
