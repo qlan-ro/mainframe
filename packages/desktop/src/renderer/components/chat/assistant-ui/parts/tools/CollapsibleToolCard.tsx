@@ -12,6 +12,8 @@ interface CollapsibleToolCardProps {
   disabled?: boolean;
   /** Start expanded */
   defaultOpen?: boolean;
+  /** Hide the Maximize2/Minimize2 icon. Whole header row stays clickable. */
+  hideToggle?: boolean;
   /** Status dot rendered at the start of the line */
   statusDot?: React.ReactNode;
   /** Content after status dot */
@@ -29,6 +31,7 @@ export function CollapsibleToolCard({
   wrapperClassName,
   disabled,
   defaultOpen = false,
+  hideToggle,
   statusDot,
   header,
   trailing,
@@ -52,7 +55,7 @@ export function CollapsibleToolCard({
         {header}
         <span className="flex-1" />
         {trailing}
-        {!disabled && (
+        {!disabled && !hideToggle && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0" tabIndex={0}>
