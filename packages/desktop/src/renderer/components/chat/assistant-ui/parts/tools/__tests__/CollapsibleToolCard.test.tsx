@@ -28,4 +28,26 @@ describe('CollapsibleToolCard', () => {
     expect(document.querySelector('svg.lucide-minimize-2, svg[class*="minimize"]')).toBeNull();
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
+
+  it('renders subHeader when collapsed AND when expanded', () => {
+    const { rerender } = render(
+      <TooltipProvider>
+        <CollapsibleToolCard header={<span>hdr</span>} subHeader={<span data-testid="sub">sub</span>}>
+          <div>body</div>
+        </CollapsibleToolCard>
+      </TooltipProvider>,
+    );
+    // Collapsed (default): subHeader visible
+    expect(screen.getByTestId('sub')).toBeInTheDocument();
+
+    // Re-render with defaultOpen — should be expanded
+    rerender(
+      <TooltipProvider>
+        <CollapsibleToolCard defaultOpen header={<span>hdr</span>} subHeader={<span data-testid="sub">sub</span>}>
+          <div>body</div>
+        </CollapsibleToolCard>
+      </TooltipProvider>,
+    );
+    expect(screen.getByTestId('sub')).toBeInTheDocument();
+  });
 });

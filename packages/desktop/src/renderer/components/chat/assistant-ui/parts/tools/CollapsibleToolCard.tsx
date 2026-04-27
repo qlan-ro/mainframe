@@ -76,7 +76,7 @@ export function CollapsibleToolCard({
           </Tooltip>
         )}
       </button>
-      {!open && subHeader}
+      {subHeader}
       {open && children}
     </div>
   );
