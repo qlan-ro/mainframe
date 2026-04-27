@@ -10,8 +10,6 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: vi.fn(() => actual.homedir()) };
 });
 
-const flushPromises = () => new Promise<void>((r) => setTimeout(r, 50));
-
 let projectDir: string;
 
 function mockRes() {
@@ -63,8 +61,7 @@ describe('GET /api/projects/:id/tree', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
     expect(res.json).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -80,8 +77,7 @@ describe('GET /api/projects/:id/tree', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { path: '../../etc' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { path: '../../etc' } }, res, vi.fn());
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
@@ -96,8 +92,7 @@ describe('GET /api/projects/:id/tree', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
     const entries = res.json.mock.calls[0][0] as Array<{ name: string }>;
     expect(entries.find((e) => e.name === 'node_modules')).toBeUndefined();
@@ -113,8 +108,7 @@ describe('GET /api/projects/:id/tree', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
     const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
     const link = entries.find((e) => e.name === 'link-to-dir');
@@ -131,8 +125,7 @@ describe('GET /api/projects/:id/tree', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
     const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
     const link = entries.find((e) => e.name === 'link-to-file');
@@ -149,8 +142,7 @@ describe('GET /api/projects/:id/tree', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
     const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
     expect(entries.find((e) => e.name === 'broken-link')).toBeUndefined();
@@ -167,8 +159,7 @@ describe('GET /api/projects/:id/tree', () => {
       const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
       const res = mockRes();
 
-      handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
-      await flushPromises();
+      await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
       const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
       const link = entries.find((e) => e.name === 'outside-dir-link');
@@ -189,8 +180,7 @@ describe('GET /api/projects/:id/tree', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
     const entries = res.json.mock.calls[0][0] as Array<{ name: string }>;
     expect(entries.find((e) => e.name === '.claude')).toBeDefined();
@@ -206,8 +196,7 @@ describe('GET /api/projects/:id/search/files', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: '' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { q: '' } }, res, vi.fn());
 
     expect(res.json).toHaveBeenCalledWith([]);
   });
@@ -221,8 +210,7 @@ describe('GET /api/projects/:id/search/files', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'main' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { q: 'main' } }, res, vi.fn());
 
     const results = res.json.mock.calls[0][0] as Array<{ name: string }>;
     expect(results.some((r) => r.name === 'main.ts')).toBe(true);
@@ -243,8 +231,7 @@ describe('GET /api/projects/:id/search/files', () => {
     const res = mockRes();
 
     // query 'app' matches app.ts; query 'env' matches .env.local
-    handler({ params: { id: 'proj-1' }, query: { q: 'env' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { q: 'env' } }, res, vi.fn());
 
     const results = res.json.mock.calls[0][0];
     const names = results.map((r: any) => r.name);
@@ -268,8 +255,7 @@ describe('GET /api/projects/:id/search/files', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'icon' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { q: 'icon' } }, res, vi.fn());
 
     const results = res.json.mock.calls[0][0];
     const names = results.map((r: any) => r.name);
@@ -293,8 +279,7 @@ describe('GET /api/projects/:id/search/files', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'legacy_lumen' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { q: 'legacy_lumen' } }, res, vi.fn());
 
     const results = res.json.mock.calls[0][0];
     const names = results.map((r: any) => r.name);
@@ -310,8 +295,7 @@ describe('GET /api/projects/:id/search/files', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/files');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'button' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { q: 'button' } }, res, vi.fn());
 
     const results = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
     // Every result must be a file — no directories
@@ -345,8 +329,7 @@ describe('GET /api/filesystem/browse', () => {
     const handler = extractHandler(router, 'get', '/api/filesystem/browse');
     const res = mockRes();
 
-    handler({ query: { path: projectDir } } as any, res, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: projectDir } } as any, res, vi.fn());
 
     expect(res.json).toHaveBeenCalledWith({
       path: realProjectDir,
@@ -369,8 +352,7 @@ describe('GET /api/filesystem/browse', () => {
     const handler = extractHandler(router, 'get', '/api/filesystem/browse');
     const res = mockRes();
 
-    handler({ query: { path: projectDir } } as any, res, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: projectDir } } as any, res, vi.fn());
 
     const result = res.json.mock.calls[0][0];
     expect(result.entries).toHaveLength(1);
@@ -385,8 +367,7 @@ describe('GET /api/filesystem/browse', () => {
     const handler = extractHandler(router, 'get', '/api/filesystem/browse');
     const res = mockRes();
 
-    handler({ query: { path: join(projectDir, 'nonexistent') } } as any, res, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: join(projectDir, 'nonexistent') } } as any, res, vi.fn());
 
     expect(res.status).toHaveBeenCalledWith(404);
   });
@@ -405,8 +386,7 @@ describe('GET /api/filesystem/browse', () => {
       const handler = extractHandler(router, 'get', '/api/filesystem/browse');
       const res = mockRes();
 
-      handler({ query: { path: outsideDir } } as any, res, vi.fn());
-      await flushPromises();
+      await handler({ query: { path: outsideDir } } as any, res, vi.fn());
 
       expect(res.status).not.toHaveBeenCalledWith(403);
       const result = res.json.mock.calls[0][0];
@@ -425,8 +405,7 @@ describe('GET /api/filesystem/browse', () => {
     const handler = extractHandler(router, 'get', '/api/filesystem/browse');
     const res = mockRes();
 
-    handler({ query: { path: '~/sub' } } as any, res, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: '~/sub' } } as any, res, vi.fn());
 
     expect(res.status).not.toHaveBeenCalledWith(404);
     const result = res.json.mock.calls[0][0];
@@ -445,16 +424,16 @@ describe('GET /api/filesystem/browse', () => {
 
     // Default: only dirs
     const resDirs = mockRes();
-    handler({ query: { path: projectDir } } as any, resDirs, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: projectDir } } as any, resDirs, vi.fn());
+
     const defaultResult = resDirs.json.mock.calls[0][0];
     expect(defaultResult.entries.some((e: { name: string }) => e.name === 'myfile.txt')).toBe(false);
     expect(defaultResult.entries.some((e: { name: string }) => e.name === 'mydir')).toBe(true);
 
     // With includeFiles=true: both appear
     const resBoth = mockRes();
-    handler({ query: { path: projectDir, includeFiles: 'true' } } as any, resBoth, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: projectDir, includeFiles: 'true' } } as any, resBoth, vi.fn());
+
     const filesResult = resBoth.json.mock.calls[0][0];
     expect(filesResult.entries.some((e: { name: string }) => e.name === 'myfile.txt')).toBe(true);
     expect(filesResult.entries.some((e: { name: string }) => e.name === 'mydir')).toBe(true);
@@ -472,24 +451,28 @@ describe('GET /api/filesystem/browse', () => {
 
     // Default (no includeFiles, no includeHidden): no files at all
     const resDefault = mockRes();
-    handler({ query: { path: projectDir } } as any, resDefault, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: projectDir } } as any, resDefault, vi.fn());
+
     const defaultResult = resDefault.json.mock.calls[0][0];
     expect(defaultResult.entries.some((e: { name: string }) => e.name === '.hidden')).toBe(false);
     expect(defaultResult.entries.some((e: { name: string }) => e.name === 'visible.txt')).toBe(false);
 
     // includeFiles only: visible.txt appears, .hidden does not
     const resFiles = mockRes();
-    handler({ query: { path: projectDir, includeFiles: 'true' } } as any, resFiles, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: projectDir, includeFiles: 'true' } } as any, resFiles, vi.fn());
+
     const filesResult = resFiles.json.mock.calls[0][0];
     expect(filesResult.entries.some((e: { name: string }) => e.name === 'visible.txt')).toBe(true);
     expect(filesResult.entries.some((e: { name: string }) => e.name === '.hidden')).toBe(false);
 
     // Both flags: both appear
     const resBoth = mockRes();
-    handler({ query: { path: projectDir, includeFiles: 'true', includeHidden: 'true' } } as any, resBoth, vi.fn());
-    await flushPromises();
+    await handler(
+      { query: { path: projectDir, includeFiles: 'true', includeHidden: 'true' } } as any,
+      resBoth,
+      vi.fn(),
+    );
+
     const bothResult = resBoth.json.mock.calls[0][0];
     expect(bothResult.entries.some((e: { name: string }) => e.name === 'visible.txt')).toBe(true);
     expect(bothResult.entries.some((e: { name: string }) => e.name === '.hidden')).toBe(true);
@@ -506,8 +489,7 @@ describe('GET /api/filesystem/browse', () => {
     const handler = extractHandler(router, 'get', '/api/filesystem/browse');
     const res = mockRes();
 
-    handler({ query: { path: projectDir, includeHidden: 'true' } } as any, res, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: projectDir, includeHidden: 'true' } } as any, res, vi.fn());
 
     const result = res.json.mock.calls[0][0];
     expect(result.entries.some((e: { name: string }) => e.name === 'node_modules')).toBe(false);
@@ -525,8 +507,7 @@ describe('GET /api/filesystem/browse', () => {
     const handler = extractHandler(router, 'get', '/api/filesystem/browse');
     const res = mockRes();
 
-    handler({ query: { path: projectDir, includeFiles: 'true' } } as any, res, vi.fn());
-    await flushPromises();
+    await handler({ query: { path: projectDir, includeFiles: 'true' } } as any, res, vi.fn());
 
     const result = res.json.mock.calls[0][0];
     const dirEntry = result.entries.find((e: { name: string }) => e.name === 'adir');
@@ -545,8 +526,7 @@ describe('GET /api/projects/:id/files', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/files');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { path: 'hello.txt' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { path: 'hello.txt' } }, res, vi.fn());
 
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ content: 'world' }));
   });
@@ -557,8 +537,68 @@ describe('GET /api/projects/:id/files', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/files');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { path: '../../etc/passwd' } }, res, vi.fn());
-    await flushPromises();
+    await handler({ params: { id: 'proj-1' }, query: { path: '../../etc/passwd' } }, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+});
+
+describe('GET /api/files/external', () => {
+  it('returns content of an absolute path file', async () => {
+    const extFile = join(projectDir, 'external.md');
+    await writeFile(extFile, '# External');
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    await handler({ query: { path: extFile } } as any, res, vi.fn());
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ content: '# External' }));
+  });
+
+  it('returns 404 for a non-existent file', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    await handler({ query: { path: join(projectDir, 'does-not-exist.txt') } } as any, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('returns 400 when path query is missing', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    await handler({ query: {} } as any, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('returns 400 for a directory path', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    await handler({ query: { path: projectDir } } as any, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('blocks sensitive SSH private key paths', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/files/external');
+    const res = mockRes();
+
+    // Path doesn't need to exist — the block check runs before realpath
+    await handler({ query: { path: join(homedir(), '.ssh', 'id_rsa') } } as any, res, vi.fn());
 
     expect(res.status).toHaveBeenCalledWith(403);
   });

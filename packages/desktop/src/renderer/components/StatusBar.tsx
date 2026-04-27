@@ -102,13 +102,14 @@ export function StatusBar(): React.ReactElement {
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const inWorktree = useChatsStore((s) => !!s.chats.find((c) => c.id === s.activeChatId)?.worktreePath);
+  const worktreeMissing = useChatsStore((s) => !!s.chats.find((c) => c.id === s.activeChatId)?.worktreeMissing);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [hasConflicts, setHasConflicts] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchBranchAndStatus = useCallback(() => {
-    if (!activeProjectId) {
+    if (!activeProjectId || worktreeMissing) {
       setGitBranch(null);
       setHasConflicts(false);
       return;
@@ -128,7 +129,7 @@ export function StatusBar(): React.ReactElement {
         console.warn('[StatusBar] git status fetch failed', err);
         setHasConflicts(false);
       });
-  }, [activeProjectId, activeChatId]);
+  }, [activeProjectId, activeChatId, worktreeMissing]);
 
   useEffect(() => {
     fetchBranchAndStatus();

@@ -57,6 +57,8 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
 
   const [archiving, setArchiving] = useState(false);
 
+  const addChat = useChatsStore((s) => s.addChat);
+
   const handleArchive = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -68,29 +70,36 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
         );
         deleteWorktree = choice;
       }
+
+      // Optimistically remove the chat from the UI immediately so switching to
+      // another session is never blocked by the in-flight archive HTTP request.
+      const wasActive = activeChatId === chat.id;
+      removeChat(chat.id);
+      deleteDraft(chat.id);
+      useTabsStore.getState().closeTab(`chat:${chat.id}`);
+      if (wasActive) {
+        const next = chats
+          .filter((c) => c.id !== chat.id && c.projectId === chat.projectId)
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+        if (next) {
+          setActiveChat(next.id);
+          useTabsStore.getState().openChatTab(next.id, next.title);
+        }
+      }
+
       setArchiving(true);
       archiveChat(chat.id, deleteWorktree)
         .then(() => {
-          const wasActive = activeChatId === chat.id;
-          removeChat(chat.id);
-          deleteDraft(chat.id);
-          useTabsStore.getState().closeTab(`chat:${chat.id}`);
-          if (wasActive) {
-            const next = chats
-              .filter((c) => c.id !== chat.id && c.projectId === chat.projectId)
-              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-            if (next) {
-              setActiveChat(next.id);
-              useTabsStore.getState().openChatTab(next.id, next.title);
-            }
-          }
+          setArchiving(false);
         })
         .catch((err) => {
           log.warn('archive failed', { err: String(err) });
+          // Restore the chat to the store so the user can retry.
+          addChat(chat);
           setArchiving(false);
         });
     },
-    [chat.id, chat.projectId, chat.worktreePath, chats, removeChat, setActiveChat, activeChatId, archiving],
+    [chat, chats, removeChat, addChat, setActiveChat, activeChatId, archiving],
   );
 
   const [editing, setEditing] = useState(false);

@@ -43,6 +43,8 @@ const nullSink: SessionSink = {
   onQueuedProcessed: () => {},
   onTodoUpdate: () => {},
   onPrDetected: () => {},
+  onCliMessage: () => {},
+  onSkillLoaded: () => {},
 };
 
 export interface ClaudeSessionState {
@@ -65,6 +67,9 @@ export interface ClaudeSessionState {
   pendingPrCreates: Set<string>;
   /** Tool_use IDs → parsed PR info for mutation commands (gh pr edit/ready/merge/close/reopen/comment/review, etc.) */
   pendingPrMutations: Map<string, DetectedPrCore>;
+  // Cached skill-name → resolved SKILL.md path, populated lazily on SkillTool
+  // detection to avoid re-probing the filesystem for the same skill.
+  skillPathCache: Map<string, string>;
 }
 
 /**
@@ -85,6 +90,10 @@ export class ClaudeSession implements AdapterSession {
   /** Mutable internal state — readable by claude-events.ts and tests. */
   readonly state: ClaudeSessionState;
 
+  /** Last non-plan permission mode seen at spawn time. Used by setPlanMode(off)
+   *  to restore the original mode when plan is toggled off. */
+  private basePermissionMode: string = 'default';
+
   private readonly resumeSessionId: string | undefined;
   private readonly onExit: (() => void) | undefined;
 
@@ -104,6 +113,7 @@ export class ClaudeSession implements AdapterSession {
       pendingCancelCallbacks: new Map(),
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),
+      skillPathCache: new Map(),
     };
   }
 
@@ -134,6 +144,10 @@ export class ClaudeSession implements AdapterSession {
       '--verbose',
       '--permission-prompt-tool',
       'stdio',
+      // Make the CLI emit `isReplay: true` user events for every queued uuid
+      // it dequeues, so the daemon can ack per-message instead of relying on
+      // brittle turn-boundary heuristics.
+      '--replay-user-messages',
     ];
 
     if (options.systemPrompt === 'enabled') {
@@ -142,7 +156,11 @@ export class ClaudeSession implements AdapterSession {
 
     if (this.resumeSessionId) args.push('--resume', this.resumeSessionId);
     if (options.model) args.push('--model', options.model);
-    const cliMode = options.permissionMode === 'yolo' ? 'bypassPermissions' : (options.permissionMode ?? 'default');
+    if (options.effort) args.push('--effort', options.effort);
+    // Remember the base (non-plan) mode so setPlanMode(false) can restore it.
+    const baseMode = options.permissionMode === 'yolo' ? 'bypassPermissions' : (options.permissionMode ?? 'default');
+    this.basePermissionMode = baseMode;
+    const cliMode = options.planMode ? 'plan' : baseMode;
     args.push('--permission-mode', cliMode, '--allow-dangerously-skip-permissions');
 
     const executable = options.executablePath || 'claude';
@@ -177,6 +195,7 @@ export class ClaudeSession implements AdapterSession {
         resume: !!this.resumeSessionId,
         model: options.model ?? 'default',
         permissionMode: options.permissionMode ?? 'default',
+        effort: options.effort ?? null,
       },
       'claude session spawned',
     );
@@ -198,11 +217,28 @@ export class ClaudeSession implements AdapterSession {
 
   async kill(): Promise<void> {
     const child = this.state.child;
-    if (child) {
-      log.debug({ sessionId: this.id }, 'claude session killed');
-      child.kill('SIGTERM');
-      this.state.child = null;
-    }
+    if (!child) return;
+
+    const exited = new Promise<void>((resolve) => {
+      child.once('close', () => resolve());
+    });
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        if (child.exitCode === null) {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            /* already dead */
+          }
+        }
+        resolve();
+      }, 3000);
+    });
+
+    child.kill('SIGTERM');
+    await Promise.race([exited, timeout]);
+    this.state.child = null;
+    log.debug({ sessionId: this.id }, 'claude session killed');
   }
 
   async interrupt(): Promise<void> {
@@ -264,12 +300,21 @@ export class ClaudeSession implements AdapterSession {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const cliMode = mode === 'yolo' ? 'bypassPermissions' : mode;
+    // Track non-plan modes so setPlanMode(false) can restore whatever the user
+    // last picked (default/acceptEdits/bypassPermissions).
+    if (cliMode !== 'plan') {
+      this.basePermissionMode = cliMode;
+    }
     const payload = {
       type: 'control_request',
       request_id: crypto.randomUUID(),
       request: { subtype: 'set_permission_mode', mode: cliMode },
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
+  }
+
+  async setPlanMode(on: boolean): Promise<void> {
+    await this.setPermissionMode(on ? 'plan' : this.basePermissionMode);
   }
 
   async setModel(model: string): Promise<void> {

@@ -6,6 +6,8 @@ export interface TodoItem {
   activeForm: string;
 }
 
+export type ChatEffort = 'low' | 'medium' | 'high';
+
 export interface Chat {
   id: string;
   adapterId: string;
@@ -13,7 +15,8 @@ export interface Chat {
   title?: string;
   claudeSessionId?: string;
   model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
+  permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+  planMode?: boolean;
   status: 'active' | 'paused' | 'ended' | 'archived';
   createdAt: string;
   updatedAt: string;
@@ -32,6 +35,8 @@ export interface Chat {
   worktreeMissing?: boolean;
   todos?: TodoItem[];
   pinned?: boolean;
+  /** Reasoning effort for Claude adapter (gated on model.supportsEffort). Applied as --effort on CLI spawn. */
+  effort?: ChatEffort;
 }
 
 export interface Project {
@@ -75,7 +80,8 @@ export type MessageContent =
       modifiedFile?: string;
     }
   | { type: 'permission_request'; request: import('./adapter.js').ControlRequest }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
 

@@ -12,6 +12,7 @@
   --color-mf-divider: var(--mf-divider);
   --color-mf-text-primary: var(--mf-text-primary);
   --color-mf-text-secondary: var(--mf-text-secondary);
+  --color-mf-text-tertiary: var(--mf-text-tertiary);
   --color-mf-success: var(--mf-success);
   --color-mf-warning: var(--mf-warning);
   --color-mf-destructive: var(--mf-destructive);
@@ -62,6 +63,8 @@
   --text-mf-heading--line-height: 24px;
   --text-mf-title: 20px;
   --text-mf-title--line-height: 28px;
+  --text-mf-tiny: 11px;
+  --text-mf-tiny--line-height: 14px;
   --text-mf-micro: 9px;
   --text-mf-micro--line-height: 12px;
 }
@@ -78,6 +81,7 @@
     /* Text */
     --mf-text-primary: oklch(0.967 0.001 285);
     --mf-text-secondary: oklch(0.712 0.013 286);
+    --mf-text-tertiary: oklch(0.542 0.010 286);
 
     /* Semantic */
     --mf-success: oklch(0.723 0.192 150);

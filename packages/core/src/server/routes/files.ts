@@ -3,6 +3,7 @@ import { readdir, stat, readFile, writeFile, realpath } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
+import { z } from 'zod';
 import type { RouteContext } from './types.js';
 import { getEffectivePath, param } from './types.js';
 import { resolveAndValidatePath, resolveClaudeConfigPath } from './path-utils.js';
@@ -272,6 +273,90 @@ async function handleWriteFile(ctx: RouteContext, req: Request, res: Response): 
   }
 }
 
+const ExternalFileQuery = z.object({
+  path: z.string().min(1),
+});
+
+/**
+ * Sensitive path prefixes that should never be served through the external file endpoint.
+ * This is a minimal blocklist — the user is opening these explicitly, so most paths are allowed.
+ */
+const BLOCKED_PREFIXES = ['/etc/shadow', '/etc/master.passwd', '/etc/sudoers'];
+
+const BLOCKED_PATTERNS = [
+  /\/\.ssh\/id_/, // private SSH keys
+];
+
+function isBlockedExternalPath(resolved: string): boolean {
+  if (BLOCKED_PREFIXES.some((p) => resolved === p || resolved.startsWith(p + '/'))) return true;
+  if (BLOCKED_PATTERNS.some((re) => re.test(resolved))) return true;
+  return false;
+}
+
+/** GET /api/files/external?path=/absolute/path/to/file
+ *  Reads a file at an absolute path outside any project root.
+ *  Only real files (no directories) are served; a minimal blocklist rejects
+ *  known sensitive paths (SSH private keys, shadow passwords, sudoers).
+ */
+async function handleExternalFileContent(_ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const parsed = validate(ExternalFileQuery, req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  const requestedPath = parsed.data.path;
+
+  // Check blocklist against the raw requested path first (before realpath) so that
+  // attempts to access sensitive paths are rejected even when the file doesn't exist.
+  if (isBlockedExternalPath(requestedPath)) {
+    res.status(403).json({ error: 'Access to this path is not allowed' });
+    return;
+  }
+
+  let resolved: string;
+  try {
+    resolved = await realpath(requestedPath);
+  } catch {
+    res.status(404).json({ error: 'File not found' });
+    return;
+  }
+
+  // Check again after realpath in case a symlink resolves to a blocked path.
+  if (isBlockedExternalPath(resolved)) {
+    res.status(403).json({ error: 'Access to this path is not allowed' });
+    return;
+  }
+
+  let fileStat: Awaited<ReturnType<typeof stat>>;
+  try {
+    fileStat = await stat(resolved);
+  } catch (err) {
+    logger.warn({ err, path: resolved }, 'Failed to stat external file');
+    res.status(404).json({ error: 'File not found' });
+    return;
+  }
+
+  if (!fileStat.isFile()) {
+    res.status(400).json({ error: 'Path is not a file' });
+    return;
+  }
+
+  const MAX_SIZE = 2 * 1024 * 1024;
+  if (fileStat.size > MAX_SIZE) {
+    res.status(413).json({ error: 'File too large (max 2MB)' });
+    return;
+  }
+
+  try {
+    const content = await readFile(resolved, 'utf-8');
+    res.json({ path: resolved, content });
+  } catch (err) {
+    logger.warn({ err, path: resolved }, 'Failed to read external file');
+    res.status(500).json({ error: 'Failed to read file' });
+  }
+}
+
 /** GET /api/filesystem/browse?path=~&includeFiles=true&includeHidden=true */
 async function handleBrowseFilesystem(_ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = validate(BrowseFilesystemQuery, req.query);
@@ -348,6 +433,10 @@ export function fileRoutes(ctx: RouteContext): Router {
   router.get(
     '/api/filesystem/browse',
     asyncHandler((req, res) => handleBrowseFilesystem(ctx, req, res)),
+  );
+  router.get(
+    '/api/files/external',
+    asyncHandler((req, res) => handleExternalFileContent(ctx, req, res)),
   );
   router.get(
     '/api/projects/:id/tree',

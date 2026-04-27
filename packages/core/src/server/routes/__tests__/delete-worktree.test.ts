@@ -29,6 +29,7 @@ function makeCtx(projectPath: string | null = PROJECT_PATH) {
       disableWorktree: vi.fn(),
       forkToWorktree: vi.fn(),
       attachWorktree: vi.fn(),
+      notifyWorktreeDeleted: vi.fn(),
     },
   } as any;
 }
@@ -90,6 +91,21 @@ describe('POST /api/projects/:id/git/delete-worktree', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(removeWorktree).toHaveBeenCalledWith(PROJECT_PATH, WORKTREE_PATH, 'feat-x');
+  });
+
+  it('notifies chats bound to the deleted worktree on success', async () => {
+    vi.mocked(getWorktrees).mockResolvedValue([
+      { path: PROJECT_PATH, branch: 'refs/heads/main' },
+      { path: WORKTREE_PATH, branch: 'refs/heads/feat-x' },
+    ]);
+    vi.mocked(removeWorktree).mockReturnValue(undefined);
+    const ctx = makeCtx();
+    const app = makeApp(ctx);
+    const res = await request(app)
+      .post('/api/projects/proj1/git/delete-worktree')
+      .send({ worktreePath: WORKTREE_PATH });
+    expect(res.status).toBe(200);
+    expect(ctx.chats.notifyWorktreeDeleted).toHaveBeenCalledWith(WORKTREE_PATH);
   });
 
   it('uses provided branchName over the one from git worktree list', async () => {

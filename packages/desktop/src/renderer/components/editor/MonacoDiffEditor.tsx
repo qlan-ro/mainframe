@@ -164,7 +164,7 @@ export function MonacoDiffEditor({
   const hasNonEmpty = comments.some((c) => c.text.trim());
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col">
       {hasComments && (
         <div className="flex items-center justify-end px-3 py-1 shrink-0 border-b border-mf-divider">
           <button
@@ -191,7 +191,7 @@ export function MonacoDiffEditor({
             readOnly: true,
             minimap: { enabled: false },
             lineNumbersMinChars: 5,
-            lineDecorationsWidth: 4,
+            lineDecorationsWidth: 6,
             scrollBeyondLastLine: false,
             fontSize: 13,
             lineHeight: 20,
@@ -206,7 +206,13 @@ export function MonacoDiffEditor({
             renderIndicators: false,
             ignoreTrimWhitespace: true,
             stickyScroll: { enabled: false },
-            scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
+            scrollbar: {
+              vertical: 'auto',
+              horizontal: 'auto',
+              verticalScrollbarSize: 6,
+              horizontalScrollbarSize: 6,
+              useShadows: false,
+            },
             padding: { top: 4, bottom: 4 },
             ...(lineOffset > 0 ? { lineNumbers: (n: number) => String(n + lineOffset) } : {}),
           }}

@@ -14,17 +14,18 @@ import { getGitBranch } from '../../../../lib/api';
 import { focusComposerInput } from '../../../../lib/focus';
 import { ContextPickerMenu } from '../../ContextPickerMenu';
 import { ComposerDropdown } from './ComposerDropdown';
+import { EffortPicker } from './EffortPicker';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { WorktreePopover } from './WorktreePopover';
 import { QueuedMessageBanner } from './QueuedMessageBanner';
+import { PlanModeToggle } from './PlanModeToggle';
 import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
-  { id: 'plan', label: 'Plan' },
   { id: 'acceptEdits', label: 'Auto-Edits' },
   { id: 'yolo', label: 'Unattended' },
 ];
@@ -72,11 +73,13 @@ function SendButton({
   hasCaptures,
   disabled: externalDisabled,
   chatId,
+  onSendPendingCaptures,
 }: {
   composerRuntime: ComposerRuntime;
   hasCaptures: boolean;
   disabled?: boolean;
   chatId: string;
+  onSendPendingCaptures: () => Promise<void>;
 }) {
   const composerEmpty = useComposerEmpty(composerRuntime);
   const disabled = externalDisabled || (composerEmpty && !hasCaptures);
@@ -86,6 +89,15 @@ function SendButton({
       disabled={disabled}
       onClick={() => {
         try {
+          // assistant-ui's runtime.send() short-circuits on empty composer text,
+          // so when the user has only captures we dispatch through our own path.
+          if (composerEmpty && hasCaptures) {
+            void onSendPendingCaptures().catch((err) => {
+              log.warn('failed to send pending captures', { err: String(err) });
+            });
+            deleteDraft(chatId);
+            return;
+          }
           composerRuntime.send();
           deleteDraft(chatId);
         } catch (err) {
@@ -102,7 +114,7 @@ function SendButton({
 }
 
 export function ComposerCard() {
-  const { chatId, composerError, dismissComposerError, openLightbox } = useMainframeRuntime();
+  const { chatId, composerError, dismissComposerError, openLightbox, sendPendingCaptures } = useMainframeRuntime();
   const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
   const adapters = useAdaptersStore((s) => s.adapters);
   const messages = useChatsStore((s) => s.messages.get(chatId));
@@ -216,6 +228,7 @@ export function ComposerCard() {
   }, [chat?.projectId]);
 
   const currentAdapter = chat?.adapterId ?? 'claude';
+  const currentAdapterInfo = adapters.find((adapter) => adapter.id === currentAdapter);
   const adapterOptions = getAdapterOptions(adapters);
   const modelOptions = getModelOptions(currentAdapter, adapters);
   const currentModel = chat?.model ?? modelOptions[0]?.id ?? '';
@@ -248,7 +261,16 @@ export function ComposerCard() {
   const handleModeChange = useCallback(
     (mode: string) => {
       if (!chatId) return;
-      daemonClient.updateChatConfig(chatId, undefined, undefined, mode as 'default' | 'acceptEdits' | 'plan' | 'yolo');
+      const typedMode = mode as 'default' | 'acceptEdits' | 'yolo';
+      daemonClient.updateChatConfig(chatId, undefined, undefined, typedMode);
+    },
+    [chatId],
+  );
+
+  const handlePlanToggle = useCallback(
+    (enable: boolean) => {
+      if (!chatId) return;
+      daemonClient.updateChatConfig(chatId, undefined, undefined, undefined, enable);
     },
     [chatId],
   );
@@ -305,7 +327,8 @@ export function ComposerCard() {
             >
               <img
                 src={c.imageDataUrl}
-                alt={c.type === 'screenshot' ? 'screenshot' : (c.selector ?? 'element')}
+                alt={c.annotation ?? (c.type === 'screenshot' ? 'screenshot' : (c.selector ?? 'element'))}
+                title={c.annotation}
                 className="w-full h-full object-cover"
               />
             </button>
@@ -392,10 +415,12 @@ export function ComposerCard() {
             value={currentMode}
             onChange={handleModeChange}
             icon={<Shield size={14} />}
-            className={
-              currentMode === 'yolo' ? 'text-mf-destructive' : currentMode === 'plan' ? 'text-mf-accent' : undefined
-            }
+            className={currentMode === 'yolo' ? 'text-mf-destructive' : undefined}
           />
+          {currentAdapterInfo?.capabilities.planMode && (
+            <PlanModeToggle active={chat?.planMode === true} onToggle={handlePlanToggle} />
+          )}
+          {chat && <EffortPicker chat={chat} adapters={adapters} modelId={currentModel} disabled={!!chat.isRunning} />}
           {isGitProject && (
             <div className="relative">
               <Tooltip>
@@ -434,6 +459,7 @@ export function ComposerCard() {
             hasCaptures={captures.length > 0}
             disabled={chat?.worktreeMissing}
             chatId={chatId}
+            onSendPendingCaptures={sendPendingCaptures}
           />
         </div>
       </div>

@@ -102,15 +102,16 @@ describe('ChatsRepository', () => {
       expect(all[1].id).toBe(c2.id);
     });
 
-    it('excludes archived chats', () => {
+    it('includes archived chats', () => {
       const c1 = chats.create(projectId, 'claude');
       const c2 = chats.create(projectId, 'claude');
 
       chats.update(c2.id, { status: 'archived' });
 
       const all = chats.list(projectId);
-      expect(all).toHaveLength(1);
-      expect(all[0].id).toBe(c1.id);
+      expect(all).toHaveLength(2);
+      expect(all.map((c) => c.id)).toContain(c1.id);
+      expect(all.map((c) => c.id)).toContain(c2.id);
     });
 
     it('returns empty array for a project with no chats', () => {
@@ -178,10 +179,10 @@ describe('ChatsRepository', () => {
 
     it('updates permissionMode', () => {
       const chat = chats.create(projectId, 'claude');
-      chats.update(chat.id, { permissionMode: 'plan' });
+      chats.update(chat.id, { permissionMode: 'acceptEdits' });
 
       const fetched = chats.get(chat.id);
-      expect(fetched!.permissionMode).toBe('plan');
+      expect(fetched!.permissionMode).toBe('acceptEdits');
     });
 
     it('updates worktreePath and branchName', () => {
@@ -250,6 +251,85 @@ describe('ChatsRepository', () => {
       chats.update(chat.id, { pinned: true });
       chats.update(chat.id, { pinned: false });
       expect(chats.get(chat.id)!.pinned).toBe(false);
+    });
+  });
+
+  describe('effort', () => {
+    it('defaults to undefined on a new chat', () => {
+      const chat = chats.create(projectId, 'claude');
+      expect(chats.get(chat.id)!.effort).toBeUndefined();
+    });
+
+    it('persists each valid effort level', () => {
+      const chat = chats.create(projectId, 'claude');
+
+      chats.update(chat.id, { effort: 'low' });
+      expect(chats.get(chat.id)!.effort).toBe('low');
+
+      chats.update(chat.id, { effort: 'medium' });
+      expect(chats.get(chat.id)!.effort).toBe('medium');
+
+      chats.update(chat.id, { effort: 'high' });
+      expect(chats.get(chat.id)!.effort).toBe('high');
+    });
+
+    it('clears effort when null is passed', () => {
+      const chat = chats.create(projectId, 'claude');
+      chats.update(chat.id, { effort: 'high' });
+      expect(chats.get(chat.id)!.effort).toBe('high');
+
+      // Route passes null to clear — cast mirrors the route handler's behavior.
+      chats.update(chat.id, { effort: null as unknown as 'high' });
+      expect(chats.get(chat.id)!.effort).toBeUndefined();
+    });
+
+    it('returns undefined for unexpected stored values', () => {
+      const chat = chats.create(projectId, 'claude');
+      // Legacy / corrupted rows: the parser must coerce to undefined.
+      db.prepare('UPDATE chats SET effort = ? WHERE id = ?').run('max', chat.id);
+      expect(chats.get(chat.id)!.effort).toBeUndefined();
+    });
+
+    it('includes effort in list() and listAll() results', () => {
+      const chat = chats.create(projectId, 'claude');
+      chats.update(chat.id, { effort: 'medium' });
+
+      const listed = chats.list(projectId).find((c) => c.id === chat.id);
+      expect(listed?.effort).toBe('medium');
+
+      const listedAll = chats.listAll().find((c) => c.id === chat.id);
+      expect(listedAll?.effort).toBe('medium');
+    });
+  });
+
+  describe('schema migration', () => {
+    it('initializeSchema adds the effort column to an existing chats table without it', () => {
+      // Simulate pre-migration DB by starting from a fresh in-memory DB, creating
+      // chats without effort, then running initializeSchema again (idempotent).
+      const legacy = new Database(':memory:');
+      legacy.exec(`
+        CREATE TABLE chats (
+          id TEXT PRIMARY KEY,
+          adapter_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          title TEXT,
+          claude_session_id TEXT,
+          model TEXT,
+          status TEXT NOT NULL DEFAULT 'active',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          total_cost REAL DEFAULT 0,
+          total_tokens_input INTEGER DEFAULT 0,
+          total_tokens_output INTEGER DEFAULT 0
+        );
+      `);
+      const before = legacy.pragma('table_info(chats)') as { name: string }[];
+      expect(before.some((c) => c.name === 'effort')).toBe(false);
+
+      initializeSchema(legacy);
+      const after = legacy.pragma('table_info(chats)') as { name: string }[];
+      expect(after.some((c) => c.name === 'effort')).toBe(true);
+      legacy.close();
     });
   });
 
@@ -443,6 +523,20 @@ describe('ChatsRepository', () => {
       const fetched = chats.get(chat.id);
       expect(fetched!.worktreePath).toBe('/tmp/wt-123');
       expect(fetched!.branchName).toBe('feat/x');
+    });
+  });
+
+  describe('planMode', () => {
+    it('reads and writes planMode', () => {
+      const chat = chats.create(projectId, 'claude');
+      expect(chat.planMode).toBe(false);
+
+      chats.update(chat.id, { planMode: true });
+      const reread = chats.get(chat.id)!;
+      expect(reread.planMode).toBe(true);
+
+      chats.update(chat.id, { planMode: false });
+      expect(chats.get(chat.id)!.planMode).toBe(false);
     });
   });
 

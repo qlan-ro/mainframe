@@ -1,5 +1,260 @@
 # Changelog
 
+## 0.15.0
+
+
+### Minor Changes
+
+- [#251](https://github.com/qlan-ro/mainframe/pull/251) [`f065b53`](https://github.com/qlan-ro/mainframe/commit/f065b53a7d5a2e5591f361ebab96eab2ea539163) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add Settings → Notifications page with per-category OS notification toggles.
+
+  Three toggle groups — Chat Notifications (task complete, session error), Permission Request Notifications (tool request, user question, plan approval), and Other (plugin notifications) — let users suppress OS notifications per event type without affecting in-app state, toasts, or badges. Settings are persisted via the existing general settings API as a JSON-serialized value.
+
+### Patch Changes
+
+- [#254](https://github.com/qlan-ro/mainframe/pull/254) [`cc78f1a`](https://github.com/qlan-ro/mainframe/commit/cc78f1a1159d9c8c3f0fce9d95279c50515be80b) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix spurious empty user bubble in Explore agent / Task tool subagent threads.
+
+  Bare `<command-name>` CLI echoes (no accompanying `<command-message>` tag) are
+  now suppressed in `convertUserContent` instead of being synthesized into a
+  `/commandName` bubble. An additional guard in `convertGroupedToDisplay` drops
+  user messages whose display content and metadata are both empty, preventing any
+  residual empty bubble from reaching the client.
+
+  User-typed `/skill-name` invocations are unaffected — they always carry a
+  `<command-message>` tag alongside `<command-name>` and continue to render
+  correctly.
+
+- Updated dependencies [[`f065b53`](https://github.com/qlan-ro/mainframe/commit/f065b53a7d5a2e5591f361ebab96eab2ea539163)]:
+  - @qlan-ro/mainframe-types@0.15.0
+
+
+### Minor Changes
+
+- [#249](https://github.com/qlan-ro/mainframe/pull/249) [`4b546c4`](https://github.com/qlan-ro/mainframe/commit/4b546c49de3e6d370f44b8a74eef79619118307c) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Chat quote support: highlight any text in the chat thread to surface a floating "Quote" button that prepends `> ` to each line and appends it to the composer. Find-in-path dialog widened to match the command palette width.
+
+- [#253](https://github.com/qlan-ro/mainframe/pull/253) [`d85984e`](https://github.com/qlan-ro/mainframe/commit/d85984e4671e79ad429d1c0ffc21a5ac3a181b9d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Show a spinner while messages load on app startup and session switch. The chat panel now displays a centered Loader2 indicator instead of a blank area whenever `getChatMessages` is in flight, and the app-level center panel shows a loading state during the initial data fetch.
+
+- [#251](https://github.com/qlan-ro/mainframe/pull/251) [`f065b53`](https://github.com/qlan-ro/mainframe/commit/f065b53a7d5a2e5591f361ebab96eab2ea539163) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add Settings → Notifications page with per-category OS notification toggles.
+
+  Three toggle groups — Chat Notifications (task complete, session error), Permission Request Notifications (tool request, user question, plan approval), and Other (plugin notifications) — let users suppress OS notifications per event type without affecting in-app state, toasts, or badges. Settings are persisted via the existing general settings API as a JSON-serialized value.
+
+- [#250](https://github.com/qlan-ro/mainframe/pull/250) [`de23db7`](https://github.com/qlan-ro/mainframe/commit/de23db741b0168e01fb40bda6f1e1c9fe321cca2) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add drag-to-capture region selection in the sandbox preview tab. Users can activate "Region capture" mode (Frame icon in the toolbar), drag a rectangle over the webview, and optionally annotate the capture before adding it to the composer. The annotation appears in the capture preamble when the message is sent.
+
+### Patch Changes
+
+- [#255](https://github.com/qlan-ro/mainframe/pull/255) [`57c867b`](https://github.com/qlan-ro/mainframe/commit/57c867b54ec6a715e60b0ccddf529f4cb8b794dc) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Pin action button bars in Quick and Full todo dialogs to the bottom so they stay visible while scrolling long forms.
+
+- Updated dependencies [[`cc78f1a`](https://github.com/qlan-ro/mainframe/commit/cc78f1a1159d9c8c3f0fce9d95279c50515be80b), [`f065b53`](https://github.com/qlan-ro/mainframe/commit/f065b53a7d5a2e5591f361ebab96eab2ea539163)]:
+  - @qlan-ro/mainframe-core@0.15.0
+  - @qlan-ro/mainframe-types@0.15.0
+
+
+### Minor Changes
+
+- [#251](https://github.com/qlan-ro/mainframe/pull/251) [`f065b53`](https://github.com/qlan-ro/mainframe/commit/f065b53a7d5a2e5591f361ebab96eab2ea539163) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add Settings → Notifications page with per-category OS notification toggles.
+
+  Three toggle groups — Chat Notifications (task complete, session error), Permission Request Notifications (tool request, user question, plan approval), and Other (plugin notifications) — let users suppress OS notifications per event type without affecting in-app state, toasts, or badges. Settings are persisted via the existing general settings API as a JSON-serialized value.
+
+
+## 0.14.0
+
+
+### Minor Changes
+
+- [#245](https://github.com/qlan-ro/mainframe/pull/245) [`9a51653`](https://github.com/qlan-ro/mainframe/commit/9a51653c3b2eb14731c62996f616bd5f238a9ddf) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add multi-zone plugin support — one plugin can now register multiple UI panels simultaneously.
+  - `PluginManifest.ui` accepts both the legacy single-object shape and a new array form; both are validated by Zod and normalized internally
+  - `PluginUIContext.addPanel()` now returns a stable `panelId` string for targeted removal
+  - `PluginUIContext.removePanel(id?)` removes a specific panel by id, or all panels for the plugin when called without an id
+  - Plugin layout store keys contributions by `(pluginId, panelId)` to support multiple panels per plugin
+  - Builtin todos plugin migrated to demonstrate multi-zone: fullview Kanban board + right-top quick-add sidebar
+
+### Patch Changes
+
+- [#243](https://github.com/qlan-ro/mainframe/pull/243) [`1367009`](https://github.com/qlan-ro/mainframe/commit/1367009dbc2c676bef18ff2ce13c087d19a99e95) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Make `asyncHandler` return its wrapped Promise so tests can properly `await` route handlers. Previously the wrapper used a fire-and-forget `.catch(next)` which discarded the Promise, forcing tests to rely on a 50ms `setTimeout`-based polyfill that raced against `listFilesWithRipgrep`'s subprocess spawn and flaked under load. Server behavior is unchanged (Express ignores the handler's return value).
+
+- [#247](https://github.com/qlan-ro/mainframe/pull/247) [`1ff74d5`](https://github.com/qlan-ro/mainframe/commit/1ff74d57b931dd787559a72b508d5140cdb1411b) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Replace skill-injection grey bubble with a collapsible SkillLoadedCard
+  - Add `skill_loaded` content block type to `MessageContent` and `DisplayContent`
+  - Add `onSkillLoaded` to `SessionSink`; parse skill name, path, and content from the CLI-injected user-event text (`<skill-format>true</skill-format>`)
+  - Suppress `onCliMessage` for skill-injection text; emit `onSkillLoaded` + `onSkillFile` instead
+  - Cache the authoritative path extracted from the text so the `Skill` tool_use branch reuses it
+  - Wire `onSkillLoaded` through `event-handler.ts` as a transient system message with a `skill_loaded` block
+  - Pass `skill_loaded` blocks through `display-pipeline.ts` and `convert-message.ts` via message metadata
+  - Render skill messages as a `SkillLoadedCard` (collapsible, `defaultOpen={false}`) in `SystemMessage.tsx`
+  - New `SkillLoadedCard.tsx`: Zap icon + `/skillName` header with path tooltip; markdown body inside `max-h-[480px]` scrollable pane
+  - Preserve user-typed `/skill-name` (and `/skill-name args`) bubbles: display-pipeline now synthesizes a readable `/cmd args` bubble from the CLI's `<command-name>`/`<command-args>` echo instead of dropping the entry
+
+- Updated dependencies [[`1ff74d5`](https://github.com/qlan-ro/mainframe/commit/1ff74d57b931dd787559a72b508d5140cdb1411b), [`9a51653`](https://github.com/qlan-ro/mainframe/commit/9a51653c3b2eb14731c62996f616bd5f238a9ddf)]:
+  - @qlan-ro/mainframe-types@0.14.0
+
+
+### Patch Changes
+
+- [#247](https://github.com/qlan-ro/mainframe/pull/247) [`1ff74d5`](https://github.com/qlan-ro/mainframe/commit/1ff74d57b931dd787559a72b508d5140cdb1411b) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Replace skill-injection grey bubble with a collapsible SkillLoadedCard
+  - Add `skill_loaded` content block type to `MessageContent` and `DisplayContent`
+  - Add `onSkillLoaded` to `SessionSink`; parse skill name, path, and content from the CLI-injected user-event text (`<skill-format>true</skill-format>`)
+  - Suppress `onCliMessage` for skill-injection text; emit `onSkillLoaded` + `onSkillFile` instead
+  - Cache the authoritative path extracted from the text so the `Skill` tool_use branch reuses it
+  - Wire `onSkillLoaded` through `event-handler.ts` as a transient system message with a `skill_loaded` block
+  - Pass `skill_loaded` blocks through `display-pipeline.ts` and `convert-message.ts` via message metadata
+  - Render skill messages as a `SkillLoadedCard` (collapsible, `defaultOpen={false}`) in `SystemMessage.tsx`
+  - New `SkillLoadedCard.tsx`: Zap icon + `/skillName` header with path tooltip; markdown body inside `max-h-[480px]` scrollable pane
+  - Preserve user-typed `/skill-name` (and `/skill-name args`) bubbles: display-pipeline now synthesizes a readable `/cmd args` bubble from the CLI's `<command-name>`/`<command-args>` echo instead of dropping the entry
+
+- [#244](https://github.com/qlan-ro/mainframe/pull/244) [`92a984d`](https://github.com/qlan-ro/mainframe/commit/92a984db5156a722b57f063ea1a18fe96f137238) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix element inspect screenshot offset when Electron zoom is not 1.0 (Cmd+/-). The crop rect passed to `capturePage` is now scaled by the webview zoom factor so device-pixel coordinates align with CSS-pixel coordinates from `getBoundingClientRect`.
+
+- [#245](https://github.com/qlan-ro/mainframe/pull/245) [`9a51653`](https://github.com/qlan-ro/mainframe/commit/9a51653c3b2eb14731c62996f616bd5f238a9ddf) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add multi-zone plugin support — one plugin can now register multiple UI panels simultaneously.
+  - `PluginManifest.ui` accepts both the legacy single-object shape and a new array form; both are validated by Zod and normalized internally
+  - `PluginUIContext.addPanel()` now returns a stable `panelId` string for targeted removal
+  - `PluginUIContext.removePanel(id?)` removes a specific panel by id, or all panels for the plugin when called without an id
+  - Plugin layout store keys contributions by `(pluginId, panelId)` to support multiple panels per plugin
+  - Builtin todos plugin migrated to demonstrate multi-zone: fullview Kanban board + right-top quick-add sidebar
+
+- [#246](https://github.com/qlan-ro/mainframe/pull/246) [`3ac285f`](https://github.com/qlan-ro/mainframe/commit/3ac285f95087916d80d90d3bc52cdf8329720bfb) Thanks [@doruchiulan](https://github.com/doruchiulan)! - feat(todos): show image preview thumbnails with remove button in Quick Todo and Todo Modal dialogs
+
+- Updated dependencies [[`1367009`](https://github.com/qlan-ro/mainframe/commit/1367009dbc2c676bef18ff2ce13c087d19a99e95), [`1ff74d5`](https://github.com/qlan-ro/mainframe/commit/1ff74d57b931dd787559a72b508d5140cdb1411b), [`9a51653`](https://github.com/qlan-ro/mainframe/commit/9a51653c3b2eb14731c62996f616bd5f238a9ddf)]:
+  - @qlan-ro/mainframe-core@0.14.0
+  - @qlan-ro/mainframe-types@0.14.0
+
+
+### Minor Changes
+
+- [#245](https://github.com/qlan-ro/mainframe/pull/245) [`9a51653`](https://github.com/qlan-ro/mainframe/commit/9a51653c3b2eb14731c62996f616bd5f238a9ddf) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add multi-zone plugin support — one plugin can now register multiple UI panels simultaneously.
+  - `PluginManifest.ui` accepts both the legacy single-object shape and a new array form; both are validated by Zod and normalized internally
+  - `PluginUIContext.addPanel()` now returns a stable `panelId` string for targeted removal
+  - `PluginUIContext.removePanel(id?)` removes a specific panel by id, or all panels for the plugin when called without an id
+  - Plugin layout store keys contributions by `(pluginId, panelId)` to support multiple panels per plugin
+  - Builtin todos plugin migrated to demonstrate multi-zone: fullview Kanban board + right-top quick-add sidebar
+
+### Patch Changes
+
+- [#247](https://github.com/qlan-ro/mainframe/pull/247) [`1ff74d5`](https://github.com/qlan-ro/mainframe/commit/1ff74d57b931dd787559a72b508d5140cdb1411b) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Replace skill-injection grey bubble with a collapsible SkillLoadedCard
+  - Add `skill_loaded` content block type to `MessageContent` and `DisplayContent`
+  - Add `onSkillLoaded` to `SessionSink`; parse skill name, path, and content from the CLI-injected user-event text (`<skill-format>true</skill-format>`)
+  - Suppress `onCliMessage` for skill-injection text; emit `onSkillLoaded` + `onSkillFile` instead
+  - Cache the authoritative path extracted from the text so the `Skill` tool_use branch reuses it
+  - Wire `onSkillLoaded` through `event-handler.ts` as a transient system message with a `skill_loaded` block
+  - Pass `skill_loaded` blocks through `display-pipeline.ts` and `convert-message.ts` via message metadata
+  - Render skill messages as a `SkillLoadedCard` (collapsible, `defaultOpen={false}`) in `SystemMessage.tsx`
+  - New `SkillLoadedCard.tsx`: Zap icon + `/skillName` header with path tooltip; markdown body inside `max-h-[480px]` scrollable pane
+  - Preserve user-typed `/skill-name` (and `/skill-name args`) bubbles: display-pipeline now synthesizes a readable `/cmd args` bubble from the CLI's `<command-name>`/`<command-args>` echo instead of dropping the entry
+
+
+## 0.13.0
+
+
+### Minor Changes
+
+- [#240](https://github.com/qlan-ro/mainframe/pull/240) [`7e480e9`](https://github.com/qlan-ro/mainframe/commit/7e480e91d4ed02e07723fb2738ff937507e55c8c) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Added an effort picker in the composer for Claude chats. Selected effort persists per chat and is passed as --effort on CLI spawn. Mid-session change is deferred.
+
+### Patch Changes
+
+- [#236](https://github.com/qlan-ro/mainframe/pull/236) [`ca7eac2`](https://github.com/qlan-ro/mainframe/commit/ca7eac288676d24b8303d7c3282b196939ceff78) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Session list now re-orders correctly when a chat gets new activity, switching sessions while another is being archived no longer blocks the UI, and archiving a running chat no longer leaves a stuck spinner when the dying CLI process emits a final chat.updated event.
+
+- [#235](https://github.com/qlan-ro/mainframe/pull/235) [`b0b091a`](https://github.com/qlan-ro/mainframe/commit/b0b091aeeaebb1490cb8c5d645dd01a257c24fd3) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fixed three file/diff editor issues: the editor can now open files outside the project root, collapsed editor panels can be re-expanded, and the diff editor no longer crops the first character of each line.
+
+- Updated dependencies [[`7e480e9`](https://github.com/qlan-ro/mainframe/commit/7e480e91d4ed02e07723fb2738ff937507e55c8c)]:
+  - @qlan-ro/mainframe-types@0.13.0
+
+
+### Minor Changes
+
+- [#240](https://github.com/qlan-ro/mainframe/pull/240) [`7e480e9`](https://github.com/qlan-ro/mainframe/commit/7e480e91d4ed02e07723fb2738ff937507e55c8c) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Added an effort picker in the composer for Claude chats. Selected effort persists per chat and is passed as --effort on CLI spawn. Mid-session change is deferred.
+
+### Patch Changes
+
+- [#237](https://github.com/qlan-ro/mainframe/pull/237) [`99ae306`](https://github.com/qlan-ro/mainframe/commit/99ae306c278bdeb84c2ec3ba9c3d6925e6a6b72d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Images in agent responses now render inline in the chat bubble instead of showing as raw base64 text.
+
+- [#239](https://github.com/qlan-ro/mainframe/pull/239) [`65c6a0f`](https://github.com/qlan-ro/mainframe/commit/65c6a0f1fac11797883ae963f3f0bc205d91a8ca) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix active-chat restore picking an archived session on boot. The daemon returns archived chats alongside active ones (they feed the archived-sessions popover), so `useAppInit.loadData()` must skip them when restoring `mf:activeChatId` — otherwise the right pane shows a chat that isn't visible in the flat list and the user can't navigate away.
+
+- [#235](https://github.com/qlan-ro/mainframe/pull/235) [`b0b091a`](https://github.com/qlan-ro/mainframe/commit/b0b091aeeaebb1490cb8c5d645dd01a257c24fd3) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fixed diff editor gutter spacing on the modified side: restores `lineDecorationsWidth: 6` so there is breathing room between line numbers and code. Follow-up to the [#113](https://github.com/qlan-ro/mainframe/issues/113) horizontal-scroll fix — the clipping was caused by `overflow-hidden`, not the decoration width, so a non-zero value is safe now that the CSS is corrected.
+
+- [#235](https://github.com/qlan-ro/mainframe/pull/235) [`b0b091a`](https://github.com/qlan-ro/mainframe/commit/b0b091aeeaebb1490cb8c5d645dd01a257c24fd3) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix InlineCommentWidget exceeding editor viewport width and causing Monaco horizontal scrollbar divergence when typing long text.
+
+- [#235](https://github.com/qlan-ro/mainframe/pull/235) [`b0b091a`](https://github.com/qlan-ro/mainframe/commit/b0b091aeeaebb1490cb8c5d645dd01a257c24fd3) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fixed a race on startup where the selected project badge could disagree with the chats filter after reload.
+
+- [#238](https://github.com/qlan-ro/mainframe/pull/238) [`8d1806f`](https://github.com/qlan-ro/mainframe/commit/8d1806f58bf9fe05047f7a2fbc04c8c3ca803f37) Thanks [@doruchiulan](https://github.com/doruchiulan)! - The Quick Todo dialog no longer crops the first character of each line and its cursor sits at the correct position. The full Todo modal now responds correctly to vertical resize — the height state is applied to the DOM so dragging the resize handle taller or shorter takes effect immediately.
+
+- [#236](https://github.com/qlan-ro/mainframe/pull/236) [`ca7eac2`](https://github.com/qlan-ro/mainframe/commit/ca7eac288676d24b8303d7c3282b196939ceff78) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Session list now re-orders correctly when a chat gets new activity, switching sessions while another is being archived no longer blocks the UI, and archiving a running chat no longer leaves a stuck spinner when the dying CLI process emits a final chat.updated event.
+
+- [#235](https://github.com/qlan-ro/mainframe/pull/235) [`b0b091a`](https://github.com/qlan-ro/mainframe/commit/b0b091aeeaebb1490cb8c5d645dd01a257c24fd3) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fixed three file/diff editor issues: the editor can now open files outside the project root, collapsed editor panels can be re-expanded, and the diff editor no longer crops the first character of each line.
+
+- Updated dependencies [[`7e480e9`](https://github.com/qlan-ro/mainframe/commit/7e480e91d4ed02e07723fb2738ff937507e55c8c), [`ca7eac2`](https://github.com/qlan-ro/mainframe/commit/ca7eac288676d24b8303d7c3282b196939ceff78), [`b0b091a`](https://github.com/qlan-ro/mainframe/commit/b0b091aeeaebb1490cb8c5d645dd01a257c24fd3)]:
+  - @qlan-ro/mainframe-types@0.13.0
+  - @qlan-ro/mainframe-core@0.13.0
+
+
+### Minor Changes
+
+- [#240](https://github.com/qlan-ro/mainframe/pull/240) [`7e480e9`](https://github.com/qlan-ro/mainframe/commit/7e480e91d4ed02e07723fb2738ff937507e55c8c) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Added an effort picker in the composer for Claude chats. Selected effort persists per chat and is passed as --effort on CLI spawn. Mid-session change is deferred.
+
+
+## 0.12.0
+
+
+### Minor Changes
+
+- [#232](https://github.com/qlan-ro/mainframe/pull/232) [`9f76627`](https://github.com/qlan-ro/mainframe/commit/9f766277b5899be807b485fd1f7343814ef11342) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Plan mode is now a standalone toggle, orthogonal to the permission mode. Codex supports plan mode with the same approval card UX as Claude, via the requestUserInput exit prompt. The per-adapter "Start in Plan Mode" checkbox in settings replaces the old Plan radio option. Existing chats and settings with permission_mode='plan' are migrated automatically. Also fixes a race where the Thinking indicator disappeared after approving a plan with Clear Context.
+
+- [#231](https://github.com/qlan-ro/mainframe/pull/231) [`753ccae`](https://github.com/qlan-ro/mainframe/commit/753ccae7c4ac7e2c9a9101d1b98dc80606a7d4f5) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add an Archive button to the chat panel header that opens a popover listing archived sessions with a Restore action. Archived chats stay hidden from the main list.
+
+### Patch Changes
+
+- [#233](https://github.com/qlan-ro/mainframe/pull/233) [`933450e`](https://github.com/qlan-ro/mainframe/commit/933450e28d508bd25f8c1d9bcda955732fbbf831) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix queued messages not clearing from the composer ([#116](https://github.com/qlan-ro/mainframe/issues/116)).
+
+  The Claude CLI only emits `isReplay: true` acks for queued uuids when spawned with `--replay-user-messages`; without the flag, queued cleanup fell back to a cache-scan on turn completion that mis-fired when the cache was reloaded from JSONL or when the CLI exited without a final `result`. Fixes:
+  - Pass `--replay-user-messages` to the Claude spawn so the CLI emits a per-uuid ack the daemon can match.
+  - Route `onQueuedProcessed` back into `ChatManager.handleQueuedProcessed` so `queuedRefs` is pruned in lockstep with the composer banner.
+  - Clear queued metadata and emit `message.queued.cleared` on abnormal CLI exit.
+  - Drop the premature bulk-clear in `onResult` that was stripping metadata from messages the CLI hadn't dequeued yet.
+  - Emit `message.queued.snapshot` to subscribing clients so the renderer's Zustand state rehydrates after a WS reconnect.
+
+- Updated dependencies [[`9f76627`](https://github.com/qlan-ro/mainframe/commit/9f766277b5899be807b485fd1f7343814ef11342), [`933450e`](https://github.com/qlan-ro/mainframe/commit/933450e28d508bd25f8c1d9bcda955732fbbf831)]:
+  - @qlan-ro/mainframe-types@0.12.0
+
+
+### Minor Changes
+
+- [#230](https://github.com/qlan-ro/mainframe/pull/230) [`29f192c`](https://github.com/qlan-ro/mainframe/commit/29f192c95f9507a6625e42d134fe599cb3f000b1) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Added the ability to delete a project from the sidebar. Two discoverable entry points route through the same confirm-and-cleanup flow:
+  - Hover the project group header (in the "All" view) → trash icon fades in next to "New Session".
+  - When filtered to a specific project, the active filter pill shows a chevron — clicking it opens a menu with "Delete Project".
+
+  Confirming stops all running CLI sessions in that project, removes all its chats from the database in a transaction, and resets any active filter or selected chat that belonged to the deleted project. Files on disk are not affected.
+
+- [#232](https://github.com/qlan-ro/mainframe/pull/232) [`9f76627`](https://github.com/qlan-ro/mainframe/commit/9f766277b5899be807b485fd1f7343814ef11342) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Plan mode is now a standalone toggle, orthogonal to the permission mode. Codex supports plan mode with the same approval card UX as Claude, via the requestUserInput exit prompt. The per-adapter "Start in Plan Mode" checkbox in settings replaces the old Plan radio option. Existing chats and settings with permission_mode='plan' are migrated automatically. Also fixes a race where the Thinking indicator disappeared after approving a plan with Clear Context.
+
+- [#231](https://github.com/qlan-ro/mainframe/pull/231) [`753ccae`](https://github.com/qlan-ro/mainframe/commit/753ccae7c4ac7e2c9a9101d1b98dc80606a7d4f5) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add an Archive button to the chat panel header that opens a popover listing archived sessions with a Restore action. Archived chats stay hidden from the main list.
+
+### Patch Changes
+
+- [#233](https://github.com/qlan-ro/mainframe/pull/233) [`933450e`](https://github.com/qlan-ro/mainframe/commit/933450e28d508bd25f8c1d9bcda955732fbbf831) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix queued messages not clearing from the composer ([#116](https://github.com/qlan-ro/mainframe/issues/116)).
+
+  The Claude CLI only emits `isReplay: true` acks for queued uuids when spawned with `--replay-user-messages`; without the flag, queued cleanup fell back to a cache-scan on turn completion that mis-fired when the cache was reloaded from JSONL or when the CLI exited without a final `result`. Fixes:
+  - Pass `--replay-user-messages` to the Claude spawn so the CLI emits a per-uuid ack the daemon can match.
+  - Route `onQueuedProcessed` back into `ChatManager.handleQueuedProcessed` so `queuedRefs` is pruned in lockstep with the composer banner.
+  - Clear queued metadata and emit `message.queued.cleared` on abnormal CLI exit.
+  - Drop the premature bulk-clear in `onResult` that was stripping metadata from messages the CLI hadn't dequeued yet.
+  - Emit `message.queued.snapshot` to subscribing clients so the renderer's Zustand state rehydrates after a WS reconnect.
+
+- Updated dependencies [[`9f76627`](https://github.com/qlan-ro/mainframe/commit/9f766277b5899be807b485fd1f7343814ef11342), [`933450e`](https://github.com/qlan-ro/mainframe/commit/933450e28d508bd25f8c1d9bcda955732fbbf831), [`753ccae`](https://github.com/qlan-ro/mainframe/commit/753ccae7c4ac7e2c9a9101d1b98dc80606a7d4f5)]:
+  - @qlan-ro/mainframe-types@0.12.0
+  - @qlan-ro/mainframe-core@0.12.0
+
+
+### Minor Changes
+
+- [#232](https://github.com/qlan-ro/mainframe/pull/232) [`9f76627`](https://github.com/qlan-ro/mainframe/commit/9f766277b5899be807b485fd1f7343814ef11342) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Plan mode is now a standalone toggle, orthogonal to the permission mode. Codex supports plan mode with the same approval card UX as Claude, via the requestUserInput exit prompt. The per-adapter "Start in Plan Mode" checkbox in settings replaces the old Plan radio option. Existing chats and settings with permission_mode='plan' are migrated automatically. Also fixes a race where the Thinking indicator disappeared after approving a plan with Clear Context.
+
+### Patch Changes
+
+- [#233](https://github.com/qlan-ro/mainframe/pull/233) [`933450e`](https://github.com/qlan-ro/mainframe/commit/933450e28d508bd25f8c1d9bcda955732fbbf831) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix queued messages not clearing from the composer ([#116](https://github.com/qlan-ro/mainframe/issues/116)).
+
+  The Claude CLI only emits `isReplay: true` acks for queued uuids when spawned with `--replay-user-messages`; without the flag, queued cleanup fell back to a cache-scan on turn completion that mis-fired when the cache was reloaded from JSONL or when the CLI exited without a final `result`. Fixes:
+  - Pass `--replay-user-messages` to the Claude spawn so the CLI emits a per-uuid ack the daemon can match.
+  - Route `onQueuedProcessed` back into `ChatManager.handleQueuedProcessed` so `queuedRefs` is pruned in lockstep with the composer banner.
+  - Clear queued metadata and emit `message.queued.cleared` on abnormal CLI exit.
+  - Drop the premature bulk-clear in `onResult` that was stripping metadata from messages the CLI hadn't dequeued yet.
+  - Emit `message.queued.snapshot` to subscribing clients so the renderer's Zustand state rehydrates after a WS reconnect.
+
+
 ## 0.11.1
 
 

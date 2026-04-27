@@ -50,6 +50,8 @@ const nullSink: SessionSink = {
   onQueuedProcessed: () => {},
   onTodoUpdate: () => {},
   onPrDetected: () => {},
+  onCliMessage: () => {},
+  onSkillLoaded: () => {},
 };
 
 export class CodexSession implements AdapterSession {
@@ -63,10 +65,11 @@ export class CodexSession implements AdapterSession {
   private readonly onExitCallback: (() => void) | undefined;
   private readonly resumeThreadId: string | undefined;
 
-  readonly state: CodexSessionState = { threadId: null, currentTurnId: null };
+  readonly state: CodexSessionState = { threadId: null, currentTurnId: null, currentTurnPlan: null };
 
   private pendingModel: string | undefined;
   private pendingPermissionMode: string = 'default';
+  private pendingPlanMode: boolean = false;
   private pid = 0;
   private status: 'starting' | 'ready' | 'running' | 'stopped' | 'error' = 'starting';
 
@@ -98,6 +101,7 @@ export class CodexSession implements AdapterSession {
     this.sink = sink ?? nullSink;
     this.pendingModel = options.model;
     this.pendingPermissionMode = options.permissionMode ?? 'default';
+    this.pendingPlanMode = options.planMode ?? false;
 
     try {
       accessSync(this.projectPath);
@@ -126,6 +130,10 @@ export class CodexSession implements AdapterSession {
     this.client = new JsonRpcClient(child, {
       onNotification: (method, params) => handleNotification(method, params, this.sink, this.state),
       onRequest: (method, params, id) => {
+        approvalHandler.setPlanContext({
+          planMode: this.pendingPlanMode,
+          currentTurnPlan: this.state.currentTurnPlan,
+        });
         approvalHandler.handleRequest(method, params, id, (rpcId, result) => {
           this.client?.respond(rpcId, result);
         });
@@ -227,8 +235,22 @@ export class CodexSession implements AdapterSession {
   }
 
   async kill(): Promise<void> {
+    const client = this.client;
+    if (!client) return;
+
     this.approvalHandler?.rejectAll();
-    this.client?.close();
+    const closed = new Promise<void>((resolve) => {
+      const unsubscribe = client.onClose(() => {
+        unsubscribe();
+        resolve();
+      });
+    });
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(resolve, 3000);
+    });
+
+    client.close();
+    await Promise.race([closed, timeout]);
     this.client = null;
   }
 
@@ -250,6 +272,10 @@ export class CodexSession implements AdapterSession {
 
   async setPermissionMode(mode: string): Promise<void> {
     this.pendingPermissionMode = mode;
+  }
+
+  async setPlanMode(on: boolean): Promise<void> {
+    this.pendingPlanMode = on;
   }
 
   async sendCommand(_command: string, _args?: string): Promise<void> {
@@ -332,7 +358,7 @@ export class CodexSession implements AdapterSession {
   }
 
   private buildCollaborationMode(): CollaborationMode {
-    const mode = this.pendingPermissionMode === 'plan' ? 'plan' : 'default';
+    const mode = this.pendingPlanMode ? 'plan' : 'default';
     return {
       mode,
       settings: {

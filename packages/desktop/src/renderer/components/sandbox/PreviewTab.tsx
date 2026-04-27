@@ -10,7 +10,10 @@ import {
   ChevronDown,
   ChevronUp,
   Smartphone,
+  Frame,
 } from 'lucide-react';
+import { RegionCaptureOverlay, type CaptureRect } from './RegionCaptureOverlay.js';
+import { CaptureAnnotationPopover } from './CaptureAnnotationPopover.js';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { startLaunchConfig, stopLaunchConfig } from '../../lib/launch';
 import { useSandboxStore } from '../../store/sandbox';
@@ -104,9 +107,36 @@ interface ElementPickResult {
   viewport: { width: number; height: number };
 }
 
+interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Converts a CSS-pixel crop rectangle to device pixels by multiplying by the zoom factor.
+ * capturePage() operates in device pixels; getBoundingClientRect() returns CSS pixels.
+ * At zoom != 1.0 (Cmd+/-), failing to scale causes an offset crop rectangle.
+ */
+export function scaleCropRect(rect: CropRect, zoom: number): CropRect {
+  return {
+    x: Math.round(rect.x * zoom),
+    y: Math.round(rect.y * zoom),
+    width: Math.round(rect.width * zoom),
+    height: Math.round(rect.height * zoom),
+  };
+}
+
 export function PreviewTab(): React.ReactElement {
   const webviewRef = useRef<HTMLElement>(null);
   const [inspecting, setInspecting] = useState(false);
+  const [capturingRegion, setCapturingRegion] = useState(false);
+  const [pendingCaptures, setPendingCaptures] = useState<
+    Array<{ id: string; rect: CaptureRect; dataUrl: string; annotation: string }>
+  >([]);
+  const [autoFocusId, setAutoFocusId] = useState<string | null>(null);
+  const webviewWrapperRef = useRef<HTMLDivElement>(null);
   const [mobileView, setMobileView] = useState(false);
   const addCapture = useSandboxStore((s) => s.addCapture);
   const logsOutput = useSandboxStore((s) => s.logsOutput);
@@ -280,6 +310,53 @@ export function PreviewTab(): React.ReactElement {
     }
   }, [addCapture]);
 
+  const handleRegionCapture = useCallback(async (rect: CaptureRect) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wv = webviewRef.current as any;
+    if (!wv) return;
+    try {
+      const zoom: number = (wv.getZoomFactor?.() as number | undefined) ?? 1;
+      const cropRect = scaleCropRect(rect, zoom);
+      const image = (await wv.capturePage(cropRect)) as { toDataURL: () => string };
+      const dataUrl = image.toDataURL();
+      const id = `cap-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setPendingCaptures((prev) => [...prev, { id, rect, dataUrl, annotation: '' }]);
+      setAutoFocusId(id);
+    } catch (err) {
+      console.warn('[sandbox] region capture failed', err);
+    }
+  }, []);
+
+  const updateAnnotation = useCallback((id: string, next: string) => {
+    setPendingCaptures((prev) => prev.map((c) => (c.id === id ? { ...c, annotation: next } : c)));
+  }, []);
+
+  const removePendingCapture = useCallback((id: string) => {
+    setPendingCaptures((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const exitCaptureMode = useCallback(() => {
+    setCapturingRegion(false);
+    setPendingCaptures([]);
+    setAutoFocusId(null);
+  }, []);
+
+  const submitAllCaptures = useCallback(() => {
+    if (pendingCaptures.length === 0) return;
+    for (const c of pendingCaptures) {
+      addCapture({
+        type: 'screenshot',
+        imageDataUrl: c.dataUrl,
+        annotation: c.annotation.trim() || undefined,
+      });
+    }
+    if (!useChatsStore.getState().activeChatId) {
+      const projectId = getActiveProjectId();
+      if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+    }
+    exitCaptureMode();
+  }, [addCapture, pendingCaptures, exitCaptureMode]);
+
   const handleInspect = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wv = webviewRef.current as any;
@@ -301,12 +378,11 @@ export function PreviewTab(): React.ReactElement {
       const right = Math.min(result.viewport.width, result.rect.x + result.rect.width + PAD);
       const bottom = Math.min(result.viewport.height, result.rect.y + result.rect.height + PAD);
 
-      const image = (await wv.capturePage({
-        x,
-        y,
-        width: Math.round(right - x),
-        height: Math.round(bottom - y),
-      })) as { toDataURL: () => string };
+      // getBoundingClientRect() returns CSS pixels, but capturePage() operates in device pixels.
+      // At non-1.0 zoom (Cmd+/Cmd-), we must scale the crop rect by the zoom factor to avoid offset captures.
+      const zoom: number = (wv.getZoomFactor?.() as number | undefined) ?? 1;
+      const cropRect = scaleCropRect({ x, y, width: right - x, height: bottom - y }, zoom);
+      const image = (await wv.capturePage(cropRect)) as { toDataURL: () => string };
       const dataUrl = image.toDataURL();
       addCapture({ type: 'element', imageDataUrl: dataUrl, selector: result.selector });
 
@@ -454,6 +530,22 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  onClick={() => (capturingRegion ? exitCaptureMode() : setCapturingRegion(true))}
+                  className={[
+                    'p-1 rounded transition-colors',
+                    capturingRegion
+                      ? 'bg-mf-hover text-mf-accent'
+                      : 'hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary',
+                  ].join(' ')}
+                >
+                  <Frame size={13} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Region capture</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
                   onClick={() => setMobileView((v) => !v)}
                   className={[
                     'p-1 rounded transition-colors',
@@ -498,6 +590,7 @@ export function PreviewTab(): React.ReactElement {
                when display:none, breaking loadURL and did-finish-load events. */}
           {previewConfig ? (
             <div
+              ref={webviewWrapperRef}
               className={
                 hasPreview ? 'flex-1 overflow-hidden min-h-0 relative mx-2 my-2 flex items-start justify-center' : ''
               }
@@ -544,6 +637,31 @@ export function PreviewTab(): React.ReactElement {
                     </span>
                   )}
                 </div>
+              )}
+              {/* Region capture overlay + per-capture annotation popovers */}
+              {capturingRegion && webviewReady && (
+                <>
+                  <RegionCaptureOverlay
+                    captured={pendingCaptures.map((c) => ({ id: c.id, rect: c.rect }))}
+                    onCapture={(rect) => {
+                      void handleRegionCapture(rect);
+                    }}
+                    onSubmitAll={submitAllCaptures}
+                    onCancel={exitCaptureMode}
+                  />
+                  {pendingCaptures.map((c, idx) => (
+                    <CaptureAnnotationPopover
+                      key={c.id}
+                      anchorRect={c.rect}
+                      containerRef={webviewWrapperRef}
+                      index={idx + 1}
+                      value={c.annotation}
+                      autoFocus={autoFocusId === c.id}
+                      onChange={(next) => updateAnnotation(c.id, next)}
+                      onRemove={() => removePendingCapture(c.id)}
+                    />
+                  ))}
+                </>
               )}
             </div>
           ) : null}

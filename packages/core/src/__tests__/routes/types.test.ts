@@ -58,4 +58,16 @@ describe('getEffectivePath', () => {
     const result = getEffectivePath(ctx, 'p1', 'unknown-chat');
     expect(result).toBe('/my/project');
   });
+
+  it('returns null when chat has a worktree but it is missing on disk', () => {
+    (ctx.db.projects.get as any).mockReturnValue({ id: 'p1', path: '/my/project' });
+    (ctx.chats.getChat as any).mockReturnValue({
+      id: 'c1',
+      worktreePath: '/deleted/worktree',
+      worktreeMissing: true,
+    });
+
+    const result = getEffectivePath(ctx, 'p1', 'c1');
+    expect(result).toBeNull();
+  });
 });

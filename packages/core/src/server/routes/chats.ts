@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import type { Chat } from '@qlan-ro/mainframe-types';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
@@ -82,6 +83,7 @@ export function chatRoutes(ctx: RouteContext): Router {
   });
 
   const pinSchema = z.object({ pinned: z.boolean() });
+  const effortSchema = z.object({ effort: z.enum(['low', 'medium', 'high']).nullable() });
 
   router.patch('/api/chats/:id/pinned', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
@@ -104,11 +106,34 @@ export function chatRoutes(ctx: RouteContext): Router {
     }
   });
 
+  router.patch('/api/chats/:id/effort', (req: Request, res: Response) => {
+    const chatId = param(req, 'id');
+    const parsed = effortSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: 'effort must be one of "low" | "medium" | "high" | null' });
+      return;
+    }
+    try {
+      // Explicit null clears the stored effort; allowed effort values pass through.
+      // The DB update loop skips undefined keys, so we cast to pass null through.
+      const effortUpdate = parsed.data.effort;
+      ctx.db.chats.update(chatId, { effort: effortUpdate as Chat['effort'] });
+      const chat = ctx.db.chats.get(chatId);
+      if (!chat) {
+        res.status(404).json({ success: false, error: 'Chat not found' });
+        return;
+      }
+      res.json({ success: true, data: chat });
+    } catch (err) {
+      logger.warn({ err, chatId }, 'Failed to update effort');
+      res.status(500).json({ success: false, error: 'Operation failed' });
+    }
+  });
+
   router.post('/api/chats/:id/unarchive', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
     try {
-      ctx.db.chats.update(chatId, { status: 'active' });
-      const chat = ctx.db.chats.get(chatId);
+      const chat = ctx.chats.unarchiveChat(chatId);
       if (!chat) {
         res.status(404).json({ success: false, error: 'Chat not found' });
         return;

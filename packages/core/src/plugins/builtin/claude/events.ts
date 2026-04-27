@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { resolveSkillPath, resolveExistingSkillPath, readSkillContent } from './skill-path.js';
 import type {
   ContextUsage,
   ControlRequest,
@@ -6,6 +7,7 @@ import type {
   DetectedPr,
   MessageContent,
   SessionSink,
+  SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
 import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
@@ -124,7 +126,7 @@ export function handleStdout(session: ClaudeSession, chunk: Buffer, sink: Sessio
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    log.trace({ sessionId: session.id, line }, 'adapter stdout');
+    log.trace({ sessionId: session.id, line }, '[stream-json]');
     try {
       const event = JSON.parse(line.trim());
       handleEvent(session, event, sink);
@@ -212,6 +214,17 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
             if (pr) session.state.pendingPrMutations.set(block.id as string, pr);
           }
         }
+        if (name === 'Skill') {
+          const input = block.input as { skill?: string } | undefined;
+          const skillName = input?.skill?.trim();
+          if (skillName) {
+            // Use the cached path from a prior user-event (more accurate), falling back to the probe.
+            const cachedPath = session.state.skillPathCache.get(skillName);
+            const resolvedPath =
+              cachedPath ?? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache);
+            sink.onSkillFile({ path: resolvedPath, displayName: skillName });
+          }
+        }
       }
     }
 
@@ -231,14 +244,48 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   }
 
   // Live stream handles ONLY tool_result blocks from user events.
-  // Text/image blocks in user entries are intentionally ignored here because:
-  //   - User-typed text: already created as a ChatMessage by chat-manager.sendMessage()
-  //   - Image blocks: not surfaced in live mode (no UX for them)
+  // Text blocks in user entries are ignored when isReplay (user-typed text already created
+  // by chat-manager.sendMessage()) or when isMeta (CLI-internal command wrappers like
+  // <local-command-caveat>). Text blocks that are neither are CLI-synthesized feedback
+  // messages (e.g. "Unknown command: /foo. Did you mean /bar?") and ARE surfaced.
+  // Image blocks: not surfaced in live mode (no UX for them).
   // History loading (convertUserEntry) reconstructs these from JSONL since it
   // has no sendMessage() counterpart. See docs/plans/2026-02-17-unified-event-pipeline.md.
   // TODO(task-support): handle <task-notification> string content as TaskGroupCard
-  const message = event.message as { content: Array<Record<string, unknown>> } | undefined;
+  const isMeta = event.isMeta === true || event.is_meta === true;
+  const message = event.message as { content: Array<Record<string, unknown>> | string } | undefined;
   if (!message?.content) return;
+
+  // User-typed /skill-name path: the CLI emits a string-content metadata
+  // event (<command-message>+<command-name>) over stream-json, but it writes
+  // the isMeta:true skill-content to JSONL only — stream-json never shows
+  // the skill body. Detect here from the <command-name> XML and read the
+  // SKILL.md off disk ourselves so the card renders live.
+  if (typeof message.content === 'string') {
+    const nameMatch = /<command-name>\/?([^<]+)<\/command-name>/.exec(message.content);
+    if (nameMatch?.[1]) {
+      const skillName = nameMatch[1].trim();
+      const cached = session.state.skillPathCache.get(skillName);
+      const skillPath = cached ?? resolveExistingSkillPath(session.projectPath, skillName);
+      if (skillPath) {
+        session.state.skillPathCache.set(skillName, skillPath);
+        const content = readSkillContent(skillPath) ?? '';
+        sink.onSkillLoaded({ skillName, path: skillPath, content });
+        sink.onSkillFile({ path: skillPath, displayName: skillName });
+      }
+      return;
+    }
+
+    // Any other string-content user event is CLI feedback that doesn't belong
+    // to a skill/command echo — e.g. "Unknown command: /foo". Surface it as a
+    // system pill so the user sees why their input had no effect. The user's
+    // original text already exists as a transient from chat-manager.sendMessage.
+    if (!isReplay && !isMeta) {
+      const trimmed = message.content.trim();
+      if (trimmed) sink.onCliMessage(trimmed);
+    }
+    return;
+  }
 
   // Stream-json uses snake_case; JSONL uses camelCase
   const tur = (event.tool_use_result ?? event.toolUseResult) as Record<string, unknown> | undefined;
@@ -276,23 +323,68 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       }
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';
-      const skillMatch = text.match(/^Base directory for this skill: (.+)/m);
-      if (skillMatch?.[1]) {
-        const basePath = skillMatch[1].trim();
-        const skillPath = path.join(basePath, 'SKILL.md');
-        const skillName = basePath.split('/').pop() ?? basePath;
-        sink.onSkillFile({ path: skillPath, displayName: skillName });
+      if (!text.trim()) continue;
+
+      // Skill injection — must be checked regardless of isReplay/isMeta.
+      // The CLI marks the skill-content user message as isMeta: true for
+      // user-typed /skill-name (processSlashCommand.tsx:905-907), so
+      // filtering isMeta out first would miss it entirely.
+      //
+      // Two shapes:
+      //   (A) <skill-format>true</skill-format> — model-initiated SkillTool
+      //       output + subagent preloads
+      //   (B) Text starting with "Base directory for this skill: <path>" —
+      //       user-typed /skill-name injection (isMeta: true, no XML tag)
+      const hasSkillFormat = text.includes('<skill-format>true</skill-format>');
+      const baseDirMatch = /^Base directory for this skill:\s*(.+?)(?:\n|$)/m.exec(text);
+      const isSkillInjection = hasSkillFormat || Boolean(baseDirMatch);
+
+      if (isSkillInjection) {
+        const nameFromTag = /<command-name>([^<]+)<\/command-name>/.exec(text)?.[1]?.replace(/^\//, '').trim();
+        const rawDir = baseDirMatch?.[1]?.trim() ?? '';
+        const skillName = nameFromTag || (rawDir ? path.basename(rawDir) : '');
+        const resolvedPath = rawDir && !path.extname(rawDir) ? path.join(rawDir, 'SKILL.md') : rawDir;
+        const finalPath =
+          resolvedPath ||
+          (skillName ? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache) : '');
+
+        if (skillName && finalPath) {
+          session.state.skillPathCache.set(skillName, finalPath);
+        }
+
+        const content = text
+          .replace(/<command-message>[^<]*<\/command-message>\n?/g, '')
+          .replace(/<command-name>[^<]*<\/command-name>\n?/g, '')
+          .replace(/<skill-format>[^<]*<\/skill-format>\n?/g, '')
+          .replace(/^Base directory for this skill:[^\n]*\n?/m, '')
+          .trim();
+
+        sink.onSkillLoaded({ skillName, path: finalPath, content });
+        sink.onSkillFile({ path: finalPath, displayName: skillName });
+        continue;
       }
-    }
-  }
-  const rawContent = (event.message as Record<string, unknown>)?.content;
-  if (typeof rawContent === 'string') {
-    const skillMatch = rawContent.match(/^Base directory for this skill: (.+)/m);
-    if (skillMatch?.[1]) {
-      const basePath = skillMatch[1].trim();
-      const skillPath = path.join(basePath, 'SKILL.md');
-      const skillName = basePath.split('/').pop() ?? basePath;
-      sink.onSkillFile({ path: skillPath, displayName: skillName });
+
+      // CLI-synthesized feedback (e.g. unknown-command errors, notices).
+      // Discriminator: not a replay of user-typed text AND not a CLI meta wrapper.
+      //
+      // Additional suppress list — CLI-internal notifications that Mainframe
+      // either already handles via its own UI (interrupts, permissions) or that
+      // carry context for the model, not the user:
+      //   • <local-command-stdout|stderr|caveat> wrappers (e.g. /model reply)
+      //   • "[Request interrupted by user]" /
+      //     "[Request interrupted by user for tool use]"
+      //     (Claude source: utils/messages.ts:207-209)
+      if (!isReplay && !isMeta) {
+        const trimmed = text.trim();
+        const isLocalCommandWrapper =
+          /^<local-command-(?:stdout|stderr|caveat)>[\s\S]*<\/local-command-(?:stdout|stderr|caveat)>\s*$/.test(
+            trimmed,
+          );
+        const isInterruptMarker = /^\[Request interrupted by user[^\]]*\]\s*$/.test(trimmed);
+        if (!isLocalCommandWrapper && !isInterruptMarker) {
+          sink.onCliMessage(trimmed);
+        }
+      }
     }
   }
 }
@@ -341,6 +433,17 @@ function handleControlResponseEvent(session: ClaudeSession, event: Record<string
 }
 
 function handleResultEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+  // Surface CLI slash-command errors that reach us only via the `result`
+  // event. When `shouldQuery: false` (unknown /cmd, bad /cmd args), the CLI
+  // filters the "Unknown skill: /X" user message out of stream-json
+  // (QueryEngine.ts:556-605 only yields <local-command-stdout|stderr> entries)
+  // but the error text survives on `result.result`. We forward it as a
+  // system pill so the user sees why their input had no effect.
+  const resultText = typeof event.result === 'string' ? event.result.trim() : '';
+  if (resultText && /^Unknown (command|skill):/i.test(resultText)) {
+    sink.onCliMessage(resultText);
+  }
+
   const lastUsage = session.state.lastAssistantUsage;
   const usage =
     lastUsage ??

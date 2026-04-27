@@ -34,6 +34,8 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     }
     case 'chat.notification': {
+      // Daemon already gates emission on the user's notification settings,
+      // so seeing this event means the OS notification should fire.
       const chat = chats.chats.find((c) => c.id === event.chatId);
       notify({
         type: event.level,
@@ -71,7 +73,10 @@ export function routeEvent(event: DaemonEvent): void {
         toolName: event.request.toolName,
       });
       chats.addPendingPermission(event.chatId, event.request);
-      {
+      // The daemon evaluates the user's settings and tells us whether to
+      // surface an OS notification via `event.notify`. The in-app permission
+      // card is always rendered (above) regardless of that flag.
+      if (event.notify) {
         const chat = chats.chats.find((c) => c.id === event.chatId);
         notify({
           type: 'info',
@@ -149,19 +154,34 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'sessions.external.count':
       break;
-    case 'plugin.notification':
-      notify({
-        type:
-          event.level === 'error'
-            ? 'error'
-            : event.level === 'warning'
-              ? 'warning'
-              : event.level === 'success'
-                ? 'success'
-                : 'info',
-        title: event.title,
-        body: event.body,
+    case 'plugin.panel.registered':
+      usePluginLayoutStore.getState().registerContribution({
+        pluginId: event.pluginId,
+        panelId: event.panelId,
+        zone: event.zone,
+        label: event.label,
+        icon: event.icon,
       });
+      break;
+    case 'plugin.panel.unregistered':
+      usePluginLayoutStore.getState().unregisterContribution(event.pluginId, event.panelId);
+      break;
+    case 'plugin.notification':
+      // Daemon already gates emission on the user's notification settings.
+      {
+        notify({
+          type:
+            event.level === 'error'
+              ? 'error'
+              : event.level === 'warning'
+                ? 'warning'
+                : event.level === 'success'
+                  ? 'success'
+                  : 'info',
+          title: event.title,
+          body: event.body,
+        });
+      }
       break;
     case 'plugin.action.registered':
       usePluginLayoutStore.getState().registerAction({
@@ -189,6 +209,9 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'message.queued.cleared':
       chats.clearQueuedMessages(event.chatId);
+      break;
+    case 'message.queued.snapshot':
+      chats.setQueuedMessages(event.chatId, event.refs);
       break;
     case 'adapter.models.updated':
       log.info('event:adapter.models.updated', { adapterId: event.adapterId, count: event.models.length });

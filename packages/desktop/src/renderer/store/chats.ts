@@ -49,6 +49,7 @@ interface ChatsState {
   processes: Map<string, AdapterProcess>;
   queuedMessages: Map<string, QueuedMessageRef[]>;
   compactingChats: Set<string>;
+  loadingChats: Set<string>;
   contextUsage: Map<string, ContextUsageState>;
   unreadChatIds: Set<string>;
   todos: Map<string, TodoItem[]>;
@@ -73,7 +74,9 @@ interface ChatsState {
   addQueuedMessage: (chatId: string, ref: QueuedMessageRef) => void;
   removeQueuedMessage: (chatId: string, uuid: string) => void;
   clearQueuedMessages: (chatId: string) => void;
+  setQueuedMessages: (chatId: string, refs: QueuedMessageRef[]) => void;
   setCompacting: (chatId: string, compacting: boolean) => void;
+  setLoadingChat: (chatId: string, loading: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
   setTodos: (chatId: string, todos: TodoItem[]) => void;
   addDetectedPr: (chatId: string, pr: DetectedPr) => void;
@@ -96,6 +99,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   processes: new Map(),
   queuedMessages: new Map(),
   compactingChats: new Set(),
+  loadingChats: new Set(),
   contextUsage: new Map(),
   unreadChatIds: new Set(),
   todos: new Map(),
@@ -114,7 +118,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
       next.delete(chatId);
       return { unreadChatIds: next };
     }),
-  setChats: (chats) => set({ chats }),
+  setChats: (chats) => set({ chats: sortChats([...chats]) }),
   setFilterProjectId: (id) => {
     if (id) {
       localStorage.setItem('mf:filterProjectId', id);
@@ -149,7 +153,9 @@ export const useChatsStore = create<ChatsState>((set) => ({
   updateChat: (chat) =>
     set((state) => {
       const idx = state.chats.findIndex((c) => c.id === chat.id);
-      if (idx === -1) return { chats: sortChats([chat, ...state.chats]) };
+      // Do not re-insert a chat that was intentionally removed (e.g. optimistic
+      // archive). Updates for unknown chats are silently dropped.
+      if (idx === -1) return state;
       const prev = state.chats[idx]!;
       // Only re-sort when updatedAt or pinned changed
       if (chat.updatedAt !== prev.updatedAt || chat.pinned !== prev.pinned) {
@@ -277,6 +283,16 @@ export const useChatsStore = create<ChatsState>((set) => ({
       next.delete(chatId);
       return { queuedMessages: next };
     }),
+  setQueuedMessages: (chatId, refs) =>
+    set((state) => {
+      const next = new Map(state.queuedMessages);
+      if (refs.length === 0) {
+        next.delete(chatId);
+      } else {
+        next.set(chatId, refs);
+      }
+      return { queuedMessages: next };
+    }),
   setCompacting: (chatId, compacting) =>
     set((state) => {
       const next = new Set(state.compactingChats);
@@ -286,6 +302,16 @@ export const useChatsStore = create<ChatsState>((set) => ({
         next.delete(chatId);
       }
       return { compactingChats: next };
+    }),
+  setLoadingChat: (chatId, loading) =>
+    set((state) => {
+      const next = new Set(state.loadingChats);
+      if (loading) {
+        next.add(chatId);
+      } else {
+        next.delete(chatId);
+      }
+      return { loadingChats: next };
     }),
   setContextUsage: (chatId, usage) =>
     set((state) => {

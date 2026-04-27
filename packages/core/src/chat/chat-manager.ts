@@ -63,11 +63,14 @@ export class ChatManager {
         const adapter = chat ? this.adapters.get(chat.adapterId) : undefined;
         return adapter?.getToolCategories?.();
       },
+      (chatId, uuid) => this.handleQueuedProcessed(chatId, uuid),
+      (chatId) => this.clearAllQueuedForChat(chatId),
     );
     this.planMode = new PlanModeHandler({
       permissions: this.permissions,
       messages: this.messages,
       db: this.db,
+      adapters: this.adapters,
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       emitEvent: (event) => this.emitEvent(event),
       clearDisplayCache: (chatId) => this.eventHandler.clearDisplayCache(chatId),
@@ -82,7 +85,8 @@ export class ChatManager {
       messages: this.messages,
       permissions: this.permissions,
       emitEvent: (event) => this.emitEvent(event),
-      buildSink: (chatId, respondToPermission) => this.eventHandler.buildSink(chatId, respondToPermission),
+      buildSink: (chatId, sessionId, respondToPermission) =>
+        this.eventHandler.buildSink(chatId, sessionId, respondToPermission),
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,
@@ -116,6 +120,7 @@ export class ChatManager {
 
   setPushService(service: import('../push/push-service.js').PushService): void {
     this.eventHandler.setPushService(service);
+    this.permissionHandler.setPushService(service);
   }
 
   getExternalSessionService(): ExternalSessionService {
@@ -154,8 +159,9 @@ export class ChatManager {
     adapterId?: string,
     model?: string,
     permissionMode?: Chat['permissionMode'],
+    planMode?: boolean,
   ): Promise<void> {
-    return this.configManager.updateChatConfig(chatId, adapterId, model, permissionMode);
+    return this.configManager.updateChatConfig(chatId, adapterId, model, permissionMode, planMode);
   }
 
   async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
@@ -365,6 +371,25 @@ export class ChatManager {
     logger.info({ chatId, uuid, messageId: ref.messageId }, 'CLI processed queued message');
   }
 
+  /** Return all queued refs for a chat, oldest-first. */
+  getQueuedForChat(chatId: string): QueuedMessageRef[] {
+    return [...this.queuedRefs.values()].filter((r) => r.chatId === chatId);
+  }
+
+  /** Drop every queuedRef belonging to a chat. Called when the CLI process exits. */
+  clearAllQueuedForChat(chatId: string): void {
+    let removed = 0;
+    for (const [uuid, ref] of this.queuedRefs) {
+      if (ref.chatId === chatId) {
+        this.queuedRefs.delete(uuid);
+        removed++;
+      }
+    }
+    if (removed > 0) {
+      logger.info({ chatId, removed }, 'cleared queued refs for exited chat');
+    }
+  }
+
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
     logger.info({ chatId, behavior: response.behavior, toolName: response.toolName }, 'permission answered');
     return this.permissionHandler.respondToPermission(chatId, response);
@@ -379,6 +404,14 @@ export class ChatManager {
   async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
     await this.lifecycle.archiveChat(chatId, deleteWorktree);
     this.eventHandler.clearDisplayCache(chatId);
+  }
+
+  unarchiveChat(chatId: string): Chat | null {
+    this.db.chats.update(chatId, { status: 'active' });
+    const chat = this.db.chats.get(chatId);
+    if (!chat) return null;
+    this.emitEvent({ type: 'chat.updated', chat });
+    return chat;
   }
 
   async endChat(chatId: string): Promise<void> {
@@ -414,6 +447,15 @@ export class ChatManager {
   listAllChats(): Chat[] {
     const chats = this.db.chats.listAll();
     return chats.map((chat) => this.enrichChat(chat));
+  }
+
+  /** Re-emit chat.updated for every non-archived chat bound to the given worktree path so clients pick up the new worktreeMissing flag. */
+  notifyWorktreeDeleted(worktreePath: string): void {
+    for (const raw of this.db.chats.listAll()) {
+      if (raw.worktreePath !== worktreePath) continue;
+      const enriched = this.enrichChat(raw);
+      this.emitEvent({ type: 'chat.updated', chat: enriched });
+    }
   }
 
   getChat(chatId: string): Chat | null {

@@ -1,6 +1,6 @@
 import type { SettingsTab } from '../../store/settings';
 import type { ProviderConfig } from '@qlan-ro/mainframe-types';
-import { SlidersHorizontal, Keyboard, Info, Cpu, Globe } from 'lucide-react';
+import { SlidersHorizontal, Keyboard, Info, Cpu, Globe, Bell } from 'lucide-react';
 import type React from 'react';
 
 export const MODE_OPTIONS: {
@@ -17,12 +17,12 @@ export const MODE_OPTIONS: {
     description: 'Auto-approves everything — use in isolated environments only',
     danger: true,
   },
-  { id: 'plan', label: 'Plan Mode', description: 'Research only until plan is approved' },
 ];
 
 export const SIDEBAR_TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
   { id: 'providers', label: 'Providers', icon: Cpu },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'keybindings', label: 'Keybindings', icon: Keyboard },
   { id: 'remote-access', label: 'Remote Access', icon: Globe },
   { id: 'about', label: 'About', icon: Info },

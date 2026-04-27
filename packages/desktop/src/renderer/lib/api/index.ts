@@ -8,7 +8,9 @@ export {
   getAllChats,
   renameChat,
   archiveChat,
+  unarchiveChat,
   pinChat,
+  setChatEffort,
   getChatMessages,
   getAdapters,
 } from './projects-api';
@@ -18,6 +20,7 @@ export {
   getFilesList,
   searchFiles,
   getFileContent,
+  getExternalFileContent,
   getFileBinary,
   getPendingPermission,
   getSessionFiles,

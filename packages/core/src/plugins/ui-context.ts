@@ -1,22 +1,45 @@
+import { nanoid } from 'nanoid';
 import type { PluginUIContext, UIZone, DaemonEvent } from '@qlan-ro/mainframe-types';
 
-export function createPluginUIContext(pluginId: string, emitEvent: (event: DaemonEvent) => void): PluginUIContext {
+interface UIContextDeps {
+  /** Optional gate — when provided and returns false, plugin.notification emissions are dropped. */
+  isPluginNotifyEnabled?: () => boolean;
+}
+
+export function createPluginUIContext(
+  pluginId: string,
+  emitEvent: (event: DaemonEvent) => void,
+  deps: UIContextDeps = {},
+): PluginUIContext {
+  /** Track live panel ids so removePanel() (no args) can clean them all up. */
+  const activePanelIds = new Set<string>();
+
   return {
-    addPanel({ zone, label, icon }: { zone: UIZone; label: string; icon?: string }): void {
+    addPanel({ zone, label, icon }: { zone: UIZone; label: string; icon?: string }): string {
+      const panelId = nanoid();
+      activePanelIds.add(panelId);
       emitEvent({
         type: 'plugin.panel.registered',
         pluginId,
+        panelId,
         zone,
         label,
         icon,
       });
+      return panelId;
     },
 
-    removePanel(): void {
-      emitEvent({
-        type: 'plugin.panel.unregistered',
-        pluginId,
-      });
+    removePanel(id?: string): void {
+      if (id !== undefined) {
+        activePanelIds.delete(id);
+        emitEvent({ type: 'plugin.panel.unregistered', pluginId, panelId: id });
+      } else {
+        // Remove all panels owned by this plugin.
+        for (const panelId of activePanelIds) {
+          emitEvent({ type: 'plugin.panel.unregistered', pluginId, panelId });
+        }
+        activePanelIds.clear();
+      }
     },
 
     addAction({ id, label, shortcut, icon }: { id: string; label: string; shortcut: string; icon?: string }): void {
@@ -39,6 +62,7 @@ export function createPluginUIContext(pluginId: string, emitEvent: (event: Daemo
     },
 
     notify(options): void {
+      if (deps.isPluginNotifyEnabled && !deps.isPluginNotifyEnabled()) return;
       emitEvent({
         type: 'plugin.notification',
         pluginId,

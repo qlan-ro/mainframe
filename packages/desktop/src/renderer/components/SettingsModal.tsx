@@ -13,6 +13,7 @@ import { GeneralSection } from './settings/GeneralSection';
 import { SIDEBAR_TABS, PROVIDER_COLORS, PROVIDER_BORDER_COLORS } from './settings/constants';
 import { AboutSection } from './settings/AboutSection';
 import { RemoteAccessSection } from './settings/RemoteAccessSection';
+import { NotificationsSection } from './settings/NotificationsSection';
 
 function ProvidersContent() {
   const selectedProvider = useSettingsStore((s) => s.selectedProvider);
@@ -43,6 +44,8 @@ function TabContent() {
       return <ProvidersContent />;
     case 'general':
       return <GeneralSection />;
+    case 'notifications':
+      return <NotificationsSection />;
     case 'keybindings':
       return <PlaceholderContent label="Keybindings" />;
     case 'remote-access':

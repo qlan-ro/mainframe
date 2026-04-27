@@ -44,13 +44,26 @@ describe('validateManifest', () => {
     expect(result.success).toBe(true);
   });
 
-  it('accepts valid ui field with a UIZone', () => {
+  // ─── Single-object ui (legacy shape) ──────────────────────────────────────
+
+  it('accepts legacy single-object ui field with a valid zone', () => {
     const result = validateManifest({
       id: 'todos',
       name: 'Todos',
       version: '1.0.0',
       capabilities: ['ui:panels'],
       ui: { zone: 'left-panel', label: 'Todos', icon: 'CheckSquare' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts legacy single-object ui with a ZoneId zone', () => {
+    const result = validateManifest({
+      id: 'todos',
+      name: 'Todos',
+      version: '1.0.0',
+      capabilities: ['ui:panels'],
+      ui: { zone: 'right-top', label: 'Sidebar' },
     });
     expect(result.success).toBe(true);
   });
@@ -78,5 +91,60 @@ describe('validateManifest', () => {
     if (!result.success) {
       expect(result.error).toMatch(/ui:panels/);
     }
+  });
+
+  // ─── Array ui (new multi-zone shape) ──────────────────────────────────────
+
+  it('accepts new array ui field with multiple zone contributions', () => {
+    const result = validateManifest({
+      id: 'todos',
+      name: 'Todos',
+      version: '1.0.0',
+      capabilities: ['ui:panels'],
+      ui: [
+        { zone: 'fullview', label: 'Kanban', icon: 'square-check' },
+        { zone: 'right-top', label: 'Quick Add', icon: 'list-todo' },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects array ui where any contribution has an invalid zone', () => {
+    const result = validateManifest({
+      id: 'todos',
+      name: 'Todos',
+      version: '1.0.0',
+      capabilities: ['ui:panels'],
+      ui: [
+        { zone: 'fullview', label: 'Kanban' },
+        { zone: 'not-a-real-zone', label: 'Bad' },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects array ui when ui:panels capability is missing', () => {
+    const result = validateManifest({
+      id: 'todos',
+      name: 'Todos',
+      version: '1.0.0',
+      capabilities: [],
+      ui: [{ zone: 'fullview', label: 'Kanban' }],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/ui:panels/);
+    }
+  });
+
+  it('accepts empty array ui without requiring ui:panels', () => {
+    const result = validateManifest({
+      id: 'todos',
+      name: 'Todos',
+      version: '1.0.0',
+      capabilities: [],
+      ui: [],
+    });
+    expect(result.success).toBe(true);
   });
 });

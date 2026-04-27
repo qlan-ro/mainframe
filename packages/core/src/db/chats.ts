@@ -3,12 +3,19 @@ import type { Chat, SessionMention, SkillFileEntry, TodoItem } from '@qlan-ro/ma
 import { nanoid } from 'nanoid';
 
 /** Raw shape returned by SQLite before boolean/JSON coercion. */
-type RawChatRow = Omit<Chat, 'pinned' | 'mentions' | 'modifiedFiles' | 'todos'> & {
+type RawChatRow = Omit<Chat, 'pinned' | 'planMode' | 'mentions' | 'modifiedFiles' | 'todos' | 'effort'> & {
   mentions: string;
   modifiedFiles: string;
   todos: string;
   pinned: number;
+  planMode: number;
+  effort: string | null;
 };
+
+function parseEffort(value: string | null | undefined): Chat['effort'] {
+  if (value === 'low' || value === 'medium' || value === 'high') return value;
+  return undefined;
+}
 
 function parseJsonColumn<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -33,9 +40,10 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos, pinned
+        process_state as processState, todos, pinned, effort,
+        plan_mode as planMode
       FROM chats
-      WHERE project_id = ? AND status != 'archived'
+      WHERE project_id = ?
       ORDER BY pinned DESC, updated_at DESC
     `);
     const rows = stmt.all(projectId) as RawChatRow[];
@@ -48,6 +56,8 @@ export class ChatsRepository {
       processState: (row.processState as Chat['processState']) || null,
       todos: parseJsonColumn(row.todos, undefined) ?? undefined,
       pinned: Boolean(row.pinned),
+      effort: parseEffort(row.effort),
+      planMode: Boolean(row.planMode),
     }));
   }
 
@@ -62,9 +72,9 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos, pinned
+        process_state as processState, todos, pinned, effort,
+        plan_mode as planMode
       FROM chats
-      WHERE status != 'archived'
       ORDER BY pinned DESC, updated_at DESC, rowid DESC
     `);
     const rows = stmt.all() as RawChatRow[];
@@ -77,6 +87,8 @@ export class ChatsRepository {
       processState: (row.processState as Chat['processState']) || null,
       todos: parseJsonColumn(row.todos, undefined) ?? undefined,
       pinned: Boolean(row.pinned),
+      effort: parseEffort(row.effort),
+      planMode: Boolean(row.planMode),
     }));
   }
 
@@ -91,7 +103,8 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos, pinned
+        process_state as processState, todos, pinned, effort,
+        plan_mode as planMode
       FROM chats WHERE id = ?
     `);
     const row = stmt.get(id) as RawChatRow | null;
@@ -105,6 +118,8 @@ export class ChatsRepository {
       processState: (row.processState as Chat['processState']) || null,
       todos: parseJsonColumn(row.todos, undefined) ?? undefined,
       pinned: Boolean(row.pinned),
+      effort: parseEffort(row.effort),
+      planMode: Boolean(row.planMode),
     };
   }
 
@@ -131,6 +146,7 @@ export class ChatsRepository {
       totalTokensInput: 0,
       totalTokensOutput: 0,
       lastContextTokensInput: 0,
+      planMode: false,
     };
   }
 
@@ -152,6 +168,8 @@ export class ChatsRepository {
     createdAt: { column: 'created_at' },
     updatedAt: { column: 'updated_at' },
     pinned: { column: 'pinned', transform: (v) => (v ? 1 : 0) },
+    effort: { column: 'effort', transform: (v) => v ?? null },
+    planMode: { column: 'plan_mode', transform: (v) => (v ? 1 : 0) },
   };
 
   update(id: string, updates: Partial<Chat>): void {
@@ -255,7 +273,8 @@ export class ChatsRepository {
         total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos, pinned
+        process_state as processState, todos, pinned, effort,
+        plan_mode as planMode
       FROM chats WHERE claude_session_id = ? AND project_id = ?
     `);
     const row = stmt.get(sessionId, projectId) as RawChatRow | null;
@@ -269,6 +288,8 @@ export class ChatsRepository {
       processState: (row.processState as Chat['processState']) || null,
       todos: parseJsonColumn(row.todos, undefined) ?? undefined,
       pinned: Boolean(row.pinned),
+      effort: parseEffort(row.effort),
+      planMode: Boolean(row.planMode),
     };
   }
 }

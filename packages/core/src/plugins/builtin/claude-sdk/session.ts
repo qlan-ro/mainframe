@@ -204,6 +204,12 @@ export class ClaudeSdkSession implements AdapterSession {
     }
   }
 
+  async setPlanMode(on: boolean): Promise<void> {
+    if (this.queryHandle) {
+      await this.queryHandle.setPermissionMode(on ? 'plan' : toSdkPermissionMode(this.spawnOptions.permissionMode));
+    }
+  }
+
   async sendCommand(_command: string, _args?: string): Promise<void> {
     logger.warn('sendCommand not implemented for claude-sdk adapter');
   }

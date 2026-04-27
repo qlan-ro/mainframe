@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { usePluginLayoutStore } from '../../store/plugins';
 import { LabelAutocomplete } from './LabelAutocomplete';
+import { ImageLightbox } from '../chat/ImageLightbox';
 import { todosApi } from '../../lib/api/todos-api';
 import { getActiveProjectId } from '../../hooks/useActiveProjectId';
 import { toast } from '../../lib/toast';
@@ -32,9 +33,24 @@ function fileToBase64(file: File): Promise<string> {
 type QuickType = 'bug' | 'feature';
 type QuickPriority = 'low' | 'medium' | 'high';
 
+// Physical padding properties (pl-*/pr-*) are used instead of the logical px-* shorthand.
+// Chromium does not scroll <input> elements correctly to the start of text when
+// padding-inline is used — the first character ends up clipped behind the left border.
 const input = cn(
-  'bg-mf-app-bg border border-mf-border rounded-mf-input px-2 py-1.5',
+  'bg-mf-app-bg border border-mf-border rounded-mf-input pl-3 pr-3 py-1.5',
   'text-mf-small text-mf-text-primary focus:outline-none focus:border-mf-accent',
+);
+
+// Scrollable textareas need the border/padding on a wrapping div, because a
+// textarea's own padding-bottom is consumed at scroll-end — content would sit
+// flush against the bottom border once the user types past the visible rows.
+const textareaWrap = cn(
+  'bg-mf-app-bg border border-mf-border rounded-mf-input pl-3 pr-3 py-1.5',
+  'focus-within:border-mf-accent',
+);
+const textareaInner = cn(
+  'w-full bg-transparent border-0 p-0 resize-none',
+  'text-mf-small text-mf-text-primary outline-none focus:outline-none focus-visible:outline-none',
 );
 
 const pillBase = cn('px-3 py-1 text-mf-small rounded-full border transition-colors cursor-pointer');
@@ -71,6 +87,7 @@ export function QuickTodoDialog() {
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -199,16 +216,16 @@ export function QuickTodoDialog() {
       <div
         role="dialog"
         aria-modal="true"
-        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border w-full max-w-md mx-4 shadow-xl"
+        className="bg-mf-panel-bg rounded-mf-panel border border-mf-border w-full max-w-md mx-4 shadow-xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border shrink-0">
           <h2 className="text-mf-small font-medium text-mf-text-primary">Quick Task</h2>
         </div>
 
         {/* Body */}
-        <div className="px-4 py-3 space-y-3">
+        <div className="px-4 py-3 space-y-3 overflow-y-auto flex-1 min-h-0">
           {/* Type toggle */}
           <div className="flex gap-2">
             <Pill label="Feature" active={type === 'feature'} onClick={() => setType('feature')} />
@@ -228,31 +245,40 @@ export function QuickTodoDialog() {
 
           {/* Description */}
           <div className="space-y-1">
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              onPaste={handlePaste}
-              placeholder="Details (optional)"
-              rows={2}
-              className={cn(input, 'w-full resize-none')}
-              onKeyDown={handleModEnter}
-            />
+            <div className={textareaWrap}>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                onPaste={handlePaste}
+                placeholder="Details (optional)"
+                rows={2}
+                className={textareaInner}
+                onKeyDown={handleModEnter}
+              />
+            </div>
             <span className="text-mf-status text-mf-text-secondary opacity-60">Paste image to attach</span>
           </div>
 
           {/* Pending attachments */}
           {pendingFiles.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {pendingFiles.map((f) => (
+              {pendingFiles.map((f, i) => (
                 <div
                   key={f.id}
                   className="relative group rounded-mf-input border border-mf-border overflow-hidden bg-mf-app-bg"
                 >
-                  <img
-                    src={`data:${f.mimeType};base64,${f.data}`}
-                    alt={f.filename}
-                    className="w-16 h-16 object-cover"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setLightboxIndex(i)}
+                    className="block w-16 h-16 focus:outline-none focus:ring-1 focus:ring-mf-accent"
+                    aria-label={`Preview ${f.filename}`}
+                  >
+                    <img
+                      src={`data:${f.mimeType};base64,${f.data}`}
+                      alt={f.filename}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setPendingFiles((prev) => prev.filter((p) => p.id !== f.id))}
@@ -264,6 +290,14 @@ export function QuickTodoDialog() {
                 </div>
               ))}
             </div>
+          )}
+          {lightboxIndex !== null && pendingFiles.length > 0 && (
+            <ImageLightbox
+              images={pendingFiles.map((f) => ({ mediaType: f.mimeType, data: f.data }))}
+              index={lightboxIndex}
+              onClose={() => setLightboxIndex(null)}
+              onNavigate={setLightboxIndex}
+            />
           )}
 
           {/* Priority toggle */}
@@ -281,7 +315,7 @@ export function QuickTodoDialog() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-mf-border">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-mf-border shrink-0">
           <span className="text-mf-tiny text-mf-text-tertiary">
             <kbd className="px-1 py-0.5 bg-mf-app-bg rounded border border-mf-border text-mf-tiny">Esc</kbd> to cancel
           </span>

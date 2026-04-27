@@ -32,17 +32,49 @@ export const AddMentionBody = z.object({
 export const UpdateProviderSettingsBody = z.object({
   defaultModel: z.string().optional(),
   defaultMode: z.string().optional(),
+  defaultPlanMode: z.enum(['true', 'false']).optional(),
   executablePath: z.string().optional(),
   systemPrompt: z.string().optional(),
 });
 
-// Settings — general update
+// Settings — general update.
+// Each subgroup is `.partial()` so callers can patch a single leaf
+// (e.g. `{ notifications: { chat: { taskComplete: false } } }`). That keeps
+// per-toggle PUTs commutative across independent leaves; concurrent writes
+// from different leaves never overwrite each other's fields.
+const NotificationConfigSchema = z
+  .object({
+    chat: z
+      .object({
+        taskComplete: z.boolean(),
+        sessionError: z.boolean(),
+      })
+      .partial()
+      .optional(),
+    permission: z
+      .object({
+        toolRequest: z.boolean(),
+        userQuestion: z.boolean(),
+        planApproval: z.boolean(),
+      })
+      .partial()
+      .optional(),
+    other: z
+      .object({
+        plugin: z.boolean(),
+      })
+      .partial()
+      .optional(),
+  })
+  .optional();
+
 export const UpdateGeneralSettingsBody = z.object({
   worktreeDir: z
     .string()
     .min(1)
     .regex(/^[a-zA-Z0-9._-]+$/, 'Must be a simple directory name')
     .optional(),
+  notifications: NotificationConfigSchema,
 });
 
 // Filesystem browsing
