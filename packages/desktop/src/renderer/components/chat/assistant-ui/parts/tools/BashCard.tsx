@@ -14,6 +14,7 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
 
   return (
     <CollapsibleToolCard
+      hideToggle
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
@@ -28,7 +29,7 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
           </Tooltip>
         </>
       }
-      statusDot={<StatusDot result={result} isError={isError} />}
+      trailing={<StatusDot result={result} isError={isError} />}
       subHeader={
         description ? (
           <Tooltip>
