@@ -4,6 +4,7 @@ import type {
   ContextUsage,
   ControlRequest,
   ControlUpdate,
+  DetectedPr,
   MessageContent,
   SessionSink,
   SkillFileEntry,
@@ -30,6 +31,41 @@ export const PR_CREATE_COMMANDS: RegExp[] = [
 
 function isPrCreateCommand(command: string): boolean {
   return PR_CREATE_COMMANDS.some((re) => re.test(command));
+}
+
+/** PR info without the `source` field — used as the value shape for stashed mutations and as the parser return type. */
+export type DetectedPrCore = Omit<DetectedPr, 'source'>;
+
+export const PR_MUTATION_COMMANDS: RegExp[] = [
+  /\bgh\s+pr\s+(edit|ready|merge|close|reopen|comment|review)\b/,
+  /\bglab\s+mr\s+(update|merge|close|reopen|note)\b/,
+  /\baz\s+repos\s+pr\s+update\b/,
+];
+
+export function isPrMutationCommand(command: string): boolean {
+  return PR_MUTATION_COMMANDS.some((re) => re.test(command));
+}
+
+const GH_COMPACT_REF_REGEX = /\b([^/\s#]+)\/([^/\s#]+)#(\d+)\b/;
+
+export function parsePrIdentifierFromArgs(command: string): DetectedPrCore | null {
+  // Try full URLs first — any of the three existing regexes.
+  const fromUrl = extractPrFromToolResult(command);
+  if (fromUrl) return fromUrl;
+
+  // gh-only compact syntax: owner/repo#N
+  if (/\bgh\s+pr\s+/.test(command)) {
+    const match = GH_COMPACT_REF_REGEX.exec(command);
+    if (match) {
+      const owner = match[1]!;
+      const repo = match[2]!;
+      const number = parseInt(match[3]!, 10);
+      if (owner && repo && !isNaN(number)) {
+        return { url: `https://github.com/${owner}/${repo}/pull/${number}`, owner, repo, number };
+      }
+    }
+  }
+  return null;
 }
 
 export function parsePrUrl(text: string): { url: string; owner: string; repo: string; number: number } | null {
@@ -173,6 +209,10 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
           if (input?.command && isPrCreateCommand(input.command)) {
             session.state.pendingPrCreates.add(block.id as string);
           }
+          if (input?.command && isPrMutationCommand(input.command)) {
+            const pr = parsePrIdentifierFromArgs(input.command);
+            if (pr) session.state.pendingPrMutations.set(block.id as string, pr);
+          }
         }
         if (name === 'Skill') {
           const input = block.input as { skill?: string } | undefined;
@@ -260,16 +300,26 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   for (const block of message.content) {
     if (block.type === 'tool_result') {
       const text = typeof block.content === 'string' ? block.content : '';
+      const toolUseId = block.tool_use_id as string | undefined;
       const planMatch = text.match(/Your plan has been saved to: (\/\S+\.md)/);
       if (planMatch?.[1]) {
         sink.onPlanFile(planMatch[1].trim());
       }
       const pr = extractPrFromToolResult(text);
       if (pr) {
-        const toolUseId = block.tool_use_id as string | undefined;
         const source = toolUseId && session.state.pendingPrCreates.has(toolUseId) ? 'created' : 'mentioned';
         if (source === 'created') session.state.pendingPrCreates.delete(toolUseId!);
         sink.onPrDetected({ ...pr, source });
+      }
+
+      // Path B: command-arg-based mutation detection. Consume any pending stash
+      // keyed by this tool_use_id, regardless of whether the output contained a URL.
+      if (toolUseId && session.state.pendingPrMutations.has(toolUseId)) {
+        const stashed = session.state.pendingPrMutations.get(toolUseId)!;
+        session.state.pendingPrMutations.delete(toolUseId);
+        if (block.is_error !== true) {
+          sink.onPrDetected({ ...stashed, source: 'mentioned' });
+        }
       }
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';

@@ -16,7 +16,7 @@ import type {
   ContextFile,
   SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
-import { handleStdout, handleStderr } from './events.js';
+import { handleStdout, handleStderr, type DetectedPrCore } from './events.js';
 import { MAINFRAME_SYSTEM_PROMPT_APPEND } from './constants.js';
 import { createChildLogger } from '../../../logger.js';
 import {
@@ -65,6 +65,8 @@ export interface ClaudeSessionState {
   pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
   /** Tool_use IDs for Bash commands that match PR-create patterns (gh pr create, etc.) */
   pendingPrCreates: Set<string>;
+  /** Tool_use IDs → parsed PR info for mutation commands (gh pr edit/ready/merge/close/reopen/comment/review, etc.) */
+  pendingPrMutations: Map<string, DetectedPrCore>;
   // Cached skill-name → resolved SKILL.md path, populated lazily on SkillTool
   // detection to avoid re-probing the filesystem for the same skill.
   skillPathCache: Map<string, string>;
@@ -110,6 +112,7 @@ export class ClaudeSession implements AdapterSession {
       interruptTimer: null,
       pendingCancelCallbacks: new Map(),
       pendingPrCreates: new Set(),
+      pendingPrMutations: new Map(),
       skillPathCache: new Map(),
     };
   }
