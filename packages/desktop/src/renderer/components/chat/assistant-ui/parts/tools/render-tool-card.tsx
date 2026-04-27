@@ -11,6 +11,7 @@ import { TaskGroupCard } from './TaskGroupCard';
 import { TaskProgressCard } from './TaskProgressCard';
 import { PlanCard } from './PlanCard';
 import { SlashCommandCard } from './SlashCommandCard';
+import { WorktreeStatusPill } from './WorktreeStatusPill';
 
 export function renderToolCard(
   toolName: string,
@@ -19,6 +20,9 @@ export function renderToolCard(
   result: unknown,
   isError: boolean | undefined,
 ): React.ReactElement | null {
+  if (toolName === 'EnterWorktree' || toolName === 'ExitWorktree') {
+    return <WorktreeStatusPill toolName={toolName} args={args} result={result as never} isError={isError} />;
+  }
   if (toolName === 'Skill') return <SlashCommandCard args={args} />;
   if (toolName === '_ToolGroup') return <ToolGroupCard args={args} />;
   if (toolName === '_TaskProgress') return <TaskProgressCard args={args} />;

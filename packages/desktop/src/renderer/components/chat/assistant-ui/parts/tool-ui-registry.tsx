@@ -11,6 +11,7 @@ import { TaskProgressCard } from './tools/TaskProgressCard';
 import { PlanCard } from './tools/PlanCard';
 import { SlashCommandCard } from './tools/SlashCommandCard';
 import { AskUserQuestionToolCard } from './tools/AskUserQuestionToolCard';
+import { WorktreeStatusPill } from './tools/WorktreeStatusPill';
 
 export const EditToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Edit',
@@ -86,6 +87,19 @@ export const AskUserQuestionToolUI = makeAssistantToolUI<Record<string, unknown>
   render: ({ args, result }) => <AskUserQuestionToolCard args={args} result={result} />,
 });
 
+export const EnterWorktreeToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
+  toolName: 'EnterWorktree',
+  render: ({ args, result, isError }) => (
+    <WorktreeStatusPill toolName="EnterWorktree" args={args} result={result as never} isError={isError} />
+  ),
+});
+export const ExitWorktreeToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
+  toolName: 'ExitWorktree',
+  render: ({ args, result, isError }) => (
+    <WorktreeStatusPill toolName="ExitWorktree" args={args} result={result as never} isError={isError} />
+  ),
+});
+
 export const AllToolUIs = [
   EditToolUI,
   WriteToolUI,
@@ -98,6 +112,8 @@ export const AllToolUIs = [
   ExitPlanModeToolUI,
   SkillToolUI,
   AskUserQuestionToolUI,
+  EnterWorktreeToolUI,
+  ExitWorktreeToolUI,
   ToolGroupUI,
   TaskGroupUI,
   TaskProgressUI,
