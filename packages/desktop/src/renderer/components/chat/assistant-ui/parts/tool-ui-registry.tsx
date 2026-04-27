@@ -81,25 +81,6 @@ export const TaskProgressUI = makeAssistantToolUI<Record<string, unknown>, unkno
   render: ({ args }) => <TaskProgressCard args={args} />,
 });
 
-// Tools that should be hidden (rendered as null)
-const HIDDEN_TOOLS = [
-  'TaskCreate',
-  'TaskUpdate',
-  'TaskList',
-  'TaskGet',
-  'TaskOutput',
-  'TaskStop',
-  'TodoWrite',
-  'EnterPlanMode',
-  'ToolSearch',
-] as const;
-export const HiddenToolUIs = HIDDEN_TOOLS.map((toolName) =>
-  makeAssistantToolUI<Record<string, unknown>, unknown>({
-    toolName,
-    render: () => null,
-  }),
-);
-
 export const AskUserQuestionToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'AskUserQuestion',
   render: ({ args, result }) => <AskUserQuestionToolCard args={args} result={result} />,
@@ -120,5 +101,4 @@ export const AllToolUIs = [
   ToolGroupUI,
   TaskGroupUI,
   TaskProgressUI,
-  ...HiddenToolUIs,
 ];
