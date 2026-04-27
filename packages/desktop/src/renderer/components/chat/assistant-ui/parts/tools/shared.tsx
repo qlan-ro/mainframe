@@ -42,7 +42,7 @@ export function borderColor(result: unknown, isError: boolean | undefined): stri
 export function cardStyle(result: unknown, isError: boolean | undefined): string {
   if (isError && result !== undefined)
     return 'border border-mf-chat-error/30 rounded-mf-card bg-mf-input-bg/40 overflow-hidden';
-  return 'rounded-mf-card bg-mf-input-bg/40 overflow-hidden';
+  return 'border border-mf-divider rounded-mf-card bg-mf-input-bg/40 overflow-hidden';
 }
 
 export function shortFilename(filePath: string): string {
