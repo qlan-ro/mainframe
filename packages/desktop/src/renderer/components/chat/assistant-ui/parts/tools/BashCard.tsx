@@ -34,7 +34,7 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
         description ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="px-3 pb-1.5 -mt-0.5 text-mf-small text-mf-text-secondary truncate pl-[52px]" tabIndex={0}>
+              <div className="px-3 pb-1.5 -mt-0.5 text-mf-small text-mf-text-secondary truncate pl-[35px]" tabIndex={0}>
                 {description}
               </div>
             </TooltipTrigger>
