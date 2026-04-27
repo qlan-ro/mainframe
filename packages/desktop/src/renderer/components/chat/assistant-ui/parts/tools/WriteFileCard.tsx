@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Pencil } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { useTabsStore } from '../../../../../store/tabs';
@@ -45,14 +45,15 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
   return (
     <CollapsibleToolCard
       defaultOpen
+      hideToggle
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
+          <Pencil size={15} className="text-mf-text-secondary shrink-0" />
           <FileTypeIcon filePath={filePath} />
           <ClickableFilePath filePath={filePath} />
         </>
       }
-      statusDot={<StatusDot result={result} isError={isError} />}
       trailing={
         <>
           {addedCount !== null && (
@@ -71,6 +72,7 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
             <TooltipTrigger asChild>
               <span
                 onClick={handleOpenDiff}
+                aria-label="Open in diff editor"
                 className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors"
                 tabIndex={0}
                 role="button"
@@ -80,6 +82,7 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
             </TooltipTrigger>
             <TooltipContent>Open in diff editor</TooltipContent>
           </Tooltip>
+          <StatusDot result={result} isError={isError} />
         </>
       }
     >
