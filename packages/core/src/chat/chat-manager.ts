@@ -449,6 +449,15 @@ export class ChatManager {
     return chats.map((chat) => this.enrichChat(chat));
   }
 
+  /** Re-emit chat.updated for every non-archived chat bound to the given worktree path so clients pick up the new worktreeMissing flag. */
+  notifyWorktreeDeleted(worktreePath: string): void {
+    for (const raw of this.db.chats.listAll()) {
+      if (raw.worktreePath !== worktreePath) continue;
+      const enriched = this.enrichChat(raw);
+      this.emitEvent({ type: 'chat.updated', chat: enriched });
+    }
+  }
+
   getChat(chatId: string): Chat | null {
     const active = this.activeChats.get(chatId);
     const chat = active ? active.chat : this.db.chats.get(chatId);
