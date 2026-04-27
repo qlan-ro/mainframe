@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { useChatsStore } from './chats';
 import type { Chat } from '@qlan-ro/mainframe-types';
 
-function makeChat(id: string, updatedAt: string, pinned = false): Chat {
+function makeChat(id: string, updatedAt: string, pinned = false, projectId = 'proj-1'): Chat {
   return {
     id,
     adapterId: 'claude',
-    projectId: 'proj-1',
+    projectId,
     status: 'active',
     createdAt: updatedAt,
     updatedAt,
@@ -131,5 +131,49 @@ describe('unread state', () => {
     useChatsStore.getState().markUnread('chat-2');
     useChatsStore.getState().setActiveChat('chat-1');
     expect(useChatsStore.getState().unreadChatIds.has('chat-2')).toBe(true);
+  });
+});
+
+describe('filterProjectId reconciliation on setActiveChat', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useChatsStore.setState({
+      chats: [
+        makeChat('chat-a', '2024-01-01T00:00:00.000Z', false, 'proj-A'),
+        makeChat('chat-b', '2024-01-01T00:00:00.000Z', false, 'proj-B'),
+      ],
+      activeChatId: null,
+      filterProjectId: null,
+    });
+  });
+
+  it("clears filterProjectId when active chat's project differs from the filter", () => {
+    useChatsStore.getState().setFilterProjectId('proj-A');
+    useChatsStore.getState().setActiveChat('chat-b');
+    expect(useChatsStore.getState().filterProjectId).toBeNull();
+    expect(localStorage.getItem('mf:filterProjectId')).toBeNull();
+  });
+
+  it("leaves filterProjectId unchanged when active chat's project matches the filter", () => {
+    useChatsStore.getState().setFilterProjectId('proj-A');
+    useChatsStore.getState().setActiveChat('chat-a');
+    expect(useChatsStore.getState().filterProjectId).toBe('proj-A');
+  });
+
+  it('leaves filterProjectId unchanged when no filter is set', () => {
+    useChatsStore.getState().setActiveChat('chat-b');
+    expect(useChatsStore.getState().filterProjectId).toBeNull();
+  });
+
+  it('leaves filterProjectId unchanged when active chat is cleared', () => {
+    useChatsStore.getState().setFilterProjectId('proj-A');
+    useChatsStore.getState().setActiveChat(null);
+    expect(useChatsStore.getState().filterProjectId).toBe('proj-A');
+  });
+
+  it('leaves filterProjectId unchanged when target chat is unknown', () => {
+    useChatsStore.getState().setFilterProjectId('proj-A');
+    useChatsStore.getState().setActiveChat('chat-missing');
+    expect(useChatsStore.getState().filterProjectId).toBe('proj-A');
   });
 });
