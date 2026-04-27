@@ -16,7 +16,7 @@ export function CodeHeader({ language, code }: CodeHeaderProps) {
   }, [code]);
 
   return (
-    <div className="group flex items-center justify-between px-3 py-1.5 bg-mf-hover/50 border-b border-mf-divider">
+    <div className="group flex items-center justify-between px-3 py-1.5">
       <span className="text-mf-small font-mono text-mf-text-secondary">
         {language && language !== 'unknown' ? language : 'text'}
       </span>
