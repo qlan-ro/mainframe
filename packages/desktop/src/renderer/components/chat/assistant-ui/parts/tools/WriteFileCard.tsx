@@ -1,6 +1,5 @@
 import React from 'react';
 import { ExternalLink, Pencil } from 'lucide-react';
-import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { useTabsStore } from '../../../../../store/tabs';
 import { FileTypeIcon } from '../FileTypeIcon';
@@ -110,8 +109,8 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
             </div>
           )}
         </div>
-        {resultText && (
-          <div className={cn('border-t border-mf-divider px-3 py-1.5', isError && 'bg-mf-chat-error-surface/20')}>
+        {resultText && isError && (
+          <div className="border-t border-mf-divider px-3 py-1.5 bg-mf-chat-error-surface/20">
             <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary">
               {resultText}
             </pre>
