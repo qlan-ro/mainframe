@@ -12,19 +12,6 @@ import { TaskProgressCard } from './TaskProgressCard';
 import { PlanCard } from './PlanCard';
 import { SlashCommandCard } from './SlashCommandCard';
 
-const HIDDEN_TOOL_NAMES = new Set([
-  'TaskCreate',
-  'TaskUpdate',
-  'TaskList',
-  'TaskGet',
-  'TaskOutput',
-  'TaskStop',
-  'TodoWrite',
-  'EnterPlanMode',
-  'AskUserQuestion',
-  'ToolSearch',
-]);
-
 export function renderToolCard(
   toolName: string,
   args: Record<string, unknown>,
@@ -32,7 +19,6 @@ export function renderToolCard(
   result: unknown,
   isError: boolean | undefined,
 ): React.ReactElement | null {
-  if (HIDDEN_TOOL_NAMES.has(toolName)) return null;
   if (toolName === 'Skill') return <SlashCommandCard args={args} />;
   if (toolName === '_ToolGroup') return <ToolGroupCard args={args} />;
   if (toolName === '_TaskProgress') return <TaskProgressCard args={args} />;
