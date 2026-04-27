@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Pencil } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { useTabsStore } from '../../../../../store/tabs';
@@ -51,14 +51,15 @@ export function EditFileCard({ args, result, isError }: ToolCardProps) {
   return (
     <CollapsibleToolCard
       defaultOpen
+      hideToggle
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
+          <Pencil size={15} className="text-mf-text-secondary shrink-0" />
           <FileTypeIcon filePath={filePath} />
           <ClickableFilePath filePath={filePath} />
         </>
       }
-      statusDot={<StatusDot result={result} isError={isError} />}
       trailing={
         <>
           {addedCount !== null && removedCount !== null && (
@@ -85,6 +86,7 @@ export function EditFileCard({ args, result, isError }: ToolCardProps) {
             </TooltipTrigger>
             <TooltipContent>Open in diff editor</TooltipContent>
           </Tooltip>
+          <StatusDot result={result} isError={isError} />
         </>
       }
     >
