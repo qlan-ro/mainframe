@@ -509,6 +509,82 @@ describe('loadHistory', () => {
     }
   });
 
+  it('does not synthesize skill_loaded messages for subagent skill loads', async () => {
+    // Regression: each subagent (Task/Agent tool) writes its own
+    // "Base directory for this skill: …" isMeta entry into a JSONL under
+    // <session>/subagents/. Live mode never surfaces those at the parent
+    // level (they only flow through agent_progress), so synthesizing them
+    // on replay creates duplicate "Using skill: X" pills that never
+    // appeared during the live session.
+    writeJsonl(SESSION_ID, [userTextEntry('Dispatch four subagents'), assistantTextEntry('Dispatching.')]);
+
+    const subagentDir = join(PROJECT_DIR, SESSION_ID, 'subagents');
+    mkdirSync(subagentDir, { recursive: true });
+    for (const agentId of ['a1', 'a2', 'a3', 'a4']) {
+      const subagentJsonl = join(subagentDir, `agent-${agentId}.jsonl`);
+      writeFileSync(
+        subagentJsonl,
+        jsonlEntry({
+          type: 'user',
+          isMeta: true,
+          isSidechain: true,
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Base directory for this skill: /repo/.claude/skills/azure-devops-cli\n\n# Azure DevOps CLI\nbody',
+              },
+            ],
+          },
+        }) + '\n',
+      );
+    }
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages.map((m) => m.type)).toEqual(['user', 'assistant']);
+    for (const m of messages) {
+      for (const block of m.content) {
+        expect(block.type).not.toBe('skill_loaded');
+      }
+    }
+  });
+
+  it('still synthesizes skill_loaded messages from sidechain sibling JSONLs', async () => {
+    // Belt-and-braces: sibling sidechain files (not under /subagents/) also
+    // carry isSidechain:true and must not promote skill loads either.
+    writeJsonl(SESSION_ID, [userTextEntry('Run a thing')]);
+
+    const sidechainId = 'sidechain-skill-xyz';
+    writeJsonl(sidechainId, [
+      jsonlEntry({
+        type: 'user',
+        sessionId: SESSION_ID,
+        isSidechain: true,
+        isMeta: true,
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Base directory for this skill: /repo/.claude/skills/azure-devops-cli\n\nbody',
+            },
+          ],
+        },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages.map((m) => m.type)).toEqual(['user']);
+    for (const m of messages) {
+      for (const block of m.content) {
+        expect(block.type).not.toBe('skill_loaded');
+      }
+    }
+  });
+
   it('returns empty array for non-existent session', async () => {
     const messages = await loadHistory('nonexistent-session', PROJECT_PATH);
     expect(messages).toEqual([]);
