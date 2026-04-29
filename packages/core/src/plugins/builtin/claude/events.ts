@@ -189,22 +189,6 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
   }
   if (!message?.content) return;
 
-  // Subagent assistant turns reach the parent stream with parent_tool_use_id
-  // set (see handleUserEvent for the protocol detail). Keep only tool_use
-  // blocks — they pair with the subagent tool_results we forward and the
-  // display pipeline groups them under the parent's Agent/Task tool_use as
-  // _TaskGroup children. Drop text/thinking/etc. so they don't appear as
-  // ghost assistant bubbles in the parent thread, and skip parent-level
-  // bookkeeping (TodoWrite, PR detection, Skill registration) which all
-  // belong to the parent agent's own tool context, not a subagent's.
-  if (event.parent_tool_use_id != null) {
-    const toolUseOnly = message.content.filter((b) => b.type === 'tool_use');
-    if (toolUseOnly.length > 0) {
-      sink.onMessage(toolUseOnly, { model: message.model, usage: message.usage });
-    }
-    return;
-  }
-
   for (const block of message.content) {
     if (block.type === 'tool_use') {
       if (block.name === 'TodoWrite') {
@@ -272,21 +256,28 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   const message = event.message as { content: Array<Record<string, unknown>> | string } | undefined;
   if (!message?.content) return;
 
-  // Subagent activity arrives over the parent stream as type:'user'/'assistant'
-  // events with parent_tool_use_id set (CLI 2.1.118+ normalizes agent_progress
-  // into top-level SDK messages — see queryHelpers.ts:120-156). Only the
-  // structural blocks (tool_result here, tool_use in handleAssistantEvent)
-  // are useful at the parent level: display-pipeline groups them under the
-  // parent's Agent/Task tool_use as _TaskGroup children. The chatter — string
-  // prompts, text/thinking, skill injections, CLI feedback — is intra-subagent
-  // noise that would render as ghost bubbles in the parent thread.
-  const isSubagentEvent = event.parent_tool_use_id != null;
-  if (isSubagentEvent) {
-    if (typeof message.content !== 'string') {
-      const tur = (event.tool_use_result ?? event.toolUseResult) as Record<string, unknown> | undefined;
-      const toolResultContent = buildToolResultBlocks(message as Record<string, unknown>, tur);
-      if (toolResultContent.length > 0) sink.onToolResult(toolResultContent);
-    }
+  // Subagent dispatch prompt: CLI 2.1.118+ normalizes agent_progress into
+  // top-level SDK messages (queryHelpers.ts:120-156). The subagent's first
+  // event is a string-content user message restating its prompt — that text
+  // already lives in the parent's `Agent.input.prompt` (rendered by the
+  // Task card), so re-emitting it via onCliMessage produces a duplicate
+  // system pill in the parent thread.
+  //
+  // Discriminator: parent_tool_use_id set + string content + no CLI-internal
+  // tags. Skill loads carry <command-name>; "Base directory for this skill:"
+  // is the isMeta skill-content shape. Anything tagged is real content from
+  // the subagent — let it flow through the existing string-content branches
+  // below so SkillLoadedCards still render. Array-content user events
+  // (tool_results, text blocks, image blocks) and assistant events all flow
+  // unchanged: the parent's Task card still picks up subagent tool_use /
+  // tool_result blocks, and any other intra-subagent surface we may want to
+  // show stays available.
+  if (
+    event.parent_tool_use_id != null &&
+    typeof message.content === 'string' &&
+    !message.content.includes('<command-name>') &&
+    !/^Base directory for this skill:/m.test(message.content)
+  ) {
     return;
   }
 
