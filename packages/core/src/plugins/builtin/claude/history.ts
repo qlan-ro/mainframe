@@ -438,7 +438,14 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
           // only chance to surface a SkillLoadedCard for these turns. Detect
           // and synthesize a system 'skill_loaded' message BEFORE the generic
           // isMeta filter drops them below.
-          if (entry.isMeta === true && entry.type === 'user') {
+          //
+          // Skip subagent and sidechain entries: each subagent loads its own
+          // skills and writes its own "Base directory for this skill:" entry.
+          // Live mode hides those from the parent thread (subagent activity
+          // surfaces only through agent_progress + the parent's Task tool_use),
+          // so promoting them on replay creates ghost SkillLoadedCards that
+          // never appeared during the live session.
+          if (entry.isMeta === true && entry.type === 'user' && !isSubagentFile && entry.isSidechain !== true) {
             const synthesized = synthesizeSkillLoadedFromUserEntry(entry, sessionId);
             if (synthesized) {
               if (!seenUuids.has(synthesized.id)) {
