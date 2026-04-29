@@ -27,7 +27,7 @@ function createSink(): SessionSink {
 }
 
 function createState(): CodexSessionState {
-  return { threadId: null, currentTurnId: null };
+  return { threadId: null, currentTurnId: null, currentTurnPlan: null };
 }
 
 describe('handleNotification', () => {
@@ -150,7 +150,7 @@ describe('handleNotification', () => {
         item: {
           id: 'item_2',
           type: 'fileChange',
-          changes: [{ path: 'src/main.ts', kind: 'update' }],
+          changes: [{ path: 'src/main.ts', kind: { type: 'update', move_path: null }, diff: '' }],
           status: 'completed',
         },
       },
@@ -162,7 +162,7 @@ describe('handleNotification', () => {
         type: 'tool_use',
         id: 'item_2',
         name: 'file_change',
-        input: { changes: [{ path: 'src/main.ts', kind: 'update' }] },
+        input: { changes: [{ path: 'src/main.ts', kind: { type: 'update', move_path: null }, diff: '' }] },
       },
     ]);
     expect(sink.onToolResult).toHaveBeenCalledWith([
@@ -189,7 +189,7 @@ describe('handleNotification', () => {
           server: 'my-mcp',
           tool: 'search',
           arguments: { query: 'foo' },
-          result: { content: [{ found: true }], structuredContent: null },
+          result: { content: [{ found: true }], structuredContent: null, _meta: null },
           error: null,
           status: 'completed',
         },

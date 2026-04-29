@@ -53,7 +53,7 @@ describe('convertThreadItems', () => {
         {
           id: 'i2',
           type: 'fileChange',
-          changes: [{ path: 'a.ts', kind: 'update' as const }],
+          changes: [{ path: 'a.ts', kind: { type: 'update' as const, move_path: null }, diff: '' }],
           status: 'completed' as const,
         },
       ],
@@ -72,7 +72,7 @@ describe('convertThreadItems', () => {
           server: 'mcp',
           tool: 'search',
           arguments: { q: 'foo' },
-          result: { content: [{ found: true }], structuredContent: null },
+          result: { content: [{ found: true }], structuredContent: null, _meta: null },
           error: null,
           status: 'completed' as const,
         },

@@ -175,11 +175,17 @@ export interface CommandExecutionItem {
   status: 'in_progress' | 'completed' | 'failed';
 }
 
+// Matches PatchChangeKind from v2 schema (tagged union with optional move_path)
+export type PatchChangeKind = { type: 'add' } | { type: 'delete' } | { type: 'update'; move_path: string | null };
+
+// Matches PatchApplyStatus from v2 schema
+export type PatchApplyStatus = 'inProgress' | 'completed' | 'failed' | 'declined';
+
 export interface FileChangeItem {
   id: string;
   type: 'fileChange';
-  changes: Array<{ path: string; kind: 'add' | 'delete' | 'update' }>;
-  status: 'completed' | 'failed';
+  changes: Array<{ path: string; kind: PatchChangeKind; diff: string }>;
+  status: PatchApplyStatus;
 }
 
 export interface McpToolCallItem {
@@ -188,9 +194,11 @@ export interface McpToolCallItem {
   server: string;
   tool: string;
   arguments: Record<string, unknown>;
-  result?: { content: unknown[]; structuredContent: unknown | null };
-  error: string | null;
-  status: 'in_progress' | 'completed' | 'failed';
+  result: { content: unknown[]; structuredContent: unknown | null; _meta: unknown | null } | null;
+  error: { message: string } | null;
+  status: 'inProgress' | 'completed' | 'failed';
+  mcpAppResourceUri?: string;
+  durationMs?: number | null;
 }
 
 export interface WebSearchItem {

@@ -154,6 +154,7 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
         {
           type: 'tool_result',
           toolUseId: item.id,
+          // TODO(F-B.2): simplify — error is now { message: string } | null, string branch is dead
           content: item.error
             ? typeof item.error === 'string'
               ? item.error
