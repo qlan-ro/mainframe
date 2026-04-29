@@ -187,52 +187,68 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
   if (message?.usage) {
     session.state.lastAssistantUsage = message.usage;
   }
-  if (message?.content) {
-    for (const block of message.content) {
-      if (block.type === 'tool_use') {
-        if (block.name === 'TodoWrite') {
-          const input = block.input as { todos?: unknown[] };
-          if (Array.isArray(input?.todos)) {
-            const valid = input.todos.filter(
-              (t): t is import('@qlan-ro/mainframe-types').TodoItem =>
-                typeof t === 'object' &&
-                t !== null &&
-                typeof (t as Record<string, unknown>).content === 'string' &&
-                typeof (t as Record<string, unknown>).status === 'string',
-            );
-            if (valid.length > 0) sink.onTodoUpdate(valid);
-          }
+  if (!message?.content) return;
+
+  // Subagent assistant turns reach the parent stream with parent_tool_use_id
+  // set (see handleUserEvent for the protocol detail). Keep only tool_use
+  // blocks — they pair with the subagent tool_results we forward and the
+  // display pipeline groups them under the parent's Agent/Task tool_use as
+  // _TaskGroup children. Drop text/thinking/etc. so they don't appear as
+  // ghost assistant bubbles in the parent thread, and skip parent-level
+  // bookkeeping (TodoWrite, PR detection, Skill registration) which all
+  // belong to the parent agent's own tool context, not a subagent's.
+  if (event.parent_tool_use_id != null) {
+    const toolUseOnly = message.content.filter((b) => b.type === 'tool_use');
+    if (toolUseOnly.length > 0) {
+      sink.onMessage(toolUseOnly, { model: message.model, usage: message.usage });
+    }
+    return;
+  }
+
+  for (const block of message.content) {
+    if (block.type === 'tool_use') {
+      if (block.name === 'TodoWrite') {
+        const input = block.input as { todos?: unknown[] };
+        if (Array.isArray(input?.todos)) {
+          const valid = input.todos.filter(
+            (t): t is import('@qlan-ro/mainframe-types').TodoItem =>
+              typeof t === 'object' &&
+              t !== null &&
+              typeof (t as Record<string, unknown>).content === 'string' &&
+              typeof (t as Record<string, unknown>).status === 'string',
+          );
+          if (valid.length > 0) sink.onTodoUpdate(valid);
         }
-        const name = block.name as string;
-        if (name === 'Bash' || name === 'BashTool') {
-          const input = block.input as { command?: string } | undefined;
-          if (input?.command && isPrCreateCommand(input.command)) {
-            session.state.pendingPrCreates.add(block.id as string);
-          }
-          if (input?.command && isPrMutationCommand(input.command)) {
-            const pr = parsePrIdentifierFromArgs(input.command);
-            if (pr) session.state.pendingPrMutations.set(block.id as string, pr);
-          }
+      }
+      const name = block.name as string;
+      if (name === 'Bash' || name === 'BashTool') {
+        const input = block.input as { command?: string } | undefined;
+        if (input?.command && isPrCreateCommand(input.command)) {
+          session.state.pendingPrCreates.add(block.id as string);
         }
-        if (name === 'Skill') {
-          const input = block.input as { skill?: string } | undefined;
-          const skillName = input?.skill?.trim();
-          if (skillName) {
-            // Use the cached path from a prior user-event (more accurate), falling back to the probe.
-            const cachedPath = session.state.skillPathCache.get(skillName);
-            const resolvedPath =
-              cachedPath ?? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache);
-            sink.onSkillFile({ path: resolvedPath, displayName: skillName });
-          }
+        if (input?.command && isPrMutationCommand(input.command)) {
+          const pr = parsePrIdentifierFromArgs(input.command);
+          if (pr) session.state.pendingPrMutations.set(block.id as string, pr);
+        }
+      }
+      if (name === 'Skill') {
+        const input = block.input as { skill?: string } | undefined;
+        const skillName = input?.skill?.trim();
+        if (skillName) {
+          // Use the cached path from a prior user-event (more accurate), falling back to the probe.
+          const cachedPath = session.state.skillPathCache.get(skillName);
+          const resolvedPath =
+            cachedPath ?? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache);
+          sink.onSkillFile({ path: resolvedPath, displayName: skillName });
         }
       }
     }
-
-    sink.onMessage(message.content, {
-      model: message.model,
-      usage: message.usage,
-    });
   }
+
+  sink.onMessage(message.content, {
+    model: message.model,
+    usage: message.usage,
+  });
 }
 
 function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
@@ -255,6 +271,24 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   const isMeta = event.isMeta === true || event.is_meta === true;
   const message = event.message as { content: Array<Record<string, unknown>> | string } | undefined;
   if (!message?.content) return;
+
+  // Subagent activity arrives over the parent stream as type:'user'/'assistant'
+  // events with parent_tool_use_id set (CLI 2.1.118+ normalizes agent_progress
+  // into top-level SDK messages — see queryHelpers.ts:120-156). Only the
+  // structural blocks (tool_result here, tool_use in handleAssistantEvent)
+  // are useful at the parent level: display-pipeline groups them under the
+  // parent's Agent/Task tool_use as _TaskGroup children. The chatter — string
+  // prompts, text/thinking, skill injections, CLI feedback — is intra-subagent
+  // noise that would render as ghost bubbles in the parent thread.
+  const isSubagentEvent = event.parent_tool_use_id != null;
+  if (isSubagentEvent) {
+    if (typeof message.content !== 'string') {
+      const tur = (event.tool_use_result ?? event.toolUseResult) as Record<string, unknown> | undefined;
+      const toolResultContent = buildToolResultBlocks(message as Record<string, unknown>, tur);
+      if (toolResultContent.length > 0) sink.onToolResult(toolResultContent);
+    }
+    return;
+  }
 
   // User-typed /skill-name path: the CLI emits a string-content metadata
   // event (<command-message>+<command-name>) over stream-json, but it writes

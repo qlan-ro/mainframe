@@ -340,6 +340,149 @@ describe('handleStdout', () => {
   });
 });
 
+describe('subagent events (parent_tool_use_id != null)', () => {
+  // Background: CLI 2.1.118+ normalizes agent_progress into top-level SDK
+  // user/assistant events with parent_tool_use_id set to the parent's
+  // Agent/Task tool_use_id. Without filtering, the subagent's prompt and
+  // chatter render as ghost bubbles in the parent thread.
+
+  it('drops string-content user events (the subagent prompt)', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: { role: 'user', content: 'Create a PR for the current branch...' },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).not.toHaveBeenCalled();
+    expect(sink.onSkillLoaded).not.toHaveBeenCalled();
+    expect(sink.onMessage).not.toHaveBeenCalled();
+    expect(sink.onToolResult).not.toHaveBeenCalled();
+  });
+
+  it('drops text-only array-content user events from a subagent', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'Some intra-subagent chatter that should not surface' }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).not.toHaveBeenCalled();
+    expect(sink.onToolResult).not.toHaveBeenCalled();
+  });
+
+  it('still forwards tool_result blocks from subagent user events so the Task card shows results', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'toolu_subagent_bash', content: 'ls output' }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onToolResult).toHaveBeenCalledTimes(1);
+    const blocks = (sink.onToolResult as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({
+      type: 'tool_result',
+      toolUseId: 'toolu_subagent_bash',
+      content: 'ls output',
+    });
+    expect(sink.onCliMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps subagent assistant tool_use blocks but drops text/thinking', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'assistant',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: {
+        role: 'assistant',
+        model: 'claude-opus-4-7',
+        content: [
+          { type: 'thinking', thinking: 'subagent inner thought' },
+          { type: 'text', text: 'Let me run a command.' },
+          { type: 'tool_use', id: 'toolu_subagent_bash', name: 'Bash', input: { command: 'ls' } },
+        ],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onMessage).toHaveBeenCalledTimes(1);
+    const [content] = (sink.onMessage as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(content).toHaveLength(1);
+    expect(content[0]).toMatchObject({ type: 'tool_use', name: 'Bash' });
+  });
+
+  it('does not call onMessage when a subagent assistant turn is text-only', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'assistant',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'subagent commentary, no tool use' }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not run parent-level Skill registration for subagent tool_use', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'assistant',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'toolu_sub_skill', name: 'Skill', input: { skill: 'azure-devops-cli' } }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onSkillFile).not.toHaveBeenCalled();
+  });
+
+  it('parent-level events (parent_tool_use_id null) still take the normal path', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      parent_tool_use_id: null,
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'Unknown command: /typo' }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).toHaveBeenCalledWith('Unknown command: /typo');
+  });
+});
+
 describe('handleStderr', () => {
   it('emits error for non-informational messages', () => {
     const session = createSession();
