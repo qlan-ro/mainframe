@@ -78,7 +78,7 @@ describe('handleNotification', () => {
     expect(sink.onMessage).toHaveBeenCalledWith([{ type: 'thinking', thinking: 'Let me think...' }]);
   });
 
-  it('item/completed commandExecution calls onMessage then onToolResult', () => {
+  it('item/completed commandExecution emits Bash tool_use + tool_result (exitCode 0)', () => {
     const sink = createSink();
     const state = createState();
     handleNotification(
@@ -102,7 +102,7 @@ describe('handleNotification', () => {
       {
         type: 'tool_use',
         id: 'item_1',
-        name: 'command_execution',
+        name: 'Bash',
         input: { command: 'ls -la' },
       },
     ]);
@@ -116,7 +116,7 @@ describe('handleNotification', () => {
     ]);
   });
 
-  it('item/completed commandExecution with non-zero exit_code sets isError true', () => {
+  it('item/completed commandExecution with exitCode 1 sets isError true', () => {
     const sink = createSink();
     const state = createState();
     handleNotification(
@@ -137,6 +137,29 @@ describe('handleNotification', () => {
       state,
     );
     expect(sink.onToolResult).toHaveBeenCalledWith([expect.objectContaining({ isError: true })]);
+  });
+
+  it('item/completed commandExecution with undefined exitCode treats as success (isError false)', () => {
+    const sink = createSink();
+    const state = createState();
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_1',
+          type: 'commandExecution',
+          command: 'echo hello',
+          aggregatedOutput: 'hello\n',
+          // exitCode intentionally omitted
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onToolResult).toHaveBeenCalledWith([expect.objectContaining({ isError: false })]);
   });
 
   it('item/completed fileChange calls onMessage then onToolResult', () => {

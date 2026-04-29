@@ -108,7 +108,7 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
         {
           type: 'tool_use',
           id: item.id,
-          name: 'command_execution',
+          name: 'Bash',
           input: { command: item.command },
         },
       ]);
@@ -116,8 +116,8 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
         {
           type: 'tool_result',
           toolUseId: item.id,
-          content: item.aggregatedOutput,
-          isError: (item.exitCode ?? 0) !== 0,
+          content: item.aggregatedOutput ?? '',
+          isError: item.exitCode !== undefined && item.exitCode !== 0,
         },
       ]);
       return;
