@@ -187,52 +187,52 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
   if (message?.usage) {
     session.state.lastAssistantUsage = message.usage;
   }
-  if (message?.content) {
-    for (const block of message.content) {
-      if (block.type === 'tool_use') {
-        if (block.name === 'TodoWrite') {
-          const input = block.input as { todos?: unknown[] };
-          if (Array.isArray(input?.todos)) {
-            const valid = input.todos.filter(
-              (t): t is import('@qlan-ro/mainframe-types').TodoItem =>
-                typeof t === 'object' &&
-                t !== null &&
-                typeof (t as Record<string, unknown>).content === 'string' &&
-                typeof (t as Record<string, unknown>).status === 'string',
-            );
-            if (valid.length > 0) sink.onTodoUpdate(valid);
-          }
+  if (!message?.content) return;
+
+  for (const block of message.content) {
+    if (block.type === 'tool_use') {
+      if (block.name === 'TodoWrite') {
+        const input = block.input as { todos?: unknown[] };
+        if (Array.isArray(input?.todos)) {
+          const valid = input.todos.filter(
+            (t): t is import('@qlan-ro/mainframe-types').TodoItem =>
+              typeof t === 'object' &&
+              t !== null &&
+              typeof (t as Record<string, unknown>).content === 'string' &&
+              typeof (t as Record<string, unknown>).status === 'string',
+          );
+          if (valid.length > 0) sink.onTodoUpdate(valid);
         }
-        const name = block.name as string;
-        if (name === 'Bash' || name === 'BashTool') {
-          const input = block.input as { command?: string } | undefined;
-          if (input?.command && isPrCreateCommand(input.command)) {
-            session.state.pendingPrCreates.add(block.id as string);
-          }
-          if (input?.command && isPrMutationCommand(input.command)) {
-            const pr = parsePrIdentifierFromArgs(input.command);
-            if (pr) session.state.pendingPrMutations.set(block.id as string, pr);
-          }
+      }
+      const name = block.name as string;
+      if (name === 'Bash' || name === 'BashTool') {
+        const input = block.input as { command?: string } | undefined;
+        if (input?.command && isPrCreateCommand(input.command)) {
+          session.state.pendingPrCreates.add(block.id as string);
         }
-        if (name === 'Skill') {
-          const input = block.input as { skill?: string } | undefined;
-          const skillName = input?.skill?.trim();
-          if (skillName) {
-            // Use the cached path from a prior user-event (more accurate), falling back to the probe.
-            const cachedPath = session.state.skillPathCache.get(skillName);
-            const resolvedPath =
-              cachedPath ?? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache);
-            sink.onSkillFile({ path: resolvedPath, displayName: skillName });
-          }
+        if (input?.command && isPrMutationCommand(input.command)) {
+          const pr = parsePrIdentifierFromArgs(input.command);
+          if (pr) session.state.pendingPrMutations.set(block.id as string, pr);
+        }
+      }
+      if (name === 'Skill') {
+        const input = block.input as { skill?: string } | undefined;
+        const skillName = input?.skill?.trim();
+        if (skillName) {
+          // Use the cached path from a prior user-event (more accurate), falling back to the probe.
+          const cachedPath = session.state.skillPathCache.get(skillName);
+          const resolvedPath =
+            cachedPath ?? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache);
+          sink.onSkillFile({ path: resolvedPath, displayName: skillName });
         }
       }
     }
-
-    sink.onMessage(message.content, {
-      model: message.model,
-      usage: message.usage,
-    });
   }
+
+  sink.onMessage(message.content, {
+    model: message.model,
+    usage: message.usage,
+  });
 }
 
 function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
@@ -255,6 +255,31 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   const isMeta = event.isMeta === true || event.is_meta === true;
   const message = event.message as { content: Array<Record<string, unknown>> | string } | undefined;
   if (!message?.content) return;
+
+  // Subagent dispatch prompt: CLI 2.1.118+ normalizes agent_progress into
+  // top-level SDK messages (queryHelpers.ts:120-156). The subagent's first
+  // event is a string-content user message restating its prompt — that text
+  // already lives in the parent's `Agent.input.prompt` (rendered by the
+  // Task card), so re-emitting it via onCliMessage produces a duplicate
+  // system pill in the parent thread.
+  //
+  // Discriminator: parent_tool_use_id set + string content + no CLI-internal
+  // tags. Skill loads carry <command-name>; "Base directory for this skill:"
+  // is the isMeta skill-content shape. Anything tagged is real content from
+  // the subagent — let it flow through the existing string-content branches
+  // below so SkillLoadedCards still render. Array-content user events
+  // (tool_results, text blocks, image blocks) and assistant events all flow
+  // unchanged: the parent's Task card still picks up subagent tool_use /
+  // tool_result blocks, and any other intra-subagent surface we may want to
+  // show stays available.
+  if (
+    event.parent_tool_use_id != null &&
+    typeof message.content === 'string' &&
+    !message.content.includes('<command-name>') &&
+    !/^Base directory for this skill:/m.test(message.content)
+  ) {
+    return;
+  }
 
   // User-typed /skill-name path: the CLI emits a string-content metadata
   // event (<command-message>+<command-name>) over stream-json, but it writes
