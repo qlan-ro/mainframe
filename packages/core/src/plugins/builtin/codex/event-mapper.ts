@@ -6,7 +6,9 @@ import type {
   TurnStartedParams,
   ThreadStartedParams,
   TokenUsageUpdatedParams,
+  PatchChangeKind,
 } from './types.js';
+import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:events');
@@ -122,31 +124,48 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
       ]);
       return;
 
-    case 'fileChange':
-      sink.onMessage([
-        {
-          type: 'tool_use',
-          id: item.id,
-          name: 'file_change',
-          input: { changes: item.changes },
-        },
-      ]);
-      sink.onToolResult([
-        {
-          type: 'tool_result',
-          toolUseId: item.id,
-          content: 'applied',
-          isError: item.status === 'failed',
-        },
-      ]);
+    case 'fileChange': {
+      const isCompleted = item.status !== 'inProgress';
+      const isError = item.status === 'failed' || item.status === 'declined';
+      item.changes.forEach((change, index) => {
+        const toolId = `${item.id}:${index}`;
+        const isAdd = change.kind.type === 'add';
+        const toolName = isAdd ? 'Write' : 'Edit';
+        const input: Record<string, unknown> = isAdd
+          ? { file_path: change.path, content: extractAddedContent(change.diff) }
+          : {
+              file_path: change.path,
+              old_string: '',
+              new_string: '',
+              ...((change.kind as Extract<PatchChangeKind, { type: 'update' }>).move_path != null
+                ? { move_path: (change.kind as Extract<PatchChangeKind, { type: 'update' }>).move_path }
+                : {}),
+            };
+        sink.onMessage([{ type: 'tool_use', id: toolId, name: toolName, input }]);
+        if (isCompleted) {
+          const structuredPatch = parseUnifiedDiff(change.diff);
+          sink.onToolResult([
+            {
+              type: 'tool_result',
+              toolUseId: toolId,
+              content: 'OK',
+              isError,
+              ...(structuredPatch.length ? { structuredPatch } : {}),
+            },
+          ]);
+        }
+      });
       return;
+    }
 
-    case 'mcpToolCall':
+    case 'mcpToolCall': {
+      const server = item.server ?? 'codex';
+      const toolName = `mcp__${server}__${item.tool}`;
       sink.onMessage([
         {
           type: 'tool_use',
           id: item.id,
-          name: item.tool,
+          name: toolName,
           input: item.arguments,
         },
       ]);
@@ -154,16 +173,12 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
         {
           type: 'tool_result',
           toolUseId: item.id,
-          // TODO(F-B.2): simplify — error is now { message: string } | null, string branch is dead
-          content: item.error
-            ? typeof item.error === 'string'
-              ? item.error
-              : ((item.error as unknown as { message: string }).message ?? '')
-            : JSON.stringify(item.result?.content ?? ''),
+          content: item.error ? (item.error.message ?? '') : JSON.stringify(item.result?.content ?? ''),
           isError: !!item.error,
         },
       ]);
       return;
+    }
 
     default:
       log.debug({ type: (item as { type: string }).type }, 'codex: unhandled item type');
@@ -191,4 +206,13 @@ function handleTokenUsage(params: TokenUsageUpdatedParams, _sink: SessionSink, s
     output_tokens: params.usage.output_tokens,
     cache_read_input_tokens: params.usage.cached_input_tokens,
   };
+}
+
+/** Extract added lines from a unified diff for Write tool input.content. */
+function extractAddedContent(diff: string): string {
+  return diff
+    .split('\n')
+    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+    .map((line) => line.slice(1))
+    .join('\n');
 }
