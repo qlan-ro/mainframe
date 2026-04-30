@@ -283,17 +283,25 @@ function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: M
   const content = inner.content as Array<Record<string, unknown>> | undefined;
   if (!Array.isArray(content)) return;
 
+  const existing = agentTools.get(parentId) ?? [];
   for (const block of content) {
-    if (block.type !== 'tool_use') continue;
-    const existing = agentTools.get(parentId) ?? [];
-    existing.push({
-      type: 'tool_use',
-      id: (block.id as string) || nanoid(),
-      name: block.name as string,
-      input: (block.input as Record<string, unknown>) ?? {},
-    });
-    agentTools.set(parentId, existing);
+    if (block.type === 'tool_use') {
+      existing.push({
+        type: 'tool_use',
+        id: (block.id as string) || nanoid(),
+        name: block.name as string,
+        input: (block.input as Record<string, unknown>) ?? {},
+        parentToolUseId: parentId,
+      });
+    } else if (block.type === 'text') {
+      const text = (block.text as string) || '';
+      if (text.trim()) existing.push({ type: 'text', text, parentToolUseId: parentId });
+    } else if (block.type === 'thinking') {
+      const t = (block.thinking as string) || '';
+      if (t.trim()) existing.push({ type: 'thinking', thinking: t, parentToolUseId: parentId });
+    }
   }
+  if (existing.length > 0) agentTools.set(parentId, existing);
 }
 
 /** Extract tool_result blocks from subagent JSONL user entries. */
@@ -315,6 +323,39 @@ function collectSubagentToolResults(
   }
 }
 
+/** Collect assistant text/thinking/tool_use blocks from subagent JSONL assistant entries. */
+function collectSubagentAssistantBlocks(
+  entry: Record<string, unknown>,
+  agentTools: Map<string, MessageContent[]>,
+): void {
+  const parentId = entry.parentToolUseID as string | undefined;
+  if (!parentId) return;
+  if (entry.type !== 'assistant') return;
+  const message = entry.message as Record<string, unknown> | undefined;
+  const content = message?.content as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(content)) return;
+
+  const existing = agentTools.get(parentId) ?? [];
+  for (const block of content) {
+    if (block.type === 'tool_use') {
+      existing.push({
+        type: 'tool_use',
+        id: (block.id as string) || nanoid(),
+        name: block.name as string,
+        input: (block.input as Record<string, unknown>) ?? {},
+        parentToolUseId: parentId,
+      });
+    } else if (block.type === 'text') {
+      const text = (block.text as string) || '';
+      if (text.trim()) existing.push({ type: 'text', text, parentToolUseId: parentId });
+    } else if (block.type === 'thinking') {
+      const t = (block.thinking as string) || '';
+      if (t.trim()) existing.push({ type: 'thinking', thinking: t, parentToolUseId: parentId });
+    }
+  }
+  if (existing.length > 0) agentTools.set(parentId, existing);
+}
+
 /** Inject subagent tool_result blocks after their matching tool_use in assistant messages. */
 function attachSubagentToolResults(
   messages: ChatMessage[],
@@ -327,7 +368,7 @@ function attachSubagentToolResults(
       newContent.push(block);
       if (block.type === 'tool_use') {
         const toolResult = results.get(block.id);
-        if (toolResult) newContent.push(toolResult);
+        if (toolResult) newContent.push({ ...toolResult, parentToolUseId: block.parentToolUseId });
       }
     }
     msg.content = newContent;
@@ -459,14 +500,22 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
           if (entry.isMeta === true) continue;
           if (entry.isCompactSummary === true || entry.isVisibleInTranscriptOnly === true) continue;
 
+          // Subagent JSONL files: extract tool_result and assistant blocks to
+          // inline under the parent's Agent tool_use. These entries must NOT
+          // appear as top-level chat messages — they're surfaced via the
+          // injectAgentChildren / attachSubagentToolResults pipeline below.
+          if (isSubagentFile) {
+            collectSubagentToolResults(entry, subagentToolResults);
+            collectSubagentAssistantBlocks(entry, agentTools);
+            continue;
+          }
+
           // Sidechain entries are subagent activity (Task/Agent tool spawns its
           // own CLI session whose messages share our sessionId but live in a
           // sibling JSONL). The subagent's first user message is its dispatch
           // prompt — converting it would render a ghost user bubble in the
-          // parent thread. Tool_results we still want are attached to the
-          // parent's Task tool_use via collectSubagentToolResults below.
-          // Skill-loaded synthesis above runs first so user-typed /skill
-          // invocations are preserved.
+          // parent thread. Skill-loaded synthesis above runs first so user-typed
+          // /skill invocations are preserved.
           if (entry.isSidechain === true) continue;
 
           // "Unknown command: /X" — CLI feedback for slash commands that don't
@@ -486,14 +535,6 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
           // Collect tool_use blocks from agent_progress events
           if (entry.type === 'progress' && entry.data?.type === 'agent_progress') {
             collectAgentProgressTools(entry, agentTools);
-            continue;
-          }
-
-          // Subagent JSONL files: only extract tool_result data to populate
-          // the tool_use blocks injected via agent_progress. The subagent's own
-          // assistant/user messages must NOT appear as top-level chat messages.
-          if (isSubagentFile) {
-            collectSubagentToolResults(entry, subagentToolResults);
             continue;
           }
 
