@@ -16,8 +16,8 @@ export interface ToolCategories {
 }
 
 export type DisplayContent =
-  | { type: 'text'; text: string }
-  | { type: 'thinking'; thinking: string }
+  | { type: 'text'; text: string; parentToolUseId?: string }
+  | { type: 'thinking'; thinking: string; parentToolUseId?: string }
   | { type: 'image'; mediaType: string; data: string }
   | {
       type: 'tool_call';
@@ -26,6 +26,7 @@ export type DisplayContent =
       input: Record<string, unknown>;
       category: 'default' | 'explore' | 'hidden' | 'progress' | 'subagent';
       result?: ToolCallResult;
+      parentToolUseId?: string;
     }
   | { type: 'tool_group'; calls: DisplayContent[] }
   | {
@@ -37,7 +38,7 @@ export type DisplayContent =
     }
   | { type: 'permission_request'; request: unknown }
   | { type: 'error'; message: string }
-  | { type: 'skill_loaded'; skillName: string; path: string; content: string };
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string };
 
 export interface DisplayMessage {
   id: string;

@@ -6,6 +6,11 @@ import { groupToolCallParts, groupTaskChildren } from './tool-grouping.js';
 
 const INTERNAL_USER_RE = /<mainframe-command[\s>]/;
 
+/** Returns `{ parentToolUseId: id }` when `id` is set, an empty object otherwise. */
+export function withParentId(id: string | undefined): { parentToolUseId: string } | Record<string, never> {
+  return id ? { parentToolUseId: id } : {};
+}
+
 /** Returns true if a user message is internal (mainframe commands or skill invocations). */
 export function isInternalUserMessage(content: MessageContent[]): boolean {
   return content.some((block) => block.type === 'text' && INTERNAL_USER_RE.test(block.text));
@@ -43,9 +48,18 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
   for (const block of grouped.content) {
     if (block.type === 'text') {
       const stripped = stripMainframeCommandTags(block.text);
-      if (stripped) content.push({ type: 'text', text: stripped });
+      if (stripped)
+        content.push({
+          type: 'text',
+          text: stripped,
+          ...withParentId(block.parentToolUseId),
+        });
     } else if (block.type === 'thinking') {
-      content.push({ type: 'thinking', thinking: block.thinking });
+      content.push({
+        type: 'thinking',
+        thinking: block.thinking,
+        ...withParentId(block.parentToolUseId),
+      });
     } else if (block.type === 'tool_use') {
       if (seenToolIds.has(block.id)) continue;
       seenToolIds.add(block.id);
@@ -57,6 +71,7 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
         name: block.name,
         input: block.input,
         category: categorizeToolCall(block.name, categories),
+        ...withParentId(block.parentToolUseId),
       };
       if (resultBlock) call.result = toToolCallResult(resultBlock);
       content.push(call);
@@ -94,7 +109,11 @@ export function convertUserContent(content: MessageContent[]): {
         // echo. The raw XML is pure CLI metadata — users want to see what they typed.
         const args = cmdInfo.userText.trim();
         const rendered = args ? `/${cmdInfo.commandName} ${args}` : `/${cmdInfo.commandName}`;
-        displayContent.push({ type: 'text', text: rendered });
+        displayContent.push({
+          type: 'text',
+          text: rendered,
+          ...withParentId(block.parentToolUseId),
+        });
         continue;
       }
 
@@ -103,7 +122,12 @@ export function convertUserContent(content: MessageContent[]): {
 
       const textToStore = files.length > 0 ? cleanText : block.text;
 
-      if (textToStore) displayContent.push({ type: 'text', text: textToStore });
+      if (textToStore)
+        displayContent.push({
+          type: 'text',
+          text: textToStore,
+          ...withParentId(block.parentToolUseId),
+        });
     } else if (block.type === 'image') {
       displayContent.push({ type: 'image', mediaType: block.mediaType, data: block.data });
     }
@@ -128,9 +152,10 @@ export function applyToolGrouping(content: DisplayContent[], categories: ToolCat
         args: c.input,
         result: c.result,
         isError: c.result?.isError,
+        ...withParentId(c.parentToolUseId),
       };
     }
-    if (c.type === 'text') return { type: 'text' as const, text: c.text };
+    if (c.type === 'text') return { type: 'text' as const, text: c.text, ...withParentId(c.parentToolUseId) };
     // Encode non-groupable content as sentinel text so it survives grouping in-place
     const idx = nonGroupable.length;
     nonGroupable.push(c);
@@ -162,7 +187,11 @@ function convertGroupedPartsToDisplay(
         const item = nonGroupable[Number(match[1])];
         if (item) result.push(item);
       } else if (part.text) {
-        result.push({ type: 'text', text: part.text });
+        result.push({
+          type: 'text',
+          text: part.text,
+          ...withParentId(part.parentToolUseId),
+        });
       }
       continue;
     }
@@ -174,6 +203,7 @@ function convertGroupedPartsToDisplay(
         args: Record<string, unknown>;
         result: unknown;
         isError: boolean | undefined;
+        parentToolUseId?: string;
       }>;
       result.push({
         type: 'tool_group',
@@ -183,9 +213,8 @@ function convertGroupedPartsToDisplay(
           name: item.toolName,
           input: item.args,
           category: categorizeToolCall(item.toolName, categories),
-          ...(item.result != null && {
-            result: item.result as ToolCallResult,
-          }),
+          ...(item.result != null && { result: item.result as ToolCallResult }),
+          ...withParentId(item.parentToolUseId),
         })),
       });
     } else if (part.toolName === '_TaskGroup') {
@@ -197,16 +226,17 @@ function convertGroupedPartsToDisplay(
         agentId,
         taskArgs: taskArgs ?? {},
         calls: children.map((child) => {
-          if (child.type !== 'tool-call') return { type: 'text' as const, text: child.text };
+          if (child.type === 'text') {
+            return { type: 'text' as const, text: child.text, ...withParentId(child.parentToolUseId) };
+          }
           return {
             type: 'tool_call' as const,
             id: child.toolCallId,
             name: child.toolName,
             input: child.args,
             category: categorizeToolCall(child.toolName, categories),
-            ...(child.result != null && {
-              result: child.result as ToolCallResult,
-            }),
+            ...(child.result != null && { result: child.result as ToolCallResult }),
+            ...withParentId(child.parentToolUseId),
           };
         }),
         ...(part.result != null && { result: part.result as ToolCallResult }),
@@ -232,6 +262,7 @@ function convertGroupedPartsToDisplay(
         input: part.args,
         category: categorizeToolCall(part.toolName, categories),
         ...(orig?.result && { result: orig.result }),
+        ...withParentId(part.parentToolUseId),
       });
     }
   }

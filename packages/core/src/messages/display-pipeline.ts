@@ -5,6 +5,7 @@ import {
   convertAssistantContent,
   convertUserContent,
   applyToolGrouping,
+  withParentId,
 } from './display-helpers.js';
 
 /**
@@ -92,9 +93,20 @@ function convertGroupedToDisplay(
         ...base,
         type: 'system',
         content: msg.content.map((c) => {
-          if (c.type === 'text') return { type: 'text' as const, text: c.text };
+          if (c.type === 'text')
+            return {
+              type: 'text' as const,
+              text: c.text,
+              ...withParentId(c.parentToolUseId),
+            };
           if (c.type === 'skill_loaded')
-            return { type: 'skill_loaded' as const, skillName: c.skillName, path: c.path, content: c.content };
+            return {
+              type: 'skill_loaded' as const,
+              skillName: c.skillName,
+              path: c.path,
+              content: c.content,
+              ...withParentId(c.parentToolUseId),
+            };
           return { type: 'text' as const, text: '' };
         }),
         ...(msg.metadata && { metadata: { ...msg.metadata } }),

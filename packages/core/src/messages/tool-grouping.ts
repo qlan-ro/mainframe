@@ -12,6 +12,7 @@ export interface ToolGroupItem {
   args: Record<string, unknown>;
   result: unknown;
   isError: boolean | undefined;
+  parentToolUseId?: string;
 }
 
 export interface TaskProgressItem {
@@ -30,8 +31,9 @@ export type PartEntry =
       args: Record<string, unknown>;
       result?: unknown;
       isError?: boolean;
+      parentToolUseId?: string;
     }
-  | { type: 'text'; text: string };
+  | { type: 'text'; text: string; parentToolUseId?: string };
 
 /**
  * Post-processes parts to group consecutive explore tools, suppress hidden tools,
@@ -98,6 +100,7 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
             args: tc.args,
             result: tc.result,
             isError: tc.isError,
+            ...(tc.parentToolUseId && { parentToolUseId: tc.parentToolUseId }),
           };
         });
         result.push({
