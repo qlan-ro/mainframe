@@ -65,9 +65,20 @@ export interface DiffHunk {
   lines: string[];
 }
 
+/**
+ * `parentToolUseId` is set on a content block to indicate it originated from a
+ * subagent stream event (CLI emits with `parent_tool_use_id`). The display
+ * pipeline groups these blocks under the parent's Agent/Task `tool_use` as
+ * `_TaskGroup` children. The field is on every variant — including `image`,
+ * `permission_request`, `error` — so the event handlers can spread the tag
+ * uniformly (`{...block, parentToolUseId}`) without per-variant filtering.
+ * The pipeline only renders the variants that have a Task-card child kind:
+ * `text`, `thinking`, `tool_use`, `tool_result`, `skill_loaded`. Other
+ * variants carrying the field are tolerated and rendered at root as usual.
+ */
 export type MessageContent =
   | { type: 'text'; text: string; parentToolUseId?: string }
-  | { type: 'image'; mediaType: string; data: string }
+  | { type: 'image'; mediaType: string; data: string; parentToolUseId?: string }
   | { type: 'thinking'; thinking: string; parentToolUseId?: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown>; parentToolUseId?: string }
   | {
@@ -80,8 +91,8 @@ export type MessageContent =
       modifiedFile?: string;
       parentToolUseId?: string;
     }
-  | { type: 'permission_request'; request: import('./adapter.js').ControlRequest }
-  | { type: 'error'; message: string }
+  | { type: 'permission_request'; request: import('./adapter.js').ControlRequest; parentToolUseId?: string }
+  | { type: 'error'; message: string; parentToolUseId?: string }
   | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;

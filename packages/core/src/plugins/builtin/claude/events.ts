@@ -189,6 +189,16 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
   }
   if (!message?.content) return;
 
+  if (typeof event.parent_tool_use_id === 'string' && event.parent_tool_use_id) {
+    const parentToolUseId = event.parent_tool_use_id;
+    const tagged = message.content.map((b) => ({
+      ...b,
+      parentToolUseId,
+    })) as import('@qlan-ro/mainframe-types').MessageContent[];
+    sink.onSubagentChild(parentToolUseId, tagged);
+    return;
+  }
+
   for (const block of message.content) {
     if (block.type === 'tool_use') {
       if (block.name === 'TodoWrite') {
@@ -235,6 +245,97 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
   });
 }
 
+/**
+ * Extract a skill_loaded block from a text block when it carries the CLI's
+ * skill-injection markers. Returns null when the text isn't a skill injection.
+ *
+ * Two shapes:
+ *   (A) <skill-format>true</skill-format> — model-initiated SkillTool output + subagent preloads
+ *   (B) Text starting with "Base directory for this skill: <path>" — user-typed /skill-name
+ */
+function extractSkillBlock(
+  text: string,
+  session: ClaudeSession,
+  parentToolUseId?: string,
+): (import('@qlan-ro/mainframe-types').MessageContent & { type: 'skill_loaded' }) | null {
+  const hasSkillFormat = text.includes('<skill-format>true</skill-format>');
+  const baseDirMatch = /^Base directory for this skill:\s*(.+?)(?:\n|$)/m.exec(text);
+  if (!hasSkillFormat && !baseDirMatch) return null;
+
+  const nameFromTag = /<command-name>([^<]+)<\/command-name>/.exec(text)?.[1]?.replace(/^\//, '').trim();
+  const rawDir = baseDirMatch?.[1]?.trim() ?? '';
+  const skillName = nameFromTag || (rawDir ? path.basename(rawDir) : '');
+  if (!skillName) return null;
+
+  const resolvedPath = rawDir && !path.extname(rawDir) ? path.join(rawDir, 'SKILL.md') : rawDir;
+  const finalPath = resolvedPath || resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache);
+  session.state.skillPathCache.set(skillName, finalPath);
+
+  const content = text
+    .replace(/<command-message>[^<]*<\/command-message>\n?/g, '')
+    .replace(/<command-name>[^<]*<\/command-name>\n?/g, '')
+    .replace(/<skill-format>[^<]*<\/skill-format>\n?/g, '')
+    .replace(/^Base directory for this skill:[^\n]*\n?/m, '')
+    .trim();
+
+  return parentToolUseId
+    ? { type: 'skill_loaded', skillName, path: finalPath, content, parentToolUseId }
+    : { type: 'skill_loaded', skillName, path: finalPath, content };
+}
+
+function handleSubagentUserEvent(
+  session: ClaudeSession,
+  event: Record<string, unknown>,
+  parentToolUseId: string,
+  message: { content: Array<Record<string, unknown>> | string },
+  sink: SessionSink,
+): void {
+  const collected: import('@qlan-ro/mainframe-types').MessageContent[] = [];
+
+  if (typeof message.content === 'string') {
+    // Pre-normalize edge case (model-switch breadcrumbs etc.). Treat as text,
+    // but if it's a `<command-name>...</command-name>` skill echo, surface as
+    // a skill_loaded child instead.
+    const nameMatch = /<command-name>\/?([^<]+)<\/command-name>/.exec(message.content);
+    if (nameMatch?.[1]) {
+      const skillName = nameMatch[1].trim();
+      const cached = session.state.skillPathCache.get(skillName);
+      const skillPath = cached ?? resolveExistingSkillPath(session.projectPath, skillName);
+      if (skillPath) {
+        session.state.skillPathCache.set(skillName, skillPath);
+        const content = readSkillContent(skillPath) ?? '';
+        collected.push({ type: 'skill_loaded', skillName, path: skillPath, content, parentToolUseId });
+      } else {
+        collected.push({ type: 'text', text: message.content, parentToolUseId });
+      }
+    } else {
+      collected.push({ type: 'text', text: message.content, parentToolUseId });
+    }
+  } else {
+    const tur = (event.tool_use_result ?? event.toolUseResult) as Record<string, unknown> | undefined;
+    const toolResults = buildToolResultBlocks(message as Record<string, unknown>, tur);
+    for (const r of toolResults) collected.push({ ...r, parentToolUseId });
+
+    for (const block of message.content) {
+      if (block.type === 'tool_result') continue; // already handled above
+      if (block.type === 'text') {
+        const text = (block.text as string) || '';
+        if (!text.trim()) continue;
+        // Skill-injection shape: surface as a skill_loaded child (inner pill).
+        const skillBlock = extractSkillBlock(text, session, parentToolUseId);
+        if (skillBlock) {
+          collected.push(skillBlock);
+          continue;
+        }
+        collected.push({ type: 'text', text, parentToolUseId });
+      }
+      // Image blocks intentionally skipped — same as the existing parent-level path.
+    }
+  }
+
+  if (collected.length > 0) sink.onSubagentChild(parentToolUseId, collected);
+}
+
 function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   // Detect queued message processed by CLI (isReplay from SDK mode)
   const isReplay = event.isReplay === true || event.is_replay === true;
@@ -256,28 +357,12 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   const message = event.message as { content: Array<Record<string, unknown>> | string } | undefined;
   if (!message?.content) return;
 
-  // Subagent dispatch prompt: CLI 2.1.118+ normalizes agent_progress into
-  // top-level SDK messages (queryHelpers.ts:120-156). The subagent's first
-  // event is a string-content user message restating its prompt — that text
-  // already lives in the parent's `Agent.input.prompt` (rendered by the
-  // Task card), so re-emitting it via onCliMessage produces a duplicate
-  // system pill in the parent thread.
-  //
-  // Discriminator: parent_tool_use_id set + string content + no CLI-internal
-  // tags. Skill loads carry <command-name>; "Base directory for this skill:"
-  // is the isMeta skill-content shape. Anything tagged is real content from
-  // the subagent — let it flow through the existing string-content branches
-  // below so SkillLoadedCards still render. Array-content user events
-  // (tool_results, text blocks, image blocks) and assistant events all flow
-  // unchanged: the parent's Task card still picks up subagent tool_use /
-  // tool_result blocks, and any other intra-subagent surface we may want to
-  // show stays available.
-  if (
-    event.parent_tool_use_id != null &&
-    typeof message.content === 'string' &&
-    !message.content.includes('<command-name>') &&
-    !/^Base directory for this skill:/m.test(message.content)
-  ) {
+  // Subagent activity: every block in this event belongs inside the parent's
+  // Agent/Task tool_use card. Tag each block with parentToolUseId and forward
+  // via onSubagentChild — the event-handler appends them to the parent's
+  // assistant message and the display pipeline groups them under _TaskGroup.
+  if (typeof event.parent_tool_use_id === 'string' && event.parent_tool_use_id) {
+    handleSubagentUserEvent(session, event, event.parent_tool_use_id, message, sink);
     return;
   }
 
@@ -360,32 +445,10 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       //       output + subagent preloads
       //   (B) Text starting with "Base directory for this skill: <path>" —
       //       user-typed /skill-name injection (isMeta: true, no XML tag)
-      const hasSkillFormat = text.includes('<skill-format>true</skill-format>');
-      const baseDirMatch = /^Base directory for this skill:\s*(.+?)(?:\n|$)/m.exec(text);
-      const isSkillInjection = hasSkillFormat || Boolean(baseDirMatch);
-
-      if (isSkillInjection) {
-        const nameFromTag = /<command-name>([^<]+)<\/command-name>/.exec(text)?.[1]?.replace(/^\//, '').trim();
-        const rawDir = baseDirMatch?.[1]?.trim() ?? '';
-        const skillName = nameFromTag || (rawDir ? path.basename(rawDir) : '');
-        const resolvedPath = rawDir && !path.extname(rawDir) ? path.join(rawDir, 'SKILL.md') : rawDir;
-        const finalPath =
-          resolvedPath ||
-          (skillName ? resolveSkillPath(session.projectPath, skillName, session.state.skillPathCache) : '');
-
-        if (skillName && finalPath) {
-          session.state.skillPathCache.set(skillName, finalPath);
-        }
-
-        const content = text
-          .replace(/<command-message>[^<]*<\/command-message>\n?/g, '')
-          .replace(/<command-name>[^<]*<\/command-name>\n?/g, '')
-          .replace(/<skill-format>[^<]*<\/skill-format>\n?/g, '')
-          .replace(/^Base directory for this skill:[^\n]*\n?/m, '')
-          .trim();
-
-        sink.onSkillLoaded({ skillName, path: finalPath, content });
-        sink.onSkillFile({ path: finalPath, displayName: skillName });
+      const skillBlock = extractSkillBlock(text, session);
+      if (skillBlock) {
+        sink.onSkillLoaded({ skillName: skillBlock.skillName, path: skillBlock.path, content: skillBlock.content });
+        sink.onSkillFile({ path: skillBlock.path, displayName: skillBlock.skillName });
         continue;
       }
 
