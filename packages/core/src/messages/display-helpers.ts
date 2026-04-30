@@ -232,6 +232,14 @@ function convertGroupedPartsToDisplay(
         taskArgs: taskArgs ?? {},
         calls: children.map((child) => {
           if (child.type === 'text') {
+            const m = NG_SENTINEL_RE.exec(child.text);
+            if (m) {
+              const original = nonGroupable[Number(m[1])];
+              // The original DisplayContent already carries parentToolUseId from
+              // applyToolGrouping's encoding step; pass it through unchanged.
+              if (original) return original;
+              return { type: 'text' as const, text: '', ...withParentId(child.parentToolUseId) };
+            }
             return { type: 'text' as const, text: child.text, ...withParentId(child.parentToolUseId) };
           }
           return {
