@@ -70,14 +70,15 @@ describe('BashCard', () => {
     expect(screen.getByText(/my-output-text/)).toBeInTheDocument();
   });
 
-  it('shows full command in expanded section after opening', async () => {
+  it('shows command output in expanded section after opening', async () => {
     render(
       <TooltipProvider>
         <BashCard args={{ command: 'echo hello' }} result="hello" isError={false} />
       </TooltipProvider>,
     );
     await userEvent.click(screen.getByRole('button'));
-    // expanded pre shows "$ echo hello"
-    expect(screen.getByText(/\$ echo hello/)).toBeInTheDocument();
+    // The expanded body shows ONLY the command output. The command itself is
+    // already in the always-visible header; echoing "$ command" was redundant.
+    expect(screen.getByText('hello')).toBeInTheDocument();
   });
 });

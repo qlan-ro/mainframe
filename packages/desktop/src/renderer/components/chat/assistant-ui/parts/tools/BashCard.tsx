@@ -43,18 +43,13 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
         ) : undefined
       }
     >
-      <div className="border-t border-mf-divider px-3 py-2 space-y-2">
-        <pre className="text-mf-small font-mono text-mf-text-primary overflow-x-auto whitespace-pre-wrap">
-          $ {command}
-        </pre>
-        {resultText && (
-          <div className={cn('border-t border-mf-divider -mx-3 px-3 py-1.5', isError && 'bg-mf-chat-error-surface/20')}>
-            <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary max-h-[400px] overflow-y-auto">
-              {resultText}
-            </pre>
-          </div>
-        )}
-      </div>
+      {resultText && (
+        <div className={cn('border-t border-mf-divider px-3 py-2', isError && 'bg-mf-chat-error-surface/20')}>
+          <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary max-h-[400px] overflow-y-auto">
+            {resultText}
+          </pre>
+        </div>
+      )}
     </CollapsibleToolCard>
   );
 }
