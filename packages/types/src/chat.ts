@@ -66,10 +66,10 @@ export interface DiffHunk {
 }
 
 export type MessageContent =
-  | { type: 'text'; text: string }
+  | { type: 'text'; text: string; parentToolUseId?: string }
   | { type: 'image'; mediaType: string; data: string }
-  | { type: 'thinking'; thinking: string }
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'thinking'; thinking: string; parentToolUseId?: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown>; parentToolUseId?: string }
   | {
       type: 'tool_result';
       toolUseId: string;
@@ -78,10 +78,11 @@ export type MessageContent =
       structuredPatch?: DiffHunk[];
       originalFile?: string;
       modifiedFile?: string;
+      parentToolUseId?: string;
     }
   | { type: 'permission_request'; request: import('./adapter.js').ControlRequest }
   | { type: 'error'; message: string }
-  | { type: 'skill_loaded'; skillName: string; path: string; content: string };
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
 
