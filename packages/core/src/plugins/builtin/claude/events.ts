@@ -399,6 +399,14 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
       //   • "[Request interrupted by user]" /
       //     "[Request interrupted by user for tool use]"
       //     (Claude source: utils/messages.ts:207-209)
+      //   • Subagent dispatch prompt: arrives here as a single text block
+      //     because normalizeMessages (CLI utils/messages.ts:782-793) converts
+      //     string-content user messages into [{type:'text', text:<string>}]
+      //     before yielding to stream-json. The text already lives in the
+      //     parent's Agent.input.prompt (rendered by the Task card), so
+      //     surfacing it via onCliMessage produces a duplicate system pill.
+      //     Skill injections from a subagent take the isSkillInjection
+      //     branch above and never reach this point, so they still surface.
       if (!isReplay && !isMeta) {
         const trimmed = text.trim();
         const isLocalCommandWrapper =
@@ -406,7 +414,8 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
             trimmed,
           );
         const isInterruptMarker = /^\[Request interrupted by user[^\]]*\]\s*$/.test(trimmed);
-        if (!isLocalCommandWrapper && !isInterruptMarker) {
+        const isSubagentDispatchPrompt = event.parent_tool_use_id != null;
+        if (!isLocalCommandWrapper && !isInterruptMarker && !isSubagentDispatchPrompt) {
           sink.onCliMessage(trimmed);
         }
       }

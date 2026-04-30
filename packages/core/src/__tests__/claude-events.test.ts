@@ -364,6 +364,29 @@ describe('subagent dispatch prompt (parent_tool_use_id != null)', () => {
     expect(sink.onSkillLoaded).not.toHaveBeenCalled();
   });
 
+  it('drops the dispatch prompt when the CLI normalized it to [{type:"text", text:…}]', () => {
+    // The CLI's normalizeMessages (utils/messages.ts:782-793) wraps any
+    // string-content user message into a single text block before yielding
+    // to stream-json. So in practice the daemon receives the dispatch prompt
+    // in this shape, not as a raw string. Without this case covered, the
+    // earlier string-only guard never fires and onCliMessage produces a
+    // duplicate system pill in the parent thread.
+    const session = createSession();
+    const sink = createSink();
+
+    const event = JSON.stringify({
+      type: 'user',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'Run `echo hi` via Bash and report the output.' }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).not.toHaveBeenCalled();
+  });
+
   it('still surfaces a subagent skill load (string content with <command-name>)', async () => {
     const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
