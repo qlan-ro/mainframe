@@ -48,26 +48,47 @@ set -a; . ./.env; set +a
 
 ## Cleanup
 
-Kill any stale dev processes from a prior run on THIS worktree's ports. Re-loads `.env` first to know which ports to target.
+Kill any stale dev processes from a prior run on THIS worktree. Re-loads `.env` first to know which ports to target.
+
+**Kill order matters.** `electron-vite` and `tsx watch` are supervisors that respawn their children when the children die. If you kill Electron first, electron-vite immediately spawns a new one — leaving zombies. Kill the supervisor first (so it stops respawning), then SIGKILL stragglers.
 
 ```bash
 [ -f .env ] && set -a && . ./.env && set +a
+WORKTREE_PATH=$(pwd)
 
-# Kill anything listening on the dev ports — guarded by the protected-port check
+# 1. Kill supervisors first (stops respawn loops)
+echo "killing supervisors (electron-vite dev, tsx watch)..."
+pgrep -fl "$WORKTREE_PATH" 2>/dev/null \
+  | grep -E "(electron-vite.*dev|tsx.*watch)" \
+  | awk '{print $1}' | xargs -r kill -TERM 2>/dev/null
+sleep 1
+
+# 2. SIGKILL all remaining dev-runtime processes rooted in this worktree.
+#    Filter is broad on purpose:
+#    - electron / electron-vite / tsx / pino-pretty / src/index.ts (the daemon's actual cmd)
+#    EXCLUDE tsserver and typingsInstaller — those belong to the editor, not us.
+echo "SIGKILL stragglers..."
+pgrep -fl "$WORKTREE_PATH" 2>/dev/null \
+  | grep -v tsserver | grep -v typingsInstaller \
+  | grep -E "(electron|electron-vite|tsx|pino-pretty|src/index\.ts)" \
+  | awk '{print $1}' | xargs -r kill -KILL 2>/dev/null
+sleep 1
+
+# 3. Port-level safety net (guarded against production ports)
 for port in "$DAEMON_PORT" "$VITE_PORT"; do
-  case "$port" in
-    31415|5173) echo "REFUSING to kill production port $port"; continue ;;
-  esac
+  case "$port" in 31415|5173) echo "REFUSING to kill production port $port"; continue ;; esac
   pids=$(lsof -ti:"$port" 2>/dev/null || true)
-  [ -n "$pids" ] && echo "Killing PIDs on :$port: $pids" && kill $pids 2>/dev/null || true
+  [ -n "$pids" ] && echo "Killing PIDs on :$port: $pids" && kill -KILL $pids 2>/dev/null || true
 done
 
-# Belt-and-suspenders: kill dev processes by command pattern, but only ones
-# rooted in THIS worktree path (so production install is unaffected)
-WORKTREE_PATH=$(pwd)
-pgrep -fl "$WORKTREE_PATH" 2>/dev/null | grep -E "(vite|tsx|electron|Mainframe Helper)" | awk '{print $1}' | xargs -r kill 2>/dev/null || true
-
-sleep 1
+# 4. Verify nothing dev-runtime survived
+remaining=$(pgrep -fl "$WORKTREE_PATH" 2>/dev/null | grep -v tsserver | grep -v typingsInstaller \
+  | grep -E "(electron|electron-vite|tsx|pino-pretty|src/index\.ts)" | wc -l | tr -d ' ')
+if [ "$remaining" != "0" ]; then
+  echo "WARNING: $remaining dev processes still alive after cleanup"
+  pgrep -fl "$WORKTREE_PATH" 2>/dev/null | grep -v tsserver | grep -v typingsInstaller \
+    | grep -E "(electron|electron-vite|tsx|pino-pretty|src/index\.ts)"
+fi
 ```
 
 ## Launch
@@ -121,22 +142,15 @@ done
 
 ## Stop / Restart
 
-When code changes mid-session:
+When code changes mid-session, **re-run the full Cleanup section above**, then re-launch. Don't take shortcuts:
 
 ```bash
-# Stop both dev processes
-[ -f .env ] && set -a && . ./.env && set +a
-for port in "$DAEMON_PORT" "$VITE_PORT"; do
-  case "$port" in 31415|5173) continue ;; esac
-  lsof -ti:"$port" 2>/dev/null | xargs -r kill 2>/dev/null || true
-done
-sleep 1
-
-# Re-launch (same as Launch section)
-nohup pnpm dev > /tmp/mainframe-dev-${DAEMON_PORT}.log 2>&1 &
+# Run the Cleanup section verbatim (kills supervisors first, SIGKILLs stragglers)
+# ... then ...
+nohup pnpm dev > "/tmp/mainframe-dev-${DAEMON_PORT}.log" 2>&1 &
 ```
 
-Never kill just one of (daemon, renderer) — leaves the other holding state.
+Never kill just one of (daemon, renderer) — leaves the other holding state. Never kill just Electron — `electron-vite` will respawn it (that's the whole reason cleanup kills supervisors first).
 
 ## Project-Specific Gotchas
 
