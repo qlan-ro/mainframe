@@ -421,8 +421,31 @@ function buildSessionSink(
       emitDisplay();
     },
 
-    onSubagentChild(_parentToolUseId: string, _blocks: import('@qlan-ro/mainframe-types').MessageContent[]) {
-      // Wired in Task 3 — intentional no-op here until event-handler.ts gains full subagent-nesting support.
+    onSubagentChild(parentToolUseId: string, blocks: import('@qlan-ro/mainframe-types').MessageContent[]) {
+      const cached = messages.get(chatId);
+      if (!cached) {
+        log.warn(
+          { chatId, parentToolUseId, blockCount: blocks.length },
+          'onSubagentChild: no messages in cache; dropping blocks',
+        );
+        return;
+      }
+      // Walk newest-first: subagent events belong to the most recent assistant
+      // message that contains the parent tool_use.
+      for (let i = cached.length - 1; i >= 0; i--) {
+        const msg = cached[i]!;
+        if (msg.type !== 'assistant') continue;
+        const owns = msg.content.some((b) => b.type === 'tool_use' && b.id === parentToolUseId);
+        if (!owns) continue;
+        msg.content = [...msg.content, ...blocks];
+        emitEvent({ type: 'message.updated', chatId, message: msg });
+        emitDisplay();
+        return;
+      }
+      log.warn(
+        { chatId, parentToolUseId, blockCount: blocks.length },
+        'onSubagentChild: parent tool_use not found in cache; dropping blocks',
+      );
     },
 
     onError(error: Error) {
