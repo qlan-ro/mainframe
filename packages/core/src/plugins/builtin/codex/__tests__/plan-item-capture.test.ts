@@ -20,6 +20,7 @@ const NULL_SINK: SessionSink = {
   onPrDetected: vi.fn(),
   onCliMessage: vi.fn(),
   onSkillLoaded: vi.fn(),
+  onSubagentChild: vi.fn(),
 };
 
 describe('Codex plan item capture', () => {

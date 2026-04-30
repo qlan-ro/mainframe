@@ -131,6 +131,15 @@ export interface SessionSink {
   onCliMessage(text: string): void;
   /** A skill was loaded via slash-command; show a collapsible skill card instead of raw text. */
   onSkillLoaded(entry: { skillName: string; path: string; content: string }): void;
+  /**
+   * Inline content blocks from a subagent stream event under the parent assistant
+   * message that owns the matching Agent/Task tool_use. Caller must have stamped
+   * each block's `.parentToolUseId` field with the same value passed as the
+   * `parentToolUseId` argument so the display pipeline can group them under the
+   * matching Task card. Implementations must no-op silently if `parentToolUseId`
+   * does not match any known tool_use block.
+   */
+  onSubagentChild(parentToolUseId: string, blocks: import('./chat.js').MessageContent[]): void;
 }
 
 export interface AdapterSession {

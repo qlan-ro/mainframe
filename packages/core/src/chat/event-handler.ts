@@ -421,6 +421,10 @@ function buildSessionSink(
       emitDisplay();
     },
 
+    onSubagentChild(_parentToolUseId: string, _blocks: import('@qlan-ro/mainframe-types').MessageContent[]) {
+      // Wired in Task 3 — intentional no-op here until event-handler.ts gains full subagent-nesting support.
+    },
+
     onError(error: Error) {
       emitEvent({ type: 'error', chatId, error: error.message });
     },
