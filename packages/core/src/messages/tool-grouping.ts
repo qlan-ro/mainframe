@@ -138,9 +138,9 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
 }
 
 /**
- * Wraps a subagent tool call together with all subsequent tool calls (until the next
- * text block or another subagent call) into a single _TaskGroup virtual entry so they
- * render nested under the subagent header.
+ * Wraps a subagent tool call together with all subsequent parts tagged with a matching
+ * `parentToolUseId` into a single _TaskGroup virtual entry so they render nested under
+ * the subagent header. Stops as soon as a part carries no tag or a different one.
  * Categories are adapter-declared — pass the adapter's ToolCategories instance.
  */
 export function groupTaskChildren(parts: PartEntry[], categories: ToolCategories): PartEntry[] {
@@ -151,18 +151,13 @@ export function groupTaskChildren(parts: PartEntry[], categories: ToolCategories
     const part = parts[i]!;
 
     if (part.type === 'tool-call' && isSubagentTool(part.toolName, categories)) {
+      const agentToolUseId = part.toolCallId;
       const children: PartEntry[] = [];
       let j = i + 1;
       while (j < parts.length) {
         const next = parts[j]!;
-        // Sentinel text entries (\0ng:N) are non-groupable placeholders (thinking,
-        // images) — skip over them without breaking or adding as children.
-        if (next.type === 'text' && next.text.startsWith('\0ng:')) {
-          j++;
-          continue;
-        }
-        if (next.type === 'text') break;
-        if (next.type === 'tool-call' && isSubagentTool(next.toolName, categories)) break;
+        // Only collect parts tagged as belonging to THIS Agent.
+        if (next.parentToolUseId !== agentToolUseId) break;
         children.push(next);
         j++;
       }

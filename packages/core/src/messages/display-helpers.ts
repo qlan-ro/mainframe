@@ -156,10 +156,15 @@ export function applyToolGrouping(content: DisplayContent[], categories: ToolCat
       };
     }
     if (c.type === 'text') return { type: 'text' as const, text: c.text, ...withParentId(c.parentToolUseId) };
-    // Encode non-groupable content as sentinel text so it survives grouping in-place
+    // Encode non-groupable content as sentinel text so it survives grouping in-place.
+    // Carry parentToolUseId so groupTaskChildren can include sentinels belonging to a subagent.
     const idx = nonGroupable.length;
     nonGroupable.push(c);
-    return { type: 'text' as const, text: `\0ng:${idx}` };
+    return {
+      type: 'text' as const,
+      text: `\0ng:${idx}`,
+      ...withParentId('parentToolUseId' in c ? c.parentToolUseId : undefined),
+    };
   });
 
   let grouped = groupToolCallParts(parts, categories);
