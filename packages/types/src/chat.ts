@@ -93,7 +93,8 @@ export type MessageContent =
     }
   | { type: 'permission_request'; request: import('./adapter.js').ControlRequest; parentToolUseId?: string }
   | { type: 'error'; message: string; parentToolUseId?: string }
-  | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string };
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string }
+  | { type: 'compaction'; parentToolUseId?: string };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
 

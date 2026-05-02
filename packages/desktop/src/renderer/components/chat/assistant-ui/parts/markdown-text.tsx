@@ -28,7 +28,14 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
   if (isCodeBlock) {
     const lang = className?.match(/language-(\w+)/)?.[1];
     const code = extractText(children);
-    return <SyntaxHighlightedCode code={code} language={lang} />;
+    return (
+      <div className="rounded-mf-card border border-mf-divider bg-mf-hover/20 overflow-hidden my-3">
+        <CodeHeader language={lang} code={code} />
+        <div className="border-t border-mf-divider">
+          <SyntaxHighlightedCode code={code} language={lang} />
+        </div>
+      </div>
+    );
   }
   return (
     <code className={cn('aui-md-inline-code', className)} {...props}>
@@ -170,9 +177,8 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
   tr: MarkdownTr,
   strong: ({ className, ...props }) => <strong className={cn('aui-md-strong', className)} {...props} />,
   del: ({ className, ...props }) => <del className={cn('aui-md-del', className)} {...props} />,
-  pre: ({ className, ...props }) => <pre className={cn('aui-md-pre', className)} {...props} />,
+  pre: ({ children }) => <>{children}</>,
   code: Code,
-  CodeHeader,
 });
 
 const REMARK_PLUGINS = [remarkGfm, remarkAppLinks];

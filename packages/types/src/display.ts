@@ -38,7 +38,8 @@ export type DisplayContent =
     }
   | { type: 'permission_request'; request: unknown }
   | { type: 'error'; message: string }
-  | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string };
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string }
+  | { type: 'compaction'; parentToolUseId?: string };
 
 export interface DisplayMessage {
   id: string;

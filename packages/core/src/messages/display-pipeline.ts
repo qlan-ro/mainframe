@@ -107,6 +107,7 @@ function convertGroupedToDisplay(
               content: c.content,
               ...withParentId(c.parentToolUseId),
             };
+          if (c.type === 'compaction') return { type: 'compaction' as const };
           return { type: 'text' as const, text: '' };
         }),
         ...(msg.metadata && { metadata: { ...msg.metadata } }),

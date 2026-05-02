@@ -63,7 +63,7 @@ export function WorktreeStatusPill({ toolName, args, result, isError }: Props) {
   );
 
   return (
-    <div className="flex justify-center my-1">
+    <div className="flex justify-center my-2">
       {tooltip ? (
         <Tooltip>
           <TooltipTrigger asChild>{pill}</TooltipTrigger>

@@ -246,7 +246,7 @@ export function convertHistoryEntry(entry: Record<string, unknown>, chatId: stri
       id: (entry.uuid as string) || nanoid(),
       chatId,
       type: 'system',
-      content: [{ type: 'text', text: 'Context compacted' }],
+      content: [{ type: 'compaction' }],
       timestamp: (entry.timestamp as string) || new Date().toISOString(),
       metadata: { source: 'history', internal: true },
     };

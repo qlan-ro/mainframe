@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Bot } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { ErrorDot, type ToolCardProps } from './shared';
 import { renderToolCard } from './render-tool-card';
 import { SkillLoadedCard } from './SkillLoadedCard';
+import { useExpandable } from './use-expandable';
 
 type ToolChild = {
   kind: 'tool';
@@ -59,7 +60,7 @@ function buildSummary(children: TaskGroupChild[]): string {
 }
 
 export function TaskGroupCard({ args, result, isError }: ToolCardProps) {
-  const [open, setOpen] = useState(false);
+  const { open, toggle, ref } = useExpandable<HTMLDivElement>();
   const taskArgs = (args.taskArgs as Record<string, unknown>) || {};
   const children = (args.children as TaskGroupChild[]) || [];
   const rawResult =
@@ -86,9 +87,9 @@ export function TaskGroupCard({ args, result, isError }: ToolCardProps) {
     firstTextIdx >= 0 && (children[firstTextIdx] as TextChild).text.trim() === prompt.trim() ? firstTextIdx : -1;
 
   return (
-    <div className="space-y-1">
+    <div ref={ref} className="space-y-1">
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => toggle()}
         className="w-full flex items-center gap-2 py-0.5 text-mf-body hover:bg-mf-hover/20 transition-colors"
       >
         <Bot size={14} className="text-mf-accent shrink-0" />
