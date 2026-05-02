@@ -1,6 +1,6 @@
-import { useState } from 'react';
 import { Plug, ChevronRight, ChevronDown } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
+import { useExpandable } from './use-expandable';
 
 interface Props {
   toolName: string;
@@ -22,7 +22,7 @@ export function MCPToolCard({ toolName, args, result, isError }: Props) {
   const { server, tool } = parseToolName(toolName);
   const pending = result === undefined;
   const errored = !pending && (isError || (typeof result === 'object' && result?.isError));
-  const [open, setOpen] = useState(false);
+  const { open, toggle, ref } = useExpandable<HTMLDivElement>();
   const expandable = !pending && !errored;
   const Chevron = open ? ChevronDown : ChevronRight;
 
@@ -36,12 +36,12 @@ export function MCPToolCard({ toolName, args, result, isError }: Props) {
   const resultText = typeof result === 'string' ? result : (result?.content ?? '');
 
   return (
-    <div className="flex flex-col items-center gap-2 my-1">
+    <div ref={ref} className="flex flex-col items-center gap-2 my-2">
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={() => expandable && setOpen((v) => !v)}
+            onClick={() => expandable && toggle()}
             className={
               errored
                 ? 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 border border-mf-chat-error/30'

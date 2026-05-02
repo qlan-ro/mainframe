@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
+import { useExpandable } from './use-expandable';
 
 interface CollapsibleToolCardProps {
   /** 'primary' for file/command cards, 'compact' for read/search/metadata cards */
@@ -38,13 +39,13 @@ export function CollapsibleToolCard({
   subHeader,
   children,
 }: CollapsibleToolCardProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const { open, toggle, ref } = useExpandable<HTMLDivElement>(defaultOpen);
   const isPrimary = variant === 'primary';
 
   return (
-    <div data-testid="tool-card" className={wrapperClassName ?? 'overflow-hidden'}>
+    <div ref={ref} data-testid="tool-card" className={wrapperClassName ?? 'overflow-hidden'}>
       <button
-        onClick={() => !disabled && setOpen((v) => !v)}
+        onClick={() => !disabled && toggle()}
         className={cn(
           'w-full flex items-center gap-2 px-3 text-mf-body transition-colors',
           isPrimary ? 'py-1.5 hover:bg-mf-hover/30' : 'py-0.5 hover:bg-mf-hover/20',
