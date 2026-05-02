@@ -106,7 +106,7 @@ export function SyntaxHighlightedCode({ code, language }: { code: string; langua
   if (html) {
     return (
       <div
-        className="[&>pre]:!bg-transparent [&>pre]:!m-0 [&>pre]:p-3 [&>pre]:overflow-x-auto [&>pre>code]:!text-[14px] [&>pre>code]:!leading-[20px] [&>pre>code]:!font-[var(--font-mono)]"
+        className="[&>pre]:!bg-transparent [&>pre]:!border-0 [&>pre]:!rounded-none [&>pre]:!m-0 [&>pre]:p-3 [&>pre]:overflow-x-auto [&>pre>code]:!text-[14px] [&>pre>code]:!leading-[20px] [&>pre>code]:!font-[var(--font-mono)]"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );

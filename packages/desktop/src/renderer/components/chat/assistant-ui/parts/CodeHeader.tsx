@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Copy, Check } from 'lucide-react';
 
 interface CodeHeaderProps {
@@ -21,20 +21,12 @@ export function CodeHeader({ language, code }: CodeHeaderProps) {
         {language && language !== 'unknown' ? language : 'text'}
       </span>
       <button
+        type="button"
         onClick={handleCopy}
-        className="flex items-center gap-1 text-mf-small text-mf-text-secondary hover:text-mf-text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-label={copied ? 'Copied' : 'Copy code'}
+        className="flex items-center text-mf-text-secondary hover:text-mf-text-primary transition-colors"
       >
-        {copied ? (
-          <>
-            <Check size={14} className="text-mf-success" />
-            <span>Copied</span>
-          </>
-        ) : (
-          <>
-            <Copy size={14} />
-            <span>Copy</span>
-          </>
-        )}
+        {copied ? <Check size={14} className="text-mf-success" /> : <Copy size={14} />}
       </button>
     </div>
   );

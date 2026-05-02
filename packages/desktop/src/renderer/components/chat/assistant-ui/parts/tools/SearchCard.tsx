@@ -36,14 +36,14 @@ export function SearchCard({
       trailing={<StatusDot result={result} isError={isError} />}
       subHeader={
         subHeaderText ? (
-          <div className="px-3 pb-0.5">
+          <div className="px-3 pb-0.5 pl-[35px]">
             <span className="font-mono text-mf-small text-mf-text-secondary/60 truncate block">{subHeaderText}</span>
           </div>
         ) : undefined
       }
     >
       {resultText && (
-        <div className="border-t border-mf-divider/50 ml-5">
+        <div className="border-t border-mf-divider/50">
           <pre
             className={cn(
               'text-mf-small font-mono overflow-x-auto whitespace-pre-wrap px-3 py-2 max-h-[300px] overflow-y-auto',

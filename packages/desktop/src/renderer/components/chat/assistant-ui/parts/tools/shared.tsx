@@ -60,16 +60,27 @@ export function ClickableFilePath({ filePath }: { filePath: string }) {
     revealFileInTree(filePath);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      openEditorTab(filePath);
+      revealFileInTree(filePath);
+    }
+  };
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
-          onClick={handleClick}
-          className="font-mono text-mf-accent truncate text-mf-body hover:underline cursor-pointer"
+        <span
+          role="button"
           tabIndex={0}
+          onClick={handleClick}
+          onKeyDown={handleKeyDown}
+          className="font-mono text-mf-accent truncate text-mf-body hover:underline cursor-pointer"
         >
           {shortFilename(filePath)}
-        </button>
+        </span>
       </TooltipTrigger>
       <TooltipContent side="top">{filePath}</TooltipContent>
     </Tooltip>
