@@ -47,23 +47,23 @@ describe('convertThreadItems', () => {
     expect(messages[0]!.content).toEqual([{ type: 'text', text: 'Fix the bug' }]);
   });
 
-  it('converts fileChange to tool_use + tool_result', () => {
+  it('converts fileChange to per-change Edit/Write tool_use + tool_result', () => {
     const messages = convertThreadItems(
       [
         {
           id: 'i2',
           type: 'fileChange',
-          changes: [{ path: 'a.ts', kind: 'update' as const }],
+          changes: [{ path: 'a.ts', kind: { type: 'update' as const, move_path: null }, diff: '' }],
           status: 'completed' as const,
         },
       ],
       'chat-1',
     );
     expect(messages).toHaveLength(2);
-    expect(messages[0]!.content[0]).toEqual(expect.objectContaining({ name: 'file_change' }));
+    expect(messages[0]!.content[0]).toEqual(expect.objectContaining({ name: 'Edit', id: 'i2:0' }));
   });
 
-  it('converts mcpToolCall to tool_use + tool_result', () => {
+  it('converts mcpToolCall to mcp__<server>__<tool> tool_use + tool_result', () => {
     const messages = convertThreadItems(
       [
         {
@@ -72,7 +72,7 @@ describe('convertThreadItems', () => {
           server: 'mcp',
           tool: 'search',
           arguments: { q: 'foo' },
-          result: { content: [{ found: true }], structuredContent: null },
+          result: { content: [{ found: true }], structuredContent: null, _meta: null },
           error: null,
           status: 'completed' as const,
         },
@@ -80,7 +80,7 @@ describe('convertThreadItems', () => {
       'chat-1',
     );
     expect(messages).toHaveLength(2);
-    expect(messages[0]!.content[0]).toEqual(expect.objectContaining({ name: 'search' }));
+    expect(messages[0]!.content[0]).toEqual(expect.objectContaining({ name: 'mcp__mcp__search' }));
   });
 
   it('sets chatId on all messages', () => {

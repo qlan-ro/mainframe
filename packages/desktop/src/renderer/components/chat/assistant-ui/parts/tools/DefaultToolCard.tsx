@@ -21,6 +21,7 @@ export function DefaultToolCard({
 
   return (
     <CollapsibleToolCard
+      hideToggle
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
@@ -28,7 +29,7 @@ export function DefaultToolCard({
           <span className="text-mf-body font-medium text-mf-text-primary">{toolName}</span>
         </>
       }
-      statusDot={<StatusDot result={result} isError={isError} />}
+      trailing={<StatusDot result={result} isError={isError} />}
     >
       <div className="border-t border-mf-divider px-3 py-2 space-y-2">
         <div>

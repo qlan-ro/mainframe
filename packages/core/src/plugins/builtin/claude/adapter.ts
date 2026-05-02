@@ -160,14 +160,18 @@ export class ClaudeAdapter implements Adapter {
     return {
       explore: new Set(['Read', 'Glob', 'Grep', 'LS']),
       hidden: new Set([
+        // TodoV1
+        'TodoWrite',
+        // TodoV2 (gated by isTodoV2Enabled() in the CLI; emitted as _TaskProgress)
+        'TaskCreate',
+        'TaskUpdate',
         'TaskList',
         'TaskGet',
         'TaskOutput',
         'TaskStop',
-        'TodoWrite',
-        'Skill',
+        // Mode/internal
         'EnterPlanMode',
-        'AskUserQuestion',
+        'AskUserQuestion', // pending state surfaces via BottomCard
         'ToolSearch',
       ]),
       progress: new Set(['TaskCreate', 'TaskUpdate']),

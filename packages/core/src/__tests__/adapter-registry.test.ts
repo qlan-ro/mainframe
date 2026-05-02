@@ -23,7 +23,9 @@ describe('ClaudeAdapter.getToolCategories', () => {
     const cats = adapter.getToolCategories();
     expect(cats.explore).toEqual(new Set(['Read', 'Glob', 'Grep', 'LS']));
     expect(cats.hidden).toContain('TaskList');
-    expect(cats.hidden).toContain('Skill');
+    expect(cats.hidden).toContain('TaskCreate');
+    expect(cats.hidden).toContain('TaskUpdate');
+    expect(cats.hidden).not.toContain('Skill');
     expect(cats.progress).toEqual(new Set(['TaskCreate', 'TaskUpdate']));
     expect(cats.subagent).toEqual(new Set(['Task', 'Agent']));
   });

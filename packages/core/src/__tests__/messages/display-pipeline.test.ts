@@ -261,6 +261,19 @@ describe('prepareMessagesForClient', () => {
     expect(result[0]!.content[1]).toEqual({ type: 'text', text: 'response' });
   });
 
+  it('keeps image blocks in assistant messages', () => {
+    const messages = [
+      rawMsg('assistant', [txt('here is your image'), { type: 'image', mediaType: 'image/png', data: 'pngbase64' }]),
+    ];
+    const result = prepareMessagesForClient(messages);
+    expect(result[0]!.content).toHaveLength(2);
+    expect(result[0]!.content[1]).toEqual({
+      type: 'image',
+      mediaType: 'image/png',
+      data: 'pngbase64',
+    });
+  });
+
   it('keeps image blocks in user messages', () => {
     const messages = [
       rawMsg('user', [txt('look at this'), { type: 'image', mediaType: 'image/png', data: 'base64data' }]),

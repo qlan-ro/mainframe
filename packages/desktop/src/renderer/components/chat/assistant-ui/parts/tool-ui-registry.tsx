@@ -11,6 +11,8 @@ import { TaskProgressCard } from './tools/TaskProgressCard';
 import { PlanCard } from './tools/PlanCard';
 import { SlashCommandCard } from './tools/SlashCommandCard';
 import { AskUserQuestionToolCard } from './tools/AskUserQuestionToolCard';
+import { WorktreeStatusPill } from './tools/WorktreeStatusPill';
+import { SchedulePill } from './tools/SchedulePill';
 
 export const EditToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Edit',
@@ -81,29 +83,33 @@ export const TaskProgressUI = makeAssistantToolUI<Record<string, unknown>, unkno
   render: ({ args }) => <TaskProgressCard args={args} />,
 });
 
-// Tools that should be hidden (rendered as null)
-const HIDDEN_TOOLS = [
-  'TaskCreate',
-  'TaskUpdate',
-  'TaskList',
-  'TaskGet',
-  'TaskOutput',
-  'TaskStop',
-  'TodoWrite',
-  'EnterPlanMode',
-  'ToolSearch',
-] as const;
-export const HiddenToolUIs = HIDDEN_TOOLS.map((toolName) =>
-  makeAssistantToolUI<Record<string, unknown>, unknown>({
-    toolName,
-    render: () => null,
-  }),
-);
-
 export const AskUserQuestionToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'AskUserQuestion',
   render: ({ args, result }) => <AskUserQuestionToolCard args={args} result={result} />,
 });
+
+export const EnterWorktreeToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
+  toolName: 'EnterWorktree',
+  render: ({ args, result, isError }) => (
+    <WorktreeStatusPill toolName="EnterWorktree" args={args} result={result as never} isError={isError} />
+  ),
+});
+export const ExitWorktreeToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
+  toolName: 'ExitWorktree',
+  render: ({ args, result, isError }) => (
+    <WorktreeStatusPill toolName="ExitWorktree" args={args} result={result as never} isError={isError} />
+  ),
+});
+
+const SCHEDULE_TOOLS = ['ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList', 'Monitor'] as const;
+export const ScheduleToolUIs = SCHEDULE_TOOLS.map((toolName) =>
+  makeAssistantToolUI<Record<string, unknown>, unknown>({
+    toolName,
+    render: ({ args, result, isError }) => (
+      <SchedulePill toolName={toolName} args={args} result={result as never} isError={isError} />
+    ),
+  }),
+);
 
 export const AllToolUIs = [
   EditToolUI,
@@ -117,8 +123,10 @@ export const AllToolUIs = [
   ExitPlanModeToolUI,
   SkillToolUI,
   AskUserQuestionToolUI,
+  EnterWorktreeToolUI,
+  ExitWorktreeToolUI,
   ToolGroupUI,
   TaskGroupUI,
   TaskProgressUI,
-  ...HiddenToolUIs,
+  ...ScheduleToolUIs,
 ];

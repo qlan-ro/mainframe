@@ -33,10 +33,15 @@ cat > "$ENV_FILE" <<EOF
 DAEMON_PORT=$DAEMON_PORT
 VITE_PORT=$VITE_PORT
 MAINFRAME_DATA_DIR=$MAINFRAME_DATA_DIR
+
+# Vite-prefixed mirrors so import.meta.env exposes them to the renderer.
+# Without these the renderer falls back to the production daemon port (31415).
+VITE_DAEMON_HTTP_PORT=$DAEMON_PORT
+VITE_DAEMON_WS_PORT=$DAEMON_PORT
 EOF
 
 echo "Wrote $ENV_FILE"
-echo "  DAEMON_PORT=$DAEMON_PORT"
+echo "  DAEMON_PORT=$DAEMON_PORT (renderer also reads via VITE_DAEMON_HTTP_PORT/WS_PORT)"
 echo "  VITE_PORT=$VITE_PORT"
 
 # Install dependencies and build types package

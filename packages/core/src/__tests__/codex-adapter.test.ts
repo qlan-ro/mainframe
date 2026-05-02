@@ -54,10 +54,21 @@ describe('CodexAdapter', () => {
     expect(session2.kill).toHaveBeenCalled();
   });
 
-  it('getToolCategories returns expected categories', () => {
+  it('getToolCategories hides todo_list (handled by TasksSection per todo #133)', () => {
     const adapter = new CodexAdapter();
-    const categories = adapter.getToolCategories!();
-    expect(categories.progress.has('todo_list')).toBe(true);
-    expect(categories.explore.size).toBe(0);
+    const cats = adapter.getToolCategories();
+    expect(cats.hidden.has('todo_list')).toBe(true);
+  });
+
+  it('getToolCategories declares no explore or subagent tools (Codex has no equivalents)', () => {
+    const adapter = new CodexAdapter();
+    const cats = adapter.getToolCategories();
+    expect(cats.explore.size).toBe(0);
+    expect(cats.subagent.size).toBe(0);
+  });
+
+  it('getToolCategories keeps todo_list in progress for parity', () => {
+    const adapter = new CodexAdapter();
+    expect(adapter.getToolCategories().progress.has('todo_list')).toBe(true);
   });
 });
