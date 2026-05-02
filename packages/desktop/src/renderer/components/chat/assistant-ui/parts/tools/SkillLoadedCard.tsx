@@ -1,10 +1,10 @@
-import { useState } from 'react';
 import { ChevronDown, ChevronRight, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { markdownComponents } from '../markdown-text';
 import { urlTransform } from '../../../../../lib/markdown-url-transform';
+import { useExpandable } from './use-expandable';
 
 interface SkillLoadedCardProps {
   skillName: string;
@@ -19,13 +19,13 @@ interface SkillLoadedCardProps {
 //   - changing CollapsibleToolCard's button styling would regress every other
 //     tool card that uses it
 export function SkillLoadedCard({ skillName, path, content }: SkillLoadedCardProps) {
-  const [open, setOpen] = useState(false);
+  const { open, toggle, ref } = useExpandable<HTMLDivElement>();
   const Chevron = open ? ChevronDown : ChevronRight;
 
   const pill = (
     <button
       type="button"
-      onClick={() => setOpen((v) => !v)}
+      onClick={() => toggle()}
       className="inline-flex items-center gap-1.5 rounded-full bg-mf-hover/50 px-3 py-1 hover:bg-mf-hover/70 transition-colors"
       aria-expanded={open}
     >
@@ -38,7 +38,7 @@ export function SkillLoadedCard({ skillName, path, content }: SkillLoadedCardPro
   );
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div ref={ref} className="flex flex-col items-center gap-2 my-2">
       {path ? (
         <Tooltip>
           <TooltipTrigger asChild>{pill}</TooltipTrigger>
