@@ -150,6 +150,7 @@ export type ThreadItem =
   | FileChangeItem
   | McpToolCallItem
   | WebSearchItem
+  | ImageGenerationItem
   | UserMessageItem;
 
 export interface AgentMessageItem {
@@ -205,6 +206,18 @@ export interface WebSearchItem {
   id: string;
   type: 'webSearch';
   query: string;
+}
+
+export interface ImageGenerationItem {
+  id: string;
+  type: 'imageGeneration';
+  /** Base64-encoded image bytes (PNG). Always present in completed events. */
+  result?: string;
+  /** Filesystem path where Codex saved the generated image — may be empty during 'generating'. */
+  savedPath?: string;
+  /** The model's revised version of the user's prompt, if available */
+  revisedPrompt?: string;
+  status: 'generating' | 'completed' | 'failed';
 }
 
 export interface TodoListItem {

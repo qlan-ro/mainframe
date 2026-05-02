@@ -1,5 +1,8 @@
 // packages/core/src/__tests__/codex-event-mapper.test.ts
 import { describe, it, expect, vi } from 'vitest';
+import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { handleNotification } from '../plugins/builtin/codex/event-mapper.js';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
 import type { CodexSessionState } from '../plugins/builtin/codex/event-mapper.js';
@@ -439,6 +442,109 @@ describe('handleNotification', () => {
     expect(sink.onToolResult).toHaveBeenCalledWith([
       expect.objectContaining({ isError: true, content: 'permission denied' }),
     ]);
+  });
+
+  it('item/completed imageGeneration emits inline base64 result with revisedPrompt', () => {
+    const sink = createSink();
+    const state = createState();
+    const b64 = 'iVBORw0KGgoAAAANSUhEUgAA';
+
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'ig_1',
+          type: 'imageGeneration',
+          result: b64,
+          savedPath: '/tmp/ig_test.png',
+          revisedPrompt: 'A cat in a hat',
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+
+    expect(sink.onMessage).toHaveBeenCalledWith([
+      { type: 'text', text: 'A cat in a hat' },
+      { type: 'image', mediaType: 'image/png', data: b64 },
+    ]);
+  });
+
+  it('item/completed imageGeneration without revisedPrompt emits image only', () => {
+    const sink = createSink();
+    const state = createState();
+    const b64 = '/9j/4AAQSkZJRg==';
+
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'ig_2',
+          type: 'imageGeneration',
+          result: b64,
+          savedPath: '/tmp/ig.jpg',
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+
+    expect(sink.onMessage).toHaveBeenCalledWith([{ type: 'image', mediaType: 'image/jpeg', data: b64 }]);
+  });
+
+  it('item/completed imageGeneration falls back to savedPath when result is missing', async () => {
+    const sink = createSink();
+    const state = createState();
+    const tmp = mkdtempSync(join(tmpdir(), 'codex-img-'));
+    const path = join(tmp, 'ig_test.png');
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    writeFileSync(path, bytes);
+
+    try {
+      handleNotification(
+        'item/completed',
+        {
+          threadId: 't1',
+          turnId: 'turn_1',
+          item: { id: 'ig_3', type: 'imageGeneration', savedPath: path, status: 'completed' },
+        },
+        sink,
+        state,
+      );
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(sink.onMessage).toHaveBeenCalledWith([
+        { type: 'image', mediaType: 'image/png', data: bytes.toString('base64') },
+      ]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('item/completed imageGeneration with no result and no savedPath logs warning', () => {
+    const sink = createSink();
+    const state = createState();
+
+    expect(() =>
+      handleNotification(
+        'item/completed',
+        {
+          threadId: 't1',
+          turnId: 'turn_1',
+          item: { id: 'ig_4', type: 'imageGeneration', status: 'failed' },
+        },
+        sink,
+        state,
+      ),
+    ).not.toThrow();
+
+    expect(sink.onMessage).not.toHaveBeenCalled();
   });
 
   it('turn/completed calls onResult with usage from prior tokenUsage event', () => {

@@ -10,7 +10,7 @@ export function ImageThumbs({
 }) {
   if (imageBlocks.length === 0) return null;
   return (
-    <div className="flex gap-2 justify-end max-w-[75%] flex-wrap">
+    <div className="flex gap-2 max-w-[75%] flex-wrap w-fit">
       {imageBlocks.map((img, i) => (
         <button
           key={i}
@@ -32,7 +32,7 @@ export function ImageThumbs({
 export function FileAttachmentThumbs({ attachments }: { attachments: { name: string }[] }) {
   if (attachments.length === 0) return null;
   return (
-    <div className="flex gap-2 justify-end max-w-[75%] flex-wrap">
+    <div className="flex gap-2 max-w-[75%] flex-wrap w-fit">
       {attachments.map((attachment, i) => (
         <div
           key={`${attachment.name}-${i}`}

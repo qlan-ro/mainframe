@@ -1,4 +1,6 @@
 // packages/core/src/plugins/builtin/codex/event-mapper.ts
+import { readFile } from 'node:fs/promises';
+import { extname } from 'node:path';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
 import type {
   ItemCompletedParams,
@@ -158,6 +160,35 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
       return;
     }
 
+    case 'imageGeneration': {
+      // Codex emits the generated image inline as base64 in `result`. Prefer that;
+      // fall back to reading `savedPath` from disk if the inline payload is missing.
+      const prompt = item.revisedPrompt;
+      const inline = item.result;
+      const emit = (data: string, mediaType: string) => {
+        const content: Parameters<SessionSink['onMessage']>[0] = [{ type: 'image', mediaType, data }];
+        if (prompt) content.unshift({ type: 'text', text: prompt });
+        sink.onMessage(content);
+      };
+
+      if (inline) {
+        emit(inline, mediaTypeFromExtension(item.savedPath ?? '.png'));
+        return;
+      }
+
+      const path = item.savedPath;
+      if (!path) {
+        log.warn({ id: item.id }, 'codex: imageGeneration missing both result and savedPath');
+        return;
+      }
+      readFile(path)
+        .then((bytes) => emit(bytes.toString('base64'), mediaTypeFromExtension(path)))
+        .catch((err) => {
+          log.warn({ err: String(err), path }, 'codex: failed to read generated image');
+        });
+      return;
+    }
+
     case 'mcpToolCall': {
       const server = item.server ?? 'codex';
       const toolName = `mcp__${server}__${item.tool}`;
@@ -206,6 +237,22 @@ function handleTokenUsage(params: TokenUsageUpdatedParams, _sink: SessionSink, s
     output_tokens: params.usage.output_tokens,
     cache_read_input_tokens: params.usage.cached_input_tokens,
   };
+}
+
+function mediaTypeFromExtension(path: string): string {
+  switch (extname(path).toLowerCase()) {
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    default:
+      return 'application/octet-stream';
+  }
 }
 
 /** Extract added lines from a unified diff for Write tool input.content. */

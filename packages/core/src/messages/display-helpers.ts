@@ -46,6 +46,8 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
       if (stripped) content.push({ type: 'text', text: stripped });
     } else if (block.type === 'thinking') {
       content.push({ type: 'thinking', thinking: block.thinking });
+    } else if (block.type === 'image') {
+      content.push({ type: 'image', mediaType: block.mediaType, data: block.data });
     } else if (block.type === 'tool_use') {
       if (seenToolIds.has(block.id)) continue;
       seenToolIds.add(block.id);
