@@ -713,7 +713,7 @@ describe('loadHistory', () => {
     expect(types).toEqual(['user', 'assistant', 'assistant']);
   });
 
-  it('converts system:compact_boundary to a visible "Context compacted" system message', async () => {
+  it('converts system:compact_boundary to a visible compaction system message', async () => {
     writeJsonl(SESSION_ID, [
       userTextEntry('Do a lot of work'),
       assistantTextEntry('Working...'),
@@ -731,7 +731,7 @@ describe('loadHistory', () => {
 
     expect(messages).toHaveLength(4);
     expect(messages[2].type).toBe('system');
-    expect(messages[2].content[0]).toMatchObject({ type: 'text', text: 'Context compacted' });
+    expect(messages[2].content[0]).toMatchObject({ type: 'compaction' });
   });
 
   it('skips isCompactSummary=true entries (context compaction messages)', async () => {

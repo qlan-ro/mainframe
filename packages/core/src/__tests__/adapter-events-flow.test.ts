@@ -180,7 +180,7 @@ describe('adapter events flow', () => {
     expect((e as any).message.content[0].type).toBe('tool_result');
   }, 10_000);
 
-  it('compact event emits message.added with Context compacted text', async () => {
+  it('compact event emits message.added with compaction content block', async () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
@@ -190,7 +190,7 @@ describe('adapter events flow', () => {
     const e = events.find((e) => e.type === 'message.added');
     expect(e).toBeDefined();
     const content = (e as any).message.content;
-    expect(content.some((b: any) => b.type === 'text' && b.text === 'Context compacted')).toBe(true);
+    expect(content.some((b: any) => b.type === 'compaction')).toBe(true);
   }, 10_000);
 
   it('plan_file event emits context.updated when file is new', async () => {
