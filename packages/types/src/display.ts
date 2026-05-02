@@ -37,7 +37,8 @@ export type DisplayContent =
     }
   | { type: 'permission_request'; request: unknown }
   | { type: 'error'; message: string }
-  | { type: 'skill_loaded'; skillName: string; path: string; content: string };
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string }
+  | { type: 'compaction' };
 
 export interface DisplayMessage {
   id: string;

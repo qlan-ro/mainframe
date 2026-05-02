@@ -3,7 +3,7 @@ import { Bot } from 'lucide-react';
 import { MessagePrimitive, useMessage } from '@assistant-ui/react';
 import { getExternalStoreMessages } from '@assistant-ui/react';
 import { MainframeText } from '../parts/MainframeText';
-import { DefaultToolCard } from '../parts/tools/DefaultToolCard';
+import { renderToolCard } from '../parts/tools/render-tool-card';
 import { TurnFooter } from './TurnFooter';
 import { ImageThumbs } from './ImageThumbs';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
@@ -29,15 +29,8 @@ export function AssistantMessage() {
               Text: MainframeText,
               Reasoning: () => null,
               tools: {
-                Fallback: ({ toolName, args, argsText, result, isError }) => (
-                  <DefaultToolCard
-                    toolName={toolName}
-                    args={(args || {}) as Record<string, unknown>}
-                    argsText={argsText}
-                    result={result}
-                    isError={isError}
-                  />
-                ),
+                Fallback: ({ toolName, args, argsText, result, isError }) =>
+                  renderToolCard(toolName, (args || {}) as Record<string, unknown>, argsText, result, isError),
               },
             }}
           />
