@@ -54,6 +54,11 @@ export function routeEvent(event: DaemonEvent): void {
       log.debug('event:display.message.added', { chatId: event.chatId });
       chats.addMessage(event.chatId, event.message);
       break;
+    case 'message.updated':
+      // No frontend consumer needed today: emitDisplay() is paired with this and
+      // the renderer reacts to display.message.updated. Adding the explicit
+      // no-op so the switch stays exhaustive and a future consumer is easy to wire.
+      break;
     case 'display.message.updated':
       log.debug('event:display.message.updated', { chatId: event.chatId, messageId: event.message.id });
       chats.updateMessage(event.chatId, event.message);

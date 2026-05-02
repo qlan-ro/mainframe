@@ -12,6 +12,7 @@ export interface ToolGroupItem {
   args: Record<string, unknown>;
   result: unknown;
   isError: boolean | undefined;
+  parentToolUseId?: string;
 }
 
 export interface TaskProgressItem {
@@ -20,6 +21,18 @@ export interface TaskProgressItem {
   args: Record<string, unknown>;
   result: unknown;
   isError: boolean | undefined;
+  parentToolUseId?: string;
+}
+
+/**
+ * Returns a parentToolUseId only if every item in the group shares the same
+ * non-empty value. Used to propagate the tag onto virtual wrappers
+ * (`_ToolGroup`, `_TaskProgress`) so groupTaskChildren can match them.
+ */
+function sharedParentToolUseId(items: ReadonlyArray<{ parentToolUseId?: string }>): string | undefined {
+  const first = items[0]?.parentToolUseId;
+  if (!first) return undefined;
+  return items.every((it) => it.parentToolUseId === first) ? first : undefined;
 }
 
 export type PartEntry =
@@ -30,8 +43,9 @@ export type PartEntry =
       args: Record<string, unknown>;
       result?: unknown;
       isError?: boolean;
+      parentToolUseId?: string;
     }
-  | { type: 'text'; text: string };
+  | { type: 'text'; text: string; parentToolUseId?: string };
 
 /**
  * Post-processes parts to group consecutive explore tools, suppress hidden tools,
@@ -68,6 +82,7 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
         args: part.args,
         result: part.result,
         isError: part.isError,
+        ...(part.parentToolUseId && { parentToolUseId: part.parentToolUseId }),
       });
       i++;
       continue;
@@ -98,14 +113,17 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
             args: tc.args,
             result: tc.result,
             isError: tc.isError,
+            ...(tc.parentToolUseId && { parentToolUseId: tc.parentToolUseId }),
           };
         });
+        const wrapperParent = sharedParentToolUseId(items);
         result.push({
           type: 'tool-call',
           toolCallId: (group[0] as PartEntry & { type: 'tool-call' }).toolCallId,
           toolName: '_ToolGroup',
           args: { items },
           result: 'grouped',
+          ...(wrapperParent && { parentToolUseId: wrapperParent }),
         });
       } else {
         result.push(group[0]!);
@@ -121,12 +139,14 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
 
   // Insert accumulated task progress at the position of the first task tool
   if (taskItems.length > 0) {
+    const wrapperParent = sharedParentToolUseId(taskItems);
     const entry: PartEntry = {
       type: 'tool-call',
       toolCallId: taskItems[0]!.toolCallId,
       toolName: '_TaskProgress',
       args: { items: taskItems },
       result: 'accumulated',
+      ...(wrapperParent && { parentToolUseId: wrapperParent }),
     };
     result.splice(taskInsertIndex >= 0 ? taskInsertIndex : result.length, 0, entry);
   }
@@ -135,9 +155,9 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
 }
 
 /**
- * Wraps a subagent tool call together with all subsequent tool calls (until the next
- * text block or another subagent call) into a single _TaskGroup virtual entry so they
- * render nested under the subagent header.
+ * Wraps a subagent tool call together with all subsequent parts tagged with a matching
+ * `parentToolUseId` into a single _TaskGroup virtual entry so they render nested under
+ * the subagent header. Stops as soon as a part carries no tag or a different one.
  * Categories are adapter-declared — pass the adapter's ToolCategories instance.
  */
 export function groupTaskChildren(parts: PartEntry[], categories: ToolCategories): PartEntry[] {
@@ -148,18 +168,13 @@ export function groupTaskChildren(parts: PartEntry[], categories: ToolCategories
     const part = parts[i]!;
 
     if (part.type === 'tool-call' && isSubagentTool(part.toolName, categories)) {
+      const agentToolUseId = part.toolCallId;
       const children: PartEntry[] = [];
       let j = i + 1;
       while (j < parts.length) {
         const next = parts[j]!;
-        // Sentinel text entries (\0ng:N) are non-groupable placeholders (thinking,
-        // images) — skip over them without breaking or adding as children.
-        if (next.type === 'text' && next.text.startsWith('\0ng:')) {
-          j++;
-          continue;
-        }
-        if (next.type === 'text') break;
-        if (next.type === 'tool-call' && isSubagentTool(next.toolName, categories)) break;
+        // Only collect parts tagged as belonging to THIS Agent.
+        if (next.parentToolUseId !== agentToolUseId) break;
         children.push(next);
         j++;
       }

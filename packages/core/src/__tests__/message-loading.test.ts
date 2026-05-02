@@ -794,6 +794,144 @@ describe('loadHistory', () => {
     expect(messages[0].content[0]).toMatchObject({ type: 'text', text: '' });
   });
 
+  it('inlines subagent assistant text/thinking and tool_results from subagent JSONLs into the parent assistant message with parentToolUseId tag', async () => {
+    const agentToolUseId = 'toolu_agent_1';
+    // Parent JSONL: assistant with Agent tool_use, then parent's tool_result.
+    writeJsonl(SESSION_ID, [
+      userTextEntry('dispatch please'),
+      assistantToolUseEntry(
+        'Agent',
+        { description: 'Echo hi', subagent_type: 'general-purpose', prompt: 'Run echo hi' },
+        agentToolUseId,
+      ),
+      toolResultEntry(agentToolUseId, 'Output of `echo hi`: `hi`'),
+    ]);
+
+    // Subagent JSONL: text/thinking/tool_use as one assistant turn, then tool_result.
+    const subagentDir = join(PROJECT_DIR, SESSION_ID, 'subagents');
+    mkdirSync(subagentDir, { recursive: true });
+    writeFileSync(
+      join(subagentDir, `agent-sub.jsonl`),
+      [
+        jsonlEntry({
+          type: 'user',
+          isSidechain: true,
+          agentId: 'sub',
+          message: { role: 'user', content: 'Run echo hi' },
+        }),
+        jsonlEntry({
+          type: 'assistant',
+          isSidechain: true,
+          agentId: 'sub',
+          parentToolUseID: agentToolUseId,
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'thinking', thinking: 'subagent inner' },
+              { type: 'text', text: 'Running it.' },
+              { type: 'tool_use', id: 'toolu_sub_bash', name: 'Bash', input: { command: 'echo hi' } },
+            ],
+          },
+        }),
+        jsonlEntry({
+          type: 'user',
+          isSidechain: true,
+          agentId: 'sub',
+          parentToolUseID: agentToolUseId,
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'toolu_sub_bash', content: 'hi' }],
+          },
+        }),
+      ].join('\n') + '\n',
+    );
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    // Find the parent assistant message and assert its content[] now includes the subagent blocks.
+    const assistant = messages.find((m) => m.type === 'assistant');
+    expect(assistant).toBeDefined();
+    const types = assistant!.content.map((c) => c.type);
+    // Must include the original Agent tool_use, plus inlined thinking + text + tool_use + tool_result.
+    expect(types).toContain('thinking');
+    expect(types.filter((t) => t === 'text').length).toBeGreaterThanOrEqual(1);
+    expect(types.filter((t) => t === 'tool_use').length).toBeGreaterThanOrEqual(2); // Agent + Bash
+    expect(types).toContain('tool_result');
+
+    // Every inlined block carries the parentToolUseId tag pointing to the Agent tool_use id.
+    for (const c of assistant!.content) {
+      if (c.type === 'tool_use' && c.name === 'Agent') continue; // the parent's own Agent tool_use is untagged
+      if ('parentToolUseId' in c && c.parentToolUseId !== undefined) {
+        expect(c.parentToolUseId).toBe(agentToolUseId);
+      }
+    }
+  });
+
+  it('links subagent JSONL entries via toolUseResult.agentId when parentToolUseID is absent (CLI 2.1.118+)', async () => {
+    // CLI 2.1.118+ writes subagent JSONL entries with `agentId` but without
+    // `parentToolUseID` on each line. The link to the parent's tool_use lives
+    // on the parent tool_result's `toolUseResult.agentId`. Without the lookup,
+    // history reload drops every subagent block and the Task card renders empty.
+    const agentToolUseId = 'toolu_agent_2118';
+    const subAgentId = 'ac1059642ea2fac5f';
+
+    writeJsonl(SESSION_ID, [
+      userTextEntry('use an explore agent'),
+      assistantToolUseEntry(
+        'Agent',
+        { description: 'Quick project overview', subagent_type: 'Explore', prompt: 'overview' },
+        agentToolUseId,
+      ),
+      // Parent tool_result carries `toolUseResult.agentId` — the only link to the subagent file.
+      jsonlEntry({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: agentToolUseId, content: 'agent done' }],
+        },
+        toolUseResult: { status: 'completed', agentId: subAgentId, agentType: 'Explore' },
+      }),
+    ]);
+
+    const subagentDir = join(PROJECT_DIR, SESSION_ID, 'subagents');
+    mkdirSync(subagentDir, { recursive: true });
+    writeFileSync(
+      join(subagentDir, `agent-${subAgentId}.jsonl`),
+      [
+        // Subagent entries carry `agentId` but NOT `parentToolUseID` — matches CLI 2.1.118+ shape.
+        jsonlEntry({
+          type: 'assistant',
+          isSidechain: true,
+          agentId: subAgentId,
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'Looking around.' },
+              { type: 'tool_use', id: 'toolu_sub_read', name: 'Read', input: { file_path: '/a.ts' } },
+            ],
+          },
+        }),
+        jsonlEntry({
+          type: 'user',
+          isSidechain: true,
+          agentId: subAgentId,
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'toolu_sub_read', content: 'file body' }],
+          },
+        }),
+      ].join('\n') + '\n',
+    );
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    const assistant = messages.find((m) => m.type === 'assistant');
+    expect(assistant).toBeDefined();
+    const tagged = assistant!.content.filter((c) => 'parentToolUseId' in c && c.parentToolUseId === agentToolUseId);
+    // Subagent text + tool_use + tool_result should all be inlined and tagged.
+    expect(tagged.map((c) => c.type).sort()).toEqual(['text', 'tool_result', 'tool_use']);
+  });
+
   it('handles tool_result with error flag', async () => {
     const toolUseId = 'toolu_err';
     writeJsonl(SESSION_ID, [

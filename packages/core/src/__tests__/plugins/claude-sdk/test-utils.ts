@@ -20,5 +20,6 @@ export function createMockSink(): SessionSink {
     onPrDetected: vi.fn(),
     onCliMessage: vi.fn(),
     onSkillLoaded: vi.fn(),
+    onSubagentChild: vi.fn(),
   };
 }

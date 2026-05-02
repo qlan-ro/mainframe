@@ -26,6 +26,7 @@ function createSink(): SessionSink {
     onPrDetected: vi.fn(),
     onCliMessage: vi.fn(),
     onSkillLoaded: vi.fn(),
+    onSubagentChild: vi.fn(),
   };
 }
 
@@ -340,31 +341,98 @@ describe('handleStdout', () => {
   });
 });
 
-describe('subagent dispatch prompt (parent_tool_use_id != null)', () => {
+describe('subagent events (parent_tool_use_id != null)', () => {
   // Background: CLI 2.1.118+ normalizes agent_progress into top-level SDK
   // user/assistant events with parent_tool_use_id set to the parent's
-  // Agent/Task tool_use_id. The first event is a string-content user message
-  // restating the dispatch prompt — that text already lives in the parent's
-  // `Agent.input.prompt` (rendered by the Task card), so re-emitting it as
-  // a system pill produces a duplicate. Everything else from the subagent
-  // (text/thinking, skill loads, tool_use, tool_result) is left untouched.
+  // Agent/Task tool_use_id. We route every such event through
+  // onSubagentChild, tagging blocks with parentToolUseId so the display
+  // pipeline groups them under the parent Task card.
 
-  it('drops the dispatch prompt (string content, no CLI-internal tags)', () => {
+  it('routes subagent assistant events to onSubagentChild with tagged blocks', () => {
     const session = createSession();
     const sink = createSink();
+    const event = JSON.stringify({
+      type: 'assistant',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: {
+        role: 'assistant',
+        model: 'claude-opus-4-7',
+        content: [
+          { type: 'thinking', thinking: 'subagent inner thought' },
+          { type: 'text', text: 'Let me run a command.' },
+          { type: 'tool_use', id: 'toolu_subagent_bash', name: 'Bash', input: { command: 'ls' } },
+        ],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
 
+    expect(sink.onMessage).not.toHaveBeenCalled();
+    expect(sink.onSubagentChild).toHaveBeenCalledTimes(1);
+    const [parentId, blocks] = (sink.onSubagentChild as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(parentId).toBe('toolu_parent_agent');
+    expect(blocks).toHaveLength(3);
+    for (const b of blocks) expect((b as { parentToolUseId?: string }).parentToolUseId).toBe('toolu_parent_agent');
+  });
+
+  it('routes the dispatch prompt (string content normalized to text block) to onSubagentChild', () => {
+    const session = createSession();
+    const sink = createSink();
     const event = JSON.stringify({
       type: 'user',
       parent_tool_use_id: 'toolu_parent_agent',
-      message: { role: 'user', content: 'Create a PR for the current branch...' },
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'Run `echo hi` via Bash and report the output.' }],
+      },
     });
     handleStdout(session, Buffer.from(event + '\n'), sink);
 
     expect(sink.onCliMessage).not.toHaveBeenCalled();
-    expect(sink.onSkillLoaded).not.toHaveBeenCalled();
+    expect(sink.onSubagentChild).toHaveBeenCalledTimes(1);
+    const [parentId, blocks] = (sink.onSubagentChild as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(parentId).toBe('toolu_parent_agent');
+    expect(blocks).toEqual([
+      { type: 'text', text: 'Run `echo hi` via Bash and report the output.', parentToolUseId: 'toolu_parent_agent' },
+    ]);
   });
 
-  it('still surfaces a subagent skill load (string content with <command-name>)', async () => {
+  it('routes raw string-content (pre-normalize edge case) to onSubagentChild', () => {
+    const session = createSession();
+    const sink = createSink();
+    const event = JSON.stringify({
+      type: 'user',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: { role: 'user', content: 'raw string body' },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onSubagentChild).toHaveBeenCalledWith('toolu_parent_agent', [
+      { type: 'text', text: 'raw string body', parentToolUseId: 'toolu_parent_agent' },
+    ]);
+  });
+
+  it('routes subagent tool_result blocks via onSubagentChild (not onToolResult)', () => {
+    const session = createSession();
+    const sink = createSink();
+    const event = JSON.stringify({
+      type: 'user',
+      parent_tool_use_id: 'toolu_parent_agent',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'toolu_subagent_bash', content: 'hi' }],
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onToolResult).not.toHaveBeenCalled();
+    expect(sink.onSubagentChild).toHaveBeenCalledTimes(1);
+    const [parentId, blocks] = (sink.onSubagentChild as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(parentId).toBe('toolu_parent_agent');
+    expect((blocks[0] as { type: string }).type).toBe('tool_result');
+    expect((blocks[0] as { parentToolUseId?: string }).parentToolUseId).toBe('toolu_parent_agent');
+  });
+
+  it('routes subagent skill loads through onSubagentChild as skill_loaded blocks (inner pill)', async () => {
     const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const pathMod = await import('node:path');
@@ -383,87 +451,57 @@ describe('subagent dispatch prompt (parent_tool_use_id != null)', () => {
       });
       handleStdout(session, Buffer.from(event + '\n'), sink);
 
-      expect(sink.onSkillLoaded).toHaveBeenCalledTimes(1);
-      const loaded = (sink.onSkillLoaded as ReturnType<typeof vi.fn>).mock.calls[0]![0];
-      expect(loaded.skillName).toBe('pencil');
+      expect(sink.onSkillLoaded).not.toHaveBeenCalled();
+      expect(sink.onSubagentChild).toHaveBeenCalledTimes(1);
+      const [parentId, blocks] = (sink.onSubagentChild as ReturnType<typeof vi.fn>).mock.calls[0]!;
+      expect(parentId).toBe('toolu_parent_agent');
+      expect((blocks[0] as { type: string }).type).toBe('skill_loaded');
+      expect((blocks[0] as { skillName: string }).skillName).toBe('pencil');
+      expect((blocks[0] as { parentToolUseId?: string }).parentToolUseId).toBe('toolu_parent_agent');
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
   });
 
-  it('still surfaces a subagent isMeta skill-content (Base directory for this skill: …)', () => {
+  it('extracts a skill_loaded block from a subagent array-content event with skill-format markers', () => {
     const session = createSession();
     const sink = createSink();
-    const skillContent = '# brainstorming\n\nThink broadly.';
-    const text = ['Base directory for this skill: /home/user/.claude/skills/brainstorming', skillContent].join('\n');
+    const text = [
+      '<command-name>brainstorming</command-name>',
+      '<skill-format>true</skill-format>',
+      'Base directory for this skill: /home/user/.claude/skills/brainstorming',
+      '# Brainstorming\n\nThink broadly.',
+    ].join('\n');
 
     const event = JSON.stringify({
       type: 'user',
       parent_tool_use_id: 'toolu_parent_agent',
-      message: { role: 'user', content: text },
+      message: { role: 'user', content: [{ type: 'text', text }] },
     });
     handleStdout(session, Buffer.from(event + '\n'), sink);
 
-    // The string-content path does not synthesize SkillLoadedCard for the
-    // "Base directory" shape (that's an array-content concern). What matters
-    // here is that we did NOT silently drop the event — it falls through to
-    // the existing onCliMessage path, where downstream code can react.
-    expect(sink.onCliMessage).toHaveBeenCalledWith(text.trim());
-  });
-
-  it('forwards tool_result blocks from a subagent user event', () => {
-    const session = createSession();
-    const sink = createSink();
-
-    const event = JSON.stringify({
-      type: 'user',
-      parent_tool_use_id: 'toolu_parent_agent',
-      message: {
-        role: 'user',
-        content: [{ type: 'tool_result', tool_use_id: 'toolu_subagent_bash', content: 'ls output' }],
-      },
-    });
-    handleStdout(session, Buffer.from(event + '\n'), sink);
-
-    expect(sink.onToolResult).toHaveBeenCalledTimes(1);
-    const blocks = (sink.onToolResult as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(sink.onSubagentChild).toHaveBeenCalledTimes(1);
+    const [parentId, blocks] = (sink.onSubagentChild as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(parentId).toBe('toolu_parent_agent');
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]).toMatchObject({
-      type: 'tool_result',
-      toolUseId: 'toolu_subagent_bash',
-      content: 'ls output',
-    });
+    const skill = blocks[0] as {
+      type: string;
+      skillName: string;
+      path: string;
+      parentToolUseId?: string;
+      content: string;
+    };
+    expect(skill.type).toBe('skill_loaded');
+    expect(skill.skillName).toBe('brainstorming');
+    expect(skill.path).toBe('/home/user/.claude/skills/brainstorming/SKILL.md');
+    expect(skill.parentToolUseId).toBe('toolu_parent_agent');
+    expect(skill.content).not.toContain('<skill-format>');
+    expect(skill.content).not.toContain('Base directory for this skill:');
   });
 
-  it('forwards subagent assistant turns unchanged (text + tool_use both flow)', () => {
+  it('parent-level events (parent_tool_use_id null) take the existing path', () => {
     const session = createSession();
     const sink = createSink();
-
-    const event = JSON.stringify({
-      type: 'assistant',
-      parent_tool_use_id: 'toolu_parent_agent',
-      message: {
-        role: 'assistant',
-        model: 'claude-opus-4-7',
-        content: [
-          { type: 'thinking', thinking: 'subagent inner thought' },
-          { type: 'text', text: 'Let me run a command.' },
-          { type: 'tool_use', id: 'toolu_subagent_bash', name: 'Bash', input: { command: 'ls' } },
-        ],
-      },
-    });
-    handleStdout(session, Buffer.from(event + '\n'), sink);
-
-    expect(sink.onMessage).toHaveBeenCalledTimes(1);
-    const [content] = (sink.onMessage as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(content).toHaveLength(3);
-    expect(content.map((b: Record<string, unknown>) => b.type)).toEqual(['thinking', 'text', 'tool_use']);
-  });
-
-  it('parent-level events (parent_tool_use_id null) take the normal path', () => {
-    const session = createSession();
-    const sink = createSink();
-
     const event = JSON.stringify({
       type: 'user',
       parent_tool_use_id: null,
@@ -475,6 +513,7 @@ describe('subagent dispatch prompt (parent_tool_use_id != null)', () => {
     handleStdout(session, Buffer.from(event + '\n'), sink);
 
     expect(sink.onCliMessage).toHaveBeenCalledWith('Unknown command: /typo');
+    expect(sink.onSubagentChild).not.toHaveBeenCalled();
   });
 });
 

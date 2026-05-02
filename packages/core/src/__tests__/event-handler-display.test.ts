@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventHandler } from '../chat/event-handler.js';
 import { MessageCache } from '../chat/message-cache.js';
 import { PermissionManager } from '../chat/permission-manager.js';
+import { convertAssistantContent } from '../messages/display-helpers.js';
 import type { DaemonEvent, SessionSink } from '@qlan-ro/mainframe-types';
+import type { GroupedMessage } from '../messages/message-grouping.js';
 
 function createRespondToPermission() {
   return vi.fn().mockResolvedValue(undefined);
@@ -155,5 +157,41 @@ describe('EventHandler display event emission', () => {
     expect(updatedEvents).toHaveLength(1);
     const updated = updatedEvents[0] as Extract<DaemonEvent, { type: 'display.message.updated' }>;
     expect(updated.message.type).toBe('assistant');
+  });
+});
+
+describe('display-pipeline parentToolUseId propagation', () => {
+  it('preserves parentToolUseId on text blocks through convertAssistantContent', () => {
+    const grouped: GroupedMessage = {
+      id: 'm1',
+      chatId: 'c1',
+      type: 'assistant',
+      content: [{ type: 'text', text: 'hello', parentToolUseId: 'toolu_agent_1' }],
+      timestamp: '2026-04-30T00:00:00Z',
+    };
+    const out = convertAssistantContent(grouped);
+    expect(out).toHaveLength(1);
+    expect((out[0] as { type: string; parentToolUseId?: string }).parentToolUseId).toBe('toolu_agent_1');
+  });
+
+  it('preserves parentToolUseId on tool_call blocks through convertAssistantContent', () => {
+    const grouped: GroupedMessage = {
+      id: 'm2',
+      chatId: 'c1',
+      type: 'tool_use',
+      content: [
+        {
+          type: 'tool_use',
+          id: 'toolu_1',
+          name: 'Read',
+          input: { path: '/tmp/x' },
+          parentToolUseId: 'toolu_agent_1',
+        },
+      ],
+      timestamp: '2026-04-30T00:00:00Z',
+    };
+    const out = convertAssistantContent(grouped);
+    expect(out).toHaveLength(1);
+    expect((out[0] as { type: string; parentToolUseId?: string }).parentToolUseId).toBe('toolu_agent_1');
   });
 });

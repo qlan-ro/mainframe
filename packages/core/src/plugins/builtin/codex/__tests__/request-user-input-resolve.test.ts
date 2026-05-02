@@ -21,6 +21,7 @@ function mkSink(onPermissionSpy = vi.fn()) {
     onPrDetected: vi.fn(),
     onCliMessage: vi.fn(),
     onSkillLoaded: vi.fn(),
+    onSubagentChild: vi.fn(),
   };
 }
 

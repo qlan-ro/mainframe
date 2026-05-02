@@ -114,30 +114,46 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
                   result: c.result,
                   isError: c.result?.isError,
                 })),
-              } as import('assistant-stream/utils').ReadonlyJSONObject,
+              } as unknown as import('assistant-stream/utils').ReadonlyJSONObject,
               result: 'grouped',
             });
             break;
           }
           case 'task_group': {
-            const calls = block.calls.filter(
-              (c): c is DisplayContent & { type: 'tool_call' } => c.type === 'tool_call',
-            );
+            const children = block.calls
+              .map((c) => {
+                if (c.type === 'tool_call') {
+                  return {
+                    kind: 'tool' as const,
+                    toolCallId: c.id,
+                    toolName: c.name,
+                    args: c.input,
+                    result: c.result,
+                    isError: c.result?.isError,
+                  };
+                }
+                if (c.type === 'text') return { kind: 'text' as const, text: c.text };
+                if (c.type === 'thinking') return { kind: 'thinking' as const, thinking: c.thinking };
+                if (c.type === 'skill_loaded') {
+                  return { kind: 'skill_loaded' as const, skillName: c.skillName, path: c.path, content: c.content };
+                }
+                if (c.type === 'image') return { kind: 'image' as const, mediaType: c.mediaType, data: c.data };
+                return null;
+              })
+              .filter((x): x is NonNullable<typeof x> => x !== null);
+
+            // Preserve the historical fallback that the agent's outer tool_result lives on the
+            // first tool child (when block.result is missing). Only consider tool children here.
+            const firstTool = children.find((c) => c.kind === 'tool') as { kind: 'tool'; result: unknown } | undefined;
             parts.push({
               type: 'tool-call',
               toolCallId: block.agentId,
               toolName: '_TaskGroup',
               args: {
                 taskArgs: block.taskArgs,
-                children: calls.map((c) => ({
-                  toolCallId: c.id,
-                  toolName: c.name,
-                  args: c.input,
-                  result: c.result,
-                  isError: c.result?.isError,
-                })),
-              } as import('assistant-stream/utils').ReadonlyJSONObject,
-              result: block.result ?? calls[0]?.result,
+                children,
+              } as unknown as import('assistant-stream/utils').ReadonlyJSONObject,
+              result: block.result ?? firstTool?.result,
             });
             break;
           }

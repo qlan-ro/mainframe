@@ -340,6 +340,99 @@ describe('EventHandler onSkillLoaded', () => {
   });
 });
 
+describe('EventHandler onSubagentChild', () => {
+  let db: any;
+  let messages: MessageCache;
+  let permissions: PermissionManager;
+  let emitEvent: ReturnType<typeof vi.fn<(event: any) => void>>;
+  let activeChats: Map<string, any>;
+  const chatId = 'chat-1';
+
+  beforeEach(() => {
+    db = {
+      chats: { update: vi.fn(), get: vi.fn(), addSkillFile: vi.fn().mockReturnValue(false) },
+      projects: { get: vi.fn() },
+      settings: { get: vi.fn() },
+    };
+    messages = new MessageCache();
+    permissions = new PermissionManager();
+    emitEvent = vi.fn();
+    activeChats = new Map();
+  });
+
+  it('appends blocks to the parent assistant message that owns the matching tool_use and emits message.updated', () => {
+    const handler = new EventHandler(db, messages, permissions, (id) => activeChats.get(id), emitEvent);
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
+
+    // Seed: an assistant message that contains an Agent tool_use with id 'toolu_agent_1'.
+    sink.onMessage(
+      [
+        { type: 'text', text: 'Dispatching subagent.' },
+        { type: 'tool_use', id: 'toolu_agent_1', name: 'Agent', input: { description: 'Echo hi 1' } },
+      ],
+      { model: 'claude-opus-4-7' },
+    );
+
+    // Act: subagent forwards two blocks tagged with parentToolUseId.
+    sink.onSubagentChild('toolu_agent_1', [
+      { type: 'text', text: 'Run echo hi via Bash and report the output.', parentToolUseId: 'toolu_agent_1' },
+      {
+        type: 'tool_use',
+        id: 'toolu_sub_bash',
+        name: 'Bash',
+        input: { command: 'echo hi' },
+        parentToolUseId: 'toolu_agent_1',
+      },
+    ]);
+
+    const cached = messages.get(chatId);
+    const assistant = cached?.find((m) => m.type === 'assistant');
+    expect(assistant).toBeDefined();
+    const types = assistant!.content.map((c: any) => c.type);
+    expect(types).toEqual(['text', 'tool_use', 'text', 'tool_use']);
+    const last = assistant!.content[3] as any;
+    expect(last.parentToolUseId).toBe('toolu_agent_1');
+    expect(last.name).toBe('Bash');
+    const updateEvents = emitEvent.mock.calls.filter(([e]: [any]) => e.type === 'message.updated');
+    expect(updateEvents.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('no-ops with a warn log when no parent assistant message owns the tool_use', () => {
+    const handler = new EventHandler(db, messages, permissions, (id) => activeChats.get(id), emitEvent);
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
+
+    sink.onSubagentChild('toolu_unknown', [{ type: 'text', text: 'orphaned', parentToolUseId: 'toolu_unknown' }]);
+
+    expect(messages.get(chatId)).toBeUndefined();
+  });
+
+  it('picks the assistant message that owns the matching tool_use id, skipping non-matching ones', () => {
+    const handler = new EventHandler(db, messages, permissions, (id) => activeChats.get(id), emitEvent);
+    const sink: SessionSink = handler.buildSink(chatId, createRespondToPermission());
+
+    sink.onMessage([{ type: 'tool_use', id: 'toolu_agent_1', name: 'Agent', input: { description: 'a' } }], {
+      model: 'claude-opus-4-7',
+    });
+    sink.onMessage([{ type: 'tool_use', id: 'toolu_agent_2', name: 'Agent', input: { description: 'b' } }], {
+      model: 'claude-opus-4-7',
+    });
+
+    sink.onSubagentChild('toolu_agent_1', [{ type: 'text', text: 'from agent 1', parentToolUseId: 'toolu_agent_1' }]);
+
+    const cached = messages.get(chatId);
+    const owningAgent1 = cached?.find(
+      (m) => m.type === 'assistant' && m.content.some((b: any) => b.type === 'tool_use' && b.id === 'toolu_agent_1'),
+    );
+    const owningAgent2 = cached?.find(
+      (m) => m.type === 'assistant' && m.content.some((b: any) => b.type === 'tool_use' && b.id === 'toolu_agent_2'),
+    );
+    expect(owningAgent1).toBeDefined();
+    expect(owningAgent2).toBeDefined();
+    expect(owningAgent1!.content).toHaveLength(2); // original tool_use + inlined text
+    expect(owningAgent2!.content).toHaveLength(1); // untouched
+  });
+});
+
 describe('EventHandler onPermission — yolo no longer auto-approves', () => {
   let db: any;
   let messages: MessageCache;

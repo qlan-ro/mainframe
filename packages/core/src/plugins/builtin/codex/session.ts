@@ -52,6 +52,7 @@ const nullSink: SessionSink = {
   onPrDetected: () => {},
   onCliMessage: () => {},
   onSkillLoaded: () => {},
+  onSubagentChild: () => {},
 };
 
 export class CodexSession implements AdapterSession {

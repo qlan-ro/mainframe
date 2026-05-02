@@ -45,6 +45,7 @@ const nullSink: SessionSink = {
   onPrDetected: () => {},
   onCliMessage: () => {},
   onSkillLoaded: () => {},
+  onSubagentChild: () => {},
 };
 
 export interface ClaudeSessionState {
