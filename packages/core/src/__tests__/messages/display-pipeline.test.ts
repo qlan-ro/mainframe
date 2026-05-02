@@ -359,9 +359,12 @@ describe('prepareMessagesForClient', () => {
       expect(groups).toHaveLength(1);
     });
 
-    it('wraps subagent tool + children into a task_group', () => {
+    it('wraps subagent tool + tagged children into a task_group', () => {
       const messages = [
-        rawMsg('assistant', [tu('tu1', 'Task', { description: 'do something' }), tu('tu2', 'Bash', { command: 'ls' })]),
+        rawMsg('assistant', [
+          tu('tu1', 'Task', { description: 'do something' }),
+          { ...tu('tu2', 'Bash', { command: 'ls' }), parentToolUseId: 'tu1' } as MessageContent,
+        ]),
         rawMsg('tool_result', [tr('tu1', 'task-result'), tr('tu2', 'bash-result')]),
       ];
       const result = prepareMessagesForClient(messages, TEST_CATEGORIES);

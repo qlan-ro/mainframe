@@ -21,6 +21,18 @@ export interface TaskProgressItem {
   args: Record<string, unknown>;
   result: unknown;
   isError: boolean | undefined;
+  parentToolUseId?: string;
+}
+
+/**
+ * Returns a parentToolUseId only if every item in the group shares the same
+ * non-empty value. Used to propagate the tag onto virtual wrappers
+ * (`_ToolGroup`, `_TaskProgress`) so groupTaskChildren can match them.
+ */
+function sharedParentToolUseId(items: ReadonlyArray<{ parentToolUseId?: string }>): string | undefined {
+  const first = items[0]?.parentToolUseId;
+  if (!first) return undefined;
+  return items.every((it) => it.parentToolUseId === first) ? first : undefined;
 }
 
 export type PartEntry =
@@ -70,6 +82,7 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
         args: part.args,
         result: part.result,
         isError: part.isError,
+        ...(part.parentToolUseId && { parentToolUseId: part.parentToolUseId }),
       });
       i++;
       continue;
@@ -103,12 +116,14 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
             ...(tc.parentToolUseId && { parentToolUseId: tc.parentToolUseId }),
           };
         });
+        const wrapperParent = sharedParentToolUseId(items);
         result.push({
           type: 'tool-call',
           toolCallId: (group[0] as PartEntry & { type: 'tool-call' }).toolCallId,
           toolName: '_ToolGroup',
           args: { items },
           result: 'grouped',
+          ...(wrapperParent && { parentToolUseId: wrapperParent }),
         });
       } else {
         result.push(group[0]!);
@@ -124,12 +139,14 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
 
   // Insert accumulated task progress at the position of the first task tool
   if (taskItems.length > 0) {
+    const wrapperParent = sharedParentToolUseId(taskItems);
     const entry: PartEntry = {
       type: 'tool-call',
       toolCallId: taskItems[0]!.toolCallId,
       toolName: '_TaskProgress',
       args: { items: taskItems },
       result: 'accumulated',
+      ...(wrapperParent && { parentToolUseId: wrapperParent }),
     };
     result.splice(taskInsertIndex >= 0 ? taskInsertIndex : result.length, 0, entry);
   }

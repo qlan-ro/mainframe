@@ -46,6 +46,17 @@ function tc(toolName: string, id?: string, result?: unknown, isError?: boolean):
   };
 }
 
+function tcTagged(toolName: string, id: string, parentToolUseId: string, result?: unknown): PartEntry {
+  return {
+    type: 'tool-call',
+    toolCallId: id,
+    toolName,
+    args: { some: 'arg' },
+    result,
+    parentToolUseId,
+  };
+}
+
 function text(t: string): PartEntry {
   return { type: 'text', text: t };
 }
@@ -293,8 +304,12 @@ describe('groupTaskChildren', () => {
     expect(result).toEqual(parts);
   });
 
-  it('wraps a Task + subsequent tool calls into a _TaskGroup', () => {
-    const parts = [tc('Task', 't1', undefined), tc('Bash', 'b1', 'output'), tc('Read', 'r1', 'file')];
+  it('wraps a Task + tagged subsequent tool calls into a _TaskGroup', () => {
+    const parts = [
+      tc('Task', 't1', undefined),
+      tcTagged('Bash', 'b1', 't1', 'output'),
+      tcTagged('Read', 'r1', 't1', 'file'),
+    ];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(1);
@@ -305,22 +320,23 @@ describe('groupTaskChildren', () => {
 
     const children = group.args.children as PartEntry[];
     expect(children).toHaveLength(2);
-    expect(children[0]!).toEqual(tc('Bash', 'b1', 'output'));
-    expect(children[1]!).toEqual(tc('Read', 'r1', 'file'));
+    expect(children[0]!).toEqual(tcTagged('Bash', 'b1', 't1', 'output'));
+    expect(children[1]!).toEqual(tcTagged('Read', 'r1', 't1', 'file'));
   });
 
   it('preserves Task args in taskArgs', () => {
     const parts = [
       { type: 'tool-call' as const, toolCallId: 't1', toolName: 'Task', args: { description: 'do stuff' } },
-      tc('Bash', 'b1'),
+      tcTagged('Bash', 'b1', 't1'),
     ];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
     const group = result[0] as PartEntry & { type: 'tool-call' };
     expect(group.args.taskArgs).toEqual({ description: 'do stuff' });
   });
 
-  it('stops grouping at a text entry', () => {
-    const parts = [tc('Task', 't1'), tc('Bash', 'b1'), text('middle'), tc('Edit', 'e1')];
+  it('stops grouping at an untagged entry', () => {
+    // Bash is tagged for t1; the untagged Edit terminates the run.
+    const parts = [tc('Task', 't1'), tcTagged('Bash', 'b1', 't1'), text('middle'), tc('Edit', 'e1')];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     // _TaskGroup(Task+Bash), text, Edit
@@ -331,11 +347,11 @@ describe('groupTaskChildren', () => {
 
     const children = (result[0] as PartEntry & { type: 'tool-call' }).args.children as PartEntry[];
     expect(children).toHaveLength(1);
-    expect(children[0]!).toEqual(tc('Bash', 'b1'));
+    expect(children[0]!).toEqual(tcTagged('Bash', 'b1', 't1'));
   });
 
-  it('stops grouping at another Task tool call', () => {
-    const parts = [tc('Task', 't1'), tc('Bash', 'b1'), tc('Task', 't2'), tc('Read', 'r1')];
+  it('stops grouping at a child tagged for a different parent', () => {
+    const parts = [tc('Task', 't1'), tcTagged('Bash', 'b1', 't1'), tc('Task', 't2'), tcTagged('Read', 'r1', 't2')];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(2);
@@ -346,11 +362,11 @@ describe('groupTaskChildren', () => {
 
     const children1 = (result[0] as PartEntry & { type: 'tool-call' }).args.children as PartEntry[];
     expect(children1).toHaveLength(1);
-    expect(children1[0]!).toEqual(tc('Bash', 'b1'));
+    expect(children1[0]!).toEqual(tcTagged('Bash', 'b1', 't1'));
 
     const children2 = (result[1] as PartEntry & { type: 'tool-call' }).args.children as PartEntry[];
     expect(children2).toHaveLength(1);
-    expect(children2[0]!).toEqual(tc('Read', 'r1'));
+    expect(children2[0]!).toEqual(tcTagged('Read', 'r1', 't2'));
   });
 
   it('leaves a Task with no children as a plain Task entry', () => {
@@ -374,11 +390,39 @@ describe('groupTaskChildren', () => {
   it('preserves result and isError on _TaskGroup', () => {
     const parts = [
       { type: 'tool-call' as const, toolCallId: 't1', toolName: 'Task', args: {}, result: 'task done', isError: false },
-      tc('Bash', 'b1'),
+      tcTagged('Bash', 'b1', 't1'),
     ];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
     const group = result[0] as PartEntry & { type: 'tool-call' };
     expect(group.result).toBe('task done');
     expect(group.isError).toBe(false);
+  });
+
+  // Reproduces the screenshot bug: a subagent that runs an explore burst
+  // (Read/Glob/Grep) gets its tool calls collapsed into a `_ToolGroup` by
+  // groupToolCallParts. groupTaskChildren then needs that wrapper to carry
+  // the subagent's parentToolUseId, otherwise the wrapper falls outside the
+  // _TaskGroup and renders at chat root.
+  it('nests a tagged _ToolGroup inside the parent _TaskGroup', () => {
+    const taskId = 't-agent';
+    const exploreItems = [
+      tcTagged('Read', 'r1', taskId),
+      tcTagged('Grep', 'g1', taskId),
+      tcTagged('Glob', 'gl1', taskId),
+    ];
+    const grouped = groupToolCallParts(exploreItems, CLAUDE_CATEGORIES);
+    expect(grouped).toHaveLength(1);
+    expect((grouped[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('_ToolGroup');
+
+    const parts = [tc('Task', taskId), ...grouped];
+    const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
+
+    expect(result).toHaveLength(1);
+    const group = result[0] as PartEntry & { type: 'tool-call' };
+    expect(group.toolName).toBe('_TaskGroup');
+
+    const children = group.args.children as PartEntry[];
+    expect(children).toHaveLength(1);
+    expect((children[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('_ToolGroup');
   });
 });
