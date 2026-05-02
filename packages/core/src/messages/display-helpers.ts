@@ -60,6 +60,13 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
         thinking: block.thinking,
         ...withParentId(block.parentToolUseId),
       });
+    } else if (block.type === 'image') {
+      content.push({
+        type: 'image',
+        mediaType: block.mediaType,
+        data: block.data,
+        ...withParentId(block.parentToolUseId),
+      });
     } else if (block.type === 'tool_use') {
       if (seenToolIds.has(block.id)) continue;
       seenToolIds.add(block.id);
@@ -129,7 +136,12 @@ export function convertUserContent(content: MessageContent[]): {
           ...withParentId(block.parentToolUseId),
         });
     } else if (block.type === 'image') {
-      displayContent.push({ type: 'image', mediaType: block.mediaType, data: block.data });
+      displayContent.push({
+        type: 'image',
+        mediaType: block.mediaType,
+        data: block.data,
+        ...withParentId(block.parentToolUseId),
+      });
     }
   }
 

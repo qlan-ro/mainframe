@@ -14,6 +14,7 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
 
   return (
     <CollapsibleToolCard
+      hideToggle
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
@@ -28,12 +29,12 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
           </Tooltip>
         </>
       }
-      statusDot={<StatusDot result={result} isError={isError} />}
+      trailing={<StatusDot result={result} isError={isError} />}
       subHeader={
         description ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="px-3 pb-1.5 -mt-0.5 text-mf-small text-mf-text-secondary truncate pl-[52px]" tabIndex={0}>
+              <div className="px-3 pb-1.5 -mt-0.5 text-mf-small text-mf-text-secondary truncate pl-[35px]" tabIndex={0}>
                 {description}
               </div>
             </TooltipTrigger>
@@ -42,18 +43,13 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
         ) : undefined
       }
     >
-      <div className="border-t border-mf-divider px-3 py-2 space-y-2">
-        <pre className="text-mf-small font-mono text-mf-text-primary overflow-x-auto whitespace-pre-wrap">
-          $ {command}
-        </pre>
-        {resultText && (
-          <div className={cn('border-t border-mf-divider -mx-3 px-3 py-1.5', isError && 'bg-mf-chat-error-surface/20')}>
-            <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary max-h-[400px] overflow-y-auto">
-              {resultText}
-            </pre>
-          </div>
-        )}
-      </div>
+      {resultText && (
+        <div className={cn('border-t border-mf-divider px-3 py-2', isError && 'bg-mf-chat-error-surface/20')}>
+          <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary max-h-[400px] overflow-y-auto">
+            {resultText}
+          </pre>
+        </div>
+      )}
     </CollapsibleToolCard>
   );
 }

@@ -18,7 +18,7 @@ export interface ToolCategories {
 export type DisplayContent =
   | { type: 'text'; text: string; parentToolUseId?: string }
   | { type: 'thinking'; thinking: string; parentToolUseId?: string }
-  | { type: 'image'; mediaType: string; data: string }
+  | { type: 'image'; mediaType: string; data: string; parentToolUseId?: string }
   | {
       type: 'tool_call';
       id: string;

@@ -11,19 +11,11 @@ import { TaskGroupCard } from './TaskGroupCard';
 import { TaskProgressCard } from './TaskProgressCard';
 import { PlanCard } from './PlanCard';
 import { SlashCommandCard } from './SlashCommandCard';
+import { WorktreeStatusPill } from './WorktreeStatusPill';
+import { MCPToolCard } from './MCPToolCard';
+import { SchedulePill } from './SchedulePill';
 
-const HIDDEN_TOOL_NAMES = new Set([
-  'TaskCreate',
-  'TaskUpdate',
-  'TaskList',
-  'TaskGet',
-  'TaskOutput',
-  'TaskStop',
-  'TodoWrite',
-  'EnterPlanMode',
-  'AskUserQuestion',
-  'ToolSearch',
-]);
+const SCHEDULE_TOOLS = new Set(['ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList', 'Monitor']);
 
 export function renderToolCard(
   toolName: string,
@@ -32,7 +24,15 @@ export function renderToolCard(
   result: unknown,
   isError: boolean | undefined,
 ): React.ReactElement | null {
-  if (HIDDEN_TOOL_NAMES.has(toolName)) return null;
+  if (toolName.startsWith('mcp__')) {
+    return <MCPToolCard toolName={toolName} args={args} result={result as never} isError={isError} />;
+  }
+  if (SCHEDULE_TOOLS.has(toolName)) {
+    return <SchedulePill toolName={toolName as never} args={args} result={result as never} isError={isError} />;
+  }
+  if (toolName === 'EnterWorktree' || toolName === 'ExitWorktree') {
+    return <WorktreeStatusPill toolName={toolName} args={args} result={result as never} isError={isError} />;
+  }
   if (toolName === 'Skill') return <SlashCommandCard args={args} />;
   if (toolName === '_ToolGroup') return <ToolGroupCard args={args} />;
   if (toolName === '_TaskProgress') return <TaskProgressCard args={args} />;

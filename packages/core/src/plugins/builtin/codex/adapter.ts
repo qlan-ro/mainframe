@@ -62,8 +62,10 @@ export class CodexAdapter implements Adapter {
   getToolCategories(): ToolCategories {
     return {
       explore: new Set(),
-      hidden: new Set(),
-      progress: new Set(['todo_list']),
+      hidden: new Set([
+        'todo_list', // Codex todoList items — hidden from chat; Context tab TasksSection (todo #133) handles them
+      ]),
+      progress: new Set(['todo_list']), // declared for parity; redundant once hidden filter fires
       subagent: new Set(),
     };
   }

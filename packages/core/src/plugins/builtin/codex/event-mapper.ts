@@ -1,4 +1,6 @@
 // packages/core/src/plugins/builtin/codex/event-mapper.ts
+import { readFile } from 'node:fs/promises';
+import { extname } from 'node:path';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
 import type {
   ItemCompletedParams,
@@ -6,7 +8,9 @@ import type {
   TurnStartedParams,
   ThreadStartedParams,
   TokenUsageUpdatedParams,
+  PatchChangeKind,
 } from './types.js';
+import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:events');
@@ -108,7 +112,7 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
         {
           type: 'tool_use',
           id: item.id,
-          name: 'command_execution',
+          name: 'Bash',
           input: { command: item.command },
         },
       ]);
@@ -116,37 +120,83 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
         {
           type: 'tool_result',
           toolUseId: item.id,
-          content: item.aggregatedOutput,
-          isError: (item.exitCode ?? 0) !== 0,
+          content: item.aggregatedOutput ?? '',
+          isError: item.exitCode !== undefined && item.exitCode !== 0,
         },
       ]);
       return;
 
-    case 'fileChange':
-      sink.onMessage([
-        {
-          type: 'tool_use',
-          id: item.id,
-          name: 'file_change',
-          input: { changes: item.changes },
-        },
-      ]);
-      sink.onToolResult([
-        {
-          type: 'tool_result',
-          toolUseId: item.id,
-          content: 'applied',
-          isError: item.status === 'failed',
-        },
-      ]);
+    case 'fileChange': {
+      const isCompleted = item.status !== 'inProgress';
+      const isError = item.status === 'failed' || item.status === 'declined';
+      item.changes.forEach((change, index) => {
+        const toolId = `${item.id}:${index}`;
+        const isAdd = change.kind.type === 'add';
+        const toolName = isAdd ? 'Write' : 'Edit';
+        const input: Record<string, unknown> = isAdd
+          ? { file_path: change.path, content: extractAddedContent(change.diff) }
+          : {
+              file_path: change.path,
+              old_string: '',
+              new_string: '',
+              ...((change.kind as Extract<PatchChangeKind, { type: 'update' }>).move_path != null
+                ? { move_path: (change.kind as Extract<PatchChangeKind, { type: 'update' }>).move_path }
+                : {}),
+            };
+        sink.onMessage([{ type: 'tool_use', id: toolId, name: toolName, input }]);
+        if (isCompleted) {
+          const structuredPatch = parseUnifiedDiff(change.diff);
+          sink.onToolResult([
+            {
+              type: 'tool_result',
+              toolUseId: toolId,
+              content: 'OK',
+              isError,
+              ...(structuredPatch.length ? { structuredPatch } : {}),
+            },
+          ]);
+        }
+      });
       return;
+    }
 
-    case 'mcpToolCall':
+    case 'imageGeneration': {
+      // Codex emits the generated image inline as base64 in `result`. Prefer that;
+      // fall back to reading `savedPath` from disk if the inline payload is missing.
+      const prompt = item.revisedPrompt;
+      const inline = item.result;
+      const emit = (data: string, mediaType: string) => {
+        const content: Parameters<SessionSink['onMessage']>[0] = [{ type: 'image', mediaType, data }];
+        if (prompt) content.unshift({ type: 'text', text: prompt });
+        sink.onMessage(content);
+      };
+
+      if (inline) {
+        emit(inline, mediaTypeFromExtension(item.savedPath ?? '.png'));
+        return;
+      }
+
+      const path = item.savedPath;
+      if (!path) {
+        log.warn({ id: item.id }, 'codex: imageGeneration missing both result and savedPath');
+        return;
+      }
+      readFile(path)
+        .then((bytes) => emit(bytes.toString('base64'), mediaTypeFromExtension(path)))
+        .catch((err) => {
+          log.warn({ err: String(err), path }, 'codex: failed to read generated image');
+        });
+      return;
+    }
+
+    case 'mcpToolCall': {
+      const server = item.server ?? 'codex';
+      const toolName = `mcp__${server}__${item.tool}`;
       sink.onMessage([
         {
           type: 'tool_use',
           id: item.id,
-          name: item.tool,
+          name: toolName,
           input: item.arguments,
         },
       ]);
@@ -154,15 +204,12 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
         {
           type: 'tool_result',
           toolUseId: item.id,
-          content: item.error
-            ? typeof item.error === 'string'
-              ? item.error
-              : ((item.error as unknown as { message: string }).message ?? '')
-            : JSON.stringify(item.result?.content ?? ''),
+          content: item.error ? (item.error.message ?? '') : JSON.stringify(item.result?.content ?? ''),
           isError: !!item.error,
         },
       ]);
       return;
+    }
 
     default:
       log.debug({ type: (item as { type: string }).type }, 'codex: unhandled item type');
@@ -190,4 +237,29 @@ function handleTokenUsage(params: TokenUsageUpdatedParams, _sink: SessionSink, s
     output_tokens: params.usage.output_tokens,
     cache_read_input_tokens: params.usage.cached_input_tokens,
   };
+}
+
+function mediaTypeFromExtension(path: string): string {
+  switch (extname(path).toLowerCase()) {
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+/** Extract added lines from a unified diff for Write tool input.content. */
+function extractAddedContent(diff: string): string {
+  return diff
+    .split('\n')
+    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+    .map((line) => line.slice(1))
+    .join('\n');
 }

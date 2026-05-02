@@ -1,5 +1,8 @@
 // packages/core/src/__tests__/codex-event-mapper.test.ts
 import { describe, it, expect, vi } from 'vitest';
+import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { handleNotification } from '../plugins/builtin/codex/event-mapper.js';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
 import type { CodexSessionState } from '../plugins/builtin/codex/event-mapper.js';
@@ -28,7 +31,7 @@ function createSink(): SessionSink {
 }
 
 function createState(): CodexSessionState {
-  return { threadId: null, currentTurnId: null };
+  return { threadId: null, currentTurnId: null, currentTurnPlan: null };
 }
 
 describe('handleNotification', () => {
@@ -79,7 +82,7 @@ describe('handleNotification', () => {
     expect(sink.onMessage).toHaveBeenCalledWith([{ type: 'thinking', thinking: 'Let me think...' }]);
   });
 
-  it('item/completed commandExecution calls onMessage then onToolResult', () => {
+  it('item/completed commandExecution emits Bash tool_use + tool_result (exitCode 0)', () => {
     const sink = createSink();
     const state = createState();
     handleNotification(
@@ -103,7 +106,7 @@ describe('handleNotification', () => {
       {
         type: 'tool_use',
         id: 'item_1',
-        name: 'command_execution',
+        name: 'Bash',
         input: { command: 'ls -la' },
       },
     ]);
@@ -117,7 +120,7 @@ describe('handleNotification', () => {
     ]);
   });
 
-  it('item/completed commandExecution with non-zero exit_code sets isError true', () => {
+  it('item/completed commandExecution with exitCode 1 sets isError true', () => {
     const sink = createSink();
     const state = createState();
     handleNotification(
@@ -140,9 +143,33 @@ describe('handleNotification', () => {
     expect(sink.onToolResult).toHaveBeenCalledWith([expect.objectContaining({ isError: true })]);
   });
 
-  it('item/completed fileChange calls onMessage then onToolResult', () => {
+  it('item/completed commandExecution with undefined exitCode treats as success (isError false)', () => {
     const sink = createSink();
     const state = createState();
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_1',
+          type: 'commandExecution',
+          command: 'echo hello',
+          aggregatedOutput: 'hello\n',
+          // exitCode intentionally omitted
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onToolResult).toHaveBeenCalledWith([expect.objectContaining({ isError: false })]);
+  });
+
+  it('item/completed fileChange (add) emits Write tool_use + tool_result with structuredPatch', () => {
+    const sink = createSink();
+    const state = createState();
+    const diff = '@@ -0,0 +1,2 @@\n+hello\n+world\n';
     handleNotification(
       'item/completed',
       {
@@ -151,7 +178,7 @@ describe('handleNotification', () => {
         item: {
           id: 'item_2',
           type: 'fileChange',
-          changes: [{ path: 'src/main.ts', kind: 'update' }],
+          changes: [{ path: 'src/new.ts', kind: { type: 'add' }, diff }],
           status: 'completed',
         },
       },
@@ -159,24 +186,56 @@ describe('handleNotification', () => {
       state,
     );
     expect(sink.onMessage).toHaveBeenCalledWith([
-      {
+      expect.objectContaining({
         type: 'tool_use',
-        id: 'item_2',
-        name: 'file_change',
-        input: { changes: [{ path: 'src/main.ts', kind: 'update' }] },
-      },
+        id: 'item_2:0',
+        name: 'Write',
+        input: expect.objectContaining({ file_path: 'src/new.ts', content: 'hello\nworld' }),
+      }),
     ]);
     expect(sink.onToolResult).toHaveBeenCalledWith([
-      {
+      expect.objectContaining({
         type: 'tool_result',
-        toolUseId: 'item_2',
-        content: 'applied',
+        toolUseId: 'item_2:0',
         isError: false,
-      },
+        structuredPatch: expect.arrayContaining([expect.objectContaining({ lines: expect.any(Array) })]),
+      }),
     ]);
   });
 
-  it('item/completed mcpToolCall calls onMessage then onToolResult', () => {
+  it('item/completed fileChange (update) emits Edit tool_use + tool_result with structuredPatch', () => {
+    const sink = createSink();
+    const state = createState();
+    const diff = '@@ -1,1 +1,1 @@\n-old\n+new\n';
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_3',
+          type: 'fileChange',
+          changes: [{ path: 'src/main.ts', kind: { type: 'update', move_path: null }, diff }],
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onMessage).toHaveBeenCalledWith([
+      expect.objectContaining({
+        type: 'tool_use',
+        id: 'item_3:0',
+        name: 'Edit',
+        input: expect.objectContaining({ file_path: 'src/main.ts' }),
+      }),
+    ]);
+    expect(sink.onToolResult).toHaveBeenCalledWith([
+      expect.objectContaining({ toolUseId: 'item_3:0', isError: false, structuredPatch: expect.any(Array) }),
+    ]);
+  });
+
+  it('item/completed fileChange with mixed changes (add + update) emits TWO tool_use blocks with distinct ids', () => {
     const sink = createSink();
     const state = createState();
     handleNotification(
@@ -185,12 +244,105 @@ describe('handleNotification', () => {
         threadId: 't1',
         turnId: 'turn_1',
         item: {
-          id: 'item_3',
+          id: 'item_4',
+          type: 'fileChange',
+          changes: [
+            { path: 'src/a.ts', kind: { type: 'add' }, diff: '+line\n' },
+            { path: 'src/b.ts', kind: { type: 'update', move_path: null }, diff: '-old\n+new\n' },
+          ],
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onMessage).toHaveBeenCalledTimes(2);
+    expect(sink.onMessage).toHaveBeenNthCalledWith(1, [expect.objectContaining({ id: 'item_4:0', name: 'Write' })]);
+    expect(sink.onMessage).toHaveBeenNthCalledWith(2, [expect.objectContaining({ id: 'item_4:1', name: 'Edit' })]);
+    expect(sink.onToolResult).toHaveBeenCalledTimes(2);
+  });
+
+  it('item/completed fileChange (update with move_path) includes move_path in input', () => {
+    const sink = createSink();
+    const state = createState();
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_5',
+          type: 'fileChange',
+          changes: [{ path: 'src/old.ts', kind: { type: 'update', move_path: 'src/new.ts' }, diff: '' }],
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onMessage).toHaveBeenCalledWith([
+      expect.objectContaining({ input: expect.objectContaining({ move_path: 'src/new.ts' }) }),
+    ]);
+  });
+
+  it('item/completed fileChange with status failed sets isError true on tool_result', () => {
+    const sink = createSink();
+    const state = createState();
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_6',
+          type: 'fileChange',
+          changes: [{ path: 'src/main.ts', kind: { type: 'update', move_path: null }, diff: '' }],
+          status: 'failed',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onToolResult).toHaveBeenCalledWith([expect.objectContaining({ isError: true })]);
+  });
+
+  it('item/completed fileChange with status inProgress emits tool_use but no tool_result', () => {
+    const sink = createSink();
+    const state = createState();
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_7',
+          type: 'fileChange',
+          changes: [{ path: 'src/main.ts', kind: { type: 'update', move_path: null }, diff: '' }],
+          status: 'inProgress',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onMessage).toHaveBeenCalled();
+    expect(sink.onToolResult).not.toHaveBeenCalled();
+  });
+
+  it('item/completed mcpToolCall emits mcp__<server>__<tool> name', () => {
+    const sink = createSink();
+    const state = createState();
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_8',
           type: 'mcpToolCall',
           server: 'my-mcp',
           tool: 'search',
           arguments: { query: 'foo' },
-          result: { content: [{ found: true }], structuredContent: null },
+          result: { content: [{ found: true }], structuredContent: null, _meta: null },
           error: null,
           status: 'completed',
         },
@@ -201,19 +353,199 @@ describe('handleNotification', () => {
     expect(sink.onMessage).toHaveBeenCalledWith([
       {
         type: 'tool_use',
-        id: 'item_3',
-        name: 'search',
+        id: 'item_8',
+        name: 'mcp__my-mcp__search',
         input: { query: 'foo' },
       },
     ]);
     expect(sink.onToolResult).toHaveBeenCalledWith([
       {
         type: 'tool_result',
-        toolUseId: 'item_3',
+        toolUseId: 'item_8',
         content: JSON.stringify([{ found: true }]),
         isError: false,
       },
     ]);
+  });
+
+  it('item/completed mcpToolCall with fs server emits mcp__fs__read_file', () => {
+    const sink = createSink();
+    const state = createState();
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_9',
+          type: 'mcpToolCall',
+          server: 'fs',
+          tool: 'read_file',
+          arguments: { path: '/tmp/x' },
+          result: { content: ['data'], structuredContent: null, _meta: null },
+          error: null,
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onMessage).toHaveBeenCalledWith([expect.objectContaining({ name: 'mcp__fs__read_file' })]);
+  });
+
+  it('item/completed mcpToolCall with no server falls back to mcp__codex__<tool>', () => {
+    const sink = createSink();
+    const state = createState();
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_10',
+          type: 'mcpToolCall',
+          server: undefined as unknown as string,
+          tool: 'list',
+          arguments: {},
+          result: null,
+          error: null,
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onMessage).toHaveBeenCalledWith([expect.objectContaining({ name: 'mcp__codex__list' })]);
+  });
+
+  it('item/completed mcpToolCall with non-null error sets is_error true and content from error.message', () => {
+    const sink = createSink();
+    const state = createState();
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'item_11',
+          type: 'mcpToolCall',
+          server: 'fs',
+          tool: 'write',
+          arguments: {},
+          result: null,
+          error: { message: 'permission denied' },
+          status: 'failed',
+        },
+      },
+      sink,
+      state,
+    );
+    expect(sink.onToolResult).toHaveBeenCalledWith([
+      expect.objectContaining({ isError: true, content: 'permission denied' }),
+    ]);
+  });
+
+  it('item/completed imageGeneration emits inline base64 result with revisedPrompt', () => {
+    const sink = createSink();
+    const state = createState();
+    const b64 = 'iVBORw0KGgoAAAANSUhEUgAA';
+
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'ig_1',
+          type: 'imageGeneration',
+          result: b64,
+          savedPath: '/tmp/ig_test.png',
+          revisedPrompt: 'A cat in a hat',
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+
+    expect(sink.onMessage).toHaveBeenCalledWith([
+      { type: 'text', text: 'A cat in a hat' },
+      { type: 'image', mediaType: 'image/png', data: b64 },
+    ]);
+  });
+
+  it('item/completed imageGeneration without revisedPrompt emits image only', () => {
+    const sink = createSink();
+    const state = createState();
+    const b64 = '/9j/4AAQSkZJRg==';
+
+    handleNotification(
+      'item/completed',
+      {
+        threadId: 't1',
+        turnId: 'turn_1',
+        item: {
+          id: 'ig_2',
+          type: 'imageGeneration',
+          result: b64,
+          savedPath: '/tmp/ig.jpg',
+          status: 'completed',
+        },
+      },
+      sink,
+      state,
+    );
+
+    expect(sink.onMessage).toHaveBeenCalledWith([{ type: 'image', mediaType: 'image/jpeg', data: b64 }]);
+  });
+
+  it('item/completed imageGeneration falls back to savedPath when result is missing', async () => {
+    const sink = createSink();
+    const state = createState();
+    const tmp = mkdtempSync(join(tmpdir(), 'codex-img-'));
+    const path = join(tmp, 'ig_test.png');
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    writeFileSync(path, bytes);
+
+    try {
+      handleNotification(
+        'item/completed',
+        {
+          threadId: 't1',
+          turnId: 'turn_1',
+          item: { id: 'ig_3', type: 'imageGeneration', savedPath: path, status: 'completed' },
+        },
+        sink,
+        state,
+      );
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(sink.onMessage).toHaveBeenCalledWith([
+        { type: 'image', mediaType: 'image/png', data: bytes.toString('base64') },
+      ]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('item/completed imageGeneration with no result and no savedPath logs warning', () => {
+    const sink = createSink();
+    const state = createState();
+
+    expect(() =>
+      handleNotification(
+        'item/completed',
+        {
+          threadId: 't1',
+          turnId: 'turn_1',
+          item: { id: 'ig_4', type: 'imageGeneration', status: 'failed' },
+        },
+        sink,
+        state,
+      ),
+    ).not.toThrow();
+
+    expect(sink.onMessage).not.toHaveBeenCalled();
   });
 
   it('turn/completed calls onResult with usage from prior tokenUsage event', () => {

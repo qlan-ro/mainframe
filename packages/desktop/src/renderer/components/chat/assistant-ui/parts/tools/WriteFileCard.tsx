@@ -1,6 +1,5 @@
 import React from 'react';
 import { ExternalLink } from 'lucide-react';
-import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { useTabsStore } from '../../../../../store/tabs';
 import { FileTypeIcon } from '../FileTypeIcon';
@@ -45,14 +44,15 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
   return (
     <CollapsibleToolCard
       defaultOpen
+      hideToggle
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
           <FileTypeIcon filePath={filePath} />
+          <span className="text-mf-body text-mf-text-secondary/60">Write</span>
           <ClickableFilePath filePath={filePath} />
         </>
       }
-      statusDot={<StatusDot result={result} isError={isError} />}
       trailing={
         <>
           {addedCount !== null && (
@@ -71,6 +71,7 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
             <TooltipTrigger asChild>
               <span
                 onClick={handleOpenDiff}
+                aria-label="Open in diff editor"
                 className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary/60 hover:text-mf-text-primary transition-colors"
                 tabIndex={0}
                 role="button"
@@ -80,6 +81,7 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
             </TooltipTrigger>
             <TooltipContent>Open in diff editor</TooltipContent>
           </Tooltip>
+          <StatusDot result={result} isError={isError} />
         </>
       }
     >
@@ -107,8 +109,8 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
             </div>
           )}
         </div>
-        {resultText && (
-          <div className={cn('border-t border-mf-divider px-3 py-1.5', isError && 'bg-mf-chat-error-surface/20')}>
+        {resultText && isError && (
+          <div className="border-t border-mf-divider px-3 py-1.5 bg-mf-chat-error-surface/20">
             <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary">
               {resultText}
             </pre>
