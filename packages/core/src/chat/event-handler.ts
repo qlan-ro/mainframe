@@ -365,7 +365,7 @@ function buildSessionSink(
     },
 
     onCompact() {
-      const message = messages.createTransientMessage(chatId, 'system', [{ type: 'text', text: 'Context compacted' }]);
+      const message = messages.createTransientMessage(chatId, 'system', [{ type: 'compaction' }]);
       messages.append(chatId, message);
       emitEvent({ type: 'message.added', chatId, message });
       emitEvent({ type: 'chat.compactDone', chatId });
