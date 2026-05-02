@@ -1,6 +1,6 @@
-import { useState } from 'react';
 import { AlarmClock, CalendarClock, CalendarX, CalendarDays, Activity, ChevronRight, ChevronDown } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
+import { useExpandable } from './use-expandable';
 
 type ScheduleTool = 'ScheduleWakeup' | 'CronCreate' | 'CronDelete' | 'CronList' | 'Monitor';
 
@@ -39,7 +39,7 @@ export function SchedulePill({ toolName, args, result, isError }: Props) {
   const Icon = ICONS[toolName];
   const pending = result === undefined;
   const errored = !pending && (isError || (typeof result === 'object' && result?.isError));
-  const [open, setOpen] = useState(false);
+  const { open, toggle, ref } = useExpandable<HTMLDivElement>();
   const { obj, content } = parseResult(result);
 
   let label: React.ReactNode = '';
@@ -139,7 +139,7 @@ export function SchedulePill({ toolName, args, result, isError }: Props) {
   const pill = (
     <button
       type="button"
-      onClick={() => expandable && setOpen((v) => !v)}
+      onClick={() => expandable && toggle()}
       disabled={!expandable}
       className={
         errored
@@ -159,7 +159,7 @@ export function SchedulePill({ toolName, args, result, isError }: Props) {
   );
 
   return (
-    <div className="flex flex-col items-center gap-2 my-1">
+    <div ref={ref} className="flex flex-col items-center gap-2 my-2">
       {tooltip ? (
         <Tooltip>
           <TooltipTrigger asChild>{pill}</TooltipTrigger>

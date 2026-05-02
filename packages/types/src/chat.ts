@@ -81,7 +81,8 @@ export type MessageContent =
     }
   | { type: 'permission_request'; request: import('./adapter.js').ControlRequest }
   | { type: 'error'; message: string }
-  | { type: 'skill_loaded'; skillName: string; path: string; content: string };
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string }
+  | { type: 'compaction' };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
 

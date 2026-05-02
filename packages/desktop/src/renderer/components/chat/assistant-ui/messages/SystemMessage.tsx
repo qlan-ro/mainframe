@@ -2,6 +2,7 @@ import { AlertTriangle, Zap } from 'lucide-react';
 import { MessagePrimitive, useMessage } from '@assistant-ui/react';
 import { getExternalStoreMessages } from '@assistant-ui/react';
 import { SkillLoadedCard } from '../parts/tools/SkillLoadedCard';
+import { CompactionPill } from '../parts/tools/CompactionPill';
 import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 
 const CLI_ERROR_PREFIXES = [/^Unknown (?:command|skill):/i];
@@ -21,6 +22,14 @@ export function SystemMessage() {
     return (
       <MessagePrimitive.Root>
         <SkillLoadedCard skillName={skillBlock.skillName} path={skillBlock.path} content={skillBlock.content} />
+      </MessagePrimitive.Root>
+    );
+  }
+
+  if (original?.content?.some((c) => c.type === 'compaction')) {
+    return (
+      <MessagePrimitive.Root>
+        <CompactionPill />
       </MessagePrimitive.Root>
     );
   }

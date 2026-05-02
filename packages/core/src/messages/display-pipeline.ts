@@ -95,6 +95,7 @@ function convertGroupedToDisplay(
           if (c.type === 'text') return { type: 'text' as const, text: c.text };
           if (c.type === 'skill_loaded')
             return { type: 'skill_loaded' as const, skillName: c.skillName, path: c.path, content: c.content };
+          if (c.type === 'compaction') return { type: 'compaction' as const };
           return { type: 'text' as const, text: '' };
         }),
         ...(msg.metadata && { metadata: { ...msg.metadata } }),
