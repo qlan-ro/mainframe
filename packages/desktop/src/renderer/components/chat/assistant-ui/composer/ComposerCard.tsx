@@ -278,7 +278,7 @@ export function ComposerCard() {
   return (
     <ComposerPrimitive.Root
       data-tutorial="step-3"
-      className="relative border border-mf-border rounded-mf-card bg-transparent"
+      className="relative border border-mf-border rounded-mf-card bg-transparent overflow-hidden"
     >
       <ContextPickerMenu forceOpen={pickerOpen} onClose={() => setPickerOpen(false)} />
       <div className="flex items-center gap-1 px-2 pt-2">
@@ -374,7 +374,14 @@ export function ComposerCard() {
         own scrollbar would shave 8px off its content width, making it wrap at a narrower
         width than the overlay and drift the caret away from the visible text.
       */}
-      <div className="relative max-h-[200px] overflow-y-auto">
+      {/*
+        Scroll wrapper (outer) owns max-h + overflow-y-auto. The textarea grows
+        naturally inside; both textarea and overlay share the same wrapping width
+        under a single scrollbar. Cap at 14lh so the card never grows beyond 14
+        lines — beyond that the textarea scrolls internally. The outer card uses
+        overflow-hidden so no second scrollbar can appear.
+      */}
+      <div className="relative overflow-y-auto" style={{ maxHeight: '14lh', boxSizing: 'border-box' }}>
         <div className="relative">
           <ComposerHighlight />
           <ComposerPrimitive.Input
@@ -384,7 +391,8 @@ export function ComposerCard() {
             spellCheck={false}
             disabled={chat?.worktreeMissing}
             placeholder="Type @ to search files, / for skills… (Enter to send)"
-            className="block w-full bg-transparent border-none px-3 py-2 font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            className="block w-full bg-transparent border-none font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ lineHeight: '1.5', padding: '8px 12px', boxSizing: 'border-box' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && chat?.isRunning) {
                 e.preventDefault();

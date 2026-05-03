@@ -12,6 +12,7 @@ import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 import { urlTransform, remarkAppLinks } from '../../../../lib/markdown-url-transform';
 import { PLAN_PREFIX, highlightMentions, resolveSkillName, parseRawCommand } from '../message-parsing';
 import { ImageThumbs, FileAttachmentThumbs } from './ImageThumbs';
+import { ReadMoreBubble } from './ReadMoreBubble.js';
 
 // remarkBreaks converts single newlines into <br> elements so user-typed line breaks
 // are preserved in rendered output (CommonMark collapses them to spaces by default).
@@ -129,11 +130,11 @@ export function UserMessage() {
       {queuedBadge}
       {hasTextContent && (
         <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5">
-          <div className="aui-md text-mf-chat text-mf-text-primary">
+          <ReadMoreBubble>
             <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userComponents}>
               {cleanText}
             </Markdown>
-          </div>
+          </ReadMoreBubble>
         </div>
       )}
       <FileAttachmentThumbs attachments={mergedFileAttachments} />

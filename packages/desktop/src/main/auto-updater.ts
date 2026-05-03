@@ -1,6 +1,7 @@
 import { autoUpdater } from 'electron-updater';
 import { BrowserWindow, ipcMain } from 'electron';
 import { createMainLogger } from './logger.js';
+import { classifyUpdateError } from './auto-updater-error-classifier.js';
 
 const log = createMainLogger('electron:auto-updater');
 
@@ -20,6 +21,7 @@ function send(mainWindow: BrowserWindow, status: UpdateStatus): void {
 function registerListeners(mainWindow: BrowserWindow): void {
   autoUpdater.on('checking-for-update', () => {
     log.info('checking for update');
+    // Clear any prior persistent error so stale banners don't persist across cycles.
     send(mainWindow, { state: 'checking' });
   });
 
@@ -43,7 +45,14 @@ function registerListeners(mainWindow: BrowserWindow): void {
   });
 
   autoUpdater.on('error', (err) => {
-    log.warn({ message: err.message }, 'update error');
+    const kind = classifyUpdateError(err);
+    if (kind === 'transient') {
+      // Transient errors (network unavailability, rate limits, server errors) are
+      // expected to resolve on the next check cycle — do not surface as an error banner.
+      log.warn({ message: err.message, kind }, 'transient update check error (suppressed from UI)');
+      return;
+    }
+    log.error({ message: err.message, kind }, 'persistent update error');
     send(mainWindow, { state: 'error', message: err.message });
   });
 }
