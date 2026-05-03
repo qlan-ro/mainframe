@@ -100,12 +100,18 @@ describe('Codex collabAgentToolCall — CollabAgent card', () => {
 
     expect(sink.onMessage).toHaveBeenCalledTimes(1);
     const [blocks] = (sink.onMessage as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    // No agent metadata available in the test → title falls back to "Sub-agent" and
+    // description falls back to the spawn prompt (since role is unavailable).
     expect(blocks).toEqual([
       {
         type: 'tool_use',
         id: 'wait_item_1',
         name: 'CollabAgent',
-        input: { prompt: 'Investigate the codebase', description: 'Investigate the codebase' },
+        input: {
+          prompt: 'Investigate the codebase',
+          description: 'Investigate the codebase',
+          subagent_type: 'Sub-agent',
+        },
       },
     ]);
   });

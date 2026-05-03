@@ -12,6 +12,7 @@ import type {
 } from './types.js';
 import type { PatchChangeKind, FileChangeItem, CollabAgentToolCallItem } from './item-types.js';
 import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
+import { lookupAgentMetadata, describeAgent, agentTitle } from './thread-registry.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:events');
@@ -335,11 +336,13 @@ function emitCollabTaskGroupStart(item: CollabAgentToolCallItem, sink: SessionSi
   for (const childId of item.receiverThreadIds ?? []) {
     state.collabChildThreads.set(childId, item.id);
   }
-  // Use the spawn prompt as the card description (looked up from the prior `spawnAgent`
-  // item — `wait` items don't carry the prompt). Falls back to the item's own prompt
-  // (for the `spawnAgent` path, currently unused) or a generic label.
   const childId = item.receiverThreadIds?.[0];
-  const description = (childId && state.spawnPrompts?.get(childId)) ?? item.prompt ?? 'Sub-agent';
+  // Same identity mapping as history.ts — subagent_type is the nickname, description
+  // is the spawn prompt (more informative than the bare role).
+  const meta = childId ? lookupAgentMetadata([childId]).get(childId) : undefined;
+  const subagentType = agentTitle(meta) ?? describeAgent(meta) ?? 'Sub-agent';
+  const prompt = (childId && state.spawnPrompts?.get(childId)) ?? item.prompt ?? '';
+  const description = describeAgent(meta) ?? (prompt || subagentType);
   // Real subagent tool name. The desktop's groupTaskChildren() promotes this to a
   // TaskGroup card when child items arrive tagged with parentToolUseId.
   sink.onMessage([
@@ -347,7 +350,7 @@ function emitCollabTaskGroupStart(item: CollabAgentToolCallItem, sink: SessionSi
       type: 'tool_use',
       id: item.id,
       name: 'CollabAgent',
-      input: { prompt: description, description },
+      input: { prompt, description, subagent_type: subagentType },
     },
   ]);
 }

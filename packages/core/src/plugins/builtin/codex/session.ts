@@ -17,6 +17,8 @@ import { JsonRpcClient } from './jsonrpc.js';
 import { handleNotification, type CodexSessionState } from './event-mapper.js';
 import { ApprovalHandler } from './approval-handler.js';
 import { convertThreadItems } from './history.js';
+import { lookupAgentMetadata, type AgentMetadata } from './thread-registry.js';
+import { readRolloutItems } from './rollout-reader.js';
 import type {
   InitializeResult,
   ThreadStartResult,
@@ -197,7 +199,11 @@ export class CodexSession implements AdapterSession {
           model: this.pendingModel,
           cwd: this.projectPath,
           persistExtendedHistory: true,
-        });
+          // Experimental: tells Codex to keep ALL ResponseItems (including child-thread
+          // commandExecution) in the rollout. Without this, sub-agent bash commands are
+          // dropped from `thread/read`/`thread/resume` responses.
+          persistFullHistory: true,
+        } as unknown as { threadId: string });
         this.state.threadId = resumeResult.thread.id;
       } else {
         const { approvalPolicy, sandbox } = this.mapPermissionMode(this.pendingPermissionMode);
@@ -208,7 +214,8 @@ export class CodexSession implements AdapterSession {
           sandbox,
           experimentalRawEvents: true,
           persistExtendedHistory: true,
-        });
+          persistFullHistory: true,
+        } as unknown as { model?: string });
         this.state.threadId = startResult.thread.id;
       }
       // Persist the real Codex thread ID immediately — don't rely on the
@@ -312,6 +319,7 @@ export class CodexSession implements AdapterSession {
     try {
       await tempClient.request('initialize', {
         clientInfo: { name: 'mainframe', title: 'Mainframe', version: '1.0.0' },
+        capabilities: { experimentalApi: true },
       });
       tempClient.notify('initialized');
 
@@ -339,8 +347,25 @@ export class CodexSession implements AdapterSession {
         }
       }
 
+      // Look up sub-agent identities + rollout paths from Codex's own thread DB.
+      // The nickname/role drives the TaskGroup card title; the rollout_path lets us
+      // recover sub-agent commandExecution items that `thread/read` filters out.
+      const agentMetaByThread =
+        childThreadIds.size > 0 ? lookupAgentMetadata(Array.from(childThreadIds)) : new Map<string, AgentMetadata>();
+
       const childItemsByThread = new Map<string, ThreadItem[]>();
       for (const childId of childThreadIds) {
+        // Prefer the raw rollout JSONL — it has function_call records (bash) that
+        // `thread/read` strips. Fall back to thread/read if the rollout isn't
+        // available (e.g. archived thread, missing rollout file).
+        const rolloutPath = agentMetaByThread.get(childId)?.rolloutPath;
+        if (rolloutPath) {
+          const items = await readRolloutItems(rolloutPath);
+          if (items.length > 0) {
+            childItemsByThread.set(childId, items);
+            continue;
+          }
+        }
         try {
           const childResult = await tempClient.request<ThreadReadResult>('thread/read', {
             threadId: childId,
@@ -353,7 +378,7 @@ export class CodexSession implements AdapterSession {
         }
       }
 
-      return convertThreadItems(allItems, this.resumeThreadId, childItemsByThread);
+      return convertThreadItems(allItems, this.resumeThreadId, childItemsByThread, agentMetaByThread);
     } catch (err) {
       log.warn({ err, threadId: this.resumeThreadId }, 'codex: failed to load history');
       return [];

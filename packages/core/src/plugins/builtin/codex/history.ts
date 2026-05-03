@@ -4,11 +4,13 @@ import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 import type { ThreadItem, PatchChangeKind } from './types.js';
 import type { CollabAgentToolCallItem } from './item-types.js';
 import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
+import { describeAgent, agentTitle, type AgentMetadata } from './thread-registry.js';
 
 export function convertThreadItems(
   items: ThreadItem[],
   chatId: string,
   childItemsByThread: Map<string, ThreadItem[]> = new Map(),
+  agentMetaByThread: Map<string, AgentMetadata> = new Map(),
 ): ChatMessage[] {
   const messages: ChatMessage[] = [];
   // Stash spawnAgent prompts (keyed by child thread id) so the matching `wait`
@@ -127,7 +129,7 @@ export function convertThreadItems(
           break;
         }
         // `wait` renders the TaskGroup card with sub-agent's child items nested under it.
-        emitCollabAgent(messages, chatId, item, spawnPrompts, childItemsByThread);
+        emitCollabAgent(messages, chatId, item, spawnPrompts, childItemsByThread, agentMetaByThread);
         break;
       }
 
@@ -144,10 +146,21 @@ function emitCollabAgent(
   item: CollabAgentToolCallItem,
   spawnPrompts: Map<string, string>,
   childItemsByThread: Map<string, ThreadItem[]>,
+  agentMetaByThread: Map<string, AgentMetadata>,
 ): void {
   const isError = item.status === 'failed' || item.status === 'interrupted';
   const childId = item.receiverThreadIds?.[0];
-  const description = (childId && spawnPrompts.get(childId)) ?? item.prompt ?? 'Sub-agent';
+  // Pull the agent's identity from Codex's thread DB:
+  //   - subagent_type = nickname (e.g. "Maxwell") — bold card title, like Claude's
+  //   - description   = the spawn prompt (the task) — informative subtitle, truncated
+  //                     to 60 chars in the card with full text in a tooltip
+  // If nickname is missing, fall back to role ("explorer") for the title.
+  const meta = childId ? agentMetaByThread.get(childId) : undefined;
+  const subagentType = agentTitle(meta) ?? describeAgent(meta) ?? 'Sub-agent';
+  const prompt = (childId && spawnPrompts.get(childId)) ?? item.prompt ?? '';
+  // Description is the agent's role (e.g. "explorer") — short subtitle next to the
+  // nickname title. The full prompt is visible when the user expands the card.
+  const description = describeAgent(meta) ?? (prompt || subagentType);
   const subAgentMessage = childId ? (item.agentsStates?.[childId]?.message ?? null) : null;
 
   // Build the parent assistant message: CollabAgent tool_use first, then sub-agent
@@ -160,7 +173,7 @@ function emitCollabAgent(
       type: 'tool_use',
       id: item.id,
       name: 'CollabAgent',
-      input: { prompt: description, description },
+      input: { prompt, description, subagent_type: subagentType },
     },
   ];
 
