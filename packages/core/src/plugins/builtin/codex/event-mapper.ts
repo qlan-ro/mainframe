@@ -8,12 +8,25 @@ import type {
   TurnStartedParams,
   ThreadStartedParams,
   TokenUsageUpdatedParams,
-  PatchChangeKind,
+  CollabAgentSpawnBeginParams,
+  CollabAgentSpawnEndParams,
 } from './types.js';
+import type { PatchChangeKind, FileChangeItem } from './item-types.js';
+import { handleSpawnBegin, handleSpawnEnd, routeChildItem } from './spawn-handler.js';
 import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:events');
+
+/** Tracks a single in-flight collab agent spawn for child-event routing. */
+export interface SpawnState {
+  /** The `tool_use` id emitted for the _TaskGroup card on the parent stream. */
+  parentToolUseId: string;
+  /** The child thread id being tracked. */
+  childThreadId: string;
+  /** Prompt text passed to the sub-agent. */
+  prompt: string;
+}
 
 export interface CodexSessionState {
   threadId: string | null;
@@ -24,6 +37,11 @@ export interface CodexSessionState {
     output_tokens: number;
     cache_read_input_tokens?: number;
   };
+  /**
+   * Maps child thread id → SpawnState for in-flight collab agent spawns.
+   * Populated on `collab_agent_spawn_begin`, cleared on `collab_agent_spawn_end`.
+   */
+  activeSpawns?: Map<string, SpawnState>;
 }
 
 export function handleNotification(method: string, params: unknown, sink: SessionSink, state: CodexSessionState): void {
@@ -45,8 +63,19 @@ export function handleNotification(method: string, params: unknown, sink: Sessio
     case 'thread/compacted':
       sink.onCompact();
       return;
+    case 'collab_agent_spawn_begin':
+      return handleSpawnBegin(params as CollabAgentSpawnBeginParams, sink, state);
+    case 'collab_agent_spawn_end':
+      return handleSpawnEnd(params as CollabAgentSpawnEndParams, sink, state);
     // TODO: future — map turn/diff/updated to file change tracking / context.updated
     // TODO: future — map turn/plan/updated to Plans panel structured plan state
+    case 'collab_agent_interaction_begin':
+    case 'collab_agent_interaction_end':
+    case 'collab_waiting_begin':
+    case 'collab_waiting_end':
+    case 'collab_close_begin':
+    case 'collab_resume_begin':
+    case 'collab_resume_end':
     case 'turn/diff/updated':
     case 'turn/plan/updated':
     case 'thread/closed':
@@ -87,7 +116,14 @@ function handlePlanDelta(params: { itemId: string; delta: string }, state: Codex
 }
 
 function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, state: CodexSessionState): void {
-  const { item } = params;
+  const { item, threadId } = params;
+
+  // Route to child-scoped sink if this item belongs to a spawned sub-agent thread.
+  const childSpawn = state.activeSpawns?.get(threadId);
+  if (childSpawn) {
+    routeChildItem(item, childSpawn.parentToolUseId, sink, handleItemCompleted, state);
+    return;
+  }
 
   // Plan items arrive as a terminal `item/completed` with type === 'plan'.
   // They aren't part of the formal ThreadItem union (yet), so branch defensively
@@ -129,7 +165,7 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
     case 'fileChange': {
       const isCompleted = item.status !== 'inProgress';
       const isError = item.status === 'failed' || item.status === 'declined';
-      item.changes.forEach((change, index) => {
+      item.changes.forEach((change: FileChangeItem['changes'][number], index: number) => {
         const toolId = `${item.id}:${index}`;
         const isAdd = change.kind.type === 'add';
         const toolName = isAdd ? 'Write' : 'Edit';
