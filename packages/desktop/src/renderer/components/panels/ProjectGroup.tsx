@@ -382,47 +382,52 @@ export const ProjectGroup = React.memo(function ProjectGroup({
             onToggleCollapse();
           }
         }}
-        className="group w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors cursor-pointer"
+        className="group flex items-center h-7 px-2 gap-2 min-w-0 w-full rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors cursor-pointer"
       >
-        {collapsed ? <ChevronRight size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
-        <div className="flex-1 min-w-0 text-left">
-          <span className="text-mf-text-primary truncate block text-mf-small font-medium">{project.name}</span>
+        {/* Left cluster: chevron + name */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="inline-flex w-4 items-center justify-center shrink-0">
+            {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+          </span>
+          <span className="truncate text-sm text-mf-text-primary font-medium">{project.name}</span>
           {parentName && (
-            <span className="text-mf-status text-mf-text-secondary truncate block">
-              {'↳ branch of '}
+            <span className="text-mf-status text-mf-text-secondary truncate ml-1">
+              {'↳ '}
               {parentName}
             </span>
           )}
         </div>
-        <span className="text-mf-status bg-mf-hover text-mf-text-secondary px-1.5 py-0.5 rounded-full shrink-0">
+        <span className="h-5 px-1.5 text-[10px] tabular-nums rounded-full bg-mf-hover text-mf-text-secondary flex items-center shrink-0">
           {chats.length}
         </span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={handleNewSession}
-              className="w-6 h-6 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors shrink-0"
-              aria-label={`New session in ${project.name}`}
-            >
-              <Plus size={12} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>New Session</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={handleDeleteProject}
-              className="w-6 h-6 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
-              aria-label={`Delete project ${project.name}`}
-            >
-              <Trash2 size={12} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Delete Project</TooltipContent>
-        </Tooltip>
+        <div className="shrink-0 hidden group-hover:flex items-center gap-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleNewSession}
+                className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
+                aria-label={`New session in ${project.name}`}
+              >
+                <Plus size={12} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{`New session in ${project.name}`}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleDeleteProject}
+                className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors"
+                aria-label={`Delete project ${project.name}`}
+              >
+                <Trash2 size={12} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Delete Project</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Chat list */}
