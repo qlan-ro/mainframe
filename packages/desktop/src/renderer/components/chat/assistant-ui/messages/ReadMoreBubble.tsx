@@ -20,35 +20,33 @@ interface ReadMoreBubbleProps {
 export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
   const [expanded, setExpanded] = useState(false);
 
-  // Derive text length from the children for the threshold check.
   const textLength = extractTextLength(children);
   const needsToggle = textLength > CHAR_THRESHOLD;
-
-  if (!needsToggle) {
-    return <>{children}</>;
-  }
+  const collapsed = needsToggle && !expanded;
 
   return (
     <div className={cn('relative', className)}>
-      {/* Content area with optional line-clamp */}
-      <div data-clamp className={cn('aui-md text-mf-chat text-mf-text-primary', !expanded && 'line-clamp-6')}>
+      <div
+        data-clamp={needsToggle ? '' : undefined}
+        className={cn('aui-md text-mf-chat text-mf-text-primary', collapsed && 'line-clamp-6')}
+      >
         {children}
       </div>
 
-      {/* Fade-out gradient when collapsed */}
-      {!expanded && (
+      {collapsed && (
         <div className="pointer-events-none absolute bottom-6 left-0 right-0 h-8 bg-gradient-to-b from-transparent to-mf-hover" />
       )}
 
-      {/* Toggle button */}
-      <button
-        type="button"
-        onClick={() => setExpanded((e) => !e)}
-        className="mt-1 text-mf-accent text-mf-small font-medium hover:underline"
-        aria-label={expanded ? 'Show less' : 'Read more'}
-      >
-        {expanded ? 'Show less' : 'Read more'}
-      </button>
+      {needsToggle && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-1 text-mf-accent text-mf-small font-medium hover:underline"
+          aria-label={expanded ? 'Show less' : 'Read more'}
+        >
+          {expanded ? 'Show less' : 'Read more'}
+        </button>
+      )}
     </div>
   );
 }

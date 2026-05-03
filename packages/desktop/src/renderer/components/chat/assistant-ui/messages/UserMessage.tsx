@@ -111,11 +111,11 @@ export function UserMessage() {
           data-testid={parsed.isCommand ? 'user-command-bubble' : 'user-skill-bubble'}
           className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5"
         >
-          <div className="aui-md text-mf-chat text-mf-text-primary">
+          <ReadMoreBubble>
             <Icon size={14} className="text-mf-accent inline-block align-[-2px] mr-0.5" />
             <span className="font-mono text-mf-chat text-mf-accent mr-1.5">/{parsed.commandName}</span>
             {parsed.userText}
-          </div>
+          </ReadMoreBubble>
         </div>
         <FileAttachmentThumbs attachments={mergedFileAttachments} />
         <ImageThumbs imageBlocks={imageBlocks} openLightbox={openLightbox} />
