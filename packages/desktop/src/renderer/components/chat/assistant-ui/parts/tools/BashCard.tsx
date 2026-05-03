@@ -7,7 +7,6 @@ import { StatusDot, cardStyle, stripErrorXml, type ToolCardProps } from './share
 export function BashCard({ args, result, isError }: ToolCardProps) {
   const command = (args.command as string) || (args.input as string) || '';
   const description = args.description as string | undefined;
-  const truncatedCmd = command.length > 80 ? command.slice(0, 80) + '...' : command;
   const rawResultText =
     typeof result === 'string' ? result : result !== undefined ? JSON.stringify(result, null, 2) : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
@@ -21,8 +20,8 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
           <Terminal size={15} className="text-mf-text-secondary shrink-0" />
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="font-mono text-mf-body text-mf-text-primary truncate" tabIndex={0}>
-                {truncatedCmd}
+              <span className="font-mono text-mf-body text-mf-text-primary truncate min-w-0" tabIndex={0}>
+                {command}
               </span>
             </TooltipTrigger>
             <TooltipContent>{command}</TooltipContent>
