@@ -1,21 +1,10 @@
 // packages/core/src/plugins/builtin/codex/__tests__/collab-agent-spawn.test.ts
 //
-// Tests for #145 — Group Codex sub-agent commands under TaskGroupCard.
-// Protocol confirmed via binary reverse-engineering of Codex 0.125.0:
-//   - collab_agent_spawn_begin (5 fields): threadId, turnId, itemId, prompt, receiverThreadIds
-//   - collab_agent_spawn_end (9 fields): threadId, turnId, itemId, newThreadId,
-//       newAgentNickname, newAgentRole, prompt, handoffId, activeTranscript
-//   - ThreadItem::CollabAgentToolCall (9 fields): senderThreadId, receiverThreadIds,
-//       reasoningEffort, agentsStates, prompt, contentItems, memoryCitation,
-//       processId, commandActions
-//
-// The TaskGroup approach: on collab_agent_spawn_begin we emit a tool_use with
-// name '_TaskGroup' and a generated id. Any item/completed events that follow for
-// the child thread are emitted with parentToolUseId pointing to that tool_use.
-// On collab_agent_spawn_end we emit the tool_result to close the group.
-//
-// NOTE: The Codex app-server streams ALL notifications on the parent thread,
-// so we match child items by threadId present in receiverThreadIds from spawn_begin.
+// Codex 0.125 emits each sub-agent delegation as TWO `collabAgentToolCall` items:
+//   - tool: "spawnAgent" — dispatch metadata (carries the prompt). Renders nothing on its own.
+//   - tool: "wait"       — the renderable card; carries the sub-agent's output in
+//                          `agentsStates[childThreadId].message`.
+// The card description is the prompt from the spawnAgent item (looked up by child thread id).
 
 import { describe, it, expect, vi } from 'vitest';
 import { handleNotification } from '../event-mapper.js';
@@ -49,145 +38,193 @@ function createState(): CodexSessionState {
   return { threadId: 'parent_thread', currentTurnId: 'turn_1', currentTurnPlan: null };
 }
 
-const SPAWN_BEGIN_PARAMS = {
-  threadId: 'parent_thread',
-  turnId: 'turn_1',
-  itemId: 'item_spawn_1',
-  prompt: 'Investigate the codebase',
+const SPAWN_AGENT = {
+  id: 'spawn_item_1',
+  type: 'collabAgentToolCall' as const,
+  tool: 'spawnAgent' as const,
+  status: 'completed' as const,
+  senderThreadId: 'parent_thread',
   receiverThreadIds: ['child_thread_1'],
-};
-
-const SPAWN_END_PARAMS = {
-  threadId: 'parent_thread',
-  turnId: 'turn_1',
-  itemId: 'item_spawn_1',
-  newThreadId: 'child_thread_1',
-  newAgentNickname: 'explorer',
-  newAgentRole: 'subagent',
   prompt: 'Investigate the codebase',
-  handoffId: 'handoff_abc',
-  activeTranscript: null,
 };
 
-describe('Codex collab_agent_spawn — TaskGroup grouping', () => {
-  it('collab_agent_spawn_begin emits a _TaskGroup tool_use with the spawn prompt', () => {
+const WAIT_INPROGRESS = {
+  id: 'wait_item_1',
+  type: 'collabAgentToolCall' as const,
+  tool: 'wait' as const,
+  status: 'inProgress' as const,
+  senderThreadId: 'parent_thread',
+  receiverThreadIds: ['child_thread_1'],
+  prompt: null,
+};
+
+const WAIT_COMPLETED = {
+  ...WAIT_INPROGRESS,
+  status: 'completed' as const,
+  agentsStates: { child_thread_1: { status: 'completed', message: 'Found 3 files' } },
+};
+
+function dispatchSpawn(sink: SessionSink, state: CodexSessionState): void {
+  handleNotification(
+    'item/started',
+    { threadId: 'parent_thread', turnId: 'turn_1', item: { ...SPAWN_AGENT, status: 'inProgress' } },
+    sink,
+    state,
+  );
+  handleNotification('item/completed', { threadId: 'parent_thread', turnId: 'turn_1', item: SPAWN_AGENT }, sink, state);
+}
+
+describe('Codex collabAgentToolCall — CollabAgent card', () => {
+  it('spawnAgent items emit no card and only stash the prompt', () => {
     const sink = createSink();
     const state = createState();
 
-    handleNotification('collab_agent_spawn_begin', SPAWN_BEGIN_PARAMS, sink, state);
+    dispatchSpawn(sink, state);
+
+    expect(sink.onMessage).not.toHaveBeenCalled();
+    expect(sink.onToolResult).not.toHaveBeenCalled();
+    expect(state.spawnPrompts?.get('child_thread_1')).toBe('Investigate the codebase');
+  });
+
+  it('wait/started opens a CollabAgent card using the stashed spawn prompt as description', () => {
+    const sink = createSink();
+    const state = createState();
+
+    dispatchSpawn(sink, state);
+    handleNotification(
+      'item/started',
+      { threadId: 'parent_thread', turnId: 'turn_1', item: WAIT_INPROGRESS },
+      sink,
+      state,
+    );
 
     expect(sink.onMessage).toHaveBeenCalledTimes(1);
     const [blocks] = (sink.onMessage as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(blocks).toHaveLength(1);
-    expect(blocks[0]).toMatchObject({
-      type: 'tool_use',
-      name: '_TaskGroup',
-      input: expect.objectContaining({ prompt: 'Investigate the codebase' }),
-    });
-    expect(typeof blocks[0].id).toBe('string');
-    expect(blocks[0].id.length).toBeGreaterThan(0);
+    expect(blocks).toEqual([
+      {
+        type: 'tool_use',
+        id: 'wait_item_1',
+        name: 'CollabAgent',
+        input: { prompt: 'Investigate the codebase', description: 'Investigate the codebase' },
+      },
+    ]);
   });
 
-  it('collab_agent_spawn_begin stores spawn state so child items can be routed', () => {
+  it('wait/completed emits tool_result with the sub-agent message and clears state', () => {
     const sink = createSink();
     const state = createState();
 
-    handleNotification('collab_agent_spawn_begin', SPAWN_BEGIN_PARAMS, sink, state);
-
-    // State should record the childThreadId → parentToolUseId mapping
-    expect(state.activeSpawns).toBeDefined();
-    expect(state.activeSpawns!.size).toBe(1);
-    const spawnState = state.activeSpawns!.get('child_thread_1');
-    expect(spawnState).toBeDefined();
-    expect(spawnState!.parentToolUseId).toBeTruthy();
-  });
-
-  it('collab_agent_spawn_end emits a tool_result closing the _TaskGroup', () => {
-    const sink = createSink();
-    const state = createState();
-
-    handleNotification('collab_agent_spawn_begin', SPAWN_BEGIN_PARAMS, sink, state);
+    dispatchSpawn(sink, state);
+    handleNotification(
+      'item/started',
+      { threadId: 'parent_thread', turnId: 'turn_1', item: WAIT_INPROGRESS },
+      sink,
+      state,
+    );
     (sink.onMessage as ReturnType<typeof vi.fn>).mockClear();
 
-    handleNotification('collab_agent_spawn_end', SPAWN_END_PARAMS, sink, state);
+    handleNotification(
+      'item/completed',
+      { threadId: 'parent_thread', turnId: 'turn_1', item: WAIT_COMPLETED },
+      sink,
+      state,
+    );
 
+    expect(sink.onMessage).not.toHaveBeenCalled();
     expect(sink.onToolResult).toHaveBeenCalledTimes(1);
     const [results] = (sink.onToolResult as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({
-      type: 'tool_result',
-      isError: false,
-    });
+    expect(results).toEqual([
+      { type: 'tool_result', toolUseId: 'wait_item_1', content: 'Found 3 files', isError: false },
+    ]);
+    expect(state.openCollabCards?.has('wait_item_1')).toBe(false);
+    expect(state.collabChildThreads?.has('child_thread_1')).toBe(false);
+    expect(state.spawnPrompts?.has('child_thread_1')).toBe(false);
   });
 
-  it('collab_agent_spawn_end clears the spawn state for the child thread', () => {
+  it('wait/completed without prior wait/started still emits both tool_use and tool_result', () => {
     const sink = createSink();
     const state = createState();
 
-    handleNotification('collab_agent_spawn_begin', SPAWN_BEGIN_PARAMS, sink, state);
-    handleNotification('collab_agent_spawn_end', SPAWN_END_PARAMS, sink, state);
+    dispatchSpawn(sink, state);
+    handleNotification(
+      'item/completed',
+      { threadId: 'parent_thread', turnId: 'turn_1', item: WAIT_COMPLETED },
+      sink,
+      state,
+    );
 
-    expect(state.activeSpawns!.has('child_thread_1')).toBe(false);
+    expect(sink.onMessage).toHaveBeenCalledTimes(1);
+    expect(sink.onToolResult).toHaveBeenCalledTimes(1);
   });
 
-  it('item/completed on child thread is emitted with parentToolUseId', () => {
+  it('failed and interrupted wait statuses produce isError: true', () => {
+    for (const status of ['failed', 'interrupted'] as const) {
+      const sink = createSink();
+      const state = createState();
+      dispatchSpawn(sink, state);
+      handleNotification(
+        'item/completed',
+        { threadId: 'parent_thread', turnId: 'turn_1', item: { ...WAIT_COMPLETED, status } },
+        sink,
+        state,
+      );
+      const [results] = (sink.onToolResult as ReturnType<typeof vi.fn>).mock.calls[0]!;
+      expect(results[0].isError).toBe(true);
+    }
+  });
+
+  it('child-thread items emitted between wait/started and wait/completed are tagged with parentToolUseId', () => {
     const sink = createSink();
     const state = createState();
 
-    handleNotification('collab_agent_spawn_begin', SPAWN_BEGIN_PARAMS, sink, state);
-    const spawnState = state.activeSpawns!.get('child_thread_1')!;
-    const expectedParentId = spawnState.parentToolUseId;
+    dispatchSpawn(sink, state);
+    handleNotification(
+      'item/started',
+      { threadId: 'parent_thread', turnId: 'turn_1', item: WAIT_INPROGRESS },
+      sink,
+      state,
+    );
     (sink.onMessage as ReturnType<typeof vi.fn>).mockClear();
 
-    // A child thread item arriving on the parent's notification stream
     handleNotification(
       'item/completed',
       {
         threadId: 'child_thread_1',
         turnId: 'child_turn_1',
-        item: { id: 'child_item_1', type: 'agentMessage', text: 'Found 3 files' },
+        item: {
+          id: 'cmd_1',
+          type: 'commandExecution',
+          command: 'ls',
+          aggregatedOutput: 'a\nb',
+          exitCode: 0,
+          status: 'completed',
+        },
       },
       sink,
       state,
     );
 
-    expect(sink.onMessage).toHaveBeenCalledTimes(1);
-    const [blocks] = (sink.onMessage as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(blocks[0]).toMatchObject({
-      type: 'text',
-      text: 'Found 3 files',
-      parentToolUseId: expectedParentId,
-    });
+    const [msgBlocks] = (sink.onMessage as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const [resBlocks] = (sink.onToolResult as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(msgBlocks[0]).toMatchObject({ type: 'tool_use', name: 'Bash', parentToolUseId: 'wait_item_1' });
+    expect(resBlocks[0]).toMatchObject({ type: 'tool_result', parentToolUseId: 'wait_item_1' });
   });
 
-  it('item/completed on parent thread is NOT tagged with parentToolUseId', () => {
+  it('item/started for non-collab items is ignored', () => {
     const sink = createSink();
     const state = createState();
 
-    handleNotification('collab_agent_spawn_begin', SPAWN_BEGIN_PARAMS, sink, state);
-    (sink.onMessage as ReturnType<typeof vi.fn>).mockClear();
-
-    // A parent-thread item should route normally, no parentToolUseId
     handleNotification(
-      'item/completed',
+      'item/started',
       {
         threadId: 'parent_thread',
         turnId: 'turn_1',
-        item: { id: 'parent_item_1', type: 'agentMessage', text: 'Done' },
+        item: { id: 'cmd_1', type: 'commandExecution', command: 'ls', aggregatedOutput: '', status: 'in_progress' },
       },
       sink,
       state,
     );
 
-    const [blocks] = (sink.onMessage as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(blocks[0]).not.toHaveProperty('parentToolUseId');
-  });
-
-  it('collab_agent_spawn_end without prior spawn_begin is handled gracefully (no crash)', () => {
-    const sink = createSink();
-    const state = createState();
-
-    expect(() => handleNotification('collab_agent_spawn_end', SPAWN_END_PARAMS, sink, state)).not.toThrow();
-    expect(sink.onToolResult).not.toHaveBeenCalled();
+    expect(sink.onMessage).not.toHaveBeenCalled();
   });
 });

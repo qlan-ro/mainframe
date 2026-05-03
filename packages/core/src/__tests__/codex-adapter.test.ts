@@ -60,11 +60,11 @@ describe('CodexAdapter', () => {
     expect(cats.hidden.has('todo_list')).toBe(true);
   });
 
-  it('getToolCategories declares no explore or subagent tools (Codex has no equivalents)', () => {
+  it('getToolCategories declares CollabAgent as the subagent tool and no explore tools', () => {
     const adapter = new CodexAdapter();
     const cats = adapter.getToolCategories();
     expect(cats.explore.size).toBe(0);
-    expect(cats.subagent.size).toBe(0);
+    expect(cats.subagent.has('CollabAgent')).toBe(true);
   });
 
   it('getToolCategories keeps todo_list in progress for parity', () => {

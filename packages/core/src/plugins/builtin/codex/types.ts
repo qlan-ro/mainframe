@@ -191,6 +191,12 @@ export interface ItemCompletedParams {
   item: ThreadItem;
 }
 
+export interface ItemStartedParams {
+  threadId: string;
+  turnId: string;
+  item: ThreadItem;
+}
+
 export interface TurnStartedParams {
   threadId: string;
   turn: { id: string };
@@ -259,34 +265,4 @@ export interface Usage {
   input_tokens: number;
   cached_input_tokens?: number;
   output_tokens: number;
-}
-
-// --- Collab agent spawn notifications (binary-confirmed field names) ---
-
-/**
- * Emitted when the parent agent spawns a sub-agent.
- * Protocol: `collab_agent_spawn_begin` notification (5 fields confirmed via binary).
- */
-export interface CollabAgentSpawnBeginParams {
-  threadId: string;
-  turnId: string;
-  itemId: string;
-  prompt: string;
-  receiverThreadIds: string[];
-}
-
-/**
- * Emitted when the spawned sub-agent completes.
- * Protocol: `collab_agent_spawn_end` notification (9 fields confirmed via binary).
- */
-export interface CollabAgentSpawnEndParams {
-  threadId: string;
-  turnId: string;
-  itemId: string;
-  newThreadId: string;
-  newAgentNickname: string | null;
-  newAgentRole: string | null;
-  prompt: string | null;
-  handoffId: string | null;
-  activeTranscript: unknown | null;
 }

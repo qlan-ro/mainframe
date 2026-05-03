@@ -27,6 +27,7 @@ import type {
   SandboxMode,
   CollaborationMode,
   UserInput,
+  ThreadItem,
 } from './types.js';
 import { createChildLogger } from '../../../logger.js';
 
@@ -320,7 +321,39 @@ export class CodexSession implements AdapterSession {
       });
 
       const allItems = result.thread.turns?.flatMap((t) => t.items) ?? [];
-      return convertThreadItems(allItems, this.resumeThreadId);
+
+      // For each spawned sub-agent thread referenced by a `wait` collabAgentToolCall item,
+      // recursively read the child thread so its agentMessages can be nested under the
+      // TaskGroup card. (Codex's child threads don't include commandExecution items, so
+      // we can't reproduce live bash nesting — but agentMessages provide the narrative.)
+      const childThreadIds = new Set<string>();
+      for (const item of allItems) {
+        if (
+          item.type === 'collabAgentToolCall' &&
+          (item as { tool?: string }).tool === 'wait' &&
+          Array.isArray((item as { receiverThreadIds?: string[] }).receiverThreadIds)
+        ) {
+          for (const id of (item as { receiverThreadIds: string[] }).receiverThreadIds) {
+            childThreadIds.add(id);
+          }
+        }
+      }
+
+      const childItemsByThread = new Map<string, ThreadItem[]>();
+      for (const childId of childThreadIds) {
+        try {
+          const childResult = await tempClient.request<ThreadReadResult>('thread/read', {
+            threadId: childId,
+            includeTurns: true,
+          });
+          const items = childResult.thread.turns?.flatMap((t) => t.items) ?? [];
+          childItemsByThread.set(childId, items);
+        } catch (err) {
+          log.warn({ err, childId }, 'codex: failed to read child thread, nesting will be skipped');
+        }
+      }
+
+      return convertThreadItems(allItems, this.resumeThreadId, childItemsByThread);
     } catch (err) {
       log.warn({ err, threadId: this.resumeThreadId }, 'codex: failed to load history');
       return [];

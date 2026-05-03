@@ -4,29 +4,17 @@ import { extname } from 'node:path';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
 import type {
   ItemCompletedParams,
+  ItemStartedParams,
   TurnCompletedParams,
   TurnStartedParams,
   ThreadStartedParams,
   TokenUsageUpdatedParams,
-  CollabAgentSpawnBeginParams,
-  CollabAgentSpawnEndParams,
 } from './types.js';
-import type { PatchChangeKind, FileChangeItem } from './item-types.js';
-import { handleSpawnBegin, handleSpawnEnd, routeChildItem } from './spawn-handler.js';
+import type { PatchChangeKind, FileChangeItem, CollabAgentToolCallItem } from './item-types.js';
 import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:events');
-
-/** Tracks a single in-flight collab agent spawn for child-event routing. */
-export interface SpawnState {
-  /** The `tool_use` id emitted for the _TaskGroup card on the parent stream. */
-  parentToolUseId: string;
-  /** The child thread id being tracked. */
-  childThreadId: string;
-  /** Prompt text passed to the sub-agent. */
-  prompt: string;
-}
 
 export interface CodexSessionState {
   threadId: string | null;
@@ -37,11 +25,20 @@ export interface CodexSessionState {
     output_tokens: number;
     cache_read_input_tokens?: number;
   };
+  /** Tracks collabAgentToolCall item ids that already had a CollabAgent tool_use emitted. */
+  openCollabCards?: Set<string>;
   /**
-   * Maps child thread id → SpawnState for in-flight collab agent spawns.
-   * Populated on `collab_agent_spawn_begin`, cleared on `collab_agent_spawn_end`.
+   * Maps child thread id → parent CollabAgent tool_use id.
+   * Items arriving with a threadId in this map are tagged with parentToolUseId so the
+   * desktop's groupTaskChildren() promotes the parent card to a TaskGroup.
    */
-  activeSpawns?: Map<string, SpawnState>;
+  collabChildThreads?: Map<string, string>;
+  /**
+   * Maps child thread id → spawn prompt, captured from `tool: "spawnAgent"` items
+   * so the later `tool: "wait"` card can use the prompt as its description (since
+   * `wait` items don't carry the prompt themselves).
+   */
+  spawnPrompts?: Map<string, string>;
 }
 
 export function handleNotification(method: string, params: unknown, sink: SessionSink, state: CodexSessionState): void {
@@ -63,24 +60,14 @@ export function handleNotification(method: string, params: unknown, sink: Sessio
     case 'thread/compacted':
       sink.onCompact();
       return;
-    case 'collab_agent_spawn_begin':
-      return handleSpawnBegin(params as CollabAgentSpawnBeginParams, sink, state);
-    case 'collab_agent_spawn_end':
-      return handleSpawnEnd(params as CollabAgentSpawnEndParams, sink, state);
+    case 'item/started':
+      return handleItemStarted(params as ItemStartedParams, sink, state);
     // TODO: future — map turn/diff/updated to file change tracking / context.updated
     // TODO: future — map turn/plan/updated to Plans panel structured plan state
-    case 'collab_agent_interaction_begin':
-    case 'collab_agent_interaction_end':
-    case 'collab_waiting_begin':
-    case 'collab_waiting_end':
-    case 'collab_close_begin':
-    case 'collab_resume_begin':
-    case 'collab_resume_end':
     case 'turn/diff/updated':
     case 'turn/plan/updated':
     case 'thread/closed':
     case 'thread/status/changed':
-    case 'item/started':
     case 'item/agentMessage/delta':
     case 'item/commandExecution/outputDelta':
     case 'item/fileChange/outputDelta':
@@ -115,14 +102,29 @@ function handlePlanDelta(params: { itemId: string; delta: string }, state: Codex
   }
 }
 
+function handleItemStarted(params: ItemStartedParams, sink: SessionSink, state: CodexSessionState): void {
+  const { item } = params;
+  if (item.type !== 'collabAgentToolCall') return;
+  // `spawnAgent` is dispatch metadata only — stash its prompt for the later `wait` card.
+  if (item.tool === 'spawnAgent') {
+    if (!state.spawnPrompts) state.spawnPrompts = new Map();
+    for (const childId of item.receiverThreadIds ?? []) {
+      if (item.prompt) state.spawnPrompts.set(childId, item.prompt);
+    }
+    return;
+  }
+  // Only `wait` items render a card.
+  emitCollabTaskGroupStart(item, sink, state);
+}
+
 function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, state: CodexSessionState): void {
   const { item, threadId } = params;
 
-  // Route to child-scoped sink if this item belongs to a spawned sub-agent thread.
-  const childSpawn = state.activeSpawns?.get(threadId);
-  if (childSpawn) {
-    routeChildItem(item, childSpawn.parentToolUseId, sink, handleItemCompleted, state);
-    return;
+  // If this item came from a spawned sub-agent's thread, tag emitted blocks with
+  // the parent CollabAgent's tool_use id so the renderer nests them.
+  const parentToolUseId = state.collabChildThreads?.get(threadId);
+  if (parentToolUseId) {
+    sink = wrapSinkWithParentId(sink, parentToolUseId);
   }
 
   // Plan items arrive as a terminal `item/completed` with type === 'plan'.
@@ -225,6 +227,39 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
       return;
     }
 
+    case 'collabAgentToolCall': {
+      // `spawnAgent` is dispatch metadata only — stash its prompt for the `wait` card.
+      if (item.tool === 'spawnAgent') {
+        if (!state.spawnPrompts) state.spawnPrompts = new Map();
+        for (const childId of item.receiverThreadIds ?? []) {
+          if (item.prompt) state.spawnPrompts.set(childId, item.prompt);
+        }
+        return;
+      }
+      // `wait` is the renderable card — open it (if started didn't) and close with the result.
+      if (!state.openCollabCards?.has(item.id)) {
+        emitCollabTaskGroupStart(item, sink, state);
+      }
+      const childId = item.receiverThreadIds?.[0];
+      const subAgentMessage = childId ? (item.agentsStates?.[childId]?.message ?? null) : null;
+      const isError = item.status === 'failed' || item.status === 'interrupted';
+      sink.onToolResult([
+        {
+          type: 'tool_result',
+          toolUseId: item.id,
+          content: subAgentMessage ?? 'Sub-agent completed',
+          isError,
+        },
+      ]);
+      state.openCollabCards?.delete(item.id);
+      // Stop routing further items from this spawn's child thread(s) and drop the prompt.
+      for (const cid of item.receiverThreadIds ?? []) {
+        state.collabChildThreads?.delete(cid);
+        state.spawnPrompts?.delete(cid);
+      }
+      return;
+    }
+
     case 'mcpToolCall': {
       const server = item.server ?? 'codex';
       const toolName = `mcp__${server}__${item.tool}`;
@@ -289,6 +324,40 @@ function mediaTypeFromExtension(path: string): string {
     default:
       return 'application/octet-stream';
   }
+}
+
+function emitCollabTaskGroupStart(item: CollabAgentToolCallItem, sink: SessionSink, state: CodexSessionState): void {
+  if (!state.openCollabCards) state.openCollabCards = new Set();
+  state.openCollabCards.add(item.id);
+  // Register the spawned thread(s) so subsequent child items get tagged with
+  // parentToolUseId and the desktop's groupTaskChildren() nests them under this card.
+  if (!state.collabChildThreads) state.collabChildThreads = new Map();
+  for (const childId of item.receiverThreadIds ?? []) {
+    state.collabChildThreads.set(childId, item.id);
+  }
+  // Use the spawn prompt as the card description (looked up from the prior `spawnAgent`
+  // item — `wait` items don't carry the prompt). Falls back to the item's own prompt
+  // (for the `spawnAgent` path, currently unused) or a generic label.
+  const childId = item.receiverThreadIds?.[0];
+  const description = (childId && state.spawnPrompts?.get(childId)) ?? item.prompt ?? 'Sub-agent';
+  // Real subagent tool name. The desktop's groupTaskChildren() promotes this to a
+  // TaskGroup card when child items arrive tagged with parentToolUseId.
+  sink.onMessage([
+    {
+      type: 'tool_use',
+      id: item.id,
+      name: 'CollabAgent',
+      input: { prompt: description, description },
+    },
+  ]);
+}
+
+function wrapSinkWithParentId(sink: SessionSink, parentToolUseId: string): SessionSink {
+  return {
+    ...sink,
+    onMessage: (blocks) => sink.onMessage(blocks.map((b) => ({ ...b, parentToolUseId }))),
+    onToolResult: (results) => sink.onToolResult(results.map((r) => ({ ...r, parentToolUseId }))),
+  };
 }
 
 /** Extract added lines from a unified diff for Write tool input.content. */

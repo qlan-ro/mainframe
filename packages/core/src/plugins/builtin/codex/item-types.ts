@@ -9,7 +9,8 @@ export type ThreadItem =
   | McpToolCallItem
   | WebSearchItem
   | ImageGenerationItem
-  | UserMessageItem;
+  | UserMessageItem
+  | CollabAgentToolCallItem;
 
 export interface AgentMessageItem {
   id: string;
@@ -87,5 +88,31 @@ export interface TodoListItem {
 export interface UserMessageItem {
   id: string;
   type: 'userMessage';
-  text: string;
+  /** Codex 0.125 stores the prompt under `content[].text`, not a top-level `text` field. */
+  content?: Array<{ type: string; text?: string; text_elements?: unknown[] }>;
+  /** Older variants may include a top-level `text` field; tolerate both. */
+  text?: string;
+}
+
+// Codex 0.125+ emits each sub-agent delegation as TWO `collabAgentToolCall`
+// items (verified via captured payloads):
+//   - tool: "spawnAgent" — initiates the spawn; carries `prompt`, `model`, `reasoningEffort`,
+//     and `receiverThreadIds` (the spawned thread). Children's items arrive on those threads.
+//   - tool: "wait"       — completes the spawn; carries the sub-agent's final output in
+//     `agentsStates[childThreadId].message`. The parent agent typically restates this in
+//     a following `agentMessage`, so we don't render the `wait` card itself.
+// Lifecycle for each: item/started (status: 'inProgress') → item/completed (terminal status).
+export interface CollabAgentToolCallItem {
+  id: string;
+  type: 'collabAgentToolCall';
+  /** "spawnAgent" or "wait" — see comment above. */
+  tool: 'spawnAgent' | 'wait' | string;
+  status: 'inProgress' | 'completed' | 'failed' | 'interrupted';
+  senderThreadId?: string;
+  receiverThreadIds?: string[];
+  prompt?: string | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  /** Per-child status snapshot. For `wait` items, contains the final `message` (sub-agent output). */
+  agentsStates?: Record<string, { status: string; message: string | null }>;
 }
