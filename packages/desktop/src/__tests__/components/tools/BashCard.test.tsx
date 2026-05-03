@@ -23,16 +23,16 @@ describe('BashCard', () => {
     expect(screen.getByText(/npm install/)).toBeInTheDocument();
   });
 
-  it('truncates long commands to 80 characters with ellipsis', () => {
+  it('renders the full command and lets CSS truncate based on available width', () => {
     const longCmd = 'x'.repeat(100);
     render(
       <TooltipProvider>
         <BashCard args={{ command: longCmd }} result={undefined} isError={undefined} />
       </TooltipProvider>,
     );
-    // truncated version shows in the header span
-    const truncated = longCmd.slice(0, 80) + '...';
-    expect(screen.getByText(truncated)).toBeInTheDocument();
+    const span = screen.getByText(longCmd);
+    expect(span).toBeInTheDocument();
+    expect(span.className).toMatch(/truncate/);
   });
 
   it('shows pulsing status dot when result is undefined (running)', () => {
