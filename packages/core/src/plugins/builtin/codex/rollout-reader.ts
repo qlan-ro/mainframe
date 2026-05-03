@@ -10,7 +10,9 @@
 // card can show nested bash commands. The parent thread continues to use the
 // JSON-RPC `thread/read` path (which works fine).
 
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join, sep } from 'node:path';
 import type {
   ThreadItem,
   AgentMessageItem,
@@ -21,6 +23,10 @@ import type {
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:rollout');
+
+/** Only paths inside ~/.codex/sessions are allowed — rollout_path comes from an
+ * externally-owned SQLite DB so we treat it as untrusted input. */
+const SESSIONS_ROOT = join(homedir(), '.codex', 'sessions') + sep;
 
 interface RolloutLine {
   type?: string;
@@ -41,10 +47,30 @@ interface RolloutLine {
  * but with `commandExecution` items reconstructed from the raw `function_call` /
  * `function_call_output` records.
  */
-export async function readRolloutItems(rolloutPath: string): Promise<ThreadItem[]> {
+export async function readRolloutItems(rolloutPath: string, expectedThreadId?: string): Promise<ThreadItem[]> {
+  // Resolve symlinks and ensure the file lives inside ~/.codex/sessions/. Rejects
+  // path-traversal attempts even though the value comes from Codex's own DB.
+  let resolved: string;
+  try {
+    resolved = await realpath(rolloutPath);
+  } catch (err) {
+    log.warn({ err: String(err), rolloutPath }, 'codex: rollout file not found');
+    return [];
+  }
+  if (!resolved.startsWith(SESSIONS_ROOT)) {
+    log.warn({ rolloutPath, resolved }, 'codex: rollout path outside ~/.codex/sessions, refusing to read');
+    return [];
+  }
+  // Sanity check: the rollout filename should embed the thread id (Codex's own
+  // convention is `rollout-<timestamp>-<threadId>.jsonl`).
+  if (expectedThreadId && !resolved.includes(expectedThreadId)) {
+    log.warn({ rolloutPath, expectedThreadId }, 'codex: rollout filename does not match thread id, refusing to read');
+    return [];
+  }
+
   let raw: string;
   try {
-    raw = await readFile(rolloutPath, 'utf8');
+    raw = await readFile(resolved, 'utf8');
   } catch (err) {
     log.warn({ err: String(err), rolloutPath }, 'codex: failed to read rollout file');
     return [];
@@ -108,13 +134,14 @@ export async function readRolloutItems(rolloutPath: string): Promise<ThreadItem[
       const exec = pendingExec.get(p.call_id);
       if (!exec) continue;
       pendingExec.delete(p.call_id);
+      const { exitCode, output } = parseRolloutOutput(p.output ?? '');
       const cmd: CommandExecutionItem = {
         id: p.call_id,
         type: 'commandExecution',
         command: exec.command,
-        aggregatedOutput: extractRolloutOutput(p.output ?? ''),
-        exitCode: 0,
-        status: 'completed',
+        aggregatedOutput: output,
+        exitCode,
+        status: exitCode === 0 ? 'completed' : 'failed',
       };
       items.push(cmd);
       continue;
@@ -124,10 +151,17 @@ export async function readRolloutItems(rolloutPath: string): Promise<ThreadItem[
   return items;
 }
 
-/** Strip Codex's chunk-metadata header from function_call_output strings. */
-function extractRolloutOutput(raw: string): string {
-  // Codex prefixes outputs with "Chunk ID: ...\nWall time: ...\nOriginal token count: ...\nOutput:\n"
+/**
+ * Parse Codex's function_call_output payload. The string starts with a header:
+ *   "Chunk ID: f71ecd\nWall time: 0.0000 seconds\nProcess exited with code N\n
+ *    Original token count: 1052\nOutput:\n<actual output>"
+ * Extract the exit code and strip the header.
+ */
+function parseRolloutOutput(raw: string): { exitCode: number; output: string } {
+  const exitMatch = raw.match(/^Process exited with code (-?\d+)/m);
+  const exitCode = exitMatch ? Number.parseInt(exitMatch[1]!, 10) : 0;
   const marker = '\nOutput:\n';
   const idx = raw.indexOf(marker);
-  return idx >= 0 ? raw.slice(idx + marker.length) : raw;
+  const output = idx >= 0 ? raw.slice(idx + marker.length) : raw;
+  return { exitCode, output };
 }

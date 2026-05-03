@@ -114,7 +114,11 @@ export function convertThreadItems(
       }
 
       case 'userMessage': {
-        const text = item.content?.find((b) => b.type === 'text')?.text ?? item.text ?? '';
+        // Codex's `thread/read` returns `content: [{ type: 'text', text: '...' }]`.
+        // Rollout JSONL records use `input_text` instead. Accept either, plus the
+        // legacy top-level `item.text` field, so the same reader handles both shapes.
+        const block = item.content?.find((b) => typeof b.text === 'string' && b.text.length > 0);
+        const text = block?.text ?? item.text ?? '';
         if (!text) break;
         messages.push(makeMessage(chatId, 'user', [{ type: 'text', text }]));
         break;
@@ -164,10 +168,13 @@ function emitCollabAgent(
   const subAgentMessage = childId ? (item.agentsStates?.[childId]?.message ?? null) : null;
 
   // Build the parent assistant message: CollabAgent tool_use first, then sub-agent
-  // child items inlined as content blocks (tagged with parentToolUseId so the desktop's
-  // groupTaskChildren() promotes the parent into a TaskGroup card). Children must live
-  // in the SAME assistant message — see claude/history.ts injectAgentChildren for the
-  // pattern reference.
+  // child *non-result* blocks (tool_use, text, thinking) tagged with parentToolUseId so
+  // the desktop's groupTaskChildren() nests them under it.
+  //
+  // Sub-agent tool_result blocks are NOT inlined here. groupMessages only attaches
+  // results coming from separate `tool_result`-type messages — inlining them would lose
+  // the bash output. We emit them as standalone tool_result messages right after the
+  // parent so they get attached via toolUseId.
   const content: MessageContent[] = [
     {
       type: 'tool_use',
@@ -176,6 +183,7 @@ function emitCollabAgent(
       input: { prompt, description, subagent_type: subagentType },
     },
   ];
+  const childToolResults: Array<MessageContent & { type: 'tool_result' }> = [];
 
   if (childId) {
     const childItems = childItemsByThread.get(childId);
@@ -185,14 +193,21 @@ function emitCollabAgent(
         // Skip the child thread's user-prompt echo — it's just a copy of the spawn prompt.
         if (m.type === 'user') continue;
         for (const block of m.content) {
-          content.push({ ...block, parentToolUseId: item.id });
+          if (block.type === 'tool_result') {
+            childToolResults.push({ ...block, parentToolUseId: item.id });
+          } else {
+            content.push({ ...block, parentToolUseId: item.id });
+          }
         }
       }
     }
   }
 
   messages.push(makeMessage(chatId, 'assistant', content));
-  // Close the card with a separate tool_result message (matches the live event-mapper path).
+  for (const r of childToolResults) {
+    messages.push(makeMessage(chatId, 'tool_result', [r]));
+  }
+  // Close the card with the CollabAgent's own tool_result (sub-agent's final message).
   messages.push(
     makeMessage(chatId, 'tool_result', [
       {

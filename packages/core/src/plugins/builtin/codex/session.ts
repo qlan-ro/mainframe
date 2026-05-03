@@ -360,7 +360,7 @@ export class CodexSession implements AdapterSession {
         // available (e.g. archived thread, missing rollout file).
         const rolloutPath = agentMetaByThread.get(childId)?.rolloutPath;
         if (rolloutPath) {
-          const items = await readRolloutItems(rolloutPath);
+          const items = await readRolloutItems(rolloutPath, childId);
           if (items.length > 0) {
             childItemsByThread.set(childId, items);
             continue;
