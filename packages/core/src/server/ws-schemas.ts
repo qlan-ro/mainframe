@@ -101,6 +101,16 @@ const MessageQueueCancel = z.object({
   messageId: z.string().min(1),
 });
 
+const SubscribeFile = z.object({
+  type: z.literal('subscribe:file'),
+  path: z.string().min(1),
+});
+
+const UnsubscribeFile = z.object({
+  type: z.literal('unsubscribe:file'),
+  path: z.string().min(1),
+});
+
 export const ClientEventSchema = z.discriminatedUnion('type', [
   ChatCreate,
   ChatResume,
@@ -113,4 +123,6 @@ export const ClientEventSchema = z.discriminatedUnion('type', [
   Unsubscribe,
   MessageQueueEdit,
   MessageQueueCancel,
+  SubscribeFile,
+  UnsubscribeFile,
 ]);

@@ -10,6 +10,7 @@ import {
   getDevices,
   removeDevice,
 } from '../../lib/api';
+import { daemonClient } from '../../lib/client';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:remote-access');
@@ -175,6 +176,37 @@ function TunnelControl(): React.ReactElement {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Subscribe to live tunnel state transitions pushed by the daemon.
+  useEffect(() => {
+    return daemonClient.onEvent((event) => {
+      if (event.type !== 'tunnel:status') return;
+      switch (event.state) {
+        case 'starting':
+          setRunning(true);
+          setVerified(false);
+          break;
+        case 'ready':
+          setRunning(true);
+          setUrl(event.url ?? null);
+          setVerified(false);
+          break;
+        case 'dns_verified':
+          setRunning(true);
+          setUrl(event.url ?? null);
+          setVerified(event.dnsVerified ?? false);
+          break;
+        case 'error':
+          log.warn('tunnel error from daemon', { error: event.error });
+          break;
+        case 'stopped':
+          setRunning(false);
+          setUrl(null);
+          setVerified(false);
+          break;
+      }
+    });
+  }, []);
 
   const handleToggle = useCallback(async () => {
     setToggling(true);

@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import { realpath, stat } from 'node:fs/promises';
 import type { Server } from 'node:http';
 import type { ChatManager } from '../chat/index.js';
 import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
@@ -6,6 +7,7 @@ import { ClientEventSchema } from './ws-schemas.js';
 import { createChildLogger } from '../logger.js';
 import { validateToken } from '../auth/token.js';
 import { LspConnectionHandler, parseLspUpgradePath } from '../lsp/index.js';
+import type { FileWatcherService } from '../files/file-watcher.js';
 
 const log = createChildLogger('ws');
 
@@ -19,6 +21,8 @@ export function isWsAuthRequired(ip: string, secret: string | null): boolean {
 interface ClientConnection {
   ws: WebSocket;
   subscriptions: Set<string>;
+  /** Absolute file paths this client has subscribed to. */
+  fileSubscriptions: Set<string>;
 }
 
 export class WebSocketManager {
@@ -29,6 +33,7 @@ export class WebSocketManager {
     server: Server,
     private chats: ChatManager,
     private lspHandler?: LspConnectionHandler,
+    private fileWatcher?: FileWatcherService,
   ) {
     this.wss = new WebSocketServer({ noServer: true });
     this.setupUpgradeAuth(server);
@@ -77,7 +82,7 @@ export class WebSocketManager {
 
   private setupEventHandlers(): void {
     this.wss.on('connection', (ws) => {
-      const client: ClientConnection = { ws, subscriptions: new Set() };
+      const client: ClientConnection = { ws, subscriptions: new Set(), fileSubscriptions: new Set() };
       this.clients.set(ws, client);
 
       ws.on('message', async (data) => {
@@ -98,6 +103,12 @@ export class WebSocketManager {
       });
 
       ws.on('close', () => {
+        // Clean up file subscriptions for this client on disconnect
+        if (this.fileWatcher) {
+          for (const path of client.fileSubscriptions) {
+            this.fileWatcher.unsubscribe(path);
+          }
+        }
         this.clients.delete(ws);
       });
     });
@@ -179,6 +190,16 @@ export class WebSocketManager {
         break;
       }
 
+      case 'subscribe:file': {
+        await this.handleFileSubscribe(client, event.path);
+        break;
+      }
+
+      case 'unsubscribe:file': {
+        this.handleFileUnsubscribe(client, event.path);
+        break;
+      }
+
       case 'subscribe': {
         client.subscriptions.add(event.chatId);
         // Rehydrate queued-message state for this client — the daemon is the
@@ -201,6 +222,51 @@ export class WebSocketManager {
         break;
       }
     }
+  }
+
+  private async handleFileSubscribe(client: ClientConnection, requestedPath: string): Promise<void> {
+    if (!this.fileWatcher) return;
+    // Only absolute paths are accepted for file watching.
+    if (!requestedPath.startsWith('/')) {
+      log.warn({ path: requestedPath }, 'subscribe:file rejected: path must be absolute');
+      return;
+    }
+    let resolvedPath: string;
+    try {
+      resolvedPath = await realpath(requestedPath);
+    } catch {
+      log.warn({ path: requestedPath }, 'subscribe:file rejected: realpath failed (file may not exist)');
+      return;
+    }
+    try {
+      const s = await stat(resolvedPath);
+      if (!s.isFile()) {
+        log.warn({ path: resolvedPath }, 'subscribe:file rejected: not a regular file');
+        return;
+      }
+    } catch (err) {
+      log.warn({ err, path: resolvedPath }, 'subscribe:file rejected: stat failed');
+      return;
+    }
+
+    if (!client.fileSubscriptions.has(resolvedPath)) {
+      client.fileSubscriptions.add(resolvedPath);
+      this.fileWatcher.subscribe(resolvedPath);
+      log.debug({ path: resolvedPath }, 'client subscribed to file');
+    }
+  }
+
+  private handleFileUnsubscribe(client: ClientConnection, requestedPath: string): void {
+    if (!this.fileWatcher) return;
+    // Try exact match first; also handle the case where the renderer sends the
+    // original path before symlink resolution.
+    const toRemove = client.fileSubscriptions.has(requestedPath)
+      ? requestedPath
+      : [...client.fileSubscriptions].find((p) => p === requestedPath);
+    if (!toRemove) return;
+    client.fileSubscriptions.delete(toRemove);
+    this.fileWatcher.unsubscribe(toRemove);
+    log.debug({ path: toRemove }, 'client unsubscribed from file');
   }
 
   broadcastEvent(event: DaemonEvent): void {

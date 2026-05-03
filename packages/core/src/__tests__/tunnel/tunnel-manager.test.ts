@@ -204,3 +204,33 @@ describe('TunnelManager.verify', () => {
     vi.useRealTimers();
   });
 });
+
+describe('TunnelManager broadcast callbacks', () => {
+  it('broadcasts stopped when stop() is called for a running tunnel', () => {
+    const broadcast = vi.fn();
+    const manager = new TunnelManager(broadcast);
+    // Inject a synthetic tunnel entry
+    (manager as any).tunnels.set('daemon', {
+      process: { kill: vi.fn() } as any,
+      url: 'https://test.trycloudflare.com',
+      ready: true,
+    });
+
+    broadcast.mockClear();
+    manager.stop('daemon');
+
+    expect(broadcast).toHaveBeenCalledWith({ type: 'tunnel:status', state: 'stopped' });
+  });
+
+  it('does not broadcast when stop() is called for an unknown label', () => {
+    const broadcast = vi.fn();
+    const manager = new TunnelManager(broadcast);
+    manager.stop('nonexistent');
+    expect(broadcast).not.toHaveBeenCalled();
+  });
+
+  it('works without a broadcast callback (no-op constructor)', () => {
+    const manager = new TunnelManager();
+    expect(() => manager.stop('nonexistent')).not.toThrow();
+  });
+});

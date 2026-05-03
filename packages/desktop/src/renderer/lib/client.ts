@@ -217,6 +217,14 @@ export class DaemonClient {
     this.visitedChats.delete(chatId);
     this.send({ type: 'unsubscribe', chatId });
   }
+
+  subscribeFile(path: string): void {
+    this.send({ type: 'subscribe:file', path });
+  }
+
+  unsubscribeFile(path: string): void {
+    this.send({ type: 'unsubscribe:file', path });
+  }
 }
 
 export const daemonClient = new DaemonClient();
