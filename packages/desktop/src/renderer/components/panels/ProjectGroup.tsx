@@ -397,17 +397,16 @@ export const ProjectGroup = React.memo(function ProjectGroup({
             </span>
           )}
         </div>
-        {/* Right cluster: count badge + action buttons — fixed width so left never reflows */}
-        <div className="flex items-center gap-1 shrink-0 w-14 justify-end">
-          <span className="h-5 px-1.5 text-[10px] tabular-nums rounded-full bg-mf-hover text-mf-text-secondary flex items-center">
-            {chats.length}
-          </span>
+        <span className="h-5 px-1.5 text-[10px] tabular-nums rounded-full bg-mf-hover text-mf-text-secondary flex items-center shrink-0">
+          {chats.length}
+        </span>
+        <div className="shrink-0 hidden group-hover:flex items-center gap-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={handleNewSession}
-                className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+                className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
                 aria-label={`New session in ${project.name}`}
               >
                 <Plus size={12} />
@@ -420,7 +419,7 @@ export const ProjectGroup = React.memo(function ProjectGroup({
               <button
                 type="button"
                 onClick={handleDeleteProject}
-                className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+                className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors"
                 aria-label={`Delete project ${project.name}`}
               >
                 <Trash2 size={12} />

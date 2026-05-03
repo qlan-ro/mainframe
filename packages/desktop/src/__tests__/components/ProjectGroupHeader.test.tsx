@@ -111,11 +111,11 @@ describe('ProjectGroup header layout', () => {
     expect(onToggleCollapse).not.toHaveBeenCalled();
   });
 
-  it('header row has a fixed-width right cluster so left content never reflows', () => {
+  it('action buttons cluster is hidden until hover/focus, matching session-row pattern', () => {
     renderGroup();
-    const btn = screen.getByRole('button', { name: /new session in my-app/i });
-    // The right cluster (parent of + button and delete button) should be shrink-0
-    const rightCluster = btn.parentElement;
-    expect(rightCluster?.className).toMatch(/shrink-0/);
+    const btn = screen.getByRole('button', { name: /new session in my-app/i, hidden: true });
+    const cluster = btn.parentElement;
+    expect(cluster?.className).toMatch(/\bhidden\b/);
+    expect(cluster?.className).toMatch(/group-hover:flex/);
   });
 });

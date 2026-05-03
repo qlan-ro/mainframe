@@ -381,7 +381,10 @@ export function ComposerCard() {
         lines — beyond that the textarea scrolls internally. The outer card uses
         overflow-hidden so no second scrollbar can appear.
       */}
-      <div className="relative overflow-y-auto" style={{ maxHeight: '14lh', boxSizing: 'border-box' }}>
+      <div
+        className="relative overflow-y-auto"
+        style={{ maxHeight: '308px', lineHeight: '22px', boxSizing: 'border-box' }}
+      >
         <div className="relative">
           <ComposerHighlight />
           <ComposerPrimitive.Input
@@ -392,7 +395,7 @@ export function ComposerCard() {
             disabled={chat?.worktreeMissing}
             placeholder="Type @ to search files, / for skills… (Enter to send)"
             className="block w-full bg-transparent border-none font-sans text-mf-chat text-transparent caret-mf-text-primary selection:text-mf-text-primary resize-none placeholder:text-mf-text-secondary focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ lineHeight: '1.5', padding: '8px 12px', boxSizing: 'border-box' }}
+            style={{ lineHeight: '22px', padding: '8px 12px', boxSizing: 'border-box' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && chat?.isRunning) {
                 e.preventDefault();

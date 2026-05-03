@@ -12,8 +12,8 @@ import { describe, it, expect } from 'vitest';
 import composerSource from '../../../renderer/components/chat/assistant-ui/composer/ComposerCard.tsx?raw';
 
 describe('ComposerCard scroll constraints', () => {
-  it('caps textarea scroll region at 14lh via maxHeight style', () => {
-    expect(composerSource).toMatch(/14lh/);
+  it('caps textarea scroll region at 14 lines (308px = 14 × 22px line-height) via maxHeight style', () => {
+    expect(composerSource).toMatch(/maxHeight:\s*'308px'/);
   });
 
   it('inner scroll wrapper uses overflow-y-auto', () => {
