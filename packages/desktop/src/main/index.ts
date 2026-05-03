@@ -175,6 +175,8 @@ function setupIPC(): void {
     n.show();
   });
 
+  ipcMain.handle('app:getHomedir', () => homedir());
+
   ipcMain.on('log', (_event, level: string, module: string, message: string, data?: unknown) => {
     logFromRenderer(level, module, message, data);
   });
