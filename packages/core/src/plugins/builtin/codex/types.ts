@@ -151,6 +151,7 @@ export type ThreadItem =
   | McpToolCallItem
   | WebSearchItem
   | ImageGenerationItem
+  | TodoListItem
   | UserMessageItem;
 
 export interface AgentMessageItem {
