@@ -127,6 +127,18 @@ function connectWs(port: number): Promise<WebSocket> {
   });
 }
 
+/** Connect and start collecting messages immediately so events fired between
+ *  upgrade and the test's first await aren't lost. */
+function connectWsCollecting(port: number): Promise<{ socket: WebSocket; events: DaemonEvent[] }> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${port}`);
+    const events: DaemonEvent[] = [];
+    socket.on('message', (d) => events.push(JSON.parse(d.toString()) as DaemonEvent));
+    socket.on('open', () => resolve({ socket, events }));
+    socket.on('error', reject);
+  });
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -210,6 +222,40 @@ describe('WS inbound flows', () => {
 
     const chatUpdated = events.find((e) => e.type === 'chat.updated' && (e as any).chat?.planMode === true);
     expect(chatUpdated).toBeDefined();
+  }, 10_000);
+
+  it('chat.created carries originClientId of the creating connection only', async () => {
+    const adapter = new MockAdapter();
+    const { httpServer } = createStack(adapter);
+    server = httpServer;
+    const port = await startServer(server);
+
+    const { socket: a, events: eventsA } = await connectWsCollecting(port);
+    const { socket: b, events: eventsB } = await connectWsCollecting(port);
+    await sleep(50);
+
+    const readyA = eventsA.find((e) => e.type === 'connection.ready');
+    const readyB = eventsB.find((e) => e.type === 'connection.ready');
+    expect(readyA?.type).toBe('connection.ready');
+    expect(readyB?.type).toBe('connection.ready');
+    const idA = (readyA as { type: 'connection.ready'; clientId: string }).clientId;
+    const idB = (readyB as { type: 'connection.ready'; clientId: string }).clientId;
+    expect(idA).toBeTypeOf('string');
+    expect(idB).toBeTypeOf('string');
+    expect(idA).not.toBe(idB);
+
+    a.send(JSON.stringify({ type: 'chat.create', projectId: 'proj-1', adapterId: 'claude' }));
+    await sleep(100);
+
+    const createdOnA = eventsA.find((e) => e.type === 'chat.created');
+    const createdOnB = eventsB.find((e) => e.type === 'chat.created');
+    expect(createdOnA).toBeDefined();
+    expect(createdOnB).toBeDefined();
+    expect((createdOnA as { originClientId?: string }).originClientId).toBe(idA);
+    expect((createdOnB as { originClientId?: string }).originClientId).toBe(idA);
+
+    a.close();
+    b.close();
   }, 10_000);
 
   it('invalid WS message sends back error type', async () => {

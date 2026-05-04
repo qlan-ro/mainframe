@@ -1,5 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { realpath, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Server } from 'node:http';
 import type { ChatManager } from '../chat/index.js';
 import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
@@ -20,10 +22,15 @@ export function isWsAuthRequired(ip: string, secret: string | null): boolean {
 
 interface ClientConnection {
   ws: WebSocket;
+  /** Stable per-connection id; sent to the client and stamped on origin-sensitive broadcasts. */
+  id: string;
   subscriptions: Set<string>;
   /** Absolute file paths this client has subscribed to. */
   fileSubscriptions: Set<string>;
 }
+
+/** Identifies which client triggered the inbound message currently being handled. */
+const originContext = new AsyncLocalStorage<{ clientId: string }>();
 
 export class WebSocketManager {
   private wss: WebSocketServer;
@@ -82,8 +89,16 @@ export class WebSocketManager {
 
   private setupEventHandlers(): void {
     this.wss.on('connection', (ws) => {
-      const client: ClientConnection = { ws, subscriptions: new Set(), fileSubscriptions: new Set() };
+      const client: ClientConnection = {
+        ws,
+        id: randomUUID(),
+        subscriptions: new Set(),
+        fileSubscriptions: new Set(),
+      };
       this.clients.set(ws, client);
+
+      const ready: DaemonEvent = { type: 'connection.ready', clientId: client.id };
+      ws.send(JSON.stringify(ready));
 
       ws.on('message', async (data) => {
         try {
@@ -94,7 +109,9 @@ export class WebSocketManager {
             this.sendError(ws, `Invalid message: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
             return;
           }
-          await this.handleClientEvent(client, parsed.data as ClientEvent);
+          await originContext.run({ clientId: client.id }, () =>
+            this.handleClientEvent(client, parsed.data as ClientEvent),
+          );
         } catch (err) {
           log.error({ err }, 'ws message handler error');
           const message = err instanceof SyntaxError ? 'Invalid JSON' : 'Internal error';
@@ -288,7 +305,16 @@ export class WebSocketManager {
       if ('projectId' in event) extra.projectId = event.projectId;
       log.debug(extra, 'broadcast %s to %d client(s)', event.type, this.clients.size);
     }
-    const payload = JSON.stringify(event);
+
+    // Stamp origin only on events whose client side-effects (selection, navigation)
+    // should fire on the originating client alone. Pure state-sync events broadcast
+    // unchanged so every client converges on the same store state.
+    const origin = originContext.getStore();
+    const stamped: DaemonEvent =
+      origin && event.type === 'chat.created' && event.originClientId === undefined
+        ? { ...event, originClientId: origin.clientId }
+        : event;
+    const payload = JSON.stringify(stamped);
 
     for (const client of this.clients.values()) {
       if (!chatId || client.subscriptions.has(chatId)) {

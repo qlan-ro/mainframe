@@ -16,7 +16,13 @@ export class DaemonClient {
   private intentionalClose = false;
   private pendingMessages: ClientEvent[] = [];
   private connectionListeners = new Set<() => void>();
+  private clientId: string | null = null;
   readonly visitedChats = new Set<string>();
+
+  /** Stable id assigned by the daemon when this WS connection was accepted. */
+  getClientId(): string | null {
+    return this.clientId;
+  }
 
   get connected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
@@ -55,6 +61,10 @@ export class DaemonClient {
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as DaemonEvent;
+        if (data.type === 'connection.ready') {
+          this.clientId = data.clientId;
+          return;
+        }
         this.eventHandlers.forEach((handler) => handler(data));
       } catch (error) {
         log.error('failed to parse event', { err: String(error) });
