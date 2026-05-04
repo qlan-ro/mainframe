@@ -8,6 +8,7 @@ import { useAdaptersStore } from '../store/adapters';
 import { createLogger } from './logger';
 import { buildLaunchScope } from './launch-scope.js';
 import { notify } from './notify';
+import { daemonClient } from './client';
 
 const log = createLogger('renderer:ws');
 
@@ -16,13 +17,26 @@ export function routeEvent(event: DaemonEvent): void {
   const tabs = useTabsStore.getState();
 
   switch (event.type) {
-    case 'chat.created':
-      log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title, source: event.source });
+    case 'chat.created': {
+      log.info('event:chat.created', {
+        chatId: event.chat.id,
+        title: event.chat.title,
+        source: event.source,
+        originClientId: event.originClientId,
+      });
       chats.addChat(event.chat);
-      if (event.source !== 'import') {
+      // Auto-select + open tab only when this client originated the creation.
+      // Imported chats and chats created by other clients (mobile, secondary
+      // desktops) update the list without hijacking the active selection.
+      const isLocalOrigin = event.originClientId === daemonClient.getClientId();
+      if (event.source !== 'import' && isLocalOrigin) {
         chats.setActiveChat(event.chat.id);
         tabs.openChatTab(event.chat.id, event.chat.title);
       }
+      break;
+    }
+    case 'connection.ready':
+      // Handled in DaemonClient before dispatch — no-op here for exhaustiveness.
       break;
     case 'chat.updated': {
       log.debug('event:chat.updated', { chatId: event.chat.id });

@@ -4,7 +4,8 @@ import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
 
 export type DaemonEvent =
-  | { type: 'chat.created'; chat: Chat; source?: 'import' }
+  | { type: 'connection.ready'; clientId: string }
+  | { type: 'chat.created'; chat: Chat; source?: 'import'; originClientId?: string }
   | { type: 'chat.updated'; chat: Chat; reason?: 'completed' | 'error' | 'interrupted' }
   | { type: 'chat.ended'; chatId: string }
   | { type: 'process.started'; chatId: string; process: AdapterProcess }
