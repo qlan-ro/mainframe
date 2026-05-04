@@ -219,7 +219,7 @@ describe('TunnelManager broadcast callbacks', () => {
     broadcast.mockClear();
     manager.stop('daemon');
 
-    expect(broadcast).toHaveBeenCalledWith({ type: 'tunnel:status', state: 'stopped' });
+    expect(broadcast).toHaveBeenCalledWith({ type: 'tunnel:status', state: 'stopped', label: 'daemon' });
   });
 
   it('does not broadcast when stop() is called for an unknown label', () => {
