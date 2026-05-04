@@ -205,12 +205,18 @@ export class ApprovalHandler {
    *     separately as the next user turn (the chat-manager's revise path
    *     sends it via sendMessage after the approval resolves).
    *
-   * For AskUserQuestion, preserve legacy behavior: forward `response.message`
-   * verbatim as the answer string.
+   * For AskUserQuestion:
+   *   - If `response.message` is set, use it (legacy free-text path).
+   *   - Otherwise read from `response.updatedInput.answers` — the desktop UI
+   *     (AskUserQuestionCard) sends the user's option selection there, keyed
+   *     by question text. We pick the first value found across all questions.
    */
   private chooseRequestUserInputAnswer(entry: PendingApproval, response: ControlResponse): string {
     if (entry.toolName !== 'ExitPlanMode') {
-      return response.message ?? '';
+      // Prefer explicit message (free-text path)
+      if (response.message) return response.message;
+      // Fall back to option selection delivered in updatedInput.answers
+      return this.extractAnswerFromUpdatedInput(response);
     }
 
     // Flatten option groups — Codex emits one option per group for ExitPlanMode.
@@ -240,6 +246,29 @@ export class ApprovalHandler {
       return findByPrefix(/^no/i, 1);
     }
     return findByPrefix(/^no/i, 1);
+  }
+
+  /**
+   * Extract the user's selection from `response.updatedInput.answers`.
+   *
+   * The desktop AskUserQuestionCard sends answers keyed by question text:
+   *   `{ answers: { [questionText]: string | string[] } }`
+   * We return the first non-empty value found. Arrays are flattened to the
+   * first element (best-effort for multi-select; Codex answers are single
+   * strings per `ToolRequestUserInputAnswer`).
+   */
+  private extractAnswerFromUpdatedInput(response: ControlResponse): string {
+    const rawAnswers = response.updatedInput?.answers;
+    if (rawAnswers === null || typeof rawAnswers !== 'object') return '';
+    for (const val of Object.values(rawAnswers as Record<string, unknown>)) {
+      if (Array.isArray(val)) {
+        const first = val[0];
+        if (typeof first === 'string' && first.length > 0) return first;
+      } else if (typeof val === 'string' && val.length > 0) {
+        return val;
+      }
+    }
+    return '';
   }
 
   rejectAll(): void {
