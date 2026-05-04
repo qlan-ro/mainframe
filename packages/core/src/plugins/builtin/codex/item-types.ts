@@ -9,6 +9,7 @@ export type ThreadItem =
   | McpToolCallItem
   | WebSearchItem
   | ImageGenerationItem
+  | TodoListItem
   | UserMessageItem
   | CollabAgentToolCallItem;
 

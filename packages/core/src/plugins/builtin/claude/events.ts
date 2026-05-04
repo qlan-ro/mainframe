@@ -12,6 +12,7 @@ import type {
 import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
 import { createChildLogger } from '../../../logger.js';
+import { normalizeTodos } from '../../../todos/normalize.js';
 
 const log = createChildLogger('claude:events');
 
@@ -214,6 +215,10 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
           if (valid.length > 0) sink.onTodoUpdate(valid);
         }
       }
+      const taskV2Name = block.name as string;
+      if (taskV2Name === 'TaskCreate' || taskV2Name === 'TaskUpdate' || taskV2Name === 'TaskStop') {
+        handleTaskV2Event(session, taskV2Name as 'TaskCreate' | 'TaskUpdate' | 'TaskStop', block.input, sink);
+      }
       const name = block.name as string;
       if (name === 'Bash' || name === 'BashTool') {
         const input = block.input as { command?: string } | undefined;
@@ -243,6 +248,21 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
     model: message.model,
     usage: message.usage,
   });
+}
+
+/**
+ * Handle a V2 task event (TaskCreate/TaskUpdate/TaskStop), accumulating state
+ * on the session and emitting onTodoUpdate with the current snapshot.
+ */
+function handleTaskV2Event(
+  session: ClaudeSession,
+  toolName: 'TaskCreate' | 'TaskUpdate' | 'TaskStop',
+  input: Record<string, unknown>,
+  sink: SessionSink,
+): void {
+  session.state.taskV2Events.push({ toolName, args: input });
+  const todos = normalizeTodos('taskV2', session.state.taskV2Events);
+  if (todos.length > 0) sink.onTodoUpdate(todos);
 }
 
 /**
@@ -588,6 +608,18 @@ function handleEvent(session: ClaudeSession, event: Record<string, unknown>, sin
     case 'control_response':
       return handleControlResponseEvent(session, event, sink);
     case 'result':
+      // Subagent result events carry `parent_tool_use_id` and represent an
+      // inner Task/Agent sub-turn completing, NOT the top-level chat turn.
+      // Forwarding them to onResult() would flip processState to 'idle' while
+      // the parent session is still running. Drop them here; their completion
+      // is already surfaced via the tool_result block in the parent's user event.
+      if (typeof event.parent_tool_use_id === 'string' && event.parent_tool_use_id) {
+        log.debug(
+          { sessionId: session.id, parentToolUseId: event.parent_tool_use_id },
+          'claude: skipping subagent result event (parent_tool_use_id present)',
+        );
+        return;
+      }
       return handleResultEvent(session, event, sink);
   }
 }

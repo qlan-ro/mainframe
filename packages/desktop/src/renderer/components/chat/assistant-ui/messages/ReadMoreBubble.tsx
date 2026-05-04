@@ -28,6 +28,7 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
     <div className={cn('relative', className)}>
       <div
         data-clamp={needsToggle ? '' : undefined}
+        data-text-part
         className={cn('aui-md text-mf-chat text-mf-text-primary', collapsed && 'line-clamp-6')}
       >
         {children}

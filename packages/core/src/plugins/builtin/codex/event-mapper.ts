@@ -10,7 +10,7 @@ import type {
   ThreadStartedParams,
   TokenUsageUpdatedParams,
 } from './types.js';
-import type { PatchChangeKind, FileChangeItem, CollabAgentToolCallItem } from './item-types.js';
+import type { PatchChangeKind, FileChangeItem, CollabAgentToolCallItem, TodoListItem } from './item-types.js';
 import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
 import { lookupAgentMetadata, describeAgent, agentTitle } from './thread-registry.js';
 import { createChildLogger } from '../../../logger.js';
@@ -283,9 +283,23 @@ function handleItemCompleted(params: ItemCompletedParams, sink: SessionSink, sta
       return;
     }
 
+    case 'todoList': {
+      const todos = normalizeTodoListItems(item);
+      if (todos.length > 0) sink.onTodoUpdate(todos);
+      return;
+    }
+
     default:
       log.debug({ type: (item as { type: string }).type }, 'codex: unhandled item type');
   }
+}
+
+function normalizeTodoListItems(item: TodoListItem): import('@qlan-ro/mainframe-types').TodoItem[] {
+  return item.items.map((t) => ({
+    content: t.text,
+    status: t.completed ? ('completed' as const) : ('pending' as const),
+    activeForm: t.text,
+  }));
 }
 
 function handleTurnCompleted(params: TurnCompletedParams, sink: SessionSink, state: CodexSessionState): void {

@@ -84,7 +84,7 @@ export function UserMessage() {
             <span className="text-mf-body font-semibold text-mf-accent">Plan to implement</span>
           </div>
           <div className="px-4 py-3">
-            <div className="aui-md text-mf-chat text-mf-text-primary">
+            <div data-text-part className="aui-md text-mf-chat text-mf-text-primary">
               <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
                 {planBody}
               </Markdown>
