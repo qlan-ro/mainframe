@@ -254,6 +254,14 @@ export class WebSocketManager {
       this.fileWatcher.subscribe(resolvedPath);
       log.debug({ path: resolvedPath }, 'client subscribed to file');
     }
+    // Tell the requesting client what path the daemon actually resolved to —
+    // realpath may collapse symlinks (/tmp → /private/tmp on macOS), and the
+    // renderer's `file:changed` filter needs to match the resolved path the
+    // daemon broadcasts.
+    if (client.ws.readyState === WebSocket.OPEN) {
+      const ack: DaemonEvent = { type: 'subscribe:file:ack', requestedPath, resolvedPath };
+      client.ws.send(JSON.stringify(ack));
+    }
   }
 
   private handleFileUnsubscribe(client: ClientConnection, requestedPath: string): void {

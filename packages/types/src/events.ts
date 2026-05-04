@@ -72,7 +72,8 @@ export type DaemonEvent =
       dnsVerified?: boolean;
       error?: string;
     }
-  | { type: 'file:changed'; path: string };
+  | { type: 'file:changed'; path: string }
+  | { type: 'subscribe:file:ack'; requestedPath: string; resolvedPath: string };
 
 export type ClientEvent =
   | {

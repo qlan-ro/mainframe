@@ -234,5 +234,9 @@ export function routeEvent(event: DaemonEvent): void {
       // Handled by subscribers in EditorTab — no global store needed.
       log.debug('event:file:changed', { path: event.path });
       break;
+    case 'subscribe:file:ack':
+      // Per-EditorTab listener consumes this to learn the daemon-resolved path.
+      log.debug('event:subscribe:file:ack', { requestedPath: event.requestedPath, resolvedPath: event.resolvedPath });
+      break;
   }
 }

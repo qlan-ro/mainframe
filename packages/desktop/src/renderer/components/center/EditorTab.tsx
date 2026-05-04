@@ -157,13 +157,22 @@ export function EditorTab({
   }, [location, fetchContent]);
 
   // Subscribe to file:changed events for disk-level change detection.
+  // The daemon resolves symlinks via realpath (/tmp → /private/tmp on macOS),
+  // so we accept the resolved path it echoes back via subscribe:file:ack and
+  // match file:changed against either the originally-requested or resolved path.
   useEffect(() => {
     if (!location) return;
-    const watchPath = location.absolutePath;
+    const requestedPath = location.absolutePath;
+    let resolvedPath = requestedPath;
 
-    daemonClient.subscribeFile(watchPath);
+    daemonClient.subscribeFile(requestedPath);
     const unsub = daemonClient.onEvent((event) => {
-      if (event.type !== 'file:changed' || event.path !== watchPath) return;
+      if (event.type === 'subscribe:file:ack' && event.requestedPath === requestedPath) {
+        resolvedPath = event.resolvedPath;
+        return;
+      }
+      if (event.type !== 'file:changed') return;
+      if (event.path !== requestedPath && event.path !== resolvedPath) return;
       if (dirtyRef.current) {
         // User has unsaved changes — surface a banner instead of silently overwriting.
         setDiskChanged(true);
@@ -182,7 +191,7 @@ export function EditorTab({
 
     return () => {
       unsub();
-      daemonClient.unsubscribeFile(watchPath);
+      daemonClient.unsubscribeFile(requestedPath);
     };
   }, [location, fetchContent]);
 
