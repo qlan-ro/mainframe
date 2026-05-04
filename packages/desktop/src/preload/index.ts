@@ -27,6 +27,7 @@ export interface MainframeAPI {
     electron: string;
   };
   getAppInfo: () => Promise<{ version: string; author: string }>;
+  getHomedir: () => Promise<string>;
   readFile: (filePath: string) => Promise<string | null>;
   showItemInFolder: (fullPath: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
@@ -45,6 +46,7 @@ const api: MainframeAPI = {
     electron: process.versions.electron,
   },
   getAppInfo: () => ipcRenderer.invoke('app:getInfo'),
+  getHomedir: () => ipcRenderer.invoke('app:getHomedir'),
   readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
   showItemInFolder: (fullPath: string) => ipcRenderer.invoke('shell:showItemInFolder', fullPath),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
