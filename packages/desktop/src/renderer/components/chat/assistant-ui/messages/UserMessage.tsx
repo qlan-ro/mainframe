@@ -83,7 +83,7 @@ export function UserMessage() {
             <span className="text-mf-body font-semibold text-mf-accent">Plan to implement</span>
           </div>
           <div className="px-4 py-3">
-            <div className="aui-md text-mf-chat text-mf-text-primary">
+            <div data-text-part className="aui-md text-mf-chat text-mf-text-primary">
               <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
                 {planBody}
               </Markdown>
@@ -110,7 +110,7 @@ export function UserMessage() {
           data-testid={parsed.isCommand ? 'user-command-bubble' : 'user-skill-bubble'}
           className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5"
         >
-          <div className="aui-md text-mf-chat text-mf-text-primary">
+          <div data-text-part className="aui-md text-mf-chat text-mf-text-primary">
             <Icon size={14} className="text-mf-accent inline-block align-[-2px] mr-0.5" />
             <span className="font-mono text-mf-chat text-mf-accent mr-1.5">/{parsed.commandName}</span>
             {parsed.userText}
@@ -129,7 +129,7 @@ export function UserMessage() {
       {queuedBadge}
       {hasTextContent && (
         <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5">
-          <div className="aui-md text-mf-chat text-mf-text-primary">
+          <div data-text-part className="aui-md text-mf-chat text-mf-text-primary">
             <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userComponents}>
               {cleanText}
             </Markdown>

@@ -40,6 +40,40 @@ function searchMessages(query: string, chatId: string | null): import('../../../
   return matches;
 }
 
+/**
+ * Convert flat character offsets within an element's textContent into a Range
+ * spanning the underlying text nodes (which may be split across nested HTML
+ * from rendered markdown).
+ */
+function rangeFromOffsets(root: Element, start: number, end: number): Range | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let pos = 0;
+  let startNode: Text | null = null;
+  let startOffset = 0;
+  let endNode: Text | null = null;
+  let endOffset = 0;
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    const len = node.data.length;
+    if (!startNode && pos + len > start) {
+      startNode = node;
+      startOffset = start - pos;
+    }
+    if (startNode && pos + len >= end) {
+      endNode = node;
+      endOffset = end - pos;
+      break;
+    }
+    pos += len;
+    node = walker.nextNode() as Text | null;
+  }
+  if (!startNode || !endNode) return null;
+  const range = document.createRange();
+  range.setStart(startNode, startOffset);
+  range.setEnd(endNode, endOffset);
+  return range;
+}
+
 export function FindBar(): React.ReactElement | null {
   const { isOpen, query, matches, activeIndex, close, setQuery, setMatches, next, prev } = useFindInChatStore();
   const activeChatId = useChatsStore((s) => s.activeChatId);
@@ -66,17 +100,56 @@ export function FindBar(): React.ReactElement | null {
     };
   }, [query, isOpen, activeChatId, setMatches]);
 
-  // Scroll active match into view
+  // Paint highlights via CSS Custom Highlight API and scroll active match into view
   useEffect(() => {
-    if (!isOpen || matches.length === 0) return;
-    const match = matches[activeIndex];
-    if (!match) return;
+    if (typeof CSS === 'undefined' || !('highlights' in CSS)) return;
+    const matchReg = CSS.highlights;
+
+    if (!isOpen || matches.length === 0) {
+      matchReg.delete('mf-find-match');
+      matchReg.delete('mf-find-active');
+      return;
+    }
+
     const threadEl = document.querySelector('[data-mf-chat-thread]');
     if (!threadEl) return;
-    const msgEl = threadEl.querySelector(`[data-message-id="${match.messageId}"]`);
-    if (msgEl) {
-      msgEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    const allRanges: Range[] = [];
+    let activeRange: Range | null = null;
+
+    const partCache = new Map<string, NodeListOf<Element>>();
+    matches.forEach((m, i) => {
+      let textEls = partCache.get(m.messageId);
+      if (!textEls) {
+        const msgEl = threadEl.querySelector(`[data-message-id="${m.messageId}"]`);
+        if (!msgEl) return;
+        textEls = msgEl.querySelectorAll('[data-text-part]');
+        partCache.set(m.messageId, textEls);
+      }
+      const partEl = textEls[m.partIndex];
+      if (!partEl) return;
+      const range = rangeFromOffsets(partEl, m.charStart, m.charEnd);
+      if (!range) return;
+      if (i === activeIndex) activeRange = range;
+      else allRanges.push(range);
+    });
+
+    matchReg.set('mf-find-match', new Highlight(...allRanges));
+    matchReg.set('mf-find-active', activeRange ? new Highlight(activeRange) : new Highlight());
+
+    if (activeRange) {
+      const rect = (activeRange as Range).getBoundingClientRect();
+      const viewport = threadEl.parentElement;
+      if (viewport && (rect.top < 0 || rect.bottom > viewport.clientHeight)) {
+        const scroller = viewport.scrollTop + rect.top - viewport.clientHeight / 2;
+        viewport.scrollTo({ top: scroller, behavior: 'smooth' });
+      }
     }
+
+    return () => {
+      matchReg.delete('mf-find-match');
+      matchReg.delete('mf-find-active');
+    };
   }, [activeIndex, matches, isOpen]);
 
   const handleKeyDown = useCallback(

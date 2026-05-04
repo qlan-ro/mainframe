@@ -48,11 +48,10 @@ export function SearchPalette(): React.ReactElement | null {
     }
   }, [isOpen]);
 
-  // Global ⌘F / Ctrl+F and ⌘O / Ctrl+O
+  // Global ⌘O / Ctrl+O. ⌘F is reserved for the chat-local Find bar.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if ((e.metaKey || e.ctrlKey) && (key === 'f' || key === 'o')) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'o') {
         e.preventDefault();
         if (isOpen) {
           close();
