@@ -2,10 +2,20 @@
 import { nanoid } from 'nanoid';
 import type { ChatMessage, MessageContent } from '@qlan-ro/mainframe-types';
 import type { ThreadItem, PatchChangeKind } from './types.js';
+import type { CollabAgentToolCallItem } from './item-types.js';
 import { parseUnifiedDiff } from '../../../messages/parse-unified-diff.js';
+import { describeAgent, agentTitle, type AgentMetadata } from './thread-registry.js';
 
-export function convertThreadItems(items: ThreadItem[], chatId: string): ChatMessage[] {
+export function convertThreadItems(
+  items: ThreadItem[],
+  chatId: string,
+  childItemsByThread: Map<string, ThreadItem[]> = new Map(),
+  agentMetaByThread: Map<string, AgentMetadata> = new Map(),
+): ChatMessage[] {
   const messages: ChatMessage[] = [];
+  // Stash spawnAgent prompts (keyed by child thread id) so the matching `wait`
+  // item can use them as the TaskGroup card's description.
+  const spawnPrompts = new Map<string, string>();
 
   for (const item of items) {
     switch (item.type) {
@@ -103,15 +113,112 @@ export function convertThreadItems(items: ThreadItem[], chatId: string): ChatMes
         break;
       }
 
-      case 'userMessage':
-        messages.push(makeMessage(chatId, 'user', [{ type: 'text', text: item.text }]));
+      case 'userMessage': {
+        // Codex's `thread/read` returns `content: [{ type: 'text', text: '...' }]`.
+        // Rollout JSONL records use `input_text` instead. Accept either, plus the
+        // legacy top-level `item.text` field, so the same reader handles both shapes.
+        const block = item.content?.find((b) => typeof b.text === 'string' && b.text.length > 0);
+        const text = block?.text ?? item.text ?? '';
+        if (!text) break;
+        messages.push(makeMessage(chatId, 'user', [{ type: 'text', text }]));
         break;
+      }
+
+      case 'collabAgentToolCall': {
+        // `spawnAgent` is dispatch metadata only — stash its prompt for the `wait` card.
+        if (item.tool === 'spawnAgent') {
+          for (const childId of item.receiverThreadIds ?? []) {
+            if (item.prompt) spawnPrompts.set(childId, item.prompt);
+          }
+          break;
+        }
+        // `wait` renders the TaskGroup card with sub-agent's child items nested under it.
+        emitCollabAgent(messages, chatId, item, spawnPrompts, childItemsByThread, agentMetaByThread);
+        break;
+      }
 
       // webSearch, todoList — skip for now
     }
   }
 
   return messages;
+}
+
+function emitCollabAgent(
+  messages: ChatMessage[],
+  chatId: string,
+  item: CollabAgentToolCallItem,
+  spawnPrompts: Map<string, string>,
+  childItemsByThread: Map<string, ThreadItem[]>,
+  agentMetaByThread: Map<string, AgentMetadata>,
+): void {
+  const isError = item.status === 'failed' || item.status === 'interrupted';
+  const childId = item.receiverThreadIds?.[0];
+  // Pull the agent's identity from Codex's thread DB:
+  //   - subagent_type = nickname (e.g. "Maxwell") — bold card title, like Claude's
+  //   - description   = the spawn prompt (the task) — informative subtitle, truncated
+  //                     to 60 chars in the card with full text in a tooltip
+  // If nickname is missing, fall back to role ("explorer") for the title.
+  const meta = childId ? agentMetaByThread.get(childId) : undefined;
+  const subagentType = agentTitle(meta) ?? describeAgent(meta) ?? 'Sub-agent';
+  const prompt = (childId && spawnPrompts.get(childId)) ?? item.prompt ?? '';
+  // Description is the agent's role (e.g. "explorer") — short subtitle next to the
+  // nickname title. The full prompt is visible when the user expands the card.
+  const description = describeAgent(meta) ?? (prompt || subagentType);
+  const subAgentMessage = childId ? (item.agentsStates?.[childId]?.message ?? null) : null;
+
+  // Build the parent assistant message: CollabAgent tool_use first, then sub-agent
+  // child *non-result* blocks (tool_use, text, thinking) tagged with parentToolUseId so
+  // the desktop's groupTaskChildren() nests them under it.
+  //
+  // Sub-agent tool_result blocks are NOT inlined here. groupMessages only attaches
+  // results coming from separate `tool_result`-type messages — inlining them would lose
+  // the bash output. We emit them as standalone tool_result messages right after the
+  // parent so they get attached via toolUseId.
+  const content: MessageContent[] = [
+    {
+      type: 'tool_use',
+      id: item.id,
+      name: 'CollabAgent',
+      input: { prompt, description, subagent_type: subagentType },
+    },
+  ];
+  const childToolResults: Array<MessageContent & { type: 'tool_result' }> = [];
+
+  if (childId) {
+    const childItems = childItemsByThread.get(childId);
+    if (childItems && childItems.length > 0) {
+      const childMessages = convertThreadItems(childItems, chatId, childItemsByThread);
+      for (const m of childMessages) {
+        // Skip the child thread's user-prompt echo — it's just a copy of the spawn prompt.
+        if (m.type === 'user') continue;
+        for (const block of m.content) {
+          if (block.type === 'tool_result') {
+            childToolResults.push({ ...block, parentToolUseId: item.id });
+          } else {
+            content.push({ ...block, parentToolUseId: item.id });
+          }
+        }
+      }
+    }
+  }
+
+  messages.push(makeMessage(chatId, 'assistant', content));
+  for (const r of childToolResults) {
+    messages.push(makeMessage(chatId, 'tool_result', [r]));
+  }
+  // Close the card with the CollabAgent's own tool_result (sub-agent's final message).
+  messages.push(
+    makeMessage(chatId, 'tool_result', [
+      {
+        type: 'tool_result',
+        toolUseId: item.id,
+        content: subAgentMessage ?? 'Sub-agent completed',
+        isError,
+      },
+    ]),
+  );
+  if (childId) spawnPrompts.delete(childId);
 }
 
 function makeMessage(chatId: string, type: ChatMessage['type'], content: MessageContent[]): ChatMessage {

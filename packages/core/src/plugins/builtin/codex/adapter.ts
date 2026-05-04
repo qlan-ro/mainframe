@@ -66,7 +66,7 @@ export class CodexAdapter implements Adapter {
         'todo_list', // Codex todoList items — hidden from chat; Context tab TasksSection (todo #133) handles them
       ]),
       progress: new Set(['todo_list']), // declared for parity; redundant once hidden filter fires
-      subagent: new Set(),
+      subagent: new Set(['CollabAgent']),
     };
   }
 
