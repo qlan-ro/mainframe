@@ -8,6 +8,11 @@ export interface TerminalTab {
 /** Maximum number of terminal tabs retained per project when it is not active. */
 const MAX_TERMINALS_PER_PROJECT = 3;
 
+// Stable empty array — returning a fresh `[]` from `getTerminals` would make
+// `useSyncExternalStore` see a new snapshot on every render, infinite-looping
+// `TerminalPanel` with React error #185.
+const EMPTY_TERMINALS: readonly TerminalTab[] = Object.freeze([]);
+
 interface TerminalState {
   /** Per-project terminal lists. Keyed by projectId. */
   terminalsByProject: Map<string, TerminalTab[]>;
@@ -26,7 +31,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   terminalsByProject: new Map(),
   activeTerminalByProject: new Map(),
 
-  getTerminals: (projectId) => get().terminalsByProject.get(projectId) ?? [],
+  getTerminals: (projectId) => get().terminalsByProject.get(projectId) ?? (EMPTY_TERMINALS as TerminalTab[]),
 
   getActiveTerminalId: (projectId) => get().activeTerminalByProject.get(projectId) ?? null,
 

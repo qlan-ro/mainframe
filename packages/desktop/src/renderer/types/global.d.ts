@@ -30,6 +30,7 @@ export interface MainframeAPI {
     electron: string;
   };
   getAppInfo: () => Promise<{ version: string; author: string }>;
+  getHomedir: () => Promise<string>;
   readFile: (filePath: string) => Promise<string | null>;
   showItemInFolder: (fullPath: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
