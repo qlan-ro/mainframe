@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { useTerminalStore } from '../../store/terminal';
+import { useTerminalStore, type TerminalTab } from '../../store/terminal';
 import { useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
@@ -10,10 +10,13 @@ import { useZoneHeaderTabs, useZoneHeaderActions } from '../zone/ZoneHeaderSlot.
 import type { InternalTab } from '../zone/ZoneHeaderSlot.js';
 import { resolveCwd } from './terminal-cwd.js';
 
+// Stable reference for the no-project case — see store/terminal.ts.
+const EMPTY_TERMINALS: TerminalTab[] = [];
+
 export function TerminalPanel(): React.ReactElement {
   const activeProjectId = useActiveProjectId();
 
-  const terminals = useTerminalStore((s) => (activeProjectId ? s.getTerminals(activeProjectId) : []));
+  const terminals = useTerminalStore((s) => (activeProjectId ? s.getTerminals(activeProjectId) : EMPTY_TERMINALS));
   const activeTerminalId = useTerminalStore((s) => (activeProjectId ? s.getActiveTerminalId(activeProjectId) : null));
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
