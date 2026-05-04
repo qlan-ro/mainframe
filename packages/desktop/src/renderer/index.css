@@ -486,3 +486,12 @@ textarea:focus-visible,
   line-height: 1;
   font-family: var(--font-mono);
 }
+
+/* Find-in-Chat highlights (CSS Custom Highlight API) */
+::highlight(mf-find-match) {
+  background-color: rgba(250, 204, 21, 0.35);
+}
+::highlight(mf-find-active) {
+  background-color: rgba(249, 115, 22, 0.75);
+  color: #ffffff;
+}

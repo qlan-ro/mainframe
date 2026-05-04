@@ -71,6 +71,8 @@ export interface ClaudeSessionState {
   // Cached skill-name → resolved SKILL.md path, populated lazily on SkillTool
   // detection to avoid re-probing the filesystem for the same skill.
   skillPathCache: Map<string, string>;
+  /** Accumulated V2 task events (TaskCreate/TaskUpdate/TaskStop) for progressive todo updates. */
+  taskV2Events: import('../../../todos/normalize.js').TaskV2Event[];
 }
 
 /**
@@ -115,6 +117,7 @@ export class ClaudeSession implements AdapterSession {
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),
       skillPathCache: new Map(),
+      taskV2Events: [],
     };
   }
 

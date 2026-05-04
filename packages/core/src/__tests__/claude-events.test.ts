@@ -542,3 +542,61 @@ describe('handleStderr', () => {
     expect(sink.onError).not.toHaveBeenCalled();
   });
 });
+
+describe('handleStdout — subagent result isolation (#141)', () => {
+  it('does not call onResult for a result event with parent_tool_use_id (subagent turn)', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const subagentResult = JSON.stringify({
+      type: 'result',
+      subtype: 'success',
+      total_cost_usd: 0.001,
+      parent_tool_use_id: 'toolu_task_1',
+      usage: { input_tokens: 100, output_tokens: 50 },
+    });
+    handleStdout(session, Buffer.from(subagentResult + '\n'), sink);
+
+    expect(sink.onResult).not.toHaveBeenCalled();
+  });
+
+  it('calls onResult for a top-level result event without parent_tool_use_id', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    const topLevelResult = JSON.stringify({
+      type: 'result',
+      subtype: 'success',
+      total_cost_usd: 0.002,
+      usage: { input_tokens: 200, output_tokens: 80 },
+    });
+    handleStdout(session, Buffer.from(topLevelResult + '\n'), sink);
+
+    expect(sink.onResult).toHaveBeenCalledOnce();
+  });
+
+  it('parent processState stays working when subagent result arrives before parent result', () => {
+    const session = createSession();
+    const sink = createSink();
+
+    // Subagent result arrives first
+    const subagentResult = JSON.stringify({
+      type: 'result',
+      subtype: 'success',
+      total_cost_usd: 0.001,
+      parent_tool_use_id: 'toolu_task_1',
+    });
+    handleStdout(session, Buffer.from(subagentResult + '\n'), sink);
+    expect(sink.onResult).not.toHaveBeenCalled();
+
+    // Then parent result arrives
+    const parentResult = JSON.stringify({
+      type: 'result',
+      subtype: 'success',
+      total_cost_usd: 0.01,
+      usage: { input_tokens: 500, output_tokens: 200 },
+    });
+    handleStdout(session, Buffer.from(parentResult + '\n'), sink);
+    expect(sink.onResult).toHaveBeenCalledOnce();
+  });
+});

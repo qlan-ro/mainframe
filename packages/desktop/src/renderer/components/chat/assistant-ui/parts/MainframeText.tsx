@@ -19,8 +19,12 @@ export const MainframeText: TextMessagePartComponent = (props) => {
 
   if (!text || text.trim() === '') return null;
 
-  // Props required by TextMessagePartComponent contract; MarkdownText reads text via context internally
-  return <MarkdownText {...props} />;
+  // data-text-part marks this subtree as searchable by the chat-local FindBar.
+  return (
+    <div data-text-part>
+      <MarkdownText {...props} />
+    </div>
+  );
 };
 
 function ErrorPartFromMessage() {

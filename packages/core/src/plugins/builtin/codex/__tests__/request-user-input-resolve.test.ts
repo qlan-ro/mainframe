@@ -123,4 +123,100 @@ describe('ApprovalHandler.resolve — ExitPlanMode option mapping', () => {
     const payload = respond.mock.calls[0]![1] as { answers: Record<string, { answers: string[] }> };
     expect(payload.answers.q2!.answers[0]).toBe('B');
   });
+
+  it('AskUserQuestion → extracts answer from updatedInput.answers when message is absent (UI option click path)', () => {
+    // The desktop AskUserQuestionCard sends { updatedInput: { ...request.input, answers: { [questionText]: label } } }
+    // but leaves response.message undefined. The handler must extract the answer from updatedInput.answers.
+    const respond = vi.fn();
+    const onPermission = vi.fn();
+    const handler = new ApprovalHandler(mkSink(onPermission));
+    handler.setPlanContext({ planMode: false, currentTurnPlan: null });
+    handler.handleRequest(
+      'item/tool/requestUserInput',
+      {
+        toolCallId: 'tc3',
+        questions: [{ id: 'q3', question: 'Which approach?' }],
+        options: [[{ label: 'Option A' }], [{ label: 'Option B' }]],
+      },
+      9,
+      respond,
+    );
+    const request = onPermission.mock.calls[0]![0] as ControlRequest;
+
+    // Simulate UI sending the selected option label in updatedInput.answers keyed by question text
+    handler.resolve({
+      requestId: request.requestId,
+      toolUseId: request.toolUseId,
+      behavior: 'allow',
+      toolName: 'AskUserQuestion',
+      // No message — the UI puts the selection in updatedInput instead
+      updatedInput: {
+        ...request.input,
+        answers: { 'Which approach?': 'Option B' },
+      },
+    });
+
+    const payload = respond.mock.calls[0]![1] as { answers: Record<string, { answers: string[] }> };
+    expect(payload.answers.q3!.answers[0]).toBe('Option B');
+  });
+
+  it('AskUserQuestion → handles array selection from updatedInput.answers (multiSelect path)', () => {
+    const respond = vi.fn();
+    const onPermission = vi.fn();
+    const handler = new ApprovalHandler(mkSink(onPermission));
+    handler.setPlanContext({ planMode: false, currentTurnPlan: null });
+    handler.handleRequest(
+      'item/tool/requestUserInput',
+      {
+        toolCallId: 'tc4',
+        questions: [{ id: 'q4', question: 'Select features' }],
+        options: [[{ label: 'Tests' }], [{ label: 'Docs' }], [{ label: 'CI' }]],
+      },
+      10,
+      respond,
+    );
+    const request = onPermission.mock.calls[0]![0] as ControlRequest;
+
+    handler.resolve({
+      requestId: request.requestId,
+      toolUseId: request.toolUseId,
+      behavior: 'allow',
+      toolName: 'AskUserQuestion',
+      updatedInput: {
+        ...request.input,
+        answers: { 'Select features': ['Tests', 'CI'] },
+      },
+    });
+
+    const payload = respond.mock.calls[0]![1] as { answers: Record<string, { answers: string[] }> };
+    // For Codex, we deliver the first selected value; multi-select support is best-effort
+    expect(payload.answers.q4!.answers[0]).toBe('Tests');
+  });
+
+  it('AskUserQuestion → falls back to empty string when both message and updatedInput.answers are absent', () => {
+    const respond = vi.fn();
+    const onPermission = vi.fn();
+    const handler = new ApprovalHandler(mkSink(onPermission));
+    handler.setPlanContext({ planMode: false, currentTurnPlan: null });
+    handler.handleRequest(
+      'item/tool/requestUserInput',
+      {
+        toolCallId: 'tc5',
+        questions: [{ id: 'q5', question: 'Any input?' }],
+      },
+      11,
+      respond,
+    );
+    const request = onPermission.mock.calls[0]![0] as ControlRequest;
+
+    handler.resolve({
+      requestId: request.requestId,
+      toolUseId: request.toolUseId,
+      behavior: 'deny',
+      toolName: 'AskUserQuestion',
+    });
+
+    const payload = respond.mock.calls[0]![1] as { answers: Record<string, { answers: string[] }> };
+    expect(payload.answers.q5!.answers[0]).toBe('');
+  });
 });
