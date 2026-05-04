@@ -5,8 +5,8 @@ export interface TerminalTab {
   name: string;
 }
 
-/** Maximum number of terminal tabs retained per project when it is not active. */
-const MAX_TERMINALS_PER_PROJECT = 3;
+/** Maximum number of terminal tabs retained per scope when it is not active. */
+const MAX_TERMINALS_PER_SCOPE = 3;
 
 // Stable empty array — returning a fresh `[]` from `getTerminals` would make
 // `useSyncExternalStore` see a new snapshot on every render, infinite-looping
@@ -14,66 +14,70 @@ const MAX_TERMINALS_PER_PROJECT = 3;
 const EMPTY_TERMINALS: readonly TerminalTab[] = Object.freeze([]);
 
 interface TerminalState {
-  /** Per-project terminal lists. Keyed by projectId. */
-  terminalsByProject: Map<string, TerminalTab[]>;
-  /** Per-project active terminal id. Keyed by projectId. */
-  activeTerminalByProject: Map<string, string | null>;
+  /**
+   * Per-scope terminal lists. The "scope" is the active chat id when there is
+   * one (so each session's terminals follow its worktree), falling back to
+   * the project id when no chat is active.
+   */
+  terminalsByScope: Map<string, TerminalTab[]>;
+  /** Per-scope active terminal id. */
+  activeTerminalByScope: Map<string, string | null>;
 
-  getTerminals: (projectId: string) => TerminalTab[];
-  getActiveTerminalId: (projectId: string) => string | null;
-  addTerminal: (projectId: string, tab: TerminalTab) => void;
-  removeTerminal: (projectId: string, id: string) => void;
-  setActiveTerminal: (projectId: string, id: string | null) => void;
-  clearProject: (projectId: string) => void;
+  getTerminals: (scopeId: string) => TerminalTab[];
+  getActiveTerminalId: (scopeId: string) => string | null;
+  addTerminal: (scopeId: string, tab: TerminalTab) => void;
+  removeTerminal: (scopeId: string, id: string) => void;
+  setActiveTerminal: (scopeId: string, id: string | null) => void;
+  clearScope: (scopeId: string) => void;
 }
 
 export const useTerminalStore = create<TerminalState>((set, get) => ({
-  terminalsByProject: new Map(),
-  activeTerminalByProject: new Map(),
+  terminalsByScope: new Map(),
+  activeTerminalByScope: new Map(),
 
-  getTerminals: (projectId) => get().terminalsByProject.get(projectId) ?? (EMPTY_TERMINALS as TerminalTab[]),
+  getTerminals: (scopeId) => get().terminalsByScope.get(scopeId) ?? (EMPTY_TERMINALS as TerminalTab[]),
 
-  getActiveTerminalId: (projectId) => get().activeTerminalByProject.get(projectId) ?? null,
+  getActiveTerminalId: (scopeId) => get().activeTerminalByScope.get(scopeId) ?? null,
 
-  addTerminal: (projectId, tab) =>
+  addTerminal: (scopeId, tab) =>
     set((state) => {
-      const existing = state.terminalsByProject.get(projectId) ?? [];
-      // Cap the list so idle projects don't accumulate unlimited tabs
-      const capped = existing.length >= MAX_TERMINALS_PER_PROJECT ? existing.slice(1) : existing;
-      const terminals = new Map(state.terminalsByProject);
-      terminals.set(projectId, [...capped, tab]);
-      const active = new Map(state.activeTerminalByProject);
-      active.set(projectId, tab.id);
-      return { terminalsByProject: terminals, activeTerminalByProject: active };
+      const existing = state.terminalsByScope.get(scopeId) ?? [];
+      // Cap the list so idle scopes don't accumulate unlimited tabs
+      const capped = existing.length >= MAX_TERMINALS_PER_SCOPE ? existing.slice(1) : existing;
+      const terminals = new Map(state.terminalsByScope);
+      terminals.set(scopeId, [...capped, tab]);
+      const active = new Map(state.activeTerminalByScope);
+      active.set(scopeId, tab.id);
+      return { terminalsByScope: terminals, activeTerminalByScope: active };
     }),
 
-  removeTerminal: (projectId, id) =>
+  removeTerminal: (scopeId, id) =>
     set((state) => {
-      const existing = state.terminalsByProject.get(projectId) ?? [];
+      const existing = state.terminalsByScope.get(scopeId) ?? [];
       const next = existing.filter((t) => t.id !== id);
-      const terminals = new Map(state.terminalsByProject);
-      terminals.set(projectId, next);
+      const terminals = new Map(state.terminalsByScope);
+      terminals.set(scopeId, next);
 
-      const active = new Map(state.activeTerminalByProject);
-      if (state.activeTerminalByProject.get(projectId) === id) {
-        active.set(projectId, next[next.length - 1]?.id ?? null);
+      const active = new Map(state.activeTerminalByScope);
+      if (state.activeTerminalByScope.get(scopeId) === id) {
+        active.set(scopeId, next[next.length - 1]?.id ?? null);
       }
-      return { terminalsByProject: terminals, activeTerminalByProject: active };
+      return { terminalsByScope: terminals, activeTerminalByScope: active };
     }),
 
-  setActiveTerminal: (projectId, id) =>
+  setActiveTerminal: (scopeId, id) =>
     set((state) => {
-      const active = new Map(state.activeTerminalByProject);
-      active.set(projectId, id);
-      return { activeTerminalByProject: active };
+      const active = new Map(state.activeTerminalByScope);
+      active.set(scopeId, id);
+      return { activeTerminalByScope: active };
     }),
 
-  clearProject: (projectId) =>
+  clearScope: (scopeId) =>
     set((state) => {
-      const terminals = new Map(state.terminalsByProject);
-      terminals.delete(projectId);
-      const active = new Map(state.activeTerminalByProject);
-      active.delete(projectId);
-      return { terminalsByProject: terminals, activeTerminalByProject: active };
+      const terminals = new Map(state.terminalsByScope);
+      terminals.delete(scopeId);
+      const active = new Map(state.activeTerminalByScope);
+      active.delete(scopeId);
+      return { terminalsByScope: terminals, activeTerminalByScope: active };
     }),
 }));
