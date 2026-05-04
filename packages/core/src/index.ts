@@ -70,7 +70,7 @@ async function main(): Promise<void> {
   // server.start() (plugin loading) are safely dropped — no WS clients yet.
   let broadcastEvent: (event: DaemonEvent) => void = () => {};
   const chats = new ChatManager(db, adapters, attachmentStore, (event) => broadcastEvent(event));
-  const tunnelManager = new TunnelManager();
+  const tunnelManager = new TunnelManager((event) => broadcastEvent(event));
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 
   chats.setStopLaunchProcesses(async (projectId, projectPath) => {

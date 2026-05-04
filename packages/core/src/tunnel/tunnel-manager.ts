@@ -3,14 +3,20 @@ import type { ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { Resolver } from 'node:dns/promises';
 import { createChildLogger } from '../logger.js';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 
 const log = createChildLogger('tunnel');
+
+type BroadcastFn = (event: DaemonEvent) => void;
 
 const TRYCLOUDFLARE_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 const REGISTERED_RE = /Registered tunnel connection/;
 const START_TIMEOUT_MS = 45_000;
 const DNS_POLL_MS = 1_000;
-const DNS_TIMEOUT_MS = 15_000;
+// Cloudflare's first-time DNS propagation for trycloudflare.com URLs routinely
+// takes 20–30 seconds. 15s was too short and made the UI flap to "unreachable"
+// for tunnels that became reachable a few seconds later.
+const DNS_TIMEOUT_MS = 45_000;
 
 export interface TunnelStartOptions {
   token?: string;
@@ -34,6 +40,11 @@ interface VerifyResult {
 export class TunnelManager {
   private tunnels = new Map<string, ManagedTunnel>();
   private verifiedAt = new Map<string, VerifyResult>();
+  private broadcast: BroadcastFn;
+
+  constructor(broadcast?: BroadcastFn) {
+    this.broadcast = broadcast ?? (() => {});
+  }
 
   static parseUrl(line: string): string | null {
     const match = TRYCLOUDFLARE_RE.exec(line);
@@ -45,6 +56,8 @@ export class TunnelManager {
     this.stop(label);
 
     const isNamed = !!options?.token;
+
+    this.broadcast({ type: 'tunnel:status', state: 'starting', label });
 
     return new Promise<string>((resolve, reject) => {
       const args = isNamed
@@ -63,7 +76,9 @@ export class TunnelManager {
         if (!done) {
           done = true;
           child.kill('SIGTERM');
-          reject(new Error(`Tunnel "${label}" timed out after ${START_TIMEOUT_MS}ms`));
+          const msg = `Tunnel "${label}" timed out after ${START_TIMEOUT_MS}ms`;
+          this.broadcast({ type: 'tunnel:status', state: 'error', label, error: msg });
+          reject(new Error(msg));
         }
       }, START_TIMEOUT_MS);
 
@@ -73,6 +88,7 @@ export class TunnelManager {
         const tunnel: ManagedTunnel = { process: child, url, ready: false };
         this.tunnels.set(label, tunnel);
         log.info({ label, url, port }, 'tunnel connected, waiting for DNS propagation…');
+        this.broadcast({ type: 'tunnel:status', state: 'ready', label, url, dnsVerified: false });
 
         this.waitForDns(url).then(
           () => {
@@ -81,6 +97,7 @@ export class TunnelManager {
             tunnel.ready = true;
             clearTimeout(timeout);
             log.info({ label, url }, 'tunnel ready (DNS verified)');
+            this.broadcast({ type: 'tunnel:status', state: 'dns_verified', label, url, dnsVerified: true });
             resolve(url);
           },
           () => {
@@ -89,6 +106,7 @@ export class TunnelManager {
             tunnel.ready = true;
             clearTimeout(timeout);
             log.warn({ label, url }, 'tunnel DNS verification timed out, emitting anyway');
+            this.broadcast({ type: 'tunnel:status', state: 'dns_verified', label, url, dnsVerified: false });
             resolve(url);
           },
         );
@@ -120,25 +138,25 @@ export class TunnelManager {
         if (done) return;
         done = true;
         clearTimeout(timeout);
-        if (err.code === 'ENOENT') {
-          reject(
-            new Error(
-              'cloudflared not found. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/',
-            ),
-          );
-        } else {
-          reject(err);
-        }
+        const message =
+          err.code === 'ENOENT'
+            ? 'cloudflared not found. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/'
+            : (err.message ?? String(err));
+        this.broadcast({ type: 'tunnel:status', state: 'error', label, error: message });
+        reject(new Error(message));
       });
 
       child.once('exit', (code) => {
         if (!done) {
           done = true;
           clearTimeout(timeout);
-          reject(new Error(`Tunnel "${label}" process exited before ready (code ${code})`));
+          const msg = `Tunnel "${label}" process exited before ready (code ${code})`;
+          this.broadcast({ type: 'tunnel:status', state: 'error', label, error: msg });
+          reject(new Error(msg));
         } else {
           log.info({ label, code }, 'tunnel process exited');
           this.tunnels.delete(label);
+          this.broadcast({ type: 'tunnel:status', state: 'stopped', label });
         }
       });
     });
@@ -150,6 +168,7 @@ export class TunnelManager {
     tunnel.process.kill('SIGTERM');
     this.tunnels.delete(label);
     log.info({ label }, 'tunnel stopped');
+    this.broadcast({ type: 'tunnel:status', state: 'stopped', label });
   }
 
   stopAll(): void {

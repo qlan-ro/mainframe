@@ -64,7 +64,17 @@ export type DaemonEvent =
   | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number }
   | { type: 'adapter.models.updated'; adapterId: string; models: import('./adapter.js').AdapterModel[] }
   | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] }
-  | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr };
+  | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr }
+  | {
+      type: 'tunnel:status';
+      state: 'starting' | 'ready' | 'dns_verified' | 'error' | 'stopped';
+      label: string;
+      url?: string;
+      dnsVerified?: boolean;
+      error?: string;
+    }
+  | { type: 'file:changed'; path: string }
+  | { type: 'subscribe:file:ack'; requestedPath: string; resolvedPath: string };
 
 export type ClientEvent =
   | {
@@ -100,4 +110,6 @@ export type ClientEvent =
   | { type: 'subscribe'; chatId: string }
   | { type: 'unsubscribe'; chatId: string }
   | { type: 'message.queue.edit'; chatId: string; messageId: string; content: string }
-  | { type: 'message.queue.cancel'; chatId: string; messageId: string };
+  | { type: 'message.queue.cancel'; chatId: string; messageId: string }
+  | { type: 'subscribe:file'; path: string }
+  | { type: 'unsubscribe:file'; path: string };

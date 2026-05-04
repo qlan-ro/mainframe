@@ -226,5 +226,17 @@ export function routeEvent(event: DaemonEvent): void {
       log.error('daemon error event', { error: event.error });
       useProjectsStore.getState().setError(event.error);
       break;
+    case 'tunnel:status':
+      // Handled by subscribers in RemoteAccessSection — no global store needed.
+      log.debug('event:tunnel:status', { state: event.state, url: event.url });
+      break;
+    case 'file:changed':
+      // Handled by subscribers in EditorTab — no global store needed.
+      log.debug('event:file:changed', { path: event.path });
+      break;
+    case 'subscribe:file:ack':
+      // Per-EditorTab listener consumes this to learn the daemon-resolved path.
+      log.debug('event:subscribe:file:ack', { requestedPath: event.requestedPath, resolvedPath: event.resolvedPath });
+      break;
   }
 }
