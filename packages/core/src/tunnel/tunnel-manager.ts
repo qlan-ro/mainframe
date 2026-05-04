@@ -13,7 +13,10 @@ const TRYCLOUDFLARE_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 const REGISTERED_RE = /Registered tunnel connection/;
 const START_TIMEOUT_MS = 45_000;
 const DNS_POLL_MS = 1_000;
-const DNS_TIMEOUT_MS = 15_000;
+// Cloudflare's first-time DNS propagation for trycloudflare.com URLs routinely
+// takes 20–30 seconds. 15s was too short and made the UI flap to "unreachable"
+// for tunnels that became reachable a few seconds later.
+const DNS_TIMEOUT_MS = 45_000;
 
 export interface TunnelStartOptions {
   token?: string;

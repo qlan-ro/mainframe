@@ -153,19 +153,32 @@ function NamedTunnelConfig({ onSaved }: { onSaved: (token: string, url: string) 
   );
 }
 
+/**
+ * UI states derived from the daemon's tunnel:status events plus the initial
+ * REST snapshot. "ready" means the tunnel is actually reachable (DNS verified),
+ * not just that cloudflared registered the connection.
+ */
+type TunnelUiState = 'idle' | 'starting' | 'verifying' | 'ready' | 'unreachable' | 'error';
+
 function TunnelControl(): React.ReactElement {
-  const [running, setRunning] = useState(false);
+  const [state, setState] = useState<TunnelUiState>('idle');
   const [url, setUrl] = useState<string | null>(null);
-  const [verified, setVerified] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
+
+  const running = state !== 'idle' && state !== 'error';
+  const verified = state === 'ready';
 
   const refresh = useCallback(async () => {
     try {
       const status = await getTunnelStatus();
-      setRunning(status.running);
       setUrl(status.url);
-      setVerified(status.verified);
+      if (!status.running) setState('idle');
+      else if (status.verified) setState('ready');
+      else if (status.url)
+        setState('unreachable'); // running + URL known + not verified = DNS check finished negatively
+      else setState('starting');
     } catch (err) {
       log.warn('failed to get tunnel status', { err: String(err) });
     } finally {
@@ -183,26 +196,30 @@ function TunnelControl(): React.ReactElement {
       if (event.type !== 'tunnel:status') return;
       switch (event.state) {
         case 'starting':
-          setRunning(true);
-          setVerified(false);
+          setState('starting');
+          setUrl(null);
+          setErrorMsg(null);
           break;
         case 'ready':
-          setRunning(true);
+          // cloudflared registered the connection but DNS may not have propagated yet.
           setUrl(event.url ?? null);
-          setVerified(false);
+          setState('verifying');
+          setErrorMsg(null);
           break;
         case 'dns_verified':
-          setRunning(true);
           setUrl(event.url ?? null);
-          setVerified(event.dnsVerified ?? false);
+          setState(event.dnsVerified ? 'ready' : 'unreachable');
           break;
         case 'error':
           log.warn('tunnel error from daemon', { error: event.error });
+          setState('error');
+          setErrorMsg(event.error ?? 'Tunnel failed to start');
+          setUrl(null);
           break;
         case 'stopped':
-          setRunning(false);
+          setState('idle');
           setUrl(null);
-          setVerified(false);
+          setErrorMsg(null);
           break;
       }
     });
@@ -213,22 +230,35 @@ function TunnelControl(): React.ReactElement {
     try {
       if (running) {
         await stopTunnel();
-        setRunning(false);
+        setState('idle');
         setUrl(null);
+        setErrorMsg(null);
       } else {
+        // Optimistic — the WS event will refine the state shortly.
+        setState('starting');
+        setErrorMsg(null);
         const result = await startTunnel();
-        setRunning(true);
         setUrl(result.url);
+        // The 'ready' / 'dns_verified' broadcasts will move us through verifying → ready/unreachable.
       }
     } catch (err) {
       log.warn('tunnel toggle failed', { err: String(err) });
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setState('error');
     } finally {
       setToggling(false);
     }
   }, [running]);
 
+  const handleRetryVerify = useCallback(async () => {
+    // Re-trigger DNS verification by toggling the daemon's view via a status refresh —
+    // most of the time DNS has actually propagated by the time the user clicks.
+    setState('verifying');
+    await refresh();
+  }, [refresh]);
+
   const handleNamedSaved = useCallback((_token: string, savedUrl: string) => {
-    setRunning(true);
+    setState('verifying');
     setUrl(savedUrl);
   }, []);
 
@@ -277,20 +307,55 @@ function TunnelControl(): React.ReactElement {
           </button>
         </div>
 
-        {running && url && (
+        {state === 'verifying' && (
+          <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
+            <Loader2 size={12} className="animate-spin text-yellow-500 shrink-0" />
+            <span className="text-mf-small text-mf-text-secondary flex-1">
+              {url ? (
+                <>
+                  Verifying DNS for <code className="text-mf-text-primary">{url}</code>…
+                </>
+              ) : (
+                <>Verifying DNS…</>
+              )}
+            </span>
+          </div>
+        )}
+
+        {state === 'ready' && url && (
           <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
             <code className="text-mf-small text-mf-text-primary truncate flex-1">{url}</code>
             <CopyButton text={url} />
           </div>
         )}
+
+        {state === 'unreachable' && url && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
+              <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
+              <code className="text-mf-small text-mf-text-secondary truncate flex-1">{url}</code>
+              <CopyButton text={url} />
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-mf-status text-yellow-500">
+                DNS not yet propagated — tunnel may not be reachable. Pairing disabled.
+              </p>
+              <button
+                onClick={handleRetryVerify}
+                className="text-mf-small text-mf-accent hover:underline shrink-0 ml-2"
+              >
+                Re-check
+              </button>
+            </div>
+          </div>
+        )}
+
+        {state === 'error' && errorMsg && <p className="text-mf-small text-red-500">{errorMsg}</p>}
       </div>
 
-      {/* Pairing section — only when tunnel is running and verified */}
-      {running && !verified && (
-        <p className="text-mf-small text-yellow-500">Tunnel unreachable — pairing unavailable</p>
-      )}
-      {running && verified && <PairingSection />}
+      {/* Pairing section — only when tunnel is fully ready (DNS verified) */}
+      {verified && <PairingSection />}
 
       {/* Devices section */}
       <DevicesSection />
