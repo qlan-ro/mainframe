@@ -68,6 +68,7 @@ export type DaemonEvent =
   | {
       type: 'tunnel:status';
       state: 'starting' | 'ready' | 'dns_verified' | 'error' | 'stopped';
+      label: string;
       url?: string;
       dnsVerified?: boolean;
       error?: string;

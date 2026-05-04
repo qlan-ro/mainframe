@@ -57,7 +57,7 @@ export class TunnelManager {
 
     const isNamed = !!options?.token;
 
-    this.broadcast({ type: 'tunnel:status', state: 'starting' });
+    this.broadcast({ type: 'tunnel:status', state: 'starting', label });
 
     return new Promise<string>((resolve, reject) => {
       const args = isNamed
@@ -77,7 +77,7 @@ export class TunnelManager {
           done = true;
           child.kill('SIGTERM');
           const msg = `Tunnel "${label}" timed out after ${START_TIMEOUT_MS}ms`;
-          this.broadcast({ type: 'tunnel:status', state: 'error', error: msg });
+          this.broadcast({ type: 'tunnel:status', state: 'error', label, error: msg });
           reject(new Error(msg));
         }
       }, START_TIMEOUT_MS);
@@ -88,7 +88,7 @@ export class TunnelManager {
         const tunnel: ManagedTunnel = { process: child, url, ready: false };
         this.tunnels.set(label, tunnel);
         log.info({ label, url, port }, 'tunnel connected, waiting for DNS propagation…');
-        this.broadcast({ type: 'tunnel:status', state: 'ready', url, dnsVerified: false });
+        this.broadcast({ type: 'tunnel:status', state: 'ready', label, url, dnsVerified: false });
 
         this.waitForDns(url).then(
           () => {
@@ -97,7 +97,7 @@ export class TunnelManager {
             tunnel.ready = true;
             clearTimeout(timeout);
             log.info({ label, url }, 'tunnel ready (DNS verified)');
-            this.broadcast({ type: 'tunnel:status', state: 'dns_verified', url, dnsVerified: true });
+            this.broadcast({ type: 'tunnel:status', state: 'dns_verified', label, url, dnsVerified: true });
             resolve(url);
           },
           () => {
@@ -106,7 +106,7 @@ export class TunnelManager {
             tunnel.ready = true;
             clearTimeout(timeout);
             log.warn({ label, url }, 'tunnel DNS verification timed out, emitting anyway');
-            this.broadcast({ type: 'tunnel:status', state: 'dns_verified', url, dnsVerified: false });
+            this.broadcast({ type: 'tunnel:status', state: 'dns_verified', label, url, dnsVerified: false });
             resolve(url);
           },
         );
@@ -142,7 +142,7 @@ export class TunnelManager {
           err.code === 'ENOENT'
             ? 'cloudflared not found. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/'
             : (err.message ?? String(err));
-        this.broadcast({ type: 'tunnel:status', state: 'error', error: message });
+        this.broadcast({ type: 'tunnel:status', state: 'error', label, error: message });
         reject(new Error(message));
       });
 
@@ -151,12 +151,12 @@ export class TunnelManager {
           done = true;
           clearTimeout(timeout);
           const msg = `Tunnel "${label}" process exited before ready (code ${code})`;
-          this.broadcast({ type: 'tunnel:status', state: 'error', error: msg });
+          this.broadcast({ type: 'tunnel:status', state: 'error', label, error: msg });
           reject(new Error(msg));
         } else {
           log.info({ label, code }, 'tunnel process exited');
           this.tunnels.delete(label);
-          this.broadcast({ type: 'tunnel:status', state: 'stopped' });
+          this.broadcast({ type: 'tunnel:status', state: 'stopped', label });
         }
       });
     });
@@ -168,7 +168,7 @@ export class TunnelManager {
     tunnel.process.kill('SIGTERM');
     this.tunnels.delete(label);
     log.info({ label }, 'tunnel stopped');
-    this.broadcast({ type: 'tunnel:status', state: 'stopped' });
+    this.broadcast({ type: 'tunnel:status', state: 'stopped', label });
   }
 
   stopAll(): void {
