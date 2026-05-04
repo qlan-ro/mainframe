@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Save, RefreshCw, X } from 'lucide-react';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
 import { useProjectsStore } from '../../store/projects';
 import { getFileContent, getExternalFileContent, saveFileContent } from '../../lib/api';
 import { daemonClient } from '../../lib/client';
+import { resolveFileLocation } from '../../lib/file-location';
 import { sendCommentMessage } from '../../lib/send-comment-message';
 import { MonacoEditor } from '../editor/MonacoEditor';
 
@@ -55,7 +56,7 @@ export function EditorTab({
   const activeProjectId = useActiveProjectId();
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const activeChat = useChatsStore((s) => s.chats.find((c) => c.id === s.activeChatId));
-  const projects = useProjectsStore((s) => s.projects);
+  const project = useProjectsStore((s) => s.projects.find((p) => p.id === activeProjectId));
   const [savedContent, setSavedContent] = useState<string | null>(providedContent ?? null);
   const [currentContent, setCurrentContent] = useState<string | null>(providedContent ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -65,24 +66,19 @@ export function EditorTab({
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
-  /** Resolve the absolute watched path, preferring the active chat's worktree. */
-  const absoluteWatchPath = useCallback((): string | null => {
+  const location = useMemo(() => {
     if (providedContent !== undefined) return null; // inline content, not a real file
-    if (filePath.startsWith('/')) return filePath;
-    const basePath = activeChat?.worktreePath ?? projects.find((p) => p.id === activeProjectId)?.path;
-    if (!basePath) return null;
-    return `${basePath}/${filePath}`;
-  }, [filePath, providedContent, activeChat, projects, activeProjectId]);
+    return resolveFileLocation(filePath, { activeChat, project, fallbackChatId: activeChatId });
+  }, [filePath, providedContent, activeChat, project, activeChatId]);
 
-  const fetchContent = useCallback(
-    (projectId: string, chatId: string | null | undefined) => {
-      if (filePath.startsWith('/')) {
-        return getExternalFileContent(filePath).then((r) => r.content);
-      }
-      return getFileContent(projectId, filePath, chatId ?? undefined).then((r) => r.content);
-    },
-    [filePath],
-  );
+  const fetchContent = useCallback((): Promise<string> => {
+    if (!location) return Promise.reject(new Error('no location'));
+    if (location.isExternal || location.relativePath === null) {
+      return getExternalFileContent(location.absolutePath).then((r) => r.content);
+    }
+    if (!activeProjectId) return Promise.reject(new Error('no active project'));
+    return getFileContent(activeProjectId, location.relativePath, location.chatIdForApi).then((r) => r.content);
+  }, [location, activeProjectId]);
 
   useEffect(() => {
     if (providedContent !== undefined) {
@@ -95,28 +91,36 @@ export function EditorTab({
     setError(null);
     setDiskChanged(false);
 
-    if (!filePath.startsWith('/') && !activeProjectId) return;
+    if (!location) return;
 
-    fetchContent(activeProjectId ?? '', activeChatId)
+    fetchContent()
       .then((content) => {
         setSavedContent(content);
         setCurrentContent(content);
       })
       .catch(() => setError('Failed to load file'));
-  }, [activeProjectId, filePath, activeChatId, providedContent, fetchContent]);
+  }, [location, providedContent, fetchContent]);
 
   const handleSave = useCallback(async () => {
-    if (!activeProjectId || currentContent == null) return;
+    if (
+      !activeProjectId ||
+      currentContent == null ||
+      !location ||
+      location.isExternal ||
+      location.relativePath === null
+    ) {
+      return;
+    }
     setSaving(true);
     try {
-      await saveFileContent(activeProjectId, filePath, currentContent, activeChatId ?? undefined);
+      await saveFileContent(activeProjectId, location.relativePath, currentContent, location.chatIdForApi);
       setSavedContent(currentContent);
     } catch {
       console.warn('[EditorTab] save failed');
     } finally {
       setSaving(false);
     }
-  }, [activeProjectId, filePath, currentContent, activeChatId]);
+  }, [activeProjectId, location, currentContent]);
 
   const handleSaveRef = useRef(handleSave);
   handleSaveRef.current = handleSave;
@@ -132,16 +136,16 @@ export function EditorTab({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Re-fetch file content when any agent edits this file via context.updated
+  // Re-fetch file content when any agent edits this file via context.updated.
+  // Match by absolute path — daemon emits absolute filePaths, and we resolve
+  // both worktree-absolute and project-relative inputs to the same absolute.
   useEffect(() => {
-    // External files (absolute paths) are not managed by the project agent.
-    if (!activeProjectId || providedContent !== undefined || filePath.startsWith('/')) return;
+    if (!location) return;
     return daemonClient.onEvent((event) => {
       if (event.type !== 'context.updated' || !event.filePaths) return;
-      const match = event.filePaths.some((fp) => filePath.endsWith(fp) || fp.endsWith(filePath));
-      if (!match) return;
+      if (!event.filePaths.includes(location.absolutePath)) return;
       if (dirtyRef.current) return; // don't overwrite unsaved user changes
-      fetchContent(activeProjectId, activeChatId)
+      fetchContent()
         .then((content) => {
           setSavedContent(content);
           setCurrentContent(content);
@@ -150,15 +154,12 @@ export function EditorTab({
           /* file may have been deleted; keep current content */
         });
     });
-  }, [activeChatId, activeProjectId, filePath, providedContent, fetchContent]);
+  }, [location, fetchContent]);
 
   // Subscribe to file:changed events for disk-level change detection.
-  // Uses the worktree path when available so agent writes to <worktree>/file.ts
-  // are correctly detected even when the editor was opened via the project path.
   useEffect(() => {
-    if (providedContent !== undefined) return;
-    const watchPath = absoluteWatchPath();
-    if (!watchPath) return;
+    if (!location) return;
+    const watchPath = location.absolutePath;
 
     daemonClient.subscribeFile(watchPath);
     const unsub = daemonClient.onEvent((event) => {
@@ -169,8 +170,7 @@ export function EditorTab({
         return;
       }
       // No unsaved changes — reload silently, preserving cursor/scroll via viewState.
-      if (!activeProjectId && !filePath.startsWith('/')) return;
-      fetchContent(activeProjectId ?? '', activeChatId)
+      fetchContent()
         .then((content) => {
           setSavedContent(content);
           setCurrentContent(content);
@@ -184,18 +184,18 @@ export function EditorTab({
       unsub();
       daemonClient.unsubscribeFile(watchPath);
     };
-  }, [providedContent, absoluteWatchPath, filePath, activeProjectId, activeChatId, fetchContent]);
+  }, [location, fetchContent]);
 
   const handleReloadFromDisk = useCallback(() => {
     setDiskChanged(false);
-    if (!activeProjectId && !filePath.startsWith('/')) return;
-    fetchContent(activeProjectId ?? '', activeChatId)
+    if (!location) return;
+    fetchContent()
       .then((content) => {
         setSavedContent(content);
         setCurrentContent(content);
       })
       .catch(() => setError('File deleted or moved'));
-  }, [activeProjectId, filePath, activeChatId, fetchContent]);
+  }, [location, fetchContent]);
 
   const handleKeepMine = useCallback(() => {
     setDiskChanged(false);

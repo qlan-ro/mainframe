@@ -1,6 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
+import { useChatsStore } from '../../store/chats';
+import { useProjectsStore } from '../../store/projects';
 import { getDiff } from '../../lib/api';
+import { resolveFileLocation } from '../../lib/file-location';
 import { sendCommentMessage } from '../../lib/send-comment-message';
 import { MonacoDiffEditor } from '../editor/MonacoDiffEditor';
 
@@ -50,24 +53,50 @@ export function DiffTab({
   base,
 }: DiffTabProps): React.ReactElement {
   const activeProjectId = useActiveProjectId();
+  const chat = useChatsStore((s) => (chatId ? s.chats.find((c) => c.id === chatId) : null));
+  const project = useProjectsStore((s) => s.projects.find((p) => p.id === activeProjectId));
   const [original, setOriginal] = useState<string | null>(inlineOriginal ?? null);
   const [modified, setModified] = useState<string | null>(inlineModified ?? null);
   const [error, setError] = useState<string | null>(null);
 
+  // Resolve filePath (and oldPath, if any) against the diff's chat worktree —
+  // the API expects a base-relative path. Tool-card paths are absolute under
+  // the worktree; file-tree paths are already relative.
+  const fileLocation = useMemo(
+    () => resolveFileLocation(filePath, { activeChat: chat, project, fallbackChatId: chatId ?? null }),
+    [filePath, chat, project, chatId],
+  );
+  const oldLocation = useMemo(
+    () =>
+      oldPath ? resolveFileLocation(oldPath, { activeChat: chat, project, fallbackChatId: chatId ?? null }) : null,
+    [oldPath, chat, project, chatId],
+  );
+
   useEffect(() => {
     if (source === 'inline') return;
     if (!activeProjectId) return;
+    if (!fileLocation || fileLocation.relativePath === null) {
+      setError('Failed to load diff');
+      return;
+    }
     setOriginal(null);
     setModified(null);
     setError(null);
 
-    getDiff(activeProjectId, filePath, source, chatId, oldPath, base)
+    getDiff(
+      activeProjectId,
+      fileLocation.relativePath,
+      source,
+      fileLocation.chatIdForApi ?? chatId,
+      oldLocation?.relativePath ?? oldPath,
+      base,
+    )
       .then((result) => {
         setOriginal(result.original);
         setModified(result.modified);
       })
       .catch(() => setError('Failed to load diff'));
-  }, [activeProjectId, filePath, source, chatId, oldPath, base]);
+  }, [activeProjectId, fileLocation, source, chatId, oldLocation, oldPath, base]);
 
   useEffect(() => {
     if (source === 'inline') {
