@@ -165,7 +165,8 @@ function TunnelControl(): React.ReactElement {
   const [url, setUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState(false);
+  const [togglingAction, setTogglingAction] = useState<'start' | 'stop' | null>(null);
+  const toggling = togglingAction !== null;
 
   const running = state !== 'idle' && state !== 'error';
   const verified = state === 'ready';
@@ -226,9 +227,10 @@ function TunnelControl(): React.ReactElement {
   }, []);
 
   const handleToggle = useCallback(async () => {
-    setToggling(true);
+    const action = running ? 'stop' : 'start';
+    setTogglingAction(action);
     try {
-      if (running) {
+      if (action === 'stop') {
         await stopTunnel();
         setState('idle');
         setUrl(null);
@@ -246,7 +248,7 @@ function TunnelControl(): React.ReactElement {
       setErrorMsg(err instanceof Error ? err.message : String(err));
       setState('error');
     } finally {
-      setToggling(false);
+      setTogglingAction(null);
     }
   }, [running]);
 
@@ -294,10 +296,10 @@ function TunnelControl(): React.ReactElement {
                 : 'bg-mf-accent text-white hover:opacity-90'
             }`}
           >
-            {toggling ? (
+            {togglingAction ? (
               <span className="flex items-center gap-1.5">
                 <Loader2 size={12} className="animate-spin" />
-                {running ? 'Stopping...' : 'Starting...'}
+                {togglingAction === 'stop' ? 'Stopping...' : 'Starting...'}
               </span>
             ) : running ? (
               'Stop'
