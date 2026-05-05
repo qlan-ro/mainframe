@@ -8,6 +8,9 @@ const mockSvc = {
   currentBranch: vi.fn(),
   statusRaw: vi.fn(),
   show: vi.fn(),
+  stage: vi.fn(),
+  commit: vi.fn(),
+  push: vi.fn(),
 };
 
 vi.mock('../../git/git-service.js', () => ({
@@ -218,6 +221,244 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+  });
+});
+
+describe('POST /api/git/stage', () => {
+  it('stages specified files', async () => {
+    mockSvc.stage.mockResolvedValueOnce(undefined);
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/stage');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123', files: ['src/index.ts'] } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+    expect(mockSvc.stage).toHaveBeenCalledWith(['src/index.ts']);
+  });
+
+  it('returns success for empty files array', async () => {
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/stage');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123', files: [] } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('returns 404 for nonexistent chat', async () => {
+    const ctx = createCtx('/some/project');
+    (ctx.chats.getEffectivePath as ReturnType<typeof vi.fn>).mockReturnValue(null);
+
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/stage');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'nonexistent', files: ['src/index.ts'] } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Chat not found' });
+  });
+
+  it('returns 400 for git error', async () => {
+    mockSvc.stage.mockRejectedValueOnce(new Error('pathspec did not match any files'));
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/stage');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123', files: ['nonexistent-file.ts'] } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.body).toBeDefined();
+  });
+
+  it('returns 400 when chatId is missing', async () => {
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/stage');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { files: ['src/index.ts'] } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+});
+
+describe('POST /api/git/commit', () => {
+  it('stages files and creates a commit, returning hash', async () => {
+    mockSvc.stage.mockResolvedValueOnce(undefined);
+    mockSvc.commit.mockResolvedValueOnce('abc1234');
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/commit');
+    const res = mockRes();
+
+    handler(
+      { params: {}, query: {}, body: { chatId: 'chat-123', message: 'feat: add button', files: ['src/button.tsx'] } },
+      res,
+      vi.fn(),
+    );
+    await waitForResponse(res);
+
+    expect(res.json).toHaveBeenCalledWith({ hash: 'abc1234' });
+    expect(mockSvc.stage).toHaveBeenCalledWith(['src/button.tsx']);
+    expect(mockSvc.commit).toHaveBeenCalledWith('feat: add button');
+  });
+
+  it('rejects empty commit message', async () => {
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/commit');
+    const res = mockRes();
+
+    handler(
+      { params: {}, query: {}, body: { chatId: 'chat-123', message: '', files: ['src/button.tsx'] } },
+      res,
+      vi.fn(),
+    );
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('returns 404 for nonexistent chat', async () => {
+    const ctx = createCtx('/some/project');
+    (ctx.chats.getEffectivePath as ReturnType<typeof vi.fn>).mockReturnValue(null);
+
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/commit');
+    const res = mockRes();
+
+    handler(
+      { params: {}, query: {}, body: { chatId: 'nonexistent', message: 'test', files: ['src/file.ts'] } },
+      res,
+      vi.fn(),
+    );
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Chat not found' });
+  });
+
+  it('skips staging when files array is empty', async () => {
+    mockSvc.commit.mockResolvedValueOnce('def5678');
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/commit');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123', message: 'test commit', files: [] } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(mockSvc.stage).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ hash: 'def5678' });
+  });
+
+  it('returns 400 when git commit fails', async () => {
+    mockSvc.stage.mockResolvedValueOnce(undefined);
+    mockSvc.commit.mockRejectedValueOnce(new Error('nothing to commit'));
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/commit');
+    const res = mockRes();
+
+    handler(
+      { params: {}, query: {}, body: { chatId: 'chat-123', message: 'test', files: ['src/file.ts'] } },
+      res,
+      vi.fn(),
+    );
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+  });
+});
+
+describe('POST /api/git/push', () => {
+  it('pushes current branch to origin', async () => {
+    mockSvc.push.mockResolvedValueOnce({ status: 'success', branch: 'feat/my-branch', remote: 'origin' });
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/push');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123' } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+    expect(mockSvc.push).toHaveBeenCalled();
+  });
+
+  it('returns 404 for nonexistent chat', async () => {
+    const ctx = createCtx('/some/project');
+    (ctx.chats.getEffectivePath as ReturnType<typeof vi.fn>).mockReturnValue(null);
+
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/push');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'nonexistent' } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Chat not found' });
+  });
+
+  it('returns 400 on push rejection (non-fast-forward)', async () => {
+    mockSvc.push.mockResolvedValueOnce({ status: 'rejected', message: 'non-fast-forward' });
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/push');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123' } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+  });
+
+  it('returns 400 on push error (network, auth, etc)', async () => {
+    mockSvc.push.mockRejectedValueOnce(new Error('Authentication failed'));
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/push');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123' } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+  });
+
+  it('rejects request with missing chatId', async () => {
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/push');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: {} }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
   });
 });
 

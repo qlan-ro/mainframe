@@ -187,6 +187,21 @@ const StatusRequestSchema = z.object({
   chatId: z.string(),
 });
 
+const PushRequestSchema = z.object({
+  chatId: z.string(),
+});
+
+const StageRequestSchema = z.object({
+  chatId: z.string(),
+  files: z.array(z.string()),
+});
+
+const CommitRequestSchema = z.object({
+  chatId: z.string(),
+  message: z.string().min(1, 'Commit message cannot be empty'),
+  files: z.array(z.string()),
+});
+
 function parsePortcelainStatus(output: string): { staged: string[]; unstaged: string[]; untracked: string[] } {
   const staged: string[] = [];
   const unstaged: string[] = [];
@@ -206,6 +221,110 @@ function parsePortcelainStatus(output: string): { staged: string[]; unstaged: st
   }
 
   return { staged, unstaged, untracked };
+}
+
+/** POST /api/git/push */
+async function handleGitPush(ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const parsed = PushRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'chatId is required' });
+    return;
+  }
+
+  const { chatId } = parsed.data;
+  const workDir = ctx.chats.getEffectivePath(chatId);
+  if (!workDir) {
+    res.status(404).json({ error: 'Chat not found' });
+    return;
+  }
+
+  try {
+    const svc = GitService.forProject(workDir);
+    const result = await svc.push();
+    if (result.status === 'rejected') {
+      res.status(400).json({ error: result.message ?? 'Push rejected' });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err, workDir, chatId }, 'Failed to push');
+    res.status(400).json({ error: (err as Error).message ?? 'Unknown error' });
+  }
+}
+
+/** POST /api/git/commit */
+async function handleGitCommit(ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const parsed = CommitRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0];
+    res.status(400).json({ error: firstIssue?.message ?? 'Invalid request' });
+    return;
+  }
+
+  const { chatId, message, files } = parsed.data;
+  const workDir = ctx.chats.getEffectivePath(chatId);
+  if (!workDir) {
+    res.status(404).json({ error: 'Chat not found' });
+    return;
+  }
+
+  for (const file of files) {
+    const resolved = resolveAndValidatePath(workDir, file);
+    if (!resolved) {
+      res.status(400).json({ error: `Path outside project: ${file}` });
+      return;
+    }
+  }
+
+  try {
+    const svc = GitService.forProject(workDir);
+    if (files.length > 0) {
+      await svc.stage(files);
+    }
+    const hash = await svc.commit(message);
+    res.json({ hash });
+  } catch (err) {
+    logger.error({ err, workDir, chatId }, 'Failed to commit');
+    res.status(400).json({ error: (err as Error).message ?? 'Unknown error' });
+  }
+}
+
+/** POST /api/git/stage */
+async function handleGitStage(ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const parsed = StageRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'chatId and files are required' });
+    return;
+  }
+
+  const { chatId, files } = parsed.data;
+  const workDir = ctx.chats.getEffectivePath(chatId);
+  if (!workDir) {
+    res.status(404).json({ error: 'Chat not found' });
+    return;
+  }
+
+  if (files.length === 0) {
+    res.json({ success: true });
+    return;
+  }
+
+  for (const file of files) {
+    const resolved = resolveAndValidatePath(workDir, file);
+    if (!resolved) {
+      res.status(400).json({ error: `Path outside project: ${file}` });
+      return;
+    }
+  }
+
+  try {
+    const svc = GitService.forProject(workDir);
+    await svc.stage(files);
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err, workDir, chatId }, 'Failed to stage files');
+    res.status(400).json({ error: (err as Error).message ?? 'Unknown error' });
+  }
 }
 
 /** POST /api/git/status */
@@ -312,6 +431,18 @@ export function gitRoutes(ctx: RouteContext): Router {
   router.post(
     '/api/git/status',
     asyncHandler((req, res) => handleChatGitStatus(ctx, req, res)),
+  );
+  router.post(
+    '/api/git/stage',
+    asyncHandler((req, res) => handleGitStage(ctx, req, res)),
+  );
+  router.post(
+    '/api/git/commit',
+    asyncHandler((req, res) => handleGitCommit(ctx, req, res)),
+  );
+  router.post(
+    '/api/git/push',
+    asyncHandler((req, res) => handleGitPush(ctx, req, res)),
   );
   router.get(
     '/api/projects/:id/git/branch-diffs',

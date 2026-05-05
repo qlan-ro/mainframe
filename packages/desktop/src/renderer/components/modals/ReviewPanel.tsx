@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useChatsStore } from '../../store/chats';
+import { useUIStore } from '../../store/ui';
 import { gitApi } from '../../lib/api/git';
 import { ReviewPanelHeader } from './ReviewPanelHeader';
 import { FileTree } from './FileTree';
@@ -11,15 +12,12 @@ interface File {
   status: 'added' | 'modified' | 'deleted' | 'renamed';
 }
 
-interface ReviewPanelProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => {
+export const ReviewPanel: React.FC = () => {
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const chats = useChatsStore((s) => s.chats);
   const activeChat = activeChatId ? chats.find((c) => c.id === activeChatId) : null;
+  const reviewPanelOpen = useUIStore((s) => s.reviewPanelOpen);
+  const setReviewPanelOpen = useUIStore((s) => s.setReviewPanelOpen);
 
   const [files, setFiles] = useState<File[]>([]);
   const [stagedFiles, setStagedFiles] = useState<Set<string>>(new Set());
@@ -32,9 +30,9 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => 
 
   const isWorktree = activeChat?.worktreePath != null;
 
-  // Load diff and status on mount
+  // Load diff and status when panel opens
   useEffect(() => {
-    if (!isOpen || !activeChat) return;
+    if (!reviewPanelOpen || !activeChat) return;
 
     const load = async () => {
       try {
@@ -67,9 +65,9 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => 
     };
 
     load();
-  }, [isOpen, activeChat]);
+  }, [reviewPanelOpen, activeChat]);
 
-  if (!isOpen || !activeChat) {
+  if (!reviewPanelOpen || !activeChat) {
     return null;
   }
 
@@ -153,7 +151,7 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => 
       // TODO: Call gh pr create via API or desktop shell
       // For now, show success message
       setError(null);
-      onClose();
+      setReviewPanelOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create PR');
     } finally {
@@ -170,7 +168,7 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
       <div className="flex h-5/6 w-5/6 flex-col rounded-lg border border-mf-border bg-mf-surface shadow-2xl">
-        <ReviewPanelHeader isWorktree={isWorktree} onClose={onClose} />
+        <ReviewPanelHeader isWorktree={isWorktree} onClose={() => setReviewPanelOpen(false)} />
 
         <div className="flex flex-1 overflow-hidden">
           <div className="w-64 overflow-hidden">

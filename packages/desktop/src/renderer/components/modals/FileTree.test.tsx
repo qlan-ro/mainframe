@@ -1,4 +1,4 @@
-import React from 'react';
+import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -310,7 +310,7 @@ describe('FileTree', () => {
     const files: (typeof mockFile1)[] = [];
     const stagedFiles = new Set<string>();
 
-    const { container } = render(
+    render(
       <FileTree
         stagedFiles={stagedFiles}
         files={files}
