@@ -189,6 +189,7 @@ export const ReviewPanel: React.FC = () => {
                 oldCode={selectedFileDiff.main}
                 newCode={selectedFileDiff.worktree}
                 filename={selectedFileData.path}
+                chatId={activeChat.id}
                 mode={diffMode}
                 onModeChange={setDiffMode}
               />

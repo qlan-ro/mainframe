@@ -16,6 +16,7 @@ interface MonacoDiffEditorProps {
   language?: string;
   filePath?: string;
   startLine?: number;
+  renderSideBySide?: boolean;
   onLineComment?: (startLine: number, endLine: number, lineContent: string, comment: string) => void;
   onSubmitReview?: (comments: { startLine: number; endLine: number; lineContent: string; comment: string }[]) => void;
 }
@@ -26,6 +27,7 @@ export function MonacoDiffEditor({
   language,
   filePath,
   startLine,
+  renderSideBySide = false,
   onLineComment,
   onSubmitReview,
 }: MonacoDiffEditorProps): React.ReactElement {
@@ -196,7 +198,7 @@ export function MonacoDiffEditor({
             fontSize: 13,
             lineHeight: 20,
             fontFamily: "'JetBrains Mono', monospace",
-            renderSideBySide: false,
+            renderSideBySide,
             hideUnchangedRegions: { enabled: false },
             renderOverviewRuler: false,
             overviewRulerBorder: false,
