@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { Chat, DetectedPr, SessionMention, SkillFileEntry, TodoItem } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
+import type { ChatTagsRepository } from './chat-tags.js';
 
 /** Raw shape returned by SQLite before boolean/JSON coercion. */
 type RawChatRow = Omit<
@@ -31,7 +32,10 @@ function parseJsonColumn<T>(value: string | null | undefined, fallback: T): T {
 }
 
 export class ChatsRepository {
-  constructor(private db: Database.Database) {}
+  constructor(
+    private db: Database.Database,
+    private chatTags?: ChatTagsRepository,
+  ) {}
 
   list(projectId: string): Chat[] {
     const stmt = this.db.prepare(`
@@ -51,7 +55,7 @@ export class ChatsRepository {
       ORDER BY pinned DESC, updated_at DESC
     `);
     const rows = stmt.all(projectId) as RawChatRow[];
-    return rows.map((row) => ({
+    const chats = rows.map((row) => ({
       ...row,
       mentions: parseJsonColumn(row.mentions, []),
       modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
@@ -64,6 +68,13 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     }));
+    if (this.chatTags && chats.length > 0) {
+      const tagsByChat = this.chatTags.bulkForChats(chats.map((c) => c.id));
+      for (const c of chats) {
+        c.tags = tagsByChat.get(c.id) ?? [];
+      }
+    }
+    return chats;
   }
 
   listAll(): Chat[] {
@@ -83,7 +94,7 @@ export class ChatsRepository {
       ORDER BY pinned DESC, updated_at DESC, rowid DESC
     `);
     const rows = stmt.all() as RawChatRow[];
-    return rows.map((row) => ({
+    const chats = rows.map((row) => ({
       ...row,
       mentions: parseJsonColumn(row.mentions, []),
       modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
@@ -96,6 +107,13 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     }));
+    if (this.chatTags && chats.length > 0) {
+      const tagsByChat = this.chatTags.bulkForChats(chats.map((c) => c.id));
+      for (const c of chats) {
+        c.tags = tagsByChat.get(c.id) ?? [];
+      }
+    }
+    return chats;
   }
 
   get(id: string): Chat | null {
@@ -115,7 +133,7 @@ export class ChatsRepository {
     `);
     const row = stmt.get(id) as RawChatRow | null;
     if (!row) return null;
-    return {
+    const chat: Chat = {
       ...row,
       mentions: parseJsonColumn(row.mentions, []),
       modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
@@ -128,6 +146,10 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     };
+    if (this.chatTags) {
+      chat.tags = this.chatTags.listForChat(chat.id);
+    }
+    return chat;
   }
 
   create(projectId: string, adapterId: string, model?: string, permissionMode?: string): Chat {
@@ -325,7 +347,7 @@ export class ChatsRepository {
     `);
     const row = stmt.get(sessionId, projectId) as RawChatRow | null;
     if (!row) return null;
-    return {
+    const chat: Chat = {
       ...row,
       mentions: parseJsonColumn(row.mentions, []),
       modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
@@ -338,5 +360,9 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     };
+    if (this.chatTags) {
+      chat.tags = this.chatTags.listForChat(chat.id);
+    }
+    return chat;
   }
 }
