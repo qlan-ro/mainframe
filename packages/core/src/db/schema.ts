@@ -61,7 +61,7 @@ export function initializeSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS chat_tags (
       chat_id    TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
       tag        TEXT NOT NULL REFERENCES tags(name) ON UPDATE CASCADE,
-      source     TEXT NOT NULL DEFAULT 'user',
+      source     TEXT NOT NULL DEFAULT 'user' CHECK (source IN ('user')),
       created_at TEXT NOT NULL,
       PRIMARY KEY (chat_id, tag, source)
     );
