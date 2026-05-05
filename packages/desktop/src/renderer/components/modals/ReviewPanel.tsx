@@ -166,7 +166,7 @@ export const ReviewPanel: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-mf-app-bg z-50">
+    <div className="fixed inset-0 flex items-center justify-center bg-mf-overlay/60 z-50">
       <div className="flex h-5/6 w-5/6 flex-col rounded-lg border border-mf-border bg-mf-panel-bg shadow-2xl">
         <ReviewPanelHeader isWorktree={isWorktree} onClose={() => setReviewPanelOpen(false)} />
 
