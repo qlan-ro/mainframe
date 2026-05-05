@@ -17,6 +17,25 @@ type RawChatRow = Omit<
   detectedPrs: string;
 };
 
+const CHAT_SELECT_FIELDS = `
+  id, adapter_id as adapterId, project_id as projectId,
+  title, claude_session_id as claudeSessionId, model,
+  permission_mode as permissionMode, status,
+  created_at as createdAt, updated_at as updatedAt,
+  total_cost as totalCost, total_tokens_input as totalTokensInput,
+  total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
+  mentions, modified_files as modifiedFiles,
+  worktree_path as worktreePath, branch_name as branchName,
+  process_state as processState, todos, pinned, effort,
+  plan_mode as planMode, detected_prs as detectedPrs
+`.trim();
+
+export interface ChatListFilters {
+  projectId?: string;
+  tagsAll?: string[];
+  hasWorktree?: boolean;
+}
+
 function parseEffort(value: string | null | undefined): Chat['effort'] {
   if (value === 'low' || value === 'medium' || value === 'high') return value;
   return undefined;
@@ -38,104 +57,56 @@ export class ChatsRepository {
   ) {}
 
   list(projectId: string): Chat[] {
-    const stmt = this.db.prepare(`
-      SELECT
-        id, adapter_id as adapterId, project_id as projectId,
-        title, claude_session_id as claudeSessionId, model,
-        permission_mode as permissionMode, status,
-        created_at as createdAt, updated_at as updatedAt,
-        total_cost as totalCost, total_tokens_input as totalTokensInput,
-        total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
-        mentions, modified_files as modifiedFiles,
-        worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos, pinned, effort,
-        plan_mode as planMode, detected_prs as detectedPrs
-      FROM chats
-      WHERE project_id = ?
-      ORDER BY pinned DESC, updated_at DESC
-    `);
-    const rows = stmt.all(projectId) as RawChatRow[];
-    const chats = rows.map((row) => ({
-      ...row,
-      mentions: parseJsonColumn(row.mentions, []),
-      modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
-      worktreePath: row.worktreePath || undefined,
-      branchName: row.branchName || undefined,
-      processState: (row.processState as Chat['processState']) || null,
-      todos: parseJsonColumn(row.todos, undefined) ?? undefined,
-      pinned: Boolean(row.pinned),
-      effort: parseEffort(row.effort),
-      planMode: Boolean(row.planMode),
-      detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
-    }));
+    const rows = this.db
+      .prepare(`SELECT ${CHAT_SELECT_FIELDS} FROM chats WHERE project_id = ? ORDER BY pinned DESC, updated_at DESC`)
+      .all(projectId) as RawChatRow[];
+    const chats = this.mapRows(rows);
     this.populateBulkTags(chats);
     return chats;
   }
 
   listAll(): Chat[] {
-    const stmt = this.db.prepare(`
-      SELECT
-        id, adapter_id as adapterId, project_id as projectId,
-        title, claude_session_id as claudeSessionId, model,
-        permission_mode as permissionMode, status,
-        created_at as createdAt, updated_at as updatedAt,
-        total_cost as totalCost, total_tokens_input as totalTokensInput,
-        total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
-        mentions, modified_files as modifiedFiles,
-        worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos, pinned, effort,
-        plan_mode as planMode, detected_prs as detectedPrs
-      FROM chats
-      ORDER BY pinned DESC, updated_at DESC, rowid DESC
-    `);
-    const rows = stmt.all() as RawChatRow[];
-    const chats = rows.map((row) => ({
-      ...row,
-      mentions: parseJsonColumn(row.mentions, []),
-      modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
-      worktreePath: row.worktreePath || undefined,
-      branchName: row.branchName || undefined,
-      processState: (row.processState as Chat['processState']) || null,
-      todos: parseJsonColumn(row.todos, undefined) ?? undefined,
-      pinned: Boolean(row.pinned),
-      effort: parseEffort(row.effort),
-      planMode: Boolean(row.planMode),
-      detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
-    }));
+    const rows = this.db
+      .prepare(`SELECT ${CHAT_SELECT_FIELDS} FROM chats ORDER BY pinned DESC, updated_at DESC, rowid DESC`)
+      .all() as RawChatRow[];
+    const chats = this.mapRows(rows);
+    this.populateBulkTags(chats);
+    return chats;
+  }
+
+  listFiltered(filters: ChatListFilters): Chat[] {
+    const where: string[] = ["status != 'archived'"];
+    const params: unknown[] = [];
+
+    if (filters.projectId) {
+      where.push('project_id = ?');
+      params.push(filters.projectId);
+    }
+    if (filters.hasWorktree) {
+      where.push('worktree_path IS NOT NULL');
+    }
+    if (filters.tagsAll && filters.tagsAll.length > 0) {
+      if (!this.chatTags) {
+        throw new Error('listFiltered with tagsAll requires ChatTagsRepository');
+      }
+      const ids = this.chatTags.filterChatIds(filters.tagsAll);
+      if (!ids || ids.length === 0) return [];
+      const placeholders = ids.map(() => '?').join(',');
+      where.push(`id IN (${placeholders})`);
+      params.push(...ids);
+    }
+
+    const sql = `SELECT ${CHAT_SELECT_FIELDS} FROM chats WHERE ${where.join(' AND ')} ORDER BY pinned DESC, updated_at DESC`;
+    const rows = this.db.prepare(sql).all(...params) as RawChatRow[];
+    const chats = this.mapRows(rows);
     this.populateBulkTags(chats);
     return chats;
   }
 
   get(id: string): Chat | null {
-    const stmt = this.db.prepare(`
-      SELECT
-        id, adapter_id as adapterId, project_id as projectId,
-        title, claude_session_id as claudeSessionId, model,
-        permission_mode as permissionMode, status,
-        created_at as createdAt, updated_at as updatedAt,
-        total_cost as totalCost, total_tokens_input as totalTokensInput,
-        total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
-        mentions, modified_files as modifiedFiles,
-        worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos, pinned, effort,
-        plan_mode as planMode, detected_prs as detectedPrs
-      FROM chats WHERE id = ?
-    `);
-    const row = stmt.get(id) as RawChatRow | null;
+    const row = this.db.prepare(`SELECT ${CHAT_SELECT_FIELDS} FROM chats WHERE id = ?`).get(id) as RawChatRow | null;
     if (!row) return null;
-    const chat: Chat = {
-      ...row,
-      mentions: parseJsonColumn(row.mentions, []),
-      modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
-      worktreePath: row.worktreePath || undefined,
-      branchName: row.branchName || undefined,
-      processState: (row.processState as Chat['processState']) || null,
-      todos: parseJsonColumn(row.todos, undefined) ?? undefined,
-      pinned: Boolean(row.pinned),
-      effort: parseEffort(row.effort),
-      planMode: Boolean(row.planMode),
-      detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
-    };
+    const chat = this.mapRow(row);
     this.populateTags(chat);
     return chat;
   }
@@ -319,23 +290,17 @@ export class ChatsRepository {
   }
 
   findByExternalSessionId(sessionId: string, projectId: string): Chat | null {
-    const stmt = this.db.prepare(`
-      SELECT
-        id, adapter_id as adapterId, project_id as projectId,
-        title, claude_session_id as claudeSessionId, model,
-        permission_mode as permissionMode, status,
-        created_at as createdAt, updated_at as updatedAt,
-        total_cost as totalCost, total_tokens_input as totalTokensInput,
-        total_tokens_output as totalTokensOutput, last_context_tokens_input as lastContextTokensInput,
-        mentions, modified_files as modifiedFiles,
-        worktree_path as worktreePath, branch_name as branchName,
-        process_state as processState, todos, pinned, effort,
-        plan_mode as planMode, detected_prs as detectedPrs
-      FROM chats WHERE claude_session_id = ? AND project_id = ?
-    `);
-    const row = stmt.get(sessionId, projectId) as RawChatRow | null;
+    const row = this.db
+      .prepare(`SELECT ${CHAT_SELECT_FIELDS} FROM chats WHERE claude_session_id = ? AND project_id = ?`)
+      .get(sessionId, projectId) as RawChatRow | null;
     if (!row) return null;
-    const chat: Chat = {
+    const chat = this.mapRow(row);
+    this.populateTags(chat);
+    return chat;
+  }
+
+  private mapRow(row: RawChatRow): Chat {
+    return {
       ...row,
       mentions: parseJsonColumn(row.mentions, []),
       modifiedFiles: parseJsonColumn(row.modifiedFiles, []),
@@ -348,8 +313,10 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     };
-    this.populateTags(chat);
-    return chat;
+  }
+
+  private mapRows(rows: RawChatRow[]): Chat[] {
+    return rows.map((row) => this.mapRow(row));
   }
 
   private populateBulkTags(chats: Chat[]): void {

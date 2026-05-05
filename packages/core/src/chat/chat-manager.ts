@@ -12,6 +12,7 @@ import type {
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
+import type { ChatListFilters } from '../db/chats.js';
 import { existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { createChildLogger } from '../logger.js';
@@ -454,6 +455,11 @@ export class ChatManager {
 
   listAllChats(): Chat[] {
     const chats = this.db.chats.listAll();
+    return chats.map((chat) => this.enrichChat(chat));
+  }
+
+  listFiltered(filters: ChatListFilters): Chat[] {
+    const chats = this.db.chats.listFiltered(filters);
     return chats.map((chat) => this.enrichChat(chat));
   }
 

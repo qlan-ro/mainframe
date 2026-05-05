@@ -12,8 +12,37 @@ const logger = createChildLogger('routes:chats');
 export function chatRoutes(ctx: RouteContext): Router {
   const router = Router();
 
-  router.get('/api/chats', (_req: Request, res: Response) => {
-    const chats = ctx.chats.listAllChats();
+  const ListQuery = z.object({
+    project: z.string().optional(),
+    tags: z.string().optional(),
+    synthetic: z.string().optional(),
+  });
+
+  router.get('/api/chats', (req: Request, res: Response) => {
+    const parsed = ListQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: parsed.error.message });
+      return;
+    }
+    const tagsAll = parsed.data.tags
+      ? parsed.data.tags
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined;
+    const synth = parsed.data.synthetic
+      ? new Set(
+          parsed.data.synthetic
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+        )
+      : new Set<string>();
+    const chats = ctx.chats.listFiltered({
+      projectId: parsed.data.project,
+      tagsAll,
+      hasWorktree: synth.has('has-worktree'),
+    });
     res.json({ success: true, data: chats });
   });
 
