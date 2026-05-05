@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
+import { z } from 'zod';
 import type { RouteContext } from './types.js';
 import { getEffectivePath, param } from './types.js';
 import { resolveAndValidatePath } from './path-utils.js';
@@ -182,20 +183,57 @@ async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promi
   }
 }
 
-/** Parse unified diff output into a map of filename → raw diff chunk. */
-function parseDiffOutput(output: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  if (!output.trim()) return result;
+const StatusRequestSchema = z.object({
+  chatId: z.string(),
+});
 
-  const fileSections = output.split(/^(?=diff --git )/m);
-  for (const section of fileSections) {
-    if (!section.trim()) continue;
-    const match = /^diff --git a\/.+ b\/(.+)$/m.exec(section);
-    if (match?.[1]) {
-      result[match[1]] = section;
+function parsePortcelainStatus(output: string): { staged: string[]; unstaged: string[]; untracked: string[] } {
+  const staged: string[] = [];
+  const unstaged: string[] = [];
+  const untracked: string[] = [];
+
+  for (const line of output.split('\n').filter(Boolean)) {
+    const indexStatus = line[0] ?? ' ';
+    const workingStatus = line[1] ?? ' ';
+    const filename = line.slice(3);
+
+    if (indexStatus === '?' && workingStatus === '?') {
+      untracked.push(filename);
+      continue;
     }
+    if (indexStatus !== ' ') staged.push(filename);
+    if (workingStatus !== ' ') unstaged.push(filename);
   }
-  return result;
+
+  return { staged, unstaged, untracked };
+}
+
+/** POST /api/git/status */
+async function handleChatGitStatus(ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const parsed = StatusRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'chatId is required' });
+    return;
+  }
+
+  const { chatId } = parsed.data;
+  const workDir = ctx.chats.getEffectivePath(chatId);
+  if (!workDir) {
+    res.status(404).json({ error: 'Chat not found' });
+    return;
+  }
+
+  try {
+    const svc = GitService.forProject(workDir);
+    const output = await svc.statusRaw();
+    const { staged, unstaged, untracked } = parsePortcelainStatus(output);
+    res.json({ staged, unstaged, untracked });
+  } catch (err) {
+    if (!isNotGitRepo(err)) {
+      logger.warn({ err, workDir, chatId }, 'Failed to get git status for chat');
+    }
+    res.status(400).json({ error: (err as Error).message ?? 'Unknown error' });
+  }
 }
 
 /** POST /api/projects/:id/git/diff-since-main */
@@ -228,9 +266,38 @@ async function handleDiffSinceMain(ctx: RouteContext, req: Request, res: Respons
       return;
     }
 
-    const diffArgs = [`${mergeBase}..HEAD`, ...(files ? ['--', ...files] : [])];
-    const diffOutput = await svc.diff(diffArgs);
-    const diffs = parseDiffOutput(diffOutput);
+    const nameStatusArgs = ['--name-status', `${mergeBase}..HEAD`, ...(files ? ['--', ...files] : [])];
+    const nameStatusOutput = await svc.diff(nameStatusArgs);
+    const changedFiles = parseDiffNameStatus(nameStatusOutput);
+
+    const diffs: Record<string, { main: string; worktree: string }> = {};
+    await Promise.all(
+      changedFiles.map(async ({ status, path, oldPath }) => {
+        let main = '';
+        let worktree = '';
+
+        if (!status.startsWith('A')) {
+          try {
+            main = await svc.show(`${mergeBase}:${oldPath ?? path}`);
+          } catch {
+            /* new file or binary */
+          }
+        }
+
+        if (!status.startsWith('D')) {
+          const resolvedPath = resolveAndValidatePath(basePath, path);
+          if (resolvedPath) {
+            try {
+              worktree = await readFile(resolvedPath, 'utf-8');
+            } catch {
+              /* deleted file */
+            }
+          }
+        }
+
+        diffs[path] = { main, worktree };
+      }),
+    );
 
     res.json({ diffs, baseBranch, mergeBase });
   } catch (err) {
@@ -242,6 +309,10 @@ async function handleDiffSinceMain(ctx: RouteContext, req: Request, res: Respons
 export function gitRoutes(ctx: RouteContext): Router {
   const router = Router();
 
+  router.post(
+    '/api/git/status',
+    asyncHandler((req, res) => handleChatGitStatus(ctx, req, res)),
+  );
   router.get(
     '/api/projects/:id/git/branch-diffs',
     asyncHandler((req, res) => handleBranchDiffs(ctx, req, res)),

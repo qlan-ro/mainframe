@@ -18,6 +18,11 @@ vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
 }));
 
+vi.mock('../../server/routes/path-utils.js', () => ({
+  resolveAndValidatePath: vi.fn((base: string, p: string) => `${base}/${p}`),
+  resolveClaudeConfigPath: vi.fn(),
+}));
+
 const { gitRoutes } = await import('../../server/routes/git.js');
 
 const waitForResponse = (res: any) => vi.waitFor(() => expect(res.json).toHaveBeenCalled(), { timeout: 2000 });
@@ -41,6 +46,7 @@ function createCtx(projectPath: string, worktreePath?: string): RouteContext {
     } as any,
     chats: {
       getChat: vi.fn().mockReturnValue(worktreePath ? { worktreePath, worktreeMissing: false } : null),
+      getEffectivePath: vi.fn().mockReturnValue(projectPath),
       on: vi.fn(),
     } as any,
     adapters: { get: vi.fn(), list: vi.fn() } as any,
@@ -68,18 +74,13 @@ beforeEach(() => {
 });
 
 describe('POST /api/projects/:id/git/diff-since-main', () => {
-  it('returns diff for all files since main', async () => {
-    const rawDiff = `diff --git a/src/foo.ts b/src/foo.ts
-index abc..def 100644
---- a/src/foo.ts
-+++ b/src/foo.ts
-@@ -1,3 +1,4 @@
- line1
-+added line
- line2
- line3`;
+  it('returns { main, worktree } shape for each changed file', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const nameStatusOutput = 'M\tsrc/foo.ts';
     mockSvc.mergeBase.mockResolvedValueOnce('abc123');
-    mockSvc.diff.mockResolvedValueOnce(rawDiff);
+    mockSvc.diff.mockResolvedValueOnce(nameStatusOutput);
+    mockSvc.show.mockResolvedValueOnce('original content');
+    (readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce('modified content');
 
     const ctx = createCtx('/some/project');
     const router = gitRoutes(ctx);
@@ -89,7 +90,57 @@ index abc..def 100644
     handler({ params: { id: 'proj-1' }, query: {}, body: {} }, res, vi.fn());
     await waitForResponse(res);
 
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ diffs: expect.any(Object) }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseBranch: 'main',
+        mergeBase: 'abc123',
+        diffs: {
+          'src/foo.ts': { main: 'original content', worktree: 'modified content' },
+        },
+      }),
+    );
+  });
+
+  it('returns empty main for added files', async () => {
+    const { readFile } = await import('node:fs/promises');
+    mockSvc.mergeBase.mockResolvedValueOnce('abc123');
+    mockSvc.diff.mockResolvedValueOnce('A\tsrc/new.ts');
+    (readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce('new file content');
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/projects/:id/git/diff-since-main');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: {}, body: {} }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        diffs: { 'src/new.ts': { main: '', worktree: 'new file content' } },
+      }),
+    );
+    expect(mockSvc.show).not.toHaveBeenCalled();
+  });
+
+  it('returns empty worktree for deleted files', async () => {
+    mockSvc.mergeBase.mockResolvedValueOnce('abc123');
+    mockSvc.diff.mockResolvedValueOnce('D\tsrc/gone.ts');
+    mockSvc.show.mockResolvedValueOnce('old content');
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/projects/:id/git/diff-since-main');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: {}, body: {} }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        diffs: { 'src/gone.ts': { main: 'old content', worktree: '' } },
+      }),
+    );
   });
 
   it('uses worktree path when chat has a worktree', async () => {
@@ -104,7 +155,9 @@ index abc..def 100644
     handler({ params: { id: 'proj-1' }, query: {}, body: { chatId: 'chat-1' } }, res, vi.fn());
     await waitForResponse(res);
 
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ diffs: expect.any(Object) }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ diffs: expect.any(Object), baseBranch: 'main', mergeBase: 'abc123' }),
+    );
   });
 
   it('filters to specific files when files array is provided', async () => {
@@ -161,6 +214,93 @@ index abc..def 100644
     const res = mockRes();
 
     handler({ params: { id: 'proj-1' }, query: {}, body: {} }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+  });
+});
+
+describe('POST /api/git/status', () => {
+  it('returns staged, unstaged, and untracked files', async () => {
+    mockSvc.statusRaw.mockResolvedValueOnce('M  src/foo.ts\n?? src/new.ts\n');
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/status');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123' } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).not.toHaveBeenCalledWith(expect.any(Number));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        staged: expect.any(Array),
+        unstaged: expect.any(Array),
+        untracked: expect.any(Array),
+      }),
+    );
+  });
+
+  it('parses git status output correctly', async () => {
+    // M in index = staged, space in working tree = not unstaged
+    // space in index = not staged, M in working tree = unstaged
+    // ?? = untracked
+    mockSvc.statusRaw.mockResolvedValueOnce('M  src/staged.ts\n M src/unstaged.ts\n?? src/new.ts\n');
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/status');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123' } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      staged: ['src/staged.ts'],
+      unstaged: ['src/unstaged.ts'],
+      untracked: ['src/new.ts'],
+    });
+  });
+
+  it('returns 404 for nonexistent chat', async () => {
+    const ctx = createCtx('/some/project');
+    (ctx.chats.getEffectivePath as ReturnType<typeof vi.fn>).mockReturnValue(null);
+
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/status');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'nonexistent-chat' } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Chat not found' });
+  });
+
+  it('returns 400 when chatId is missing', async () => {
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/status');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: {} }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+  });
+
+  it('returns 400 when git status fails', async () => {
+    mockSvc.statusRaw.mockRejectedValueOnce(new Error('not a git repository'));
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'post', '/api/git/status');
+    const res = mockRes();
+
+    handler({ params: {}, query: {}, body: { chatId: 'chat-123' } }, res, vi.fn());
     await waitForResponse(res);
 
     expect(res.status).toHaveBeenCalledWith(400);
