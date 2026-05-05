@@ -182,6 +182,63 @@ async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promi
   }
 }
 
+/** Parse unified diff output into a map of filename → raw diff chunk. */
+function parseDiffOutput(output: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!output.trim()) return result;
+
+  const fileSections = output.split(/^(?=diff --git )/m);
+  for (const section of fileSections) {
+    if (!section.trim()) continue;
+    const match = /^diff --git a\/.+ b\/(.+)$/m.exec(section);
+    if (match?.[1]) {
+      result[match[1]] = section;
+    }
+  }
+  return result;
+}
+
+/** POST /api/projects/:id/git/diff-since-main */
+async function handleDiffSinceMain(ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const chatId = req.body.chatId as string | undefined;
+  const files = Array.isArray(req.body.files) ? (req.body.files as string[]) : undefined;
+
+  const basePath = getEffectivePath(ctx, param(req, 'id'), chatId);
+  if (!basePath) {
+    res.status(404).json({ error: 'Project not found' });
+    return;
+  }
+
+  try {
+    const svc = GitService.forProject(basePath);
+
+    let baseBranch: string | null = null;
+    let mergeBase: string | null = null;
+    for (const base of ['main', 'master']) {
+      const sha = await svc.mergeBase(base, 'HEAD');
+      if (sha) {
+        baseBranch = base;
+        mergeBase = sha;
+        break;
+      }
+    }
+
+    if (!mergeBase) {
+      res.json({ diffs: {}, baseBranch: null, mergeBase: null });
+      return;
+    }
+
+    const diffArgs = [`${mergeBase}..HEAD`, ...(files ? ['--', ...files] : [])];
+    const diffOutput = await svc.diff(diffArgs);
+    const diffs = parseDiffOutput(diffOutput);
+
+    res.json({ diffs, baseBranch, mergeBase });
+  } catch (err) {
+    logger.error({ err, basePath, chatId }, 'Failed to get diff since main');
+    res.status(400).json({ error: (err as Error).message ?? 'Unknown error' });
+  }
+}
+
 export function gitRoutes(ctx: RouteContext): Router {
   const router = Router();
 
@@ -200,6 +257,10 @@ export function gitRoutes(ctx: RouteContext): Router {
   router.get(
     '/api/projects/:id/git/diff',
     asyncHandler((req, res) => handleDiff(ctx, req, res)),
+  );
+  router.post(
+    '/api/projects/:id/git/diff-since-main',
+    asyncHandler((req, res) => handleDiffSinceMain(ctx, req, res)),
   );
 
   router.use(gitWriteRoutes(ctx));
