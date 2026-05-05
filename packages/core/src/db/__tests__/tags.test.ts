@@ -65,4 +65,105 @@ describe('TagsRepository', () => {
     repo.remove('feature');
     expect(repo.list()).toHaveLength(0);
   });
+
+  it('upsert normalizes whitespace and case', () => {
+    const repo = setup();
+    const a = repo.upsert('  Feature  ');
+    expect(a.name).toBe('feature');
+  });
+
+  it('rename to self is a no-op (no throw, no list change)', () => {
+    const repo = setup();
+    repo.upsert('feature');
+    expect(() => repo.rename('feature', 'feature')).not.toThrow();
+    expect(repo.list()).toHaveLength(1);
+  });
+
+  it('upsert ignores color arg when tag already exists (color preserved)', () => {
+    const repo = setup();
+    const first = repo.upsert('feature'); // gets auto color
+    const second = repo.upsert('feature', 'red');
+    expect(second.color).toBe(first.color);
+  });
+
+  it('plain rename cascades chat_tags via ON UPDATE CASCADE', () => {
+    const db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
+    initializeSchema(db);
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO projects (id, name, path, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?)').run(
+      'p1',
+      'p',
+      '/tmp/p',
+      now,
+      now,
+    );
+    db.prepare(
+      'INSERT INTO chats (id, adapter_id, project_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('c1', 'claude', 'p1', 'active', now, now);
+    const repo = new TagsRepository(db);
+    repo.upsert('feat');
+    db.prepare("INSERT INTO chat_tags (chat_id, tag, source, created_at) VALUES (?, ?, 'user', ?)").run(
+      'c1',
+      'feat',
+      now,
+    );
+    repo.rename('feat', 'feature');
+    const row = db.prepare('SELECT tag FROM chat_tags WHERE chat_id = ?').get('c1') as { tag: string };
+    expect(row.tag).toBe('feature');
+  });
+
+  it('merge rename moves chat_tags rows under the target tag', () => {
+    const db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
+    initializeSchema(db);
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO projects (id, name, path, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?)').run(
+      'p1',
+      'p',
+      '/tmp/p',
+      now,
+      now,
+    );
+    db.prepare(
+      'INSERT INTO chats (id, adapter_id, project_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('c1', 'claude', 'p1', 'active', now, now);
+    db.prepare(
+      'INSERT INTO chats (id, adapter_id, project_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('c2', 'claude', 'p1', 'active', now, now);
+    const repo = new TagsRepository(db);
+    repo.upsert('feat');
+    repo.upsert('feature');
+    db.prepare("INSERT INTO chat_tags (chat_id, tag, source, created_at) VALUES (?, ?, 'user', ?)").run(
+      'c1',
+      'feat',
+      now,
+    );
+    db.prepare("INSERT INTO chat_tags (chat_id, tag, source, created_at) VALUES (?, ?, 'user', ?)").run(
+      'c2',
+      'feature',
+      now,
+    );
+    repo.rename('feat', 'feature');
+    const tags = db.prepare('SELECT tag FROM chat_tags ORDER BY chat_id').all() as { tag: string }[];
+    expect(tags.map((r) => r.tag)).toEqual(['feature', 'feature']);
+  });
+
+  it('get returns null for missing tag', () => {
+    expect(setup().get('nonexistent')).toBeNull();
+  });
+
+  it('rename rejects reserved-prefix target', () => {
+    const repo = setup();
+    repo.upsert('feature');
+    expect(() => repo.rename('feature', 'has-pr')).toThrow(/reserved/i);
+  });
+
+  it('setColor throws when tag missing', () => {
+    expect(() => setup().setColor('nope', 'red')).toThrow(/not found/i);
+  });
+
+  it('remove throws when tag missing', () => {
+    expect(() => setup().remove('nope')).toThrow(/not found/i);
+  });
 });

@@ -6,15 +6,20 @@ import { hashTagColor } from '../lib/tag-color.js';
 export class TagsRepository {
   constructor(private db: Database.Database) {}
 
+  private normalize(name: string): string {
+    return name.trim().toLowerCase();
+  }
+
   list(): Tag[] {
     const rows = this.db.prepare('SELECT name, color, created_at as createdAt FROM tags ORDER BY name').all() as Tag[];
     return rows;
   }
 
   get(name: string): Tag | null {
-    const row = this.db.prepare('SELECT name, color, created_at as createdAt FROM tags WHERE name = ?').get(name) as
-      | Tag
-      | undefined;
+    const normalized = this.normalize(name);
+    const row = this.db
+      .prepare('SELECT name, color, created_at as createdAt FROM tags WHERE name = ?')
+      .get(normalized) as Tag | undefined;
     return row ?? null;
   }
 
@@ -31,12 +36,14 @@ export class TagsRepository {
   }
 
   setColor(name: string, color: TagColor): void {
-    this.db.prepare('UPDATE tags SET color = ? WHERE name = ?').run(color, name);
+    const normalized = this.normalize(name);
+    const info = this.db.prepare('UPDATE tags SET color = ? WHERE name = ?').run(color, normalized);
+    if (info.changes === 0) throw new Error(`Tag not found: ${normalized}`);
   }
 
   /** Atomic rename. If `to` already exists, merges associations and drops `from`. */
   rename(fromRaw: string, toRaw: string): void {
-    const from = fromRaw.trim().toLowerCase();
+    const from = this.normalize(fromRaw);
     const v = validateTagName(toRaw);
     if (!v.ok) throw new Error(v.error);
     const to = v.normalized;
@@ -62,9 +69,11 @@ export class TagsRepository {
   }
 
   remove(name: string): void {
+    const normalized = this.normalize(name);
     const tx = this.db.transaction(() => {
-      this.db.prepare('DELETE FROM chat_tags WHERE tag = ?').run(name);
-      this.db.prepare('DELETE FROM tags WHERE name = ?').run(name);
+      this.db.prepare('DELETE FROM chat_tags WHERE tag = ?').run(normalized);
+      const info = this.db.prepare('DELETE FROM tags WHERE name = ?').run(normalized);
+      if (info.changes === 0) throw new Error(`Tag not found: ${normalized}`);
     });
     tx();
   }
