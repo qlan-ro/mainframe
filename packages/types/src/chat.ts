@@ -40,6 +40,8 @@ export interface Chat {
   effort?: ChatEffort;
   /** PRs detected in the session's tool_results (created via `gh pr create` or merely mentioned). */
   detectedPrs?: DetectedPr[];
+  /** User-source tags applied to this chat. Synthetic chips (has-pr, has-worktree) are NOT included. */
+  tags?: string[];
 }
 
 export interface Project {
