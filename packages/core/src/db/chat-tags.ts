@@ -33,13 +33,14 @@ export class ChatTagsRepository {
 
   /** Replace the user tag set for a chat atomically. Auto-creates any missing tags. */
   setForChat(chatId: string, tags: string[], registry: TagsRepository): void {
+    const unique = [...new Set(tags)];
     const tx = this.db.transaction(() => {
       this.db.prepare("DELETE FROM chat_tags WHERE chat_id = ? AND source = 'user'").run(chatId);
       const insert = this.db.prepare(
         "INSERT OR IGNORE INTO chat_tags (chat_id, tag, source, created_at) VALUES (?, ?, 'user', ?)",
       );
       const now = new Date().toISOString();
-      for (const raw of tags) {
+      for (const raw of unique) {
         const tag = registry.upsert(raw); // throws on invalid input
         insert.run(chatId, tag.name, now);
       }
@@ -79,8 +80,9 @@ export class ChatTagsRepository {
    * Returns null when `tags` is empty (caller treats null as "no tag filter").
    */
   filterChatIds(tags: string[]): string[] | null {
-    if (tags.length === 0) return null;
-    const placeholders = tags.map(() => '?').join(',');
+    const unique = [...new Set(tags)];
+    if (unique.length === 0) return null;
+    const placeholders = unique.map(() => '?').join(',');
     const rows = this.db
       .prepare(
         `SELECT chat_id FROM chat_tags
@@ -88,7 +90,7 @@ export class ChatTagsRepository {
          GROUP BY chat_id
          HAVING COUNT(DISTINCT tag) = ?`,
       )
-      .all(...tags, tags.length) as { chat_id: string }[];
+      .all(...unique, unique.length) as { chat_id: string }[];
     return rows.map((r) => r.chat_id);
   }
 }
