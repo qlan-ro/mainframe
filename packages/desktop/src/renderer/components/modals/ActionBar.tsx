@@ -40,7 +40,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
   };
 
   return (
-    <div className="border-t border-mf-border bg-mf-surface-secondary p-4">
+    <div className="border-t border-mf-border bg-mf-panel-bg p-4">
       <div className="mb-3 flex gap-2">
         <Input
           type="text"
@@ -56,7 +56,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
       </div>
 
       {commitError && (
-        <div className="mb-3 rounded bg-mf-error-background px-3 py-2 text-sm text-mf-error">{commitError}</div>
+        <div className="mb-3 rounded bg-mf-chat-error-surface px-3 py-2 text-sm text-mf-chat-error">{commitError}</div>
       )}
 
       <div className="flex gap-2">

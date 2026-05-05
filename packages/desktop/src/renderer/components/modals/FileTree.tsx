@@ -137,8 +137,8 @@ const FileItem: React.FC<FileItemProps> = ({ file, isSelected, isStaged, onSelec
       onClick={onSelect}
       className={`mb-1 flex cursor-pointer items-center gap-2 rounded px-3 py-2 text-sm transition-colors ${
         isSelected
-          ? 'bg-mf-surface-secondary text-mf-text-primary'
-          : 'text-mf-text-secondary hover:bg-mf-surface-secondary hover:text-mf-text-primary'
+          ? 'bg-mf-hover text-mf-text-primary'
+          : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
       }`}
     >
       <input

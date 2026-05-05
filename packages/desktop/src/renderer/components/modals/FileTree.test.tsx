@@ -156,7 +156,7 @@ describe('FileTree', () => {
 
     // Initially no file is selected
     const index = screen.getByText('index.ts').closest('div[class*="cursor-pointer"]');
-    expect(index).not.toHaveClass('bg-mf-surface-secondary');
+    expect(index).not.toHaveClass('bg-mf-hover');
 
     // Rerender with file selected
     rerender(
@@ -172,7 +172,7 @@ describe('FileTree', () => {
     );
 
     const selectedIndex = screen.getByText('index.ts').closest('div[class*="cursor-pointer"]');
-    expect(selectedIndex).toHaveClass('bg-mf-surface-secondary');
+    expect(selectedIndex).toHaveClass('bg-mf-hover');
   });
 
   it('calls onToggleStaged when checkbox is clicked for unstaged file', async () => {

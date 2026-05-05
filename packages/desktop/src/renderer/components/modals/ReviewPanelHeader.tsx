@@ -18,7 +18,7 @@ export const ReviewPanelHeader: React.FC<ReviewPanelHeaderProps> = ({ isWorktree
           size="sm"
           onClick={onClose}
           aria-label="Close review panel"
-          className="hover:bg-mf-surface-secondary"
+          className="hover:bg-mf-hover"
         >
           ✕
         </Button>
@@ -26,7 +26,7 @@ export const ReviewPanelHeader: React.FC<ReviewPanelHeaderProps> = ({ isWorktree
 
       {/* Warning banner (only if not worktree) */}
       {!isWorktree && (
-        <div className="flex gap-3 border-t border-mf-border bg-mf-surface-secondary px-6 py-3">
+        <div className="flex gap-3 border-t border-mf-border bg-mf-hover px-6 py-3">
           <AlertCircle className="h-4 w-4 flex-shrink-0 text-mf-warning" />
           <p className="text-sm text-mf-text-secondary">
             Changes are not isolated to this chat. Review includes all uncommitted work in the project.
