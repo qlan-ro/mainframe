@@ -149,6 +149,11 @@ export class GitService {
     await this.git().add(files);
   }
 
+  async unstage(files: string[]): Promise<void> {
+    if (files.length === 0) return;
+    await this.git().raw(['reset', 'HEAD', '--', ...files]);
+  }
+
   async commit(message: string): Promise<string> {
     const result = await this.git().commit(message);
     return result.commit;

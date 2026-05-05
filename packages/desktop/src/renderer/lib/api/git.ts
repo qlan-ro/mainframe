@@ -26,7 +26,6 @@ export const gitApi = {
   },
 
   async unstageFiles(chatId: string, files: string[]): Promise<{ success: boolean }> {
-    // No dedicated backend endpoint yet — placeholder for future /api/git/unstage route.
     return postJson(`${API_BASE}/api/git/unstage`, { chatId, files });
   },
 

@@ -327,6 +327,44 @@ async function handleGitStage(ctx: RouteContext, req: Request, res: Response): P
   }
 }
 
+/** POST /api/git/unstage */
+async function handleGitUnstage(ctx: RouteContext, req: Request, res: Response): Promise<void> {
+  const parsed = StageRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'chatId and files are required' });
+    return;
+  }
+
+  const { chatId, files } = parsed.data;
+  const workDir = ctx.chats.getEffectivePath(chatId);
+  if (!workDir) {
+    res.status(404).json({ error: 'Chat not found' });
+    return;
+  }
+
+  if (files.length === 0) {
+    res.json({ success: true });
+    return;
+  }
+
+  for (const file of files) {
+    const resolved = resolveAndValidatePath(workDir, file);
+    if (!resolved) {
+      res.status(400).json({ error: `Path outside project: ${file}` });
+      return;
+    }
+  }
+
+  try {
+    const svc = GitService.forProject(workDir);
+    await svc.unstage(files);
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err, workDir, chatId }, 'Failed to unstage files');
+    res.status(400).json({ error: (err as Error).message ?? 'Unknown error' });
+  }
+}
+
 /** POST /api/git/status */
 async function handleChatGitStatus(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = StatusRequestSchema.safeParse(req.body);
@@ -435,6 +473,10 @@ export function gitRoutes(ctx: RouteContext): Router {
   router.post(
     '/api/git/stage',
     asyncHandler((req, res) => handleGitStage(ctx, req, res)),
+  );
+  router.post(
+    '/api/git/unstage',
+    asyncHandler((req, res) => handleGitUnstage(ctx, req, res)),
   );
   router.post(
     '/api/git/commit',
