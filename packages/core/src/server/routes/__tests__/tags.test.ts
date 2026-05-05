@@ -114,6 +114,25 @@ describe('tag routes', () => {
     expect(res.body.data.sort()).toEqual(['feature', 'ui']);
   });
 
+  it('PATCH /api/tags/:name updates color only', async () => {
+    const { app, tags } = makeApp();
+    tags.upsert('feature');
+    const res = await request(app).patch('/api/tags/feature').send({ color: 'red' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.color).toBe('red');
+    expect(tags.get('feature')?.color).toBe('red');
+  });
+
+  it('PATCH /api/tags/:name applies rename and color in one call', async () => {
+    const { app, tags } = makeApp();
+    tags.upsert('feat');
+    const res = await request(app).patch('/api/tags/feat').send({ rename: 'feature', color: 'red' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.name).toBe('feature');
+    expect(res.body.data.color).toBe('red');
+    expect(tags.get('feat')).toBeNull();
+  });
+
   it('PUT /api/chats/:id/tags rejects reserved-prefix tag with 400', async () => {
     const { app } = makeApp();
     const res = await request(app)

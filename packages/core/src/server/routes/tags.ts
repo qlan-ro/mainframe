@@ -50,9 +50,9 @@ export function tagRoutes(ctx: RouteContext): Router {
       return;
     }
     try {
-      if (parsed.data.rename) ctx.db.tags.rename(name, parsed.data.rename);
+      if (parsed.data.rename !== undefined) ctx.db.tags.rename(name, parsed.data.rename);
       const final = parsed.data.rename ?? name;
-      if (parsed.data.color) ctx.db.tags.setColor(final, parsed.data.color);
+      if (parsed.data.color !== undefined) ctx.db.tags.setColor(final, parsed.data.color);
       const result = ctx.db.tags.get(final);
       res.json({ success: true, data: result });
     } catch (err) {
