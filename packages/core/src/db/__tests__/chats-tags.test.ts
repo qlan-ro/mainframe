@@ -67,3 +67,13 @@ describe('ChatsRepository — Chat.tags population', () => {
     expect(result!.tags).toEqual([]);
   });
 });
+
+describe('ChatsRepository — listFiltered invariant', () => {
+  it('listFiltered throws when tagsAll given but chatTags is absent', () => {
+    const db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
+    initializeSchema(db);
+    const chats = new ChatsRepository(db); // no chatTags
+    expect(() => chats.listFiltered({ tagsAll: ['feature'] })).toThrow(/ChatTagsRepository/);
+  });
+});

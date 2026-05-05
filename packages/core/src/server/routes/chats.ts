@@ -12,9 +12,23 @@ const logger = createChildLogger('routes:chats');
 export function chatRoutes(ctx: RouteContext): Router {
   const router = Router();
 
+  const TAG_NAME_PATTERN = /^[a-z0-9-]+$/;
+
   const ListQuery = z.object({
     project: z.string().optional(),
-    tags: z.string().optional(),
+    tags: z
+      .string()
+      .optional()
+      .refine(
+        (v) =>
+          v === undefined ||
+          v
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .every((t) => TAG_NAME_PATTERN.test(t)),
+        { message: 'Tag values must match [a-z0-9-]+' },
+      ),
     synthetic: z.string().optional(),
   });
 

@@ -107,4 +107,10 @@ describe('GET /api/chats — filtered list', () => {
     const c1 = res.body.data.find((c: { id: string }) => c.id === 'c1');
     expect(c1.tags).toEqual(['feature']);
   });
+
+  it('rejects malformed tag values with 400', async () => {
+    const { app } = makeApp();
+    const res = await request(app).get('/api/chats?tags=feature,BAD!');
+    expect(res.status).toBe(400);
+  });
 });
