@@ -28,7 +28,7 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => 
   const [commitMessage, setCommitMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [diffs, setDiffs] = useState<Record<string, { original: string; modified: string }>>({});
+  const [diffs, setDiffs] = useState<Record<string, { main: string; worktree: string }>>({});
 
   const isWorktree = activeChat?.worktreePath != null;
 
@@ -57,7 +57,7 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => 
         setStagedFiles(new Set(statusRes.staged));
 
         if (fileList.length > 0) {
-          setSelectedFile(fileList[0].path);
+          setSelectedFile(fileList[0]?.path ?? null);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load changes');
@@ -137,7 +137,7 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => 
       setFiles(fileList);
       setDiffs(diffRes.diffs);
       setStagedFiles(new Set(statusRes.staged));
-      setSelectedFile(fileList.length > 0 ? fileList[0].path : null);
+      setSelectedFile(fileList.length > 0 ? (fileList[0]?.path ?? null) : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to commit');
     } finally {
@@ -176,7 +176,6 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => 
           <div className="w-64 overflow-hidden">
             <FileTree
               stagedFiles={stagedFiles}
-              unstageFiles={new Set()}
               files={files}
               selectedFile={selectedFile}
               onSelectFile={setSelectedFile}
@@ -189,8 +188,8 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({ isOpen, onClose }) => 
           <div className="flex-1 overflow-hidden">
             {selectedFileData && selectedFileDiff ? (
               <DiffView
-                oldCode={selectedFileDiff.original}
-                newCode={selectedFileDiff.modified}
+                oldCode={selectedFileDiff.main}
+                newCode={selectedFileDiff.worktree}
                 filename={selectedFileData.path}
                 mode={diffMode}
                 onModeChange={setDiffMode}
