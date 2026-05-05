@@ -13,7 +13,8 @@ export const TAG_PALETTE = Object.freeze([
 export type TagColor = (typeof TAG_PALETTE)[number];
 
 /** Used for synthetic chips in the filter bar — outside the user palette so it signals "system" visually. */
-export const SYNTHETIC_TAG_COLOR: TagColor | 'gray' = 'gray';
+export const SYNTHETIC_TAG_COLOR = 'gray' as const;
+export type SyntheticTagColor = typeof SYNTHETIC_TAG_COLOR;
 export const RESERVED_TAG_PREFIX = 'has-';
 
 export const SYNTHETIC_TAGS = Object.freeze(['has-pr', 'has-worktree'] as const);
