@@ -68,12 +68,7 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     }));
-    if (this.chatTags && chats.length > 0) {
-      const tagsByChat = this.chatTags.bulkForChats(chats.map((c) => c.id));
-      for (const c of chats) {
-        c.tags = tagsByChat.get(c.id) ?? [];
-      }
-    }
+    this.populateBulkTags(chats);
     return chats;
   }
 
@@ -107,12 +102,7 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     }));
-    if (this.chatTags && chats.length > 0) {
-      const tagsByChat = this.chatTags.bulkForChats(chats.map((c) => c.id));
-      for (const c of chats) {
-        c.tags = tagsByChat.get(c.id) ?? [];
-      }
-    }
+    this.populateBulkTags(chats);
     return chats;
   }
 
@@ -146,9 +136,7 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     };
-    if (this.chatTags) {
-      chat.tags = this.chatTags.listForChat(chat.id);
-    }
+    this.populateTags(chat);
     return chat;
   }
 
@@ -360,9 +348,20 @@ export class ChatsRepository {
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     };
-    if (this.chatTags) {
-      chat.tags = this.chatTags.listForChat(chat.id);
-    }
+    this.populateTags(chat);
     return chat;
+  }
+
+  private populateBulkTags(chats: Chat[]): void {
+    if (!this.chatTags || chats.length === 0) return;
+    const tagsByChat = this.chatTags.bulkForChats(chats.map((c) => c.id));
+    for (const c of chats) {
+      c.tags = tagsByChat.get(c.id) ?? [];
+    }
+  }
+
+  private populateTags(chat: Chat): void {
+    if (!this.chatTags) return;
+    chat.tags = this.chatTags.listForChat(chat.id);
   }
 }
