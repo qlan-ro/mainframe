@@ -1,0 +1,72 @@
+import React, { useState } from 'react';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+
+interface ActionBarProps {
+  commitMessage: string;
+  onCommitMessageChange: (message: string) => void;
+  onSuggestMessage: () => void;
+  onCommit: () => Promise<void>;
+  onOpenPR: () => Promise<void>;
+  isLoading: boolean;
+}
+
+export const ActionBar: React.FC<ActionBarProps> = ({
+  commitMessage,
+  onCommitMessageChange,
+  onSuggestMessage,
+  onCommit,
+  onOpenPR,
+  isLoading,
+}) => {
+  const [commitError, setCommitError] = useState<string | null>(null);
+
+  const handleCommit = async () => {
+    try {
+      setCommitError(null);
+      await onCommit();
+    } catch (error) {
+      setCommitError(error instanceof Error ? error.message : 'Failed to commit');
+    }
+  };
+
+  const handleOpenPR = async () => {
+    try {
+      setCommitError(null);
+      await onOpenPR();
+    } catch (error) {
+      setCommitError(error instanceof Error ? error.message : 'Failed to create PR');
+    }
+  };
+
+  return (
+    <div className="border-t border-mf-border bg-mf-surface-secondary p-4">
+      <div className="mb-3 flex gap-2">
+        <Input
+          type="text"
+          placeholder="Commit message..."
+          value={commitMessage}
+          onChange={(e) => onCommitMessageChange(e.target.value)}
+          disabled={isLoading}
+          className="flex-1"
+        />
+        <Button variant="secondary" size="sm" onClick={onSuggestMessage} disabled={isLoading}>
+          AI Suggest
+        </Button>
+      </div>
+
+      {commitError && (
+        <div className="mb-3 rounded bg-mf-error-background px-3 py-2 text-sm text-mf-error">{commitError}</div>
+      )}
+
+      <div className="flex gap-2">
+        <Button variant="default" onClick={handleCommit} disabled={isLoading || !commitMessage.trim()}>
+          {isLoading ? 'Committing...' : 'Commit'}
+        </Button>
+        <Button variant="secondary" onClick={handleOpenPR} disabled={isLoading}>
+          {isLoading ? 'Creating PR...' : 'Open PR'}
+        </Button>
+      </div>
+    </div>
+  );
+};
