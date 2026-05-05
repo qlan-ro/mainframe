@@ -33,7 +33,7 @@ export const DiffView: React.FC<DiffViewProps> = ({ oldCode, newCode, filename, 
         <span className="text-sm font-medium text-mf-text-secondary">{filename}</span>
         <div className="flex gap-2">
           <Button
-            variant={currentMode === 'inline' ? 'default' : 'ghost'}
+            variant={currentMode === 'inline' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => handleModeChange('inline')}
             aria-label="Switch to inline diff view"
@@ -41,7 +41,7 @@ export const DiffView: React.FC<DiffViewProps> = ({ oldCode, newCode, filename, 
             ≣ Inline
           </Button>
           <Button
-            variant={currentMode === 'split' ? 'default' : 'ghost'}
+            variant={currentMode === 'split' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => handleModeChange('split')}
             aria-label="Switch to side-by-side diff view"

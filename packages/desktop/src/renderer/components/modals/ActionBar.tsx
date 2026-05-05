@@ -50,7 +50,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
           disabled={isLoading}
           className="flex-1"
         />
-        <Button variant="secondary" size="sm" onClick={onSuggestMessage} disabled={isLoading}>
+        <Button variant="ghost" size="sm" onClick={onSuggestMessage} disabled={isLoading}>
           AI Suggest
         </Button>
       </div>
@@ -59,12 +59,17 @@ export const ActionBar: React.FC<ActionBarProps> = ({
         <div className="mb-3 rounded bg-mf-chat-error-surface px-3 py-2 text-sm text-mf-chat-error">{commitError}</div>
       )}
 
-      <div className="flex gap-2">
-        <Button variant="default" onClick={handleCommit} disabled={isLoading || !commitMessage.trim()}>
-          {isLoading ? 'Committing...' : 'Commit'}
-        </Button>
-        <Button variant="secondary" onClick={handleOpenPR} disabled={isLoading}>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={handleOpenPR} disabled={isLoading}>
           {isLoading ? 'Creating PR...' : 'Open PR'}
+        </Button>
+        <Button
+          size="sm"
+          className="bg-mf-accent text-white hover:bg-mf-accent/90"
+          onClick={handleCommit}
+          disabled={isLoading || !commitMessage.trim()}
+        >
+          {isLoading ? 'Committing...' : 'Commit'}
         </Button>
       </div>
     </div>
