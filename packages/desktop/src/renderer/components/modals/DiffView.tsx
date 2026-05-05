@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { DiffEditor } from '@monaco-editor/react';
 import { Button } from '../ui/button';
+import '../editor/setup';
 
 interface DiffViewProps {
   oldCode: string;
