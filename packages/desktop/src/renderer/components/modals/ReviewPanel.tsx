@@ -32,7 +32,7 @@ export const ReviewPanel: React.FC = () => {
 
   // Load diff and status when panel opens
   useEffect(() => {
-    if (!reviewPanelOpen || !activeChat) return;
+    if (!reviewPanelOpen || !activeChat || !activeChat.projectId) return;
 
     const load = async () => {
       try {
@@ -166,7 +166,7 @@ export const ReviewPanel: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
       <div className="flex h-5/6 w-5/6 flex-col rounded-lg border border-mf-border bg-mf-surface shadow-2xl">
         <ReviewPanelHeader isWorktree={isWorktree} onClose={() => setReviewPanelOpen(false)} />
 
