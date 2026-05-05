@@ -279,7 +279,7 @@ describe('POST /api/git/stage', () => {
     await waitForResponse(res);
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.body).toBeDefined();
+    expect(res.json).toHaveBeenCalled();
   });
 
   it('returns 400 when chatId is missing', async () => {
