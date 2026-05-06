@@ -463,17 +463,6 @@ textarea:focus-visible,
   color: white;
 }
 
-/* Monaco diff line overlays paint a colored background on top of the text layer
-   with `user-select: none`, which captures clicks and prevents selecting text on
-   added/removed lines. They're purely decorative — passing pointer events
-   through lets the underlying .view-line selection work normally. */
-.monaco-editor .line-insert,
-.monaco-editor .line-delete,
-.monaco-editor .char-insert,
-.monaco-editor .char-delete {
-  pointer-events: none;
-}
-
 /* Monaco glyph margin "+" icon for inline comments */
 .mf-line-comment-glyph {
   cursor: pointer;
