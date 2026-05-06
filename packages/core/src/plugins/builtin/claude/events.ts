@@ -372,11 +372,24 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   // versions / SDK shims that drop the flag.
   if (event.isCompactSummary === true) return;
 
-  // Detect queued message processed by CLI (isReplay from SDK mode)
+  // Detect queued message processed by CLI (isReplay from SDK mode).
+  // The uuid identifying the original user message can land in any of three
+  // places depending on CLI version and event shape:
+  //   - event.uuid              (stream-json entry-level)
+  //   - event.message.uuid      (some SDK builds)
+  //   - event.message.id        (when treated as a regular Anthropic message id)
+  // Reading only event.uuid leaves a stranded queued flag in the cache when
+  // the CLI uses one of the other shapes — see issue #147.
   const isReplay = event.isReplay === true || event.is_replay === true;
-  const uuid = (event.uuid as string) || undefined;
+  const messageObj = event.message as { uuid?: string; id?: string } | undefined;
+  const uuid = (event.uuid as string) || messageObj?.uuid || messageObj?.id || undefined;
   if (isReplay && uuid) {
     sink.onQueuedProcessed(uuid);
+  } else if (isReplay) {
+    log.warn(
+      { sessionId: session.id, eventKeys: Object.keys(event) },
+      'isReplay user event without recognizable uuid — queued flag may strand',
+    );
   }
 
   // Live stream handles ONLY tool_result blocks from user events.

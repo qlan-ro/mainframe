@@ -65,6 +65,7 @@ export class ChatManager {
       },
       (chatId, uuid) => this.handleQueuedProcessed(chatId, uuid),
       (chatId) => this.clearAllQueuedForChat(chatId),
+      (chatId) => this.getQueuedForChat(chatId).length,
     );
     this.planMode = new PlanModeHandler({
       permissions: this.permissions,

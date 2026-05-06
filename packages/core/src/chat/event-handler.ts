@@ -53,6 +53,7 @@ export class EventHandler {
     private getToolCategories: (chatId: string) => ToolCategories | undefined = () => undefined,
     private onQueuedProcessed: (chatId: string, uuid: string) => void = () => {},
     private onQueuedCleared: (chatId: string) => void = () => {},
+    private getQueuedCount: (chatId: string) => number = () => 0,
   ) {}
 
   setPushService(service: PushService): void {
@@ -83,6 +84,7 @@ export class EventHandler {
       this.getToolCategories,
       this.onQueuedProcessed,
       this.onQueuedCleared,
+      this.getQueuedCount,
       this.pushService,
     );
   }
@@ -112,6 +114,7 @@ function buildSessionSink(
   getToolCategories: (chatId: string) => ToolCategories | undefined,
   onQueuedProcessedCb: (chatId: string, uuid: string) => void,
   onQueuedClearedCb: (chatId: string) => void,
+  getQueuedCount: (chatId: string) => number,
   pushService?: PushService,
 ): SessionSink {
   function emitDisplay(): void {
@@ -261,20 +264,50 @@ function buildSessionSink(
       // the AI finishes a turn, not only when the user sends a message.
       const now = new Date().toISOString();
 
+      // Result events fire per-turn. If the user queued more messages while the
+      // CLI was busy, the CLI will keep processing them — we must NOT flip to
+      // idle here, or the thinking indicator drops while the assistant is
+      // still streaming the next queued turn. The final result (when the queue
+      // drains) will set idle.
+      const queueRemaining = getQueuedCount(chatId);
+      const nextProcessState: 'idle' | 'working' = queueRemaining > 0 ? 'working' : 'idle';
+
       db.chats.update(chatId, {
         totalCost: newCost,
         totalTokensInput: newInput,
         totalTokensOutput: newOutput,
         lastContextTokensInput: tokensInput,
-        processState: 'idle',
+        processState: nextProcessState,
         updatedAt: now,
       });
       active.chat.totalCost = newCost;
       active.chat.totalTokensInput = newInput;
       active.chat.totalTokensOutput = newOutput;
       active.chat.lastContextTokensInput = tokensInput;
-      active.chat.processState = 'idle';
+      active.chat.processState = nextProcessState;
       active.chat.updatedAt = now;
+
+      // Belt-and-suspenders: when the queue is genuinely empty, sweep any
+      // message still flagged metadata.queued. These are stranded acks —
+      // happens when the CLI's isReplay event arrived in a uuid shape we
+      // didn't dispatch on, so the per-message flag was never cleared.
+      if (queueRemaining === 0) {
+        const cached = messages.get(chatId);
+        let swept = false;
+        if (cached) {
+          for (const m of cached) {
+            if (m.metadata?.queued) {
+              delete (m.metadata as Record<string, unknown>).queued;
+              delete (m.metadata as Record<string, unknown>).uuid;
+              swept = true;
+            }
+          }
+        }
+        if (swept) {
+          log.warn({ chatId }, 'onResult: swept stranded metadata.queued flags');
+          emitDisplay();
+        }
+      }
       // Check interrupted flag before clearing permissions (clear() wipes both).
       const wasInterrupted = permissions.clearInterrupted(chatId);
       // CLI process ended — clear stale permissions so displayStatus reflects
