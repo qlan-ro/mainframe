@@ -63,7 +63,13 @@ export const ReviewPanel: React.FC = () => {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-mf-overlay/60 z-50">
       <div className="flex h-5/6 w-5/6 flex-col rounded-lg border border-mf-border bg-mf-panel-bg shadow-2xl">
-        <ReviewPanelHeader isWorktree={isWorktree} onClose={() => setReviewPanelOpen(false)} />
+        <ReviewPanelHeader
+          isWorktree={isWorktree}
+          onClose={() => setReviewPanelOpen(false)}
+          filename={selectedFileData?.path ?? null}
+          mode={selectedFileDiff ? diffMode : undefined}
+          onModeChange={selectedFileDiff ? setDiffMode : undefined}
+        />
 
         <div className="flex flex-1 overflow-hidden">
           <div className="w-64 overflow-hidden">
@@ -78,7 +84,6 @@ export const ReviewPanel: React.FC = () => {
                 filename={selectedFileData.path}
                 chatId={activeChat.id}
                 mode={diffMode}
-                onModeChange={setDiffMode}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-mf-text-secondary">

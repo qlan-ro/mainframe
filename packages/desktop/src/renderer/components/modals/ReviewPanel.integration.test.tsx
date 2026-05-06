@@ -12,7 +12,7 @@ vi.mock('../../lib/api/git');
 // which requires browser APIs unavailable in jsdom (document.queryCommandSupported).
 // The integration tests below cover load/error/close — diff rendering is out of scope.
 vi.mock('./DiffView', () => ({
-  DiffView: ({ filename }: { filename: string }) => <div data-testid="diff-view">{filename}</div>,
+  DiffView: () => <div data-testid="diff-view" />,
 }));
 
 const mockGitApi = gitApiModule.gitApi as any;
