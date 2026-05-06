@@ -10,6 +10,9 @@ vi.mock('../../renderer/store/index.js', () => ({
       activeChatId: null,
       setActiveChat: vi.fn(),
       removeChat: vi.fn(),
+      addChat: vi.fn(),
+      updateChat: vi.fn(),
+      chats: [],
       unreadChatIds: new Set(),
       detectedPrs: new Map(),
     }),
@@ -19,6 +22,9 @@ vi.mock('../../renderer/store/tabs.js', () => ({
 }));
 vi.mock('../../renderer/store/adapters.js', () => ({
   useAdaptersStore: (selector: (s: unknown) => unknown) => selector({ adapters: [] }),
+}));
+vi.mock('../../renderer/store/tags.js', () => ({
+  useTagsStore: (selector: (s: unknown) => unknown) => selector({ registry: [] }),
 }));
 vi.mock('../../renderer/lib/client.js', () => ({
   daemonClient: { createChat: vi.fn(), resumeChat: vi.fn() },
