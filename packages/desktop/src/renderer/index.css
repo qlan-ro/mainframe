@@ -232,6 +232,10 @@ code {
    numbers, gutter, minimap, scrollbars stay non-selectable. */
 .mf-editor-selectable .monaco-editor .view-line,
 .mf-editor-selectable .monaco-editor .view-lines,
+.mf-editor-selectable .monaco-editor .line-insert,
+.mf-editor-selectable .monaco-editor .line-delete,
+.mf-editor-selectable .monaco-editor .char-insert,
+.mf-editor-selectable .monaco-editor .char-delete,
 .mf-editor-selectable .monaco-editor .line-delete-selectable {
   user-select: text;
   -webkit-user-select: text;
