@@ -278,7 +278,7 @@ export function ComposerCard() {
   return (
     <ComposerPrimitive.Root
       data-tutorial="step-3"
-      className="relative border border-mf-border rounded-mf-card bg-transparent overflow-hidden"
+      className="relative border border-mf-border rounded-mf-card bg-transparent"
     >
       <ContextPickerMenu forceOpen={pickerOpen} onClose={() => setPickerOpen(false)} />
       <div className="flex items-center gap-1 px-2 pt-2">

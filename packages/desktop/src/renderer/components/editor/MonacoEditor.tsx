@@ -96,7 +96,13 @@ export function MonacoEditor({
     const model = editor.getModel();
     if (!model) return;
     if (model.getValue() !== value) {
+      // Save scroll position before updating content
+      const savedViewState = editor.saveViewState();
       model.setValue(value);
+      // Restore scroll position after content update
+      if (savedViewState) {
+        editor.restoreViewState(savedViewState);
+      }
     }
   }, [value]);
 
