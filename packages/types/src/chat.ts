@@ -8,14 +8,6 @@ export interface TodoItem {
 
 export type ChatEffort = 'low' | 'medium' | 'high';
 
-export interface ReviewComment {
-  fileId: string;
-  line: number;
-  content: string;
-  authorId: string;
-  timestamp: number;
-}
-
 export interface Chat {
   id: string;
   adapterId: string;
@@ -45,7 +37,6 @@ export interface Chat {
   pinned?: boolean;
   /** Reasoning effort for Claude adapter (gated on model.supportsEffort). Applied as --effort on CLI spawn. */
   effort?: ChatEffort;
-  reviewComments?: ReviewComment[];
 }
 
 export interface Project {

@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { MonacoDiffEditor } from '../editor/MonacoDiffEditor';
 import { sendCommentMessage } from '../../lib/send-comment-message';
+import { formatLineComment } from '../../lib/format-line-comment';
 
 interface DiffViewProps {
   oldCode: string;
@@ -34,18 +35,10 @@ function inferLanguage(filename: string): string {
   return map[ext || ''] || 'plaintext';
 }
 
-function formatComment(item: { startLine: number; endLine: number; lineContent: string; comment: string }): string {
-  const lineRef =
-    item.startLine === item.endLine ? `line ${item.startLine}` : `lines ${item.startLine}-${item.endLine}`;
-  const trimmed = item.lineContent.trim();
-  const quote = trimmed ? `\n\`\`\`\n${trimmed}\n\`\`\`` : '';
-  return `At ${lineRef}:${quote}\n${item.comment}`;
-}
-
 export const DiffView: React.FC<DiffViewProps> = ({ oldCode, newCode, filename, chatId, mode = 'inline' }) => {
   const handleLineComment = useCallback(
     (startLine: number, endLine: number, lineContent: string, comment: string) => {
-      const body = formatComment({ startLine, endLine, lineContent, comment });
+      const body = formatLineComment({ startLine, endLine, lineContent, comment });
       sendCommentMessage(`Diff of \`${filename}\`\n\n${body}`, chatId);
     },
     [filename, chatId],
@@ -53,7 +46,7 @@ export const DiffView: React.FC<DiffViewProps> = ({ oldCode, newCode, filename, 
 
   const handleSubmitReview = useCallback(
     (items: { startLine: number; endLine: number; lineContent: string; comment: string }[]) => {
-      const parts = items.map(formatComment);
+      const parts = items.map(formatLineComment);
       sendCommentMessage(`Diff of \`${filename}\`\n\n${parts.join('\n\n---\n\n')}`, chatId);
     },
     [filename, chatId],
