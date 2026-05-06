@@ -241,15 +241,24 @@ code {
   -webkit-user-select: text;
 }
 
-/* The selection decoration (.cslr.selected-text) is a sibling of the diff
-   line backgrounds (.cdr.line-insert / .line-delete) inside .view-overlays.
-   Our setup.ts uses opaque diff line colors (#243d30 / #4d2c2c) so the green/
-   red band paints over the selection, making selection invisible on diff
-   lines. Monaco's upstream fix for #267991 uses the same pattern: bump
-   .line-delete-selectable to z-index: 1. We bump the selection layer instead
-   so the user can see what they selected. */
+/* Selection rendering on diff lines:
+   .cslr.selected-text and .cdr.line-insert / .line-delete are sibling
+   decorations inside .view-overlays. Without z-index, paint follows DOM
+   order and Monaco emits the diff color decoration AFTER the selection,
+   which works upstream because Monaco's default diff bg is semi-transparent.
+   Our setup.ts uses opaque hex (#243d30 / #4d2c2c) so the band fully covers
+   the selection. We need the selection to paint above the diff band but
+   *below* the text spans (which live in the sibling .view-lines subtree,
+   normally painted on top so selected text stays crisp). Putting an
+   unconstrained z-index on .selected-text would lift it above the text too.
+   Solution: make .view-overlays its own stacking context with isolation,
+   then z-index competition stays inside it — selection beats diff bands
+   without leaking out to beat .view-lines text. */
+.mf-editor-selectable .monaco-editor .view-overlays {
+  isolation: isolate;
+}
 .mf-editor-selectable .monaco-editor .selected-text {
-  z-index: 2 !important;
+  z-index: 1 !important;
 }
 
 /* assistant-ui markdown overrides */
