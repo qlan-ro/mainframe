@@ -33,24 +33,14 @@ export const ReviewPanelHeader: React.FC<ReviewPanelHeaderProps> = ({
 
         <div className="relative flex items-center gap-2">
           {mode && onModeChange && (
-            <>
-              <Button
-                variant={mode === 'inline' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => onModeChange('inline')}
-                aria-label="Switch to inline diff view"
-              >
+            <div className="flex items-center gap-1">
+              <ModeButton active={mode === 'inline'} onClick={() => onModeChange('inline')} label="inline">
                 ≣ Inline
-              </Button>
-              <Button
-                variant={mode === 'split' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => onModeChange('split')}
-                aria-label="Switch to side-by-side diff view"
-              >
+              </ModeButton>
+              <ModeButton active={mode === 'split'} onClick={() => onModeChange('split')} label="side-by-side">
                 ⇄ Split
-              </Button>
-            </>
+              </ModeButton>
+            </div>
           )}
           <Button
             variant="ghost"
@@ -76,3 +66,27 @@ export const ReviewPanelHeader: React.FC<ReviewPanelHeaderProps> = ({
     </div>
   );
 };
+
+interface ModeButtonProps {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}
+
+/** Bordered toggle in the header — mirrors tabs.tsx active/inactive pattern, sized for app-bg chrome. */
+const ModeButton: React.FC<ModeButtonProps> = ({ active, onClick, label, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    aria-label={`Switch to ${label} diff view`}
+    className={`h-7 rounded-mf-input border px-2.5 text-mf-small font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-mf-ring ${
+      active
+        ? 'border-mf-border bg-mf-hover text-mf-text-primary'
+        : 'border-mf-border/60 bg-transparent text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'
+    }`}
+  >
+    {children}
+  </button>
+);
