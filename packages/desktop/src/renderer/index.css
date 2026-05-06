@@ -241,6 +241,17 @@ code {
   -webkit-user-select: text;
 }
 
+/* The selection decoration (.cslr.selected-text) is a sibling of the diff
+   line backgrounds (.cdr.line-insert / .line-delete) inside .view-overlays.
+   Our setup.ts uses opaque diff line colors (#243d30 / #4d2c2c) so the green/
+   red band paints over the selection, making selection invisible on diff
+   lines. Monaco's upstream fix for #267991 uses the same pattern: bump
+   .line-delete-selectable to z-index: 1. We bump the selection layer instead
+   so the user can see what they selected. */
+.mf-editor-selectable .monaco-editor .selected-text {
+  z-index: 2 !important;
+}
+
 /* assistant-ui markdown overrides */
 .aui-md {
   max-width: none;
