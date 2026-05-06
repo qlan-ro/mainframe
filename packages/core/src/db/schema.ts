@@ -94,6 +94,9 @@ export function initializeSchema(db: Database.Database): void {
   if (!cols.some((c) => c.name === 'effort')) {
     db.exec('ALTER TABLE chats ADD COLUMN effort TEXT');
   }
+  if (!cols.some((c) => c.name === 'detected_prs')) {
+    db.exec("ALTER TABLE chats ADD COLUMN detected_prs TEXT DEFAULT '[]'");
+  }
   if (!cols.some((c) => c.name === 'plan_mode')) {
     db.exec('ALTER TABLE chats ADD COLUMN plan_mode INTEGER NOT NULL DEFAULT 0');
     db.exec("UPDATE chats SET plan_mode = 1, permission_mode = 'default' WHERE permission_mode = 'plan'");

@@ -118,7 +118,20 @@ export const useChatsStore = create<ChatsState>((set) => ({
       next.delete(chatId);
       return { unreadChatIds: next };
     }),
-  setChats: (chats) => set({ chats: sortChats([...chats]) }),
+  setChats: (chats) =>
+    set((state) => {
+      // Seed `detectedPrs` from the DB-backed Chat rows so PR badges render
+      // immediately on app load without requiring each session to be opened
+      // (which is what triggers the daemon's history-replay PR scan). Live
+      // `chat.prDetected` events still merge into this Map idempotently.
+      const next = new Map(state.detectedPrs);
+      for (const chat of chats) {
+        if (chat.detectedPrs && chat.detectedPrs.length > 0 && !next.has(chat.id)) {
+          next.set(chat.id, chat.detectedPrs);
+        }
+      }
+      return { chats: sortChats([...chats]), detectedPrs: next };
+    }),
   setFilterProjectId: (id) => {
     if (id) {
       localStorage.setItem('mf:filterProjectId', id);

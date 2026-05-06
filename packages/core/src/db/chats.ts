@@ -1,15 +1,19 @@
 import type Database from 'better-sqlite3';
-import type { Chat, SessionMention, SkillFileEntry, TodoItem } from '@qlan-ro/mainframe-types';
+import type { Chat, DetectedPr, SessionMention, SkillFileEntry, TodoItem } from '@qlan-ro/mainframe-types';
 import { nanoid } from 'nanoid';
 
 /** Raw shape returned by SQLite before boolean/JSON coercion. */
-type RawChatRow = Omit<Chat, 'pinned' | 'planMode' | 'mentions' | 'modifiedFiles' | 'todos' | 'effort'> & {
+type RawChatRow = Omit<
+  Chat,
+  'pinned' | 'planMode' | 'mentions' | 'modifiedFiles' | 'todos' | 'effort' | 'detectedPrs'
+> & {
   mentions: string;
   modifiedFiles: string;
   todos: string;
   pinned: number;
   planMode: number;
   effort: string | null;
+  detectedPrs: string;
 };
 
 function parseEffort(value: string | null | undefined): Chat['effort'] {
@@ -41,7 +45,7 @@ export class ChatsRepository {
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
         process_state as processState, todos, pinned, effort,
-        plan_mode as planMode
+        plan_mode as planMode, detected_prs as detectedPrs
       FROM chats
       WHERE project_id = ?
       ORDER BY pinned DESC, updated_at DESC
@@ -58,6 +62,7 @@ export class ChatsRepository {
       pinned: Boolean(row.pinned),
       effort: parseEffort(row.effort),
       planMode: Boolean(row.planMode),
+      detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     }));
   }
 
@@ -73,7 +78,7 @@ export class ChatsRepository {
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
         process_state as processState, todos, pinned, effort,
-        plan_mode as planMode
+        plan_mode as planMode, detected_prs as detectedPrs
       FROM chats
       ORDER BY pinned DESC, updated_at DESC, rowid DESC
     `);
@@ -89,6 +94,7 @@ export class ChatsRepository {
       pinned: Boolean(row.pinned),
       effort: parseEffort(row.effort),
       planMode: Boolean(row.planMode),
+      detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     }));
   }
 
@@ -104,7 +110,7 @@ export class ChatsRepository {
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
         process_state as processState, todos, pinned, effort,
-        plan_mode as planMode
+        plan_mode as planMode, detected_prs as detectedPrs
       FROM chats WHERE id = ?
     `);
     const row = stmt.get(id) as RawChatRow | null;
@@ -120,6 +126,7 @@ export class ChatsRepository {
       pinned: Boolean(row.pinned),
       effort: parseEffort(row.effort),
       planMode: Boolean(row.planMode),
+      detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     };
   }
 
@@ -242,6 +249,45 @@ export class ChatsRepository {
     return true;
   }
 
+  getDetectedPrs(chatId: string): DetectedPr[] {
+    const stmt = this.db.prepare('SELECT detected_prs FROM chats WHERE id = ?');
+    const row = stmt.get(chatId) as { detected_prs: string } | undefined;
+    return parseJsonColumn(row?.detected_prs, []);
+  }
+
+  /**
+   * Persist newly-detected PRs, deduplicating by URL. Returns the rows that
+   * were actually written (i.e. either new, or had their `source` upgraded
+   * from `mentioned` → `created`). Existing 'created' entries are never
+   * downgraded to 'mentioned'.
+   */
+  addDetectedPrs(chatId: string, prs: DetectedPr[]): DetectedPr[] {
+    const existing = this.getDetectedPrs(chatId);
+    const byUrl = new Map(existing.map((p) => [p.url, p] as const));
+    const written: DetectedPr[] = [];
+    let mutated = false;
+
+    for (const pr of prs) {
+      const prev = byUrl.get(pr.url);
+      if (!prev) {
+        byUrl.set(pr.url, pr);
+        written.push(pr);
+        mutated = true;
+      } else if (prev.source !== 'created' && pr.source === 'created') {
+        byUrl.set(pr.url, { ...prev, source: 'created' });
+        written.push({ ...prev, source: 'created' });
+        mutated = true;
+      }
+    }
+
+    if (mutated) {
+      this.db
+        .prepare('UPDATE chats SET detected_prs = ? WHERE id = ?')
+        .run(JSON.stringify([...byUrl.values()]), chatId);
+    }
+    return written;
+  }
+
   getTodos(chatId: string): TodoItem[] | null {
     const stmt = this.db.prepare('SELECT todos FROM chats WHERE id = ?');
     const row = stmt.get(chatId) as { todos: string | null } | undefined;
@@ -274,7 +320,7 @@ export class ChatsRepository {
         mentions, modified_files as modifiedFiles,
         worktree_path as worktreePath, branch_name as branchName,
         process_state as processState, todos, pinned, effort,
-        plan_mode as planMode
+        plan_mode as planMode, detected_prs as detectedPrs
       FROM chats WHERE claude_session_id = ? AND project_id = ?
     `);
     const row = stmt.get(sessionId, projectId) as RawChatRow | null;
@@ -290,6 +336,7 @@ export class ChatsRepository {
       pinned: Boolean(row.pinned),
       effort: parseEffort(row.effort),
       planMode: Boolean(row.planMode),
+      detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     };
   }
 }

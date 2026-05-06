@@ -626,4 +626,70 @@ describe('ChatsRepository', () => {
       expect(chats.findByExternalSessionId('session-ggg', p2.id)).not.toBeNull();
     });
   });
+
+  describe('detected PRs', () => {
+    it('getDetectedPrs returns empty array for a new chat', () => {
+      const chat = chats.create(projectId, 'claude');
+      expect(chats.getDetectedPrs(chat.id)).toEqual([]);
+    });
+
+    it('addDetectedPrs persists a PR and is retrievable', () => {
+      const chat = chats.create(projectId, 'claude');
+      const pr = {
+        number: 123,
+        owner: 'owner',
+        repo: 'repo',
+        url: 'https://github.com/owner/repo/pull/123',
+        source: 'mentioned' as const,
+      };
+
+      const added = chats.addDetectedPrs(chat.id, [pr]);
+      expect(added).toEqual([pr]);
+      expect(chats.getDetectedPrs(chat.id)).toEqual([pr]);
+    });
+
+    it('addDetectedPrs deduplicates by URL across calls', () => {
+      const chat = chats.create(projectId, 'claude');
+      const pr = {
+        number: 1,
+        owner: 'o',
+        repo: 'r',
+        url: 'https://github.com/o/r/pull/1',
+        source: 'mentioned' as const,
+      };
+
+      chats.addDetectedPrs(chat.id, [pr]);
+      const second = chats.addDetectedPrs(chat.id, [pr]);
+      expect(second).toEqual([]);
+      expect(chats.getDetectedPrs(chat.id)).toHaveLength(1);
+    });
+
+    it('addDetectedPrs upgrades source from mentioned → created on second sighting', () => {
+      const chat = chats.create(projectId, 'claude');
+      const url = 'https://github.com/o/r/pull/9';
+
+      chats.addDetectedPrs(chat.id, [{ number: 9, owner: 'o', repo: 'r', url, source: 'mentioned' }]);
+      chats.addDetectedPrs(chat.id, [{ number: 9, owner: 'o', repo: 'r', url, source: 'created' }]);
+
+      const result = chats.getDetectedPrs(chat.id);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.source).toBe('created');
+    });
+
+    it('Chat returned by get() includes detectedPrs from DB', () => {
+      const chat = chats.create(projectId, 'claude');
+      chats.addDetectedPrs(chat.id, [
+        {
+          number: 7,
+          owner: 'o',
+          repo: 'r',
+          url: 'https://github.com/o/r/pull/7',
+          source: 'mentioned',
+        },
+      ]);
+
+      const reloaded = chats.get(chat.id);
+      expect(reloaded?.detectedPrs).toEqual([expect.objectContaining({ number: 7, source: 'mentioned' })]);
+    });
+  });
 });

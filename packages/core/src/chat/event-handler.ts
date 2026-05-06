@@ -402,7 +402,13 @@ function buildSessionSink(
     },
 
     onPrDetected(pr: import('@qlan-ro/mainframe-types').DetectedPr) {
-      emitEvent({ type: 'chat.prDetected', chatId, pr });
+      // Persist before emitting so reconnecting renderers / sidebar entries
+      // that never trigger a loadChat see the PR via the DB-backed Chat row.
+      // Suppress the WS event when addDetectedPrs reports no change — avoids
+      // re-emitting on every duplicate sighting from the live stream.
+      const persisted = db.chats.addDetectedPrs(chatId, [pr]);
+      if (persisted.length === 0) return;
+      emitEvent({ type: 'chat.prDetected', chatId, pr: persisted[0]! });
     },
 
     onCliMessage(text: string) {
