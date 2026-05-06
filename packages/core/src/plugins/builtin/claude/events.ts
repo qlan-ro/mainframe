@@ -590,6 +590,11 @@ function handleResultEvent(session: ClaudeSession, event: Record<string, unknown
   session.state.lastAssistantUsage = undefined;
   session.clearInterruptTimer();
 
+  log.debug(
+    { sessionId: session.id, sessionChatId: session.state.chatId, subtype: event.subtype },
+    'handling result event for parent session',
+  );
+
   sink.onResult({
     total_cost_usd: (event.total_cost_usd as number) || 0,
     usage: usage

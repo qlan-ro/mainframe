@@ -245,6 +245,11 @@ function buildSessionSink(
       const active = getActiveChat(chatId);
       if (!active) return;
 
+      log.debug(
+        { chatId, sessionId: active.session?.id, subtype: data.subtype, is_error: data.is_error },
+        'onResult: processing session result',
+      );
+
       const cost = data.total_cost_usd ?? 0;
       const tokensInput = data.usage?.input_tokens ?? 0;
       const tokensOutput = data.usage?.output_tokens ?? 0;
@@ -278,6 +283,7 @@ function buildSessionSink(
 
       const isError = data.subtype === 'error_during_execution' && data.is_error !== false;
       const reason = wasInterrupted ? 'interrupted' : isError ? 'error' : 'completed';
+      log.debug({ chatId, reason, wasInterrupted, isError }, 'onResult: emitting chat.updated with processState=idle');
       emitEvent({ type: 'chat.updated', chat: active.chat, reason });
 
       const notifyConfig = readNotificationConfig(db);
@@ -317,12 +323,16 @@ function buildSessionSink(
     },
 
     onQueuedProcessed(uuid: string) {
+      log.debug({ chatId, uuid }, 'onQueuedProcessed: removing queued flag from message');
       const msgs = messages.get(chatId);
       const msg = msgs?.find((m) => m.metadata?.uuid === uuid);
       if (msg?.metadata) {
         delete (msg.metadata as Record<string, unknown>).queued;
         delete (msg.metadata as Record<string, unknown>).uuid;
+        log.debug({ chatId, uuid, messageId: msg.id }, 'onQueuedProcessed: queued flag removed, emitting display');
         emitDisplay();
+      } else {
+        log.warn({ chatId, uuid }, 'onQueuedProcessed: message not found in cache or already processed');
       }
       emitEvent({ type: 'message.queued.processed', chatId, uuid });
       onQueuedProcessedCb(chatId, uuid);
