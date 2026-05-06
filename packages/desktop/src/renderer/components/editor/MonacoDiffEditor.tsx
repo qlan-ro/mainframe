@@ -166,7 +166,7 @@ export function MonacoDiffEditor({
   const hasNonEmpty = comments.some((c) => c.text.trim());
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="mf-editor-selectable h-full flex flex-col">
       {hasComments && (
         <div className="flex items-center justify-end px-3 py-1 shrink-0 border-b border-mf-divider">
           <button

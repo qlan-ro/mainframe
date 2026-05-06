@@ -214,19 +214,25 @@
   background: var(--mf-scrollbar-hover);
 }
 
-/* Re-enable text selection for content areas. Our body sets user-select: none
-   for the app-shell feel; Monaco editors and diff-editors render into <div>s
-   (.view-line, .line-delete-selectable, etc.) that aren't in the default
-   re-enable list, so they inherit the body's user-select: none and selection
-   silently fails everywhere — including the deleted-line selection that
-   monaco-editor 0.55.1's upstream fix (microsoft/vscode#267991) provides. */
+/* Re-enable text selection for content areas */
 .aui-md,
 input,
 textarea,
 [contenteditable],
 pre,
-code,
-.monaco-editor {
+code {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Opt-in selection inside Monaco editors. The app-shell sets user-select: none
+   on body to prevent selection in chrome; components that embed an editor and
+   want selection (DiffView, MonacoEditor, MonacoDiffEditor) tag their wrapper
+   with .mf-editor-selectable. We re-enable on the text layers only — line
+   numbers, gutter, minimap, scrollbars stay non-selectable. */
+.mf-editor-selectable .monaco-editor .view-line,
+.mf-editor-selectable .monaco-editor .view-lines,
+.mf-editor-selectable .monaco-editor .line-delete-selectable {
   user-select: text;
   -webkit-user-select: text;
 }
