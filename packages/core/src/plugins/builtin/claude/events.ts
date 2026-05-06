@@ -7,7 +7,6 @@ import type {
   DetectedPr,
   MessageContent,
   SessionSink,
-  SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
 import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
@@ -146,7 +145,7 @@ const INFORMATIONAL_PATTERNS = [
   /^Cloning into/,
 ];
 
-export function handleStderr(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
+export function handleStderr(_session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
   const message = chunk.toString().trim();
   if (!message) return;
   if (INFORMATIONAL_PATTERNS.some((p) => p.test(message))) return;
@@ -518,7 +517,7 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   }
 }
 
-function handleControlRequestEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+function handleControlRequestEvent(_session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   const request = event.request as Record<string, unknown>;
   if (request?.subtype === 'can_use_tool') {
     const permRequest: ControlRequest = {

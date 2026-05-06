@@ -193,7 +193,9 @@ describe('queued messages and thinking indicator', () => {
     await sleep(50);
 
     // Simulate tool result
-    adapter.currentSession!.simulateToolResult([{ type: 'tool_result', toolUseId: 'tool-1', content: 'hello' }]);
+    adapter.currentSession!.simulateToolResult([
+      { type: 'tool_result', toolUseId: 'tool-1', content: 'hello', isError: false },
+    ]);
     await sleep(50);
 
     // Verify tool_result message was added
