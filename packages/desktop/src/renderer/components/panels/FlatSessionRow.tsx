@@ -38,6 +38,8 @@ interface FlatSessionRowProps {
   onContextMenu?: (e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => void;
   registerRenameCallback?: (chatId: string, trigger: () => void) => void;
   unregisterRenameCallback?: (chatId: string) => void;
+  registerOpenTagPopover?: (chatId: string, trigger: (rect: DOMRect) => void) => void;
+  unregisterOpenTagPopover?: (chatId: string) => void;
 }
 
 export const FlatSessionRow = React.memo(function FlatSessionRow({
@@ -46,6 +48,8 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   onContextMenu,
   registerRenameCallback,
   unregisterRenameCallback,
+  registerOpenTagPopover,
+  unregisterOpenTagPopover,
 }: FlatSessionRowProps): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const chats = useChatsStore((s) => s.chats);
@@ -123,6 +127,11 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
     registerRenameCallback?.(chat.id, handleStartRename);
     return () => unregisterRenameCallback?.(chat.id);
   }, [chat.id, handleStartRename, registerRenameCallback, unregisterRenameCallback]);
+
+  useEffect(() => {
+    registerOpenTagPopover?.(chat.id, (rect) => setPopoverRect(rect));
+    return () => unregisterOpenTagPopover?.(chat.id);
+  }, [chat.id, registerOpenTagPopover, unregisterOpenTagPopover]);
 
   const updateChat = useChatsStore((s) => s.updateChat);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);

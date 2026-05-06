@@ -348,6 +348,16 @@ export function ChatsPanel(): React.ReactElement {
     renameCallbacks.current.delete(chatId);
   }, []);
 
+  const openTagPopoverCallbacks = useRef<Map<string, (rect: DOMRect) => void>>(new Map());
+
+  const registerOpenTagPopover = useCallback((chatId: string, trigger: (rect: DOMRect) => void) => {
+    openTagPopoverCallbacks.current.set(chatId, trigger);
+  }, []);
+
+  const unregisterOpenTagPopover = useCallback((chatId: string) => {
+    openTagPopoverCallbacks.current.delete(chatId);
+  }, []);
+
   const updateChat = useChatsStore((s) => s.updateChat);
 
   const handleContextMenu = useCallback(
@@ -360,6 +370,13 @@ export function ChatsPanel(): React.ReactElement {
         items: [
           ...(chat
             ? [
+                {
+                  label: 'Tags...',
+                  onClick: () => {
+                    const rect = new DOMRect(e.clientX, e.clientY - 4, 0, 0);
+                    openTagPopoverCallbacks.current.get(chat.id)?.(rect);
+                  },
+                },
                 {
                   label: 'Rename',
                   onClick: () => {
@@ -591,6 +608,8 @@ export function ChatsPanel(): React.ReactElement {
                 onContextMenu={handleContextMenu}
                 registerRenameCallback={registerRenameCallback}
                 unregisterRenameCallback={unregisterRenameCallback}
+                registerOpenTagPopover={registerOpenTagPopover}
+                unregisterOpenTagPopover={unregisterOpenTagPopover}
               />
             ))}
           </div>
@@ -607,6 +626,8 @@ export function ChatsPanel(): React.ReactElement {
                   onContextMenu={handleContextMenu}
                   registerRenameCallback={registerRenameCallback}
                   unregisterRenameCallback={unregisterRenameCallback}
+                  registerOpenTagPopover={registerOpenTagPopover}
+                  unregisterOpenTagPopover={unregisterOpenTagPopover}
                 />
               ))
             )}
