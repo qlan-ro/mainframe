@@ -3,7 +3,7 @@ import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, CopySlash, Folder
 import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:composer');
-import { ComposerPrimitive, useThreadRuntime, useComposerRuntime, type ComposerRuntime } from '@assistant-ui/react';
+import { ComposerPrimitive, useThread, useComposerRuntime, type ComposerRuntime } from '@assistant-ui/react';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { useChatsStore } from '../../../../store/chats';
 import { useSkillsStore } from '../../../../store/skills';
@@ -55,7 +55,7 @@ function useComposerEmpty(composerRuntime: ComposerRuntime) {
 }
 
 function StopButton() {
-  const thread = useThreadRuntime();
+  const thread = useThread();
   if (!thread.isRunning) return null;
   return (
     <ComposerPrimitive.Cancel
@@ -119,23 +119,7 @@ export function ComposerCard() {
   const adapters = useAdaptersStore((s) => s.adapters);
   const messages = useChatsStore((s) => s.messages.get(chatId));
   const hasMessages = (messages?.length ?? 0) > 0;
-  const composerRuntime =
-    useSyncExternalStore(
-      (cb) => {
-        try {
-          return useComposerRuntime().subscribe(cb);
-        } catch {
-          return () => {};
-        }
-      },
-      () => {
-        try {
-          return useComposerRuntime();
-        } catch {
-          return null as any;
-        }
-      },
-    ) ?? useComposerRuntime();
+  const composerRuntime = useComposerRuntime();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [worktreePopoverOpen, setWorktreePopoverOpen] = useState(false);
   const [isGitProject, setIsGitProject] = useState(false);
