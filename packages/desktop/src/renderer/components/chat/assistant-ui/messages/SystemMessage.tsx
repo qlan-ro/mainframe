@@ -1,5 +1,5 @@
 import { AlertTriangle, Zap } from 'lucide-react';
-import { MessagePrimitive, useMessage } from '@assistant-ui/react';
+import { MessagePrimitive, useMessageRuntime } from '@assistant-ui/react';
 import { getExternalStoreMessages } from '@assistant-ui/react';
 import { SkillLoadedCard } from '../parts/tools/SkillLoadedCard';
 import { CompactionPill } from '../parts/tools/CompactionPill';
@@ -12,7 +12,7 @@ function isCliError(text: string): boolean {
 }
 
 export function SystemMessage() {
-  const message = useMessage();
+  const message = useMessageRuntime();
   const [original] = getExternalStoreMessages<DisplayMessage>(message);
 
   // Compaction takes priority — if any block is compaction, show only the compaction pill
