@@ -18,8 +18,10 @@ import { getDefaultModelForAdapter } from '../../lib/adapters';
 import { pinChat } from '../../lib/api';
 import { ProjectGroup } from './ProjectGroup';
 import { FlatSessionRow } from './FlatSessionRow';
+import { SessionFilterBar } from './SessionFilterBar';
 import { ImportSessionsPopover } from './ImportSessionsPopover';
 import { ArchivedSessionsPopover } from './ArchivedSessionsPopover';
+import { useTagsStore } from '../../store/tags';
 import { useZoneHeaderActions } from '../zone/ZoneHeaderSlot.js';
 import type { Chat, Project } from '@qlan-ro/mainframe-types';
 
@@ -191,9 +193,29 @@ export function ChatsPanel(): React.ReactElement {
   const projects = useProjectsStore((s) => s.projects);
   const addProject = useProjectsStore((s) => s.addProject);
   const allChats = useChatsStore((s) => s.chats);
-  const chats = useMemo(() => allChats.filter((c) => c.status !== 'archived'), [allChats]);
+  const detectedPrs = useChatsStore((s) => s.detectedPrs);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const pendingPermissions = useChatsStore((s) => s.pendingPermissions);
+
+  const selectedTags = useTagsStore((s) => s.selectedTags);
+  const selectedSynthetic = useTagsStore((s) => s.selectedSynthetic);
+  const clearTagFilters = useTagsStore((s) => s.clearFilters);
+
+  const chats = useMemo(() => {
+    return allChats.filter((c) => {
+      if (c.status === 'archived') return false;
+      if (selectedSynthetic.has('has-worktree') && !c.worktreePath) return false;
+      if (selectedSynthetic.has('has-pr')) {
+        const prs = detectedPrs.get(c.id);
+        if (!prs || prs.length === 0) return false;
+      }
+      if (selectedTags.size > 0) {
+        const tagSet = new Set(c.tags ?? []);
+        for (const t of selectedTags) if (!tagSet.has(t)) return false;
+      }
+      return true;
+    });
+  }, [allChats, selectedTags, selectedSynthetic, detectedPrs]);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -543,10 +565,19 @@ export function ChatsPanel(): React.ReactElement {
         </div>
       )}
 
+      <SessionFilterBar />
+
       {/* Session list */}
       <div className="flex-1 overflow-y-auto px-[10px]">
         {projects.length === 0 ? (
           <div className="py-4 text-center text-mf-text-secondary text-mf-label">No projects yet.</div>
+        ) : chats.length === 0 && (selectedTags.size > 0 || selectedSynthetic.size > 0) ? (
+          <div className="py-4 text-center text-sm text-mf-text-secondary">
+            No sessions match these filters.{' '}
+            <button type="button" onClick={clearTagFilters} className="underline hover:text-mf-text-primary">
+              Clear filters
+            </button>
+          </div>
         ) : viewMode === 'grouped' ? (
           <div className="space-y-1">
             {filteredGroups.map((g) => (
