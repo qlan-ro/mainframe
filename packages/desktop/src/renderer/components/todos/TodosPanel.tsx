@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus } from 'lucide-react';
+import { useFullviewHeaderSlot } from '../modals/FullviewModal';
 import { createLogger } from '../../lib/logger';
 
 const log = createLogger('renderer:todos');
@@ -213,6 +214,24 @@ export function TodosPanel(): React.ReactElement {
     [activeProjectId],
   );
 
+  const newButton = useMemo(
+    () => (
+      <button
+        onClick={() => {
+          setEditingTodo(null);
+          setModalOpen(true);
+        }}
+        className="flex items-center gap-1.5 px-2 py-1 rounded-mf-card text-mf-body text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-panel-bg transition-colors"
+        aria-label="Create new task"
+      >
+        <Plus size={13} />
+        New
+      </button>
+    ),
+    [],
+  );
+  useFullviewHeaderSlot(newButton);
+
   if (!activeProjectId) {
     return (
       <div className="h-full flex items-center justify-center text-mf-text-secondary text-mf-small">
@@ -240,22 +259,6 @@ export function TodosPanel(): React.ReactElement {
 
   return (
     <div data-testid="todos-panel" className="h-full flex flex-col gap-px overflow-hidden bg-mf-app-bg">
-      {/* Header */}
-      <div className="h-11 px-4 flex items-center justify-between shrink-0 bg-mf-panel-bg">
-        <span className="text-mf-small text-mf-text-secondary uppercase tracking-wider">Tasks</span>
-        <button
-          onClick={() => {
-            setEditingTodo(null);
-            setModalOpen(true);
-          }}
-          className="flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
-          aria-label="Create new task"
-        >
-          <Plus size={13} />
-          New
-        </button>
-      </div>
-
       {/* Filters */}
       <TodoFilterBar
         filters={filters}

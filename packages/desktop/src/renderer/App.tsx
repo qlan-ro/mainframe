@@ -15,6 +15,7 @@ import { getActiveProjectId } from './hooks/useActiveProjectId.js';
 import { daemonClient } from './lib/client';
 import { getDefaultModelForAdapter } from './lib/adapters';
 import { PluginGlobalComponents } from './components/plugins/PluginGlobalComponents';
+import { FullviewModal } from './components/modals';
 
 export default function App(): React.ReactElement {
   useAppInit();
@@ -66,6 +67,7 @@ export default function App(): React.ReactElement {
     <ErrorBoundary>
       <TooltipProvider delayDuration={200} skipDelayDuration={100} disableHoverableContent>
         <Layout centerPanel={<CenterPanel />} />
+        <FullviewModal />
         <SearchPalette />
         <SettingsModal />
         <TutorialOverlay />
