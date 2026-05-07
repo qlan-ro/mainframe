@@ -89,6 +89,7 @@ export class ClaudeSession implements AdapterSession {
   readonly id: string;
   readonly adapterId = 'claude';
   readonly projectPath: string;
+  readonly supportsReplayAck = true;
 
   /** Mutable internal state — readable by claude-events.ts and tests. */
   readonly state: ClaudeSessionState;
