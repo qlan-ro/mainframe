@@ -35,6 +35,7 @@ export const FullviewModal: React.FC = () => {
   return (
     <div
       data-testid="fullview-modal-backdrop"
+      role="presentation"
       onClick={close}
       className="fixed inset-0 z-50 flex items-center justify-center bg-mf-overlay/60"
     >
