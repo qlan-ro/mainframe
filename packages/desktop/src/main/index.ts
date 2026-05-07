@@ -1,9 +1,16 @@
-import { app, BrowserWindow, Notification, session, shell, ipcMain, utilityProcess, Menu } from 'electron';
+import { app, BrowserWindow, Notification, session, shell, ipcMain, utilityProcess } from 'electron';
 import type { UtilityProcess } from 'electron';
 import { join, resolve, sep } from 'path';
 import { execFileSync } from 'child_process';
 import { readFile } from 'fs/promises';
 import { homedir } from 'os';
+import { createMainLogger, logFromRenderer } from './logger.js';
+import { setupTerminalIPC, killAllTerminals } from './terminal-manager.js';
+import { initAutoUpdater } from './auto-updater.js';
+import { startIdleReporter, stopIdleReporter } from './idle-reporter.js';
+import { buildApplicationMenu } from './menu.js';
+import { setupWebviewSandbox } from './sandbox.js';
+
 const APP_AUTHOR = 'Mainframe Contributors';
 
 // Enable Chrome DevTools Protocol on port 9222 for development tooling (e.g. MCP server).
@@ -11,10 +18,6 @@ const APP_AUTHOR = 'Mainframe Contributors';
 if (process.env.NODE_ENV === 'development') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
-import { createMainLogger, logFromRenderer } from './logger.js';
-import { setupTerminalIPC, killAllTerminals } from './terminal-manager.js';
-import { initAutoUpdater } from './auto-updater.js';
-import { startIdleReporter, stopIdleReporter } from './idle-reporter.js';
 
 const log = createMainLogger('electron');
 
@@ -98,24 +101,6 @@ function startDaemon(shellEnv: Record<string, string>): void {
   daemon.on('exit', (code) => {
     log.error({ code }, 'daemon exited');
   });
-}
-
-function setProductionMenu(): void {
-  const menu = Menu.getApplicationMenu();
-  if (!menu) {
-    log.warn('setProductionMenu: no application menu found');
-    return;
-  }
-
-  const newItems = menu.items.map((topItem) => {
-    if (topItem.label !== 'View' || !topItem.submenu) return topItem;
-    return {
-      label: 'View',
-      submenu: topItem.submenu.items.filter((sub) => sub.role !== 'toggledevtools'),
-    };
-  });
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(newItems));
 }
 
 function setupIPC(): void {
@@ -264,49 +249,14 @@ app.whenReady().then(() => {
   startDaemon(shellEnv);
   setupTerminalIPC(shellEnv);
 
-  if (process.env.NODE_ENV !== 'development') {
-    setProductionMenu();
-  }
+  buildApplicationMenu(() => mainWindow);
 
   createWindow();
   startIdleReporter();
 
   if (mainWindow) initAutoUpdater(mainWindow);
 
-  const configuredPartitions = new Set<string>();
-  app.on('web-contents-created', (_event, contents) => {
-    if (contents.getType() !== 'webview') return;
-
-    // Each project gets its own persist:sandbox-{id} partition.
-    // Apply permission restrictions on first encounter.
-    const partition = contents.session.storagePath;
-    const partitionId = partition ?? '';
-    if (!configuredPartitions.has(partitionId)) {
-      configuredPartitions.add(partitionId);
-      contents.session.setPermissionRequestHandler(denyUnneededPermissions);
-      // Strip Electron markers from user-agent and client hints so OAuth/SSO
-      // providers with Conditional Access policies (e.g. Microsoft Entra ID)
-      // see a standard Chrome browser instead of rejecting the webview.
-      contents.session.setUserAgent(contents.session.getUserAgent().replace(/Electron\/\S+ /, ''));
-      contents.session.webRequest.onBeforeSendHeaders((details, callback) => {
-        const headers = { ...details.requestHeaders };
-        for (const key of Object.keys(headers)) {
-          if (key.toLowerCase() === 'sec-ch-ua') {
-            headers[key] = headers[key]!.replace(/, ?"Electron";v="[^"]*"/g, '');
-          }
-        }
-        callback({ requestHeaders: headers });
-      });
-    }
-
-    // Allow all navigations inside webviews — the sandbox loads user dev servers
-    // that legitimately redirect cross-origin (OAuth flows, SSO, etc.).
-    // Only intercept window.open for truly external links (target="_blank").
-    contents.setWindowOpenHandler((details) => {
-      openExternalSafe(details.url);
-      return { action: 'deny' };
-    });
-  });
+  setupWebviewSandbox(denyUnneededPermissions, openExternalSafe);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
