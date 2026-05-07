@@ -10,18 +10,11 @@ export function getClaudeProjectDir(projectPath: string): string {
 }
 
 /** Move a CLI session's files from one Claude project dir to another. */
-export async function moveSessionFiles(
-  sessionId: string,
-  sourceDir: string,
-  targetDir: string,
-): Promise<void> {
+export async function moveSessionFiles(sessionId: string, sourceDir: string, targetDir: string): Promise<void> {
   await mkdir(targetDir, { recursive: true });
 
   // 1. Move main JSONL
-  await moveFile(
-    path.join(sourceDir, `${sessionId}.jsonl`),
-    path.join(targetDir, `${sessionId}.jsonl`),
-  );
+  await moveFile(path.join(sourceDir, `${sessionId}.jsonl`), path.join(targetDir, `${sessionId}.jsonl`));
 
   // 2. Move session directory (subagents + tool-results)
   const sessionDir = path.join(sourceDir, sessionId);

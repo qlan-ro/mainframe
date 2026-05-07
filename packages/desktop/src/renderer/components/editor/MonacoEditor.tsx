@@ -217,7 +217,7 @@ export function MonacoEditor({
   const hasNonEmpty = comments.some((c) => c.text.trim());
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="mf-editor-selectable h-full flex flex-col overflow-hidden">
       {hasComments && (
         <div className="flex items-center justify-end px-3 py-1 shrink-0 border-b border-mf-divider">
           <button

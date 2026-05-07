@@ -3,3 +3,5 @@ out
 node_modules
 pnpm-lock.yaml
 *.md
+**/daemon.cjs
+**/resources/**

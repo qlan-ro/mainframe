@@ -145,6 +145,20 @@ export class GitService {
     return { current: result.current, local, remote, worktrees: worktreeNames, activeOperation };
   }
 
+  async stage(files: string[]): Promise<void> {
+    await this.git().add(files);
+  }
+
+  async unstage(files: string[]): Promise<void> {
+    if (files.length === 0) return;
+    await this.git().raw(['reset', 'HEAD', '--', ...files]);
+  }
+
+  async commit(message: string): Promise<string> {
+    const result = await this.git().commit(message);
+    return result.commit;
+  }
+
   async diff(args: string[]): Promise<string> {
     return this.git().raw(['diff', ...args]);
   }

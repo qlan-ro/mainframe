@@ -7,6 +7,7 @@ import { getFileContent, getExternalFileContent, saveFileContent } from '../../l
 import { daemonClient } from '../../lib/client';
 import { resolveFileLocation } from '../../lib/file-location';
 import { sendCommentMessage } from '../../lib/send-comment-message';
+import { formatLineComment } from '../../lib/format-line-comment';
 import { MonacoEditor } from '../editor/MonacoEditor';
 
 function inferLanguage(filePath: string): string {
@@ -214,31 +215,20 @@ export function EditorTab({
     if (value !== undefined) setCurrentContent(value);
   }, []);
 
-  const formatComment = useCallback(
-    (item: { startLine: number; endLine: number; lineContent: string; comment: string }) => {
-      const lineRef =
-        item.startLine === item.endLine ? `line ${item.startLine}` : `lines ${item.startLine}-${item.endLine}`;
-      const trimmed = item.lineContent.trim();
-      const quote = trimmed ? `\n\`\`\`\n${trimmed}\n\`\`\`` : '';
-      return `At ${lineRef}:${quote}\n${item.comment}`;
-    },
-    [],
-  );
-
   const handleLineComment = useCallback(
     (startLine: number, endLine: number, lineContent: string, comment: string) => {
-      const body = formatComment({ startLine, endLine, lineContent, comment });
+      const body = formatLineComment({ startLine, endLine, lineContent, comment });
       sendCommentMessage(`File: \`${filePath}\`\n\n${body}`);
     },
-    [filePath, formatComment],
+    [filePath],
   );
 
   const handleSubmitReview = useCallback(
     (items: { startLine: number; endLine: number; lineContent: string; comment: string }[]) => {
-      const parts = items.map(formatComment);
+      const parts = items.map(formatLineComment);
       sendCommentMessage(`File: \`${filePath}\`\n\n${parts.join('\n\n---\n\n')}`);
     },
-    [filePath, formatComment],
+    [filePath],
   );
 
   if (error) {
