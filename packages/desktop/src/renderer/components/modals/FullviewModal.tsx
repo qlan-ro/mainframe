@@ -1,13 +1,31 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { PluginView } from '../plugins/PluginView';
 import { usePluginLayoutStore } from '../../store/plugins';
 
+type SetSlot = (node: ReactNode) => void;
+const FullviewHeaderSlotContext = createContext<SetSlot | null>(null);
+
+/**
+ * Render `node` into the active FullviewModal header. No-op when not inside a
+ * FullviewModal. Caller should memoize `node` (e.g. via `useMemo`) to avoid
+ * spurious slot updates each render.
+ */
+export function useFullviewHeaderSlot(node: ReactNode): void {
+  const setSlot = useContext(FullviewHeaderSlotContext);
+  useEffect(() => {
+    if (!setSlot) return;
+    setSlot(node);
+    return () => setSlot(null);
+  }, [setSlot, node]);
+}
+
 export const FullviewModal: React.FC = () => {
   const activeFullviewId = usePluginLayoutStore((s) => s.activeFullviewId);
   const contributions = usePluginLayoutStore((s) => s.contributions);
   const activateFullview = usePluginLayoutStore((s) => s.activateFullview);
+  const [headerSlot, setHeaderSlot] = useState<ReactNode>(null);
 
   const close = useCallback((): void => {
     if (activeFullviewId) {
@@ -45,14 +63,25 @@ export const FullviewModal: React.FC = () => {
       >
         <div className="flex items-center justify-between border-b border-mf-border px-4 py-2">
           <span className="text-xs font-medium uppercase tracking-wide text-mf-text-secondary">{label}</span>
-          <Button variant="ghost" size="sm" onClick={close} aria-label="Close" className="hover:bg-mf-hover">
-            <X size={14} />
-          </Button>
+          <div className="flex items-center gap-1">
+            {headerSlot}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={close}
+              aria-label="Close"
+              className="text-mf-text-secondary hover:bg-mf-panel-bg hover:text-mf-text-primary"
+            >
+              <X size={14} />
+            </Button>
+          </div>
         </div>
 
         {contribution && (
           <div className="flex-1 overflow-hidden">
-            <PluginView pluginId={activeFullviewId} />
+            <FullviewHeaderSlotContext.Provider value={setHeaderSlot}>
+              <PluginView pluginId={activeFullviewId} />
+            </FullviewHeaderSlotContext.Provider>
           </div>
         )}
       </div>

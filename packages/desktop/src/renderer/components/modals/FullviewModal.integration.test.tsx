@@ -1,15 +1,24 @@
 import React from 'react';
 import { describe, it, beforeEach, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { FullviewModal } from './FullviewModal';
+import { FullviewModal, useFullviewHeaderSlot } from './FullviewModal';
 import { usePluginLayoutStore } from '../../store/plugins';
 import type { PluginUIContribution } from '@qlan-ro/mainframe-types';
 
 // PluginView mounts real plugin React trees (TodosPanel etc.) which pull in
 // daemon clients and other heavy modules. The modal's behaviour is what we
 // test here — plugin rendering is covered elsewhere.
+const PROBE_SLOT = <button data-testid="slot-action">Slot Action</button>;
+function HeaderSlotProbe(): React.ReactElement {
+  useFullviewHeaderSlot(PROBE_SLOT);
+  return <div data-testid="plugin-view">probe</div>;
+}
+
 vi.mock('../plugins/PluginView', () => ({
-  PluginView: ({ pluginId }: { pluginId: string }) => <div data-testid="plugin-view">{pluginId}</div>,
+  PluginView: ({ pluginId }: { pluginId: string }) => {
+    if (pluginId === 'probe') return <HeaderSlotProbe />;
+    return <div data-testid="plugin-view">{pluginId}</div>;
+  },
 }));
 
 function makeContribution(pluginId: string, label: string): PluginUIContribution {
@@ -115,5 +124,16 @@ describe('FullviewModal Integration', () => {
 
     render(<FullviewModal />);
     expect(screen.getByText('todos')).toBeInTheDocument();
+  });
+
+  it('renders header slot content registered by the active plugin', () => {
+    usePluginLayoutStore.setState({
+      contributions: [makeContribution('probe', 'Probe')],
+      activeFullviewId: 'probe',
+    });
+
+    render(<FullviewModal />);
+
+    expect(screen.getByTestId('slot-action')).toBeInTheDocument();
   });
 });
