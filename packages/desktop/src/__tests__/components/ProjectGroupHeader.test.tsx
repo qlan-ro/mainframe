@@ -159,7 +159,7 @@ describe('ProjectGroup header layout', () => {
     expect(screen.queryByText('+ tag')).not.toBeInTheDocument();
   });
 
-  it('shows the adapter label before tags on the session row metadata line', () => {
+  it('renders the adapter label on the metadata sub-row and tags inline with the title', () => {
     render(
       <TooltipProvider>
         <ProjectGroup
@@ -171,12 +171,14 @@ describe('ProjectGroup header layout', () => {
       </TooltipProvider>,
     );
 
-    expect(screen.getByText('Claude CLI')).toBeInTheDocument();
-    expect(screen.getByText('frontend')).toBeInTheDocument();
-    expect(screen.getByText('·')).toBeInTheDocument();
+    const metadataRow = screen.getByTestId('session-row-metadata');
+    const tagsRow = screen.getByTestId('session-row-tags');
+
+    expect(metadataRow).toHaveTextContent('Claude CLI');
+    expect(tagsRow).toHaveTextContent('frontend');
   });
 
-  it('pushes the worktree pill to the right while allowing the title to use available space', () => {
+  it('places the worktree pill on the metadata sub-row and lets the title row carry tags', () => {
     render(
       <TooltipProvider>
         <ProjectGroup
@@ -189,64 +191,28 @@ describe('ProjectGroup header layout', () => {
     );
 
     const title = screen.getByText('A very long session title');
-    const worktree = screen.getByText('feat-tags');
-    const pill = worktree.parentElement;
-
-    expect(title.parentElement).toBe(pill?.closest('button'));
-    expect(title.className).toContain('flex-1');
-    expect(title.className).not.toContain('max-w-[50%]');
-    expect(pill?.className).toContain('ml-auto');
-    expect(pill?.className).toContain('rounded-full');
-    expect(pill?.className).toContain('px-2.5');
-    expect(pill?.className).toContain('bg-mf-hover');
-    expect(pill?.className).toContain('text-mf-text-secondary');
-    expect(title.parentElement?.parentElement?.className).toContain('grid-cols-[12px_minmax(0,1fr)]');
-  });
-
-  it('hides the worktree pill when the available title width drops below the threshold', async () => {
-    // The row container is narrow enough that, after subtracting the status dot,
-    // gaps, and the pill's natural width, the title would have <56px (the hysteresis
-    // hide threshold). Specifically: 200 - 28 - 120 = 52 < 56.
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement): number {
-      return this.dataset.testid === 'session-title-row' ? 200 : 0;
-    });
-    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement): number {
-      return this.dataset.testid === 'worktree-pill' ? 120 : 0;
-    });
-
-    render(
-      <TooltipProvider>
-        <ProjectGroup
-          project={mockProject}
-          chats={[{ ...mockChat, worktreePath: '/repo/.worktrees/feat-tags' }]}
-          collapsed={false}
-          onToggleCollapse={vi.fn()}
-        />
-      </TooltipProvider>,
-    );
-
-    for (const callback of resizeObserverCallbacks) {
-      callback([], {} as ResizeObserver);
-    }
-
     const pill = screen.getByTestId('worktree-pill');
-    expect(pill.className).toContain('opacity-0');
-    expect(pill).toHaveAttribute('aria-hidden', 'true');
+    const metadataRow = screen.getByTestId('session-row-metadata');
+    const titleRow = screen.getByTestId('session-title-row');
+
+    expect(metadataRow).toContainElement(pill);
+    expect(titleRow).toContainElement(title);
+    expect(pill.className).toContain('rounded');
+    expect(pill.className).toContain('bg-mf-accent');
+    expect(pill.className).toContain('text-white');
   });
 
   it('keeps the right-side time and hover actions in a centered area outside content rows', () => {
     renderGroup();
 
     const time = screen.getByText('Jan 1, 2024');
-    const slot = time.parentElement;
+    const slot = time.closest('div');
     const metadataRow = screen.getByTestId('session-row-metadata');
     const actionsArea = screen.getByTestId('session-row-actions');
 
-    expect(slot?.className).toContain('w-[104px]');
-    expect(slot?.className).toContain('h-6');
+    expect(slot?.className).toContain('w-[72px]');
     expect(slot?.className).toContain('shrink-0');
     expect(slot?.className).toContain('justify-end');
-    expect(time.className).toContain('whitespace-nowrap');
     expect(actionsArea.className).toContain('self-center');
     expect(actionsArea).toContainElement(slot);
     expect(metadataRow).not.toContainElement(slot);
