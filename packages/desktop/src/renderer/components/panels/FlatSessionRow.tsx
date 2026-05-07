@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Archive, FolderGit, GitPullRequest, Loader2, Pencil, Pin, Tag as TagIcon } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
@@ -17,21 +17,22 @@ import { TagPopover } from '../tags/TagPopover';
 
 const log = createLogger('renderer:flat-session-row');
 
-function formatRelativeTime(isoString: string): string {
+function formatRelativeTime(isoString: string): { primary: string; secondary?: string } {
   const date = new Date(isoString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  if (date.toDateString() === now.toDateString()) return `Today ${time}`;
+  if (date.toDateString() === now.toDateString()) return { primary: 'Today', secondary: time };
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
-  if (diffDays < 7) return `${date.toLocaleDateString([], { weekday: 'long' })} ${time}`;
-  if (diffDays < 14) return 'Last week';
-  if (date.getFullYear() === now.getFullYear()) return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  if (date.toDateString() === yesterday.toDateString()) return { primary: 'Yesterday', secondary: time };
+  if (diffDays < 7) return { primary: date.toLocaleDateString([], { weekday: 'short' }), secondary: time };
+  if (diffDays < 14) return { primary: 'Last week' };
+  if (date.getFullYear() === now.getFullYear())
+    return { primary: date.toLocaleDateString([], { month: 'short', day: 'numeric' }) };
+  return { primary: date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) };
 }
 
 interface FlatSessionRowProps {
@@ -148,9 +149,15 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   const updateChat = useChatsStore((s) => s.updateChat);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const isUnread = unreadChatIds.has(chat.id);
-  const createdPrUrl = useChatsStore((s) => {
+  const prUrl = useChatsStore((s) => {
     const prs = s.detectedPrs.get(chat.id);
-    return prs?.find((p) => p.source === 'created')?.url ?? null;
+    if (!prs || prs.length === 0) return null;
+    return (prs.find((p) => p.source === 'created') ?? prs[0])?.url ?? null;
+  });
+  const prNumber = useChatsStore((s) => {
+    const prs = s.detectedPrs.get(chat.id);
+    if (!prs || prs.length === 0) return null;
+    return (prs.find((p) => p.source === 'created') ?? prs[0])?.number ?? null;
   });
 
   const handleCommitRename = useCallback(() => {
@@ -193,50 +200,31 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   const hasTags = tagNames.length > 0;
   const adapterLabel = getAdapterLabel(chat.adapterId, adapters);
   const worktreeName = chat.worktreePath?.split('/').pop();
-  const worktreePillRef = useRef<HTMLSpanElement>(null);
-  const titleRowRef = useRef<HTMLDivElement>(null);
-  const [hideWorktreePill, setHideWorktreePill] = useState(false);
 
-  useEffect(() => {
-    if (!worktreeName || editing) {
-      setHideWorktreePill(false);
-      return;
+  // Tag row gets a full-width dedicated row. If pills overflow, hide trailing
+  // ones and render a +N overflow pill that opens the existing TagPopover.
+  const tagRowRef = useRef<HTMLDivElement>(null);
+  const [visibleTagCount, setVisibleTagCount] = useState(tagNames.length);
+
+  useLayoutEffect(() => {
+    setVisibleTagCount(tagNames.length);
+  }, [tagNames.length]);
+
+  useLayoutEffect(() => {
+    const el = tagRowRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setVisibleTagCount(tagNames.length));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tagNames.length]);
+
+  useLayoutEffect(() => {
+    const el = tagRowRef.current;
+    if (!el) return;
+    if (el.scrollWidth > el.clientWidth + 1 && visibleTagCount > 0) {
+      setVisibleTagCount((c) => c - 1);
     }
-
-    // Only observe the row container — its width is independent of pill visibility,
-    // which avoids the show/hide feedback loop. The pill's own width is content-driven
-    // (depends on `worktreeName` length, capped at 140px) and stable per render.
-    const STATUS_DOT_AND_GAPS = 28; // 12px dot + ~16px of grid gap + flex gaps
-    const MIN_TITLE_WIDTH = 80; // titles below this are uncomfortable to read
-    const HYSTERESIS_BUFFER = 24; // larger than typical sub-pixel resize jitter
-
-    const update = (): void => {
-      const container = titleRowRef.current;
-      const pill = worktreePillRef.current;
-      if (!container || !pill) return;
-      const containerWidth = container.clientWidth;
-      // scrollWidth gives the pill's natural rendered width even when hidden via opacity.
-      const pillWidth = pill.scrollWidth;
-      if (containerWidth === 0 || pillWidth === 0) return;
-      const availableForTitle = containerWidth - STATUS_DOT_AND_GAPS - pillWidth;
-      setHideWorktreePill((wasHidden) => {
-        const showThreshold = MIN_TITLE_WIDTH;
-        const hideThreshold = MIN_TITLE_WIDTH - HYSTERESIS_BUFFER;
-        return wasHidden ? availableForTitle < showThreshold : availableForTitle < hideThreshold;
-      });
-    };
-
-    update();
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', update);
-      return () => window.removeEventListener('resize', update);
-    }
-
-    const observer = new ResizeObserver(update);
-    if (titleRowRef.current) observer.observe(titleRowRef.current);
-    return () => observer.disconnect();
-  }, [editing, worktreeName]);
+  });
 
   return (
     <div
@@ -248,32 +236,28 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover',
       )}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5">
-        <div className="min-w-0">
-          <div
-            ref={titleRowRef}
-            data-testid="session-title-row"
-            className="grid grid-cols-[12px_minmax(0,1fr)] items-center gap-2"
-          >
-            {/* status dot */}
-            <div className="w-3 h-3 shrink-0 flex items-center justify-center">
-              {chat.worktreeMissing ? (
-                <div className="w-2 h-2 rounded-full bg-mf-destructive" />
-              ) : isWorking ? (
-                <Loader2 size={12} className="text-mf-accent animate-spin" />
-              ) : (
-                <div
-                  className={cn('w-2 h-2 rounded-full', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary')}
-                  style={!isUnread ? { opacity: 0.4 } : undefined}
-                />
-              )}
-            </div>
+      <div className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5">
+        {/* status dot — vertically centered across title + metadata */}
+        <div className="w-3 h-3 shrink-0 flex items-center justify-center">
+          {chat.worktreeMissing ? (
+            <div className="w-2 h-2 rounded-full bg-mf-destructive" />
+          ) : isWorking ? (
+            <Loader2 size={12} className="text-mf-accent animate-spin" />
+          ) : (
+            <div
+              className={cn('w-2 h-2 rounded-full', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary')}
+              style={!isUnread ? { opacity: 0.4 } : undefined}
+            />
+          )}
+        </div>
 
+        <div className="min-w-0 space-y-2">
+          <div data-testid="session-title-row" className="flex items-center min-w-0 gap-2">
             {/* title + select target */}
             <button
               type="button"
               onClick={handleSelect}
-              className="relative flex-1 min-w-0 text-left flex items-center gap-1.5 min-h-[20px]"
+              className={cn('min-w-0 text-left flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}
             >
               {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
               {editing ? (
@@ -305,68 +289,90 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
                   </TooltipContent>
                 </Tooltip>
               )}
-
-              {chat.worktreePath && worktreeName && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      ref={worktreePillRef}
-                      data-testid="worktree-pill"
-                      aria-hidden={hideWorktreePill}
-                      className={cn(
-                        'ml-auto shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-mf-hover border border-mf-border text-xs text-mf-text-secondary max-w-[140px] min-w-0',
-                        hideWorktreePill && 'absolute right-0 opacity-0 pointer-events-none',
-                      )}
-                    >
-                      <FolderGit size={10} className="shrink-0 opacity-70" />
-                      <span className="min-w-0 truncate">{worktreeName}</span>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>{chat.worktreePath}</TooltipContent>
-                </Tooltip>
-              )}
             </button>
+
+            {hasTags && (
+              <div
+                ref={tagRowRef}
+                data-testid="session-row-tags"
+                className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden whitespace-nowrap"
+              >
+                {tagNames.slice(0, visibleTagCount).map((name) => (
+                  <TagPill key={name} label={name} color={colorOf(name)} variant="row" />
+                ))}
+                {visibleTagCount < tagNames.length && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        role="button"
+                        onClick={openTagPopover}
+                        className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full border border-mf-border text-xs font-medium cursor-pointer bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary"
+                        aria-label="Show all tags"
+                      >
+                        +{tagNames.length - visibleTagCount}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Show all tags</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* metadata row */}
-          <div data-testid="session-row-metadata" className="grid grid-cols-[12px_minmax(0,1fr)] items-center gap-2">
-            <div className="w-3" />
-            <div className="min-w-0 flex items-center gap-1 flex-wrap">
-              <span className="text-xs text-mf-text-secondary opacity-80">{adapterLabel}</span>
-              {hasTags && <span className="text-xs text-mf-text-secondary opacity-50">·</span>}
-              {tagNames.map((name) => (
-                <TagPill key={name} label={name} color={colorOf(name)} variant="row" />
-              ))}
-            </div>
+          {/* metadata row: adapter + worktree + PR */}
+          <div data-testid="session-row-metadata" className="min-w-0 flex items-center gap-1 flex-wrap">
+            <span className="shrink-0 text-xs font-medium text-mf-text-secondary opacity-80">{adapterLabel}</span>
+
+            {chat.worktreePath && worktreeName && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    data-testid="worktree-pill"
+                    className="shrink-0 inline-flex items-center gap-1 h-[18px] px-1.5 rounded text-[10px] font-medium bg-mf-accent text-white max-w-[180px] min-w-0"
+                  >
+                    <FolderGit size={10} className="shrink-0" />
+                    <span className="min-w-0 truncate">{worktreeName}</span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{chat.worktreePath}</TooltipContent>
+              </Tooltip>
+            )}
+
+            {prUrl && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    role="button"
+                    data-testid="pr-pill"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(prUrl, '_blank');
+                    }}
+                    className="shrink-0 inline-flex items-center gap-1 h-[18px] px-1.5 rounded text-[10px] font-medium cursor-pointer transition-colors bg-[#1a7f37] text-white hover:bg-[#2ea043]"
+                    aria-label="Open PR"
+                  >
+                    <GitPullRequest size={10} className="shrink-0" />
+                    <span>#{prNumber}</span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Open PR</TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </div>
 
         <div data-testid="session-row-actions" className="self-center flex items-center justify-end gap-2 min-w-0">
-          {/* PR badge */}
-          {createdPrUrl && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  role="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.open(createdPrUrl, '_blank');
-                  }}
-                  className="shrink-0 text-[#1a7f37] hover:opacity-70 cursor-pointer"
-                  aria-label="Open PR"
-                >
-                  <GitPullRequest size={12} />
+          <div className="w-[72px] h-8 shrink-0 flex items-center justify-end">
+            {/* time — visible when not hovered (stacked: weekday/label on top, time below) */}
+            {(() => {
+              const t = formatRelativeTime(chat.updatedAt);
+              return (
+                <span className="text-xs text-mf-text-secondary tabular-nums whitespace-nowrap leading-tight text-right group-hover:hidden flex flex-col items-end">
+                  <span>{t.primary}</span>
+                  {t.secondary && <span>{t.secondary}</span>}
                 </span>
-              </TooltipTrigger>
-              <TooltipContent>Open PR</TooltipContent>
-            </Tooltip>
-          )}
-
-          <div className="w-[104px] h-6 shrink-0 flex items-center justify-end">
-            {/* time — visible when not hovered */}
-            <span className="text-xs text-mf-text-secondary tabular-nums whitespace-nowrap group-hover:hidden">
-              {formatRelativeTime(chat.updatedAt)}
-            </span>
+              );
+            })()}
 
             {/* hover actions (Tag / Rename / Archive) */}
             <div className={cn('items-center gap-0.5 hidden group-hover:flex', archiving && 'flex')}>
