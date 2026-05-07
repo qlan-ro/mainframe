@@ -147,6 +147,17 @@ export interface AdapterSession {
   readonly adapterId: string;
   readonly projectPath: string;
   readonly isSpawned: boolean;
+  /**
+   * True when the adapter's protocol echoes a per-message replay ack that
+   * Mainframe can use to drive `sink.onQueuedProcessed(uuid)` — e.g. the
+   * Claude CLI's `isReplay` user event over stream-json. Adapters whose
+   * `sendMessage` consumes the message synchronously (Codex `turn/start`,
+   * Claude SDK `streamFollowUp`) leave this `false` (or undefined). The
+   * chat-manager only enrolls a message in `queuedRefs` when this is true,
+   * so chats on non-acknowledging adapters never get stuck in
+   * `processState='working'` waiting for an ack that will never arrive.
+   */
+  readonly supportsReplayAck?: boolean;
 
   spawn(options?: SessionSpawnOptions, sink?: SessionSink): Promise<AdapterProcess>;
   kill(): Promise<void>;

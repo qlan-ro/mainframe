@@ -517,6 +517,77 @@ describe('subagent events (parent_tool_use_id != null)', () => {
   });
 });
 
+describe('handleStdout — compaction summary suppression (#150)', () => {
+  // The CLI synthesizes a `user` event when resuming a session post-compaction
+  // to seed the new context. It carries `isCompactSummary: true` and
+  // `isVisibleInTranscriptOnly: true`. Mainframe already renders a CompactionPill
+  // for the compaction event itself; surfacing the synthesized summary as a
+  // CLI feedback pill produces a giant text bubble (issue #150).
+
+  it('skips a string-content user event flagged isCompactSummary', () => {
+    const session = createSession();
+    const sink = createSink();
+    const event = JSON.stringify({
+      type: 'user',
+      isCompactSummary: true,
+      isVisibleInTranscriptOnly: true,
+      message: {
+        role: 'user',
+        content:
+          'This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary: ...',
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).not.toHaveBeenCalled();
+  });
+
+  it('still surfaces a user event flagged only isVisibleInTranscriptOnly (skill-invocation, errors, etc.)', () => {
+    // `isVisibleInTranscriptOnly` is set on a wider class of entries — including
+    // skill invocations and CLI errors that we DO want to surface. The compaction
+    // filter is keyed on `isCompactSummary` alone, so this should still render.
+    const session = createSession();
+    const sink = createSink();
+    const event = JSON.stringify({
+      type: 'user',
+      isVisibleInTranscriptOnly: true,
+      message: { role: 'user', content: 'Unknown skill: /unknown' },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).toHaveBeenCalledWith('Unknown skill: /unknown');
+  });
+
+  it('skips when content begins with the canonical compaction-summary preamble (flag missing)', () => {
+    // Defensive fallback: tolerate CLI versions / SDK shims that drop the flag.
+    const session = createSession();
+    const sink = createSink();
+    const event = JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content:
+          'This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary: ...',
+      },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).not.toHaveBeenCalled();
+  });
+
+  it('still surfaces normal CLI feedback strings (regression guard)', () => {
+    const session = createSession();
+    const sink = createSink();
+    const event = JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: 'Unknown command: /typo' },
+    });
+    handleStdout(session, Buffer.from(event + '\n'), sink);
+
+    expect(sink.onCliMessage).toHaveBeenCalledWith('Unknown command: /typo');
+  });
+});
+
 describe('handleStderr', () => {
   it('emits error for non-informational messages', () => {
     const session = createSession();

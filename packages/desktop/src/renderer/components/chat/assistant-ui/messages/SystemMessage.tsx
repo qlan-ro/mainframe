@@ -15,6 +15,15 @@ export function SystemMessage() {
   const message = useMessage();
   const [original] = getExternalStoreMessages<DisplayMessage>(message);
 
+  // Compaction takes priority — if any block is compaction, show only the compaction pill
+  if (original?.content?.some((c) => c.type === 'compaction')) {
+    return (
+      <MessagePrimitive.Root>
+        <CompactionPill />
+      </MessagePrimitive.Root>
+    );
+  }
+
   const skillBlock = original?.content?.find(
     (c): c is DisplayContent & { type: 'skill_loaded' } => c.type === 'skill_loaded',
   );
@@ -22,14 +31,6 @@ export function SystemMessage() {
     return (
       <MessagePrimitive.Root>
         <SkillLoadedCard skillName={skillBlock.skillName} path={skillBlock.path} content={skillBlock.content} />
-      </MessagePrimitive.Root>
-    );
-  }
-
-  if (original?.content?.some((c) => c.type === 'compaction')) {
-    return (
-      <MessagePrimitive.Root>
-        <CompactionPill />
       </MessagePrimitive.Root>
     );
   }

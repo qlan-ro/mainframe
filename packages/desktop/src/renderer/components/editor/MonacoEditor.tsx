@@ -8,6 +8,7 @@ import { useInlineComments } from './useInlineComments';
 import './setup';
 import { registerDefinitionProvider } from './navigation';
 import { copyReference } from './copy-reference';
+import { applyValueUpdate } from './apply-value-update';
 import { useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
@@ -95,9 +96,7 @@ export function MonacoEditor({
     if (!editor) return;
     const model = editor.getModel();
     if (!model) return;
-    if (model.getValue() !== value) {
-      model.setValue(value);
-    }
+    applyValueUpdate(editor, model, value);
   }, [value]);
 
   useEffect(() => {
