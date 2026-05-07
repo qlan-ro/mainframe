@@ -15,6 +15,8 @@ import { listFilesWithRipgrep } from '../ripgrep.js';
 
 const logger = createChildLogger('routes:files');
 
+const TREE_HIDDEN_NAMES = new Set(['.git']);
+
 /** GET /api/projects/:id/tree?path=relative/dir&chatId=X */
 async function handleTree(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
@@ -34,7 +36,7 @@ async function handleTree(ctx: RouteContext, req: Request, res: Response): Promi
     const dirents = await readdir(fullPath, { withFileTypes: true });
     const resolved = await Promise.all(
       dirents
-        .filter((e) => !IGNORED_DIRS.has(e.name))
+        .filter((e) => !TREE_HIDDEN_NAMES.has(e.name))
         .map(async (e) => {
           const entryPath = path.join(fullPath, e.name);
           let type: 'file' | 'directory';
