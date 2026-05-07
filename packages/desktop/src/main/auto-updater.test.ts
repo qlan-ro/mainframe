@@ -103,6 +103,20 @@ describe('auto-updater manual check', () => {
     expect(mockAutoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
   });
 
+  it('watchdog clears in-flight flag if no terminal event fires within 60s', async () => {
+    vi.useFakeTimers();
+    try {
+      const mod = await import('./auto-updater.js');
+      mod.initAutoUpdater(mockWindow);
+      await mod.checkForUpdatesManual(mockWindow);
+      expect(mod.isManualCheckInFlight()).toBe(true);
+      vi.advanceTimersByTime(60_000);
+      expect(mod.isManualCheckInFlight()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('checkForUpdatesManual is a no-op in development mode', async () => {
     process.env.NODE_ENV = 'development';
     const mod = await import('./auto-updater.js');

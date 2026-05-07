@@ -24,23 +24,25 @@ export function buildApplicationMenu(getWindow: () => BrowserWindow | null): voi
 
   const newItems = menu.items.map((topItem): Electron.MenuItemConstructorOptions | Electron.MenuItem => {
     if (topItem.label === 'View' && topItem.submenu && isProduction) {
+      // Pass live MenuItem instances through; buildFromTemplate accepts MenuItem
+      // at every nesting level, so we preserve type/click/submenu/etc. losslessly.
+      // Electron normalizes role to lowercase at runtime, so we compare case-insensitively.
       return {
         label: 'View',
-        submenu: topItem.submenu.items
-          .filter((sub) => sub.role !== 'toggleDevTools')
-          .map((sub) => ({ role: sub.role, label: sub.label, accelerator: sub.accelerator ?? undefined })),
+        submenu: topItem.submenu.items.filter(
+          (sub) => (sub.role ?? '').toLowerCase() !== 'toggledevtools',
+        ) as unknown as Electron.MenuItemConstructorOptions[],
       };
     }
     if (topItem.role === 'help' && topItem.submenu) {
-      const helpSubmenu = topItem.submenu.items.map((sub) => ({
-        role: sub.role,
-        label: sub.label,
-        accelerator: sub.accelerator ?? undefined,
-      }));
       return {
         label: topItem.label || 'Help',
         role: 'help' as const,
-        submenu: [checkForUpdatesItem, { type: 'separator' as const }, ...helpSubmenu],
+        submenu: [
+          checkForUpdatesItem,
+          { type: 'separator' as const },
+          ...topItem.submenu.items,
+        ] as unknown as Electron.MenuItemConstructorOptions[],
       };
     }
     return topItem;
