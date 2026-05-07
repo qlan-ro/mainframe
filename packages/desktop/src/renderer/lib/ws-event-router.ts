@@ -25,11 +25,19 @@ export function routeEvent(event: DaemonEvent): void {
         originClientId: event.originClientId,
       });
       chats.addChat(event.chat);
-      // Auto-select + open tab only when this client originated the creation.
-      // Imported chats and chats created by other clients (mobile, secondary
-      // desktops) update the list without hijacking the active selection.
-      const isLocalOrigin = event.originClientId === daemonClient.getClientId();
-      if (event.source !== 'import' && isLocalOrigin) {
+      // Auto-select + open tab when this client either (a) originated the
+      // creation over WS (originClientId matches our id), or (b) the event
+      // carries no origin attribution at all — that path covers plugin HTTP
+      // routes (e.g. POST /todos/:id/start-session) that emit chat.created
+      // outside the WS AsyncLocalStorage context. Skipping those would leave
+      // the user clicking "Start session" with no visible navigation.
+      // Other-client originated creates (mobile, secondary desktops) still
+      // get filtered by the strict mismatch case below — and imports always
+      // skip the auto-select via the source check.
+      const ownClientId = daemonClient.getClientId();
+      const hasOrigin = event.originClientId !== undefined;
+      const isOwnOrigin = hasOrigin ? event.originClientId === ownClientId : true;
+      if (event.source !== 'import' && isOwnOrigin) {
         chats.setActiveChat(event.chat.id);
         tabs.openChatTab(event.chat.id, event.chat.title);
       }
