@@ -15,12 +15,7 @@ import { listFilesWithRipgrep } from '../ripgrep.js';
 
 const logger = createChildLogger('routes:files');
 
-// Tree listing is lazy (one level per request) and user-driven, so it should
-// surface what's actually on disk. We only hide directories that are pure
-// noise at every depth — `.git` internals and `node_modules`. The broader
-// IGNORED_DIRS set is appropriate for recursive walks (search, file listing)
-// but not here: it would hide e.g. `.claude/worktrees/` by basename match.
-const TREE_HIDDEN_NAMES = new Set(['.git', 'node_modules']);
+const TREE_HIDDEN_NAMES = new Set(['.git']);
 
 /** GET /api/projects/:id/tree?path=relative/dir&chatId=X */
 async function handleTree(ctx: RouteContext, req: Request, res: Response): Promise<void> {
