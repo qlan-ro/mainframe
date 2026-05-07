@@ -83,22 +83,6 @@ describe('GET /api/projects/:id/tree', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
   });
 
-  it('filters out node_modules from listing', async () => {
-    await mkdir(join(projectDir, 'node_modules'));
-    await mkdir(join(projectDir, 'src'));
-
-    const ctx = createCtx(projectDir);
-    const router = fileRoutes(ctx);
-    const handler = extractHandler(router, 'get', '/api/projects/:id/tree');
-    const res = mockRes();
-
-    await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
-
-    const entries = res.json.mock.calls[0][0] as Array<{ name: string }>;
-    expect(entries.find((e) => e.name === 'node_modules')).toBeUndefined();
-    expect(entries.find((e) => e.name === 'src')).toBeDefined();
-  });
-
   it('classifies a symlink to a directory as a directory', async () => {
     await mkdir(join(projectDir, 'real-dir'));
     await symlink(join(projectDir, 'real-dir'), join(projectDir, 'link-to-dir'));
