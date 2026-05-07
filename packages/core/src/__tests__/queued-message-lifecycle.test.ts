@@ -20,7 +20,9 @@ function makeSink(
   callbacks?: {
     onQueuedProcessed?: (chatId: string, uuid: string) => void;
     onQueuedCleared?: (chatId: string) => void;
-    getQueuedCount?: (chatId: string) => number;
+    getQueuedRefs?: (
+      chatId: string,
+    ) => Array<{ uuid: string; chatId: string; messageId: string; content: string; timestamp: string }>;
   },
 ) {
   const db: any = {
@@ -39,7 +41,7 @@ function makeSink(
     () => undefined,
     callbacks?.onQueuedProcessed,
     callbacks?.onQueuedCleared,
-    callbacks?.getQueuedCount,
+    callbacks?.getQueuedRefs as never,
   );
   const sink: SessionSink = handler.buildSink(chatId, vi.fn().mockResolvedValue(undefined));
   return { sink, messages, handler, db };
@@ -157,9 +159,13 @@ describe('Queued message cleanup — onResult must NOT prematurely clear', () =>
   it('does not strip metadata.queued from messages still waiting in the CLI queue', () => {
     const emit = emitEvent as unknown as (e: DaemonEvent) => void;
     // Real-world scenario: ChatManager has 2 entries in queuedRefs corresponding
-    // to the cached messages below. Pass that count via getQueuedCount so the
-    // sink knows the queue is non-empty and stays in 'working' / no sweep.
-    const { sink, messages } = makeSink(activeChats, chatId, emit, { getQueuedCount: () => 2 });
+    // to the cached messages below. Pass them via getQueuedRefs so reconcile
+    // sees both refs as live and leaves metadata.queued alone.
+    const refs = [
+      { uuid: 'uuid-B', chatId, messageId: 'mB', content: 'B', timestamp: '' },
+      { uuid: 'uuid-C', chatId, messageId: 'mC', content: 'C', timestamp: '' },
+    ];
+    const { sink, messages } = makeSink(activeChats, chatId, emit, { getQueuedRefs: () => refs });
     // Two queued messages, neither yet dequeued by the CLI
     messages.append(
       chatId,
@@ -186,10 +192,10 @@ describe('Queued message cleanup — onResult must NOT prematurely clear', () =>
 
   it('sweeps stranded metadata.queued flags when result fires with empty queuedRefs', () => {
     const emit = emitEvent as unknown as (e: DaemonEvent) => void;
-    // queuedRefs is empty (getQueuedCount=0). The cached message's metadata.queued
+    // queuedRefs is empty. The cached message's metadata.queued
     // flag is therefore stranded — happens when the CLI's isReplay ack arrived in
     // a uuid shape we didn't dispatch on. onResult must clean it up.
-    const { sink, messages } = makeSink(activeChats, chatId, emit, { getQueuedCount: () => 0 });
+    const { sink, messages } = makeSink(activeChats, chatId, emit, { getQueuedRefs: () => [] });
     messages.append(
       chatId,
       messages.createTransientMessage(chatId, 'user', [{ type: 'text', text: 'orphan' }], {
