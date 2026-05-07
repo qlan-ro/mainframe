@@ -5,25 +5,33 @@ import { useTerminalStore, type TerminalTab } from '../../store/terminal';
 import { useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useChatsStore } from '../../store/chats';
-import { TerminalInstance } from './TerminalInstance';
+import { TerminalInstance, disposeCachedTerminal } from './TerminalInstance';
 import { useZoneHeaderTabs, useZoneHeaderActions } from '../zone/ZoneHeaderSlot.js';
 import type { InternalTab } from '../zone/ZoneHeaderSlot.js';
 import { resolveCwd } from './terminal-cwd.js';
 
-// Stable reference for the no-project case — see store/terminal.ts.
+// Stable reference for the no-scope case — see store/terminal.ts.
 const EMPTY_TERMINALS: TerminalTab[] = [];
 
 export function TerminalPanel(): React.ReactElement {
   const activeProjectId = useActiveProjectId();
+  const activeChatId = useChatsStore((s) => s.activeChatId);
 
-  const terminals = useTerminalStore((s) => (activeProjectId ? s.getTerminals(activeProjectId) : EMPTY_TERMINALS));
-  const activeTerminalId = useTerminalStore((s) => (activeProjectId ? s.getActiveTerminalId(activeProjectId) : null));
+  // Terminals follow the active chat (so each session's terminals stay tied
+  // to its worktree). When no chat is selected, fall back to the project so
+  // we still have a valid scope.
+  const scopeId = activeChatId ?? activeProjectId ?? null;
+
+  const terminals = useTerminalStore((s) => (scopeId ? s.getTerminals(scopeId) : EMPTY_TERMINALS));
+  const activeTerminalId = useTerminalStore((s) => (scopeId ? s.getActiveTerminalId(scopeId) : null));
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
   const setActiveTerminal = useTerminalStore((s) => s.setActiveTerminal);
 
   const shellNameRef = useRef('zsh');
-  const counterRef = useRef(0);
+  // Per-scope tab counter so numbering restarts at 1 in each session/project
+  // and survives across scope switches.
+  const counterByScopeRef = useRef<Map<string, number>>(new Map());
 
   // Resolved homedir — fetched once via IPC on mount.
   const [homedir, setHomedir] = useState<string | null>(null);
@@ -44,7 +52,8 @@ export function TerminalPanel(): React.ReactElement {
       console.warn('[terminal] getCwd: no activeProjectId, deferring to homedir');
       return homedir;
     }
-    const chat = useChatsStore.getState().chats.find((c) => c.id === useChatsStore.getState().activeChatId);
+    const chatsState = useChatsStore.getState();
+    const chat = chatsState.chats.find((c) => c.id === chatsState.activeChatId);
     const project = useProjectsStore.getState().projects.find((p) => p.id === activeProjectId);
     const cwd = resolveCwd({
       worktreePath: chat?.worktreePath,
@@ -66,52 +75,40 @@ export function TerminalPanel(): React.ReactElement {
   const createTerminal = useCallback(async () => {
     const cwd = getCwd();
     if (!cwd) {
-      // homedir not yet loaded — silently bail; auto-create will retry
+      // homedir not yet loaded — silently bail; user can retry by clicking +
       return;
     }
-    if (!activeProjectId) {
-      console.warn('[terminal] createTerminal called without activeProjectId — using homedir');
+    if (!scopeId) {
+      console.warn('[terminal] createTerminal called without a scope — using homedir');
     }
     try {
       const rect = containerRef.current?.getBoundingClientRect();
       const initCols = rect ? Math.max(2, Math.floor(rect.width / 7.8)) : undefined;
       const initRows = rect ? Math.max(1, Math.floor(rect.height / 17)) : undefined;
       const { id } = await window.mainframe.terminal.create({ cwd, cols: initCols, rows: initRows });
-      counterRef.current += 1;
-      const name = counterRef.current === 1 ? shellNameRef.current : `${shellNameRef.current} (${counterRef.current})`;
-      const projectId = activeProjectId ?? '__no_project__';
-      addTerminal(projectId, { id, name });
+      const scope = scopeId ?? '__no_scope__';
+      const next = (counterByScopeRef.current.get(scope) ?? 0) + 1;
+      counterByScopeRef.current.set(scope, next);
+      const name = next === 1 ? shellNameRef.current : `${shellNameRef.current} (${next})`;
+      addTerminal(scope, { id, name });
     } catch (err) {
       console.warn('[terminal] failed to create terminal', err);
     }
-  }, [getCwd, addTerminal, activeProjectId]);
+  }, [getCwd, addTerminal, scopeId]);
 
   const closeTerminal = useCallback(
     (id: string) => {
       window.mainframe.terminal.kill(id).catch((err) => {
         console.warn('[terminal] failed to kill terminal', id, err);
       });
-      if (activeProjectId) {
-        removeTerminal(activeProjectId, id);
+      // Tear down the cached xterm instance — output is no longer needed.
+      disposeCachedTerminal(id);
+      if (scopeId) {
+        removeTerminal(scopeId, id);
       }
     },
-    [removeTerminal, activeProjectId],
+    [removeTerminal, scopeId],
   );
-
-  // Auto-create first terminal when both homedir is ready and we have a project
-  const didAutoCreate = useRef(false);
-  useEffect(() => {
-    if (terminals.length === 0 && !didAutoCreate.current && homedir !== null) {
-      didAutoCreate.current = true;
-      void createTerminal();
-    }
-  }, [terminals.length, createTerminal, homedir]);
-
-  // Reset auto-create flag when project changes so the first terminal for a
-  // new project is created automatically.
-  useEffect(() => {
-    didAutoCreate.current = false;
-  }, [activeProjectId]);
 
   // Handle terminal exit events
   useEffect(() => {
@@ -144,9 +141,9 @@ export function TerminalPanel(): React.ReactElement {
 
   const handleTabChange = useCallback(
     (tabId: string) => {
-      if (activeProjectId) setActiveTerminal(activeProjectId, tabId);
+      if (scopeId) setActiveTerminal(scopeId, tabId);
     },
-    [setActiveTerminal, activeProjectId],
+    [setActiveTerminal, scopeId],
   );
 
   useZoneHeaderTabs(internalTabs, activeTerminalId, handleTabChange);
@@ -172,11 +169,15 @@ export function TerminalPanel(): React.ReactElement {
 
   return (
     <div className="h-full flex flex-col" data-testid="terminal-panel">
-      {/* Terminal instances — all mounted, only active one visible */}
+      {/* Terminal instances — all mounted, only active one visible. */}
       <div ref={containerRef} className="flex-1 min-h-0 relative">
-        {terminals.map((t) => (
-          <TerminalInstance key={t.id} terminalId={t.id} visible={t.id === activeTerminalId} />
-        ))}
+        {terminals.length === 0 ? (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-mf-text-secondary select-none">
+            Click the + icon to start a new terminal session
+          </div>
+        ) : (
+          terminals.map((t) => <TerminalInstance key={t.id} terminalId={t.id} visible={t.id === activeTerminalId} />)
+        )}
       </div>
     </div>
   );

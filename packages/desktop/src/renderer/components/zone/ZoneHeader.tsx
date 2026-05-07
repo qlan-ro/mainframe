@@ -26,7 +26,10 @@ export function ZoneHeader({ zoneId }: ZoneHeaderProps): React.ReactElement | nu
       {/* Panel name */}
       <span className="text-sm font-semibold text-mf-text-primary select-none shrink-0">{tw.label}</span>
 
-      {/* Internal tabs registered by the panel */}
+      {/* Internal tabs registered by the panel. Inline (`buttons`) tabs render
+          panel actions immediately after the tab list so the new-tab `+` sits
+          next to the tabs instead of at the far right. Dropdown / no-tabs
+          panels keep actions at the right via the trailing render below. */}
       {internalTabs.length > 0 &&
         (tabStyle === 'dropdown' ? (
           <TabDropdown tabs={internalTabs} activeTabId={activeTabId} onTabChange={onTabChange} />
@@ -53,7 +56,7 @@ export function ZoneHeader({ zoneId }: ZoneHeaderProps): React.ReactElement | nu
                         e.stopPropagation();
                         tab.onClose?.();
                       }}
-                      className="opacity-0 group-hover:opacity-100 hover:text-mf-destructive transition-opacity"
+                      className="hover:text-mf-destructive transition-colors"
                     >
                       <X size={10} />
                     </span>
@@ -61,14 +64,18 @@ export function ZoneHeader({ zoneId }: ZoneHeaderProps): React.ReactElement | nu
                 </button>
               );
             })}
+            {actions && <div className="flex items-center gap-0.5 shrink-0 ml-1">{actions}</div>}
           </div>
         ))}
 
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Panel-registered actions */}
-      {actions && <div className="flex items-center gap-0.5 shrink-0">{actions}</div>}
+      {/* Panel-registered actions — only rendered here when actions weren't
+          already rendered inline next to the tabs above. */}
+      {actions && (internalTabs.length === 0 || tabStyle === 'dropdown') && (
+        <div className="flex items-center gap-0.5 shrink-0">{actions}</div>
+      )}
 
       {/* Minimize */}
       <div className="flex items-center gap-0.5 shrink-0">
