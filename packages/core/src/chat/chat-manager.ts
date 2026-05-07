@@ -479,6 +479,17 @@ export class ChatManager {
     return this.enrichChat(chat);
   }
 
+  /**
+   * Sync the in-memory tags of a cached active chat. The tags route persists
+   * to the DB, but `activeChats[id].chat.tags` would otherwise stay stale and
+   * a later `chat.updated` emission (e.g. from resumeChat) would broadcast the
+   * old tags and clobber the renderer's store.
+   */
+  syncChatTags(chatId: string, tags: string[]): void {
+    const active = this.activeChats.get(chatId);
+    if (active) active.chat.tags = tags;
+  }
+
   getEffectivePath(chatId: string): string | null {
     const chat = this.getChat(chatId);
     if (!chat) return null;

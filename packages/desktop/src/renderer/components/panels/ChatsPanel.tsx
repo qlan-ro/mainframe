@@ -585,7 +585,7 @@ export function ChatsPanel(): React.ReactElement {
       <SessionFilterBar />
 
       {/* Session list */}
-      <div className="flex-1 overflow-y-auto px-[10px]">
+      <div className="flex-1 overflow-y-auto px-[10px] py-2">
         {projects.length === 0 ? (
           <div className="py-4 text-center text-mf-text-secondary text-mf-label">No projects yet.</div>
         ) : chats.length === 0 && (selectedTags.size > 0 || selectedSynthetic.size > 0) ? (

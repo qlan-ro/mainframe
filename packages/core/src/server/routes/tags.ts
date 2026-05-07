@@ -85,7 +85,9 @@ export function tagRoutes(ctx: RouteContext): Router {
     const chatId = param(req, 'id');
     try {
       ctx.db.chatTags.setForChat(chatId, parsed.data.tags, ctx.db.tags);
-      res.json({ success: true, data: ctx.db.chatTags.listForChat(chatId) });
+      const persisted = ctx.db.chatTags.listForChat(chatId);
+      ctx.chats?.syncChatTags?.(chatId, persisted);
+      res.json({ success: true, data: persisted });
     } catch (err) {
       logger.warn({ err, chatId }, 'set chat tags failed');
       res.status(400).json({ success: false, error: String((err as Error).message) });

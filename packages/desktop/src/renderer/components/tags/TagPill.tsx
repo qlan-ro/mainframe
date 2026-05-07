@@ -45,7 +45,10 @@ export function TagPill({ label, color, variant, active, onClick, onContextMenu 
       <span
         onClick={onClick}
         onContextMenu={onContextMenu}
-        className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer', cls)}
+        className={cn(
+          'inline-flex items-center px-2 py-0.5 rounded-full border border-transparent text-xs font-medium cursor-pointer',
+          cls,
+        )}
       >
         {label}
       </span>
