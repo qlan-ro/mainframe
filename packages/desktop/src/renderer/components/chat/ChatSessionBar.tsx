@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel, getModelContextWindow, getModelLabel } from '../../lib/adapters';
 import { PrBadge } from './PrBadge';
+import { ChatActions } from './ChatActions';
 
 const ADAPTER_ACCENT: Record<string, string> = {
   claude: 'bg-mf-accent-claude',
@@ -153,8 +154,9 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
         <StatusIndicator chatId={chatId} />
       </div>
 
-      {/* Right: token progress */}
+      {/* Right: token progress and actions */}
       <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+        <ChatActions chatId={chatId} />
         <div className="flex gap-px">
           {Array.from({ length: PROGRESS_SEGMENTS }, (_, i) => (
             <div

@@ -8,6 +8,7 @@ import { useAdaptersStore } from '../store/adapters';
 import { createLogger } from './logger';
 import { buildLaunchScope } from './launch-scope.js';
 import { notify } from './notify';
+import { daemonClient } from './client';
 
 const log = createLogger('renderer:ws');
 
@@ -16,13 +17,34 @@ export function routeEvent(event: DaemonEvent): void {
   const tabs = useTabsStore.getState();
 
   switch (event.type) {
-    case 'chat.created':
-      log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title, source: event.source });
+    case 'chat.created': {
+      log.info('event:chat.created', {
+        chatId: event.chat.id,
+        title: event.chat.title,
+        source: event.source,
+        originClientId: event.originClientId,
+      });
       chats.addChat(event.chat);
-      if (event.source !== 'import') {
+      // Auto-select + open tab when this client either (a) originated the
+      // creation over WS (originClientId matches our id), or (b) the event
+      // carries no origin attribution at all — that path covers plugin HTTP
+      // routes (e.g. POST /todos/:id/start-session) that emit chat.created
+      // outside the WS AsyncLocalStorage context. Skipping those would leave
+      // the user clicking "Start session" with no visible navigation.
+      // Other-client originated creates (mobile, secondary desktops) still
+      // get filtered by the strict mismatch case below — and imports always
+      // skip the auto-select via the source check.
+      const ownClientId = daemonClient.getClientId();
+      const hasOrigin = event.originClientId !== undefined;
+      const isOwnOrigin = hasOrigin ? event.originClientId === ownClientId : true;
+      if (event.source !== 'import' && isOwnOrigin) {
         chats.setActiveChat(event.chat.id);
         tabs.openChatTab(event.chat.id, event.chat.title);
       }
+      break;
+    }
+    case 'connection.ready':
+      // Handled in DaemonClient before dispatch — no-op here for exhaustiveness.
       break;
     case 'chat.updated': {
       log.debug('event:chat.updated', { chatId: event.chat.id });

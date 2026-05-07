@@ -360,6 +360,8 @@ export class ChatLifecycleManager {
         // Scan history for PR URLs with command-level correlation.
         // Walk messages in order: assistant tool_use blocks identify PR-create
         // commands; subsequent tool_result blocks with PR URLs are classified.
+        const scanned: { url: string; owner: string; repo: string; number: number; source: 'created' | 'mentioned' }[] =
+          [];
         const seenPrs = new Set<string>();
         const pendingCreates = new Set<string>();
         for (const msg of cached) {
@@ -388,7 +390,19 @@ export class ChatLifecycleManager {
             const toolUseId = (block as Record<string, unknown>).toolUseId as string | undefined;
             const source = toolUseId && pendingCreates.has(toolUseId) ? ('created' as const) : ('mentioned' as const);
             if (source === 'created') pendingCreates.delete(toolUseId!);
-            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr: { ...pr, source } });
+            scanned.push({ ...pr, source });
+          }
+        }
+
+        // Persist to DB so subsequent renderer connects (or sidebar views that
+        // never trigger a loadChat for this session) can surface PRs without
+        // re-running history replay. Emit `chat.prDetected` only for entries
+        // that are actually new or had their source upgraded — addDetectedPrs
+        // returns the diff. The renderer's `detectedPrs` Map merges idempotently.
+        if (scanned.length > 0) {
+          const persisted = this.deps.db.chats.addDetectedPrs(chatId, scanned);
+          for (const pr of persisted) {
+            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr });
           }
         }
       }

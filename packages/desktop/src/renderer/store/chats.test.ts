@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useChatsStore } from './chats';
-import type { Chat } from '@qlan-ro/mainframe-types';
+import { useChatsStore, mergeDetectedPrs } from './chats';
+import type { Chat, DetectedPr } from '@qlan-ro/mainframe-types';
 
 function makeChat(id: string, updatedAt: string, pinned = false, projectId = 'proj-1'): Chat {
   return {
@@ -175,5 +175,98 @@ describe('filterProjectId reconciliation on setActiveChat', () => {
     useChatsStore.getState().setFilterProjectId('proj-A');
     useChatsStore.getState().setActiveChat('chat-missing');
     expect(useChatsStore.getState().filterProjectId).toBe('proj-A');
+  });
+});
+
+const pr = (number: number, source: 'created' | 'mentioned' = 'mentioned', owner = 'o', repo = 'r'): DetectedPr => ({
+  number,
+  owner,
+  repo,
+  url: `https://github.com/${owner}/${repo}/pull/${number}`,
+  source,
+});
+
+describe('mergeDetectedPrs', () => {
+  it('returns DB entries when in-memory is empty', () => {
+    const result = mergeDetectedPrs([], [pr(1), pr(2)]);
+    expect(result.map((p) => p.number).sort()).toEqual([1, 2]);
+  });
+
+  it('returns in-memory entries when DB is empty (live event raced ahead of DB write)', () => {
+    const result = mergeDetectedPrs([pr(5)], []);
+    expect(result.map((p) => p.number)).toEqual([5]);
+  });
+
+  it('dedups by URL across both sources', () => {
+    const result = mergeDetectedPrs([pr(1)], [pr(1), pr(2)]);
+    expect(result.map((p) => p.number).sort()).toEqual([1, 2]);
+  });
+
+  it('upgrades source from mentioned → created when DB has the upgrade', () => {
+    // Renderer disconnected with PR#7 'mentioned'. While offline, daemon saw
+    // the gh pr create succeed and persisted PR#7 as 'created'. On reconnect,
+    // setChats merges — DB version wins.
+    const result = mergeDetectedPrs([pr(7, 'mentioned')], [pr(7, 'created')]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.source).toBe('created');
+  });
+
+  it('does NOT downgrade source from created → mentioned', () => {
+    // Inverse: renderer saw the live 'created' event but DB only has
+    // 'mentioned' (race window between live emit and DB commit). Keep 'created'.
+    const result = mergeDetectedPrs([pr(7, 'created')], [pr(7, 'mentioned')]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.source).toBe('created');
+  });
+
+  it('preserves in-memory entries the DB does not yet know about', () => {
+    const result = mergeDetectedPrs([pr(99)], [pr(1)]);
+    expect(result.map((p) => p.number).sort()).toEqual([1, 99]);
+  });
+});
+
+describe('setChats — detectedPrs reconciliation across reconnect', () => {
+  beforeEach(() => {
+    useChatsStore.setState({ chats: [], detectedPrs: new Map() });
+  });
+
+  function makeChatWithPrs(id: string, prs: DetectedPr[]): Chat {
+    return {
+      id,
+      adapterId: 'claude',
+      projectId: 'p1',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      totalCost: 0,
+      totalTokensInput: 0,
+      totalTokensOutput: 0,
+      lastContextTokensInput: 0,
+      detectedPrs: prs,
+    };
+  }
+
+  it('seeds the Map from DB on first setChats', () => {
+    useChatsStore.getState().setChats([makeChatWithPrs('c1', [pr(1)])]);
+    expect(
+      useChatsStore
+        .getState()
+        .detectedPrs.get('c1')
+        ?.map((p) => p.number),
+    ).toEqual([1]);
+  });
+
+  it('merges DB into existing Map on reconnect — picks up DB-only PRs added while offline', () => {
+    useChatsStore.setState({ detectedPrs: new Map([['c1', [pr(1)]]]) });
+    // Daemon, while we were offline, persisted PR#2 too.
+    useChatsStore.getState().setChats([makeChatWithPrs('c1', [pr(1), pr(2)])]);
+    const result = useChatsStore.getState().detectedPrs.get('c1');
+    expect(result?.map((p) => p.number).sort()).toEqual([1, 2]);
+  });
+
+  it('upgrades source on reconnect when DB has source upgrade', () => {
+    useChatsStore.setState({ detectedPrs: new Map([['c1', [pr(7, 'mentioned')]]]) });
+    useChatsStore.getState().setChats([makeChatWithPrs('c1', [pr(7, 'created')])]);
+    expect(useChatsStore.getState().detectedPrs.get('c1')?.[0]?.source).toBe('created');
   });
 });

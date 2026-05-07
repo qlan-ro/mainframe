@@ -16,5 +16,6 @@ export { contentSearchRoutes } from './search.js';
 export { lspRoutes } from './lsp-routes.js';
 export { worktreeRoutes } from './worktree.js';
 export { deviceRoutes } from './device.js';
+export { tagRoutes } from './tags.js';
 export { asyncHandler } from './async-handler.js';
 export type { RouteContext } from './types.js';

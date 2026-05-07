@@ -98,3 +98,5 @@ export {
   attachWorktree,
   deleteWorktree,
 } from './worktree-api';
+
+export { listTags, createTag, updateTag, deleteTag, getChatTags, setChatTags } from './tags-api';

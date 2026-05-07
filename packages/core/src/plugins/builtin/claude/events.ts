@@ -7,7 +7,6 @@ import type {
   DetectedPr,
   MessageContent,
   SessionSink,
-  SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
 import type { ClaudeSession } from './session.js';
 import { buildToolResultBlocks } from './history.js';
@@ -146,7 +145,7 @@ const INFORMATIONAL_PATTERNS = [
   /^Cloning into/,
 ];
 
-export function handleStderr(session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
+export function handleStderr(_session: ClaudeSession, chunk: Buffer, sink: SessionSink): void {
   const message = chunk.toString().trim();
   if (!message) return;
   if (INFORMATIONAL_PATTERNS.some((p) => p.test(message))) return;
@@ -356,12 +355,41 @@ function handleSubagentUserEvent(
   if (collected.length > 0) sink.onSubagentChild(parentToolUseId, collected);
 }
 
+// Canonical preamble the CLI prepends to the synthesized post-compaction
+// "continuation" user message. Used as a defensive fallback when the
+// `isCompactSummary` / `isVisibleInTranscriptOnly` flags are missing —
+// e.g. older CLI versions or third-party SDK shims that drop them.
+const COMPACT_SUMMARY_PREAMBLE = 'This session is being continued from a previous conversation that ran out of context';
+
 function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
-  // Detect queued message processed by CLI (isReplay from SDK mode)
+  // Drop the post-compaction continuation user message — the CLI emits it to
+  // seed the new context with the prior conversation summary, but Mainframe
+  // already shows a CompactionPill, so the raw text becomes a giant pill
+  // containing the whole summary (#150). Filter strictly on `isCompactSummary`;
+  // `isVisibleInTranscriptOnly` is broader and may apply to entries we want
+  // to render, so we don't use it here. The string-content branch below also
+  // matches against the canonical preamble as a defensive fallback for CLI
+  // versions / SDK shims that drop the flag.
+  if (event.isCompactSummary === true) return;
+
+  // Detect queued message processed by CLI (isReplay from SDK mode).
+  // The uuid identifying the original user message can land in any of three
+  // places depending on CLI version and event shape:
+  //   - event.uuid              (stream-json entry-level)
+  //   - event.message.uuid      (some SDK builds)
+  //   - event.message.id        (when treated as a regular Anthropic message id)
+  // Reading only event.uuid leaves a stranded queued flag in the cache when
+  // the CLI uses one of the other shapes — see issue #147.
   const isReplay = event.isReplay === true || event.is_replay === true;
-  const uuid = (event.uuid as string) || undefined;
+  const messageObj = event.message as { uuid?: string; id?: string } | undefined;
+  const uuid = (event.uuid as string) || messageObj?.uuid || messageObj?.id || undefined;
   if (isReplay && uuid) {
     sink.onQueuedProcessed(uuid);
+  } else if (isReplay) {
+    log.warn(
+      { sessionId: session.id, eventKeys: Object.keys(event) },
+      'isReplay user event without recognizable uuid — queued flag may strand',
+    );
   }
 
   // Live stream handles ONLY tool_result blocks from user events.
@@ -412,7 +440,11 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
     // original text already exists as a transient from chat-manager.sendMessage.
     if (!isReplay && !isMeta) {
       const trimmed = message.content.trim();
-      if (trimmed) sink.onCliMessage(trimmed);
+      // Defensive: catch post-compaction continuation messages whose flags
+      // were stripped by the CLI/SDK (see COMPACT_SUMMARY_PREAMBLE).
+      if (trimmed && !trimmed.startsWith(COMPACT_SUMMARY_PREAMBLE)) {
+        sink.onCliMessage(trimmed);
+      }
     }
     return;
   }
@@ -489,7 +521,8 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
             trimmed,
           );
         const isInterruptMarker = /^\[Request interrupted by user[^\]]*\]\s*$/.test(trimmed);
-        if (!isLocalCommandWrapper && !isInterruptMarker) {
+        const isCompactPreamble = trimmed.startsWith(COMPACT_SUMMARY_PREAMBLE);
+        if (!isLocalCommandWrapper && !isInterruptMarker && !isCompactPreamble) {
           sink.onCliMessage(trimmed);
         }
       }
@@ -497,7 +530,7 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
   }
 }
 
-function handleControlRequestEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+function handleControlRequestEvent(_session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
   const request = event.request as Record<string, unknown>;
   if (request?.subtype === 'can_use_tool') {
     const permRequest: ControlRequest = {
@@ -568,6 +601,11 @@ function handleResultEvent(session: ClaudeSession, event: Record<string, unknown
   const tokensOutput = usage?.output_tokens || 0;
   session.state.lastAssistantUsage = undefined;
   session.clearInterruptTimer();
+
+  log.debug(
+    { sessionId: session.id, sessionChatId: session.state.chatId, subtype: event.subtype },
+    'handling result event for parent session',
+  );
 
   sink.onResult({
     total_cost_usd: (event.total_cost_usd as number) || 0,

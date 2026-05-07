@@ -20,6 +20,7 @@ function makeSink(
   callbacks?: {
     onQueuedProcessed?: (chatId: string, uuid: string) => void;
     onQueuedCleared?: (chatId: string) => void;
+    getQueuedCount?: (chatId: string) => number;
   },
 ) {
   const db: any = {
@@ -38,6 +39,7 @@ function makeSink(
     () => undefined,
     callbacks?.onQueuedProcessed,
     callbacks?.onQueuedCleared,
+    callbacks?.getQueuedCount,
   );
   const sink: SessionSink = handler.buildSink(chatId, vi.fn().mockResolvedValue(undefined));
   return { sink, messages, handler, db };
@@ -154,7 +156,10 @@ describe('Queued message cleanup — onResult must NOT prematurely clear', () =>
 
   it('does not strip metadata.queued from messages still waiting in the CLI queue', () => {
     const emit = emitEvent as unknown as (e: DaemonEvent) => void;
-    const { sink, messages } = makeSink(activeChats, chatId, emit);
+    // Real-world scenario: ChatManager has 2 entries in queuedRefs corresponding
+    // to the cached messages below. Pass that count via getQueuedCount so the
+    // sink knows the queue is non-empty and stays in 'working' / no sweep.
+    const { sink, messages } = makeSink(activeChats, chatId, emit, { getQueuedCount: () => 2 });
     // Two queued messages, neither yet dequeued by the CLI
     messages.append(
       chatId,
@@ -177,6 +182,26 @@ describe('Queued message cleanup — onResult must NOT prematurely clear', () =>
     // And no bulk clear event leaks out.
     const clearEvents = emitEvent.mock.calls.filter((call) => call[0].type === 'message.queued.cleared');
     expect(clearEvents).toHaveLength(0);
+  });
+
+  it('sweeps stranded metadata.queued flags when result fires with empty queuedRefs', () => {
+    const emit = emitEvent as unknown as (e: DaemonEvent) => void;
+    // queuedRefs is empty (getQueuedCount=0). The cached message's metadata.queued
+    // flag is therefore stranded — happens when the CLI's isReplay ack arrived in
+    // a uuid shape we didn't dispatch on. onResult must clean it up.
+    const { sink, messages } = makeSink(activeChats, chatId, emit, { getQueuedCount: () => 0 });
+    messages.append(
+      chatId,
+      messages.createTransientMessage(chatId, 'user', [{ type: 'text', text: 'orphan' }], {
+        queued: true,
+        uuid: 'uuid-orphan',
+      }),
+    );
+
+    sink.onResult({ total_cost_usd: 0, usage: { input_tokens: 0, output_tokens: 0 } });
+
+    const stranded = messages.get(chatId)!.find((m) => m.metadata?.queued === true);
+    expect(stranded).toBeUndefined();
   });
 });
 

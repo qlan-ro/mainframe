@@ -7,6 +7,7 @@ import { asyncHandler } from './async-handler.js';
 import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
 import { gitWriteRoutes } from './git-write.js';
+import { gitChatRoutes } from './git-chat.js';
 
 const logger = createChildLogger('routes:git');
 
@@ -202,6 +203,7 @@ export function gitRoutes(ctx: RouteContext): Router {
     asyncHandler((req, res) => handleDiff(ctx, req, res)),
   );
 
+  router.use(gitChatRoutes(ctx));
   router.use(gitWriteRoutes(ctx));
 
   return router;

@@ -1,14 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, FolderOpen, GitBranch, GitPullRequest, Clock, Loader2, Pencil, Pin } from 'lucide-react';
+import { Archive, FolderGit, GitPullRequest, Loader2, Pencil, Pin, Tag as TagIcon } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useChatsStore } from '../../store';
 import { useTabsStore } from '../../store/tabs';
+import { useTagsStore } from '../../store/tags';
+import { useAdaptersStore } from '../../store/adapters';
 import { daemonClient } from '../../lib/client';
 import { archiveChat, renameChat } from '../../lib/api';
+import { getAdapterLabel } from '../../lib/adapters';
 import { deleteDraft } from '../chat/assistant-ui/composer/composer-drafts.js';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { createLogger } from '../../lib/logger';
+import { TagPill } from '../tags/TagPill';
+import { TagPopover } from '../tags/TagPopover';
 
 const log = createLogger('renderer:flat-session-row');
 
@@ -35,14 +40,18 @@ interface FlatSessionRowProps {
   onContextMenu?: (e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => void;
   registerRenameCallback?: (chatId: string, trigger: () => void) => void;
   unregisterRenameCallback?: (chatId: string) => void;
+  registerOpenTagPopover?: (chatId: string, trigger: (rect: DOMRect) => void) => void;
+  unregisterOpenTagPopover?: (chatId: string) => void;
 }
 
 export const FlatSessionRow = React.memo(function FlatSessionRow({
   chat,
-  projectName,
+  projectName: _projectName,
   onContextMenu,
   registerRenameCallback,
   unregisterRenameCallback,
+  registerOpenTagPopover,
+  unregisterOpenTagPopover,
 }: FlatSessionRowProps): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const chats = useChatsStore((s) => s.chats);
@@ -54,6 +63,16 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
     useTabsStore.getState().openChatTab(chat.id, chat.title);
     daemonClient.resumeChat(chat.id);
   }, [chat.id, chat.title, setActiveChat]);
+
+  const handleRowClick = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.closest('button, input, a, [role="button"]')) return;
+      handleSelect();
+    },
+    [handleSelect],
+  );
 
   const [archiving, setArchiving] = useState(false);
 
@@ -121,6 +140,11 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
     return () => unregisterRenameCallback?.(chat.id);
   }, [chat.id, handleStartRename, registerRenameCallback, unregisterRenameCallback]);
 
+  useEffect(() => {
+    registerOpenTagPopover?.(chat.id, (rect) => setPopoverRect(rect));
+    return () => unregisterOpenTagPopover?.(chat.id);
+  }, [chat.id, registerOpenTagPopover, unregisterOpenTagPopover]);
+
   const updateChat = useChatsStore((s) => s.updateChat);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
   const isUnread = unreadChatIds.has(chat.id);
@@ -150,30 +174,108 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   const isActive = activeChatId === chat.id;
   const isWorking = chat.displayStatus === 'working' || chat.displayStatus === 'waiting';
 
+  // Tag popover state
+  const [popoverRect, setPopoverRect] = useState<DOMRect | null>(null);
+  const tagButtonRef = useRef<HTMLButtonElement>(null);
+
+  const openTagPopover = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setPopoverRect(rect);
+  }, []);
+
+  const closeTagPopover = useCallback(() => setPopoverRect(null), []);
+
+  const registry = useTagsStore((s) => s.registry);
+  const adapters = useAdaptersStore((s) => s.adapters);
+  const colorOf = useCallback((name: string) => registry.find((t) => t.name === name)?.color ?? 'gray', [registry]);
+  const tagNames = chat.tags ?? [];
+  const hasTags = tagNames.length > 0;
+  const adapterLabel = getAdapterLabel(chat.adapterId, adapters);
+  const worktreeName = chat.worktreePath?.split('/').pop();
+  const worktreePillRef = useRef<HTMLSpanElement>(null);
+  const titleRowRef = useRef<HTMLDivElement>(null);
+  const [hideWorktreePill, setHideWorktreePill] = useState(false);
+
+  useEffect(() => {
+    if (!worktreeName || editing) {
+      setHideWorktreePill(false);
+      return;
+    }
+
+    // Only observe the row container — its width is independent of pill visibility,
+    // which avoids the show/hide feedback loop. The pill's own width is content-driven
+    // (depends on `worktreeName` length, capped at 140px) and stable per render.
+    const STATUS_DOT_AND_GAPS = 28; // 12px dot + ~16px of grid gap + flex gaps
+    const MIN_TITLE_WIDTH = 80; // titles below this are uncomfortable to read
+    const HYSTERESIS_BUFFER = 24; // larger than typical sub-pixel resize jitter
+
+    const update = (): void => {
+      const container = titleRowRef.current;
+      const pill = worktreePillRef.current;
+      if (!container || !pill) return;
+      const containerWidth = container.clientWidth;
+      // scrollWidth gives the pill's natural rendered width even when hidden via opacity.
+      const pillWidth = pill.scrollWidth;
+      if (containerWidth === 0 || pillWidth === 0) return;
+      const availableForTitle = containerWidth - STATUS_DOT_AND_GAPS - pillWidth;
+      setHideWorktreePill((wasHidden) => {
+        const showThreshold = MIN_TITLE_WIDTH;
+        const hideThreshold = MIN_TITLE_WIDTH - HYSTERESIS_BUFFER;
+        return wasHidden ? availableForTitle < showThreshold : availableForTitle < hideThreshold;
+      });
+    };
+
+    update();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', update);
+      return () => window.removeEventListener('resize', update);
+    }
+
+    const observer = new ResizeObserver(update);
+    if (titleRowRef.current) observer.observe(titleRowRef.current);
+    return () => observer.disconnect();
+  }, [editing, worktreeName]);
+
   return (
     <div
       data-testid="chat-list-item"
+      onClick={handleRowClick}
       onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId, chat.id)}
       className={cn(
-        'group w-full rounded-mf-input transition-colors flex items-center gap-2',
-        isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
+        'group w-full rounded-mf-input transition-colors cursor-pointer',
+        isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover',
       )}
     >
-      <button type="button" onClick={handleSelect} className="flex-1 min-w-0 px-3 py-1.5 text-left">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 shrink-0 flex items-center justify-center">
-            {chat.worktreeMissing ? (
-              <div className="w-2 h-2 rounded-full bg-mf-destructive" />
-            ) : isWorking ? (
-              <Loader2 size={12} className="text-mf-accent animate-spin" />
-            ) : (
-              <div
-                className={cn('w-2 h-2 rounded-full', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary opacity-40')}
-              />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5">
+        <div className="min-w-0">
+          <div
+            ref={titleRowRef}
+            data-testid="session-title-row"
+            className="grid grid-cols-[12px_minmax(0,1fr)] items-center gap-2"
+          >
+            {/* status dot */}
+            <div className="w-3 h-3 shrink-0 flex items-center justify-center">
+              {chat.worktreeMissing ? (
+                <div className="w-2 h-2 rounded-full bg-mf-destructive" />
+              ) : isWorking ? (
+                <Loader2 size={12} className="text-mf-accent animate-spin" />
+              ) : (
+                <div
+                  className={cn('w-2 h-2 rounded-full', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary')}
+                  style={!isUnread ? { opacity: 0.4 } : undefined}
+                />
+              )}
+            </div>
+
+            {/* title + select target */}
+            <button
+              type="button"
+              onClick={handleSelect}
+              className="relative flex-1 min-w-0 text-left flex items-center gap-1.5 min-h-[20px]"
+            >
+              {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
               {editing ? (
                 <input
                   ref={inputRef}
@@ -182,104 +284,145 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
                   onBlur={handleCommitRename}
                   onKeyDown={handleRenameKeyDown}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
+                  className="flex-1 bg-mf-panel-bg text-sm text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
                 />
               ) : (
-                <div className="flex items-center gap-1 min-w-0">
-                  {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
-                  {createdPrUrl && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          role="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(createdPrUrl, '_blank');
-                          }}
-                          className="shrink-0 text-[#1a7f37] hover:opacity-70 cursor-pointer"
-                          aria-label="Open PR"
-                        >
-                          <GitPullRequest size={12} />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>Open PR</TooltipContent>
-                    </Tooltip>
-                  )}
-                  <div
-                    className={cn(
-                      'text-mf-small truncate',
-                      isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                      isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
-                    )}
-                  >
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      data-testid="session-title-text"
+                      className={cn(
+                        'min-w-0 flex-1 truncate text-sm',
+                        isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
+                        isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
+                      )}
+                    >
+                      {chat.title || 'Untitled session'}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[320px] whitespace-pre-wrap break-words">
                     {chat.title || 'Untitled session'}
-                  </div>
-                </div>
+                  </TooltipContent>
+                </Tooltip>
               )}
-            </div>
-            <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
-              {projectName && (
-                <>
-                  <FolderOpen size={10} className="shrink-0" />
-                  <span className="truncate">{projectName}</span>
-                  <span className="shrink-0">{'·'}</span>
-                </>
+
+              {chat.worktreePath && worktreeName && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      ref={worktreePillRef}
+                      data-testid="worktree-pill"
+                      aria-hidden={hideWorktreePill}
+                      className={cn(
+                        'ml-auto shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-mf-hover border border-mf-border text-xs text-mf-text-secondary max-w-[140px] min-w-0',
+                        hideWorktreePill && 'absolute right-0 opacity-0 pointer-events-none',
+                      )}
+                    >
+                      <FolderGit size={10} className="shrink-0 opacity-70" />
+                      <span className="min-w-0 truncate">{worktreeName}</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{chat.worktreePath}</TooltipContent>
+                </Tooltip>
               )}
-              {chat.worktreePath && (
-                <>
-                  <GitBranch size={10} className="shrink-0" />
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="truncate max-w-[100px]" tabIndex={0}>
-                        {chat.worktreePath.split('/').pop()}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>{chat.worktreePath}</TooltipContent>
-                  </Tooltip>
-                  <span className="shrink-0">{'·'}</span>
-                </>
-              )}
-              <Clock size={10} className="shrink-0" />
-              <span className="shrink-0">{formatRelativeTime(chat.updatedAt)}</span>
+            </button>
+          </div>
+
+          {/* metadata row */}
+          <div data-testid="session-row-metadata" className="grid grid-cols-[12px_minmax(0,1fr)] items-center gap-2">
+            <div className="w-3" />
+            <div className="min-w-0 flex items-center gap-1 flex-wrap">
+              <span className="text-xs text-mf-text-secondary opacity-80">{adapterLabel}</span>
+              {hasTags && <span className="text-xs text-mf-text-secondary opacity-50">·</span>}
+              {tagNames.map((name) => (
+                <TagPill key={name} label={name} color={colorOf(name)} variant="row" />
+              ))}
             </div>
           </div>
         </div>
-      </button>
-      {chat.displayStatus === 'waiting' && (
-        <span className="shrink-0 mr-2 px-2 py-1 rounded-full text-xs font-medium border border-mf-warning text-mf-warning">
-          Waiting
-        </span>
-      )}
-      <div className={cn('shrink-0 mr-1 flex items-center gap-0.5', archiving ? 'flex' : 'hidden group-hover:flex')}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={handleStartRename}
-              className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
-              aria-label="Rename session"
-            >
-              <Pencil size={14} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Rename session</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={handleArchive}
-              disabled={archiving}
-              className={cn(
-                'w-6 h-6 rounded flex items-center justify-center text-mf-text-secondary transition-colors shrink-0',
-                archiving ? '' : 'hover:bg-mf-hover hover:text-mf-text-primary',
-              )}
-              aria-label="Archive session"
-            >
-              {archiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Archive session</TooltipContent>
-        </Tooltip>
+
+        <div data-testid="session-row-actions" className="self-center flex items-center justify-end gap-2 min-w-0">
+          {/* PR badge */}
+          {createdPrUrl && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  role="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(createdPrUrl, '_blank');
+                  }}
+                  className="shrink-0 text-[#1a7f37] hover:opacity-70 cursor-pointer"
+                  aria-label="Open PR"
+                >
+                  <GitPullRequest size={12} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Open PR</TooltipContent>
+            </Tooltip>
+          )}
+
+          <div className="w-[104px] h-6 shrink-0 flex items-center justify-end">
+            {/* time — visible when not hovered */}
+            <span className="text-xs text-mf-text-secondary tabular-nums whitespace-nowrap group-hover:hidden">
+              {formatRelativeTime(chat.updatedAt)}
+            </span>
+
+            {/* hover actions (Tag / Rename / Archive) */}
+            <div className={cn('items-center gap-0.5 hidden group-hover:flex', archiving && 'flex')}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    ref={tagButtonRef}
+                    onClick={openTagPopover}
+                    className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                    aria-label="Edit tags"
+                  >
+                    <TagIcon size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Tags</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleStartRename}
+                    className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+                    aria-label="Rename session"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Rename</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleArchive}
+                    disabled={archiving}
+                    className={cn(
+                      'w-6 h-6 rounded flex items-center justify-center text-mf-text-secondary transition-colors',
+                      archiving ? '' : 'hover:bg-mf-hover hover:text-mf-text-primary',
+                    )}
+                    aria-label="Archive session"
+                  >
+                    {archiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Archive</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+
+          {chat.displayStatus === 'waiting' && (
+            <span className="shrink-0 px-2 py-1 rounded-full text-xs font-medium border border-mf-warning text-mf-warning">
+              Waiting
+            </span>
+          )}
+        </div>
       </div>
+
+      {popoverRect && <TagPopover chatId={chat.id} anchorRect={popoverRect} onClose={closeTagPopover} />}
     </div>
   );
 });

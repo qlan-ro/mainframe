@@ -15,6 +15,7 @@ import { DragProvider } from './zone/DragOverlay';
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { FileViewHeader } from './panels/FileViewHeader';
 import { FileViewContent } from './panels/FileViewContent';
+import { ReviewPanel } from './modals';
 
 const BOTTOM_HEIGHT_MIN = 120;
 const BOTTOM_HEIGHT_DEFAULT = 200;
@@ -208,6 +209,7 @@ export function Layout({ centerPanel }: LayoutProps): React.ReactElement {
 
         <StatusBar />
       </div>
+      <ReviewPanel />
     </DragProvider>
   );
 }
