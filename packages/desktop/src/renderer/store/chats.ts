@@ -90,6 +90,22 @@ function sortChats(chats: Chat[]): Chat[] {
   });
 }
 
+/**
+ * Merge two PR lists deduped by URL. 'created' source always wins over
+ * 'mentioned' (matches the DB's addDetectedPrs upgrade rule). Order is
+ * preserved from the merged-into list, with new entries appended.
+ */
+export function mergeDetectedPrs(into: DetectedPr[], add: DetectedPr[]): DetectedPr[] {
+  const byUrl = new Map<string, DetectedPr>();
+  for (const pr of into) byUrl.set(pr.url, pr);
+  for (const pr of add) {
+    const prev = byUrl.get(pr.url);
+    if (!prev) byUrl.set(pr.url, pr);
+    else if (prev.source !== 'created' && pr.source === 'created') byUrl.set(pr.url, { ...prev, source: 'created' });
+  }
+  return [...byUrl.values()];
+}
+
 export const useChatsStore = create<ChatsState>((set) => ({
   chats: [],
   activeChatId: null,
@@ -120,15 +136,19 @@ export const useChatsStore = create<ChatsState>((set) => ({
     }),
   setChats: (chats) =>
     set((state) => {
-      // Seed `detectedPrs` from the DB-backed Chat rows so PR badges render
-      // immediately on app load without requiring each session to be opened
-      // (which is what triggers the daemon's history-replay PR scan). Live
-      // `chat.prDetected` events still merge into this Map idempotently.
+      // Reconcile `detectedPrs` with the DB-backed Chat rows so PR badges
+      // render immediately on app load AND so reconnects pick up DB writes
+      // that happened while the renderer was offline (live `chat.prDetected`
+      // events would have been missed). DB is authoritative; merge in any
+      // in-memory entries the DB doesn't yet know about (covers the brief
+      // window between an live event arriving over WS and the DB write
+      // completing). Source-rank: 'created' beats 'mentioned'.
       const next = new Map(state.detectedPrs);
       for (const chat of chats) {
-        if (chat.detectedPrs && chat.detectedPrs.length > 0 && !next.has(chat.id)) {
-          next.set(chat.id, chat.detectedPrs);
-        }
+        const dbPrs = chat.detectedPrs ?? [];
+        const memPrs = next.get(chat.id) ?? [];
+        if (dbPrs.length === 0 && memPrs.length === 0) continue;
+        next.set(chat.id, mergeDetectedPrs(memPrs, dbPrs));
       }
       return { chats: sortChats([...chats]), detectedPrs: next };
     }),
