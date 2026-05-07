@@ -90,6 +90,22 @@ function sortChats(chats: Chat[]): Chat[] {
   });
 }
 
+/**
+ * Merge two PR lists deduped by URL. 'created' source always wins over
+ * 'mentioned' (matches the DB's addDetectedPrs upgrade rule). Order is
+ * preserved from the merged-into list, with new entries appended.
+ */
+export function mergeDetectedPrs(into: DetectedPr[], add: DetectedPr[]): DetectedPr[] {
+  const byUrl = new Map<string, DetectedPr>();
+  for (const pr of into) byUrl.set(pr.url, pr);
+  for (const pr of add) {
+    const prev = byUrl.get(pr.url);
+    if (!prev) byUrl.set(pr.url, pr);
+    else if (prev.source !== 'created' && pr.source === 'created') byUrl.set(pr.url, { ...prev, source: 'created' });
+  }
+  return [...byUrl.values()];
+}
+
 export const useChatsStore = create<ChatsState>((set) => ({
   chats: [],
   activeChatId: null,
@@ -118,7 +134,24 @@ export const useChatsStore = create<ChatsState>((set) => ({
       next.delete(chatId);
       return { unreadChatIds: next };
     }),
-  setChats: (chats) => set({ chats: sortChats([...chats]) }),
+  setChats: (chats) =>
+    set((state) => {
+      // Reconcile `detectedPrs` with the DB-backed Chat rows so PR badges
+      // render immediately on app load AND so reconnects pick up DB writes
+      // that happened while the renderer was offline (live `chat.prDetected`
+      // events would have been missed). DB is authoritative; merge in any
+      // in-memory entries the DB doesn't yet know about (covers the brief
+      // window between an live event arriving over WS and the DB write
+      // completing). Source-rank: 'created' beats 'mentioned'.
+      const next = new Map(state.detectedPrs);
+      for (const chat of chats) {
+        const dbPrs = chat.detectedPrs ?? [];
+        const memPrs = next.get(chat.id) ?? [];
+        if (dbPrs.length === 0 && memPrs.length === 0) continue;
+        next.set(chat.id, mergeDetectedPrs(memPrs, dbPrs));
+      }
+      return { chats: sortChats([...chats]), detectedPrs: next };
+    }),
   setFilterProjectId: (id) => {
     if (id) {
       localStorage.setItem('mf:filterProjectId', id);
