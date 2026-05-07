@@ -16,6 +16,9 @@ export type UpdateStatus =
 
 let manualCheckInFlight = false;
 let manualCheckWindow: BrowserWindow | null = null;
+let manualCheckTimeout: NodeJS.Timeout | null = null;
+
+const MANUAL_CHECK_TIMEOUT_MS = 60_000;
 
 export function isManualCheckInFlight(): boolean {
   return manualCheckInFlight;
@@ -24,6 +27,10 @@ export function isManualCheckInFlight(): boolean {
 function clearManualFlag(): void {
   manualCheckInFlight = false;
   manualCheckWindow = null;
+  if (manualCheckTimeout) {
+    clearTimeout(manualCheckTimeout);
+    manualCheckTimeout = null;
+  }
 }
 
 function showUpToDateDialog(window: BrowserWindow): void {
@@ -139,6 +146,13 @@ export async function checkForUpdatesManual(window: BrowserWindow): Promise<void
   }
   manualCheckInFlight = true;
   manualCheckWindow = window;
+  // Watchdog: if checkForUpdates() resolves null (e.g. updater disabled or
+  // another check already in progress) and no terminal event fires, the flag
+  // would otherwise leak forever and break every subsequent click.
+  manualCheckTimeout = setTimeout(() => {
+    log.warn('manual update check timed out without a terminal event; clearing flag');
+    clearManualFlag();
+  }, MANUAL_CHECK_TIMEOUT_MS);
   try {
     await autoUpdater.checkForUpdates();
   } catch (err: unknown) {
