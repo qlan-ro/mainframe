@@ -265,7 +265,14 @@ export class ChatManager {
     const outgoingContent =
       textPrefix.length > 0 ? (content ? `${textPrefix.join('\n')}\n\n${content}` : textPrefix.join('\n')) : content;
 
-    const isQueued = postStart.chat.processState === 'working';
+    // Only treat the message as queued for adapters whose protocol echoes a
+    // per-message replay ack (Claude CLI stream-json). Adapters that consume
+    // sendMessage synchronously (Codex turn/start, Claude SDK streamFollowUp)
+    // never call `sink.onQueuedProcessed`, so leaving them on the queued path
+    // would strand `queuedRefs` and pin `processState='working'` forever via
+    // the new `getQueuedCount` gate in onResult.
+    const adapterAcksReplay = postStart.session.supportsReplayAck === true;
+    const isQueued = adapterAcksReplay && postStart.chat.processState === 'working';
     const transientMetadata: Record<string, unknown> = {};
     if (isQueued) transientMetadata.queued = true;
     if (attachmentPreviews.length > 0) transientMetadata.attachments = attachmentPreviews;

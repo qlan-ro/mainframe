@@ -10,6 +10,11 @@ import { MockBaseSession } from './helpers/mock-session.js';
 import type { ControlResponse, AdapterSession, SessionOptions, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 class MockSession extends MockBaseSession {
+  // Tests that exercise the queued-message path simulate the Claude protocol,
+  // which echoes per-message replay acks (isReplay). Mark the mock adapter as
+  // ack-supporting so chat-manager enrolls messages in queuedRefs.
+  readonly supportsReplayAck = true;
+
   constructor(private adapter: MockAdapter) {
     super('proc-1', adapter.id, '/tmp');
   }
@@ -212,6 +217,57 @@ describe('queued messages and thinking indicator', () => {
     // Verify transition to idle happened correctly
     const idleEvent = events.find((e) => e.type === 'chat.updated' && (e as any).chat.processState === 'idle');
     expect(idleEvent).toBeDefined();
+  }, 10_000);
+
+  it('non-acking adapters (no supportsReplayAck) still transition to idle on result', async () => {
+    // Adapters without per-message replay ack — Codex turn/start, Claude SDK
+    // streamFollowUp — must NOT get stuck in processState=working when a
+    // second message is sent while busy. chat-manager skips queuedRefs for
+    // them entirely, so the new getQueuedCount gate sees 0 and onResult
+    // flips to idle as expected.
+    class NonAckingMockSession extends MockBaseSession {
+      constructor(private adapter: MockAdapter) {
+        super('proc-1', adapter.id, '/tmp');
+      }
+      override async sendMessage(msg: string): Promise<void> {
+        this.adapter.sendMessageSpy(msg);
+      }
+      override async respondToPermission(r: ControlResponse): Promise<void> {
+        this.adapter.respondToPermissionSpy(r);
+      }
+      override async interrupt(): Promise<void> {
+        this.adapter.interruptSpy();
+      }
+      override async kill(): Promise<void> {
+        await super.kill();
+        this.adapter.killSpy();
+      }
+    }
+    class NonAckingMockAdapter extends MockAdapter {
+      override createSession(_options: SessionOptions): AdapterSession {
+        this.currentSession = new NonAckingMockSession(this) as unknown as MockSession;
+        return this.currentSession;
+      }
+    }
+    const adapter = new NonAckingMockAdapter();
+    const events = await setup(adapter);
+    const chatManager = events.chats;
+
+    // Send a second message while processState='working'. Without the
+    // adapter-capability check, this would enroll a queuedRef that never
+    // drains (the adapter never calls onQueuedProcessed). With the check,
+    // no ref is enrolled.
+    await chatManager.sendMessage('test-chat', 'second message');
+    await sleep(50);
+    events.length = 0;
+
+    adapter.currentSession!.simulateResult({ subtype: 'completed', is_error: false });
+    await sleep(50);
+
+    const idle = events.find(
+      (e) => e.type === 'chat.updated' && (e as { chat: { processState?: string } }).chat.processState === 'idle',
+    );
+    expect(idle).toBeDefined();
   }, 10_000);
 
   it('keeps processState=working when result fires while a queued message is still pending', async () => {
