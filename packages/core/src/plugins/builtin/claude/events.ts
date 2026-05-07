@@ -356,7 +356,23 @@ function handleSubagentUserEvent(
   if (collected.length > 0) sink.onSubagentChild(parentToolUseId, collected);
 }
 
+// Canonical preamble the CLI prepends to the synthesized post-compaction
+// "continuation" user message. Used as a defensive fallback when the
+// `isCompactSummary` / `isVisibleInTranscriptOnly` flags are missing —
+// e.g. older CLI versions or third-party SDK shims that drop them.
+const COMPACT_SUMMARY_PREAMBLE = 'This session is being continued from a previous conversation that ran out of context';
+
 function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+  // Drop the post-compaction continuation user message — the CLI emits it to
+  // seed the new context with the prior conversation summary, but Mainframe
+  // already shows a CompactionPill, so the raw text becomes a giant pill
+  // containing the whole summary (#150). Filter strictly on `isCompactSummary`;
+  // `isVisibleInTranscriptOnly` is broader and may apply to entries we want
+  // to render, so we don't use it here. The string-content branch below also
+  // matches against the canonical preamble as a defensive fallback for CLI
+  // versions / SDK shims that drop the flag.
+  if (event.isCompactSummary === true) return;
+
   // Detect queued message processed by CLI (isReplay from SDK mode)
   const isReplay = event.isReplay === true || event.is_replay === true;
   const uuid = (event.uuid as string) || undefined;
@@ -412,7 +428,11 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
     // original text already exists as a transient from chat-manager.sendMessage.
     if (!isReplay && !isMeta) {
       const trimmed = message.content.trim();
-      if (trimmed) sink.onCliMessage(trimmed);
+      // Defensive: catch post-compaction continuation messages whose flags
+      // were stripped by the CLI/SDK (see COMPACT_SUMMARY_PREAMBLE).
+      if (trimmed && !trimmed.startsWith(COMPACT_SUMMARY_PREAMBLE)) {
+        sink.onCliMessage(trimmed);
+      }
     }
     return;
   }
@@ -489,7 +509,8 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
             trimmed,
           );
         const isInterruptMarker = /^\[Request interrupted by user[^\]]*\]\s*$/.test(trimmed);
-        if (!isLocalCommandWrapper && !isInterruptMarker) {
+        const isCompactPreamble = trimmed.startsWith(COMPACT_SUMMARY_PREAMBLE);
+        if (!isLocalCommandWrapper && !isInterruptMarker && !isCompactPreamble) {
           sink.onCliMessage(trimmed);
         }
       }
