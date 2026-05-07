@@ -8,6 +8,7 @@ import type {
   MessageMetadata,
   ToolCategories,
   ContextUsage,
+  QueuedMessageRef,
 } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { MessageCache } from './message-cache.js';
@@ -53,7 +54,7 @@ export class EventHandler {
     private getToolCategories: (chatId: string) => ToolCategories | undefined = () => undefined,
     private onQueuedProcessed: (chatId: string, uuid: string) => void = () => {},
     private onQueuedCleared: (chatId: string) => void = () => {},
-    private getQueuedCount: (chatId: string) => number = () => 0,
+    private getQueuedRefs: (chatId: string) => QueuedMessageRef[] = () => [],
   ) {}
 
   setPushService(service: PushService): void {
@@ -84,7 +85,7 @@ export class EventHandler {
       this.getToolCategories,
       this.onQueuedProcessed,
       this.onQueuedCleared,
-      this.getQueuedCount,
+      this.getQueuedRefs,
       this.pushService,
     );
   }
@@ -114,7 +115,7 @@ function buildSessionSink(
   getToolCategories: (chatId: string) => ToolCategories | undefined,
   onQueuedProcessedCb: (chatId: string, uuid: string) => void,
   onQueuedClearedCb: (chatId: string) => void,
-  getQueuedCount: (chatId: string) => number,
+  getQueuedRefs: (chatId: string) => QueuedMessageRef[],
   pushService?: PushService,
 ): SessionSink {
   function emitDisplay(): void {
@@ -264,12 +265,60 @@ function buildSessionSink(
       // the AI finishes a turn, not only when the user sends a message.
       const now = new Date().toISOString();
 
-      // Result events fire per-turn. If the user queued more messages while the
-      // CLI was busy, the CLI will keep processing them — we must NOT flip to
-      // idle here, or the thinking indicator drops while the assistant is
-      // still streaming the next queued turn. The final result (when the queue
-      // drains) will set idle.
-      const queueRemaining = getQueuedCount(chatId);
+      // Reconcile cached metadata.queued ↔ chat-manager queuedRefs. The CLI's
+      // isReplay acks can race with our queuedRefs.set (the daemon registers
+      // the ref AFTER awaiting stdin.write; the CLI may already have ack'd),
+      // and renderer-side `queuedMessages` can drift from the daemon when
+      // events arrive out of order. We recompute the canonical state here on
+      // every result event:
+      //   1. cached msg has metadata.queued but no matching ref → orphan flag.
+      //      Strip the flag + emit message.queued.processed for the renderer.
+      //   2. ref has no matching cached msg → orphan ref. Drop it + ack.
+      //   3. Emit a queued.snapshot afterwards so the renderer's composer
+      //      converges on whatever refs the daemon believes are still live.
+      const refsBefore = getQueuedRefs(chatId);
+      const refUuids = new Set(refsBefore.map((r) => r.uuid));
+      const cached = messages.get(chatId) ?? [];
+      const cachedQueuedUuids = new Set<string>();
+      let displayChanged = false;
+
+      for (const m of cached) {
+        const u = m.metadata?.uuid;
+        if (m.metadata?.queued && typeof u === 'string') {
+          cachedQueuedUuids.add(u);
+          if (!refUuids.has(u)) {
+            delete (m.metadata as Record<string, unknown>).queued;
+            delete (m.metadata as Record<string, unknown>).uuid;
+            displayChanged = true;
+            log.warn({ chatId, uuid: u }, 'onResult: orphan metadata.queued (no matching ref) — clearing');
+            emitEvent({ type: 'message.queued.processed', chatId, uuid: u });
+            onQueuedProcessedCb(chatId, u);
+          }
+        }
+      }
+
+      for (const ref of refsBefore) {
+        if (!cachedQueuedUuids.has(ref.uuid)) {
+          log.warn({ chatId, uuid: ref.uuid }, 'onResult: orphan queuedRef (no matching cached message) — pruning');
+          emitEvent({ type: 'message.queued.processed', chatId, uuid: ref.uuid });
+          onQueuedProcessedCb(chatId, ref.uuid);
+        }
+      }
+
+      if (displayChanged) emitDisplay();
+
+      // Force renderer composer to converge on the daemon's refs. Defends
+      // against any out-of-order delivery / dedupe gap that could leave the
+      // renderer's queuedMessages map with stale entries.
+      const refsAfter = getQueuedRefs(chatId);
+      emitEvent({ type: 'message.queued.snapshot', chatId, refs: refsAfter });
+
+      // Result events fire per-turn. While queued messages are still pending
+      // we must NOT flip to idle here, or the thinking indicator drops while
+      // the assistant is still streaming the next queued turn. Use the count
+      // AFTER reconciliation so orphan refs don't pin the state to 'working'
+      // when the CLI is genuinely done.
+      const queueRemaining = refsAfter.length;
       const nextProcessState: 'idle' | 'working' = queueRemaining > 0 ? 'working' : 'idle';
 
       db.chats.update(chatId, {
@@ -287,27 +336,6 @@ function buildSessionSink(
       active.chat.processState = nextProcessState;
       active.chat.updatedAt = now;
 
-      // Belt-and-suspenders: when the queue is genuinely empty, sweep any
-      // message still flagged metadata.queued. These are stranded acks —
-      // happens when the CLI's isReplay event arrived in a uuid shape we
-      // didn't dispatch on, so the per-message flag was never cleared.
-      if (queueRemaining === 0) {
-        const cached = messages.get(chatId);
-        let swept = false;
-        if (cached) {
-          for (const m of cached) {
-            if (m.metadata?.queued) {
-              delete (m.metadata as Record<string, unknown>).queued;
-              delete (m.metadata as Record<string, unknown>).uuid;
-              swept = true;
-            }
-          }
-        }
-        if (swept) {
-          log.warn({ chatId }, 'onResult: swept stranded metadata.queued flags');
-          emitDisplay();
-        }
-      }
       // Check interrupted flag before clearing permissions (clear() wipes both).
       const wasInterrupted = permissions.clearInterrupted(chatId);
       // CLI process ended — clear stale permissions so displayStatus reflects
