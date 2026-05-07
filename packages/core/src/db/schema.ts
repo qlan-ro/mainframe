@@ -51,6 +51,23 @@ export function initializeSchema(db: Database.Database): void {
       created_at  TEXT NOT NULL,
       last_seen   TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      name       TEXT PRIMARY KEY,
+      color      TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_tags (
+      chat_id    TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      tag        TEXT NOT NULL REFERENCES tags(name) ON UPDATE CASCADE,
+      source     TEXT NOT NULL DEFAULT 'user' CHECK (source IN ('user')),
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (chat_id, tag, source)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_tags_chat ON chat_tags(chat_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_tags_tag  ON chat_tags(tag);
   `);
 
   // Migrations

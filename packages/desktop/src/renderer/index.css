@@ -40,6 +40,17 @@
   --color-mf-info: var(--mf-info);
   --color-mf-ring: var(--mf-ring);
 
+  --color-mf-tag-blue: var(--mf-tag-blue);
+  --color-mf-tag-red: var(--mf-tag-red);
+  --color-mf-tag-purple: var(--mf-tag-purple);
+  --color-mf-tag-violet: var(--mf-tag-violet);
+  --color-mf-tag-amber: var(--mf-tag-amber);
+  --color-mf-tag-teal: var(--mf-tag-teal);
+  --color-mf-tag-cyan: var(--mf-tag-cyan);
+  --color-mf-tag-green: var(--mf-tag-green);
+  --color-mf-tag-pink: var(--mf-tag-pink);
+  --color-mf-tag-orange: var(--mf-tag-orange);
+
   --spacing-mf-gap: var(--mf-gap-panel);
 
   --radius-mf-panel: var(--mf-radius-panel);
@@ -124,6 +135,18 @@
     --mf-overlay: oklch(0 0 0);
     --mf-info: oklch(0.714 0.143 255);
     --mf-ring: var(--mf-accent);
+
+    /* Tag palette */
+    --mf-tag-blue: oklch(0.65 0.18 250);
+    --mf-tag-red: oklch(0.65 0.22 25);
+    --mf-tag-purple: oklch(0.65 0.22 305);
+    --mf-tag-violet: oklch(0.62 0.20 285);
+    --mf-tag-amber: oklch(0.78 0.16 75);
+    --mf-tag-teal: oklch(0.70 0.15 185);
+    --mf-tag-cyan: oklch(0.75 0.13 215);
+    --mf-tag-green: oklch(0.72 0.19 150);
+    --mf-tag-pink: oklch(0.72 0.18 350);
+    --mf-tag-orange: oklch(0.72 0.18 50);
 
     /* Spacing */
     --mf-gap-panel: 4px;
