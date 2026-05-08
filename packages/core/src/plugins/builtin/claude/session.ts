@@ -68,6 +68,15 @@ export interface ClaudeSessionState {
   pendingPrCreates: Set<string>;
   /** Tool_use IDs → parsed PR info for mutation commands (gh pr edit/ready/merge/close/reopen/comment/review, etc.) */
   pendingPrMutations: Map<string, DetectedPrCore>;
+  /**
+   * Tool_use IDs → originating tool name (and Bash command, if applicable).
+   * Path A PR detection consults this to gate URL scanning to tools that
+   * legitimately surface PR URLs (Bash with a PR-CLI command, or Agent
+   * subagents). Without it, a Read/Grep/Edit of a file that happens to
+   * contain a PR URL would falsely tag the chat.
+   * Cleared when the matching tool_result arrives.
+   */
+  toolUseRegistry: Map<string, { name: string; command?: string }>;
   // Cached skill-name → resolved SKILL.md path, populated lazily on SkillTool
   // detection to avoid re-probing the filesystem for the same skill.
   skillPathCache: Map<string, string>;
@@ -117,6 +126,7 @@ export class ClaudeSession implements AdapterSession {
       pendingCancelCallbacks: new Map(),
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),
+      toolUseRegistry: new Map(),
       skillPathCache: new Map(),
       taskV2Events: [],
     };
