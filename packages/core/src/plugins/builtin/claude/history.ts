@@ -94,7 +94,7 @@ function synthesizeSkillLoadedFromUserEntry(entry: Record<string, unknown>, chat
   };
 }
 
-function extractToolResultContent(content: unknown): string {
+export function extractToolResultContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     const texts: string[] = [];

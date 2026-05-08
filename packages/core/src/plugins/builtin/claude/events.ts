@@ -9,7 +9,7 @@ import type {
   SessionSink,
 } from '@qlan-ro/mainframe-types';
 import type { ClaudeSession } from './session.js';
-import { buildToolResultBlocks } from './history.js';
+import { buildToolResultBlocks, extractToolResultContent } from './history.js';
 import { createChildLogger } from '../../../logger.js';
 import { normalizeTodos } from '../../../todos/normalize.js';
 
@@ -44,6 +44,28 @@ export const PR_MUTATION_COMMANDS: RegExp[] = [
 
 export function isPrMutationCommand(command: string): boolean {
   return PR_MUTATION_COMMANDS.some((re) => re.test(command));
+}
+
+/**
+ * Bash commands whose output may legitimately surface a PR URL we want to attribute
+ * to this chat (creates, mutations, and views/lists). Anything else — `cat`, `grep`,
+ * `git log` of unrelated history — must NOT trigger Path A, otherwise we tag the chat
+ * with PRs that just happen to be mentioned in some file or transcript.
+ */
+const PR_RELEVANT_BASH_REGEX = /\b(gh\s+pr|glab\s+mr|az\s+repos\s+pr)\b/;
+
+/**
+ * Tools whose tool_result we trust to surface PR URLs that belong to this chat.
+ * - Bash: gated further by PR_RELEVANT_BASH_REGEX on the originating command.
+ * - Agent / Task: subagent dispatch — the parent assistant explicitly delegated work,
+ *   so a PR URL in the subagent's final report is attributable to this chat.
+ */
+function shouldScanToolResultForPr(meta: { name: string; command?: string } | undefined): boolean {
+  if (!meta) return false;
+  if (meta.name === 'Bash' || meta.name === 'BashTool') {
+    return !!meta.command && PR_RELEVANT_BASH_REGEX.test(meta.command);
+  }
+  return meta.name === 'Agent' || meta.name === 'Task';
 }
 
 const GH_COMPACT_REF_REGEX = /\b([^/\s#]+)\/([^/\s#]+)#(\d+)\b/;
@@ -219,6 +241,11 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
         handleTaskV2Event(session, taskV2Name as 'TaskCreate' | 'TaskUpdate' | 'TaskStop', block.input, sink);
       }
       const name = block.name as string;
+      const id = block.id as string | undefined;
+      if (id && name) {
+        const command = (block.input as { command?: string } | undefined)?.command;
+        session.state.toolUseRegistry.set(id, command ? { name, command } : { name });
+      }
       if (name === 'Bash' || name === 'BashTool') {
         const input = block.input as { command?: string } | undefined;
         if (input?.command && isPrCreateCommand(input.command)) {
@@ -461,17 +488,24 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
 
   for (const block of message.content) {
     if (block.type === 'tool_result') {
-      const text = typeof block.content === 'string' ? block.content : '';
+      // tool_result.content is a string for Bash and most tools, but an array
+      // of typed blocks for Agent (Task) subagent results — flatten both.
+      const text = extractToolResultContent(block.content);
       const toolUseId = block.tool_use_id as string | undefined;
+      const meta = toolUseId ? session.state.toolUseRegistry.get(toolUseId) : undefined;
       const planMatch = text.match(/Your plan has been saved to: (\/\S+\.md)/);
       if (planMatch?.[1]) {
         sink.onPlanFile(planMatch[1].trim());
       }
-      const pr = extractPrFromToolResult(text);
-      if (pr) {
-        const source = toolUseId && session.state.pendingPrCreates.has(toolUseId) ? 'created' : 'mentioned';
-        if (source === 'created') session.state.pendingPrCreates.delete(toolUseId!);
-        sink.onPrDetected({ ...pr, source });
+      // Path A — gated by originating tool. Without this gate, a Read/Grep/Edit
+      // of any file containing a PR URL would falsely tag this chat with that PR.
+      if (shouldScanToolResultForPr(meta)) {
+        const pr = extractPrFromToolResult(text);
+        if (pr) {
+          const source = toolUseId && session.state.pendingPrCreates.has(toolUseId) ? 'created' : 'mentioned';
+          if (source === 'created') session.state.pendingPrCreates.delete(toolUseId!);
+          sink.onPrDetected({ ...pr, source });
+        }
       }
 
       // Path B: command-arg-based mutation detection. Consume any pending stash
@@ -483,6 +517,7 @@ function handleUserEvent(session: ClaudeSession, event: Record<string, unknown>,
           sink.onPrDetected({ ...stashed, source: 'mentioned' });
         }
       }
+      if (toolUseId) session.state.toolUseRegistry.delete(toolUseId);
     } else if (block.type === 'text') {
       const text = (block.text as string) || '';
       if (!text.trim()) continue;

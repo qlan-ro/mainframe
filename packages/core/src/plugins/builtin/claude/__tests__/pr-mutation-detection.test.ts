@@ -38,6 +38,7 @@ function createMockSession(): ClaudeSession {
       pendingCancelCallbacks: new Map(),
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),
+      toolUseRegistry: new Map(),
     },
     clearInterruptTimer: vi.fn(),
     requestContextUsage: vi.fn(),
@@ -453,12 +454,27 @@ describe('handleUserEvent consumes pending mutations', () => {
     const sink = createMockSink();
     const session = createMockSession();
 
-    session.state.pendingPrMutations.set('tu_overlap', {
-      url: 'https://github.com/org/repo/pull/42',
-      owner: 'org',
-      repo: 'repo',
-      number: 42,
-    });
+    // Fire the assistant tool_use so the registry recognizes this as a
+    // PR-relevant Bash command (`gh pr edit`) and Path A scans the output.
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tu_overlap',
+                name: 'Bash',
+                input: { command: 'gh pr edit https://github.com/org/repo/pull/42 --add-label bug' },
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
 
     const userEvent = {
       type: 'user',
@@ -491,6 +507,245 @@ describe('handleUserEvent consumes pending mutations', () => {
       repo: 'repo',
       number: 42,
       source: 'mentioned',
+    });
+  });
+});
+
+describe('Path A gating by originating tool', () => {
+  it('does NOT emit when a Read tool_result happens to contain a PR URL', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    const assistantEvent = {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tu_read_1',
+            name: 'Read',
+            input: { file_path: '/repo/docs/some-file.md' },
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(assistantEvent) + '\n'), sink);
+
+    const userEvent = {
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tu_read_1',
+            content: 'See https://github.com/owner/repo/pull/123 for context',
+          },
+        ],
+      },
+    };
+    handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
+
+    expect(sink.onPrDetected).not.toHaveBeenCalled();
+  });
+
+  it('does NOT emit when a Bash `cat` prints a PR URL from an unrelated file', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tu_cat_1',
+                name: 'Bash',
+                input: { command: 'cat README.md' },
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'user',
+          message: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'tu_cat_1',
+                content: 'See https://github.com/owner/repo/pull/777 for changelog details',
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
+
+    expect(sink.onPrDetected).not.toHaveBeenCalled();
+  });
+
+  it('does NOT emit when a Grep match line contains a PR URL', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tu_grep_1',
+                name: 'Grep',
+                input: { pattern: 'pull' },
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'user',
+          message: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'tu_grep_1',
+                content: 'docs/foo.md:14: https://github.com/owner/repo/pull/9',
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
+
+    expect(sink.onPrDetected).not.toHaveBeenCalled();
+  });
+
+  it('DOES emit when an Agent (Task subagent) reports a PR URL via array-form content', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tu_agent_1',
+                name: 'Agent',
+                input: { description: 'Open Azure DevOps PR', subagent_type: 'azure-devops', prompt: '...' },
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
+
+    // Agent tool_result.content is an array of typed blocks, not a string —
+    // this is the shape that caused session #83f472ff to miss its own PR.
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'user',
+          message: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'tu_agent_1',
+                content: [
+                  {
+                    type: 'text',
+                    text: 'PR URL:\nhttps://dev.azure.com/bp-product/Optimizer/_git/Optimizer/pullrequest/11302',
+                  },
+                  { type: 'text', text: 'agentId: abc123' },
+                ],
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
+
+    expect(sink.onPrDetected).toHaveBeenCalledWith({
+      url: 'https://dev.azure.com/bp-product/Optimizer/_git/Optimizer/pullrequest/11302',
+      owner: 'bp-product',
+      repo: 'Optimizer',
+      number: 11302,
+      source: 'mentioned',
+    });
+  });
+
+  it('DOES emit when Bash `gh pr create` prints a PR URL', () => {
+    const sink = createMockSink();
+    const session = createMockSession();
+
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tu_create_1',
+                name: 'Bash',
+                input: { command: 'gh pr create --title x --body y' },
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'user',
+          message: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'tu_create_1',
+                content: 'https://github.com/org/repo/pull/501\n',
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
+
+    expect(sink.onPrDetected).toHaveBeenCalledWith({
+      url: 'https://github.com/org/repo/pull/501',
+      owner: 'org',
+      repo: 'repo',
+      number: 501,
+      source: 'created',
     });
   });
 });
