@@ -23,6 +23,12 @@
   </picture>
 </p>
 
+<p align="center">
+  <video src="https://github.com/qlan-ro/mainframe/releases/download/demo-assets/demo.mp4" controls muted playsinline width="720">
+    Your browser doesn't support inline video. <a href="https://github.com/qlan-ro/mainframe/releases/download/demo-assets/demo.mp4">Download the demo</a>.
+  </video>
+</p>
+
 ---
 
 ## What is Mainframe?
@@ -31,6 +37,8 @@ Mainframe is an open-source desktop app that brings all your AI coding agents in
 
 AI CLI tools are powerful, but they live in the terminal. Mainframe adds the layer terminals can't: visual file editing, live sandbox previews, task management, cross-project session history, and a mobile companion for working on the go.
 
+> **One person, weekends, lots of coffee.** I poke at this when the mood strikes, ship what I feel like shipping, and change my mind a lot. The roadmap is a sticky note. If you're here this early, welcome to the construction site — bring a hard hat.
+>
 > **Work in progress.** Mainframe is under active development — some features are incomplete and the mobile companion app is not yet published. Expect rough edges.
 
 ## Features
