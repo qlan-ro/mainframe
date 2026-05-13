@@ -24,8 +24,8 @@
 </p>
 
 <p align="center">
-  <video src="https://github.com/qlan-ro/mainframe/releases/download/demo-assets/demo.mp4" controls muted playsinline width="720">
-    Your browser doesn't support inline video. <a href="https://github.com/qlan-ro/mainframe/releases/download/demo-assets/demo.mp4">Download the demo</a>.
+  <video src="https://github.com/user-attachments/assets/3eca698b-824f-4e9f-a80b-bcb6e74f31c9" controls muted playsinline width="720">
+    Your browser doesn't support inline video. <a href="https://github.com/user-attachments/assets/3eca698b-824f-4e9f-a80b-bcb6e74f31c9">Download the demo</a>.
   </video>
 </p>
 
