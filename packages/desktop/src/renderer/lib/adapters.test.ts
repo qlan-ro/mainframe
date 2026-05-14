@@ -36,6 +36,8 @@ describe('adapters model metadata', () => {
     expect(getAdapterLabel('unknown')).toBe('unknown');
     expect(getModelLabel('custom-model', adapters)).toBe('custom-model');
     expect(getModelLabel(undefined, adapters)).toBe('');
-    expect(getModelContextWindow('unknown-model', adapters)).toBe(200_000);
+    expect(getModelContextWindow('unknown-model', adapters)).toBeUndefined();
+    expect(getModelContextWindow(undefined, adapters)).toBeUndefined();
+    expect(getModelContextWindow('claude-opus-4-6', adapters)).toBe(200_000);
   });
 });

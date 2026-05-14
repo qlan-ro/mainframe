@@ -111,6 +111,23 @@ const CLAUDE_MODELS: AdapterModel[] = [
   { id: 'claude-3-5-haiku-20241022', label: 'Haiku 3.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
 ];
 
+// The CLI's model probe doesn't expose context window size — only a marketing
+// description like "Opus 4.7 with 1M context". Reconcile probed entries with
+// the static catalog so known IDs retain their authoritative window, and
+// unknown IDs fall back to a description sniff before the 200k default.
+function enrichWithContextWindow(probed: AdapterModel[]): AdapterModel[] {
+  const staticById = new Map(CLAUDE_MODELS.map((m) => [m.id, m]));
+  return probed.map((model) => {
+    if (model.contextWindow) return model;
+    const fromStatic = staticById.get(model.id)?.contextWindow;
+    if (fromStatic) return { ...model, contextWindow: fromStatic };
+    const window = /\b1m\b|1m context/i.test(model.description ?? '')
+      ? EXTENDED_CONTEXT_WINDOW
+      : DEFAULT_CONTEXT_WINDOW;
+    return { ...model, contextWindow: window };
+  });
+}
+
 export class ClaudeAdapter implements Adapter {
   id = 'claude';
   name = 'Claude CLI';
@@ -151,9 +168,9 @@ export class ClaudeAdapter implements Adapter {
   async probeModels(): Promise<AdapterModel[] | null> {
     const models = await doProbeModels('claude');
     if (models) {
-      this.dynamicModels = models;
+      this.dynamicModels = enrichWithContextWindow(models);
     }
-    return models;
+    return this.dynamicModels;
   }
 
   getToolCategories(): ToolCategories {

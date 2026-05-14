@@ -69,7 +69,12 @@ export function getDefaultModelForAdapter(adapterId: string): string | undefined
   return adapter?.models.find((m) => m.isDefault)?.id ?? adapter?.models[0]?.id;
 }
 
-export function getModelContextWindow(modelId: string | undefined, adapters: AdapterInfo[]): number {
-  if (!modelId) return 200_000;
-  return getModelMetadata(adapters).get(modelId)?.contextWindow ?? 200_000;
+// Returns undefined when the window is unknown. Callers should hide
+// any percentage UI rather than fabricate one from a default — the
+// Claude CLI's probe historically omitted contextWindow for some
+// entries (notably the `default` alias), and rendering "100% used"
+// against a 200k fallback while the real window was 1M was misleading.
+export function getModelContextWindow(modelId: string | undefined, adapters: AdapterInfo[]): number | undefined {
+  if (!modelId) return undefined;
+  return getModelMetadata(adapters).get(modelId)?.contextWindow;
 }
