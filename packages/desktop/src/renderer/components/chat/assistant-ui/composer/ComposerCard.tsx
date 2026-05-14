@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, CopySlash, FolderGit, GitBranch } from 'lucide-react';
+import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, CopySlash, FolderGit } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:composer');
@@ -446,7 +446,7 @@ export function ComposerCard() {
                     }`}
                     aria-label={chat?.worktreePath ? `Worktree on branch ${chat.branchName}` : 'Worktree isolation'}
                   >
-                    {chat?.worktreePath ? <FolderGit size={14} /> : <GitBranch size={14} />}
+                    <FolderGit size={14} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
