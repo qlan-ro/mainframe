@@ -130,7 +130,7 @@ function enrichWithContextWindow(probed: AdapterModel[]): AdapterModel[] {
 
 export class ClaudeAdapter implements Adapter {
   id = 'claude';
-  name = 'Claude CLI';
+  name = 'Claude Code';
   readonly capabilities = { planMode: true } as const;
 
   private sessions = new Set<ClaudeSession>();

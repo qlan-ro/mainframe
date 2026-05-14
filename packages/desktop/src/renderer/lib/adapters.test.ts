@@ -6,7 +6,7 @@ describe('adapters model metadata', () => {
   const adapters: AdapterInfo[] = [
     {
       id: 'claude',
-      name: 'Claude CLI',
+      name: 'Claude Code',
       description: 'Claude adapter',
       installed: true,
       version: '1.0.0',
@@ -24,7 +24,7 @@ describe('adapters model metadata', () => {
 
     expect(modelIds.has('claude-opus-4-6')).toBe(true);
     expect(modelIds.has('claude-opus-4-5-20251101')).toBe(true);
-    expect(adapterOptions).toEqual([{ id: 'claude', label: 'Claude CLI' }]);
+    expect(adapterOptions).toEqual([{ id: 'claude', label: 'Claude Code' }]);
   });
 
   it('resolves known model labels from adapter metadata', () => {
