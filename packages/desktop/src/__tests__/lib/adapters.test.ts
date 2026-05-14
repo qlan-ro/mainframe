@@ -35,8 +35,9 @@ describe('getModelContextWindow', () => {
     expect(getModelContextWindow('claude-opus-4-6', mockAdapters)).toBe(200_000);
   });
 
-  it('defaults to 200K for unknown models', () => {
-    expect(getModelContextWindow('unknown-model', mockAdapters)).toBe(200_000);
+  it('returns undefined for unknown models so callers can hide percentage UI', () => {
+    expect(getModelContextWindow('unknown-model', mockAdapters)).toBeUndefined();
+    expect(getModelContextWindow(undefined, mockAdapters)).toBeUndefined();
   });
 });
 
