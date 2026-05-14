@@ -100,7 +100,16 @@ export function MonacoEditor({
   }, [value]);
 
   useEffect(() => {
-    return () => clearEditorViewState();
+    return () => {
+      const editor = editorRef.current;
+      if (editor) {
+        const model = editor.getModel();
+        editor.dispose();
+        model?.dispose();
+        editorRef.current = null;
+      }
+      clearEditorViewState();
+    };
   }, []);
 
   const handleSubmitComment = useCallback(

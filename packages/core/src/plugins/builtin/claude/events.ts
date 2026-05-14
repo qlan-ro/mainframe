@@ -148,6 +148,7 @@ export function handleStdout(session: ClaudeSession, chunk: Buffer, sink: Sessio
 
   for (const line of lines) {
     if (!line.trim()) continue;
+    session.state.lastActivityAt = Date.now();
     log.trace({ sessionId: session.id, line }, '[stream-json]');
     try {
       const event = JSON.parse(line.trim());

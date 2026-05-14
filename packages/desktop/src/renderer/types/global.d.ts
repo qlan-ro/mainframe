@@ -35,6 +35,7 @@ export interface MainframeAPI {
   showItemInFolder: (fullPath: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   clearSandboxSession: (projectId: string) => Promise<void>;
+  destroyWebview: (webContentsId: number) => Promise<void>;
   showNotification: (title: string, body?: string) => Promise<void>;
   log: (level: string, module: string, message: string, data?: unknown) => void;
   terminal: TerminalAPI;

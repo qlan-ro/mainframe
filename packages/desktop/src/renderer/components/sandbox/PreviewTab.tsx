@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import type { WebviewTag } from 'electron';
 import {
   Trash2,
   RotateCw,
@@ -214,6 +215,26 @@ export function PreviewTab(): React.ReactElement {
 
   const onConsoleSeparatorUp = useCallback(() => {
     consoleDragging.current = false;
+  }, []);
+
+  // Destroy the underlying webContents on unmount. Removing the <webview> DOM
+  // node alone leaks the host guest process and its partition state; the
+  // main-process IPC handler resolves the id and closes the webContents.
+  // getWebContentsId() throws before dom-ready, so skip if the guest never
+  // finished loading.
+  useEffect(() => {
+    return () => {
+      const wv = webviewRef.current as WebviewTag | null;
+      if (!wv) return;
+      try {
+        const id = wv.getWebContentsId();
+        window.mainframe?.destroyWebview(id).catch((err: unknown) => {
+          console.warn('[sandbox] webview destroy IPC failed', err);
+        });
+      } catch (err) {
+        console.warn('[sandbox] webview unmount: webContents unavailable (dom-ready never fired)', err);
+      }
+    };
   }, []);
 
   // Reset ready state when process stops or scope changes (worktree switch)
