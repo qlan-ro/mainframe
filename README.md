@@ -40,8 +40,10 @@ AI CLI tools are powerful, but they live in the terminal. Mainframe adds the lay
 > **One person, weekends, lots of coffee.** I poke at this when the mood strikes, ship what I feel like shipping, and change my mind a lot. The roadmap is a sticky note. If you're here this early, welcome to the construction site — bring a hard hat.
 >
 > **Work in progress.** Mainframe is under active development — some features are incomplete and the mobile companion app is not yet published. Currently focusing.
+>
 > **Windows and Linux** Apps not tested at all, I am open to help with any initial issues found, but not my focus at all for now
- **HELP NEEDED** UI/UX experts contributions are a blessing, I'm not the best guy for building UIs
+>
+> **HELP NEEDED** UI/UX experts contributions are a blessing, I'm not the best guy for building UIs
 
 ## Features
 
