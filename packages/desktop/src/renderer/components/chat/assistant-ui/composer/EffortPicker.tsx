@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import { Gauge } from 'lucide-react';
 import type { AdapterInfo, Chat, ChatEffort } from '@qlan-ro/mainframe-types';
 import { ComposerDropdown } from './ComposerDropdown';
