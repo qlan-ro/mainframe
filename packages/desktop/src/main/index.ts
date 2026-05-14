@@ -210,7 +210,21 @@ function createWindow(): void {
   // ErrorBoundary only catches render errors, not process-level crashes like OOM
   // or GPU-killed). Log the reason so we can diagnose recurring cases.
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    log.error({ reason: details.reason, exitCode: details.exitCode }, 'renderer process gone');
+    const wc = mainWindow?.webContents;
+    // rendererPid matches the `pid` field in ~/Library/Logs/DiagnosticReports/*.ips,
+    // so the next crash self-correlates with its crashpad report.
+    log.error(
+      {
+        reason: details.reason,
+        exitCode: details.exitCode,
+        url: wc?.getURL(),
+        rendererPid: wc?.getOSProcessId(),
+        appUptimeSec: Math.round(process.uptime()),
+        rss: process.memoryUsage().rss,
+        crashDumpsDir: app.getPath('crashDumps'),
+      },
+      'renderer process gone',
+    );
   });
 
   if (process.env.NODE_ENV !== 'development') {
