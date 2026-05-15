@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type {
   DaemonEvent,
   DisplayMessage,
@@ -23,6 +25,11 @@ import { readNotificationConfig, shouldNotifyPermission } from '../notifications
 const log = createChildLogger('chat:events');
 
 const PUSH_BODY_MAX_LENGTH = 200;
+
+export function computeSessionFilePath(cwd: string, sessionId: string): string {
+  const encoded = cwd.replace(/[^a-zA-Z0-9-]/g, '-');
+  return join(homedir(), '.claude', 'projects', encoded, `${sessionId}.jsonl`);
+}
 
 function getLastAssistantText(msgs: import('@qlan-ro/mainframe-types').ChatMessage[] | undefined): string {
   if (!msgs) return '';
@@ -136,6 +143,13 @@ function buildSessionSink(
       if (!active) return;
       db.chats.update(chatId, { claudeSessionId: sessionId });
       active.chat.claudeSessionId = sessionId;
+      const projectPath = db.projects.get(active.chat.projectId)?.path;
+      const cwd = active.chat.worktreePath ?? projectPath;
+      if (cwd) {
+        const sessionFilePath = computeSessionFilePath(cwd, sessionId);
+        db.chats.update(chatId, { sessionFilePath });
+        active.chat.sessionFilePath = sessionFilePath;
+      }
       emitEvent({ type: 'process.ready', processId: active.session?.id ?? '', claudeSessionId: sessionId });
     },
 
