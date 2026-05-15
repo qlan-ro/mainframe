@@ -8,6 +8,7 @@ import { useSkillsStore } from '../store/skills';
 import { useSettingsStore } from '../store/settings';
 import { useAdaptersStore } from '../store/adapters';
 import { usePluginLayoutStore } from '../store';
+import { useTagsStore } from '../store/tags';
 import { routeEvent } from '../lib/ws-event-router';
 import { createLogger } from '../lib/logger';
 import { fetchLaunchStatuses } from '../lib/launch';
@@ -37,12 +38,13 @@ export function useAppInit(): void {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [projectsResult, adaptersResult, providerResult, pluginsResult, chatsResult] = await Promise.allSettled([
+        const [projectsResult, adaptersResult, providerResult, pluginsResult, chatsResult, tagsResult] = await Promise.allSettled([
           getProjects(),
           getAdapters(),
           getProviderSettings(),
           getPlugins(),
           getAllChats(),
+          useTagsStore.getState().refreshRegistry(),
         ]);
 
         if (projectsResult.status === 'fulfilled') {
@@ -116,6 +118,10 @@ export function useAppInit(): void {
           // filter to null when the new active chat lives in a different project.
         } else {
           log.warn('chat fetch failed', { err: String(chatsResult.reason) });
+        }
+
+        if (tagsResult.status === 'rejected') {
+          log.warn('tag registry fetch failed', { err: String(tagsResult.reason) });
         }
       } catch {
         setError('Failed to connect to daemon');
