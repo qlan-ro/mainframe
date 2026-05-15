@@ -13,4 +13,10 @@ describe('computeSessionFilePath', () => {
     const p = computeSessionFilePath('/a/b.c/worktrees/x', 'sid');
     expect(p).toBe(join(homedir(), '.claude', 'projects', '-a-b-c-worktrees-x', 'sid.jsonl'));
   });
+
+  it('sanitizes a malicious session id so it cannot traverse', () => {
+    const p = computeSessionFilePath('/proj', '../../etc/passwd');
+    expect(p).not.toContain('..');
+    expect(p.endsWith('.jsonl')).toBe(true);
+  });
 });

@@ -28,7 +28,8 @@ const PUSH_BODY_MAX_LENGTH = 200;
 
 export function computeSessionFilePath(cwd: string, sessionId: string): string {
   const encoded = cwd.replace(/[^a-zA-Z0-9-]/g, '-');
-  return join(homedir(), '.claude', 'projects', encoded, `${sessionId}.jsonl`);
+  const safeSession = sessionId.replace(/[^a-zA-Z0-9-]/g, '-');
+  return join(homedir(), '.claude', 'projects', encoded, `${safeSession}.jsonl`);
 }
 
 function getLastAssistantText(msgs: import('@qlan-ro/mainframe-types').ChatMessage[] | undefined): string {
