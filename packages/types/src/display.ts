@@ -6,6 +6,8 @@ export interface ToolCallResult {
   structuredPatch?: DiffHunk[];
   originalFile?: string;
   modifiedFile?: string;
+  truncated?: boolean;
+  fullBytes?: number;
 }
 
 export interface ToolCategories {
