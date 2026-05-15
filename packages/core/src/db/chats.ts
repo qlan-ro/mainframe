@@ -27,7 +27,8 @@ const CHAT_SELECT_FIELDS = `
   mentions, modified_files as modifiedFiles,
   worktree_path as worktreePath, branch_name as branchName,
   process_state as processState, todos, pinned, effort,
-  plan_mode as planMode, detected_prs as detectedPrs
+  plan_mode as planMode, detected_prs as detectedPrs,
+  session_file_path as sessionFilePath
 `.trim();
 
 export interface ChatListFilters {
@@ -142,6 +143,7 @@ export class ChatsRepository {
     adapterId: { column: 'adapter_id' },
     model: { column: 'model' },
     claudeSessionId: { column: 'claude_session_id' },
+    sessionFilePath: { column: 'session_file_path' },
     status: { column: 'status' },
     totalCost: { column: 'total_cost' },
     totalTokensInput: { column: 'total_tokens_input' },

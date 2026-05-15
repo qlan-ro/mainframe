@@ -118,6 +118,9 @@ export function initializeSchema(db: Database.Database): void {
     db.exec('ALTER TABLE chats ADD COLUMN plan_mode INTEGER NOT NULL DEFAULT 0');
     db.exec("UPDATE chats SET plan_mode = 1, permission_mode = 'default' WHERE permission_mode = 'plan'");
   }
+  if (!cols.some((c) => c.name === 'session_file_path')) {
+    db.exec('ALTER TABLE chats ADD COLUMN session_file_path TEXT');
+  }
 
   const projectCols = db.pragma('table_info(projects)') as { name: string }[];
   if (!projectCols.some((c) => c.name === 'parent_project_id')) {
