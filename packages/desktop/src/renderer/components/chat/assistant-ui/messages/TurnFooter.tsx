@@ -1,4 +1,3 @@
-import React from 'react';
 import { useMessage } from '@assistant-ui/react';
 import { getExternalStoreMessages } from '@assistant-ui/react';
 import type { DisplayMessage } from '@qlan-ro/mainframe-types';
