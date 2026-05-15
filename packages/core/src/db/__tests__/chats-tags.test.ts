@@ -76,4 +76,18 @@ describe('ChatsRepository — listFiltered invariant', () => {
     const chats = new ChatsRepository(db); // no chatTags
     expect(() => chats.listFiltered({ tagsAll: ['feature'] })).toThrow(/ChatTagsRepository/);
   });
+
+  it('listFiltered includes archived chats when includeArchived is true', () => {
+    const { projects, chats } = setup();
+    const p = projects.create('/tmp/p');
+    const active = chats.create(p.id, 'claude');
+    const archived = chats.create(p.id, 'claude');
+    chats.update(archived.id, { status: 'archived' });
+
+    const defaultList = chats.listFiltered({ projectId: p.id });
+    expect(defaultList.map((c) => c.id)).toEqual([active.id]);
+
+    const allList = chats.listFiltered({ projectId: p.id, includeArchived: true });
+    expect(allList.map((c) => c.id).sort()).toEqual([active.id, archived.id].sort());
+  });
 });

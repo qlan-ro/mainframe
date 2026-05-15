@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { ThreadPrimitive, useThread } from '@assistant-ui/react';
 import { Loader2 } from 'lucide-react';
 import { useMainframeRuntime } from './MainframeRuntimeProvider';
@@ -83,10 +83,8 @@ export function MainframeThread() {
   const closeFindBar = useFindInChatStore((s) => s.close);
   const findBarOpen = useFindInChatStore((s) => s.isOpen);
 
-  // Intercept Cmd/Ctrl+F while the chat thread is focused — open find bar
-  // instead of the global search palette.
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         e.stopPropagation();
@@ -96,15 +94,13 @@ export function MainframeThread() {
           openFindBar();
         }
       }
-    },
-    [findBarOpen, openFindBar, closeFindBar],
-  );
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [findBarOpen, openFindBar, closeFindBar]);
 
   return (
-    // Outer wrapper captures Cmd/Ctrl+F and routes it to the chat-local
-    // find bar, preventing the global search palette from opening when the
-    // user is focused on the chat thread.
-    <div className="h-full flex flex-col" onKeyDown={handleKeyDown}>
+    <div className="h-full flex flex-col">
       <FindBar />
       <ThreadPrimitive.Root className="flex-1 flex flex-col min-h-0">
         <ThreadPrimitive.Viewport autoScroll className="flex-1 overflow-y-auto scrollbar-on-hover">
