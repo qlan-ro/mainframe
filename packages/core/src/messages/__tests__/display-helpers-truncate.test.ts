@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { toToolCallResult } from '../display-helpers.js';
-import { TRUNCATE_THRESHOLD_BYTES } from '../truncate-tool-content.js';
+import { TRUNCATE_THRESHOLD_BYTES, truncateToolContent } from '../truncate-tool-content.js';
 import { extractPrFromToolResult } from '../../plugins/builtin/claude/events.js';
 
 describe('toToolCallResult truncation', () => {
@@ -27,7 +27,11 @@ describe('toToolCallResult truncation', () => {
 
   it('ingestion PR detection runs on full content, unaffected by display truncation', () => {
     const url = 'https://github.com/acme/repo/pull/4242';
-    const huge = 'x'.repeat(TRUNCATE_THRESHOLD_BYTES + 1000) + '\n' + url;
+    const filler = Array.from({ length: 3000 }, (_, i) => `noise line ${i}`).join('\n');
+    const huge = `${filler}\n${url}\n${filler}`;
+    // Sanity: a truncated copy must NOT contain the URL...
+    expect(truncateToolContent(huge).content).not.toContain('4242');
+    // ...but ingestion, which reads the full string, still finds it.
     const result = extractPrFromToolResult(huge);
     expect(result).not.toBeNull();
     expect(result?.number).toBe(4242);
