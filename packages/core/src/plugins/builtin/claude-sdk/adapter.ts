@@ -215,28 +215,35 @@ export class ClaudeSdkAdapter implements Adapter {
     return deleteAgent(agentId, projectPath);
   }
 
-  async listExternalSessions(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]> {
-    try {
-      const sessions = await listSessions({ dir: projectPath });
-      const excludeSet = new Set(excludeSessionIds);
+  async listExternalSessions(projectPaths: string[], excludeSessionIds: string[]): Promise<ExternalSession[]> {
+    const excludeSet = new Set(excludeSessionIds);
+    const seen = new Set<string>();
+    const aggregated: ExternalSession[] = [];
 
-      return sessions
-        .filter((s: any) => !excludeSet.has(s.sessionId))
-        .map((s: any) => ({
-          sessionId: s.sessionId,
-          adapterId: this.id,
-          projectPath,
-          firstPrompt: s.firstPrompt,
-          summary: s.summary,
-          messageCount: s.messageCount,
-          createdAt: s.createdAt ?? new Date().toISOString(),
-          modifiedAt: s.modifiedAt ?? new Date().toISOString(),
-          gitBranch: s.gitBranch,
-          model: s.model,
-        }));
-    } catch (err) {
-      logger.warn({ err }, 'Failed to list external sessions via SDK');
-      return [];
+    for (const projectPath of Array.from(new Set(projectPaths))) {
+      try {
+        const sessions = await listSessions({ dir: projectPath });
+        for (const s of sessions as any[]) {
+          if (excludeSet.has(s.sessionId) || seen.has(s.sessionId)) continue;
+          seen.add(s.sessionId);
+          aggregated.push({
+            sessionId: s.sessionId,
+            adapterId: this.id,
+            projectPath,
+            firstPrompt: s.firstPrompt,
+            summary: s.summary,
+            messageCount: s.messageCount,
+            createdAt: s.createdAt ?? new Date().toISOString(),
+            modifiedAt: s.modifiedAt ?? new Date().toISOString(),
+            gitBranch: s.gitBranch,
+            model: s.model,
+          });
+        }
+      } catch (err) {
+        logger.warn({ err, projectPath }, 'Failed to list external sessions via SDK');
+      }
     }
+
+    return aggregated;
   }
 }

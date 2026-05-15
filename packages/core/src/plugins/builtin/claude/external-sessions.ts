@@ -32,18 +32,31 @@ function getProjectDir(projectPath: string): string {
   return path.join(homedir(), '.claude', 'projects', encodedPath);
 }
 
-/** Try sessions-index.json first; fall back to JSONL scan. */
+/** Try sessions-index.json first; fall back to JSONL scan. Aggregates across multiple paths. */
 export async function listExternalSessions(
-  projectPath: string,
+  projectPaths: string[],
   excludeSessionIds: string[],
 ): Promise<ExternalSession[]> {
-  const projectDir = getProjectDir(projectPath);
   const excludeSet = new Set(excludeSessionIds);
+  const uniquePaths = Array.from(new Set(projectPaths));
+  const aggregated: ExternalSession[] = [];
 
-  const fromIndex = await listFromIndex(projectDir, projectPath, excludeSet);
-  if (fromIndex !== null) return fromIndex;
+  for (const projectPath of uniquePaths) {
+    const projectDir = getProjectDir(projectPath);
+    const fromIndex = await listFromIndex(projectDir, projectPath, excludeSet);
+    const sessions = fromIndex ?? (await listFromJsonl(projectDir, projectPath, excludeSet));
+    aggregated.push(...sessions);
+  }
 
-  return listFromJsonl(projectDir, projectPath, excludeSet);
+  const seen = new Set<string>();
+  const deduped: ExternalSession[] = [];
+  for (const session of aggregated) {
+    if (seen.has(session.sessionId)) continue;
+    seen.add(session.sessionId);
+    deduped.push(session);
+  }
+
+  return deduped.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
 }
 
 async function listFromIndex(
