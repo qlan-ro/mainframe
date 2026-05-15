@@ -3,6 +3,7 @@ import { stripMainframeCommandTags, parseCommandMessage, parseAttachedFilePathTa
 import type { GroupedMessage } from './message-grouping.js';
 import type { PartEntry } from './tool-grouping.js';
 import { groupToolCallParts, groupTaskChildren } from './tool-grouping.js';
+import { truncateToolContent } from './truncate-tool-content.js';
 
 const INTERNAL_USER_RE = /<mainframe-command[\s>]/;
 
@@ -30,10 +31,12 @@ export function categorizeToolCall(
 }
 
 /** Build a ToolCallResult from a tool_result content block. */
-function toToolCallResult(block: MessageContent & { type: 'tool_result' }): ToolCallResult {
+export function toToolCallResult(block: MessageContent & { type: 'tool_result' }): ToolCallResult {
+  const t = truncateToolContent(block.content);
   return {
-    content: block.content,
+    content: t.content,
     isError: block.isError,
+    ...(t.truncated ? { truncated: true, fullBytes: t.fullBytes } : {}),
     ...(block.structuredPatch && { structuredPatch: block.structuredPatch }),
     ...(block.originalFile && { originalFile: block.originalFile }),
     ...(block.modifiedFile && { modifiedFile: block.modifiedFile }),
