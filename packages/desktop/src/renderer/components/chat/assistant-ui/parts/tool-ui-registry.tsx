@@ -1,4 +1,5 @@
 import { makeAssistantToolUI } from '@assistant-ui/react';
+import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { EditFileCard } from './tools/EditFileCard';
 import { WriteFileCard } from './tools/WriteFileCard';
 import { BashCard } from './tools/BashCard';
@@ -16,15 +17,19 @@ import { SchedulePill } from './tools/SchedulePill';
 
 export const EditToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Edit',
-  render: ({ args, result, isError }) => {
+  render: ({ args, result, isError, toolCallId }) => {
+    const { chatId } = useMainframeRuntime();
     if (args.old_string === undefined) return null;
-    return <EditFileCard args={args} result={result} isError={isError} />;
+    return <EditFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
   },
 });
 
 export const WriteToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Write',
-  render: ({ args, result, isError }) => <WriteFileCard args={args} result={result} isError={isError} />,
+  render: ({ args, result, isError, toolCallId }) => {
+    const { chatId } = useMainframeRuntime();
+    return <WriteFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
+  },
 });
 
 export const BashToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({

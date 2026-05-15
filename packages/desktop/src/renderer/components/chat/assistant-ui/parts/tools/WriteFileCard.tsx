@@ -9,20 +9,29 @@ import {
   StatusDot,
   cardStyle,
   isStructuredResult,
+  isTruncatedResult,
   stripErrorXml,
   countDiffStats,
   reconstructFromHunks,
   DiffFromPatch,
   type ToolCardProps,
 } from './shared';
+import { ToolResultExpand } from '../../ToolResultExpand';
 
-export function WriteFileCard({ args, result, isError }: ToolCardProps) {
+export function WriteFileCard({ args, result, isError, chatId, toolCallId }: ToolCardProps) {
   const filePath = (args.file_path as string) || '';
   const content = (args.content as string) || '';
 
   const structured = isStructuredResult(result);
+  const truncated = isTruncatedResult(result);
   const hunks = structured ? result.structuredPatch : null;
-  const rawResultText = structured ? result.content : typeof result === 'string' ? result : undefined;
+  const rawResultText = structured
+    ? result.content
+    : truncated
+      ? result.content
+      : typeof result === 'string'
+        ? result
+        : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
 
   const stats = hunks ? countDiffStats(hunks) : null;
@@ -111,9 +120,18 @@ export function WriteFileCard({ args, result, isError }: ToolCardProps) {
         </div>
         {resultText && isError && (
           <div className="border-t border-mf-divider px-3 py-1.5 bg-mf-chat-error-surface/20">
-            <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary">
-              {resultText}
-            </pre>
+            {truncated && chatId && toolCallId ? (
+              <ToolResultExpand
+                chatId={chatId}
+                toolUseId={toolCallId}
+                truncatedContent={resultText}
+                fullBytes={(result as { fullBytes: number }).fullBytes}
+              />
+            ) : (
+              <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary">
+                {resultText}
+              </pre>
+            )}
           </div>
         )}
       </div>
