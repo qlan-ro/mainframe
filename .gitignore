@@ -50,6 +50,9 @@ release/
 
 # Superpowers brainstorm artifacts
 .superpowers/
+docs/plans/
+docs/superpowers/
+docs/CODE-ANALYSIS*
 
 # Codex-review local session state (per-branch, not shared)
 .claude/codex-review/
