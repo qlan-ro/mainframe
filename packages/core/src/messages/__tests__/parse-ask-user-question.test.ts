@@ -36,6 +36,13 @@ describe('parseAskUserQuestionResult', () => {
     expect(parseAskUserQuestionResult(s)).toEqual([{ question: 'Name', answer: ['Doe', 'John'] }]);
   });
 
+  it('captures a preview that uses CRLF before the body', () => {
+    const s = `${PREFIX}"Layout?"="Grid" selected preview:\r\n<div/> user notes: dense${SUFFIX}`;
+    expect(parseAskUserQuestionResult(s)).toEqual([
+      { question: 'Layout?', answer: ['Grid'], preview: '<div/>', notes: 'dense' },
+    ]);
+  });
+
   it('returns [] for non-AskUserQuestion or malformed content, never throws', () => {
     expect(parseAskUserQuestionResult('')).toEqual([]);
     expect(parseAskUserQuestionResult('totally unrelated tool output')).toEqual([]);

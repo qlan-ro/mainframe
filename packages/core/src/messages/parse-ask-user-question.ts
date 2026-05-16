@@ -24,8 +24,8 @@ export function parseAskUserQuestionResult(content: string): AskUserQuestionAnsw
     // tail = text between this pair's closing quote and the start of the next pair (or end of body)
     const tail = body.slice(cur.end, next ? next.start : body.length);
 
-    const previewMatch = tail.match(/selected preview:\n([\s\S]*?)(?: user notes: |$)/);
-    const notesMatch = tail.match(/user notes: ([\s\S]*?)(?:,\s*)?$/);
+    const previewMatch = tail.match(/selected preview:\r?\n([\s\S]*?)(?: user notes: |$)/);
+    const notesMatch = tail.match(/user notes: ([\s\S]*?)\s*,?\s*$/);
 
     const entry: AskUserQuestionAnswer = {
       question: cur.q,
@@ -36,7 +36,7 @@ export function parseAskUserQuestionResult(content: string): AskUserQuestionAnsw
     };
     if (entry.answer.length === 0) entry.answer = [cur.a];
     const preview = previewMatch?.[1]?.trim();
-    const notes = notesMatch?.[1]?.replace(/,\s*$/, '').trim();
+    const notes = notesMatch?.[1]?.trim();
     if (preview) entry.preview = preview;
     if (notes) entry.notes = notes;
     out.push(entry);
