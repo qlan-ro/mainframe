@@ -88,24 +88,37 @@ export class CodexAdapter implements Adapter {
   // TODO: implement listAgents, createAgent, updateAgent, deleteAgent
   // TODO: implement listCommands
 
-  async listExternalSessions(projectPath: string, _excludeSessionIds: string[]): Promise<ExternalSession[]> {
+  async listExternalSessions(projectPaths: string[], _excludeSessionIds: string[]): Promise<ExternalSession[]> {
     let client: JsonRpcClient | null = null;
     try {
       client = await this.spawnTempAppServer();
-      const result = await client.request<ThreadListResult>('thread/list', {
-        cwd: projectPath,
-        archived: false,
-      });
-      return result.data.map((t) => ({
-        sessionId: t.id,
-        adapterId: this.id,
-        projectPath,
-        firstPrompt: t.name ?? t.preview,
-        summary: t.name ?? t.preview,
-        createdAt: new Date(t.createdAt).toISOString(),
-        modifiedAt: new Date(t.updatedAt).toISOString(),
-        model: t.model,
-      }));
+      const seen = new Set<string>();
+      const aggregated: ExternalSession[] = [];
+      for (const projectPath of Array.from(new Set(projectPaths))) {
+        try {
+          const result = await client.request<ThreadListResult>('thread/list', {
+            cwd: projectPath,
+            archived: false,
+          });
+          for (const t of result.data) {
+            if (seen.has(t.id)) continue;
+            seen.add(t.id);
+            aggregated.push({
+              sessionId: t.id,
+              adapterId: this.id,
+              projectPath,
+              firstPrompt: t.name ?? t.preview,
+              summary: t.name ?? t.preview,
+              createdAt: new Date(t.createdAt).toISOString(),
+              modifiedAt: new Date(t.updatedAt).toISOString(),
+              model: t.model,
+            });
+          }
+        } catch (err) {
+          log.warn({ err, projectPath }, 'codex: failed to list external sessions for path');
+        }
+      }
+      return aggregated;
     } catch (err) {
       log.warn({ err }, 'codex: failed to list external sessions');
       return [];

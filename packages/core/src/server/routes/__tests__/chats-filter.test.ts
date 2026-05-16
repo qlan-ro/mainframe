@@ -37,7 +37,7 @@ function makeApp() {
   // c2: tagged feature, no worktree
   // c3: tagged bug, has worktree
   // c4: untagged, has worktree (project p2)
-  // c5: archived (must never appear)
+  // c5: archived (now included so the archived sessions popover can render)
   const seed = (id: string, projectId: string, worktree: string | null, status = 'active'): void => {
     db.prepare(
       `INSERT INTO chats (id, adapter_id, project_id, status, created_at, updated_at, worktree_path)
@@ -61,12 +61,12 @@ function makeApp() {
 }
 
 describe('GET /api/chats — filtered list', () => {
-  it('no filters returns all non-archived chats', async () => {
+  it('no filters returns all chats including archived', async () => {
     const { app } = makeApp();
     const res = await request(app).get('/api/chats');
     expect(res.status).toBe(200);
     const ids = res.body.data.map((c: { id: string }) => c.id).sort();
-    expect(ids).toEqual(['c1', 'c2', 'c3', 'c4']);
+    expect(ids).toEqual(['c1', 'c2', 'c3', 'c4', 'c5']);
   });
 
   it('filters by project', async () => {
@@ -86,7 +86,7 @@ describe('GET /api/chats — filtered list', () => {
     const { app } = makeApp();
     const res = await request(app).get('/api/chats?synthetic=has-worktree');
     const ids = res.body.data.map((c: { id: string }) => c.id).sort();
-    expect(ids).toEqual(['c1', 'c3', 'c4']);
+    expect(ids).toEqual(['c1', 'c3', 'c4', 'c5']);
   });
 
   it('AND-combines tags + synthetic + project', async () => {
@@ -98,7 +98,7 @@ describe('GET /api/chats — filtered list', () => {
   it('ignores has-pr in synthetic (handled client-side)', async () => {
     const { app } = makeApp();
     const res = await request(app).get('/api/chats?synthetic=has-pr');
-    expect(res.body.data).toHaveLength(4);
+    expect(res.body.data).toHaveLength(5);
   });
 
   it('Chat.tags is populated on filtered results', async () => {
