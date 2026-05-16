@@ -167,6 +167,7 @@ export function applyToolGrouping(content: DisplayContent[], categories: ToolCat
         args: c.input,
         result: c.result,
         isError: c.result?.isError,
+        category: c.category,
         ...withParentId(c.parentToolUseId),
       };
     }
@@ -279,7 +280,7 @@ function convertGroupedPartsToDisplay(
         ...(part.result != null && { result: part.result as ToolCallResult }),
       });
     } else {
-      // Regular tool call — find original DisplayContent to preserve result
+      // Regular tool call — find original DisplayContent to preserve result and category
       const orig = originalContent.find((c) => c.type === 'tool_call' && c.id === part.toolCallId) as
         | (DisplayContent & { type: 'tool_call' })
         | undefined;
@@ -288,7 +289,7 @@ function convertGroupedPartsToDisplay(
         id: part.toolCallId,
         name: part.toolName,
         input: part.args,
-        category: categorizeToolCall(part.toolName, categories),
+        category: orig?.category ?? categorizeToolCall(part.toolName, categories),
         ...(orig?.result && { result: orig.result }),
         ...withParentId(part.parentToolUseId),
       });

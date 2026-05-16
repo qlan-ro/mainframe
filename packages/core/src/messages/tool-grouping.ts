@@ -2,6 +2,7 @@ import {
   type ToolCategories,
   isExploreTool,
   isHiddenTool,
+  isHiddenToolPart,
   isTaskProgressTool,
   isSubagentTool,
 } from './tool-categorization.js';
@@ -43,6 +44,7 @@ export type PartEntry =
       args: Record<string, unknown>;
       result?: unknown;
       isError?: boolean;
+      category?: string;
       parentToolUseId?: string;
     }
   | { type: 'text'; text: string; parentToolUseId?: string };
@@ -68,7 +70,7 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
     }
 
     // Skip hidden tools
-    if (isHiddenTool(part.toolName, categories)) {
+    if (isHiddenToolPart(part.toolName, part.category, categories)) {
       i++;
       continue;
     }
@@ -97,7 +99,10 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
         if (next.type !== 'tool-call') break;
         if (isExploreTool(next.toolName, categories)) {
           group.push(next);
-        } else if (!isHiddenTool(next.toolName, categories) && !isTaskProgressTool(next.toolName, categories)) {
+        } else if (
+          !isHiddenToolPart(next.toolName, next.category, categories) &&
+          !isTaskProgressTool(next.toolName, categories)
+        ) {
           break;
         }
         // hidden and task tools within the run are skipped/collected separately
