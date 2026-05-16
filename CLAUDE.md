@@ -133,6 +133,7 @@ These rules exist because every one was violated before and required cleanup. Fo
 ### Testing
 - **New public methods need tests.** Route handlers, DB methods, and core logic must have corresponding test files.
 - **Coverage thresholds enforced.** `vitest.config.ts` defines minimum coverage. Don't lower thresholds to pass CI.
+- **Always add a `data-testid` to interactive controls and dialog/modal roots.** Every button, input, select, textarea, and action link — plus the root element of every dialog/modal/picker — gets a stable `data-testid`. UI tests bind to these hooks; without them the test-worktree skill has to patch one in. Use a scoped, area-qualified value (e.g. `settings-executable-path-browse`), not a bare name.
 
 ### Performance
 - **Lazy-load heavy components.** Large editors and visualizations must use `React.lazy()` with `Suspense`.
