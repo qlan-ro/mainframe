@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseAskUserQuestionResult } from '../parse-ask-user-question.js';
+import { ASK_USER_QUESTION_FIXTURE } from '@qlan-ro/mainframe-types';
 
 const PREFIX = 'User has answered your questions: ';
 const SUFFIX = ". You can now continue with the user's answers in mind.";
@@ -47,5 +48,12 @@ describe('parseAskUserQuestionResult', () => {
     expect(parseAskUserQuestionResult('')).toEqual([]);
     expect(parseAskUserQuestionResult('totally unrelated tool output')).toEqual([]);
     expect(parseAskUserQuestionResult(`${PREFIX}garbage no quotes${SUFFIX}`)).toEqual([]);
+  });
+
+  it('parser output for the canonical CLI string equals the shared fixture', () => {
+    const s =
+      'User has answered your questions: "Which DB?"="Postgres", "Pick"="Red,Blue" user notes: dense' +
+      ". You can now continue with the user's answers in mind.";
+    expect(parseAskUserQuestionResult(s)).toEqual(ASK_USER_QUESTION_FIXTURE);
   });
 });

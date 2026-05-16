@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
-import type { AskUserQuestionAnswer } from '@qlan-ro/mainframe-types';
+import { ASK_USER_QUESTION_FIXTURE } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '../../../../../ui/tooltip.js';
 import { AskUserQuestionToolCard } from '../AskUserQuestionToolCard.js';
 
@@ -15,11 +15,11 @@ const args = {
 
 describe('AskUserQuestionToolCard', () => {
   it('renders question texts, answers, and notes from structured askUserQuestion field', () => {
-    const askUserQuestion: AskUserQuestionAnswer[] = [
-      { question: 'Which DB?', answer: ['Postgres'] },
-      { question: 'Pick', answer: ['Red', 'Blue'], notes: 'dense' },
-    ];
-    const result = { content: 'User answered the questions.', isError: false, askUserQuestion };
+    const result = {
+      content: 'User answered the questions.',
+      isError: false,
+      askUserQuestion: ASK_USER_QUESTION_FIXTURE,
+    };
 
     const { getByText, getByRole } = render(wrap(<AskUserQuestionToolCard args={args} result={result} />));
     fireEvent.click(getByRole('button'));
