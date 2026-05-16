@@ -61,7 +61,12 @@ vi.mock('../../store/projects', () => ({
       return selector ? selector(state) : state;
     }),
     {
-      getState: vi.fn(() => ({ setProjects: mockSetProjects, setLoading: mockSetLoading, setError: mockSetError, projects: [] })),
+      getState: vi.fn(() => ({
+        setProjects: mockSetProjects,
+        setLoading: mockSetLoading,
+        setError: mockSetError,
+        projects: [],
+      })),
     },
   ),
 }));
@@ -74,15 +79,21 @@ vi.mock('../../store/chats', () => ({
 }));
 
 vi.mock('../../store/tabs', () => ({
-  useTabsStore: Object.assign(vi.fn(() => ({})), {
-    getState: vi.fn(() => ({ openChatTab: vi.fn() })),
-  }),
+  useTabsStore: Object.assign(
+    vi.fn(() => ({})),
+    {
+      getState: vi.fn(() => ({ openChatTab: vi.fn() })),
+    },
+  ),
 }));
 
 vi.mock('../../store/skills', () => ({
-  useSkillsStore: Object.assign(vi.fn(() => ({})), {
-    getState: vi.fn(() => ({ fetchSkills: vi.fn(), fetchAgents: vi.fn(), fetchCommands: vi.fn() })),
-  }),
+  useSkillsStore: Object.assign(
+    vi.fn(() => ({})),
+    {
+      getState: vi.fn(() => ({ fetchSkills: vi.fn(), fetchAgents: vi.fn(), fetchCommands: vi.fn() })),
+    },
+  ),
 }));
 
 const mockLoadProviders = vi.fn();
@@ -108,15 +119,21 @@ vi.mock('../../store/adapters', () => ({
 }));
 
 vi.mock('../../store', () => ({
-  usePluginLayoutStore: Object.assign(vi.fn(() => ({})), {
-    getState: vi.fn(() => ({ registerContribution: vi.fn(), registerAction: vi.fn() })),
-  }),
+  usePluginLayoutStore: Object.assign(
+    vi.fn(() => ({})),
+    {
+      getState: vi.fn(() => ({ registerContribution: vi.fn(), registerAction: vi.fn() })),
+    },
+  ),
 }));
 
 vi.mock('../../store/sandbox', () => ({
-  useSandboxStore: Object.assign(vi.fn(() => ({})), {
-    getState: vi.fn(() => ({ setProcessStatus: vi.fn() })),
-  }),
+  useSandboxStore: Object.assign(
+    vi.fn(() => ({})),
+    {
+      getState: vi.fn(() => ({ setProcessStatus: vi.fn() })),
+    },
+  ),
 }));
 
 // ── real tags store — assert it gets hydrated ────────────────────────────────

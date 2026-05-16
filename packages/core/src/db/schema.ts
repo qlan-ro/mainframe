@@ -119,6 +119,11 @@ export function initializeSchema(db: Database.Database): void {
     db.exec("UPDATE chats SET plan_mode = 1, permission_mode = 'default' WHERE permission_mode = 'plan'");
   }
 
+  const sdkChats = db.prepare("SELECT COUNT(*) as n FROM chats WHERE adapter_id = 'claude-sdk'").get() as { n: number };
+  if (sdkChats.n > 0) {
+    db.exec("UPDATE chats SET adapter_id = 'claude' WHERE adapter_id = 'claude-sdk'");
+  }
+
   const projectCols = db.pragma('table_info(projects)') as { name: string }[];
   if (!projectCols.some((c) => c.name === 'parent_project_id')) {
     db.exec('ALTER TABLE projects ADD COLUMN parent_project_id TEXT REFERENCES projects(id)');

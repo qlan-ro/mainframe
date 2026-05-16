@@ -38,14 +38,15 @@ export function useAppInit(): void {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [projectsResult, adaptersResult, providerResult, pluginsResult, chatsResult, tagsResult] = await Promise.allSettled([
-          getProjects(),
-          getAdapters(),
-          getProviderSettings(),
-          getPlugins(),
-          getAllChats(),
-          useTagsStore.getState().refreshRegistry(),
-        ]);
+        const [projectsResult, adaptersResult, providerResult, pluginsResult, chatsResult, tagsResult] =
+          await Promise.allSettled([
+            getProjects(),
+            getAdapters(),
+            getProviderSettings(),
+            getPlugins(),
+            getAllChats(),
+            useTagsStore.getState().refreshRegistry(),
+          ]);
 
         if (projectsResult.status === 'fulfilled') {
           setProjects(projectsResult.value);
