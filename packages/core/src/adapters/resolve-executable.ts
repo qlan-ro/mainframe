@@ -69,6 +69,30 @@ export async function resolveAdapterExecutable(adapterId: string, deps: Resolver
   return { path: bare, source: 'fallback', valid: false };
 }
 
+const RESOLVE_MEMO_TTL_MS = 5000;
+const resolveMemo = new Map<string, { at: number; value: ResolvedExecutable }>();
+
+/**
+ * Short-TTL memo around `resolveAdapterExecutable`. The settings GET endpoint is
+ * polled and resolution spawns child processes (up to ~5s timeout each), so a
+ * 5s in-process cache keeps a burst of polls from re-spawning. `resolveAdapterExecutable`
+ * itself stays pure/unmemoized for tests.
+ */
+export async function resolveAdapterExecutableCached(
+  adapterId: string,
+  deps: ResolverDeps,
+): Promise<ResolvedExecutable> {
+  const hit = resolveMemo.get(adapterId);
+  if (hit && Date.now() - hit.at < RESOLVE_MEMO_TTL_MS) return hit.value;
+  const value = await resolveAdapterExecutable(adapterId, deps);
+  resolveMemo.set(adapterId, { at: Date.now(), value });
+  return value;
+}
+
+export function clearResolveMemo(): void {
+  resolveMemo.clear();
+}
+
 export async function backfillAdapterExecutables(adapterIds: string[], deps: ResolverDeps): Promise<void> {
   for (const id of adapterIds) {
     try {

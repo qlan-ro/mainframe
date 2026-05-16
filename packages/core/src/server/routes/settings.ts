@@ -7,7 +7,7 @@ import { GENERAL_DEFAULTS, NOTIFICATION_DEFAULTS, type NotificationConfig } from
 import type { RouteContext } from './types.js';
 import { validate, UpdateProviderSettingsBody, UpdateGeneralSettingsBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';
-import { resolveAdapterExecutable, defaultRun } from '../../adapters/resolve-executable.js';
+import { resolveAdapterExecutableCached, defaultRun } from '../../adapters/resolve-executable.js';
 
 // Per-group validation so a single bad leaf doesn't discard the user's other
 // valid overrides on read.
@@ -123,11 +123,15 @@ export function settingRoutes(ctx: RouteContext): Router {
       }
       const ids = new Set<string>(Object.keys(providers));
       for (const a of ctx.adapters.getAll()) ids.add(a.id);
+      const idList = Array.from(ids);
+      const resolved = await Promise.all(
+        idList.map((id) => resolveAdapterExecutableCached(id, { settings: ctx.db.settings, run: defaultRun })),
+      );
       const out: Record<string, Record<string, unknown>> = {};
-      for (const id of ids) {
+      idList.forEach((id, i) => {
         out[id] = { ...(providers[id] ?? {}) };
-        out[id].resolvedExecutable = await resolveAdapterExecutable(id, { settings: ctx.db.settings, run: defaultRun });
-      }
+        out[id].resolvedExecutable = resolved[i];
+      });
       res.json({ success: true, data: out });
     }),
   );

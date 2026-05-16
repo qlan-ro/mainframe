@@ -1,5 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
-import { resolveAdapterExecutable, backfillAdapterExecutables, BARE_NAMES } from '../resolve-executable.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  resolveAdapterExecutable,
+  resolveAdapterExecutableCached,
+  clearResolveMemo,
+  backfillAdapterExecutables,
+  BARE_NAMES,
+} from '../resolve-executable.js';
 
 type SettingsStub = {
   store: Map<string, string>;
@@ -76,6 +82,47 @@ describe('backfillAdapterExecutables', () => {
     const s = settingsStub();
     await backfillAdapterExecutables(['codex'], { settings: s, run: runner, platform: 'linux' });
     expect(s.get('provider', 'codex.executablePath')).toBeNull();
+  });
+});
+
+describe('resolveAdapterExecutableCached', () => {
+  beforeEach(() => clearResolveMemo());
+  afterEach(() => clearResolveMemo());
+
+  it('memoizes within the TTL and re-resolves after clearResolveMemo()', async () => {
+    const runner = vi.fn(async (cmd: string, args: string[]) => {
+      if (cmd === 'which') return { ok: true, stdout: '/opt/homebrew/bin/claude\n' };
+      if (args.includes('--version')) return { ok: true, stdout: 'claude 1.0.0' };
+      return { ok: false, stdout: '' };
+    });
+    const s = settingsStub();
+
+    const first = await resolveAdapterExecutableCached('claude', { settings: s, run: runner, platform: 'darwin' });
+    const callsAfterFirst = runner.mock.calls.length;
+    expect(callsAfterFirst).toBeGreaterThan(0);
+
+    const second = await resolveAdapterExecutableCached('claude', { settings: s, run: runner, platform: 'darwin' });
+    expect(second).toBe(first);
+    // Cache hit: runner not invoked again within TTL.
+    expect(runner.mock.calls.length).toBe(callsAfterFirst);
+
+    clearResolveMemo();
+    await resolveAdapterExecutableCached('claude', { settings: s, run: runner, platform: 'darwin' });
+    // Re-resolution after clear invokes the runner again.
+    expect(runner.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+  });
+
+  it('keys the memo by adapter id', async () => {
+    const runner = vi.fn(async (cmd: string, args: string[]) => {
+      if (cmd === 'which') return { ok: true, stdout: `/bin/${args[0]}\n` };
+      if (args.includes('--version')) return { ok: true, stdout: '1.0.0' };
+      return { ok: false, stdout: '' };
+    });
+    const s = settingsStub();
+    const claude = await resolveAdapterExecutableCached('claude', { settings: s, run: runner, platform: 'darwin' });
+    const codex = await resolveAdapterExecutableCached('codex', { settings: s, run: runner, platform: 'darwin' });
+    expect(claude.path).toBe('/bin/claude');
+    expect(codex.path).toBe('/bin/codex');
   });
 });
 

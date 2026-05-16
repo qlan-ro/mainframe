@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { settingRoutes } from '../../server/routes/settings.js';
+import { clearResolveMemo } from '../../adapters/resolve-executable.js';
 import type { RouteContext } from '../../server/routes/types.js';
 
 function createMockContext(): RouteContext {
@@ -37,9 +38,14 @@ describe('GET /api/settings/providers - resolvedExecutable', () => {
   let ctx: RouteContext;
 
   beforeEach(() => {
+    clearResolveMemo();
     ctx = createMockContext();
     // No registered adapters by default
     (ctx.adapters.getAll as any).mockReturnValue([]);
+  });
+
+  afterEach(() => {
+    clearResolveMemo();
   });
 
   it('includes resolvedExecutable with source="config" when executablePath is configured', async () => {

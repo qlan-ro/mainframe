@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // spawn real child processes and hit unpredictable timeouts.
 vi.mock('../../adapters/resolve-executable.js', () => ({
   resolveAdapterExecutable: vi.fn().mockResolvedValue({ path: 'claude', source: 'fallback', valid: false }),
+  resolveAdapterExecutableCached: vi.fn().mockResolvedValue({ path: 'claude', source: 'fallback', valid: false }),
+  clearResolveMemo: () => {},
   defaultRun: vi.fn(),
   BARE_NAMES: { claude: 'claude', codex: 'codex', gemini: 'gemini', opencode: 'opencode' },
 }));
