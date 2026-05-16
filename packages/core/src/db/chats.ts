@@ -35,6 +35,7 @@ export interface ChatListFilters {
   projectId?: string;
   tagsAll?: string[];
   hasWorktree?: boolean;
+  includeArchived?: boolean;
 }
 
 function parseEffort(value: string | null | undefined): Chat['effort'] {
@@ -76,9 +77,12 @@ export class ChatsRepository {
   }
 
   listFiltered(filters: ChatListFilters): Chat[] {
-    const where: string[] = ["status != 'archived'"];
+    const where: string[] = [];
     const params: unknown[] = [];
 
+    if (!filters.includeArchived) {
+      where.push("status != 'archived'");
+    }
     if (filters.projectId) {
       where.push('project_id = ?');
       params.push(filters.projectId);
@@ -97,7 +101,7 @@ export class ChatsRepository {
       params.push(...ids);
     }
 
-    const sql = `SELECT ${CHAT_SELECT_FIELDS} FROM chats WHERE ${where.join(' AND ')} ORDER BY pinned DESC, updated_at DESC`;
+    const sql = `SELECT ${CHAT_SELECT_FIELDS} FROM chats${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY pinned DESC, updated_at DESC`;
     const rows = this.db.prepare(sql).all(...params) as RawChatRow[];
     const chats = this.mapRows(rows);
     this.populateBulkTags(chats);

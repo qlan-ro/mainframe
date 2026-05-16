@@ -64,7 +64,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps): React.ReactElement {
       <div className="flex-1 min-w-0">
         <p className="font-medium select-text text-mf-text-primary">{toast.title}</p>
         {toast.description && (
-          <p className="mt-1 text-xs select-text text-mf-text-secondary max-h-24 overflow-y-auto">
+          <p className="mt-1 text-xs select-text text-mf-text-secondary max-h-24 overflow-y-auto whitespace-normal break-words">
             {toast.description}
           </p>
         )}

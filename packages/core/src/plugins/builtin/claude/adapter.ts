@@ -130,7 +130,7 @@ function enrichWithContextWindow(probed: AdapterModel[]): AdapterModel[] {
 
 export class ClaudeAdapter implements Adapter {
   id = 'claude';
-  name = 'Claude CLI';
+  name = manifest.name;
   readonly capabilities = { planMode: true } as const;
 
   private sessions = new Set<ClaudeSession>();
@@ -247,7 +247,7 @@ export class ClaudeAdapter implements Adapter {
     return skills.deleteAgent(agentId, projectPath);
   }
 
-  async listExternalSessions(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]> {
-    return listExternalSessions(projectPath, excludeSessionIds);
+  async listExternalSessions(projectPaths: string[], excludeSessionIds: string[]): Promise<ExternalSession[]> {
+    return listExternalSessions(projectPaths, excludeSessionIds);
   }
 }

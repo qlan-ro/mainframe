@@ -5,8 +5,8 @@ import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 const mockAdapters: AdapterInfo[] = [
   {
     id: 'claude',
-    name: 'Claude CLI',
-    description: 'Claude CLI adapter',
+    name: 'Claude Code',
+    description: 'Claude Code adapter',
     installed: true,
     capabilities: { planMode: true },
     models: [

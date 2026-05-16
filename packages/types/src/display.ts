@@ -1,5 +1,12 @@
 import type { DiffHunk } from './chat.js';
 
+export interface AskUserQuestionAnswer {
+  question: string;
+  answer: string[];
+  preview?: string;
+  notes?: string;
+}
+
 export interface ToolCallResult {
   content: string;
   isError: boolean;
@@ -8,6 +15,7 @@ export interface ToolCallResult {
   modifiedFile?: string;
   truncated?: boolean;
   fullBytes?: number;
+  askUserQuestion?: AskUserQuestionAnswer[];
 }
 
 export interface ToolCategories {
