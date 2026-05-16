@@ -1,7 +1,6 @@
 import {
   type ToolCategories,
   isExploreTool,
-  isHiddenTool,
   isHiddenToolPart,
   isTaskProgressTool,
   isSubagentTool,
