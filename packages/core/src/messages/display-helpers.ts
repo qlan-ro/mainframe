@@ -3,6 +3,7 @@ import { stripMainframeCommandTags, parseCommandMessage, parseAttachedFilePathTa
 import type { GroupedMessage } from './message-grouping.js';
 import type { PartEntry } from './tool-grouping.js';
 import { groupToolCallParts, groupTaskChildren } from './tool-grouping.js';
+import { parseAskUserQuestionResult } from './parse-ask-user-question.js';
 
 const INTERNAL_USER_RE = /<mainframe-command[\s>]/;
 
@@ -30,13 +31,14 @@ export function categorizeToolCall(
 }
 
 /** Build a ToolCallResult from a tool_result content block. */
-function toToolCallResult(block: MessageContent & { type: 'tool_result' }): ToolCallResult {
+function toToolCallResult(block: MessageContent & { type: 'tool_result' }, toolName: string): ToolCallResult {
   return {
     content: block.content,
     isError: block.isError,
     ...(block.structuredPatch && { structuredPatch: block.structuredPatch }),
     ...(block.originalFile && { originalFile: block.originalFile }),
     ...(block.modifiedFile && { modifiedFile: block.modifiedFile }),
+    ...(toolName === 'AskUserQuestion' ? { askUserQuestion: parseAskUserQuestionResult(block.content) } : {}),
   };
 }
 
@@ -72,15 +74,16 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
       seenToolIds.add(block.id);
 
       const resultBlock = grouped._toolResults?.get(block.id);
+      const baseCategory = categorizeToolCall(block.name, categories);
       const call: DisplayContent & { type: 'tool_call' } = {
         type: 'tool_call',
         id: block.id,
         name: block.name,
         input: block.input,
-        category: categorizeToolCall(block.name, categories),
+        category: block.name === 'AskUserQuestion' && resultBlock ? 'default' : baseCategory,
         ...withParentId(block.parentToolUseId),
       };
-      if (resultBlock) call.result = toToolCallResult(resultBlock);
+      if (resultBlock) call.result = toToolCallResult(resultBlock, block.name);
       content.push(call);
     }
   }
