@@ -55,7 +55,14 @@ describe('ProviderSection — executable path', () => {
       activeTab: 'providers',
       selectedProvider: 'claude',
       providers: {},
-      general: { worktreeDir: '.worktrees' },
+      general: {
+        worktreeDir: '.worktrees',
+        notifications: {
+          chat: { taskComplete: true, sessionError: true },
+          permission: { toolRequest: true, userQuestion: true, planApproval: true },
+          other: { plugin: true },
+        },
+      },
       loading: false,
     });
   });
