@@ -73,7 +73,7 @@ describe('listExternalSessions', () => {
       };
       mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
 
-      const result = await listExternalSessions('/test/project', []);
+      const result = await listExternalSessions(['/test/project'], []);
       expect(result).toHaveLength(1);
       expect(result[0]!.sessionId).toBe('abc-123');
       expect(result[0]!.adapterId).toBe('claude');
@@ -93,7 +93,7 @@ describe('listExternalSessions', () => {
       };
       mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
 
-      const result = await listExternalSessions('/test/project', ['exclude-me']);
+      const result = await listExternalSessions(['/test/project'], ['exclude-me']);
       expect(result).toHaveLength(1);
       expect(result[0]!.sessionId).toBe('keep-me');
     });
@@ -108,7 +108,7 @@ describe('listExternalSessions', () => {
       };
       mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
 
-      const result = await listExternalSessions('/test/project', []);
+      const result = await listExternalSessions(['/test/project'], []);
       expect(result).toHaveLength(1);
       expect(result[0]!.sessionId).toBe('main-session');
     });
@@ -123,7 +123,7 @@ describe('listExternalSessions', () => {
       };
       mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
 
-      const result = await listExternalSessions('/test/project', []);
+      const result = await listExternalSessions(['/test/project'], []);
       expect(result[0]!.sessionId).toBe('newer');
       expect(result[1]!.sessionId).toBe('older');
     });
@@ -138,15 +138,56 @@ describe('listExternalSessions', () => {
       };
       mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
 
-      const result = await listExternalSessions('/test/project', []);
+      const result = await listExternalSessions(['/test/project'], []);
       expect(result).toHaveLength(1);
       expect(result[0]!.sessionId).toBe('with-prompt');
     });
   });
 
+  describe('aggregation across multiple project paths', () => {
+    it('combines and dedupes sessions from multiple paths', async () => {
+      const indexMain = {
+        version: 1,
+        entries: [
+          {
+            sessionId: 'main-1',
+            firstPrompt: 'Main',
+            created: '2026-01-01T00:00:00Z',
+            modified: '2026-01-01T00:00:00Z',
+          },
+          {
+            sessionId: 'shared',
+            firstPrompt: 'Shared',
+            created: '2026-01-02T00:00:00Z',
+            modified: '2026-01-02T00:00:00Z',
+          },
+        ],
+      };
+      const indexWorktree = {
+        version: 1,
+        entries: [
+          { sessionId: 'wt-1', firstPrompt: 'WT', created: '2026-01-03T00:00:00Z', modified: '2026-01-03T00:00:00Z' },
+          {
+            sessionId: 'shared',
+            firstPrompt: 'Shared',
+            created: '2026-01-02T00:00:00Z',
+            modified: '2026-01-02T00:00:00Z',
+          },
+        ],
+      };
+      mockReadFile
+        .mockResolvedValueOnce(JSON.stringify(indexMain) as unknown as ArrayBuffer)
+        .mockResolvedValueOnce(JSON.stringify(indexWorktree) as unknown as ArrayBuffer);
+
+      const result = await listExternalSessions(['/test/project', '/test/project/.worktrees/feat'], []);
+      const ids = result.map((s) => s.sessionId).sort();
+      expect(ids).toEqual(['main-1', 'shared', 'wt-1']);
+    });
+  });
+
   describe('JSONL fallback (no sessions-index.json)', () => {
     it('returns empty when no index and no directory', async () => {
-      const result = await listExternalSessions('/test/project', []);
+      const result = await listExternalSessions(['/test/project'], []);
       expect(result).toEqual([]);
     });
 
@@ -164,7 +205,7 @@ describe('listExternalSessions', () => {
       ];
       mockJsonlFile(lines);
 
-      const result = await listExternalSessions('/test/project', []);
+      const result = await listExternalSessions(['/test/project'], []);
       expect(result).toHaveLength(1);
       expect(result[0]!.sessionId).toBe('abc-123');
       expect(result[0]!.adapterId).toBe('claude');
@@ -176,7 +217,7 @@ describe('listExternalSessions', () => {
     it('filters out excluded sessions in JSONL scan', async () => {
       mockReaddir.mockResolvedValue(['keep.jsonl', 'skip.jsonl'] as unknown as Awaited<ReturnType<typeof readdir>>);
 
-      const result = await listExternalSessions('/test/project', ['skip']);
+      const result = await listExternalSessions(['/test/project'], ['skip']);
       // 'skip' is excluded, only 'keep' should be processed
       expect(mockStat).toHaveBeenCalledTimes(1);
     });
@@ -188,7 +229,7 @@ describe('listExternalSessions', () => {
       const lines = [JSON.stringify({ type: 'user', isSidechain: true, timestamp: '2026-01-01T00:00:00Z' })];
       mockJsonlFile(lines);
 
-      const result = await listExternalSessions('/test/project', []);
+      const result = await listExternalSessions(['/test/project'], []);
       expect(result).toEqual([]);
     });
 
@@ -202,7 +243,7 @@ describe('listExternalSessions', () => {
       ];
       mockJsonlFile(lines);
 
-      const result = await listExternalSessions('/test/project', []);
+      const result = await listExternalSessions(['/test/project'], []);
       expect(result).toEqual([]);
     });
 
@@ -213,7 +254,7 @@ describe('listExternalSessions', () => {
       mockStat.mockResolvedValue({ mtime: new Date('2026-01-01T00:00:00Z') } as Awaited<ReturnType<typeof stat>>);
       mockJsonlFile([JSON.stringify({ type: 'system', timestamp: '2026-01-01T00:00:00Z' })]);
 
-      const result = await listExternalSessions('/test/project', []);
+      const result = await listExternalSessions(['/test/project'], []);
       // Only session.jsonl should be processed
       expect(mockStat).toHaveBeenCalledTimes(1);
     });

@@ -217,6 +217,10 @@ export function useBranchActions(
       if (!window.confirm(`Delete ${label}?`)) return false;
       return withBusy(async () => {
         const result = await gitDeleteBranch(projectId, branch, false, isRemote, chatId);
+        if (result.status === 'is-current') {
+          toast.error(result.message);
+          return;
+        }
         if (result.status === 'not-merged') {
           if (window.confirm(`${result.message}\nForce delete?`)) {
             await gitDeleteBranch(projectId, branch, true, isRemote, chatId);

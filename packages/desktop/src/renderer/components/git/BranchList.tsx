@@ -88,7 +88,12 @@ function BranchRow({
       )}
     >
       {isMain ? <Star size={12} className="text-mf-warning shrink-0" /> : <GitBranch size={12} className="shrink-0" />}
-      <span className="truncate">{displayName}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="truncate">{displayName}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{name}</TooltipContent>
+      </Tooltip>
       {((!!ahead && ahead > 0) || (!!behind && behind > 0)) && (
         <span className="flex items-center gap-0.5 shrink-0 ml-1 text-xs text-mf-text-secondary">
           <span className="opacity-40">·</span>

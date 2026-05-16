@@ -383,6 +383,9 @@ export class GitService {
         if (err?.message?.includes('not fully merged')) {
           return { status: 'not-merged', message: err.message };
         }
+        if (err?.message?.includes('used by worktree')) {
+          return { status: 'is-current', message: 'Cannot delete the currently checked-out branch' };
+        }
         throw err;
       }
     });
