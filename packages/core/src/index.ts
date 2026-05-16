@@ -7,6 +7,7 @@ import { EventEmitter } from 'node:events';
 import { ensureAuthSecret, getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
 import { AdapterRegistry } from './adapters/index.js';
+import { backfillAdapterExecutables, defaultRun } from './adapters/resolve-executable.js';
 import { ChatManager } from './chat/index.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
@@ -130,6 +131,15 @@ async function main(): Promise<void> {
   // Failure here must not prevent the daemon from serving requests.
   backfillWorktreeRelationships(db.projects).catch((err) => {
     logger.warn({ err }, 'Worktree relationship backfill failed');
+  });
+
+  // Non-blocking: resolve + persist absolute CLI paths for registered adapters
+  // so spawns are explicit. Failure must not block serving requests.
+  backfillAdapterExecutables(
+    adapters.getAll().map((a) => a.id),
+    { settings: db.settings, run: defaultRun },
+  ).catch((err) => {
+    logger.warn({ err }, 'Adapter executable backfill failed');
   });
 
   if (config.tunnel === true) {

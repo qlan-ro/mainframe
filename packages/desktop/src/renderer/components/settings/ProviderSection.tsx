@@ -10,6 +10,7 @@ import { getModelOptions } from '../../lib/adapters';
 import type { ProviderConfig } from '@qlan-ro/mainframe-types';
 import { ModelDropdown } from './ModelDropdown';
 import { MODE_OPTIONS } from './constants';
+import { DirectoryPickerModal } from '../DirectoryPickerModal';
 
 const EMPTY_CONFIG: ProviderConfig = {};
 
@@ -20,6 +21,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
   const adapter = adapters.find((entry) => entry.id === adapterId);
   const models = getModelOptions(adapterId, adapters);
   const [conflicts, setConflicts] = useState<string[]>([]);
+  const [showBinaryPicker, setShowBinaryPicker] = useState(false);
 
   useEffect(() => {
     getConfigConflicts(adapterId)
@@ -38,21 +40,38 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
     [adapterId, config, setProviderConfig],
   );
 
+  const handlePickBinary = useCallback(
+    (p: string) => {
+      setShowBinaryPicker(false);
+      update({ executablePath: p });
+    },
+    [update],
+  );
+
   return (
     <div className="space-y-4">
       {/* Executable Path */}
       <div className="space-y-1.5">
         <label className="text-mf-small text-mf-text-secondary">Executable Path</label>
-        <input
-          type="text"
-          value={config.executablePath ?? ''}
-          onChange={(e) => update({ executablePath: e.target.value || undefined })}
-          placeholder={adapterId}
-          className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-mf-input focus:outline-none focus:border-mf-accent"
-        />
-        <p className="text-mf-status text-mf-text-secondary">
-          Full path to the CLI binary. Leave empty to use system PATH.
-        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={config.executablePath ?? ''}
+            onChange={(e) => update({ executablePath: e.target.value || undefined })}
+            placeholder={adapterId}
+            className="flex-1 px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-mf-input focus:outline-none focus:border-mf-accent"
+          />
+          <button
+            type="button"
+            onClick={() => setShowBinaryPicker(true)}
+            className="px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-secondary border border-mf-border rounded-mf-input hover:text-mf-text-primary hover:border-mf-accent transition-colors"
+          >
+            Browse…
+          </button>
+        </div>
+        {config.resolvedExecutable?.source === 'fallback' && (
+          <p className="text-mf-status text-mf-text-secondary">Not found on PATH — Browse to select the binary</p>
+        )}
       </div>
 
       {/* Config conflict warning */}
@@ -137,6 +156,13 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
           ))}
         </div>
       </div>
+
+      <DirectoryPickerModal
+        open={showBinaryPicker}
+        mode="file"
+        onSelect={handlePickBinary}
+        onCancel={() => setShowBinaryPicker(false)}
+      />
     </div>
   );
 }
