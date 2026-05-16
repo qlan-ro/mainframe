@@ -1,6 +1,9 @@
 # Test Worktree Config: Mainframe
 
-Project-specific configuration for the `test-worktree` skill. See `~/.agents/skills/test-worktree/SKILL.md` for the general workflow.
+Project-specific configuration consumed by the `test-worktree` skill (which
+dispatches the `prepare-worktree` subagent for environment setup). See
+`~/.claude/skills/test-worktree/SKILL.md` for the staged pipeline and
+`~/.claude/agents/prepare-worktree.md` for the env subagent.
 
 ## App Type
 
@@ -18,21 +21,22 @@ Verify any candidate PID does not hold `31415` before sending SIGKILL.
 
 ## Environment
 
-Read ports and data dir from `.env` at the worktree root:
+`.env` is **generated** by `scripts/setup-ports.sh` (invoked from
+`launch-test.sh`), not hand-written. It always holds isolated free ports — the
+`31415`/`5173` defaults below are the *production* values and are deliberately
+never used for a test worktree.
 
-```bash
-source .env
-export MAINFRAME_DATA_DIR="${MAINFRAME_DATA_DIR:-$HOME/.mainframe_dev}"
-```
-
-| Variable | Used by | Source | Default |
+| Variable | Used by | Source | Isolated range / value |
 |---|---|---|---|
-| `DAEMON_PORT` | Core daemon | `.env` | 31415 |
-| `VITE_PORT` | Vite dev server | `.env` | 5173 |
-| `MAINFRAME_DATA_DIR` | Core + Desktop | `.env` | `~/.mainframe_dev` |
-| `VITE_DAEMON_HTTP_PORT` | Desktop renderer HTTP | Pass explicitly | `$DAEMON_PORT` |
-| `VITE_DAEMON_WS_PORT` | Desktop renderer WS | Pass explicitly | `$DAEMON_PORT` |
-| `LOG_LEVEL` | Core daemon | Optional | info |
+| `DAEMON_PORT` | Core daemon | generated `.env` | free port in `31416–32416` |
+| `VITE_PORT` | Vite dev server | generated `.env` | free port in `5174–6174` |
+| `MAINFRAME_DATA_DIR` | Core + Desktop | generated `.env` | `~/.mainframe_dev` |
+| `VITE_DAEMON_HTTP_PORT` | Desktop renderer HTTP | generated `.env` | `=$DAEMON_PORT` |
+| `VITE_DAEMON_WS_PORT` | Desktop renderer WS | generated `.env` | `=$DAEMON_PORT` |
+| `LOG_LEVEL` | Core daemon | set by `launch-test.sh` | `debug` |
+
+Production defaults (never used here): `DAEMON_PORT=31415`, `VITE_PORT=5173`,
+`LOG_LEVEL=info`.
 
 ## Cleanup (Kill Stale Dev Processes)
 
@@ -84,24 +88,33 @@ fi
 
 ## Launch
 
-Launch each process EXACTLY ONCE. On readiness-poll timeout, read the log file — do not re-launch.
-
-### Daemon
-
-```bash
-DAEMON_PORT=$DAEMON_PORT MAINFRAME_DATA_DIR=$MAINFRAME_DATA_DIR LOG_LEVEL=debug \
-  pnpm --filter @qlan-ro/mainframe-core run dev > /tmp/mf-daemon-$DAEMON_PORT.log 2>&1 &
+```
+script: .agents/launch-test.sh
 ```
 
-### Desktop App
+Run the script EXACTLY ONCE. On readiness-poll timeout, read the log file — do
+not re-launch.
 
-```bash
-VITE_DAEMON_HTTP_PORT=$DAEMON_PORT \
-VITE_DAEMON_WS_PORT=$DAEMON_PORT \
-VITE_PORT=$VITE_PORT \
-MAINFRAME_DATA_DIR=$MAINFRAME_DATA_DIR \
-  pnpm --filter @qlan-ro/mainframe-desktop run dev > /tmp/mf-desktop-$DAEMON_PORT.log 2>&1 &
-```
+`launch-test.sh` owns the full project bring-up and is the place to tweak how
+the app starts for testing. It:
+
+1. runs `scripts/setup-ports.sh` — allocates **isolated** free ports (daemon
+   `31416–32416`, Vite `5174–6174`, never the protected prod port `31415`),
+   writes `.env` with the `VITE_DAEMON_*` mirrors (without which the renderer
+   falls back to the prod daemon), then `pnpm install` + full build of all
+   three packages;
+2. sources the isolated `.env`;
+3. starts the daemon (`LOG_LEVEL=debug`, log → `/tmp/mf-daemon-<port>.log`);
+4. starts desktop (Vite + Electron with CDP on `9222`, log →
+   `/tmp/mf-desktop-<port>.log`);
+5. prints `DAEMON_PORT` / `VITE_PORT` / `CDP_URL` / log paths for the readiness
+   report.
+
+Because step 1 already does a full install + build, the dispatching
+`prepare-worktree` subagent does **not** need a separate build step for this
+project — the script is authoritative. Default ports (`31415`/`5173`) are never
+used; isolation here is what prevents the production-daemon / sibling-worktree
+port clashes that otherwise derail the start.
 
 ## Wait for Ready
 
