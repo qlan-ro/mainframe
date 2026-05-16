@@ -7,6 +7,7 @@ import { GENERAL_DEFAULTS, NOTIFICATION_DEFAULTS, type NotificationConfig } from
 import type { RouteContext } from './types.js';
 import { validate, UpdateProviderSettingsBody, UpdateGeneralSettingsBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';
+import { resolveAdapterExecutable, defaultRun } from '../../adapters/resolve-executable.js';
 
 // Per-group validation so a single bad leaf doesn't discard the user's other
 // valid overrides on read.
@@ -100,26 +101,36 @@ export function settingRoutes(ctx: RouteContext): Router {
   });
 
   // Provider defaults
-  router.get('/api/settings/providers', (_req: Request, res: Response) => {
-    const raw = ctx.db.settings.getByCategory('provider');
-    const providers: Record<string, Record<string, unknown>> = {};
-    for (const [key, value] of Object.entries(raw)) {
-      const dotIdx = key.indexOf('.');
-      if (dotIdx === -1) continue;
-      const adapterId = key.slice(0, dotIdx);
-      const field = key.slice(dotIdx + 1);
-      if (!providers[adapterId]) providers[adapterId] = {};
-      providers[adapterId][field] = value;
-    }
-    for (const id of Object.keys(providers)) {
-      const provider = providers[id]!;
-      if (provider.skipPermissions === 'true' && !provider.defaultMode) {
-        provider.defaultMode = 'yolo';
+  router.get(
+    '/api/settings/providers',
+    asyncHandler(async (_req: Request, res: Response) => {
+      const raw = ctx.db.settings.getByCategory('provider');
+      const providers: Record<string, Record<string, unknown>> = {};
+      for (const [key, value] of Object.entries(raw)) {
+        const dotIdx = key.indexOf('.');
+        if (dotIdx === -1) continue;
+        const adapterId = key.slice(0, dotIdx);
+        const field = key.slice(dotIdx + 1);
+        if (!providers[adapterId]) providers[adapterId] = {};
+        providers[adapterId][field] = value;
       }
-      delete provider.skipPermissions;
-    }
-    res.json({ success: true, data: providers });
-  });
+      for (const id of Object.keys(providers)) {
+        const provider = providers[id]!;
+        if (provider.skipPermissions === 'true' && !provider.defaultMode) {
+          provider.defaultMode = 'yolo';
+        }
+        delete provider.skipPermissions;
+      }
+      const ids = new Set<string>(Object.keys(providers));
+      for (const a of ctx.adapters.getAll()) ids.add(a.id);
+      const out: Record<string, Record<string, unknown>> = {};
+      for (const id of ids) {
+        out[id] = { ...(providers[id] ?? {}) };
+        out[id].resolvedExecutable = await resolveAdapterExecutable(id, { settings: ctx.db.settings, run: defaultRun });
+      }
+      res.json({ success: true, data: out });
+    }),
+  );
 
   router.put('/api/settings/providers/:adapterId', (req: Request, res: Response) => {
     const { adapterId } = req.params;
