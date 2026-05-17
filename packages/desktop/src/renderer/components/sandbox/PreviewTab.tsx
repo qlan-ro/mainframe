@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import type { WebviewTag } from 'electron';
+import { loadUrlWithRetry } from './loadUrlWithRetry';
 import {
   Trash2,
   RotateCw,
@@ -271,12 +272,21 @@ export function PreviewTab(): React.ReactElement {
       } catch {
         /* not ready yet */
       }
-      wv.loadURL(previewUrl)
-        .then(() => {
-          if (cancelled) return;
-          setWebviewReady(true);
-        })
-        .catch(() => {});
+      // The daemon emits 'running' on port-bind, but the dev server may not be
+      // accepting requests yet (cold compile) — the first loadURL can reject
+      // with ERR_CONNECTION_REFUSED. Retry with backoff instead of swallowing,
+      // otherwise the overlay hangs on "Waiting for localhost…" until a manual
+      // stop/start re-runs this effect.
+      void loadUrlWithRetry({
+        load: () => wv.loadURL(previewUrl),
+        attempts: 15,
+        delayMs: 1000,
+        isCancelled: () => cancelled,
+        onError: (err, attempt) =>
+          console.warn(`[sandbox] preview loadURL attempt ${attempt} failed for ${previewUrl}`, err),
+      }).then((ok) => {
+        if (ok && !cancelled) setWebviewReady(true);
+      });
     };
 
     // Wait for dom-ready if the webview isn't ready yet
