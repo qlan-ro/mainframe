@@ -45,10 +45,21 @@ export function renderToolCard(
     return <EditFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
   if (toolName === 'Write')
     return <WriteFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
-  if (toolName === 'Bash') return <BashCard args={args} result={result} isError={isError} />;
-  if (toolName === 'Read') return <ReadFileCard args={args} result={result} isError={isError} />;
+  if (toolName === 'Bash')
+    return <BashCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
+  if (toolName === 'Read')
+    return <ReadFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
   if (toolName === 'Glob' || toolName === 'Grep' || toolName === 'LS')
-    return <SearchCard toolName={toolName} args={args} result={result} isError={isError} />;
+    return (
+      <SearchCard
+        toolName={toolName}
+        args={args}
+        result={result}
+        isError={isError}
+        chatId={chatId}
+        toolCallId={toolCallId}
+      />
+    );
   return (
     <DefaultToolCard
       toolName={toolName}
