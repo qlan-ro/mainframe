@@ -56,6 +56,7 @@ export function chatRoutes(ctx: RouteContext): Router {
       projectId: parsed.data.project,
       tagsAll,
       hasWorktree: synth.has('has-worktree'),
+      includeArchived: true,
     });
     res.json({ success: true, data: chats });
   });

@@ -8,6 +8,22 @@ import { BranchSubmenu } from './BranchSubmenu';
 import { NewBranchDialog } from './NewBranchDialog';
 import { ConflictView } from './ConflictView';
 import { useBranchActions } from './useBranchActions';
+import { useHorizontalResize } from '../../hooks/useHorizontalResize';
+
+const RESIZE_STORAGE_KEY = 'mf:branch-popover-width';
+const RESIZE_DEFAULT = 320;
+const RESIZE_MIN = 280;
+const RESIZE_MAX = 800;
+
+function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }): React.ReactElement {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="absolute top-0 right-0 h-full w-1 cursor-ew-resize hover:bg-mf-hover"
+      style={{ touchAction: 'none' }}
+    />
+  );
+}
 
 type View = 'list' | 'submenu' | 'new-branch' | 'conflict' | 'rename';
 
@@ -32,6 +48,12 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
   const [renameValue, setRenameValue] = useState('');
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const { width, onHandleMouseDown } = useHorizontalResize({
+    storageKey: RESIZE_STORAGE_KEY,
+    defaultWidth: RESIZE_DEFAULT,
+    minWidth: RESIZE_MIN,
+    maxWidth: RESIZE_MAX,
+  });
 
   // Switch to conflict view when conflicts or active operation detected
   useEffect(() => {
@@ -108,8 +130,13 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
 
   if (!branches) {
     return (
-      <div ref={popoverRef} className="bg-mf-app-bg border border-mf-border rounded-lg shadow-xl p-4">
+      <div
+        ref={popoverRef}
+        className="relative bg-mf-app-bg border border-mf-border rounded-lg shadow-xl p-4"
+        style={{ width }}
+      >
         <Loader2 size={16} className="animate-spin text-mf-text-secondary mx-auto" />
+        <ResizeHandle onMouseDown={onHandleMouseDown} />
       </div>
     );
   }
@@ -119,7 +146,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
   return (
     <div ref={popoverRef} className="flex items-start gap-1">
       {/* Main panel */}
-      <div className="bg-mf-app-bg border border-mf-border rounded-lg shadow-xl min-w-[300px] max-w-[360px]">
+      <div className="relative bg-mf-app-bg border border-mf-border rounded-lg shadow-xl" style={{ width }}>
         {activeChat?.worktreePath && (
           <div className="flex items-center gap-2 px-3 py-2 mb-1 text-mf-label text-mf-accent bg-mf-accent/10 rounded-mf-input">
             <GitBranch size={12} />
@@ -242,6 +269,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
             />
           </>
         )}
+        <ResizeHandle onMouseDown={onHandleMouseDown} />
       </div>
 
       {/* Flyout submenu — side by side */}

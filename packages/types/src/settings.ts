@@ -1,11 +1,19 @@
 export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'yolo';
 
+export interface ResolvedExecutable {
+  path: string;
+  source: 'config' | 'detected' | 'fallback';
+  valid: boolean;
+  version?: string;
+}
+
 export interface ProviderConfig {
   defaultModel?: string;
   defaultMode?: 'default' | 'acceptEdits' | 'yolo';
   defaultPlanMode?: 'true' | 'false';
   executablePath?: string;
   systemPrompt?: string;
+  resolvedExecutable?: ResolvedExecutable;
 }
 
 export interface NotificationConfig {

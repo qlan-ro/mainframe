@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye } from 'lucide-react';
+import { ClipboardCheck } from 'lucide-react';
 import { useUIStore } from '../../store';
 import { useChatsStore } from '../../store/chats';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -25,7 +25,7 @@ export function ChatActions({ chatId }: ChatActionsProps): React.ReactElement | 
             aria-label="Review changes"
             title="Review changes (Cmd+Shift+R)"
           >
-            <Eye size={16} className="text-mf-text-secondary" />
+            <ClipboardCheck size={16} className="text-mf-text-secondary" />
           </button>
         </TooltipTrigger>
         <TooltipContent>Review changes (Cmd+Shift+R)</TooltipContent>

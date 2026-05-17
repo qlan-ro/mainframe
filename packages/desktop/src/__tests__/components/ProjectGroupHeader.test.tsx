@@ -48,7 +48,7 @@ vi.mock('../../renderer/lib/client.js', () => ({
 }));
 vi.mock('../../renderer/lib/adapters.js', () => ({
   getDefaultModelForAdapter: vi.fn(() => 'claude-sonnet-4-6'),
-  getAdapterLabel: vi.fn(() => 'Claude CLI'),
+  getAdapterLabel: vi.fn(() => 'Claude Code'),
 }));
 vi.mock('../../renderer/lib/api.js', () => ({
   archiveChat: vi.fn(() => Promise.resolve()),
@@ -155,7 +155,7 @@ describe('ProjectGroup header layout', () => {
 
   it('shows the adapter label on the session row metadata line when there are no tags', () => {
     renderGroup();
-    expect(screen.getByText('Claude CLI')).toBeInTheDocument();
+    expect(screen.getByText('Claude Code')).toBeInTheDocument();
     expect(screen.queryByText('+ tag')).not.toBeInTheDocument();
   });
 
@@ -174,7 +174,7 @@ describe('ProjectGroup header layout', () => {
     const metadataRow = screen.getByTestId('session-row-metadata');
     const tagsRow = screen.getByTestId('session-row-tags');
 
-    expect(metadataRow).toHaveTextContent('Claude CLI');
+    expect(metadataRow).toHaveTextContent('Claude Code');
     expect(tagsRow).toHaveTextContent('frontend');
   });
 
@@ -263,7 +263,7 @@ describe('ProjectGroup header layout', () => {
   it('does not open the tag popover when clicking session metadata', async () => {
     renderGroup();
 
-    await userEvent.click(screen.getByText('Claude CLI'));
+    await userEvent.click(screen.getByText('Claude Code'));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
@@ -271,7 +271,7 @@ describe('ProjectGroup header layout', () => {
   it('selects the session when clicking row background or metadata', async () => {
     renderGroup();
 
-    await userEvent.click(screen.getByText('Claude CLI'));
+    await userEvent.click(screen.getByText('Claude Code'));
 
     expect(mocks.setActiveChat).toHaveBeenCalledWith('chat-1');
     expect(mocks.openChatTab).toHaveBeenCalledWith('chat-1', 'Session 1');

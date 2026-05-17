@@ -1,12 +1,12 @@
 {
   "id": "claude",
-  "name": "Claude CLI",
+  "name": "Claude Code",
   "version": "1.0.0",
-  "description": "Claude CLI adapter — built-in",
+  "description": "Claude Code adapter — built-in",
   "capabilities": ["adapters", "process:exec"],
   "adapter": {
     "binaryName": "claude",
-    "displayName": "Claude CLI"
+    "displayName": "Claude Code"
   },
   "commands": [
     { "name": "clear", "description": "Clear conversation history" },

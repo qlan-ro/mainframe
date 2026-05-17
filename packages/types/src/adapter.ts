@@ -255,7 +255,7 @@ export interface Adapter {
   ): Promise<import('./skill.js').AgentConfig>;
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
-  listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
+  listExternalSessions?(projectPaths: string[], excludeSessionIds: string[]): Promise<ExternalSession[]>;
 
   /**
    * Factory for an adapter-specific plan-mode action handler.
