@@ -11,7 +11,7 @@ import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 
 export function AssistantMessage() {
   const message = useMessage();
-  const { openLightbox } = useMainframeRuntime();
+  const { openLightbox, chatId } = useMainframeRuntime();
 
   const [original] = getExternalStoreMessages<DisplayMessage>(message);
   const imageBlocks = (original?.content?.filter((c): c is DisplayContent & { type: 'image' } => c.type === 'image') ??
@@ -29,8 +29,16 @@ export function AssistantMessage() {
               Text: MainframeText,
               Reasoning: () => null,
               tools: {
-                Fallback: ({ toolName, args, argsText, result, isError }) =>
-                  renderToolCard(toolName, (args || {}) as Record<string, unknown>, argsText, result, isError),
+                Fallback: ({ toolName, args, argsText, result, isError, toolCallId }) =>
+                  renderToolCard(
+                    toolName,
+                    (args || {}) as Record<string, unknown>,
+                    argsText,
+                    result,
+                    isError,
+                    chatId,
+                    toolCallId,
+                  ),
               },
             }}
           />
