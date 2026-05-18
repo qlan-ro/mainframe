@@ -27,6 +27,7 @@ function UpdateIndicator(): React.ReactElement | null {
       <Tooltip>
         <TooltipTrigger asChild>
           <button
+            data-testid="status-bar-update-download"
             className="flex items-center gap-1 text-mf-accent hover:text-mf-text-primary transition-colors"
             onClick={() => {
               try {
@@ -59,6 +60,7 @@ function UpdateIndicator(): React.ReactElement | null {
       <Tooltip>
         <TooltipTrigger asChild>
           <button
+            data-testid="status-bar-update-install"
             className="flex items-center gap-1 text-mf-success hover:text-mf-text-primary transition-colors"
             onClick={() => {
               try {
