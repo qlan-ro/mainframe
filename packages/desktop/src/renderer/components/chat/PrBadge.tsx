@@ -29,6 +29,7 @@ export function PrBadge({ chatId }: PrBadgeProps): React.ReactElement | null {
           <TooltipTrigger asChild>
             <button
               type="button"
+              data-testid={`chat-pr-open-${pr.owner}-${pr.repo}-${pr.number}`}
               onClick={() => openUrl(pr.url)}
               className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#1a7f37] text-white hover:bg-[#2ea043] transition-colors"
               aria-label={`Open PR #${pr.number} in ${pr.owner}/${pr.repo}`}

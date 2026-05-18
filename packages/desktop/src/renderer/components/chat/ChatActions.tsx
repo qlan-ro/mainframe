@@ -20,6 +20,7 @@ export function ChatActions({ chatId }: ChatActionsProps): React.ReactElement | 
         <TooltipTrigger asChild>
           <button
             type="button"
+            data-testid="chat-review-changes-button"
             onClick={() => setReviewPanelOpen(true)}
             className="p-2 hover:bg-mf-surface-secondary rounded transition-colors"
             aria-label="Review changes"

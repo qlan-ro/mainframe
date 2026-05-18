@@ -97,6 +97,7 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
               {activeQuestion.options.map((opt) => (
                 <button
                   key={opt.label}
+                  data-testid={`chat-question-option-${opt.label}`}
                   role={activeQuestion.multiSelect ? 'checkbox' : 'radio'}
                   aria-checked={activeSelection.has(opt.label)}
                   onClick={() => toggleOption(currentQuestionIndex, opt.label, Boolean(activeQuestion.multiSelect))}
@@ -127,6 +128,7 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
                 </button>
               ))}
               <button
+                data-testid="chat-question-option-other"
                 role={activeQuestion.multiSelect ? 'checkbox' : 'radio'}
                 aria-checked={activeSelection.has('__other__')}
                 onClick={() => toggleOption(currentQuestionIndex, '__other__', Boolean(activeQuestion.multiSelect))}
@@ -157,6 +159,7 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
             {activeSelection.has('__other__') && (
               <input
                 type="text"
+                data-testid="chat-question-other-input"
                 autoFocus
                 placeholder="Type your answer..."
                 value={otherTexts.get(currentQuestionIndex) || ''}
@@ -173,17 +176,18 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
         <div className="flex items-center justify-between gap-2">
           <div>
             {currentQuestionIndex > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => setCurrentQuestionIndex((idx) => idx - 1)}>
+              <Button data-testid="chat-question-back-button" variant="ghost" size="sm" onClick={() => setCurrentQuestionIndex((idx) => idx - 1)}>
                 Back
               </Button>
             )}
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => onRespond('deny')}>
+            <Button data-testid="chat-question-skip-button" variant="ghost" size="sm" onClick={() => onRespond('deny')}>
               Skip
             </Button>
             {isLastQuestion ? (
               <Button
+                data-testid="chat-question-submit-button"
                 size="sm"
                 className="bg-mf-accent text-white hover:bg-mf-accent/90"
                 disabled={!hasActiveSelection}
@@ -193,6 +197,7 @@ export function AskUserQuestionCard({ request, onRespond }: AskUserQuestionCardP
               </Button>
             ) : (
               <Button
+                data-testid="chat-question-next-button"
                 size="sm"
                 className="bg-mf-accent text-white hover:bg-mf-accent/90"
                 disabled={!hasActiveSelection}
