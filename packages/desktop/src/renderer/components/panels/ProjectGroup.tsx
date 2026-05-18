@@ -84,6 +84,7 @@ export const ProjectGroup = React.memo(function ProjectGroup({
             <TooltipTrigger asChild>
               <button
                 type="button"
+                data-testid={`chats-project-new-session-${project.id}`}
                 onClick={handleNewSession}
                 className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
                 aria-label={`New session in ${project.name}`}
@@ -97,6 +98,7 @@ export const ProjectGroup = React.memo(function ProjectGroup({
             <TooltipTrigger asChild>
               <button
                 type="button"
+                data-testid={`chats-project-delete-${project.id}`}
                 onClick={handleDeleteProject}
                 className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors"
                 aria-label={`Delete project ${project.name}`}
