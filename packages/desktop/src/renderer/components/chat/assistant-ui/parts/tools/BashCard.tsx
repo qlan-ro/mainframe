@@ -2,13 +2,21 @@ import { Terminal } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { StatusDot, cardStyle, stripErrorXml, type ToolCardProps } from './shared';
+import { StatusDot, cardStyle, stripErrorXml, isTruncatedResult, type ToolCardProps } from './shared';
+import { ToolResultExpand } from '../../ToolResultExpand';
 
-export function BashCard({ args, result, isError }: ToolCardProps) {
+export function BashCard({ args, result, isError, chatId, toolCallId }: ToolCardProps) {
   const command = (args.command as string) || (args.input as string) || '';
   const description = args.description as string | undefined;
+  const truncated = isTruncatedResult(result);
   const rawResultText =
-    typeof result === 'string' ? result : result !== undefined ? JSON.stringify(result, null, 2) : undefined;
+    typeof result === 'string'
+      ? result
+      : truncated
+        ? result.content
+        : result !== undefined
+          ? JSON.stringify(result, null, 2)
+          : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
 
   return (
@@ -44,9 +52,18 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
     >
       {resultText && (
         <div className={cn('border-t border-mf-divider px-3 py-2', isError && 'bg-mf-chat-error-surface/20')}>
-          <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary max-h-[400px] overflow-y-auto">
-            {resultText}
-          </pre>
+          {truncated && chatId && toolCallId ? (
+            <ToolResultExpand
+              chatId={chatId}
+              toolUseId={toolCallId}
+              truncatedContent={resultText}
+              fullBytes={result.fullBytes}
+            />
+          ) : (
+            <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary max-h-[400px] overflow-y-auto">
+              {resultText}
+            </pre>
+          )}
         </div>
       )}
     </CollapsibleToolCard>

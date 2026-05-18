@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '../../../../../ui/tooltip.js';
 import { SearchCard } from '../SearchCard.js';
 
@@ -27,5 +27,23 @@ describe('SearchCard (U5 unified)', () => {
       wrap(<SearchCard toolName="Grep" args={{ pattern: 'foo' }} result={{ content: 'no matches' }} isError={false} />),
     );
     expect(container.querySelector('svg.lucide-maximize-2')).toBeNull();
+  });
+
+  it('renders ToolResultExpand for a truncated result when chatId/toolCallId present', () => {
+    const { container, getByRole, getByText } = render(
+      wrap(
+        <SearchCard
+          toolName="Grep"
+          args={{ pattern: 'foo' }}
+          result={{ content: 'HEAD…[truncated 9 lines · 50 KB — expand]…TAIL', truncated: true, fullBytes: 51200 }}
+          isError={false}
+          chatId="c1"
+          toolCallId="toolu_1"
+        />,
+      ),
+    );
+    fireEvent.click(container.querySelector('[data-testid="tool-card"] button')!);
+    expect(getByRole('button', { name: /show full output/i })).toBeTruthy();
+    expect(getByText(/HEAD…\[truncated 9 lines · 50 KB — expand\]…TAIL/)).toBeTruthy();
   });
 });

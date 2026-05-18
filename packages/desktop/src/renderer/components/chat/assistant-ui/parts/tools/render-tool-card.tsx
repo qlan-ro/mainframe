@@ -23,6 +23,8 @@ export function renderToolCard(
   argsText: string,
   result: unknown,
   isError: boolean | undefined,
+  chatId?: string,
+  toolCallId?: string,
 ): React.ReactElement | null {
   if (toolName.startsWith('mcp__')) {
     return <MCPToolCard toolName={toolName} args={args} result={result as never} isError={isError} />;
@@ -40,11 +42,33 @@ export function renderToolCard(
   if (toolName === 'Task' || toolName === 'Agent') return <TaskCard args={args} result={result} isError={isError} />;
   if (toolName === 'ExitPlanMode') return <PlanCard args={args} result={result} isError={isError} />;
   if (toolName === 'Edit' && args.old_string !== undefined)
-    return <EditFileCard args={args} result={result} isError={isError} />;
-  if (toolName === 'Write') return <WriteFileCard args={args} result={result} isError={isError} />;
-  if (toolName === 'Bash') return <BashCard args={args} result={result} isError={isError} />;
-  if (toolName === 'Read') return <ReadFileCard args={args} result={result} isError={isError} />;
+    return <EditFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
+  if (toolName === 'Write')
+    return <WriteFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
+  if (toolName === 'Bash')
+    return <BashCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
+  if (toolName === 'Read')
+    return <ReadFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
   if (toolName === 'Glob' || toolName === 'Grep' || toolName === 'LS')
-    return <SearchCard toolName={toolName} args={args} result={result} isError={isError} />;
-  return <DefaultToolCard toolName={toolName} args={args} argsText={argsText} result={result} isError={isError} />;
+    return (
+      <SearchCard
+        toolName={toolName}
+        args={args}
+        result={result}
+        isError={isError}
+        chatId={chatId}
+        toolCallId={toolCallId}
+      />
+    );
+  return (
+    <DefaultToolCard
+      toolName={toolName}
+      args={args}
+      argsText={argsText}
+      result={result}
+      isError={isError}
+      chatId={chatId}
+      toolCallId={toolCallId}
+    />
+  );
 }

@@ -19,8 +19,12 @@ function mapDisplayContentToToolCall(block: DisplayContent & { type: 'tool_call'
           structuredPatch: block.result.structuredPatch,
           originalFile: block.result.originalFile,
           modifiedFile: block.result.modifiedFile,
+          truncated: block.result.truncated,
+          fullBytes: block.result.fullBytes,
         }
-      : block.result.content
+      : block.result.truncated
+        ? { content: block.result.content, truncated: true as const, fullBytes: block.result.fullBytes ?? 0 }
+        : block.result.content
     : undefined;
 
   return {

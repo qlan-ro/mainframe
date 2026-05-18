@@ -2,7 +2,8 @@ import React from 'react';
 import { Wrench } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { StatusDot, cardStyle, stripErrorXml } from './shared';
+import { StatusDot, cardStyle, stripErrorXml, isTruncatedResult } from './shared';
+import { ToolResultExpand } from '../../ToolResultExpand';
 
 export function DefaultToolCard({
   toolName,
@@ -10,14 +11,19 @@ export function DefaultToolCard({
   argsText,
   result,
   isError,
+  chatId,
+  toolCallId,
 }: {
   toolName: string;
   args: Record<string, unknown>;
   argsText: string;
   result: unknown;
   isError: boolean | undefined;
+  chatId?: string;
+  toolCallId?: string;
 }) {
   const hasResult = result !== undefined;
+  const truncated = isTruncatedResult(result);
 
   return (
     <CollapsibleToolCard
@@ -46,9 +52,18 @@ export function DefaultToolCard({
             )}
           >
             <span className="text-mf-status uppercase tracking-wide font-semibold text-mf-text-secondary">Result</span>
-            <pre className="mt-1 text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-primary max-h-[400px] overflow-y-auto">
-              {stripErrorXml(typeof result === 'string' ? result : JSON.stringify(result, null, 2))}
-            </pre>
+            {truncated && chatId && toolCallId ? (
+              <ToolResultExpand
+                chatId={chatId}
+                toolUseId={toolCallId}
+                truncatedContent={stripErrorXml(result.content)}
+                fullBytes={result.fullBytes}
+              />
+            ) : (
+              <pre className="mt-1 text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-primary max-h-[400px] overflow-y-auto">
+                {stripErrorXml(typeof result === 'string' ? result : JSON.stringify(result, null, 2))}
+              </pre>
+            )}
           </div>
         )}
       </div>
