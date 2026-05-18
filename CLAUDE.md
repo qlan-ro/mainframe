@@ -133,6 +133,7 @@ These rules exist because every one was violated before and required cleanup. Fo
 ### Testing
 - **New public methods need tests.** Route handlers, DB methods, and core logic must have corresponding test files.
 - **Coverage thresholds enforced.** `vitest.config.ts` defines minimum coverage. Don't lower thresholds to pass CI.
+- **Every interactive element needs a `data-testid`.** Any new or modified `button`, `input`, `select`, `textarea`, action link, and every dialog/modal/picker root element MUST carry a stable, scoped `data-testid`. Use `<surface>-<element>` (area-qualified, kebab-case, e.g. `settings-executable-path-input`); loop items key off a stable domain id, never an array index. Shared `ui/` primitives stay passthrough (forward `data-testid` via `{...props}`) — never hardcode an id in a primitive. UI tests bind to these hooks; an untagged interactive element is an incomplete change.
 
 ### Performance
 - **Lazy-load heavy components.** Large editors and visualizations must use `React.lazy()` with `Suspense`.

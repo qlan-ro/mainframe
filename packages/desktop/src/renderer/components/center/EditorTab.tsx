@@ -247,6 +247,7 @@ export function EditorTab({
         <div className="flex items-center gap-2 px-3 py-1.5 shrink-0 bg-yellow-500/10 border-b border-yellow-500/20 text-mf-small">
           <span className="text-yellow-400 flex-1">File changed on disk</span>
           <button
+            data-testid="center-button-reload-from-disk"
             onClick={handleReloadFromDisk}
             className="flex items-center gap-1 px-2 py-0.5 text-mf-small rounded bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 transition-colors"
           >
@@ -254,6 +255,7 @@ export function EditorTab({
             Reload
           </button>
           <button
+            data-testid="center-button-keep-mine"
             onClick={handleKeepMine}
             className="flex items-center gap-1 px-2 py-0.5 text-mf-small rounded hover:bg-mf-hover text-mf-text-secondary transition-colors"
           >
@@ -265,6 +267,7 @@ export function EditorTab({
       {dirty && (
         <div className="flex items-center justify-end px-3 py-1 shrink-0">
           <button
+            data-testid="center-button-save"
             className="flex items-center gap-1 px-2 py-1 text-mf-small rounded hover:bg-mf-input text-mf-text-secondary hover:text-mf-text-primary disabled:opacity-40"
             disabled={saving}
             onClick={handleSave}

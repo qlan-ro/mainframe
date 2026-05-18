@@ -19,7 +19,7 @@ export function ConflictView({
   const operationInProgress = !hasConflicts && activeOperation;
 
   return (
-    <div className="min-w-[280px]">
+    <div data-testid="conflict-view-dialog" className="min-w-[280px]">
       {/* Warning header */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[#7f1d1d] rounded-t">
         <AlertTriangle size={14} className="text-mf-destructive shrink-0" />
@@ -60,6 +60,7 @@ export function ConflictView({
       {/* Abort button */}
       <div className="px-3 py-2 border-t border-mf-border">
         <button
+          data-testid="conflict-view-abort"
           onClick={onAbort}
           disabled={aborting}
           className={cn(

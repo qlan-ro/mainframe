@@ -44,10 +44,10 @@ export function LeftRail(): React.ReactElement {
       ))}
 
       {/* Fixed utility buttons — not part of zone system */}
-      <RailButton onClick={() => useSettingsStore.getState().open()} title="Settings">
+      <RailButton testId="left-rail-settings" onClick={() => useSettingsStore.getState().open()} title="Settings">
         <Settings size={16} />
       </RailButton>
-      <RailButton onClick={() => useSettingsStore.getState().open(undefined, 'about')} title="Help">
+      <RailButton testId="left-rail-help" onClick={() => useSettingsStore.getState().open(undefined, 'about')} title="Help">
         <HelpCircle size={16} />
       </RailButton>
     </div>

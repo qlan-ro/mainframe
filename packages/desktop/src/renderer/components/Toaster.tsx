@@ -70,6 +70,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps): React.ReactElement {
         )}
       </div>
       <button
+        data-testid={`toaster-dismiss-${toast.id}`}
         onClick={(e) => {
           e.stopPropagation();
           onDismiss(toast.id);

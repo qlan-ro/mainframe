@@ -54,6 +54,7 @@ export function EffortPicker({
 
   return (
     <ComposerDropdown
+      data-testid="composer-effort-select"
       items={EFFORT_OPTIONS}
       value={current}
       onChange={handleChange}

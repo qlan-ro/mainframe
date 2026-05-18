@@ -37,12 +37,13 @@ export function ImageLightbox({ images, index, onClose, onNavigate }: ImageLight
       className="fixed inset-0 z-50 flex items-center justify-center bg-mf-overlay/80 app-no-drag"
       onClick={onClose}
     >
-      <button onClick={onClose} className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors">
+      <button data-testid="chat-lightbox-close-button" onClick={onClose} className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors">
         <X size={24} />
       </button>
 
       {images.length > 1 && index > 0 && (
         <button
+          data-testid="chat-lightbox-prev-button"
           onClick={(e) => {
             e.stopPropagation();
             onNavigate(index - 1);
@@ -55,6 +56,7 @@ export function ImageLightbox({ images, index, onClose, onNavigate }: ImageLight
 
       {images.length > 1 && index < images.length - 1 && (
         <button
+          data-testid="chat-lightbox-next-button"
           onClick={(e) => {
             e.stopPropagation();
             onNavigate(index + 1);

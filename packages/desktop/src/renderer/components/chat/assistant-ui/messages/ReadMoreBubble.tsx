@@ -40,6 +40,7 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
 
       {needsToggle && (
         <button
+          data-testid="message-read-more"
           type="button"
           onClick={() => setExpanded((e) => !e)}
           className="mt-1 text-mf-accent text-mf-small font-medium hover:underline"

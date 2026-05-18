@@ -115,6 +115,7 @@ export function ZoneTabBar({ zoneId }: ZoneTabBarProps): React.ReactElement | nu
         return (
           <button
             key={tabId}
+            data-testid={`zone-tab-${tabId}`}
             data-active={isActive}
             draggable
             onClick={() => setActiveTab(zoneId, tabId)}

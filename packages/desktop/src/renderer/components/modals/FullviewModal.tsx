@@ -58,6 +58,7 @@ export const FullviewModal: React.FC = () => {
       className="fixed inset-0 z-50 flex items-center justify-center bg-mf-overlay/60"
     >
       <div
+        data-testid="fullview-modal"
         onClick={(e) => e.stopPropagation()}
         className="flex h-5/6 w-5/6 flex-col rounded-lg border border-mf-border bg-mf-app-bg shadow-2xl"
       >
@@ -68,6 +69,7 @@ export const FullviewModal: React.FC = () => {
             <Button
               variant="ghost"
               size="sm"
+              data-testid="fullview-button-close"
               onClick={close}
               aria-label="Close"
               className="text-mf-text-secondary hover:bg-mf-panel-bg hover:text-mf-text-primary"

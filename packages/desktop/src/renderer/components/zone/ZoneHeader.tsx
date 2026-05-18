@@ -40,6 +40,7 @@ export function ZoneHeader({ zoneId }: ZoneHeaderProps): React.ReactElement | nu
               return (
                 <button
                   key={tab.id}
+                  data-testid={`zone-tab-${tab.id}`}
                   onClick={() => onTabChange?.(tab.id)}
                   className={[
                     'group flex items-center gap-1 px-2 h-6 rounded text-sm border',
@@ -82,6 +83,7 @@ export function ZoneHeader({ zoneId }: ZoneHeaderProps): React.ReactElement | nu
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              data-testid="zone-button-minimize"
               onClick={() => setActiveTab(zoneId, null)}
               aria-label="Minimize"
               className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
@@ -121,6 +123,7 @@ function TabDropdown({
   return (
     <div ref={ref} className="relative ml-2">
       <button
+        data-testid="zone-button-tab-dropdown"
         onClick={() => setOpen((prev) => !prev)}
         className="flex items-center gap-1 px-2 h-6 rounded text-sm border border-mf-border bg-mf-hover text-mf-text-primary"
       >
@@ -132,6 +135,7 @@ function TabDropdown({
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              data-testid={`zone-tab-dropdown-option-${tab.id}`}
               onClick={() => {
                 onTabChange?.(tab.id);
                 setOpen(false);

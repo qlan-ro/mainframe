@@ -13,6 +13,7 @@ interface RailButtonProps {
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
+  testId?: string;
   children: React.ReactNode;
 }
 
@@ -23,12 +24,14 @@ export function RailButton({
   draggable,
   onDragStart,
   onDragEnd,
+  testId,
   children,
 }: RailButtonProps): React.ReactElement {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
+          data-testid={testId}
           onClick={onClick}
           title={title}
           draggable={draggable}
@@ -145,6 +148,7 @@ export function RailSection({ zoneId }: RailSectionProps): React.ReactElement {
         return (
           <RailButton
             key={tabId}
+            testId={`zone-rail-button-${tabId}`}
             active={isActive}
             onClick={() => handleClick(tabId)}
             title={tw.label}

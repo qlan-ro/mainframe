@@ -197,6 +197,7 @@ export function SearchPalette(): React.ReactElement | null {
         <button
           type="button"
           key={`s-${item.id}`}
+          data-testid={`search-palette-session-${item.id}`}
           className={`w-[calc(100%-0.5rem)] text-left bg-transparent border-0 flex items-center gap-2 px-3 py-2 cursor-pointer rounded-mf-input mx-1 ${idx === selectedIndex ? 'bg-mf-hover text-mf-text-primary' : 'text-mf-text-secondary hover:bg-mf-hover/50'}`}
           onMouseEnter={() => setSelectedIndex(idx)}
           onClick={() => handleSelect(item)}
@@ -241,6 +242,7 @@ export function SearchPalette(): React.ReactElement | null {
         <button
           type="button"
           key={`f-${item.id}`}
+          data-testid={`search-palette-file-${item.id}`}
           className={`w-[calc(100%-0.5rem)] text-left bg-transparent border-0 flex items-center gap-2 px-3 py-2 cursor-pointer rounded-mf-input mx-1 ${idx === selectedIndex ? 'bg-mf-hover text-mf-text-primary' : 'text-mf-text-secondary hover:bg-mf-hover/50'}`}
           onMouseEnter={() => setSelectedIndex(idx)}
           onClick={() => handleSelect(item)}
@@ -291,6 +293,7 @@ export function SearchPalette(): React.ReactElement | null {
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[min(20vh,120px)]" onClick={close}>
       <div
         ref={dialogRef}
+        data-testid="search-palette-dialog"
         role="dialog"
         aria-modal="true"
         aria-label="Search"
@@ -303,6 +306,7 @@ export function SearchPalette(): React.ReactElement | null {
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-mf-border/50">
           <Search size={14} className="text-mf-text-secondary shrink-0" />
           <input
+            data-testid="search-palette-input"
             ref={inputRef}
             type="text"
             value={query}

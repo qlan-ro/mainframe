@@ -56,10 +56,10 @@ export function NewBranchDialog({
   };
 
   return (
-    <div className="min-w-[280px]">
+    <div data-testid="new-branch-dialog" className="min-w-[280px]">
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-mf-border">
-        <button onClick={onBack} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
+        <button data-testid="new-branch-back" onClick={onBack} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
           <ArrowLeft size={14} />
         </button>
         <span className="text-sm font-medium text-mf-text-primary">New Branch</span>
@@ -70,6 +70,7 @@ export function NewBranchDialog({
         <div>
           <label className="block text-xs font-medium text-mf-text-secondary mb-1">Branch name</label>
           <input
+            data-testid="new-branch-name-input"
             ref={inputRef}
             value={name}
             onChange={(e) => {
@@ -91,6 +92,7 @@ export function NewBranchDialog({
         <div>
           <label className="block text-xs font-medium text-mf-text-secondary mb-1">Start from</label>
           <select
+            data-testid="new-branch-start-point-select"
             value={startPoint}
             onChange={(e) => setStartPoint(e.target.value)}
             disabled={creating}
@@ -118,6 +120,7 @@ export function NewBranchDialog({
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-1">
           <button
+            data-testid="new-branch-cancel"
             type="button"
             onClick={onBack}
             disabled={creating}
@@ -126,6 +129,7 @@ export function NewBranchDialog({
             Cancel
           </button>
           <button
+            data-testid="new-branch-create"
             type="submit"
             disabled={creating || !name.trim()}
             className={cn(

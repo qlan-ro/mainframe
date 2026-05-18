@@ -98,6 +98,7 @@ export function SettingsModal(): React.ReactElement | null {
         <div className="flex items-center justify-between px-5 py-3 border-b border-mf-divider">
           <h2 className="text-mf-title font-semibold text-mf-text-primary">Settings</h2>
           <button
+            data-testid="settings-modal-close"
             onClick={close}
             className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
           >
@@ -132,6 +133,7 @@ export function SettingsModal(): React.ReactElement | null {
                       return (
                         <button
                           key={adapter.id}
+                          data-testid={`settings-modal-sidebar-provider-${adapter.id}`}
                           onClick={() => {
                             setActiveTab('providers');
                             setSelectedProvider(adapter.id);

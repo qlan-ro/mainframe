@@ -190,6 +190,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
               <div className="flex-1 flex items-center gap-1 px-2 py-1 rounded border border-mf-border bg-mf-app-bg">
                 <Search size={12} className="text-mf-text-secondary shrink-0" />
                 <input
+                  data-testid="branch-popover-search-input"
                   ref={searchRef}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -200,6 +201,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid="branch-popover-fetch"
                     onClick={actions.handleFetch}
                     disabled={busy}
                     aria-label="Fetch"
@@ -222,6 +224,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
             {/* Quick actions */}
             <div className="border-b border-mf-border">
               <button
+                data-testid="branch-popover-new-branch"
                 onClick={() => {
                   setNewBranchFrom(undefined);
                   setView('new-branch');
@@ -232,6 +235,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                 <span>New Branch...</span>
               </button>
               <button
+                data-testid="branch-popover-update-all"
                 onClick={actions.handleUpdateAll}
                 disabled={busy}
                 className={cn(
@@ -243,6 +247,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                 <span>Update All</span>
               </button>
               <button
+                data-testid="branch-popover-push"
                 onClick={handleGlobalPush}
                 disabled={busy}
                 className={cn(
@@ -328,12 +333,13 @@ function RenameView({
   return (
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-1.5">
-        <button onClick={onBack} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
+        <button data-testid="rename-branch-back" onClick={onBack} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
           <ArrowLeft size={14} />
         </button>
         <span className="text-sm font-medium text-mf-text-primary">Rename Branch</span>
       </div>
       <input
+        data-testid="rename-branch-name-input"
         ref={inputRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -345,12 +351,14 @@ function RenameView({
       />
       <div className="flex justify-end gap-2">
         <button
+          data-testid="rename-branch-cancel"
           onClick={onBack}
           className="px-3 py-1 text-sm rounded border border-mf-border text-mf-text-secondary hover:bg-mf-hover"
         >
           Cancel
         </button>
         <button
+          data-testid="rename-branch-rename"
           onClick={onSubmit}
           disabled={busy || !value.trim()}
           className={cn(
