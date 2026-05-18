@@ -15,12 +15,26 @@ import { ClaudeSession } from './session.js';
 import { probeModels as doProbeModels } from './probe-models.js';
 import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';
+import { ClaudePlanModeHandler } from './plan-mode-handler.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
 import manifest from './manifest.json' with { type: 'json' };
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const EXTENDED_CONTEXT_WINDOW = 1_000_000;
 const CLAUDE_MODELS: AdapterModel[] = [
+  // The CLI accepts "default" as an alias that resolves to the user's tier default
+  // at spawn time (Opus 4.7 on Max with 1M merge enabled). The probe replaces this
+  // with the live catalog, but keep the label aligned with the current upstream default.
+  {
+    id: 'default',
+    label: 'Default - Opus 4.7',
+    description: 'Opus 4.7 with 1M context',
+    contextWindow: EXTENDED_CONTEXT_WINDOW,
+    supportsEffort: true,
+    supportsFastMode: true,
+    supportsAutoMode: true,
+    isDefault: true,
+  },
   {
     id: 'claude-opus-4-6',
     label: 'Opus 4.6',
@@ -97,12 +111,34 @@ const CLAUDE_MODELS: AdapterModel[] = [
   { id: 'claude-3-5-haiku-20241022', label: 'Haiku 3.5', contextWindow: DEFAULT_CONTEXT_WINDOW },
 ];
 
+// The CLI's model probe doesn't expose context window size — only a marketing
+// description like "Opus 4.7 with 1M context". Reconcile probed entries with
+// the static catalog so known IDs retain their authoritative window, and
+// unknown IDs fall back to a description sniff before the 200k default.
+function enrichWithContextWindow(probed: AdapterModel[]): AdapterModel[] {
+  const staticById = new Map(CLAUDE_MODELS.map((m) => [m.id, m]));
+  return probed.map((model) => {
+    if (model.contextWindow) return model;
+    const fromStatic = staticById.get(model.id)?.contextWindow;
+    if (fromStatic) return { ...model, contextWindow: fromStatic };
+    const window = /\b1m\b|1m context/i.test(model.description ?? '')
+      ? EXTENDED_CONTEXT_WINDOW
+      : DEFAULT_CONTEXT_WINDOW;
+    return { ...model, contextWindow: window };
+  });
+}
+
 export class ClaudeAdapter implements Adapter {
   id = 'claude';
-  name = 'Claude CLI';
+  name = manifest.name;
+  readonly capabilities = { planMode: true } as const;
 
   private sessions = new Set<ClaudeSession>();
   private dynamicModels: AdapterModel[] | null = null;
+
+  createPlanModeHandler(): unknown {
+    return new ClaudePlanModeHandler();
+  }
 
   async isInstalled(): Promise<boolean> {
     return new Promise((resolve) => {
@@ -132,23 +168,27 @@ export class ClaudeAdapter implements Adapter {
   async probeModels(): Promise<AdapterModel[] | null> {
     const models = await doProbeModels('claude');
     if (models) {
-      this.dynamicModels = models;
+      this.dynamicModels = enrichWithContextWindow(models);
     }
-    return models;
+    return this.dynamicModels;
   }
 
   getToolCategories(): ToolCategories {
     return {
       explore: new Set(['Read', 'Glob', 'Grep', 'LS']),
       hidden: new Set([
+        // TodoV1
+        'TodoWrite',
+        // TodoV2 (gated by isTodoV2Enabled() in the CLI; emitted as _TaskProgress)
+        'TaskCreate',
+        'TaskUpdate',
         'TaskList',
         'TaskGet',
         'TaskOutput',
         'TaskStop',
-        'TodoWrite',
-        'Skill',
+        // Mode/internal
         'EnterPlanMode',
-        'AskUserQuestion',
+        'AskUserQuestion', // pending state surfaces via BottomCard
         'ToolSearch',
       ]),
       progress: new Set(['TaskCreate', 'TaskUpdate']),
@@ -207,7 +247,7 @@ export class ClaudeAdapter implements Adapter {
     return skills.deleteAgent(agentId, projectPath);
   }
 
-  async listExternalSessions(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]> {
-    return listExternalSessions(projectPath, excludeSessionIds);
+  async listExternalSessions(projectPaths: string[], excludeSessionIds: string[]): Promise<ExternalSession[]> {
+    return listExternalSessions(projectPaths, excludeSessionIds);
   }
 }

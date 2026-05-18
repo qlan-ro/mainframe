@@ -28,11 +28,18 @@ export function tunnelRoutes(ctx: RouteContext): Router {
       return;
     }
 
-    const token = typeof req.body?.token === 'string' ? req.body.token : undefined;
-    const namedUrl = typeof req.body?.url === 'string' ? req.body.url : undefined;
+    const bodyToken = typeof req.body?.token === 'string' ? req.body.token : undefined;
+    const bodyUrl = typeof req.body?.url === 'string' ? req.body.url : undefined;
+
+    // Fall back to the persisted config when the renderer doesn't pass a token —
+    // this happens when the user clicks "Start" on an already-configured named
+    // tunnel (the renderer cleared the token field after the initial Save).
+    const cfg = getConfig();
+    const token = bodyToken ?? cfg.tunnelToken;
+    const namedUrl = bodyUrl ?? cfg.tunnelUrl;
 
     const existing = ctx.tunnelManager.getUrl('daemon');
-    if (existing && !token) {
+    if (existing && !bodyToken) {
       res.json({ success: true, data: { url: existing } });
       return;
     }
@@ -41,8 +48,9 @@ export function tunnelRoutes(ctx: RouteContext): Router {
       const url = await ctx.tunnelManager.start(ctx.port, 'daemon', token ? { token, url: namedUrl } : undefined);
       ctx.setTunnelUrl?.(url);
 
-      if (token && namedUrl) {
-        saveConfig({ tunnel: true, tunnelToken: token, tunnelUrl: namedUrl });
+      // Only persist new credentials when the caller explicitly provided them.
+      if (bodyToken && bodyUrl) {
+        saveConfig({ tunnel: true, tunnelToken: bodyToken, tunnelUrl: bodyUrl });
       } else {
         saveConfig({ tunnel: true });
       }

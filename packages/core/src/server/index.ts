@@ -12,6 +12,7 @@ import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import { LspRegistry, LspManager, LspConnectionHandler } from '../lsp/index.js';
+import { FileWatcherService } from '../files/file-watcher.js';
 
 const log = createChildLogger('server');
 
@@ -51,10 +52,12 @@ export function createServerManager(
   chats.setPushService(pushService);
   const httpServer = createServer(app);
   let _wsManager: WebSocketManager | null = null;
+  let _fileWatcher: FileWatcherService | null = null;
 
   return {
     async start(port: number): Promise<void> {
-      _wsManager = new WebSocketManager(httpServer, chats, lspHandler);
+      _fileWatcher = new FileWatcherService((event) => _wsManager?.broadcastEvent(event));
+      _wsManager = new WebSocketManager(httpServer, chats, lspHandler, _fileWatcher);
 
       return new Promise((resolve) => {
         httpServer.listen(port, '127.0.0.1', () => {
@@ -66,6 +69,7 @@ export function createServerManager(
 
     async stop(): Promise<void> {
       await lspManager.shutdownAll();
+      _fileWatcher?.stopAll();
       _wsManager?.close();
       return new Promise((resolve, reject) => {
         httpServer.close((err) => {

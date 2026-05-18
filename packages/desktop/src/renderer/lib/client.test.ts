@@ -74,4 +74,65 @@ describe('DaemonClient', () => {
 
     expect(attemptReconnect).toHaveBeenCalledOnce();
   });
+
+  it('subscribeFile sends subscribe:file message when socket is open', () => {
+    const client = new DaemonClient();
+    client.connect();
+    const socket = created[0]!;
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+
+    client.subscribeFile('/tmp/foo.ts');
+
+    expect(socket.send).toHaveBeenCalledWith(JSON.stringify({ type: 'subscribe:file', path: '/tmp/foo.ts' }));
+  });
+
+  it('unsubscribeFile sends unsubscribe:file message when socket is open', () => {
+    const client = new DaemonClient();
+    client.connect();
+    const socket = created[0]!;
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+
+    client.unsubscribeFile('/tmp/foo.ts');
+
+    expect(socket.send).toHaveBeenCalledWith(JSON.stringify({ type: 'unsubscribe:file', path: '/tmp/foo.ts' }));
+  });
+
+  it('tunnel:status events are routed to onEvent handlers', () => {
+    const client = new DaemonClient();
+    client.connect();
+    const socket = created[0]!;
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+
+    const handler = vi.fn();
+    client.onEvent(handler);
+
+    const event = {
+      type: 'tunnel:status',
+      state: 'dns_verified',
+      url: 'https://x.trycloudflare.com',
+      dnsVerified: true,
+    };
+    socket.onmessage?.({ data: JSON.stringify(event) });
+
+    expect(handler).toHaveBeenCalledWith(event);
+  });
+
+  it('file:changed events are routed to onEvent handlers', () => {
+    const client = new DaemonClient();
+    client.connect();
+    const socket = created[0]!;
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+
+    const handler = vi.fn();
+    client.onEvent(handler);
+
+    const event = { type: 'file:changed', path: '/tmp/foo.ts' };
+    socket.onmessage?.({ data: JSON.stringify(event) });
+
+    expect(handler).toHaveBeenCalledWith(event);
+  });
 });

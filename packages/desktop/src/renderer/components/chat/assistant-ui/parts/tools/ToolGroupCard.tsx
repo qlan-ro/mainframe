@@ -1,7 +1,7 @@
 import { Layers, Eye, Search } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { ErrorDot, shortFilename } from './shared';
+import { StatusDot, shortFilename, ErrorDot } from './shared';
 import type { ToolGroupItem } from '../../convert-message';
 
 function toolGroupSummary(items: ToolGroupItem[]): string {
@@ -38,17 +38,20 @@ function groupItemIcon(item: ToolGroupItem) {
 export function ToolGroupCard({ args }: { args: Record<string, unknown> }) {
   const items = (args.items as ToolGroupItem[]) || [];
   const anyError = items.some((i) => i.isError);
+  const aggregateResult = items.some((i) => i.result !== undefined) ? 'done' : undefined;
 
   return (
     <CollapsibleToolCard
       variant="compact"
+      hideToggle
+      wrapperClassName="border border-mf-divider rounded-mf-card overflow-hidden"
       header={
         <>
           <Layers size={15} className="text-mf-text-secondary/40 shrink-0" />
           <span className="text-mf-body text-mf-text-secondary/60">{toolGroupSummary(items)}</span>
         </>
       }
-      statusDot={anyError ? <span className="w-2 h-2 rounded-full bg-mf-chat-error shrink-0" /> : undefined}
+      trailing={<StatusDot result={aggregateResult} isError={anyError} />}
     >
       <div className="ml-5 border-l border-mf-divider/50">
         {items.map((item) => (

@@ -245,6 +245,25 @@ describe('convertMessage', () => {
       expect(part.toolName).toBe('_TaskGroup');
     });
 
+    it('skips image blocks in assistant messages (rendered directly from original DisplayMessage)', () => {
+      const msg = display('assistant', [
+        { type: 'text', text: 'Here is a screenshot:' },
+        { type: 'image', mediaType: 'image/png', data: 'base64data==' },
+      ]);
+      const result = convertMessage(msg);
+      // Only the text part should appear; the image block is intentionally excluded
+      // from the ThreadMessageLike content — it is accessed directly from the original
+      // DisplayMessage by AssistantMessage via getExternalStoreMessages.
+      expect(result.content).toEqual([{ type: 'text', text: 'Here is a screenshot:' }]);
+    });
+
+    it('produces fallback empty text when assistant message has only image blocks', () => {
+      const msg = display('assistant', [{ type: 'image', mediaType: 'image/jpeg', data: 'abc' }]);
+      const result = convertMessage(msg);
+      // No text/tool parts → fallback empty text (image is rendered separately)
+      expect(result.content).toEqual([{ type: 'text', text: '' }]);
+    });
+
     it('handles mixed content: text, thinking, tool_call, error', () => {
       const msg = display('assistant', [
         { type: 'thinking', thinking: 'hmm' },

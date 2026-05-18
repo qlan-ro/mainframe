@@ -30,9 +30,12 @@ export interface SessionOptions {
 
 export interface SessionSpawnOptions {
   model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'yolo';
+  permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+  planMode?: boolean;
   executablePath?: string;
   systemPrompt?: string;
+  /** Reasoning effort passed as --effort to the CLI. Only honored by adapters whose selected model supports it. */
+  effort?: import('./chat.js').ChatEffort;
 }
 
 export interface AdapterProcess {
@@ -124,6 +127,19 @@ export interface SessionSink {
   onQueuedProcessed(uuid: string): void;
   onTodoUpdate(todos: import('./chat.js').TodoItem[]): void;
   onPrDetected(pr: DetectedPr): void;
+  /** CLI-synthesized feedback text (e.g. unknown-command errors) shown as system messages. */
+  onCliMessage(text: string): void;
+  /** A skill was loaded via slash-command; show a collapsible skill card instead of raw text. */
+  onSkillLoaded(entry: { skillName: string; path: string; content: string }): void;
+  /**
+   * Inline content blocks from a subagent stream event under the parent assistant
+   * message that owns the matching Agent/Task tool_use. Caller must have stamped
+   * each block's `.parentToolUseId` field with the same value passed as the
+   * `parentToolUseId` argument so the display pipeline can group them under the
+   * matching Task card. Implementations must no-op silently if `parentToolUseId`
+   * does not match any known tool_use block.
+   */
+  onSubagentChild(parentToolUseId: string, blocks: import('./chat.js').MessageContent[]): void;
 }
 
 export interface AdapterSession {
@@ -131,6 +147,24 @@ export interface AdapterSession {
   readonly adapterId: string;
   readonly projectPath: string;
   readonly isSpawned: boolean;
+  /**
+   * True when the adapter's protocol echoes a per-message replay ack that
+   * Mainframe can use to drive `sink.onQueuedProcessed(uuid)` — e.g. the
+   * Claude CLI's `isReplay` user event over stream-json. Adapters whose
+   * `sendMessage` consumes the message synchronously (Codex `turn/start`,
+   * Claude SDK `streamFollowUp`) leave this `false` (or undefined). The
+   * chat-manager only enrolls a message in `queuedRefs` when this is true,
+   * so chats on non-acknowledging adapters never get stuck in
+   * `processState='working'` waiting for an ack that will never arrive.
+   */
+  readonly supportsReplayAck?: boolean;
+
+  /**
+   * Epoch ms of last protocol activity (stdin write or stdout event). Optional
+   * — adapters that don't track activity may omit it, in which case the
+   * idle-eviction scanner treats the session as always-active.
+   */
+  readonly lastActivityAt?: number;
 
   spawn(options?: SessionSpawnOptions, sink?: SessionSink): Promise<AdapterProcess>;
   kill(): Promise<void>;
@@ -141,6 +175,7 @@ export interface AdapterSession {
   interrupt(): Promise<void>;
   setModel(model: string): Promise<void>;
   setPermissionMode(mode: string): Promise<void>;
+  setPlanMode(on: boolean): Promise<void>;
   sendCommand(command: string, args?: string): Promise<void>;
   cancelQueuedMessage(uuid: string): Promise<boolean>;
 
@@ -157,15 +192,21 @@ export interface AdapterInfo {
   installed: boolean;
   version?: string;
   models: AdapterModel[];
+  capabilities: {
+    planMode: boolean;
+  };
 }
 
 export interface AdapterModel {
   id: string;
   label: string;
+  description?: string;
   contextWindow?: number;
   supportsEffort?: boolean;
   supportsFastMode?: boolean;
   supportsAutoMode?: boolean;
+  /** Marks the provider default. When the user hasn't picked a specific model, this one is used. */
+  isDefault?: boolean;
 }
 
 export interface ExternalSession {
@@ -184,6 +225,9 @@ export interface ExternalSession {
 export interface Adapter {
   id: string;
   name: string;
+  readonly capabilities: {
+    planMode: boolean;
+  };
 
   isInstalled(): Promise<boolean>;
   getVersion(): Promise<string | null>;
@@ -211,5 +255,14 @@ export interface Adapter {
   ): Promise<import('./skill.js').AgentConfig>;
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
-  listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
+  listExternalSessions?(projectPaths: string[], excludeSessionIds: string[]): Promise<ExternalSession[]>;
+
+  /**
+   * Factory for an adapter-specific plan-mode action handler.
+   *
+   * Returns `unknown` here to avoid a core→types dependency cycle — core casts
+   * the result to `PlanModeActionHandler` (defined in
+   * `packages/core/src/chat/plan-mode-actions.ts`).
+   */
+  createPlanModeHandler?(): unknown;
 }

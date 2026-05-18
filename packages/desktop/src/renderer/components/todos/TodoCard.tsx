@@ -98,6 +98,7 @@ export const TodoCard = React.memo(function TodoCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid={`todos-card-start-${todo.id}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onStartSession(todo);
@@ -114,6 +115,7 @@ export const TodoCard = React.memo(function TodoCard({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                data-testid={`todos-card-edit-${todo.id}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit(todo);
@@ -129,6 +131,7 @@ export const TodoCard = React.memo(function TodoCard({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                data-testid={`todos-card-delete-${todo.id}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(todo.id);

@@ -47,6 +47,12 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
+    server: {
+      // Honor VITE_PORT from .env so worktrees on dev ports don't collide
+      // with the production renderer's default 5173.
+      port: Number(process.env['VITE_PORT']) || 5173,
+      strictPort: true,
+    },
     build: {
       rollupOptions: {
         input: {

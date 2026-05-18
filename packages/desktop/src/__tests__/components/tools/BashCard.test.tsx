@@ -23,16 +23,16 @@ describe('BashCard', () => {
     expect(screen.getByText(/npm install/)).toBeInTheDocument();
   });
 
-  it('truncates long commands to 80 characters with ellipsis', () => {
+  it('renders the full command and lets CSS truncate based on available width', () => {
     const longCmd = 'x'.repeat(100);
     render(
       <TooltipProvider>
         <BashCard args={{ command: longCmd }} result={undefined} isError={undefined} />
       </TooltipProvider>,
     );
-    // truncated version shows in the header span
-    const truncated = longCmd.slice(0, 80) + '...';
-    expect(screen.getByText(truncated)).toBeInTheDocument();
+    const span = screen.getByText(longCmd);
+    expect(span).toBeInTheDocument();
+    expect(span.className).toMatch(/truncate/);
   });
 
   it('shows pulsing status dot when result is undefined (running)', () => {
@@ -70,14 +70,15 @@ describe('BashCard', () => {
     expect(screen.getByText(/my-output-text/)).toBeInTheDocument();
   });
 
-  it('shows full command in expanded section after opening', async () => {
+  it('shows command output in expanded section after opening', async () => {
     render(
       <TooltipProvider>
         <BashCard args={{ command: 'echo hello' }} result="hello" isError={false} />
       </TooltipProvider>,
     );
     await userEvent.click(screen.getByRole('button'));
-    // expanded pre shows "$ echo hello"
-    expect(screen.getByText(/\$ echo hello/)).toBeInTheDocument();
+    // The expanded body shows ONLY the command output. The command itself is
+    // already in the always-visible header; echoing "$ command" was redundant.
+    expect(screen.getByText('hello')).toBeInTheDocument();
   });
 });

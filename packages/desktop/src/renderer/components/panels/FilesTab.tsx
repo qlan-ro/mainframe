@@ -99,6 +99,7 @@ function FileTreeNode({
     <>
       <button
         ref={nodeRef}
+        data-testid={`files-tree-node-${entry.path}`}
         onClick={handleClick}
         onContextMenu={(e) => onContextMenu(e, entry.path, entry.type)}
         className={cn(
@@ -201,8 +202,9 @@ export function FilesTab(): React.ReactElement {
       e.preventDefault();
       if (!activeProject) return;
 
-      const sep = activeProject.path.includes('\\') ? '\\' : '/';
-      const fullPath = `${activeProject.path}${sep}${entryPath}`;
+      const basePath = activeChatWorktreePath ?? activeProject.path;
+      const sep = basePath.includes('\\') ? '\\' : '/';
+      const fullPath = `${basePath}${sep}${entryPath}`;
 
       setContextMenu({
         x: e.clientX,
@@ -238,7 +240,7 @@ export function FilesTab(): React.ReactElement {
         ],
       });
     },
-    [activeProject],
+    [activeProject, activeChatWorktreePath],
   );
 
   if (!activeProject) {
@@ -255,6 +257,7 @@ export function FilesTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="files-root-toggle"
                   onClick={() => toggleTreePath('.')}
                   onContextMenu={(e) => handleContextMenu(e, '.', 'directory')}
                   className="flex-1 flex items-center gap-1 py-1 px-2 text-mf-small hover:bg-mf-hover/50 rounded-mf-input text-left font-semibold text-mf-text-primary min-w-0"
@@ -269,6 +272,7 @@ export function FilesTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="files-refresh"
                   onClick={() => setRefreshKey((k) => k + 1)}
                   className="hidden @min-[160px]:block p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
                   aria-label="Refresh file tree"

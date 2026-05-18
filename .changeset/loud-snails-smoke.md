@@ -1,0 +1,4 @@
+---
+---
+
+Ignore local planning docs

@@ -1,18 +1,65 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import type { Chat } from '@qlan-ro/mainframe-types';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
 import { extractSessionFilePaths } from '../../messages/session-files.js';
+import { readToolResultFromJsonl } from '../../messages/read-tool-result-from-jsonl.js';
+import { computeSessionFilePath } from '../../chat/event-handler.js';
 
 const logger = createChildLogger('routes:chats');
 
 export function chatRoutes(ctx: RouteContext): Router {
   const router = Router();
 
-  router.get('/api/chats', (_req: Request, res: Response) => {
-    const chats = ctx.chats.listAllChats();
+  const TAG_NAME_PATTERN = /^[a-z0-9-]+$/;
+
+  const ListQuery = z.object({
+    project: z.string().optional(),
+    tags: z
+      .string()
+      .optional()
+      .refine(
+        (v) =>
+          v === undefined ||
+          v
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .every((t) => TAG_NAME_PATTERN.test(t)),
+        { message: 'Tag values must match [a-z0-9-]+' },
+      ),
+    synthetic: z.string().optional(),
+  });
+
+  router.get('/api/chats', (req: Request, res: Response) => {
+    const parsed = ListQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: parsed.error.message });
+      return;
+    }
+    const tagsAll = parsed.data.tags
+      ? parsed.data.tags
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined;
+    const synth = parsed.data.synthetic
+      ? new Set(
+          parsed.data.synthetic
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+        )
+      : new Set<string>();
+    const chats = ctx.chats.listFiltered({
+      projectId: parsed.data.project,
+      tagsAll,
+      hasWorktree: synth.has('has-worktree'),
+      includeArchived: true,
+    });
     res.json({ success: true, data: chats });
   });
 
@@ -82,6 +129,7 @@ export function chatRoutes(ctx: RouteContext): Router {
   });
 
   const pinSchema = z.object({ pinned: z.boolean() });
+  const effortSchema = z.object({ effort: z.enum(['low', 'medium', 'high']).nullable() });
 
   router.patch('/api/chats/:id/pinned', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
@@ -104,11 +152,34 @@ export function chatRoutes(ctx: RouteContext): Router {
     }
   });
 
+  router.patch('/api/chats/:id/effort', (req: Request, res: Response) => {
+    const chatId = param(req, 'id');
+    const parsed = effortSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: 'effort must be one of "low" | "medium" | "high" | null' });
+      return;
+    }
+    try {
+      // Explicit null clears the stored effort; allowed effort values pass through.
+      // The DB update loop skips undefined keys, so we cast to pass null through.
+      const effortUpdate = parsed.data.effort;
+      ctx.db.chats.update(chatId, { effort: effortUpdate as Chat['effort'] });
+      const chat = ctx.db.chats.get(chatId);
+      if (!chat) {
+        res.status(404).json({ success: false, error: 'Chat not found' });
+        return;
+      }
+      res.json({ success: true, data: chat });
+    } catch (err) {
+      logger.warn({ err, chatId }, 'Failed to update effort');
+      res.status(500).json({ success: false, error: 'Operation failed' });
+    }
+  });
+
   router.post('/api/chats/:id/unarchive', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
     try {
-      ctx.db.chats.update(chatId, { status: 'active' });
-      const chat = ctx.db.chats.get(chatId);
+      const chat = ctx.chats.unarchiveChat(chatId);
       if (!chat) {
         res.status(404).json({ success: false, error: 'Chat not found' });
         return;
@@ -129,6 +200,46 @@ export function chatRoutes(ctx: RouteContext): Router {
       const messages = await ctx.chats.getMessagesFromDisk(chatId);
       const files = extractSessionFilePaths(messages);
       res.json({ files });
+    }),
+  );
+
+  const ToolResultParams = z.object({
+    id: z.string().min(1),
+    toolUseId: z.string().regex(/^[a-zA-Z0-9_-]+$/),
+  });
+
+  router.get(
+    '/api/chats/:id/tool-result/:toolUseId',
+    asyncHandler(async (req: Request, res: Response) => {
+      const parsed = ToolResultParams.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: parsed.error.message });
+        return;
+      }
+      const chat = ctx.chats.getChat(parsed.data.id);
+      if (!chat) {
+        res.status(404).json({ success: false, error: 'Chat not found' });
+        return;
+      }
+      let filePath = chat.sessionFilePath;
+      if (!filePath && chat.claudeSessionId) {
+        const projectPath = ctx.db.projects.get(chat.projectId)?.path ?? null;
+        const cwd = chat.worktreePath ?? projectPath;
+        if (cwd) {
+          filePath = computeSessionFilePath(cwd, chat.claudeSessionId);
+          ctx.db.chats.update(chat.id, { sessionFilePath: filePath });
+        }
+      }
+      if (!filePath) {
+        res.status(404).json({ success: false, error: 'No session file for chat' });
+        return;
+      }
+      const content = await readToolResultFromJsonl(filePath, parsed.data.toolUseId);
+      if (content === null) {
+        res.status(404).json({ success: false, error: 'Tool result not available' });
+        return;
+      }
+      res.json({ success: true, data: { content } });
     }),
   );
 

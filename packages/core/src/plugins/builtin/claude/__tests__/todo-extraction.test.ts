@@ -20,6 +20,9 @@ function createMockSink(): SessionSink {
     onQueuedProcessed: vi.fn(),
     onTodoUpdate: vi.fn(),
     onPrDetected: vi.fn(),
+    onCliMessage: vi.fn(),
+    onSkillLoaded: vi.fn(),
+    onSubagentChild: vi.fn(),
   };
 }
 
@@ -33,6 +36,9 @@ function createMockSession(): ClaudeSession {
       lastAssistantUsage: undefined,
       activeTasks: new Map(),
       pendingCancelCallbacks: new Map(),
+      pendingPrCreates: new Set(),
+      pendingPrMutations: new Map(),
+      toolUseRegistry: new Map(),
     },
     clearInterruptTimer: vi.fn(),
     requestContextUsage: vi.fn(),

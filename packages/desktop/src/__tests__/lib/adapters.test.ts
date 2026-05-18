@@ -5,9 +5,10 @@ import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 const mockAdapters: AdapterInfo[] = [
   {
     id: 'claude',
-    name: 'Claude CLI',
-    description: 'Claude CLI adapter',
+    name: 'Claude Code',
+    description: 'Claude Code adapter',
     installed: true,
+    capabilities: { planMode: true },
     models: [
       { id: 'claude-opus-4-6', label: 'Opus 4.6', contextWindow: 200_000 },
       { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', contextWindow: 200_000 },
@@ -34,8 +35,9 @@ describe('getModelContextWindow', () => {
     expect(getModelContextWindow('claude-opus-4-6', mockAdapters)).toBe(200_000);
   });
 
-  it('defaults to 200K for unknown models', () => {
-    expect(getModelContextWindow('unknown-model', mockAdapters)).toBe(200_000);
+  it('returns undefined for unknown models so callers can hide percentage UI', () => {
+    expect(getModelContextWindow('unknown-model', mockAdapters)).toBeUndefined();
+    expect(getModelContextWindow(undefined, mockAdapters)).toBeUndefined();
   });
 });
 

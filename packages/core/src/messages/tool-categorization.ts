@@ -9,6 +9,10 @@ export function isExploreTool(name: string, categories: ToolCategories): boolean
 export function isHiddenTool(name: string, categories: ToolCategories): boolean {
   return categories.hidden.has(name);
 }
+export function isHiddenToolPart(name: string, category: string | undefined, categories: ToolCategories): boolean {
+  if (name === 'AskUserQuestion' && category !== undefined) return category === 'hidden';
+  return isHiddenTool(name, categories);
+}
 export function isTaskProgressTool(name: string, categories: ToolCategories): boolean {
   return categories.progress.has(name);
 }

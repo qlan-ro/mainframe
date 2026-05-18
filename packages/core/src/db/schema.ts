@@ -51,6 +51,23 @@ export function initializeSchema(db: Database.Database): void {
       created_at  TEXT NOT NULL,
       last_seen   TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      name       TEXT PRIMARY KEY,
+      color      TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_tags (
+      chat_id    TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      tag        TEXT NOT NULL REFERENCES tags(name) ON UPDATE CASCADE,
+      source     TEXT NOT NULL DEFAULT 'user' CHECK (source IN ('user')),
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (chat_id, tag, source)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_tags_chat ON chat_tags(chat_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_tags_tag  ON chat_tags(tag);
   `);
 
   // Migrations
@@ -91,9 +108,42 @@ export function initializeSchema(db: Database.Database): void {
   if (!cols.some((c) => c.name === 'pinned')) {
     db.exec('ALTER TABLE chats ADD COLUMN pinned INTEGER DEFAULT 0');
   }
+  if (!cols.some((c) => c.name === 'effort')) {
+    db.exec('ALTER TABLE chats ADD COLUMN effort TEXT');
+  }
+  if (!cols.some((c) => c.name === 'detected_prs')) {
+    db.exec("ALTER TABLE chats ADD COLUMN detected_prs TEXT DEFAULT '[]'");
+  }
+  if (!cols.some((c) => c.name === 'plan_mode')) {
+    db.exec('ALTER TABLE chats ADD COLUMN plan_mode INTEGER NOT NULL DEFAULT 0');
+    db.exec("UPDATE chats SET plan_mode = 1, permission_mode = 'default' WHERE permission_mode = 'plan'");
+  }
+  if (!cols.some((c) => c.name === 'session_file_path')) {
+    db.exec('ALTER TABLE chats ADD COLUMN session_file_path TEXT');
+  }
+
+  const sdkChats = db.prepare("SELECT COUNT(*) as n FROM chats WHERE adapter_id = 'claude-sdk'").get() as { n: number };
+  if (sdkChats.n > 0) {
+    db.exec("UPDATE chats SET adapter_id = 'claude' WHERE adapter_id = 'claude-sdk'");
+  }
 
   const projectCols = db.pragma('table_info(projects)') as { name: string }[];
   if (!projectCols.some((c) => c.name === 'parent_project_id')) {
     db.exec('ALTER TABLE projects ADD COLUMN parent_project_id TEXT REFERENCES projects(id)');
+  }
+
+  const planModeSettings = db
+    .prepare("SELECT id, key FROM settings WHERE category='provider' AND key LIKE '%.defaultMode' AND value='plan'")
+    .all() as { id: string; key: string }[];
+  for (const { id, key } of planModeSettings) {
+    const now = new Date().toISOString();
+    const prefix = key.slice(0, -'.defaultMode'.length);
+    const planKey = `${prefix}.defaultPlanMode`;
+    db.prepare("UPDATE settings SET value='default', updated_at=? WHERE id=?").run(now, id);
+    db.prepare(
+      `INSERT INTO settings (id, category, key, value, updated_at)
+       VALUES (?, 'provider', ?, 'true', ?)
+       ON CONFLICT(category, key) DO UPDATE SET value='true', updated_at=excluded.updated_at`,
+    ).run(`${id}-plan`, planKey, now);
   }
 }

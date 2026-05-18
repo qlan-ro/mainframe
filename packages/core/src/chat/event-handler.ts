@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type {
   DaemonEvent,
   DisplayMessage,
@@ -8,6 +10,7 @@ import type {
   MessageMetadata,
   ToolCategories,
   ContextUsage,
+  QueuedMessageRef,
 } from '@qlan-ro/mainframe-types';
 import type { DatabaseManager } from '../db/index.js';
 import type { MessageCache } from './message-cache.js';
@@ -17,10 +20,17 @@ import type { PushService } from '../push/push-service.js';
 import { stripMainframeCommandTags } from '../messages/message-parsing.js';
 import { emitDisplayDelta } from './display-emitter.js';
 import { createChildLogger } from '../logger.js';
+import { readNotificationConfig, shouldNotifyPermission } from '../notifications/notification-config.js';
 
 const log = createChildLogger('chat:events');
 
 const PUSH_BODY_MAX_LENGTH = 200;
+
+export function computeSessionFilePath(cwd: string, sessionId: string): string {
+  const encoded = cwd.replace(/[^a-zA-Z0-9-]/g, '-');
+  const safeSession = sessionId.replace(/[^a-zA-Z0-9-]/g, '-');
+  return join(homedir(), '.claude', 'projects', encoded, `${safeSession}.jsonl`);
+}
 
 function getLastAssistantText(msgs: import('@qlan-ro/mainframe-types').ChatMessage[] | undefined): string {
   if (!msgs) return '';
@@ -50,15 +60,29 @@ export class EventHandler {
     private getActiveChat: (chatId: string) => ActiveChat | undefined,
     private emitEvent: (event: DaemonEvent) => void,
     private getToolCategories: (chatId: string) => ToolCategories | undefined = () => undefined,
+    private onQueuedProcessed: (chatId: string, uuid: string) => void = () => {},
+    private onQueuedCleared: (chatId: string) => void = () => {},
+    private getQueuedRefs: (chatId: string) => QueuedMessageRef[] = () => [],
   ) {}
 
   setPushService(service: PushService): void {
     this.pushService = service;
   }
 
-  buildSink(chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>): SessionSink {
+  buildSink(
+    chatId: string,
+    sessionIdOrRespondToPermission: string | ((response: ControlResponse) => Promise<void>),
+    maybeRespondToPermission?: (response: ControlResponse) => Promise<void>,
+  ): SessionSink {
+    const builtForSessionId =
+      typeof sessionIdOrRespondToPermission === 'string' ? sessionIdOrRespondToPermission : undefined;
+    const respondToPermission =
+      typeof sessionIdOrRespondToPermission === 'string' ? maybeRespondToPermission : sessionIdOrRespondToPermission;
+    if (!respondToPermission) throw new Error('respondToPermission is required');
+
     return buildSessionSink(
       chatId,
+      builtForSessionId,
       this.db,
       this.messages,
       this.permissions,
@@ -67,6 +91,9 @@ export class EventHandler {
       respondToPermission,
       this.displayCache,
       this.getToolCategories,
+      this.onQueuedProcessed,
+      this.onQueuedCleared,
+      this.getQueuedRefs,
       this.pushService,
     );
   }
@@ -85,6 +112,7 @@ export class EventHandler {
 
 function buildSessionSink(
   chatId: string,
+  builtForSessionId: string | undefined,
   db: DatabaseManager,
   messages: MessageCache,
   permissions: PermissionManager,
@@ -93,6 +121,9 @@ function buildSessionSink(
   _respondToPermission: (response: ControlResponse) => Promise<void>,
   displayCache: Map<string, DisplayMessage[]>,
   getToolCategories: (chatId: string) => ToolCategories | undefined,
+  onQueuedProcessedCb: (chatId: string, uuid: string) => void,
+  onQueuedClearedCb: (chatId: string) => void,
+  getQueuedRefs: (chatId: string) => QueuedMessageRef[],
   pushService?: PushService,
 ): SessionSink {
   function emitDisplay(): void {
@@ -113,6 +144,13 @@ function buildSessionSink(
       if (!active) return;
       db.chats.update(chatId, { claudeSessionId: sessionId });
       active.chat.claudeSessionId = sessionId;
+      const projectPath = db.projects.get(active.chat.projectId)?.path;
+      const cwd = active.chat.worktreePath ?? projectPath;
+      if (cwd) {
+        const sessionFilePath = computeSessionFilePath(cwd, sessionId);
+        db.chats.update(chatId, { sessionFilePath });
+        active.chat.sessionFilePath = sessionFilePath;
+      }
       emitEvent({ type: 'process.ready', processId: active.session?.id ?? '', claudeSessionId: sessionId });
     },
 
@@ -131,9 +169,9 @@ function buildSessionSink(
       const hasEnterPlanMode = content.some((b: any) => b.type === 'tool_use' && b.name === 'EnterPlanMode');
       if (hasEnterPlanMode) {
         const active = getActiveChat(chatId);
-        if (active && active.chat.permissionMode !== 'plan') {
-          db.chats.update(chatId, { permissionMode: 'plan' });
-          active.chat.permissionMode = 'plan';
+        if (active && active.chat.planMode !== true) {
+          db.chats.update(chatId, { planMode: true });
+          active.chat.planMode = true;
           emitEvent({ type: 'chat.updated', chat: active.chat });
         }
       }
@@ -194,7 +232,9 @@ function buildSessionSink(
           { chatId, requestId: request.requestId, toolName: request.toolName },
           'permission.requested emitted to clients',
         );
-        emitEvent({ type: 'permission.requested', chatId, request });
+        const notifyConfig = readNotificationConfig(db);
+        const notify = shouldNotifyPermission(notifyConfig, request.toolName);
+        emitEvent({ type: 'permission.requested', chatId, request, notify });
 
         // Emit chat.updated so displayStatus flips to 'waiting' on clients
         const active = getActiveChat(chatId);
@@ -202,14 +242,16 @@ function buildSessionSink(
           emitEvent({ type: 'chat.updated', chat: active.chat });
         }
 
-        pushService
-          ?.sendPush({
-            title: 'Permission Required',
-            body: `Agent wants to run: ${request.toolName ?? 'unknown tool'}`,
-            data: { chatId, type: 'permission' },
-            priority: 'high',
-          })
-          .catch((err) => log.warn({ err }, 'push notification failed'));
+        if (notify) {
+          pushService
+            ?.sendPush({
+              title: 'Permission Required',
+              body: `Agent wants to run: ${request.toolName ?? 'unknown tool'}`,
+              data: { chatId, type: 'permission' },
+              priority: 'high',
+            })
+            .catch((err) => log.warn({ err }, 'push notification failed'));
+        }
       } else {
         log.info(
           { chatId, requestId: request.requestId, toolName: request.toolName },
@@ -222,6 +264,11 @@ function buildSessionSink(
       const active = getActiveChat(chatId);
       if (!active) return;
 
+      log.debug(
+        { chatId, sessionId: active.session?.id, subtype: data.subtype, is_error: data.is_error },
+        'onResult: processing session result',
+      );
+
       const cost = data.total_cost_usd ?? 0;
       const tokensInput = data.usage?.input_tokens ?? 0;
       const tokensOutput = data.usage?.output_tokens ?? 0;
@@ -229,19 +276,81 @@ function buildSessionSink(
       const newCost = active.chat.totalCost + cost;
       const newInput = active.chat.totalTokensInput + tokensInput;
       const newOutput = active.chat.totalTokensOutput + tokensOutput;
+      // Bump updatedAt so the session resurfaces to the top of the list when
+      // the AI finishes a turn, not only when the user sends a message.
+      const now = new Date().toISOString();
+
+      // Reconcile cached metadata.queued ↔ chat-manager queuedRefs. The CLI's
+      // isReplay acks can race with our queuedRefs.set (the daemon registers
+      // the ref AFTER awaiting stdin.write; the CLI may already have ack'd),
+      // and renderer-side `queuedMessages` can drift from the daemon when
+      // events arrive out of order. We recompute the canonical state here on
+      // every result event:
+      //   1. cached msg has metadata.queued but no matching ref → orphan flag.
+      //      Strip the flag + emit message.queued.processed for the renderer.
+      //   2. ref has no matching cached msg → orphan ref. Drop it + ack.
+      //   3. Emit a queued.snapshot afterwards so the renderer's composer
+      //      converges on whatever refs the daemon believes are still live.
+      const refsBefore = getQueuedRefs(chatId);
+      const refUuids = new Set(refsBefore.map((r) => r.uuid));
+      const cached = messages.get(chatId) ?? [];
+      const cachedQueuedUuids = new Set<string>();
+      let displayChanged = false;
+
+      for (const m of cached) {
+        const u = m.metadata?.uuid;
+        if (m.metadata?.queued && typeof u === 'string') {
+          cachedQueuedUuids.add(u);
+          if (!refUuids.has(u)) {
+            delete (m.metadata as Record<string, unknown>).queued;
+            delete (m.metadata as Record<string, unknown>).uuid;
+            displayChanged = true;
+            log.warn({ chatId, uuid: u }, 'onResult: orphan metadata.queued (no matching ref) — clearing');
+            emitEvent({ type: 'message.queued.processed', chatId, uuid: u });
+            onQueuedProcessedCb(chatId, u);
+          }
+        }
+      }
+
+      for (const ref of refsBefore) {
+        if (!cachedQueuedUuids.has(ref.uuid)) {
+          log.warn({ chatId, uuid: ref.uuid }, 'onResult: orphan queuedRef (no matching cached message) — pruning');
+          emitEvent({ type: 'message.queued.processed', chatId, uuid: ref.uuid });
+          onQueuedProcessedCb(chatId, ref.uuid);
+        }
+      }
+
+      if (displayChanged) emitDisplay();
+
+      // Force renderer composer to converge on the daemon's refs. Defends
+      // against any out-of-order delivery / dedupe gap that could leave the
+      // renderer's queuedMessages map with stale entries.
+      const refsAfter = getQueuedRefs(chatId);
+      emitEvent({ type: 'message.queued.snapshot', chatId, refs: refsAfter });
+
+      // Result events fire per-turn. While queued messages are still pending
+      // we must NOT flip to idle here, or the thinking indicator drops while
+      // the assistant is still streaming the next queued turn. Use the count
+      // AFTER reconciliation so orphan refs don't pin the state to 'working'
+      // when the CLI is genuinely done.
+      const queueRemaining = refsAfter.length;
+      const nextProcessState: 'idle' | 'working' = queueRemaining > 0 ? 'working' : 'idle';
 
       db.chats.update(chatId, {
         totalCost: newCost,
         totalTokensInput: newInput,
         totalTokensOutput: newOutput,
         lastContextTokensInput: tokensInput,
-        processState: 'idle',
+        processState: nextProcessState,
+        updatedAt: now,
       });
       active.chat.totalCost = newCost;
       active.chat.totalTokensInput = newInput;
       active.chat.totalTokensOutput = newOutput;
       active.chat.lastContextTokensInput = tokensInput;
-      active.chat.processState = 'idle';
+      active.chat.processState = nextProcessState;
+      active.chat.updatedAt = now;
+
       // Check interrupted flag before clearing permissions (clear() wipes both).
       const wasInterrupted = permissions.clearInterrupted(chatId);
       // CLI process ended — clear stale permissions so displayStatus reflects
@@ -250,8 +359,10 @@ function buildSessionSink(
 
       const isError = data.subtype === 'error_during_execution' && data.is_error !== false;
       const reason = wasInterrupted ? 'interrupted' : isError ? 'error' : 'completed';
+      log.debug({ chatId, reason, wasInterrupted, isError }, 'onResult: emitting chat.updated with processState=idle');
       emitEvent({ type: 'chat.updated', chat: active.chat, reason });
 
+      const notifyConfig = readNotificationConfig(db);
       if (isError) {
         if (!wasInterrupted) {
           const message = messages.createTransientMessage(chatId, 'error', [
@@ -261,13 +372,15 @@ function buildSessionSink(
           emitEvent({ type: 'message.added', chatId, message });
           emitDisplay();
 
-          const notification = { title: 'Session Error', body: 'A session ended unexpectedly' };
-          emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'error' });
-          pushService
-            ?.sendPush({ ...notification, data: { chatId, type: 'error' }, priority: 'high' })
-            .catch((err) => log.warn({ err }, 'push notification failed'));
+          if (notifyConfig.chat.sessionError) {
+            const notification = { title: 'Session Error', body: 'A session ended unexpectedly' };
+            emitEvent({ type: 'chat.notification', chatId, ...notification, level: 'error' });
+            pushService
+              ?.sendPush({ ...notification, data: { chatId, type: 'error' }, priority: 'high' })
+              .catch((err) => log.warn({ err }, 'push notification failed'));
+          }
         }
-      } else {
+      } else if (notifyConfig.chat.taskComplete) {
         const lastText = getLastAssistantText(messages.get(chatId));
         const notification = {
           title: 'Task Complete',
@@ -279,42 +392,56 @@ function buildSessionSink(
           .catch((err) => log.warn({ err }, 'push notification failed'));
       }
 
-      // Clear queued badges on turn completion — the CLI has processed all queued
-      // messages by this point. We can't rely on isReplay events in stream-json mode.
-      const allMsgs = messages.get(chatId);
-      if (allMsgs) {
-        let cleared = false;
-        for (const msg of allMsgs) {
-          if (msg.metadata?.queued) {
-            delete (msg.metadata as Record<string, unknown>).queued;
-            delete (msg.metadata as Record<string, unknown>).uuid;
-            cleared = true;
-          }
-        }
-        if (cleared) {
-          emitDisplay();
-          emitEvent({ type: 'message.queued.cleared', chatId });
-        }
-      }
+      // Per-queued-uuid cleanup happens in onQueuedProcessed (driven by the
+      // CLI's isReplay acks under --replay-user-messages). Don't bulk-clear
+      // on turn completion — that strips metadata.queued from messages the
+      // CLI hasn't dequeued yet.
     },
 
     onQueuedProcessed(uuid: string) {
+      log.debug({ chatId, uuid }, 'onQueuedProcessed: removing queued flag from message');
       const msgs = messages.get(chatId);
-      if (!msgs) return;
-      const msg = msgs.find((m) => m.metadata?.uuid === uuid);
-      if (!msg) return;
-      if (msg.metadata) {
+      const msg = msgs?.find((m) => m.metadata?.uuid === uuid);
+      if (msg?.metadata) {
         delete (msg.metadata as Record<string, unknown>).queued;
         delete (msg.metadata as Record<string, unknown>).uuid;
+        log.debug({ chatId, uuid, messageId: msg.id }, 'onQueuedProcessed: queued flag removed, emitting display');
+        emitDisplay();
+      } else {
+        log.warn({ chatId, uuid }, 'onQueuedProcessed: message not found in cache or already processed');
       }
-      emitDisplay();
       emitEvent({ type: 'message.queued.processed', chatId, uuid });
+      onQueuedProcessedCb(chatId, uuid);
     },
 
     onExit(_code: number | null) {
       const active = getActiveChat(chatId);
+      if (builtForSessionId && active?.session && active.session.id !== builtForSessionId) {
+        return;
+      }
       const sessionId = active?.session?.id ?? '';
       log.debug({ sessionId, chatId }, 'session exited');
+
+      // Any messages still flagged as queued are stranded — the CLI process
+      // is gone and will never emit an isReplay ack for them. Clear here so
+      // the composer banner and the daemon's queuedRefs don't leak.
+      const cachedMsgs = messages.get(chatId);
+      let hadQueued = false;
+      if (cachedMsgs) {
+        for (const msg of cachedMsgs) {
+          if (msg.metadata?.queued) {
+            delete (msg.metadata as Record<string, unknown>).queued;
+            delete (msg.metadata as Record<string, unknown>).uuid;
+            hadQueued = true;
+          }
+        }
+      }
+      if (hadQueued) {
+        emitDisplay();
+        emitEvent({ type: 'message.queued.cleared', chatId });
+      }
+      onQueuedClearedCb(chatId);
+
       if (active) {
         active.chat.processState = null;
         db.chats.update(chatId, { processState: null });
@@ -324,7 +451,7 @@ function buildSessionSink(
     },
 
     onCompact() {
-      const message = messages.createTransientMessage(chatId, 'system', [{ type: 'text', text: 'Context compacted' }]);
+      const message = messages.createTransientMessage(chatId, 'system', [{ type: 'compaction' }]);
       messages.append(chatId, message);
       emitEvent({ type: 'message.added', chatId, message });
       emitEvent({ type: 'chat.compactDone', chatId });
@@ -346,25 +473,8 @@ function buildSessionSink(
     },
 
     onSkillFile(entry: SkillFileEntry) {
-      // Autonomous Skill-tool flows emit a tool_result containing "Launching skill:" before
-      // the isMeta skill content arrives. Slash-command flows do not, so we add an
-      // announcement message to confirm the skill was loaded.
-      const cachedMessages = messages.get(chatId) ?? [];
-      const lastMsg = cachedMessages[cachedMessages.length - 1];
-      const isAutonomousFlow =
-        lastMsg?.type === 'tool_result' &&
-        lastMsg.content.some(
-          (b) => b.type === 'tool_result' && typeof b.content === 'string' && b.content.startsWith('Launching skill:'),
-        );
-      if (!isAutonomousFlow) {
-        const announcement = messages.createTransientMessage(chatId, 'system', [
-          { type: 'text', text: `Using skill: ${entry.displayName}` },
-        ]);
-        messages.append(chatId, announcement);
-        emitEvent({ type: 'message.added', chatId, message: announcement });
-        emitDisplay();
-      }
-
+      // The SkillLoadedCard (emitted via onSkillLoaded) already tells the user
+      // which skill was loaded — no separate announcement message needed.
       if (db.chats.addSkillFile(chatId, entry)) {
         emitEvent({ type: 'context.updated', chatId });
       }
@@ -378,7 +488,56 @@ function buildSessionSink(
     },
 
     onPrDetected(pr: import('@qlan-ro/mainframe-types').DetectedPr) {
-      emitEvent({ type: 'chat.prDetected', chatId, pr });
+      // Persist before emitting so reconnecting renderers / sidebar entries
+      // that never trigger a loadChat see the PR via the DB-backed Chat row.
+      // Suppress the WS event when addDetectedPrs reports no change — avoids
+      // re-emitting on every duplicate sighting from the live stream.
+      const persisted = db.chats.addDetectedPrs(chatId, [pr]);
+      if (persisted.length === 0) return;
+      emitEvent({ type: 'chat.prDetected', chatId, pr: persisted[0]! });
+    },
+
+    onCliMessage(text: string) {
+      const message = messages.createTransientMessage(chatId, 'system', [{ type: 'text', text }]);
+      messages.append(chatId, message);
+      emitEvent({ type: 'message.added', chatId, message });
+      emitDisplay();
+    },
+
+    onSkillLoaded(entry: { skillName: string; path: string; content: string }) {
+      const message = messages.createTransientMessage(chatId, 'system', [
+        { type: 'skill_loaded', skillName: entry.skillName, path: entry.path, content: entry.content },
+      ]);
+      messages.append(chatId, message);
+      emitEvent({ type: 'message.added', chatId, message });
+      emitDisplay();
+    },
+
+    onSubagentChild(parentToolUseId: string, blocks: import('@qlan-ro/mainframe-types').MessageContent[]) {
+      const cached = messages.get(chatId);
+      if (!cached) {
+        log.warn(
+          { chatId, parentToolUseId, blockCount: blocks.length },
+          'onSubagentChild: no messages in cache; dropping blocks',
+        );
+        return;
+      }
+      // Walk newest-first: subagent events belong to the most recent assistant
+      // message that contains the parent tool_use.
+      for (let i = cached.length - 1; i >= 0; i--) {
+        const msg = cached[i]!;
+        if (msg.type !== 'assistant') continue;
+        const owns = msg.content.some((b) => b.type === 'tool_use' && b.id === parentToolUseId);
+        if (!owns) continue;
+        msg.content = [...msg.content, ...blocks];
+        emitEvent({ type: 'message.updated', chatId, message: msg });
+        emitDisplay();
+        return;
+      }
+      log.warn(
+        { chatId, parentToolUseId, blockCount: blocks.length },
+        'onSubagentChild: parent tool_use not found in cache; dropping blocks',
+      );
     },
 
     onError(error: Error) {

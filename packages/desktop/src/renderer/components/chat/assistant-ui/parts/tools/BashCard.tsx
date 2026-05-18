@@ -2,38 +2,46 @@ import { Terminal } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { StatusDot, cardStyle, stripErrorXml, type ToolCardProps } from './shared';
+import { StatusDot, cardStyle, stripErrorXml, isTruncatedResult, type ToolCardProps } from './shared';
+import { ToolResultExpand } from '../../ToolResultExpand';
 
-export function BashCard({ args, result, isError }: ToolCardProps) {
+export function BashCard({ args, result, isError, chatId, toolCallId }: ToolCardProps) {
   const command = (args.command as string) || (args.input as string) || '';
   const description = args.description as string | undefined;
-  const truncatedCmd = command.length > 80 ? command.slice(0, 80) + '...' : command;
+  const truncated = isTruncatedResult(result);
   const rawResultText =
-    typeof result === 'string' ? result : result !== undefined ? JSON.stringify(result, null, 2) : undefined;
+    typeof result === 'string'
+      ? result
+      : truncated
+        ? result.content
+        : result !== undefined
+          ? JSON.stringify(result, null, 2)
+          : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
 
   return (
     <CollapsibleToolCard
+      hideToggle
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
           <Terminal size={15} className="text-mf-text-secondary shrink-0" />
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="font-mono text-mf-body text-mf-text-primary truncate" tabIndex={0}>
-                {truncatedCmd}
+              <span className="font-mono text-mf-body text-mf-text-primary truncate min-w-0" tabIndex={0}>
+                {command}
               </span>
             </TooltipTrigger>
             <TooltipContent>{command}</TooltipContent>
           </Tooltip>
         </>
       }
-      statusDot={<StatusDot result={result} isError={isError} />}
+      trailing={<StatusDot result={result} isError={isError} />}
       subHeader={
         description ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="px-3 pb-1.5 -mt-0.5 text-mf-small text-mf-text-secondary truncate pl-[52px]" tabIndex={0}>
+              <div className="px-3 pb-1.5 -mt-0.5 text-mf-small text-mf-text-secondary truncate pl-[35px]" tabIndex={0}>
                 {description}
               </div>
             </TooltipTrigger>
@@ -42,18 +50,22 @@ export function BashCard({ args, result, isError }: ToolCardProps) {
         ) : undefined
       }
     >
-      <div className="border-t border-mf-divider px-3 py-2 space-y-2">
-        <pre className="text-mf-small font-mono text-mf-text-primary overflow-x-auto whitespace-pre-wrap">
-          $ {command}
-        </pre>
-        {resultText && (
-          <div className={cn('border-t border-mf-divider -mx-3 px-3 py-1.5', isError && 'bg-mf-chat-error-surface/20')}>
+      {resultText && (
+        <div className={cn('border-t border-mf-divider px-3 py-2', isError && 'bg-mf-chat-error-surface/20')}>
+          {truncated && chatId && toolCallId ? (
+            <ToolResultExpand
+              chatId={chatId}
+              toolUseId={toolCallId}
+              truncatedContent={resultText}
+              fullBytes={result.fullBytes}
+            />
+          ) : (
             <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary max-h-[400px] overflow-y-auto">
               {resultText}
             </pre>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </CollapsibleToolCard>
   );
 }

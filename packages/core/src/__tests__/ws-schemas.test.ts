@@ -44,3 +44,59 @@ describe('MessageSend schema', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('ChatCreate schema', () => {
+  const base = {
+    type: 'chat.create' as const,
+    projectId: 'proj-1',
+    adapterId: 'claude',
+  };
+
+  it('accepts a payload without worktree fields', () => {
+    const result = ClientEventSchema.safeParse(base);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a payload with both worktreePath and branchName', () => {
+    const result = ClientEventSchema.safeParse({
+      ...base,
+      worktreePath: '/projects/my-repo/.worktrees/feat-x',
+      branchName: 'feat-x',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects empty worktreePath', () => {
+    const result = ClientEventSchema.safeParse({
+      ...base,
+      worktreePath: '',
+      branchName: 'feat-x',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects empty branchName when provided', () => {
+    const result = ClientEventSchema.safeParse({
+      ...base,
+      worktreePath: '/projects/my-repo/.worktrees/feat-x',
+      branchName: '',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects worktreePath without branchName', () => {
+    const result = ClientEventSchema.safeParse({
+      ...base,
+      worktreePath: '/projects/my-repo/.worktrees/feat-x',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects branchName without worktreePath', () => {
+    const result = ClientEventSchema.safeParse({
+      ...base,
+      branchName: 'feat-x',
+    });
+    expect(result.success).toBe(false);
+  });
+});

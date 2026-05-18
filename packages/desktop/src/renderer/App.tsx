@@ -10,11 +10,12 @@ import { Toaster } from './components/Toaster';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useAppInit } from './hooks/useAppInit';
 import { usePluginShortcuts } from './hooks/usePluginShortcuts';
-import { useSettingsStore } from './store';
+import { useSettingsStore, useChatsStore, useUIStore } from './store';
 import { getActiveProjectId } from './hooks/useActiveProjectId.js';
 import { daemonClient } from './lib/client';
 import { getDefaultModelForAdapter } from './lib/adapters';
 import { PluginGlobalComponents } from './components/plugins/PluginGlobalComponents';
+import { FullviewModal } from './components/modals';
 
 export default function App(): React.ReactElement {
   useAppInit();
@@ -47,10 +48,26 @@ export default function App(): React.ReactElement {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Global ⌘⇧R / Ctrl+⇧R — open review panel
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'r') {
+        e.preventDefault();
+        const activeChatId = useChatsStore.getState().activeChatId;
+        if (activeChatId) {
+          useUIStore.getState().setReviewPanelOpen(true);
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   return (
     <ErrorBoundary>
       <TooltipProvider delayDuration={200} skipDelayDuration={100} disableHoverableContent>
         <Layout centerPanel={<CenterPanel />} />
+        <FullviewModal />
         <SearchPalette />
         <SettingsModal />
         <TutorialOverlay />

@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel, getModelContextWindow, getModelLabel } from '../../lib/adapters';
 import { PrBadge } from './PrBadge';
+import { ChatActions } from './ChatActions';
 
 const ADAPTER_ACCENT: Record<string, string> = {
   claude: 'bg-mf-accent-claude',
@@ -110,11 +111,15 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
   const accentClass = ADAPTER_ACCENT[chat.adapterId] ?? 'bg-mf-text-secondary';
   const contextWindow = getModelContextWindow(chat.model, adapters);
   // Prefer CLI-reported usage percentage; fall back to token-estimate
+  // only when we know the window size — otherwise the bar would be a
+  // guess against a default that may not match the real model.
   const usagePct = cliContextUsage
     ? Math.min(100, Math.round(cliContextUsage.percentage))
-    : Math.min(100, Math.round(((chat.lastContextTokensInput ?? 0) / contextWindow) * 100));
-  const filledSegments = Math.round((usagePct / 100) * PROGRESS_SEGMENTS);
-  const progressColor = getProgressColor(usagePct);
+    : contextWindow
+      ? Math.min(100, Math.round(((chat.lastContextTokensInput ?? 0) / contextWindow) * 100))
+      : null;
+  const filledSegments = usagePct === null ? 0 : Math.round((usagePct / 100) * PROGRESS_SEGMENTS);
+  const progressColor = getProgressColor(usagePct ?? 0);
 
   return (
     <div data-testid="session-bar" className="h-7 flex items-center px-3 text-mf-status bg-mf-panel-bg shrink-0">
@@ -153,20 +158,23 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
         <StatusIndicator chatId={chatId} />
       </div>
 
-      {/* Right: token progress */}
+      {/* Right: token progress and actions */}
       <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-        <div className="flex gap-px">
-          {Array.from({ length: PROGRESS_SEGMENTS }, (_, i) => (
-            <div
-              key={i}
-              className={cn(
-                'w-1 h-2 rounded-[1px]',
-                i < filledSegments ? progressColor : 'bg-mf-text-secondary opacity-15',
-              )}
-            />
-          ))}
-        </div>
-        {usagePct > 0 && (
+        <ChatActions chatId={chatId} />
+        {usagePct !== null && (
+          <div className="flex gap-px">
+            {Array.from({ length: PROGRESS_SEGMENTS }, (_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  'w-1 h-2 rounded-[1px]',
+                  i < filledSegments ? progressColor : 'bg-mf-text-secondary opacity-15',
+                )}
+              />
+            ))}
+          </div>
+        )}
+        {usagePct !== null && usagePct > 0 && (
           <span data-testid="session-bar-context-pct" className="text-mf-text-secondary tabular-nums">
             {usagePct}%
           </span>

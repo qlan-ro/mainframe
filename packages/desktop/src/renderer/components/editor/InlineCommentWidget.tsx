@@ -22,28 +22,48 @@ export function InlineCommentWidget({ text, onTextChange, onSubmit, onClose }: I
 
   return (
     <div className="pt-2 pb-4">
-      <textarea
-        ref={ref}
-        value={text}
-        onChange={(e) => onTextChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSubmit();
-          }
-          if (e.key === 'Escape') onClose();
-        }}
-        placeholder="Add context about this line..."
-        className="w-full h-[54px] resize-none bg-mf-input-bg border border-mf-divider rounded-md px-3 py-2 text-[13px] font-mono text-mf-text-primary focus:outline-none focus:border-mf-accent/50"
-      />
+      {/*
+        Wrapper owns the visual border/background and the visible padding.
+        The textarea fills the padded inner area with zero padding of its
+        own, because a textarea's own padding-bottom is "eaten" at scroll
+        end — scrolled content would otherwise sit flush against the
+        bottom border on long input.
+      */}
+      <div className="w-full h-[64px] bg-mf-input-bg border border-mf-divider rounded-md px-3.5 py-3 box-border focus-within:border-mf-accent/50">
+        <textarea
+          data-testid="editor-inline-comment-input"
+          ref={ref}
+          value={text}
+          onChange={(e) => onTextChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+            if (e.key === 'Escape') onClose();
+          }}
+          placeholder="Add context about this line..."
+          style={{
+            whiteSpace: 'pre-wrap',
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            boxSizing: 'border-box',
+            outline: 'none',
+            boxShadow: 'none',
+          }}
+          className="w-full h-full resize-none bg-transparent p-0 border-0 text-[13px] leading-[1.45] font-mono text-mf-text-primary outline-none focus:outline-none focus-visible:outline-none"
+        />
+      </div>
       <div className="flex items-center gap-2 mt-1">
         <button
+          data-testid="editor-inline-comment-cancel"
           onClick={onClose}
           className="px-2 py-0.5 rounded text-mf-small text-mf-text-secondary hover:bg-mf-hover/50 transition-colors"
         >
           Cancel
         </button>
         <button
+          data-testid="editor-inline-comment-send"
           onClick={handleSubmit}
           disabled={!text.trim()}
           className="flex items-center gap-1 px-2 py-0.5 rounded text-mf-small text-mf-accent hover:bg-mf-accent/10 disabled:opacity-30 transition-colors"

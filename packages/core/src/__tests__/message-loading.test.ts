@@ -340,7 +340,7 @@ describe('loadHistory', () => {
     }
   });
 
-  it('filters slash-command invocation markers containing <command-name> tags', async () => {
+  it('preserves slash-command invocation markers so display-pipeline can render them', async () => {
     writeJsonl(SESSION_ID, [
       userTextEntry('<command-name>commit</command-name>\n/commit'),
       userTextEntry('You are a commit message generator. Analyze the staged changes...'),
@@ -349,13 +349,51 @@ describe('loadHistory', () => {
 
     const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
-    // The command marker (first user message) is filtered; skill expansion content + assistant remain
-    expect(messages).toHaveLength(2);
+    // History keeps <command-name> entries so the display pipeline can render
+    // them as "/commit" bubbles instead of silently dropping the user's typed command.
+    expect(messages).toHaveLength(3);
     expect(messages[0].type).toBe('user');
-    expect(messages[1].type).toBe('assistant');
+    expect(messages[1].type).toBe('user');
+    expect(messages[2].type).toBe('assistant');
   });
 
-  it('skips isMeta=true entries (skill content injections)', async () => {
+  it('synthesizes user + system messages for "Unknown command: /X" string entries', async () => {
+    writeJsonl(SESSION_ID, [
+      jsonlEntry({
+        type: 'user',
+        message: { role: 'user', content: 'Unknown command: /non-existent-skill' },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0].type).toBe('user');
+    expect(messages[0].content[0]).toMatchObject({ type: 'text', text: '/non-existent-skill' });
+    expect(messages[1].type).toBe('system');
+    expect(messages[1].content[0]).toMatchObject({
+      type: 'text',
+      text: 'Unknown command: /non-existent-skill',
+    });
+  });
+
+  it('synthesizes user + system messages for "Unknown skill: X" string entries (no leading slash)', async () => {
+    writeJsonl(SESSION_ID, [
+      jsonlEntry({
+        type: 'user',
+        message: { role: 'user', content: 'Unknown skill: missing-skill' },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0].type).toBe('user');
+    expect(messages[0].content[0]).toMatchObject({ type: 'text', text: '/missing-skill' });
+    expect(messages[1].type).toBe('system');
+  });
+
+  it('converts isMeta skill-content entries into a synthetic system/skill_loaded message', async () => {
     const toolUseId = 'toolu_skill_1';
     writeJsonl(SESSION_ID, [
       userTextEntry('Use the brainstorming skill'),
@@ -367,16 +405,21 @@ describe('loadHistory', () => {
 
     const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
-    // isMeta=true entry is skipped; 4 real messages remain
-    expect(messages).toHaveLength(4);
+    // isMeta entry is converted to a system message with a skill_loaded block → 5 messages.
+    expect(messages).toHaveLength(5);
     const types = messages.map((m) => m.type);
-    expect(types).toEqual(['user', 'assistant', 'tool_result', 'assistant']);
+    expect(types).toEqual(['user', 'assistant', 'tool_result', 'system', 'assistant']);
+    const skillMsg = messages[3];
+    expect(skillMsg.content[0]).toMatchObject({
+      type: 'skill_loaded',
+      skillName: 'brainstorming',
+    });
   });
 
-  it('preserves assistant turn continuity when isMeta entry is skipped', async () => {
-    // Bug 1 regression: isMeta entries between two assistant entries were splitting
-    // the consecutive assistant chain in groupMessages(), causing the first assistant
-    // text to appear as a separate message from the announcement.
+  it('preserves assistant turn continuity around the synthesized skill_loaded message', async () => {
+    // Regression guard: isMeta entries between two assistant entries were splitting
+    // the consecutive assistant chain in groupMessages(). The synthesized system
+    // message is its own role, so grouping must still work correctly.
     const toolUseId = 'toolu_skill_2';
     writeJsonl(SESSION_ID, [
       userTextEntry('Let me start working on this'),
@@ -389,12 +432,11 @@ describe('loadHistory', () => {
 
     const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
 
-    // isMeta entry is gone → 5 messages, no spurious user message splitting the assistant turns
-    expect(messages).toHaveLength(5);
+    // synthesized system msg sits between tool_result and the next assistant text.
+    expect(messages).toHaveLength(6);
     const types = messages.map((m) => m.type);
-    // user, assistant (pre-text), assistant (Skill tool_use), tool_result, assistant (announcement)
-    expect(types).toEqual(['user', 'assistant', 'assistant', 'tool_result', 'assistant']);
-    // No user or error message should appear at any point
+    expect(types).toEqual(['user', 'assistant', 'assistant', 'tool_result', 'system', 'assistant']);
+    // No extra user messages leaked in
     expect(types.filter((t) => t === 'user')).toHaveLength(1);
   });
 
@@ -424,6 +466,123 @@ describe('loadHistory', () => {
     expect(messages[0].content[0]).toMatchObject({ text: 'First message' });
     expect(messages[2].content[0]).toMatchObject({ text: 'Continued message' });
     expect(messages[3].content[0]).toMatchObject({ text: 'Continued response' });
+  });
+
+  it('drops isSidechain=true entries from sibling JSONL files (subagent prompts)', async () => {
+    // Regression: when the parent CLI session spawns a subagent (Task/Agent tool),
+    // the subagent's CLI process writes its own messages — including its dispatch
+    // prompt as a `user` entry — to a sibling JSONL marked with isSidechain:true.
+    // Discovering sibling JSONLs by sessionId pulls these in, and without filtering,
+    // the subagent's prompt rendered as a ghost user bubble in the parent thread.
+    writeJsonl(SESSION_ID, [userTextEntry('Run a search'), assistantTextEntry('Dispatching the search agent.')]);
+
+    const sidechainId = 'sidechain-session-xyz';
+    writeJsonl(sidechainId, [
+      jsonlEntry({
+        type: 'user',
+        sessionId: SESSION_ID,
+        isSidechain: true,
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Subagent prompt: search for monaco scrollbar fixes...' }],
+        },
+      }),
+      jsonlEntry({
+        type: 'assistant',
+        sessionId: SESSION_ID,
+        isSidechain: true,
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Searching...' }] },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages).toHaveLength(2);
+    expect(messages.map((m) => m.type)).toEqual(['user', 'assistant']);
+    // No subagent prompt leaks into the parent thread
+    for (const m of messages) {
+      for (const block of m.content) {
+        if (block.type === 'text') {
+          expect(block.text).not.toMatch(/Subagent prompt/);
+        }
+      }
+    }
+  });
+
+  it('does not synthesize skill_loaded messages for subagent skill loads', async () => {
+    // Regression: each subagent (Task/Agent tool) writes its own
+    // "Base directory for this skill: …" isMeta entry into a JSONL under
+    // <session>/subagents/. Live mode never surfaces those at the parent
+    // level (they only flow through agent_progress), so synthesizing them
+    // on replay creates duplicate "Using skill: X" pills that never
+    // appeared during the live session.
+    writeJsonl(SESSION_ID, [userTextEntry('Dispatch four subagents'), assistantTextEntry('Dispatching.')]);
+
+    const subagentDir = join(PROJECT_DIR, SESSION_ID, 'subagents');
+    mkdirSync(subagentDir, { recursive: true });
+    for (const agentId of ['a1', 'a2', 'a3', 'a4']) {
+      const subagentJsonl = join(subagentDir, `agent-${agentId}.jsonl`);
+      writeFileSync(
+        subagentJsonl,
+        jsonlEntry({
+          type: 'user',
+          isMeta: true,
+          isSidechain: true,
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Base directory for this skill: /repo/.claude/skills/azure-devops-cli\n\n# Azure DevOps CLI\nbody',
+              },
+            ],
+          },
+        }) + '\n',
+      );
+    }
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages.map((m) => m.type)).toEqual(['user', 'assistant']);
+    for (const m of messages) {
+      for (const block of m.content) {
+        expect(block.type).not.toBe('skill_loaded');
+      }
+    }
+  });
+
+  it('still synthesizes skill_loaded messages from sidechain sibling JSONLs', async () => {
+    // Belt-and-braces: sibling sidechain files (not under /subagents/) also
+    // carry isSidechain:true and must not promote skill loads either.
+    writeJsonl(SESSION_ID, [userTextEntry('Run a thing')]);
+
+    const sidechainId = 'sidechain-skill-xyz';
+    writeJsonl(sidechainId, [
+      jsonlEntry({
+        type: 'user',
+        sessionId: SESSION_ID,
+        isSidechain: true,
+        isMeta: true,
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Base directory for this skill: /repo/.claude/skills/azure-devops-cli\n\nbody',
+            },
+          ],
+        },
+      }),
+    ]);
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    expect(messages.map((m) => m.type)).toEqual(['user']);
+    for (const m of messages) {
+      for (const block of m.content) {
+        expect(block.type).not.toBe('skill_loaded');
+      }
+    }
   });
 
   it('returns empty array for non-existent session', async () => {
@@ -554,7 +713,7 @@ describe('loadHistory', () => {
     expect(types).toEqual(['user', 'assistant', 'assistant']);
   });
 
-  it('converts system:compact_boundary to a visible "Context compacted" system message', async () => {
+  it('converts system:compact_boundary to a visible compaction system message', async () => {
     writeJsonl(SESSION_ID, [
       userTextEntry('Do a lot of work'),
       assistantTextEntry('Working...'),
@@ -572,7 +731,7 @@ describe('loadHistory', () => {
 
     expect(messages).toHaveLength(4);
     expect(messages[2].type).toBe('system');
-    expect(messages[2].content[0]).toMatchObject({ type: 'text', text: 'Context compacted' });
+    expect(messages[2].content[0]).toMatchObject({ type: 'compaction' });
   });
 
   it('skips isCompactSummary=true entries (context compaction messages)', async () => {
@@ -633,6 +792,144 @@ describe('loadHistory', () => {
     expect(messages).toHaveLength(2);
     expect(messages[0].type).toBe('user');
     expect(messages[0].content[0]).toMatchObject({ type: 'text', text: '' });
+  });
+
+  it('inlines subagent assistant text/thinking and tool_results from subagent JSONLs into the parent assistant message with parentToolUseId tag', async () => {
+    const agentToolUseId = 'toolu_agent_1';
+    // Parent JSONL: assistant with Agent tool_use, then parent's tool_result.
+    writeJsonl(SESSION_ID, [
+      userTextEntry('dispatch please'),
+      assistantToolUseEntry(
+        'Agent',
+        { description: 'Echo hi', subagent_type: 'general-purpose', prompt: 'Run echo hi' },
+        agentToolUseId,
+      ),
+      toolResultEntry(agentToolUseId, 'Output of `echo hi`: `hi`'),
+    ]);
+
+    // Subagent JSONL: text/thinking/tool_use as one assistant turn, then tool_result.
+    const subagentDir = join(PROJECT_DIR, SESSION_ID, 'subagents');
+    mkdirSync(subagentDir, { recursive: true });
+    writeFileSync(
+      join(subagentDir, `agent-sub.jsonl`),
+      [
+        jsonlEntry({
+          type: 'user',
+          isSidechain: true,
+          agentId: 'sub',
+          message: { role: 'user', content: 'Run echo hi' },
+        }),
+        jsonlEntry({
+          type: 'assistant',
+          isSidechain: true,
+          agentId: 'sub',
+          parentToolUseID: agentToolUseId,
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'thinking', thinking: 'subagent inner' },
+              { type: 'text', text: 'Running it.' },
+              { type: 'tool_use', id: 'toolu_sub_bash', name: 'Bash', input: { command: 'echo hi' } },
+            ],
+          },
+        }),
+        jsonlEntry({
+          type: 'user',
+          isSidechain: true,
+          agentId: 'sub',
+          parentToolUseID: agentToolUseId,
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'toolu_sub_bash', content: 'hi' }],
+          },
+        }),
+      ].join('\n') + '\n',
+    );
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    // Find the parent assistant message and assert its content[] now includes the subagent blocks.
+    const assistant = messages.find((m) => m.type === 'assistant');
+    expect(assistant).toBeDefined();
+    const types = assistant!.content.map((c) => c.type);
+    // Must include the original Agent tool_use, plus inlined thinking + text + tool_use + tool_result.
+    expect(types).toContain('thinking');
+    expect(types.filter((t) => t === 'text').length).toBeGreaterThanOrEqual(1);
+    expect(types.filter((t) => t === 'tool_use').length).toBeGreaterThanOrEqual(2); // Agent + Bash
+    expect(types).toContain('tool_result');
+
+    // Every inlined block carries the parentToolUseId tag pointing to the Agent tool_use id.
+    for (const c of assistant!.content) {
+      if (c.type === 'tool_use' && c.name === 'Agent') continue; // the parent's own Agent tool_use is untagged
+      if ('parentToolUseId' in c && c.parentToolUseId !== undefined) {
+        expect(c.parentToolUseId).toBe(agentToolUseId);
+      }
+    }
+  });
+
+  it('links subagent JSONL entries via toolUseResult.agentId when parentToolUseID is absent (CLI 2.1.118+)', async () => {
+    // CLI 2.1.118+ writes subagent JSONL entries with `agentId` but without
+    // `parentToolUseID` on each line. The link to the parent's tool_use lives
+    // on the parent tool_result's `toolUseResult.agentId`. Without the lookup,
+    // history reload drops every subagent block and the Task card renders empty.
+    const agentToolUseId = 'toolu_agent_2118';
+    const subAgentId = 'ac1059642ea2fac5f';
+
+    writeJsonl(SESSION_ID, [
+      userTextEntry('use an explore agent'),
+      assistantToolUseEntry(
+        'Agent',
+        { description: 'Quick project overview', subagent_type: 'Explore', prompt: 'overview' },
+        agentToolUseId,
+      ),
+      // Parent tool_result carries `toolUseResult.agentId` — the only link to the subagent file.
+      jsonlEntry({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: agentToolUseId, content: 'agent done' }],
+        },
+        toolUseResult: { status: 'completed', agentId: subAgentId, agentType: 'Explore' },
+      }),
+    ]);
+
+    const subagentDir = join(PROJECT_DIR, SESSION_ID, 'subagents');
+    mkdirSync(subagentDir, { recursive: true });
+    writeFileSync(
+      join(subagentDir, `agent-${subAgentId}.jsonl`),
+      [
+        // Subagent entries carry `agentId` but NOT `parentToolUseID` — matches CLI 2.1.118+ shape.
+        jsonlEntry({
+          type: 'assistant',
+          isSidechain: true,
+          agentId: subAgentId,
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'Looking around.' },
+              { type: 'tool_use', id: 'toolu_sub_read', name: 'Read', input: { file_path: '/a.ts' } },
+            ],
+          },
+        }),
+        jsonlEntry({
+          type: 'user',
+          isSidechain: true,
+          agentId: subAgentId,
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'toolu_sub_read', content: 'file body' }],
+          },
+        }),
+      ].join('\n') + '\n',
+    );
+
+    const messages = await loadHistory(SESSION_ID, PROJECT_PATH);
+
+    const assistant = messages.find((m) => m.type === 'assistant');
+    expect(assistant).toBeDefined();
+    const tagged = assistant!.content.filter((c) => 'parentToolUseId' in c && c.parentToolUseId === agentToolUseId);
+    // Subagent text + tool_use + tool_result should all be inlined and tagged.
+    expect(tagged.map((c) => c.type).sort()).toEqual(['text', 'tool_result', 'tool_use']);
   });
 
   it('handles tool_result with error flag', async () => {

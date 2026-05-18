@@ -30,6 +30,9 @@ function createMockSink(): SessionSink {
     onQueuedProcessed: vi.fn(),
     onTodoUpdate: vi.fn(),
     onPrDetected: vi.fn(),
+    onCliMessage: vi.fn(),
+    onSkillLoaded: vi.fn(),
+    onSubagentChild: vi.fn(),
   };
 }
 
@@ -44,6 +47,8 @@ function createMockSession(): ClaudeSession {
       activeTasks: new Map(),
       pendingCancelCallbacks: new Map(),
       pendingPrCreates: new Set(),
+      pendingPrMutations: new Map(),
+      toolUseRegistry: new Map(),
     },
     clearInterruptTimer: vi.fn(),
     requestContextUsage: vi.fn(),
@@ -232,7 +237,10 @@ describe('command-level PR detection', () => {
     expect(session.state.pendingPrCreates.has('tu_pr_1')).toBe(false);
   });
 
-  it('detects source: mentioned when no matching tool_use preceded tool_result', () => {
+  it('does NOT emit when no matching tool_use preceded the tool_result', () => {
+    // Path A is gated on the originating tool. Without a registered tool_use
+    // we can't know whether the URL came from a PR-CLI command or from an
+    // unrelated Read/Grep, so we err on the side of not tagging.
     const sink = createMockSink();
     const session = createMockSession();
 
@@ -250,13 +258,7 @@ describe('command-level PR detection', () => {
     };
     handleStdout(session, Buffer.from(JSON.stringify(userEvent) + '\n'), sink);
 
-    expect(sink.onPrDetected).toHaveBeenCalledWith({
-      url: 'https://github.com/myorg/myrepo/pull/50',
-      owner: 'myorg',
-      repo: 'myrepo',
-      number: 50,
-      source: 'mentioned',
-    });
+    expect(sink.onPrDetected).not.toHaveBeenCalled();
   });
 
   it('stashes tool_use_id for glab mr create', () => {
@@ -307,8 +309,26 @@ describe('command-level PR detection', () => {
     const sink = createMockSink();
     const session = createMockSession();
 
-    // Stash the az command
-    session.state.pendingPrCreates.add('tu_az_2');
+    // Fire the assistant tool_use so the registry knows this is `az repos pr create`.
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tu_az_2',
+                name: 'Bash',
+                input: { command: 'az repos pr create --source-branch f --target-branch main' },
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
 
     const userEvent = {
       type: 'user',
@@ -337,7 +357,25 @@ describe('command-level PR detection', () => {
     const sink = createMockSink();
     const session = createMockSession();
 
-    session.state.pendingPrCreates.add('tu_az_3');
+    handleStdout(
+      session,
+      Buffer.from(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tu_az_3',
+                name: 'Bash',
+                input: { command: 'az repos pr create --output json' },
+              },
+            ],
+          },
+        }) + '\n',
+      ),
+      sink,
+    );
 
     const jsonOutput =
       '{"pullRequestId": 42, "name": "my-repo", "url": "https://dev.azure.com/myorg/myproject/_apis/git/repositories/my-repo/pullRequests/42"}';

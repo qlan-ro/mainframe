@@ -1,6 +1,6 @@
 {
   "name": "@qlan-ro/mainframe-desktop",
-  "version": "0.10.2",
+  "version": "0.18.2",
   "description": "Mainframe desktop app — Electron/React frontend for orchestrating AI agents",
   "license": "MIT",
   "repository": {
@@ -51,6 +51,7 @@
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.7.5",
+    "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "shiki": "^4.0.2",
     "tailwind-merge": "^3.5.0",
@@ -150,7 +151,8 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,

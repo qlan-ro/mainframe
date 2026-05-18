@@ -8,6 +8,7 @@ import { useInlineComments } from './useInlineComments';
 import './setup';
 import { registerDefinitionProvider } from './navigation';
 import { copyReference } from './copy-reference';
+import { applyValueUpdate } from './apply-value-update';
 import { useProjectsStore } from '../../store';
 import { useActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useTabsStore } from '../../store/tabs';
@@ -95,13 +96,20 @@ export function MonacoEditor({
     if (!editor) return;
     const model = editor.getModel();
     if (!model) return;
-    if (model.getValue() !== value) {
-      model.setValue(value);
-    }
+    applyValueUpdate(editor, model, value);
   }, [value]);
 
   useEffect(() => {
-    return () => clearEditorViewState();
+    return () => {
+      const editor = editorRef.current;
+      if (editor) {
+        const model = editor.getModel();
+        editor.dispose();
+        model?.dispose();
+        editorRef.current = null;
+      }
+      clearEditorViewState();
+    };
   }, []);
 
   const handleSubmitComment = useCallback(
@@ -218,10 +226,11 @@ export function MonacoEditor({
   const hasNonEmpty = comments.some((c) => c.text.trim());
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="mf-editor-selectable h-full flex flex-col overflow-hidden">
       {hasComments && (
         <div className="flex items-center justify-end px-3 py-1 shrink-0 border-b border-mf-divider">
           <button
+            data-testid="editor-submit-review"
             onClick={handleSubmitReview}
             disabled={!hasNonEmpty}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded text-mf-small font-medium text-mf-accent hover:bg-mf-accent/10 disabled:opacity-30 transition-colors"

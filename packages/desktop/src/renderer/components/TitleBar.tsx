@@ -86,7 +86,7 @@ export function TitleBar(): React.ReactElement {
           className="w-[480px] max-w-[90%] flex items-center gap-2 px-3 py-[5px] rounded-mf-card border border-mf-border text-mf-text-secondary text-mf-body app-no-drag cursor-pointer hover:border-mf-text-secondary transition-colors pointer-events-auto"
         >
           <Search size={14} />
-          <span>Search ⌘F</span>
+          <span>Search ⌘O</span>
         </div>
       </div>
 

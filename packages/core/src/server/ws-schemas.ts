@@ -1,14 +1,20 @@
 import { z } from 'zod';
 
-const permissionModeSchema = z.enum(['default', 'acceptEdits', 'plan', 'yolo']).optional();
+const permissionModeSchema = z.enum(['default', 'acceptEdits', 'yolo']).optional();
 
-const ChatCreate = z.object({
-  type: z.literal('chat.create'),
-  projectId: z.string().min(1),
-  adapterId: z.string().min(1),
-  model: z.string().optional(),
-  permissionMode: permissionModeSchema,
-});
+const ChatCreate = z
+  .object({
+    type: z.literal('chat.create'),
+    projectId: z.string().min(1),
+    adapterId: z.string().min(1),
+    model: z.string().optional(),
+    permissionMode: permissionModeSchema,
+    worktreePath: z.string().min(1).optional(),
+    branchName: z.string().min(1).optional(),
+  })
+  .refine((msg) => (msg.worktreePath == null) === (msg.branchName == null), {
+    message: 'worktreePath and branchName must be provided together',
+  });
 
 const ChatResume = z.object({
   type: z.literal('chat.resume'),
@@ -31,6 +37,7 @@ const ChatUpdateConfig = z.object({
   adapterId: z.string().optional(),
   model: z.string().optional(),
   permissionMode: permissionModeSchema,
+  planMode: z.boolean().optional(),
 });
 
 const MessageSend = z
@@ -94,6 +101,16 @@ const MessageQueueCancel = z.object({
   messageId: z.string().min(1),
 });
 
+const SubscribeFile = z.object({
+  type: z.literal('subscribe:file'),
+  path: z.string().min(1),
+});
+
+const UnsubscribeFile = z.object({
+  type: z.literal('unsubscribe:file'),
+  path: z.string().min(1),
+});
+
 export const ClientEventSchema = z.discriminatedUnion('type', [
   ChatCreate,
   ChatResume,
@@ -106,4 +123,6 @@ export const ClientEventSchema = z.discriminatedUnion('type', [
   Unsubscribe,
   MessageQueueEdit,
   MessageQueueCancel,
+  SubscribeFile,
+  UnsubscribeFile,
 ]);

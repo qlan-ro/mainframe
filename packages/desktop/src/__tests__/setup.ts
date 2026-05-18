@@ -33,3 +33,10 @@ Object.defineProperty(globalThis, 'localStorage', {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import '@testing-library/jest-dom';
+
+// Mock ResizeObserver for components using @radix-ui/react-scroll-area
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as any;

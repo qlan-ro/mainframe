@@ -30,9 +30,14 @@ export function TaskCard({ args, result, isError }: ToolCardProps) {
   const agentType = (args.subagent_type as string) || 'Task';
   const model = args.model as string | undefined;
   const description = (args.description as string) || (args.prompt as string) || '';
-  const truncatedDesc = description.length > 60 ? description.slice(0, 60) + '...' : description;
+  const truncatedDesc = description.length > 80 ? description.slice(0, 80) + '…' : description;
   const usage = parseAgentUsage(result);
   const isDone = result !== undefined;
+  const promptForTooltip = (() => {
+    const p = String(args.prompt ?? args.description ?? '');
+    if (!p) return null;
+    return p.length > 600 ? p.slice(0, 600) + '…' : p;
+  })();
 
   return (
     <div data-testid="task-card">
@@ -40,14 +45,6 @@ export function TaskCard({ args, result, isError }: ToolCardProps) {
         <Bot size={14} className="text-mf-accent shrink-0" />
         <span className="text-mf-body text-mf-accent font-medium">{agentType}</span>
         {model && <span className="text-mf-status text-mf-text-secondary/50 font-mono">{model}</span>}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="text-mf-small text-mf-text-secondary/70 truncate" tabIndex={0}>
-              {truncatedDesc}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{description}</TooltipContent>
-        </Tooltip>
         <span className="flex-1" />
         {!isDone && <span className="w-2 h-2 rounded-full bg-mf-text-secondary/40 animate-pulse shrink-0" />}
         {isDone && usage && (
@@ -57,6 +54,19 @@ export function TaskCard({ args, result, isError }: ToolCardProps) {
         )}
         <ErrorDot isError={isError} />
       </div>
+      {description &&
+        (promptForTooltip ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="text-mf-small text-mf-text-secondary/70 truncate pl-6" tabIndex={0}>
+                {truncatedDesc}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[480px] whitespace-pre-wrap">{promptForTooltip}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <div className="text-mf-small text-mf-text-secondary/70 truncate pl-6">{truncatedDesc}</div>
+        ))}
     </div>
   );
 }

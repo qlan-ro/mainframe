@@ -4,6 +4,7 @@ import { createPluginAttachmentContext } from './attachment-context.js';
 import { createPluginEventBus } from './event-bus.js';
 import { createPluginConfig } from './config-context.js';
 import { createPluginUIContext } from './ui-context.js';
+import { readNotificationConfig } from '../notifications/notification-config.js';
 import { buildChatService } from './services/chat-service.js';
 import { buildProjectService } from './services/project-service.js';
 import type { EventEmitter } from 'node:events';
@@ -61,7 +62,9 @@ export function buildPluginContext(deps: PluginContextDeps): PluginContext {
 
   const uiContext =
     has('ui:panels') || has('ui:notifications')
-      ? createPluginUIContext(manifest.id, deps.emitEvent)
+      ? createPluginUIContext(manifest.id, deps.emitEvent, {
+          isPluginNotifyEnabled: () => readNotificationConfig(deps.db).other.plugin,
+        })
       : new Proxy({} as ReturnType<typeof createPluginUIContext>, {
           get:
             () =>

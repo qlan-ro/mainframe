@@ -13,6 +13,7 @@ import { GeneralSection } from './settings/GeneralSection';
 import { SIDEBAR_TABS, PROVIDER_COLORS, PROVIDER_BORDER_COLORS } from './settings/constants';
 import { AboutSection } from './settings/AboutSection';
 import { RemoteAccessSection } from './settings/RemoteAccessSection';
+import { NotificationsSection } from './settings/NotificationsSection';
 
 function ProvidersContent() {
   const selectedProvider = useSettingsStore((s) => s.selectedProvider);
@@ -43,6 +44,8 @@ function TabContent() {
       return <ProvidersContent />;
     case 'general':
       return <GeneralSection />;
+    case 'notifications':
+      return <NotificationsSection />;
     case 'keybindings':
       return <PlaceholderContent label="Keybindings" />;
     case 'remote-access':
@@ -95,6 +98,7 @@ export function SettingsModal(): React.ReactElement | null {
         <div className="flex items-center justify-between px-5 py-3 border-b border-mf-divider">
           <h2 className="text-mf-title font-semibold text-mf-text-primary">Settings</h2>
           <button
+            data-testid="settings-modal-close"
             onClick={close}
             className="p-1 rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
           >
@@ -129,6 +133,7 @@ export function SettingsModal(): React.ReactElement | null {
                       return (
                         <button
                           key={adapter.id}
+                          data-testid={`settings-modal-sidebar-provider-${adapter.id}`}
                           onClick={() => {
                             setActiveTab('providers');
                             setSelectedProvider(adapter.id);

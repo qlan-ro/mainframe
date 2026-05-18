@@ -8,6 +8,7 @@ import { useAdaptersStore } from '../store/adapters';
 import { createLogger } from './logger';
 import { buildLaunchScope } from './launch-scope.js';
 import { notify } from './notify';
+import { daemonClient } from './client';
 
 const log = createLogger('renderer:ws');
 
@@ -16,13 +17,34 @@ export function routeEvent(event: DaemonEvent): void {
   const tabs = useTabsStore.getState();
 
   switch (event.type) {
-    case 'chat.created':
-      log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title, source: event.source });
+    case 'chat.created': {
+      log.info('event:chat.created', {
+        chatId: event.chat.id,
+        title: event.chat.title,
+        source: event.source,
+        originClientId: event.originClientId,
+      });
       chats.addChat(event.chat);
-      if (event.source !== 'import') {
+      // Auto-select + open tab when this client either (a) originated the
+      // creation over WS (originClientId matches our id), or (b) the event
+      // carries no origin attribution at all — that path covers plugin HTTP
+      // routes (e.g. POST /todos/:id/start-session) that emit chat.created
+      // outside the WS AsyncLocalStorage context. Skipping those would leave
+      // the user clicking "Start session" with no visible navigation.
+      // Other-client originated creates (mobile, secondary desktops) still
+      // get filtered by the strict mismatch case below — and imports always
+      // skip the auto-select via the source check.
+      const ownClientId = daemonClient.getClientId();
+      const hasOrigin = event.originClientId !== undefined;
+      const isOwnOrigin = hasOrigin ? event.originClientId === ownClientId : true;
+      if (event.source !== 'import' && isOwnOrigin) {
         chats.setActiveChat(event.chat.id);
         tabs.openChatTab(event.chat.id, event.chat.title);
       }
+      break;
+    }
+    case 'connection.ready':
+      // Handled in DaemonClient before dispatch — no-op here for exhaustiveness.
       break;
     case 'chat.updated': {
       log.debug('event:chat.updated', { chatId: event.chat.id });
@@ -34,6 +56,8 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     }
     case 'chat.notification': {
+      // Daemon already gates emission on the user's notification settings,
+      // so seeing this event means the OS notification should fire.
       const chat = chats.chats.find((c) => c.id === event.chatId);
       notify({
         type: event.level,
@@ -51,6 +75,11 @@ export function routeEvent(event: DaemonEvent): void {
     case 'display.message.added':
       log.debug('event:display.message.added', { chatId: event.chatId });
       chats.addMessage(event.chatId, event.message);
+      break;
+    case 'message.updated':
+      // No frontend consumer needed today: emitDisplay() is paired with this and
+      // the renderer reacts to display.message.updated. Adding the explicit
+      // no-op so the switch stays exhaustive and a future consumer is easy to wire.
       break;
     case 'display.message.updated':
       log.debug('event:display.message.updated', { chatId: event.chatId, messageId: event.message.id });
@@ -71,7 +100,10 @@ export function routeEvent(event: DaemonEvent): void {
         toolName: event.request.toolName,
       });
       chats.addPendingPermission(event.chatId, event.request);
-      {
+      // The daemon evaluates the user's settings and tells us whether to
+      // surface an OS notification via `event.notify`. The in-app permission
+      // card is always rendered (above) regardless of that flag.
+      if (event.notify) {
         const chat = chats.chats.find((c) => c.id === event.chatId);
         notify({
           type: 'info',
@@ -149,19 +181,34 @@ export function routeEvent(event: DaemonEvent): void {
       break;
     case 'sessions.external.count':
       break;
-    case 'plugin.notification':
-      notify({
-        type:
-          event.level === 'error'
-            ? 'error'
-            : event.level === 'warning'
-              ? 'warning'
-              : event.level === 'success'
-                ? 'success'
-                : 'info',
-        title: event.title,
-        body: event.body,
+    case 'plugin.panel.registered':
+      usePluginLayoutStore.getState().registerContribution({
+        pluginId: event.pluginId,
+        panelId: event.panelId,
+        zone: event.zone,
+        label: event.label,
+        icon: event.icon,
       });
+      break;
+    case 'plugin.panel.unregistered':
+      usePluginLayoutStore.getState().unregisterContribution(event.pluginId, event.panelId);
+      break;
+    case 'plugin.notification':
+      // Daemon already gates emission on the user's notification settings.
+      {
+        notify({
+          type:
+            event.level === 'error'
+              ? 'error'
+              : event.level === 'warning'
+                ? 'warning'
+                : event.level === 'success'
+                  ? 'success'
+                  : 'info',
+          title: event.title,
+          body: event.body,
+        });
+      }
       break;
     case 'plugin.action.registered':
       usePluginLayoutStore.getState().registerAction({
@@ -190,6 +237,9 @@ export function routeEvent(event: DaemonEvent): void {
     case 'message.queued.cleared':
       chats.clearQueuedMessages(event.chatId);
       break;
+    case 'message.queued.snapshot':
+      chats.setQueuedMessages(event.chatId, event.refs);
+      break;
     case 'adapter.models.updated':
       log.info('event:adapter.models.updated', { adapterId: event.adapterId, count: event.models.length });
       useAdaptersStore.getState().updateAdapterModels(event.adapterId, event.models);
@@ -197,6 +247,18 @@ export function routeEvent(event: DaemonEvent): void {
     case 'error':
       log.error('daemon error event', { error: event.error });
       useProjectsStore.getState().setError(event.error);
+      break;
+    case 'tunnel:status':
+      // Handled by subscribers in RemoteAccessSection — no global store needed.
+      log.debug('event:tunnel:status', { state: event.state, url: event.url });
+      break;
+    case 'file:changed':
+      // Handled by subscribers in EditorTab — no global store needed.
+      log.debug('event:file:changed', { path: event.path });
+      break;
+    case 'subscribe:file:ack':
+      // Per-EditorTab listener consumes this to learn the daemon-resolved path.
+      log.debug('event:subscribe:file:ack', { requestedPath: event.requestedPath, resolvedPath: event.resolvedPath });
       break;
   }
 }

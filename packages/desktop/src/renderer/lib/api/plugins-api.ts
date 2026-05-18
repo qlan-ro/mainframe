@@ -2,6 +2,7 @@ import type { UIZone } from '@qlan-ro/mainframe-types';
 import { API_BASE, fetchJson } from './http';
 
 interface PluginPanel {
+  panelId: string;
   zone: UIZone;
   label: string;
   icon?: string;
@@ -20,7 +21,10 @@ interface PluginInfo {
   name: string;
   version: string;
   capabilities: string[];
+  /** Legacy single-panel field kept for backwards compat. */
   panel?: PluginPanel;
+  /** All panels registered by this plugin. */
+  panels?: PluginPanel[];
   actions?: PluginActionInfo[];
 }
 

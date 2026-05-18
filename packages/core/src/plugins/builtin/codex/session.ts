@@ -17,6 +17,8 @@ import { JsonRpcClient } from './jsonrpc.js';
 import { handleNotification, type CodexSessionState } from './event-mapper.js';
 import { ApprovalHandler } from './approval-handler.js';
 import { convertThreadItems } from './history.js';
+import { lookupAgentMetadata, type AgentMetadata } from './thread-registry.js';
+import { readRolloutItems } from './rollout-reader.js';
 import type {
   InitializeResult,
   ThreadStartResult,
@@ -27,6 +29,7 @@ import type {
   SandboxMode,
   CollaborationMode,
   UserInput,
+  ThreadItem,
 } from './types.js';
 import { createChildLogger } from '../../../logger.js';
 
@@ -50,6 +53,9 @@ const nullSink: SessionSink = {
   onQueuedProcessed: () => {},
   onTodoUpdate: () => {},
   onPrDetected: () => {},
+  onCliMessage: () => {},
+  onSkillLoaded: () => {},
+  onSubagentChild: () => {},
 };
 
 export class CodexSession implements AdapterSession {
@@ -63,10 +69,11 @@ export class CodexSession implements AdapterSession {
   private readonly onExitCallback: (() => void) | undefined;
   private readonly resumeThreadId: string | undefined;
 
-  readonly state: CodexSessionState = { threadId: null, currentTurnId: null };
+  readonly state: CodexSessionState = { threadId: null, currentTurnId: null, currentTurnPlan: null };
 
   private pendingModel: string | undefined;
   private pendingPermissionMode: string = 'default';
+  private pendingPlanMode: boolean = false;
   private pid = 0;
   private status: 'starting' | 'ready' | 'running' | 'stopped' | 'error' = 'starting';
 
@@ -98,6 +105,7 @@ export class CodexSession implements AdapterSession {
     this.sink = sink ?? nullSink;
     this.pendingModel = options.model;
     this.pendingPermissionMode = options.permissionMode ?? 'default';
+    this.pendingPlanMode = options.planMode ?? false;
 
     try {
       accessSync(this.projectPath);
@@ -126,6 +134,10 @@ export class CodexSession implements AdapterSession {
     this.client = new JsonRpcClient(child, {
       onNotification: (method, params) => handleNotification(method, params, this.sink, this.state),
       onRequest: (method, params, id) => {
+        approvalHandler.setPlanContext({
+          planMode: this.pendingPlanMode,
+          currentTurnPlan: this.state.currentTurnPlan,
+        });
         approvalHandler.handleRequest(method, params, id, (rpcId, result) => {
           this.client?.respond(rpcId, result);
         });
@@ -187,7 +199,11 @@ export class CodexSession implements AdapterSession {
           model: this.pendingModel,
           cwd: this.projectPath,
           persistExtendedHistory: true,
-        });
+          // Experimental: tells Codex to keep ALL ResponseItems (including child-thread
+          // commandExecution) in the rollout. Without this, sub-agent bash commands are
+          // dropped from `thread/read`/`thread/resume` responses.
+          persistFullHistory: true,
+        } as unknown as { threadId: string });
         this.state.threadId = resumeResult.thread.id;
       } else {
         const { approvalPolicy, sandbox } = this.mapPermissionMode(this.pendingPermissionMode);
@@ -198,7 +214,8 @@ export class CodexSession implements AdapterSession {
           sandbox,
           experimentalRawEvents: true,
           persistExtendedHistory: true,
-        });
+          persistFullHistory: true,
+        } as unknown as { model?: string });
         this.state.threadId = startResult.thread.id;
       }
       // Persist the real Codex thread ID immediately — don't rely on the
@@ -227,8 +244,22 @@ export class CodexSession implements AdapterSession {
   }
 
   async kill(): Promise<void> {
+    const client = this.client;
+    if (!client) return;
+
     this.approvalHandler?.rejectAll();
-    this.client?.close();
+    const closed = new Promise<void>((resolve) => {
+      const unsubscribe = client.onClose(() => {
+        unsubscribe();
+        resolve();
+      });
+    });
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(resolve, 3000);
+    });
+
+    client.close();
+    await Promise.race([closed, timeout]);
     this.client = null;
   }
 
@@ -250,6 +281,10 @@ export class CodexSession implements AdapterSession {
 
   async setPermissionMode(mode: string): Promise<void> {
     this.pendingPermissionMode = mode;
+  }
+
+  async setPlanMode(on: boolean): Promise<void> {
+    this.pendingPlanMode = on;
   }
 
   async sendCommand(_command: string, _args?: string): Promise<void> {
@@ -284,6 +319,7 @@ export class CodexSession implements AdapterSession {
     try {
       await tempClient.request('initialize', {
         clientInfo: { name: 'mainframe', title: 'Mainframe', version: '1.0.0' },
+        capabilities: { experimentalApi: true },
       });
       tempClient.notify('initialized');
 
@@ -293,7 +329,56 @@ export class CodexSession implements AdapterSession {
       });
 
       const allItems = result.thread.turns?.flatMap((t) => t.items) ?? [];
-      return convertThreadItems(allItems, this.resumeThreadId);
+
+      // For each spawned sub-agent thread referenced by a `wait` collabAgentToolCall item,
+      // recursively read the child thread so its agentMessages can be nested under the
+      // TaskGroup card. (Codex's child threads don't include commandExecution items, so
+      // we can't reproduce live bash nesting — but agentMessages provide the narrative.)
+      const childThreadIds = new Set<string>();
+      for (const item of allItems) {
+        if (
+          item.type === 'collabAgentToolCall' &&
+          (item as { tool?: string }).tool === 'wait' &&
+          Array.isArray((item as { receiverThreadIds?: string[] }).receiverThreadIds)
+        ) {
+          for (const id of (item as { receiverThreadIds: string[] }).receiverThreadIds) {
+            childThreadIds.add(id);
+          }
+        }
+      }
+
+      // Look up sub-agent identities + rollout paths from Codex's own thread DB.
+      // The nickname/role drives the TaskGroup card title; the rollout_path lets us
+      // recover sub-agent commandExecution items that `thread/read` filters out.
+      const agentMetaByThread =
+        childThreadIds.size > 0 ? lookupAgentMetadata(Array.from(childThreadIds)) : new Map<string, AgentMetadata>();
+
+      const childItemsByThread = new Map<string, ThreadItem[]>();
+      for (const childId of childThreadIds) {
+        // Prefer the raw rollout JSONL — it has function_call records (bash) that
+        // `thread/read` strips. Fall back to thread/read if the rollout isn't
+        // available (e.g. archived thread, missing rollout file).
+        const rolloutPath = agentMetaByThread.get(childId)?.rolloutPath;
+        if (rolloutPath) {
+          const items = await readRolloutItems(rolloutPath, childId);
+          if (items.length > 0) {
+            childItemsByThread.set(childId, items);
+            continue;
+          }
+        }
+        try {
+          const childResult = await tempClient.request<ThreadReadResult>('thread/read', {
+            threadId: childId,
+            includeTurns: true,
+          });
+          const items = childResult.thread.turns?.flatMap((t) => t.items) ?? [];
+          childItemsByThread.set(childId, items);
+        } catch (err) {
+          log.warn({ err, childId }, 'codex: failed to read child thread, nesting will be skipped');
+        }
+      }
+
+      return convertThreadItems(allItems, this.resumeThreadId, childItemsByThread, agentMetaByThread);
     } catch (err) {
       log.warn({ err, threadId: this.resumeThreadId }, 'codex: failed to load history');
       return [];
@@ -332,7 +417,7 @@ export class CodexSession implements AdapterSession {
   }
 
   private buildCollaborationMode(): CollaborationMode {
-    const mode = this.pendingPermissionMode === 'plan' ? 'plan' : 'default';
+    const mode = this.pendingPlanMode ? 'plan' : 'default';
     return {
       mode,
       settings: {
