@@ -55,10 +55,21 @@ const textareaInner = cn(
 
 const pillBase = cn('px-3 py-1 text-mf-small rounded-full border transition-colors cursor-pointer');
 
-function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function Pill({
+  label,
+  active,
+  onClick,
+  testId,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  testId?: string;
+}) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       className={cn(
         pillBase,
@@ -214,6 +225,7 @@ export function QuickTodoDialog() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
       <div
+        data-testid="todos-quick-dialog"
         role="dialog"
         aria-modal="true"
         className="bg-mf-panel-bg rounded-mf-panel border border-mf-border w-full max-w-md mx-4 shadow-xl flex flex-col max-h-[90vh]"
@@ -228,13 +240,14 @@ export function QuickTodoDialog() {
         <div className="px-4 py-3 space-y-3 overflow-y-auto flex-1 min-h-0">
           {/* Type toggle */}
           <div className="flex gap-2">
-            <Pill label="Feature" active={type === 'feature'} onClick={() => setType('feature')} />
-            <Pill label="Bug" active={type === 'bug'} onClick={() => setType('bug')} />
+            <Pill label="Feature" active={type === 'feature'} onClick={() => setType('feature')} testId="todos-quick-type-feature" />
+            <Pill label="Bug" active={type === 'bug'} onClick={() => setType('bug')} testId="todos-quick-type-bug" />
           </div>
 
           {/* Title */}
           <input
             ref={titleRef}
+            data-testid="todos-quick-title-input"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -247,6 +260,7 @@ export function QuickTodoDialog() {
           <div className="space-y-1">
             <div className={textareaWrap}>
               <textarea
+                data-testid="todos-quick-body-input"
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 onPaste={handlePaste}
@@ -269,6 +283,7 @@ export function QuickTodoDialog() {
                 >
                   <button
                     type="button"
+                    data-testid={`todos-quick-attachment-preview-${f.id}`}
                     onClick={() => setLightboxIndex(i)}
                     className="block w-16 h-16 focus:outline-none focus:ring-1 focus:ring-mf-accent"
                     aria-label={`Preview ${f.filename}`}
@@ -281,6 +296,7 @@ export function QuickTodoDialog() {
                   </button>
                   <button
                     type="button"
+                    data-testid={`todos-quick-attachment-remove-${f.id}`}
                     onClick={() => setPendingFiles((prev) => prev.filter((p) => p.id !== f.id))}
                     className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                     aria-label={`Remove ${f.filename}`}
@@ -304,9 +320,9 @@ export function QuickTodoDialog() {
           <div className="flex items-center gap-2">
             <span className="text-mf-small text-mf-text-secondary">Priority</span>
             <div className="flex gap-1">
-              <Pill label="Low" active={priority === 'low'} onClick={() => setPriority('low')} />
-              <Pill label="Medium" active={priority === 'medium'} onClick={() => setPriority('medium')} />
-              <Pill label="High" active={priority === 'high'} onClick={() => setPriority('high')} />
+              <Pill label="Low" active={priority === 'low'} onClick={() => setPriority('low')} testId="todos-quick-priority-low" />
+              <Pill label="Medium" active={priority === 'medium'} onClick={() => setPriority('medium')} testId="todos-quick-priority-medium" />
+              <Pill label="High" active={priority === 'high'} onClick={() => setPriority('high')} testId="todos-quick-priority-high" />
             </div>
           </div>
 
@@ -321,6 +337,7 @@ export function QuickTodoDialog() {
           </span>
           <button
             type="button"
+            data-testid="todos-quick-create"
             onClick={handleSubmit}
             disabled={!title.trim() || submitting}
             className={cn(
