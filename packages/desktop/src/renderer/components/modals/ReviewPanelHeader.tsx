@@ -45,6 +45,7 @@ export const ReviewPanelHeader: React.FC<ReviewPanelHeaderProps> = ({
           <Button
             variant="ghost"
             size="sm"
+            data-testid="review-button-close"
             onClick={onClose}
             aria-label="Close review panel"
             className="hover:bg-mf-hover"
@@ -78,6 +79,7 @@ interface ModeButtonProps {
 const ModeButton: React.FC<ModeButtonProps> = ({ active, onClick, label, children }) => (
   <button
     type="button"
+    data-testid={`review-button-mode-${label}`}
     onClick={onClick}
     aria-pressed={active}
     aria-label={`Switch to ${label} diff view`}

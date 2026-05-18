@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { HighlighterCore } from 'shiki';
 import { createLogger } from '../../../../lib/logger';
 
@@ -25,12 +25,7 @@ const LANGS = [
   'diff',
   'toml',
   'xml',
-  'c',
-  'cpp',
   'java',
-  'ruby',
-  'swift',
-  'kotlin',
 ];
 
 function getHighlighter(): Promise<HighlighterCore> {
@@ -56,10 +51,7 @@ const LANG_ALIASES: Record<string, string> = {
   zsh: 'bash',
   yml: 'yaml',
   md: 'markdown',
-  'c++': 'cpp',
   rs: 'rust',
-  rb: 'ruby',
-  kt: 'kotlin',
 };
 
 function resolveLang(lang: string | undefined): string {

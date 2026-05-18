@@ -13,6 +13,7 @@ export function SidebarTab({
   const Icon = tab.icon;
   return (
     <button
+      data-testid={`settings-modal-sidebar-tab-${tab.id}`}
       onClick={onClick}
       className={`w-full flex items-center gap-2.5 px-3 py-2 text-mf-small transition-colors ${
         active

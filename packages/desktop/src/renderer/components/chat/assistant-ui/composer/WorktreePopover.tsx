@@ -23,12 +23,14 @@ function BranchSelect({
   options,
   currentBranch,
   onChange,
+  testId,
 }: {
   label: string;
   value: string;
   options: string[];
   currentBranch: string;
   onChange: (v: string) => void;
+  testId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -48,6 +50,7 @@ function BranchSelect({
       <div className="relative" ref={ref}>
         <button
           type="button"
+          data-testid={testId}
           onClick={() => setOpen((o) => !o)}
           className="w-full flex items-center justify-between rounded-mf-input border border-mf-border bg-mf-panel-bg px-2 py-1.5 text-mf-small text-mf-text-primary outline-none hover:border-mf-accent cursor-pointer transition-colors"
         >
@@ -63,6 +66,7 @@ function BranchSelect({
               <button
                 key={b}
                 type="button"
+                data-testid={testId ? `${testId}-option-${b}` : undefined}
                 onClick={() => {
                   onChange(b);
                   setOpen(false);
@@ -256,6 +260,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
       <div className="flex items-center gap-0.5 mb-3 p-0.5 rounded-md bg-mf-input">
         <button
           type="button"
+          data-testid="composer-worktree-tab-existing"
           onClick={() => setTab('existing')}
           className={`flex-1 text-mf-small px-2 py-0.5 rounded transition-colors ${
             tab === 'existing'
@@ -267,6 +272,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
         </button>
         <button
           type="button"
+          data-testid="composer-worktree-tab-new"
           onClick={() => setTab('new')}
           className={`flex-1 text-mf-small px-2 py-0.5 rounded transition-colors ${
             tab === 'new'
@@ -288,6 +294,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
               <button
                 key={wt.path}
                 type="button"
+                data-testid={`composer-worktree-attach-${wt.path}`}
                 disabled={submitting}
                 onClick={() => void handleAttach(wt)}
                 className="w-full text-left px-2 py-2 rounded-mf-input text-mf-small hover:bg-mf-hover transition-colors"
@@ -314,12 +321,14 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
             options={branches}
             currentBranch={currentBranch}
             onChange={setBaseBranch}
+            testId="composer-worktree-base-branch"
           />
 
           <label className="block mb-2">
             <span className="text-mf-small text-mf-text-secondary mb-1 block">Branch name</span>
             <input
               type="text"
+              data-testid="composer-worktree-branch-name"
               value={branchName}
               onChange={(e) => {
                 setBranchName(e.target.value);
@@ -336,6 +345,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
           <div className="flex items-center justify-end gap-2 mt-3">
             <button
               type="button"
+              data-testid="composer-worktree-cancel"
               onClick={onClose}
               className="px-3 py-1.5 rounded-mf-input text-mf-small text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
             >
@@ -343,6 +353,7 @@ export function WorktreePopover({ chatId, hasMessages, onClose }: WorktreePopove
             </button>
             <button
               type="button"
+              data-testid="composer-worktree-enable"
               disabled={submitting || !!validationError || !branchName}
               onClick={handleEnable}
               className="px-3 py-1.5 rounded-mf-input text-mf-small bg-mf-accent text-mf-panel-bg hover:opacity-90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"

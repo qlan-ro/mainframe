@@ -21,6 +21,7 @@ export function CodeHeader({ language, code }: CodeHeaderProps) {
         {language && language !== 'unknown' ? language : 'text'}
       </span>
       <button
+        data-testid="message-part-copy"
         type="button"
         onClick={handleCopy}
         aria-label={copied ? 'Copied' : 'Copy code'}

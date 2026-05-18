@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronRight, ChevronDown, Folder, X } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, File, X } from 'lucide-react';
 import { browseFilesystem, type BrowseEntry } from '../lib/api/files-api';
 import { createLogger } from '../lib/logger';
 
@@ -8,6 +8,7 @@ const log = createLogger('renderer:dir-picker');
 interface DirNode {
   name: string;
   path: string;
+  type: 'file' | 'directory';
   children?: DirNode[];
   loading?: boolean;
   expanded?: boolean;
@@ -17,15 +18,18 @@ interface DirectoryPickerModalProps {
   open: boolean;
   onSelect: (path: string) => void;
   onCancel: () => void;
+  mode?: 'directory' | 'file';
 }
 
 export function DirectoryPickerModal({
   open,
   onSelect,
   onCancel,
+  mode = 'directory',
 }: DirectoryPickerModalProps): React.ReactElement | null {
   const [roots, setRoots] = useState<DirNode[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<'file' | 'directory' | null>(null);
   const [homePath, setHomePath] = useState<string>('');
 
   // Escape key to close
@@ -41,74 +45,87 @@ export function DirectoryPickerModal({
   useEffect(() => {
     if (!open) return;
     setSelectedPath(null);
-    browseFilesystem()
+    setSelectedType(null);
+    browseFilesystem(undefined, { includeFiles: mode === 'file' })
       .then((result) => {
         setHomePath(result.path);
-        setRoots(result.entries.map((e: BrowseEntry) => ({ name: e.name, path: e.path })));
+        const entries = mode === 'file' ? result.entries : result.entries.filter((e: BrowseEntry) => e.type !== 'file');
+        setRoots(entries.map((e: BrowseEntry) => ({ name: e.name, path: e.path, type: e.type ?? 'directory' })));
       })
       .catch((err) => log.warn('failed to load home directory', { err: String(err) }));
-  }, [open]);
+  }, [open, mode]);
 
-  const toggleExpand = useCallback(async (node: DirNode, indexPath: number[]) => {
-    setRoots((prev) => {
-      const next = structuredClone(prev);
-      let target = next;
-      for (let i = 0; i < indexPath.length - 1; i++) {
-        target = target[indexPath[i]!]!.children!;
-      }
-      const n = target[indexPath[indexPath.length - 1]!]!;
+  const toggleExpand = useCallback(
+    async (node: DirNode, indexPath: number[]) => {
+      if (node.type === 'file') return;
+      setRoots((prev) => {
+        const next = structuredClone(prev);
+        let target = next;
+        for (let i = 0; i < indexPath.length - 1; i++) {
+          target = target[indexPath[i]!]!.children!;
+        }
+        const n = target[indexPath[indexPath.length - 1]!]!;
 
-      if (n.expanded) {
-        n.expanded = false;
-        return next;
-      }
+        if (n.expanded) {
+          n.expanded = false;
+          return next;
+        }
 
-      if (n.children) {
+        if (n.children) {
+          n.expanded = true;
+          return next;
+        }
+
+        n.loading = true;
         n.expanded = true;
+
+        browseFilesystem(n.path, { includeFiles: mode === 'file' })
+          .then((result) => {
+            setRoots((prev2) => {
+              const next2 = structuredClone(prev2);
+              let t = next2;
+              for (let i = 0; i < indexPath.length - 1; i++) {
+                t = t[indexPath[i]!]!.children!;
+              }
+              const node2 = t[indexPath[indexPath.length - 1]!]!;
+              const childEntries =
+                mode === 'file' ? result.entries : result.entries.filter((e: BrowseEntry) => e.type !== 'file');
+              node2.children = childEntries.map((e: BrowseEntry) => ({
+                name: e.name,
+                path: e.path,
+                type: e.type ?? 'directory',
+              }));
+              node2.loading = false;
+              return next2;
+            });
+          })
+          .catch((err) => {
+            log.warn('failed to load directory', { err: String(err), path: n.path });
+            setRoots((prev2) => {
+              const next2 = structuredClone(prev2);
+              let t = next2;
+              for (let i = 0; i < indexPath.length - 1; i++) {
+                t = t[indexPath[i]!]!.children!;
+              }
+              const node2 = t[indexPath[indexPath.length - 1]!]!;
+              node2.loading = false;
+              node2.children = [];
+              return next2;
+            });
+          });
+
         return next;
-      }
-
-      n.loading = true;
-      n.expanded = true;
-
-      browseFilesystem(n.path)
-        .then((result) => {
-          setRoots((prev2) => {
-            const next2 = structuredClone(prev2);
-            let t = next2;
-            for (let i = 0; i < indexPath.length - 1; i++) {
-              t = t[indexPath[i]!]!.children!;
-            }
-            const node2 = t[indexPath[indexPath.length - 1]!]!;
-            node2.children = result.entries.map((e: BrowseEntry) => ({ name: e.name, path: e.path }));
-            node2.loading = false;
-            return next2;
-          });
-        })
-        .catch((err) => {
-          log.warn('failed to load directory', { err: String(err), path: n.path });
-          setRoots((prev2) => {
-            const next2 = structuredClone(prev2);
-            let t = next2;
-            for (let i = 0; i < indexPath.length - 1; i++) {
-              t = t[indexPath[i]!]!.children!;
-            }
-            const node2 = t[indexPath[indexPath.length - 1]!]!;
-            node2.loading = false;
-            node2.children = [];
-            return next2;
-          });
-        });
-
-      return next;
-    });
-  }, []);
+      });
+    },
+    [mode],
+  );
 
   if (!open) return null;
 
   const renderNode = (node: DirNode, indexPath: number[]): React.ReactElement => {
     const depth = indexPath.length - 1;
     const isSelected = selectedPath === node.path;
+    const isFile = node.type === 'file';
 
     return (
       <div key={node.path}>
@@ -116,13 +133,20 @@ export function DirectoryPickerModal({
           data-testid={`dir-entry-${node.path}`}
           onClick={() => {
             setSelectedPath(node.path);
-            void toggleExpand(node, indexPath);
+            setSelectedType(node.type);
+            if (!isFile) void toggleExpand(node, indexPath);
           }}
           className={`w-full flex items-center gap-1 px-2 py-1 text-mf-body text-left hover:bg-mf-hover/50 transition-colors ${isSelected ? 'bg-mf-hover text-mf-text-primary font-medium' : 'text-mf-text-secondary'}`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
         >
-          {node.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <Folder size={14} />
+          {isFile ? (
+            <span style={{ width: 14 }} />
+          ) : node.expanded ? (
+            <ChevronDown size={14} />
+          ) : (
+            <ChevronRight size={14} />
+          )}
+          {isFile ? <File size={14} /> : <Folder size={14} />}
           <span className="truncate">{node.name}</span>
         </button>
         {node.expanded && node.children && (
@@ -159,7 +183,7 @@ export function DirectoryPickerModal({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border">
           <h2 className="text-mf-body font-semibold text-mf-text-primary">Select Project Directory</h2>
-          <button onClick={onCancel} className="text-mf-text-secondary hover:text-mf-text-primary transition-colors">
+          <button data-testid="directory-picker-close" onClick={onCancel} className="text-mf-text-secondary hover:text-mf-text-primary transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -176,6 +200,7 @@ export function DirectoryPickerModal({
           </span>
           <div className="flex items-center gap-2">
             <button
+              data-testid="directory-picker-cancel"
               onClick={onCancel}
               className="px-3 py-1.5 text-mf-body text-mf-text-secondary hover:text-mf-text-primary transition-colors"
             >
@@ -184,7 +209,7 @@ export function DirectoryPickerModal({
             <button
               data-testid="dir-picker-select-btn"
               onClick={() => selectedPath && onSelect(selectedPath)}
-              disabled={!selectedPath}
+              disabled={mode === 'file' ? selectedType !== 'file' : !selectedPath}
               className="px-3 py-1.5 text-mf-body bg-mf-accent text-white rounded-mf-card disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
             >
               Select

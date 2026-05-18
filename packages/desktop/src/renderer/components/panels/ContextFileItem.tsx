@@ -18,6 +18,7 @@ export function ContextFileItem({ path, displayName, badge }: ContextFileItemPro
 
   return (
     <button
+      data-testid={`files-context-item-${path}`}
       onClick={handleClick}
       className="flex items-center gap-2 px-2 py-1 rounded-mf-input hover:bg-mf-hover cursor-pointer text-mf-small text-mf-text-primary w-full text-left"
     >

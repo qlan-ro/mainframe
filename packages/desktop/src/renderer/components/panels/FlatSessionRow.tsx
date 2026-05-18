@@ -256,6 +256,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
             {/* title + select target */}
             <button
               type="button"
+              data-testid={`chats-session-select-${chat.id}`}
               onClick={handleSelect}
               className={cn('min-w-0 text-left flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}
             >
@@ -263,6 +264,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               {editing ? (
                 <input
                   ref={inputRef}
+                  data-testid={`chats-session-rename-input-${chat.id}`}
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
                   onBlur={handleCommitRename}
@@ -380,6 +382,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
                 <TooltipTrigger asChild>
                   <button
                     ref={tagButtonRef}
+                    data-testid={`chats-session-tags-${chat.id}`}
                     onClick={openTagPopover}
                     className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                     aria-label="Edit tags"
@@ -392,6 +395,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid={`chats-session-rename-${chat.id}`}
                     onClick={handleStartRename}
                     className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                     aria-label="Rename session"
@@ -404,6 +408,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid={`chats-session-archive-${chat.id}`}
                     onClick={handleArchive}
                     disabled={archiving}
                     className={cn(

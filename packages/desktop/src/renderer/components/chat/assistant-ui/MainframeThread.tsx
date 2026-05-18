@@ -5,6 +5,7 @@ import { useMainframeRuntime } from './MainframeRuntimeProvider';
 import { useChatsStore } from '../../../store/chats';
 import { ImageLightbox } from '../ImageLightbox';
 import { UserMessage, AssistantMessage, SystemMessage } from './messages';
+import { MessageRenderBoundary } from './messages/MessageRenderBoundary';
 import { ComposerCard } from './composer';
 import { QuoteOnSelectionButton } from './QuoteOnSelectionButton';
 import { FindBar } from './FindBar';
@@ -75,6 +76,24 @@ function BottomCard() {
   );
 }
 
+const BoundedUserMessage = () => (
+  <MessageRenderBoundary>
+    <UserMessage />
+  </MessageRenderBoundary>
+);
+
+const BoundedAssistantMessage = () => (
+  <MessageRenderBoundary>
+    <AssistantMessage />
+  </MessageRenderBoundary>
+);
+
+const BoundedSystemMessage = () => (
+  <MessageRenderBoundary>
+    <SystemMessage />
+  </MessageRenderBoundary>
+);
+
 export function MainframeThread() {
   const { lightbox, closeLightbox, navigateLightbox } = useMainframeRuntime();
   const activeChatId = useChatsStore((s) => s.activeChatId);
@@ -112,9 +131,9 @@ export function MainframeThread() {
               <div data-mf-chat-thread className="px-6 py-6 space-y-5">
                 <ThreadPrimitive.Messages
                   components={{
-                    UserMessage,
-                    AssistantMessage,
-                    SystemMessage,
+                    UserMessage: BoundedUserMessage,
+                    AssistantMessage: BoundedAssistantMessage,
+                    SystemMessage: BoundedSystemMessage,
                   }}
                 />
                 <GeneratingIndicator />

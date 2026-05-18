@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification, session, shell, ipcMain, utilityProcess } from 'electron';
+import { app, BrowserWindow, Notification, session, shell, ipcMain, utilityProcess, webContents } from 'electron';
 import type { UtilityProcess } from 'electron';
 import { join, resolve, sep } from 'path';
 import { execFileSync } from 'child_process';
@@ -8,6 +8,7 @@ import { createMainLogger, logFromRenderer } from './logger.js';
 import { setupTerminalIPC, killAllTerminals } from './terminal-manager.js';
 import { initAutoUpdater } from './auto-updater.js';
 import { startIdleReporter, stopIdleReporter } from './idle-reporter.js';
+import { startRendererMemoryLogger, stopRendererMemoryLogger } from './memory-logger.js';
 import { buildApplicationMenu } from './menu.js';
 import { setupWebviewSandbox } from './sandbox.js';
 
@@ -139,6 +140,16 @@ function setupIPC(): void {
     openExternalSafe(url);
   });
 
+  ipcMain.handle('webview:destroy', (_event, webContentsId: number) => {
+    const wc = webContents.fromId(webContentsId);
+    if (!wc || wc.isDestroyed()) return;
+    if (wc.getType() !== 'webview') {
+      log.warn({ webContentsId, type: wc.getType() }, 'webview:destroy refused non-webview target');
+      return;
+    }
+    wc.close();
+  });
+
   ipcMain.handle('sandbox:clearSession', async (_event, projectId: string) => {
     const partition = `persist:sandbox-${projectId}`;
     const ses = session.fromPartition(partition);
@@ -267,6 +278,7 @@ app.whenReady().then(() => {
 
   createWindow();
   startIdleReporter();
+  startRendererMemoryLogger(() => mainWindow);
 
   if (mainWindow) initAutoUpdater(mainWindow);
 
@@ -283,6 +295,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  stopRendererMemoryLogger();
 });
 
 app.on('quit', () => {

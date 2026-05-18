@@ -37,6 +37,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             {this.state.error?.message}
           </pre>
           <button
+            data-testid="error-boundary-retry"
             onClick={() => this.setState({ hasError: false, error: null })}
             className="px-4 py-2 rounded-mf-input bg-mf-hover text-mf-text-primary hover:bg-mf-hover/80 transition-colors"
           >

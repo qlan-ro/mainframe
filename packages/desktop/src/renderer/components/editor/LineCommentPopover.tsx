@@ -74,7 +74,7 @@ export function LineCommentPopover({
           </TooltipTrigger>
           <TooltipContent>{filePath}</TooltipContent>
         </Tooltip>
-        <button onClick={onClose} className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary">
+        <button data-testid="editor-line-comment-close" onClick={onClose} className="p-0.5 rounded hover:bg-mf-hover/50 text-mf-text-secondary">
           <X size={14} />
         </button>
       </div>
@@ -94,6 +94,7 @@ export function LineCommentPopover({
 
       <div className="p-3">
         <textarea
+          data-testid="editor-line-comment-input"
           ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -109,6 +110,7 @@ export function LineCommentPopover({
         <div className="flex items-center justify-between mt-2">
           <span className="text-[11px] text-mf-text-secondary opacity-40">Enter to send · Shift+Enter for newline</span>
           <button
+            data-testid="editor-line-comment-send"
             onClick={handleSubmit}
             disabled={!text.trim()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-mf-accent/20 text-mf-accent text-mf-small font-medium hover:bg-mf-accent/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"

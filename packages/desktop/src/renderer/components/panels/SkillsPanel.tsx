@@ -63,6 +63,7 @@ function SkillItem({
       </div>
       <div className="relative shrink-0">
         <button
+          data-testid={`skills-item-menu-${skill.id}`}
           onClick={(e) => {
             e.stopPropagation();
             setMenuOpen(!menuOpen);
@@ -77,6 +78,7 @@ function SkillItem({
             onMouseLeave={() => setMenuOpen(false)}
           >
             <button
+              data-testid={`skills-item-edit-${skill.id}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setMenuOpen(false);
@@ -88,6 +90,7 @@ function SkillItem({
             </button>
             {skill.scope !== 'plugin' && (
               <button
+                data-testid={`skills-item-delete-${skill.id}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   setMenuOpen(false);

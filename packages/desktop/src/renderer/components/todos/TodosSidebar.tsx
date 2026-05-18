@@ -72,6 +72,7 @@ export function TodosSidebar(): React.ReactElement {
             <button
               key={t.id}
               type="button"
+              data-testid={`todos-sidebar-item-${t.id}`}
               onClick={() => activateFullview('todos')}
               className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-mf-hover/40 transition-colors"
               title={t.title}

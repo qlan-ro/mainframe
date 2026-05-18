@@ -58,6 +58,7 @@ export function TagPill({ label, color, variant, active, onClick, onContextMenu 
   return (
     <button
       type="button"
+      data-testid={`tags-button-filter-${label}`}
       onClick={onClick}
       onContextMenu={onContextMenu}
       className={cn(

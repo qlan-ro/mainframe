@@ -145,6 +145,7 @@ function LinkWithPreview({
         <TooltipContent className="flex items-center gap-1.5 max-w-[400px]">
           <span className="truncate min-w-0">{href}</span>
           <button
+            data-testid="message-part-copy-url"
             type="button"
             onClick={copyUrl}
             className="shrink-0 px-1.5 py-0.5 rounded bg-mf-hover hover:bg-mf-border text-mf-text-secondary hover:text-mf-text-primary transition-colors text-[10px]"

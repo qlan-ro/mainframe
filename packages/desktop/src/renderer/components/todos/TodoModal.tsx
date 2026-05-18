@@ -206,6 +206,7 @@ export function TodoModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div
+        data-testid="todos-modal-dialog"
         role="dialog"
         aria-modal="true"
         aria-label={todo ? 'Edit Task' : 'New Task'}
@@ -216,6 +217,7 @@ export function TodoModal({
         <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border">
           <h2 className="text-mf-body font-medium text-mf-text-primary">{todo ? 'Edit Task' : 'New Task'}</h2>
           <button
+            data-testid="todos-modal-close"
             onClick={onClose}
             className="p-1 rounded text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
             aria-label="Close"
@@ -232,6 +234,7 @@ export function TodoModal({
               </label>
               <input
                 id="todo-title"
+                data-testid="todos-modal-title-input"
                 className={input}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -245,6 +248,7 @@ export function TodoModal({
               <div className="flex flex-col gap-1">
                 <label className="text-mf-small text-mf-text-secondary">Type</label>
                 <select
+                  data-testid="todos-modal-type-select"
                   className={cn(input, 'cursor-pointer capitalize')}
                   value={type}
                   onChange={(e) => setType(e.target.value as TodoType)}
@@ -259,6 +263,7 @@ export function TodoModal({
               <div className="flex flex-col gap-1">
                 <label className="text-mf-small text-mf-text-secondary">Priority</label>
                 <select
+                  data-testid="todos-modal-priority-select"
                   className={cn(input, 'cursor-pointer capitalize')}
                   value={priority}
                   onChange={(e) => setPriority(e.target.value as TodoPriority)}
@@ -273,6 +278,7 @@ export function TodoModal({
               <div className="flex flex-col gap-1">
                 <label className="text-mf-small text-mf-text-secondary">Status</label>
                 <select
+                  data-testid="todos-modal-status-select"
                   className={cn(input, 'cursor-pointer capitalize')}
                   value={status}
                   onChange={(e) => setStatus(e.target.value as TodoStatus)}
@@ -293,6 +299,7 @@ export function TodoModal({
               </div>
               <div className={textareaWrap}>
                 <textarea
+                  data-testid="todos-modal-body-input"
                   className={textareaInner}
                   rows={4}
                   value={body}
@@ -318,6 +325,7 @@ export function TodoModal({
                       >
                         <button
                           type="button"
+                          data-testid={`todos-modal-attachment-preview-${f.id}`}
                           onClick={() => setLightboxIndex(i)}
                           className="block w-20 h-20 focus:outline-none focus:ring-1 focus:ring-mf-accent"
                           aria-label={`Preview ${f.filename}`}
@@ -333,6 +341,7 @@ export function TodoModal({
                         </div>
                         <button
                           type="button"
+                          data-testid={`todos-modal-attachment-remove-${f.id}`}
                           onClick={() => removePending(f.id)}
                           className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                           aria-label={`Remove ${f.filename}`}
@@ -353,6 +362,7 @@ export function TodoModal({
                 )}
                 <input
                   ref={fileInputRef}
+                  data-testid="todos-modal-file-input"
                   type="file"
                   accept={IMAGE_ACCEPT}
                   onChange={handleFilePick}
@@ -360,6 +370,7 @@ export function TodoModal({
                 />
                 <button
                   type="button"
+                  data-testid="todos-modal-upload"
                   onClick={() => fileInputRef.current?.click()}
                   className="flex items-center gap-1 w-fit px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
                 >
@@ -377,6 +388,7 @@ export function TodoModal({
             <div className="flex flex-col gap-1">
               <label className="text-mf-small text-mf-text-secondary">Assignees (comma-separated)</label>
               <input
+                data-testid="todos-modal-assignees-input"
                 className={input}
                 value={assignees}
                 onChange={(e) => setAssignees(e.target.value)}
@@ -387,6 +399,7 @@ export function TodoModal({
             <div className="flex flex-col gap-1">
               <label className="text-mf-small text-mf-text-secondary">Milestone</label>
               <input
+                data-testid="todos-modal-milestone-input"
                 className={input}
                 value={milestone}
                 onChange={(e) => setMilestone(e.target.value)}
@@ -408,6 +421,7 @@ export function TodoModal({
             {todo && todo.status === 'in_progress' && onStartSession && (
               <button
                 type="button"
+                data-testid="todos-modal-start-session"
                 onClick={() => {
                   onStartSession(todo);
                   onClose();
@@ -419,6 +433,7 @@ export function TodoModal({
             )}
             <button
               type="button"
+              data-testid="todos-modal-cancel"
               onClick={onClose}
               className="px-3 py-1.5 rounded-mf-input text-mf-small text-mf-text-secondary hover:bg-mf-hover transition-colors"
             >
@@ -426,6 +441,7 @@ export function TodoModal({
             </button>
             <button
               type="submit"
+              data-testid="todos-modal-save"
               disabled={!title.trim()}
               className="px-3 py-1.5 rounded-mf-input text-mf-small bg-mf-accent text-white disabled:opacity-40 hover:bg-mf-accent/90 transition-colors"
             >

@@ -3,6 +3,8 @@ import { stripMainframeCommandTags, parseCommandMessage, parseAttachedFilePathTa
 import type { GroupedMessage } from './message-grouping.js';
 import type { PartEntry } from './tool-grouping.js';
 import { groupToolCallParts, groupTaskChildren } from './tool-grouping.js';
+import { truncateToolContent } from './truncate-tool-content.js';
+import { parseAskUserQuestionResult } from './parse-ask-user-question.js';
 
 const INTERNAL_USER_RE = /<mainframe-command[\s>]/;
 
@@ -30,13 +32,16 @@ export function categorizeToolCall(
 }
 
 /** Build a ToolCallResult from a tool_result content block. */
-function toToolCallResult(block: MessageContent & { type: 'tool_result' }): ToolCallResult {
+export function toToolCallResult(block: MessageContent & { type: 'tool_result' }, toolName?: string): ToolCallResult {
+  const t = truncateToolContent(block.content);
   return {
-    content: block.content,
+    content: t.content,
     isError: block.isError,
+    ...(t.truncated ? { truncated: true, fullBytes: t.fullBytes } : {}),
     ...(block.structuredPatch && { structuredPatch: block.structuredPatch }),
     ...(block.originalFile && { originalFile: block.originalFile }),
     ...(block.modifiedFile && { modifiedFile: block.modifiedFile }),
+    ...(toolName === 'AskUserQuestion' ? { askUserQuestion: parseAskUserQuestionResult(block.content) } : {}),
   };
 }
 
@@ -72,15 +77,16 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
       seenToolIds.add(block.id);
 
       const resultBlock = grouped._toolResults?.get(block.id);
+      const baseCategory = categorizeToolCall(block.name, categories);
       const call: DisplayContent & { type: 'tool_call' } = {
         type: 'tool_call',
         id: block.id,
         name: block.name,
         input: block.input,
-        category: categorizeToolCall(block.name, categories),
+        category: block.name === 'AskUserQuestion' && resultBlock ? 'default' : baseCategory,
         ...withParentId(block.parentToolUseId),
       };
-      if (resultBlock) call.result = toToolCallResult(resultBlock);
+      if (resultBlock) call.result = toToolCallResult(resultBlock, block.name);
       content.push(call);
     }
   }
@@ -164,6 +170,7 @@ export function applyToolGrouping(content: DisplayContent[], categories: ToolCat
         args: c.input,
         result: c.result,
         isError: c.result?.isError,
+        category: c.category,
         ...withParentId(c.parentToolUseId),
       };
     }
@@ -276,7 +283,7 @@ function convertGroupedPartsToDisplay(
         ...(part.result != null && { result: part.result as ToolCallResult }),
       });
     } else {
-      // Regular tool call — find original DisplayContent to preserve result
+      // Regular tool call — find original DisplayContent to preserve result and category
       const orig = originalContent.find((c) => c.type === 'tool_call' && c.id === part.toolCallId) as
         | (DisplayContent & { type: 'tool_call' })
         | undefined;
@@ -285,7 +292,7 @@ function convertGroupedPartsToDisplay(
         id: part.toolCallId,
         name: part.toolName,
         input: part.args,
-        category: categorizeToolCall(part.toolName, categories),
+        category: orig?.category ?? categorizeToolCall(part.toolName, categories),
         ...(orig?.result && { result: orig.result }),
         ...withParentId(part.parentToolUseId),
       });

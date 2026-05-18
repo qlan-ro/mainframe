@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import type { WebviewTag } from 'electron';
+import { loadUrlWithRetry } from './loadUrlWithRetry';
 import {
   Trash2,
   RotateCw,
@@ -216,6 +218,26 @@ export function PreviewTab(): React.ReactElement {
     consoleDragging.current = false;
   }, []);
 
+  // Destroy the underlying webContents on unmount. Removing the <webview> DOM
+  // node alone leaks the host guest process and its partition state; the
+  // main-process IPC handler resolves the id and closes the webContents.
+  // getWebContentsId() throws before dom-ready, so skip if the guest never
+  // finished loading.
+  useEffect(() => {
+    return () => {
+      const wv = webviewRef.current as WebviewTag | null;
+      if (!wv) return;
+      try {
+        const id = wv.getWebContentsId();
+        window.mainframe?.destroyWebview(id).catch((err: unknown) => {
+          console.warn('[sandbox] webview destroy IPC failed', err);
+        });
+      } catch (err) {
+        console.warn('[sandbox] webview unmount: webContents unavailable (dom-ready never fired)', err);
+      }
+    };
+  }, []);
+
   // Reset ready state when process stops or scope changes (worktree switch)
   useEffect(() => {
     if (previewStatus !== 'running') {
@@ -250,12 +272,21 @@ export function PreviewTab(): React.ReactElement {
       } catch {
         /* not ready yet */
       }
-      wv.loadURL(previewUrl)
-        .then(() => {
-          if (cancelled) return;
-          setWebviewReady(true);
-        })
-        .catch(() => {});
+      // The daemon emits 'running' on port-bind, but the dev server may not be
+      // accepting requests yet (cold compile) — the first loadURL can reject
+      // with ERR_CONNECTION_REFUSED. Retry with backoff instead of swallowing,
+      // otherwise the overlay hangs on "Waiting for localhost…" until a manual
+      // stop/start re-runs this effect.
+      void loadUrlWithRetry({
+        load: () => wv.loadURL(previewUrl),
+        attempts: 15,
+        delayMs: 1000,
+        isCancelled: () => cancelled,
+        onError: (err, attempt) =>
+          console.warn(`[sandbox] preview loadURL attempt ${attempt} failed for ${previewUrl}`, err),
+      }).then((ok) => {
+        if (ok && !cancelled) setWebviewReady(true);
+      });
     };
 
     // Wait for dom-ready if the webview isn't ready yet
@@ -453,6 +484,7 @@ export function PreviewTab(): React.ReactElement {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid="sandbox-button-restart"
                     onClick={() => void handleRestart()}
                     className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                   >
@@ -464,6 +496,7 @@ export function PreviewTab(): React.ReactElement {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid="sandbox-button-stop"
                     onClick={() => void handleStop()}
                     className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-red-400 transition-colors"
                   >
@@ -477,6 +510,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-start"
                   onClick={() => void handleStart()}
                   className="p-1 rounded hover:bg-mf-hover text-mf-accent transition-colors"
                 >
@@ -492,6 +526,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-reload"
                   onClick={handleReload}
                   className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                 >
@@ -503,6 +538,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-inspect"
                   onClick={() => void handleInspect()}
                   className={[
                     'p-1 rounded transition-colors',
@@ -519,6 +555,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-screenshot"
                   onClick={() => void handleFullScreenshot()}
                   className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                 >
@@ -530,6 +567,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-region-capture"
                   onClick={() => (capturingRegion ? exitCaptureMode() : setCapturingRegion(true))}
                   className={[
                     'p-1 rounded transition-colors',
@@ -546,6 +584,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-mobile-view"
                   onClick={() => setMobileView((v) => !v)}
                   className={[
                     'p-1 rounded transition-colors',
@@ -563,6 +602,7 @@ export function PreviewTab(): React.ReactElement {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid="sandbox-button-clear-session"
                     onClick={() => {
                       window.mainframe.clearSandboxSession(activeProjectId).then(() => handleReload());
                     }}
@@ -686,6 +726,7 @@ export function PreviewTab(): React.ReactElement {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
+                      data-testid="sandbox-button-clear-logs"
                       onClick={() => {
                         if (selectedProcess && scopeKey) clearLogsForProcess(scopeKey, selectedProcess);
                       }}
@@ -700,6 +741,7 @@ export function PreviewTab(): React.ReactElement {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
+                      data-testid="sandbox-button-toggle-console"
                       onClick={() => setLogExpanded(!logExpanded)}
                       className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                     >

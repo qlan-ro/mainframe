@@ -89,6 +89,7 @@ export function TaskGroupCard({ args, result, isError }: ToolCardProps) {
   return (
     <div ref={ref} className="space-y-1">
       <button
+        data-testid="tool-task-group-toggle"
         onClick={() => toggle()}
         className="w-full flex items-center gap-2 py-0.5 text-mf-body hover:bg-mf-hover/20 transition-colors"
       >

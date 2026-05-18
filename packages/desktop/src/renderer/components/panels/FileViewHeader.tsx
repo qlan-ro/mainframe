@@ -77,6 +77,7 @@ export function FileViewHeader(): React.ReactElement | null {
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                data-testid="fileview-prev-change"
                 onClick={() => navigateDiff('prev')}
                 className="p-0.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                 aria-label="Previous change"
@@ -89,6 +90,7 @@ export function FileViewHeader(): React.ReactElement | null {
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                data-testid="fileview-next-change"
                 onClick={() => navigateDiff('next')}
                 className="p-0.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                 aria-label="Next change"
@@ -112,6 +114,7 @@ export function FileViewHeader(): React.ReactElement | null {
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              data-testid="fileview-reveal-in-tree"
               onClick={() => revealFileInTree(filePath)}
               className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
               aria-label="Select in file tree"
@@ -125,6 +128,7 @@ export function FileViewHeader(): React.ReactElement | null {
       <Tooltip>
         <TooltipTrigger asChild>
           <button
+            data-testid="fileview-collapse"
             onClick={toggleFileViewCollapsed}
             className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
             aria-label="Collapse file view"

@@ -32,7 +32,7 @@ function renderWithProviders(ui: React.ReactElement) {
 
 const claudeAdapter: AdapterInfo = {
   id: 'claude',
-  name: 'Claude CLI',
+  name: 'Claude Code',
   description: '',
   installed: true,
   models: [

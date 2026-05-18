@@ -187,6 +187,7 @@ export function FindBar(): React.ReactElement | null {
     >
       <input
         ref={inputRef}
+        data-testid="thread-find-input"
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -199,6 +200,7 @@ export function FindBar(): React.ReactElement | null {
         {query ? `${current}/${count}` : ''}
       </span>
       <button
+        data-testid="thread-find-prev"
         onClick={prev}
         disabled={count === 0}
         className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary disabled:opacity-30"
@@ -207,6 +209,7 @@ export function FindBar(): React.ReactElement | null {
         <ChevronUp size={14} />
       </button>
       <button
+        data-testid="thread-find-next"
         onClick={next}
         disabled={count === 0}
         className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary disabled:opacity-30"
@@ -215,6 +218,7 @@ export function FindBar(): React.ReactElement | null {
         <ChevronDown size={14} />
       </button>
       <button
+        data-testid="thread-find-close"
         onClick={close}
         className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary"
         aria-label="Close find bar"

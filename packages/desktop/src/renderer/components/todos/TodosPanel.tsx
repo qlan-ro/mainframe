@@ -217,6 +217,7 @@ export function TodosPanel(): React.ReactElement {
   const newButton = useMemo(
     () => (
       <button
+        data-testid="todos-new"
         onClick={() => {
           setEditingTodo(null);
           setModalOpen(true);
@@ -250,7 +251,7 @@ export function TodosPanel(): React.ReactElement {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-2 text-mf-text-secondary text-mf-small px-4 text-center">
         <p>{error}</p>
-        <button onClick={() => void loadTodos()} className="text-mf-accent hover:underline">
+        <button data-testid="todos-retry" onClick={() => void loadTodos()} className="text-mf-accent hover:underline">
           Retry
         </button>
       </div>

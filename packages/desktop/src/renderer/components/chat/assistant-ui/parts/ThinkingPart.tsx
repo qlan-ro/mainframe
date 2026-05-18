@@ -9,6 +9,7 @@ export const ThinkingPart: ReasoningMessagePartComponent = ({ text }) => {
   return (
     <div className="rounded-mf-card bg-mf-input-bg/50 border border-mf-divider/50 overflow-hidden">
       <button
+        data-testid="message-part-thinking-toggle"
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-2 px-3 py-2 text-mf-body hover:bg-mf-hover/30 transition-colors"
       >

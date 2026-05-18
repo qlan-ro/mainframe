@@ -37,6 +37,7 @@ export function PermissionCard({ request, onRespond }: PermissionCardProps): Rea
         {/* Collapsible command preview */}
         <div>
           <button
+            data-testid="chat-permission-details-toggle"
             onClick={() => setDetailsOpen((v) => !v)}
             className="flex items-center gap-1.5 text-mf-small text-mf-text-secondary hover:text-mf-text-primary transition-colors"
           >
@@ -54,14 +55,15 @@ export function PermissionCard({ request, onRespond }: PermissionCardProps): Rea
 
         {/* Actions */}
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => onRespond('deny')}>
+          <Button data-testid="chat-permission-deny-button" variant="ghost" size="sm" onClick={() => onRespond('deny')}>
             Deny
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onRespond('allow')}>
+          <Button data-testid="chat-permission-allow-once-button" variant="outline" size="sm" onClick={() => onRespond('allow')}>
             Allow Once
           </Button>
           {request.suggestions.length > 0 && (
             <Button
+              data-testid="chat-permission-always-allow-button"
               size="sm"
               className="bg-mf-accent text-white hover:bg-mf-accent/90"
               onClick={() => onRespond('allow', request.suggestions)}

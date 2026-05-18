@@ -80,6 +80,7 @@ function BranchRow({
 
   return (
     <button
+      data-testid={`branch-row-select-${name}`}
       onClick={onClick}
       className={cn(
         'w-full flex items-center gap-1.5 px-3 py-1 text-left text-sm',
@@ -88,7 +89,12 @@ function BranchRow({
       )}
     >
       {isMain ? <Star size={12} className="text-mf-warning shrink-0" /> : <GitBranch size={12} className="shrink-0" />}
-      <span className="truncate">{displayName}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="truncate">{displayName}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{name}</TooltipContent>
+      </Tooltip>
       {((!!ahead && ahead > 0) || (!!behind && behind > 0)) && (
         <span className="flex items-center gap-0.5 shrink-0 ml-1 text-xs text-mf-text-secondary">
           <span className="opacity-40">·</span>
@@ -125,6 +131,7 @@ function GroupSection({
   return (
     <div>
       <button
+        data-testid={`branch-group-toggle-${prefix}`}
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-1 px-2 py-0.5 text-sm text-mf-text-secondary hover:text-mf-text-primary"
       >
@@ -176,6 +183,7 @@ function WorktreeSection({
       <div className="border-t border-mf-border my-1" />
       <div className="flex items-center">
         <button
+          data-testid={`worktree-section-toggle-${name}`}
           onClick={() => setExpanded(!expanded)}
           className="flex-1 flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
         >
@@ -186,6 +194,7 @@ function WorktreeSection({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                data-testid={`worktree-section-new-session-${name}`}
                 onClick={() => onNewSession(name, branchName)}
                 disabled={isDeleting}
                 className={cn(
@@ -204,6 +213,7 @@ function WorktreeSection({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                data-testid={`worktree-section-delete-${name}`}
                 onClick={() => onDeleteWorktree(name, branchName)}
                 disabled={isDeleting}
                 className={cn(
@@ -280,6 +290,7 @@ export function BranchList({
     <div className="max-h-60 overflow-y-auto">
       {/* Local branches */}
       <button
+        data-testid="branch-list-local-toggle"
         onClick={() => setLocalExpanded(!localExpanded)}
         className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
       >
@@ -339,6 +350,7 @@ export function BranchList({
         <>
           <div className="border-t border-mf-border my-1" />
           <button
+            data-testid="branch-list-remote-toggle"
             onClick={() => setRemoteExpanded(!remoteExpanded)}
             className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
           >
@@ -349,6 +361,7 @@ export function BranchList({
             filteredRemote.map((r) => (
               <button
                 key={r}
+                data-testid={`branch-list-remote-row-${r}`}
                 onClick={() => onSelectBranch(r, false, true)}
                 className="w-full flex items-center gap-1.5 px-3 py-1 text-left text-sm text-mf-text-secondary hover:bg-mf-hover rounded transition-colors"
               >

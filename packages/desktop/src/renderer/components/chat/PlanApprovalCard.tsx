@@ -99,6 +99,7 @@ export function PlanApprovalCard({ request, onRespond }: PlanApprovalCardProps):
         {/* Revise textarea */}
         {revising && (
           <textarea
+            data-testid="chat-plan-feedback-input"
             autoFocus
             rows={3}
             placeholder="What should be changed..."
@@ -120,6 +121,7 @@ export function PlanApprovalCard({ request, onRespond }: PlanApprovalCardProps):
               <div />
               <div className="flex gap-2">
                 <Button
+                  data-testid="chat-plan-cancel-revise-button"
                   variant="ghost"
                   size="sm"
                   onClick={() => {
@@ -130,6 +132,7 @@ export function PlanApprovalCard({ request, onRespond }: PlanApprovalCardProps):
                   Cancel
                 </Button>
                 <Button
+                  data-testid="chat-plan-send-feedback-button"
                   size="sm"
                   className="bg-mf-accent text-white hover:bg-mf-accent/90"
                   disabled={!feedback.trim()}
@@ -146,6 +149,7 @@ export function PlanApprovalCard({ request, onRespond }: PlanApprovalCardProps):
                 <label className="flex items-center gap-1.5 text-mf-status text-mf-text-secondary cursor-pointer mr-2">
                   <input
                     type="checkbox"
+                    data-testid="chat-plan-clear-context-checkbox"
                     checked={clearContext}
                     onChange={(e) => setClearContext(e.target.checked)}
                     className="accent-mf-accent"
@@ -154,6 +158,7 @@ export function PlanApprovalCard({ request, onRespond }: PlanApprovalCardProps):
                 </label>
                 <div className="relative">
                   <select
+                    data-testid="chat-plan-exec-mode-select"
                     value={execMode}
                     onChange={(e) => {
                       setExecModeTouched(true);
@@ -189,13 +194,14 @@ export function PlanApprovalCard({ request, onRespond }: PlanApprovalCardProps):
 
               {/* Action buttons */}
               <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => onRespond('deny')}>
+                <Button data-testid="chat-plan-reject-button" variant="ghost" size="sm" onClick={() => onRespond('deny')}>
                   Reject
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setRevising(true)}>
+                <Button data-testid="chat-plan-revise-button" variant="outline" size="sm" onClick={() => setRevising(true)}>
                   Revise
                 </Button>
                 <Button
+                  data-testid="chat-plan-approve-button"
                   size="sm"
                   className="bg-mf-accent text-white hover:bg-mf-accent/90"
                   onClick={() =>

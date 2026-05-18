@@ -12,10 +12,27 @@ export interface ToolResult {
   structuredPatch: DiffHunk[];
   originalFile?: string;
   modifiedFile?: string;
+  truncated?: boolean;
+  fullBytes?: number;
+}
+
+export interface TruncatedResult {
+  content: string;
+  truncated: true;
+  fullBytes: number;
 }
 
 export function isStructuredResult(result: unknown): result is ToolResult {
   return typeof result === 'object' && result !== null && 'structuredPatch' in result;
+}
+
+export function isTruncatedResult(result: unknown): result is TruncatedResult {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    'truncated' in result &&
+    (result as Record<string, unknown>)['truncated'] === true
+  );
 }
 
 export function StatusDot({ result, isError }: { result: unknown; isError: boolean | undefined }) {
@@ -274,4 +291,6 @@ export interface ToolCardProps {
   args: Record<string, unknown>;
   result: unknown;
   isError: boolean | undefined;
+  chatId?: string;
+  toolCallId?: string;
 }
