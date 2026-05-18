@@ -150,6 +150,7 @@ export function RegionCaptureOverlay({ captured, onCapture, onSubmitAll, onCance
         </span>
         <button
           type="button"
+          data-testid="sandbox-button-submit-captures"
           onClick={onSubmitAll}
           disabled={submitDisabled}
           className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-mf-accent/20 text-mf-accent hover:bg-mf-accent/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -160,6 +161,7 @@ export function RegionCaptureOverlay({ captured, onCapture, onSubmitAll, onCance
         </button>
         <button
           type="button"
+          data-testid="sandbox-button-cancel-capture"
           onClick={onCancel}
           className="p-1 rounded text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
           aria-label="Cancel region capture"

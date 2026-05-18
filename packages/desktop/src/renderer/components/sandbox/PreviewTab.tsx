@@ -484,6 +484,7 @@ export function PreviewTab(): React.ReactElement {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid="sandbox-button-restart"
                     onClick={() => void handleRestart()}
                     className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                   >
@@ -495,6 +496,7 @@ export function PreviewTab(): React.ReactElement {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid="sandbox-button-stop"
                     onClick={() => void handleStop()}
                     className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-red-400 transition-colors"
                   >
@@ -508,6 +510,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-start"
                   onClick={() => void handleStart()}
                   className="p-1 rounded hover:bg-mf-hover text-mf-accent transition-colors"
                 >
@@ -523,6 +526,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-reload"
                   onClick={handleReload}
                   className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                 >
@@ -534,6 +538,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-inspect"
                   onClick={() => void handleInspect()}
                   className={[
                     'p-1 rounded transition-colors',
@@ -550,6 +555,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-screenshot"
                   onClick={() => void handleFullScreenshot()}
                   className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                 >
@@ -561,6 +567,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-region-capture"
                   onClick={() => (capturingRegion ? exitCaptureMode() : setCapturingRegion(true))}
                   className={[
                     'p-1 rounded transition-colors',
@@ -577,6 +584,7 @@ export function PreviewTab(): React.ReactElement {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="sandbox-button-mobile-view"
                   onClick={() => setMobileView((v) => !v)}
                   className={[
                     'p-1 rounded transition-colors',
@@ -594,6 +602,7 @@ export function PreviewTab(): React.ReactElement {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid="sandbox-button-clear-session"
                     onClick={() => {
                       window.mainframe.clearSandboxSession(activeProjectId).then(() => handleReload());
                     }}
@@ -717,6 +726,7 @@ export function PreviewTab(): React.ReactElement {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
+                      data-testid="sandbox-button-clear-logs"
                       onClick={() => {
                         if (selectedProcess && scopeKey) clearLogsForProcess(scopeKey, selectedProcess);
                       }}
@@ -731,6 +741,7 @@ export function PreviewTab(): React.ReactElement {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
+                      data-testid="sandbox-button-toggle-console"
                       onClick={() => setLogExpanded(!logExpanded)}
                       className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                     >
