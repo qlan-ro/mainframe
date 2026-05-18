@@ -13,6 +13,8 @@ import { urlTransform, remarkAppLinks } from '../../../../lib/markdown-url-trans
 import { PLAN_PREFIX, highlightMentions, resolveSkillName, parseRawCommand } from '../message-parsing';
 import { ImageThumbs, FileAttachmentThumbs } from './ImageThumbs';
 import { ReadMoreBubble } from './ReadMoreBubble.js';
+import { parseSandboxCaptureBlock } from '../../../../lib/format-captures.js';
+import { SandboxCaptureContext } from '../parts/SandboxCaptureContext.js';
 
 // remarkBreaks converts single newlines into <br> elements so user-typed line breaks
 // are preserved in rendered output (CommonMark collapses them to spaces by default).
@@ -74,6 +76,43 @@ export function UserMessage() {
     (file, i, arr) => arr.findIndex((f) => f.name === file.name) === i,
   );
 
+  const queuedBadge = isQueued ? (
+    <span className="flex items-center gap-1 text-[11px] text-mf-text-tertiary self-end mr-1">
+      <Clock size={12} className="animate-pulse" />
+      Queued
+    </span>
+  ) : null;
+
+  const sandbox = parseSandboxCaptureBlock(rawUserText);
+  if (sandbox) {
+    const imageNames = Array.isArray(original?.metadata?.attachments)
+      ? (original!.metadata!.attachments as Array<{ name?: string; kind?: string }>)
+          .filter((a) => a.kind === 'image' && !!a.name)
+          .map((a) => a.name!)
+      : [];
+    const images: Record<string, string> = {};
+    imageBlocks.forEach((img, i) => {
+      const name = imageNames[i];
+      if (name) images[name] = `data:${img.mediaType};base64,${img.data}`;
+    });
+    return (
+      <MessagePrimitive.Root className="flex flex-col items-end gap-2 pt-2">
+        {queuedBadge}
+        <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5 flex flex-col gap-2">
+          <SandboxCaptureContext rows={sandbox.rows} images={images} />
+          {sandbox.rest ? (
+            <ReadMoreBubble>
+              <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userComponents}>
+                {sandbox.rest}
+              </Markdown>
+            </ReadMoreBubble>
+          ) : null}
+        </div>
+        <FileAttachmentThumbs attachments={mergedFileAttachments} />
+      </MessagePrimitive.Root>
+    );
+  }
+
   if (cleanText.startsWith(PLAN_PREFIX)) {
     const planBody = cleanText.slice(PLAN_PREFIX.length);
     return (
@@ -94,13 +133,6 @@ export function UserMessage() {
       </MessagePrimitive.Root>
     );
   }
-
-  const queuedBadge = isQueued ? (
-    <span className="flex items-center gap-1 text-[11px] text-mf-text-tertiary self-end mr-1">
-      <Clock size={12} className="animate-pulse" />
-      Queued
-    </span>
-  ) : null;
 
   if (parsed) {
     const Icon = parsed.isCommand ? Wrench : Zap;
