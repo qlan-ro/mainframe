@@ -55,6 +55,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
         <label className="text-mf-small text-mf-text-secondary">Executable Path</label>
         <div className="flex gap-2">
           <input
+            data-testid={`providers-${adapterId}-executable-path-input`}
             type="text"
             value={config.executablePath ?? ''}
             onChange={(e) => update({ executablePath: e.target.value || undefined })}
@@ -63,6 +64,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
           />
           <button
             type="button"
+            data-testid={`providers-${adapterId}-executable-path-browse`}
             onClick={() => setShowBinaryPicker(true)}
             className="px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-secondary border border-mf-border rounded-mf-input hover:text-mf-text-primary hover:border-mf-accent transition-colors"
           >
@@ -89,6 +91,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
       <div className="space-y-1">
         <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
           <input
+            data-testid={`providers-${adapterId}-system-prompt-toggle`}
             type="checkbox"
             checked={config.systemPrompt === 'enabled'}
             onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : '' })}
@@ -106,6 +109,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
         {adapter?.capabilities.planMode && (
           <label className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors">
             <input
+              data-testid={`providers-${adapterId}-plan-mode-toggle`}
               type="checkbox"
               checked={config.defaultPlanMode === 'true'}
               onChange={(e) => update({ defaultPlanMode: e.target.checked ? 'true' : 'false' })}
@@ -139,6 +143,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
               className="flex items-start gap-2.5 px-3 py-2 rounded-mf-input cursor-pointer hover:bg-mf-hover transition-colors"
             >
               <input
+                data-testid={`providers-${adapterId}-mode-option-${mode.id}`}
                 type="radio"
                 name={`${adapterId}-mode`}
                 checked={(config.defaultMode ?? 'default') === mode.id}

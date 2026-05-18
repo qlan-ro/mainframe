@@ -48,6 +48,7 @@ export function GeneralSection(): React.ReactElement {
               {THEMES.map((theme) => (
                 <button
                   key={theme.id}
+                  data-testid={`general-theme-option-${theme.id}`}
                   onClick={() => setTheme(theme.id)}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-mf-input border transition-colors text-left ${
                     themeId === theme.id
@@ -69,6 +70,7 @@ export function GeneralSection(): React.ReactElement {
             </p>
             <div className="flex gap-2">
               <input
+                data-testid="general-worktree-dir-input"
                 type="text"
                 value={worktreeDir}
                 onChange={(e) => setWorktreeDir(e.target.value)}
@@ -80,6 +82,7 @@ export function GeneralSection(): React.ReactElement {
               />
               {dirty && (
                 <button
+                  data-testid="general-worktree-dir-save"
                   onClick={handleSave}
                   disabled={saving}
                   className="px-3 py-1.5 text-mf-small bg-mf-accent text-white rounded-mf-input hover:opacity-90 disabled:opacity-50 transition-opacity"

@@ -40,6 +40,7 @@ export function ModelDropdown({
   const trigger = (
     <button
       type="button"
+      data-testid="model-dropdown-trigger"
       onClick={() => setOpen(!open)}
       className="w-full flex items-center justify-between bg-mf-input-bg border border-mf-border rounded-mf-input px-3 py-1.5 text-mf-small text-mf-text-primary hover:border-mf-accent focus:outline-none focus:border-mf-accent cursor-pointer transition-colors"
     >
@@ -59,6 +60,7 @@ export function ModelDropdown({
               <RowWithTooltip key={opt.id} option={opt}>
                 <button
                   type="button"
+                  data-testid={`model-dropdown-option-${opt.id}`}
                   onClick={() => {
                     onChange(opt.id);
                     setOpen(false);
