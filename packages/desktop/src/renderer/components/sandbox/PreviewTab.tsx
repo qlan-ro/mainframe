@@ -26,6 +26,7 @@ import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 import { useZoneHeaderTabs } from '../zone/ZoneHeaderSlot.js';
+import { submitCapturesDirect } from '../../lib/send-captures-direct.js';
 
 // CSS selector generator — injected into the webview page
 const GET_SELECTOR_FN = `
@@ -373,20 +374,13 @@ export function PreviewTab(): React.ReactElement {
   }, []);
 
   const submitAllCaptures = useCallback(() => {
-    if (pendingCaptures.length === 0) return;
-    for (const c of pendingCaptures) {
-      addCapture({
-        type: 'screenshot',
-        imageDataUrl: c.dataUrl,
-        annotation: c.annotation.trim() || undefined,
-      });
-    }
-    if (!useChatsStore.getState().activeChatId) {
-      const projectId = getActiveProjectId();
-      if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
-    }
-    exitCaptureMode();
-  }, [addCapture, pendingCaptures, exitCaptureMode]);
+    submitCapturesDirect(pendingCaptures, {
+      onSuccess: () => {
+        setPendingCaptures([]);
+        exitCaptureMode();
+      },
+    });
+  }, [pendingCaptures, exitCaptureMode]);
 
   const handleInspect = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
