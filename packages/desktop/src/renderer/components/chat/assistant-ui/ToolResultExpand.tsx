@@ -36,6 +36,7 @@ export function ToolResultExpand({
       <div>
         <pre className="whitespace-pre-wrap break-words">{full}</pre>
         <button
+          data-testid="thread-tool-result-collapse"
           type="button"
           className="text-mf-text-secondary hover:text-mf-text-primary"
           onClick={() => setFull(null)}
@@ -53,6 +54,7 @@ export function ToolResultExpand({
         <span className="text-mf-text-secondary opacity-70">full output no longer available</span>
       ) : (
         <button
+          data-testid="thread-tool-result-expand"
           type="button"
           disabled={state === 'loading'}
           className="text-mf-text-secondary hover:text-mf-text-primary"

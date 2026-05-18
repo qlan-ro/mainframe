@@ -45,6 +45,7 @@ export function CollapsibleToolCard({
   return (
     <div ref={ref} data-testid="tool-card" className={wrapperClassName ?? 'overflow-hidden'}>
       <button
+        data-testid="tool-card-toggle"
         onClick={() => !disabled && toggle()}
         className={cn(
           'w-full flex items-center gap-2 px-3 text-mf-body transition-colors',
