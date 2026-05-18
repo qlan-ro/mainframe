@@ -68,6 +68,7 @@ export class MockBaseSession implements AdapterSession {
   async interrupt(): Promise<void> {}
   async setModel(_model: string): Promise<void> {}
   async setPermissionMode(_mode: string): Promise<void> {}
+  async setPlanMode(_on: boolean): Promise<void> {}
   async sendCommand(_command: string, _args?: string): Promise<void> {}
 
   getContextFiles(): { global: ContextFile[]; project: ContextFile[] } {

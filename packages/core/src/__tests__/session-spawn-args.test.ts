@@ -96,4 +96,22 @@ describe('ClaudeSession spawn args', () => {
     expect(idx).toBeGreaterThan(-1);
     expect(args[idx + 1]).toBe(MAINFRAME_SYSTEM_PROMPT_APPEND);
   });
+
+  it('omits --effort when effort is undefined', async () => {
+    const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    await session.spawn({} as any).catch(() => {});
+    const args = spawnMock.mock.calls[0]?.[1] as string[];
+    expect(args).not.toContain('--effort');
+  });
+
+  it.each(['low', 'medium', 'high'] as const)('passes --effort %s when set', async (effort) => {
+    const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    await session.spawn({ effort } as any).catch(() => {});
+    const args = spawnMock.mock.calls[0]?.[1] as string[];
+    const idx = args.indexOf('--effort');
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx + 1]).toBe(effort);
+  });
 });

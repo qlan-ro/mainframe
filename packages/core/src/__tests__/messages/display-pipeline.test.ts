@@ -118,14 +118,33 @@ describe('prepareMessagesForClient', () => {
     expect(result[0]!.type).toBe('assistant');
   });
 
-  it('filters out internal user messages with command-name skill marker', () => {
+  it('renders user-typed /skill-name as a /skill-name bubble', () => {
     const messages = [
-      rawMsg('user', [txt('<command-name>systematic-debugging</command-name> some text')]),
+      rawMsg('user', [
+        txt(
+          '<command-message>systematic-debugging</command-message>\n<command-name>/systematic-debugging</command-name>',
+        ),
+      ]),
       rawMsg('assistant', [txt('response')]),
     ];
     const result = prepareMessagesForClient(messages);
+    expect(result).toHaveLength(2);
+    expect(result[0]!.type).toBe('user');
+    expect(result[0]!.content).toEqual([{ type: 'text', text: '/systematic-debugging' }]);
+  });
+
+  it('renders user-typed /skill-name with <command-args> as /skill-name args bubble', () => {
+    const messages = [
+      rawMsg('user', [
+        txt(
+          '<command-message>work-logger:slack-status-writer</command-message>\n<command-name>/work-logger:slack-status-writer</command-name>\n<command-args>how are you</command-args>',
+        ),
+      ]),
+    ];
+    const result = prepareMessagesForClient(messages);
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('assistant');
+    expect(result[0]!.type).toBe('user');
+    expect(result[0]!.content).toEqual([{ type: 'text', text: '/work-logger:slack-status-writer how are you' }]);
   });
 
   it('deduplicates tool_use blocks by id (keeps first occurrence)', () => {
@@ -242,6 +261,19 @@ describe('prepareMessagesForClient', () => {
     expect(result[0]!.content[1]).toEqual({ type: 'text', text: 'response' });
   });
 
+  it('keeps image blocks in assistant messages', () => {
+    const messages = [
+      rawMsg('assistant', [txt('here is your image'), { type: 'image', mediaType: 'image/png', data: 'pngbase64' }]),
+    ];
+    const result = prepareMessagesForClient(messages);
+    expect(result[0]!.content).toHaveLength(2);
+    expect(result[0]!.content[1]).toEqual({
+      type: 'image',
+      mediaType: 'image/png',
+      data: 'pngbase64',
+    });
+  });
+
   it('keeps image blocks in user messages', () => {
     const messages = [
       rawMsg('user', [txt('look at this'), { type: 'image', mediaType: 'image/png', data: 'base64data' }]),
@@ -262,6 +294,56 @@ describe('prepareMessagesForClient', () => {
     expect(result[0]!.type).toBe('user');
   });
 
+  it('suppresses a bare <command-name> message with no body (subagent/replay echo)', () => {
+    // Subagent CLI echoes emit <command-name>skill</command-name> with no <command-message>
+    // and no other content. These are internal CLI metadata and must not produce a visible bubble.
+    const messages = [
+      rawMsg('user', [txt('<command-name>do-thing</command-name>')]),
+      rawMsg('assistant', [txt('response')]),
+    ];
+    const result = prepareMessagesForClient(messages);
+    // The bare <command-name> message must be suppressed; only the assistant reply remains
+    expect(result).toHaveLength(1);
+    expect(result[0]!.type).toBe('assistant');
+  });
+
+  it('suppresses a <command-name> with empty body after stripping (replay path with no visible text)', () => {
+    // Replay path: <command-name> only, no command-message, no args, no body
+    const messages = [rawMsg('user', [txt('<command-name>/some-internal-skill</command-name>')])];
+    const result = prepareMessagesForClient(messages);
+    expect(result).toHaveLength(0);
+  });
+
+  it('still renders user-typed /skill-name that has <command-message> alongside <command-name>', () => {
+    // User-typed slash commands always arrive with both <command-message> and <command-name>
+    const messages = [
+      rawMsg('user', [
+        txt(
+          '<command-message>systematic-debugging</command-message>\n<command-name>/systematic-debugging</command-name>',
+        ),
+      ]),
+      rawMsg('assistant', [txt('response')]),
+    ];
+    const result = prepareMessagesForClient(messages);
+    expect(result).toHaveLength(2);
+    expect(result[0]!.type).toBe('user');
+    expect(result[0]!.content).toEqual([{ type: 'text', text: '/systematic-debugging' }]);
+  });
+
+  it('still renders user-typed /skill-name args bubble when <command-message> is present', () => {
+    const messages = [
+      rawMsg('user', [
+        txt(
+          '<command-message>brainstorming</command-message>\n<command-name>/brainstorming</command-name>\n<command-args>new feature idea</command-args>',
+        ),
+      ]),
+    ];
+    const result = prepareMessagesForClient(messages);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.type).toBe('user');
+    expect(result[0]!.content).toEqual([{ type: 'text', text: '/brainstorming new feature idea' }]);
+  });
+
   describe('tool grouping with categories', () => {
     it('groups consecutive explore tools into a tool_group', () => {
       const messages = [
@@ -277,9 +359,12 @@ describe('prepareMessagesForClient', () => {
       expect(groups).toHaveLength(1);
     });
 
-    it('wraps subagent tool + children into a task_group', () => {
+    it('wraps subagent tool + tagged children into a task_group', () => {
       const messages = [
-        rawMsg('assistant', [tu('tu1', 'Task', { description: 'do something' }), tu('tu2', 'Bash', { command: 'ls' })]),
+        rawMsg('assistant', [
+          tu('tu1', 'Task', { description: 'do something' }),
+          { ...tu('tu2', 'Bash', { command: 'ls' }), parentToolUseId: 'tu1' } as MessageContent,
+        ]),
         rawMsg('tool_result', [tr('tu1', 'task-result'), tr('tu2', 'bash-result')]),
       ];
       const result = prepareMessagesForClient(messages, TEST_CATEGORIES);

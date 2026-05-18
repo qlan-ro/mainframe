@@ -139,7 +139,7 @@ export function BranchSubmenu({
       ];
 
   return (
-    <div className="min-w-[220px]">
+    <div data-testid="branch-submenu-dialog" className="min-w-[220px]">
       {/* Header */}
       <div className="px-3 py-1.5 border-b border-mf-border">
         <span className="text-sm font-medium text-mf-text-primary truncate">{branch}</span>
@@ -154,6 +154,7 @@ export function BranchSubmenu({
           return (
             <button
               key={item.label}
+              data-testid={`branch-submenu-item-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/g, '')}`}
               onClick={item.action}
               disabled={item.disabled}
               className={cn(

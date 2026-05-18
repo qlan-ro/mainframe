@@ -6,19 +6,21 @@ import type { Page } from '@playwright/test';
  *
  * Use this instead of Meta+n when the test needs a specific permissionMode.
  * E.g. pass 'acceptEdits' so file-editing tests never stall on a plan approval card.
+ * Pass adapterId to use a specific adapter (default: 'claude').
  */
 export async function createTestChat(
   page: Page,
   projectId: string,
   permissionMode: 'default' | 'acceptEdits' | 'plan' | 'yolo' = 'default',
+  adapterId = 'claude',
 ): Promise<void> {
   await page.evaluate(
-    ({ pid, mode }) => {
+    ({ pid, adapter, mode }) => {
       const client = (window as any).__daemonClient;
       if (!client) throw new Error('__daemonClient not exposed on window');
-      client.createChat(pid, 'claude', undefined, mode);
+      client.createChat(pid, adapter, undefined, mode);
     },
-    { pid: projectId, mode: permissionMode },
+    { pid: projectId, adapter: adapterId, mode: permissionMode },
   );
   // Wait for the new chat's composer — renderer opens the tab on chat.created
   await page.getByRole('textbox').waitFor({ timeout: 10_000 });

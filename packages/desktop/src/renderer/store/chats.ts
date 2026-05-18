@@ -49,6 +49,7 @@ interface ChatsState {
   processes: Map<string, AdapterProcess>;
   queuedMessages: Map<string, QueuedMessageRef[]>;
   compactingChats: Set<string>;
+  loadingChats: Set<string>;
   contextUsage: Map<string, ContextUsageState>;
   unreadChatIds: Set<string>;
   todos: Map<string, TodoItem[]>;
@@ -73,7 +74,9 @@ interface ChatsState {
   addQueuedMessage: (chatId: string, ref: QueuedMessageRef) => void;
   removeQueuedMessage: (chatId: string, uuid: string) => void;
   clearQueuedMessages: (chatId: string) => void;
+  setQueuedMessages: (chatId: string, refs: QueuedMessageRef[]) => void;
   setCompacting: (chatId: string, compacting: boolean) => void;
+  setLoadingChat: (chatId: string, loading: boolean) => void;
   setContextUsage: (chatId: string, usage: ContextUsageState) => void;
   setTodos: (chatId: string, todos: TodoItem[]) => void;
   addDetectedPr: (chatId: string, pr: DetectedPr) => void;
@@ -87,6 +90,22 @@ function sortChats(chats: Chat[]): Chat[] {
   });
 }
 
+/**
+ * Merge two PR lists deduped by URL. 'created' source always wins over
+ * 'mentioned' (matches the DB's addDetectedPrs upgrade rule). Order is
+ * preserved from the merged-into list, with new entries appended.
+ */
+export function mergeDetectedPrs(into: DetectedPr[], add: DetectedPr[]): DetectedPr[] {
+  const byUrl = new Map<string, DetectedPr>();
+  for (const pr of into) byUrl.set(pr.url, pr);
+  for (const pr of add) {
+    const prev = byUrl.get(pr.url);
+    if (!prev) byUrl.set(pr.url, pr);
+    else if (prev.source !== 'created' && pr.source === 'created') byUrl.set(pr.url, { ...prev, source: 'created' });
+  }
+  return [...byUrl.values()];
+}
+
 export const useChatsStore = create<ChatsState>((set) => ({
   chats: [],
   activeChatId: null,
@@ -96,6 +115,7 @@ export const useChatsStore = create<ChatsState>((set) => ({
   processes: new Map(),
   queuedMessages: new Map(),
   compactingChats: new Set(),
+  loadingChats: new Set(),
   contextUsage: new Map(),
   unreadChatIds: new Set(),
   todos: new Map(),
@@ -114,7 +134,24 @@ export const useChatsStore = create<ChatsState>((set) => ({
       next.delete(chatId);
       return { unreadChatIds: next };
     }),
-  setChats: (chats) => set({ chats }),
+  setChats: (chats) =>
+    set((state) => {
+      // Reconcile `detectedPrs` with the DB-backed Chat rows so PR badges
+      // render immediately on app load AND so reconnects pick up DB writes
+      // that happened while the renderer was offline (live `chat.prDetected`
+      // events would have been missed). DB is authoritative; merge in any
+      // in-memory entries the DB doesn't yet know about (covers the brief
+      // window between an live event arriving over WS and the DB write
+      // completing). Source-rank: 'created' beats 'mentioned'.
+      const next = new Map(state.detectedPrs);
+      for (const chat of chats) {
+        const dbPrs = chat.detectedPrs ?? [];
+        const memPrs = next.get(chat.id) ?? [];
+        if (dbPrs.length === 0 && memPrs.length === 0) continue;
+        next.set(chat.id, mergeDetectedPrs(memPrs, dbPrs));
+      }
+      return { chats: sortChats([...chats]), detectedPrs: next };
+    }),
   setFilterProjectId: (id) => {
     if (id) {
       localStorage.setItem('mf:filterProjectId', id);
@@ -138,7 +175,18 @@ export const useChatsStore = create<ChatsState>((set) => ({
               return s;
             })()
           : state.unreadChatIds;
-      return { activeChatId: id, unreadChatIds };
+      // Reconcile the sidebar project filter with the new active chat. If the
+      // chat's project differs from the persisted filter, clear it so the
+      // badge stops pointing at a project the user is not actually viewing.
+      let filterProjectId = state.filterProjectId;
+      if (id && filterProjectId !== null) {
+        const target = state.chats.find((c) => c.id === id);
+        if (target && target.projectId !== filterProjectId) {
+          localStorage.removeItem('mf:filterProjectId');
+          filterProjectId = null;
+        }
+      }
+      return { activeChatId: id, unreadChatIds, filterProjectId };
     });
   },
   addChat: (chat) =>
@@ -149,7 +197,9 @@ export const useChatsStore = create<ChatsState>((set) => ({
   updateChat: (chat) =>
     set((state) => {
       const idx = state.chats.findIndex((c) => c.id === chat.id);
-      if (idx === -1) return { chats: sortChats([chat, ...state.chats]) };
+      // Do not re-insert a chat that was intentionally removed (e.g. optimistic
+      // archive). Updates for unknown chats are silently dropped.
+      if (idx === -1) return state;
       const prev = state.chats[idx]!;
       // Only re-sort when updatedAt or pinned changed
       if (chat.updatedAt !== prev.updatedAt || chat.pinned !== prev.pinned) {
@@ -277,6 +327,16 @@ export const useChatsStore = create<ChatsState>((set) => ({
       next.delete(chatId);
       return { queuedMessages: next };
     }),
+  setQueuedMessages: (chatId, refs) =>
+    set((state) => {
+      const next = new Map(state.queuedMessages);
+      if (refs.length === 0) {
+        next.delete(chatId);
+      } else {
+        next.set(chatId, refs);
+      }
+      return { queuedMessages: next };
+    }),
   setCompacting: (chatId, compacting) =>
     set((state) => {
       const next = new Set(state.compactingChats);
@@ -286,6 +346,16 @@ export const useChatsStore = create<ChatsState>((set) => ({
         next.delete(chatId);
       }
       return { compactingChats: next };
+    }),
+  setLoadingChat: (chatId, loading) =>
+    set((state) => {
+      const next = new Set(state.loadingChats);
+      if (loading) {
+        next.add(chatId);
+      } else {
+        next.delete(chatId);
+      }
+      return { loadingChats: next };
     }),
   setContextUsage: (chatId, usage) =>
     set((state) => {

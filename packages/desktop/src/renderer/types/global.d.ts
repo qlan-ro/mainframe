@@ -30,10 +30,12 @@ export interface MainframeAPI {
     electron: string;
   };
   getAppInfo: () => Promise<{ version: string; author: string }>;
+  getHomedir: () => Promise<string>;
   readFile: (filePath: string) => Promise<string | null>;
   showItemInFolder: (fullPath: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   clearSandboxSession: (projectId: string) => Promise<void>;
+  destroyWebview: (webContentsId: number) => Promise<void>;
   showNotification: (title: string, body?: string) => Promise<void>;
   log: (level: string, module: string, message: string, data?: unknown) => void;
   terminal: TerminalAPI;

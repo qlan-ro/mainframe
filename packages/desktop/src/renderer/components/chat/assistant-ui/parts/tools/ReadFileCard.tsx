@@ -1,26 +1,38 @@
-import { Eye } from 'lucide-react';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { ClickableFilePath, ErrorDot, stripErrorXml, type ToolCardProps } from './shared';
+import { FileTypeIcon } from '../FileTypeIcon';
+import { ClickableFilePath, StatusDot, stripErrorXml, isTruncatedResult, type ToolCardProps } from './shared';
+import { ToolResultExpand } from '../../ToolResultExpand';
 
-export function ReadFileCard({ args, result, isError }: ToolCardProps) {
+export function ReadFileCard({ args, result, isError, chatId, toolCallId }: ToolCardProps) {
   const filePath = (args.file_path as string) || '';
-  const rawResultText = typeof result === 'string' ? result : undefined;
+  const truncated = isTruncatedResult(result);
+  const rawResultText = typeof result === 'string' ? result : truncated ? result.content : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
 
   return (
     <CollapsibleToolCard
       variant="compact"
+      wrapperClassName="border border-mf-divider rounded-mf-card overflow-hidden"
+      hideToggle
       header={
         <>
-          <Eye size={15} className="text-mf-text-secondary/40 shrink-0" />
+          <FileTypeIcon filePath={filePath} />
+          <span className="text-mf-body text-mf-text-secondary/60">Read</span>
           <ClickableFilePath filePath={filePath} />
         </>
       }
-      statusDot={<ErrorDot isError={isError} />}
+      trailing={<StatusDot result={result} isError={isError} />}
     >
       {resultText && (
         <div className="border-t border-mf-divider/50 ml-5">
-          {isError ? (
+          {truncated && chatId && toolCallId ? (
+            <ToolResultExpand
+              chatId={chatId}
+              toolUseId={toolCallId}
+              truncatedContent={resultText}
+              fullBytes={result.fullBytes}
+            />
+          ) : isError ? (
             <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap px-3 py-2 max-h-[300px] overflow-y-auto text-mf-chat-error-muted bg-mf-chat-error-surface/20">
               {resultText}
             </pre>

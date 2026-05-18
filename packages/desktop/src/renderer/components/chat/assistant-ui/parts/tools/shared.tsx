@@ -12,10 +12,27 @@ export interface ToolResult {
   structuredPatch: DiffHunk[];
   originalFile?: string;
   modifiedFile?: string;
+  truncated?: boolean;
+  fullBytes?: number;
+}
+
+export interface TruncatedResult {
+  content: string;
+  truncated: true;
+  fullBytes: number;
 }
 
 export function isStructuredResult(result: unknown): result is ToolResult {
   return typeof result === 'object' && result !== null && 'structuredPatch' in result;
+}
+
+export function isTruncatedResult(result: unknown): result is TruncatedResult {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    'truncated' in result &&
+    (result as Record<string, unknown>)['truncated'] === true
+  );
 }
 
 export function StatusDot({ result, isError }: { result: unknown; isError: boolean | undefined }) {
@@ -42,7 +59,7 @@ export function borderColor(result: unknown, isError: boolean | undefined): stri
 export function cardStyle(result: unknown, isError: boolean | undefined): string {
   if (isError && result !== undefined)
     return 'border border-mf-chat-error/30 rounded-mf-card bg-mf-input-bg/40 overflow-hidden';
-  return 'rounded-mf-card bg-mf-input-bg/40 overflow-hidden';
+  return 'border border-mf-divider rounded-mf-card bg-mf-input-bg/40 overflow-hidden';
 }
 
 export function shortFilename(filePath: string): string {
@@ -60,16 +77,27 @@ export function ClickableFilePath({ filePath }: { filePath: string }) {
     revealFileInTree(filePath);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      openEditorTab(filePath);
+      revealFileInTree(filePath);
+    }
+  };
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
-          onClick={handleClick}
-          className="font-mono text-mf-accent truncate text-mf-body hover:underline cursor-pointer"
+        <span
+          role="button"
           tabIndex={0}
+          onClick={handleClick}
+          onKeyDown={handleKeyDown}
+          className="font-mono text-mf-accent truncate text-mf-body hover:underline cursor-pointer"
         >
           {shortFilename(filePath)}
-        </button>
+        </span>
       </TooltipTrigger>
       <TooltipContent side="top">{filePath}</TooltipContent>
     </Tooltip>
@@ -263,4 +291,6 @@ export interface ToolCardProps {
   args: Record<string, unknown>;
   result: unknown;
   isError: boolean | undefined;
+  chatId?: string;
+  toolCallId?: string;
 }

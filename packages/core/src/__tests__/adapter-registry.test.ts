@@ -23,24 +23,36 @@ describe('ClaudeAdapter.getToolCategories', () => {
     const cats = adapter.getToolCategories();
     expect(cats.explore).toEqual(new Set(['Read', 'Glob', 'Grep', 'LS']));
     expect(cats.hidden).toContain('TaskList');
-    expect(cats.hidden).toContain('Skill');
+    expect(cats.hidden).toContain('TaskCreate');
+    expect(cats.hidden).toContain('TaskUpdate');
+    expect(cats.hidden).not.toContain('Skill');
     expect(cats.progress).toEqual(new Set(['TaskCreate', 'TaskUpdate']));
     expect(cats.subagent).toEqual(new Set(['Task', 'Agent']));
   });
 });
 
 describe('ClaudeAdapter.listModels', () => {
-  it('returns all 11 known Claude models', async () => {
+  it('returns the hardcoded Claude model catalog', async () => {
     const adapter = new ClaudeAdapter();
     const models = await adapter.listModels();
-    expect(models.length).toBe(13);
+    expect(models.length).toBe(14);
     const ids = models.map((m) => m.id);
+    expect(ids).toContain('default');
     expect(ids).toContain('claude-opus-4-6');
     expect(ids).toContain('opus[1m]');
     expect(ids).toContain('claude-sonnet-4-6');
     expect(ids).toContain('sonnet[1m]');
     expect(ids).toContain('claude-3-5-haiku-20241022');
     expect(ids).toContain('claude-3-5-sonnet-20241022');
+  });
+
+  it('marks a single entry as the fallback default', async () => {
+    const adapter = new ClaudeAdapter();
+    const models = await adapter.listModels();
+    const defaults = models.filter((m) => m.isDefault);
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0]?.id).toBe('default');
+    expect(defaults[0]?.description).toBeTruthy();
   });
 
   it('includes capability flags on supported models', async () => {

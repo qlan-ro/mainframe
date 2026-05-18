@@ -12,3 +12,5 @@ export type { Capture } from './sandbox';
 export { useTerminalStore } from './terminal';
 export type { TerminalTab } from './terminal';
 export { useLayoutStore } from './layout';
+export { useFindInChatStore } from './find-in-chat';
+export type { FindMatch } from './find-in-chat';

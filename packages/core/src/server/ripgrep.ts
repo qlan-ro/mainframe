@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import type { SearchContentResult } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
+import { IGNORED_DIRS } from './fs-utils.js';
 
 const logger = createChildLogger('ripgrep');
 
@@ -124,13 +125,34 @@ export function searchWithRipgrep(
   });
 }
 
-export function listFilesWithRipgrep(dirPath: string, opts?: { includeIgnored?: boolean }): Promise<string[] | null> {
+/**
+ * Build ripgrep glob exclusion args for all known build-artifact directories.
+ * Used when bypassing .gitignore so that env/config files surface while
+ * generated output directories are still excluded.
+ */
+function buildIgnoredDirGlobs(): string[] {
+  const globs: string[] = [];
+  for (const dir of IGNORED_DIRS) {
+    globs.push('--glob', `!**/${dir}/**`);
+  }
+  return globs;
+}
+
+export function listFilesWithRipgrep(
+  dirPath: string,
+  opts?: { includeIgnored?: boolean; useBuiltinIgnoreOnly?: boolean },
+): Promise<string[] | null> {
   const rgPath = getRgPath();
   if (!rgPath) return Promise.resolve(null);
 
   const args = ['--files', '--no-require-git'];
 
-  if (opts?.includeIgnored) {
+  if (opts?.useBuiltinIgnoreOnly) {
+    // Skip .gitignore so that gitignored config files (e.g. .env) appear, but
+    // still exclude build-artifact directories via explicit glob rules.
+    args.push('--no-ignore', '--hidden');
+    args.push(...buildIgnoredDirGlobs());
+  } else if (opts?.includeIgnored) {
     args.push('--no-ignore', '--hidden');
   }
 

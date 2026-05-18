@@ -5,6 +5,7 @@ import {
   convertAssistantContent,
   convertUserContent,
   applyToolGrouping,
+  withParentId,
 } from './display-helpers.js';
 
 /**
@@ -70,6 +71,11 @@ function convertGroupedToDisplay(
 
     case 'user': {
       const { displayContent, metadata: extraMeta } = convertUserContent(msg.content);
+      // Suppress user messages whose entire content was stripped to nothing
+      // (e.g. bare <command-name> CLI echoes from subagent/replay paths that
+      // contain no visible text, no images, and no tool results). Returning
+      // null here prevents an empty bubble from appearing in the chat thread.
+      if (displayContent.length === 0 && Object.keys(extraMeta).length === 0) return null;
       const metadata = {
         ...(msg.metadata ?? {}),
         ...extraMeta,
@@ -87,7 +93,21 @@ function convertGroupedToDisplay(
         ...base,
         type: 'system',
         content: msg.content.map((c) => {
-          if (c.type === 'text') return { type: 'text' as const, text: c.text };
+          if (c.type === 'text')
+            return {
+              type: 'text' as const,
+              text: c.text,
+              ...withParentId(c.parentToolUseId),
+            };
+          if (c.type === 'skill_loaded')
+            return {
+              type: 'skill_loaded' as const,
+              skillName: c.skillName,
+              path: c.path,
+              content: c.content,
+              ...withParentId(c.parentToolUseId),
+            };
+          if (c.type === 'compaction') return { type: 'compaction' as const };
           return { type: 'text' as const, text: '' };
         }),
         ...(msg.metadata && { metadata: { ...msg.metadata } }),

@@ -49,6 +49,7 @@ export class AdapterRegistry {
         installed,
         version: version || undefined,
         models,
+        capabilities: adapter.capabilities,
       });
     }
     return infos;

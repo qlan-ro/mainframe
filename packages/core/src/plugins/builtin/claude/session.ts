@@ -16,7 +16,7 @@ import type {
   ContextFile,
   SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
-import { handleStdout, handleStderr } from './events.js';
+import { handleStdout, handleStderr, type DetectedPrCore } from './events.js';
 import { MAINFRAME_SYSTEM_PROMPT_APPEND } from './constants.js';
 import { createChildLogger } from '../../../logger.js';
 import {
@@ -43,6 +43,9 @@ const nullSink: SessionSink = {
   onQueuedProcessed: () => {},
   onTodoUpdate: () => {},
   onPrDetected: () => {},
+  onCliMessage: () => {},
+  onSkillLoaded: () => {},
+  onSubagentChild: () => {},
 };
 
 export interface ClaudeSessionState {
@@ -63,6 +66,24 @@ export interface ClaudeSessionState {
   pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
   /** Tool_use IDs for Bash commands that match PR-create patterns (gh pr create, etc.) */
   pendingPrCreates: Set<string>;
+  /** Tool_use IDs → parsed PR info for mutation commands (gh pr edit/ready/merge/close/reopen/comment/review, etc.) */
+  pendingPrMutations: Map<string, DetectedPrCore>;
+  /**
+   * Tool_use IDs → originating tool name (and Bash command, if applicable).
+   * Path A PR detection consults this to gate URL scanning to tools that
+   * legitimately surface PR URLs (Bash with a PR-CLI command, or Agent
+   * subagents). Without it, a Read/Grep/Edit of a file that happens to
+   * contain a PR URL would falsely tag the chat.
+   * Cleared when the matching tool_result arrives.
+   */
+  toolUseRegistry: Map<string, { name: string; command?: string }>;
+  // Cached skill-name → resolved SKILL.md path, populated lazily on SkillTool
+  // detection to avoid re-probing the filesystem for the same skill.
+  skillPathCache: Map<string, string>;
+  /** Accumulated V2 task events (TaskCreate/TaskUpdate/TaskStop) for progressive todo updates. */
+  taskV2Events: import('../../../todos/normalize.js').TaskV2Event[];
+  /** Epoch ms of last stdin write or stdout event — drives idle eviction. */
+  lastActivityAt: number;
 }
 
 /**
@@ -79,9 +100,14 @@ export class ClaudeSession implements AdapterSession {
   readonly id: string;
   readonly adapterId = 'claude';
   readonly projectPath: string;
+  readonly supportsReplayAck = true;
 
   /** Mutable internal state — readable by claude-events.ts and tests. */
   readonly state: ClaudeSessionState;
+
+  /** Last non-plan permission mode seen at spawn time. Used by setPlanMode(off)
+   *  to restore the original mode when plan is toggled off. */
+  private basePermissionMode: string = 'default';
 
   private readonly resumeSessionId: string | undefined;
   private readonly onExit: (() => void) | undefined;
@@ -101,11 +127,20 @@ export class ClaudeSession implements AdapterSession {
       interruptTimer: null,
       pendingCancelCallbacks: new Map(),
       pendingPrCreates: new Set(),
+      pendingPrMutations: new Map(),
+      toolUseRegistry: new Map(),
+      skillPathCache: new Map(),
+      taskV2Events: [],
+      lastActivityAt: Date.now(),
     };
   }
 
   get isSpawned(): boolean {
     return this.state.child !== null;
+  }
+
+  get lastActivityAt(): number {
+    return this.state.lastActivityAt;
   }
 
   getProcessInfo(): AdapterProcess | null {
@@ -131,6 +166,10 @@ export class ClaudeSession implements AdapterSession {
       '--verbose',
       '--permission-prompt-tool',
       'stdio',
+      // Make the CLI emit `isReplay: true` user events for every queued uuid
+      // it dequeues, so the daemon can ack per-message instead of relying on
+      // brittle turn-boundary heuristics.
+      '--replay-user-messages',
     ];
 
     if (options.systemPrompt === 'enabled') {
@@ -139,7 +178,11 @@ export class ClaudeSession implements AdapterSession {
 
     if (this.resumeSessionId) args.push('--resume', this.resumeSessionId);
     if (options.model) args.push('--model', options.model);
-    const cliMode = options.permissionMode === 'yolo' ? 'bypassPermissions' : (options.permissionMode ?? 'default');
+    if (options.effort) args.push('--effort', options.effort);
+    // Remember the base (non-plan) mode so setPlanMode(false) can restore it.
+    const baseMode = options.permissionMode === 'yolo' ? 'bypassPermissions' : (options.permissionMode ?? 'default');
+    this.basePermissionMode = baseMode;
+    const cliMode = options.planMode ? 'plan' : baseMode;
     args.push('--permission-mode', cliMode, '--allow-dangerously-skip-permissions');
 
     const executable = options.executablePath || 'claude';
@@ -166,6 +209,7 @@ export class ClaudeSession implements AdapterSession {
     this.state.child = child;
     this.state.pid = child.pid || 0;
     this.state.status = 'starting';
+    this.state.lastActivityAt = Date.now();
 
     log.debug(
       {
@@ -174,6 +218,7 @@ export class ClaudeSession implements AdapterSession {
         resume: !!this.resumeSessionId,
         model: options.model ?? 'default',
         permissionMode: options.permissionMode ?? 'default',
+        effort: options.effort ?? null,
       },
       'claude session spawned',
     );
@@ -195,11 +240,28 @@ export class ClaudeSession implements AdapterSession {
 
   async kill(): Promise<void> {
     const child = this.state.child;
-    if (child) {
-      log.debug({ sessionId: this.id }, 'claude session killed');
-      child.kill('SIGTERM');
-      this.state.child = null;
-    }
+    if (!child) return;
+
+    const exited = new Promise<void>((resolve) => {
+      child.once('close', () => resolve());
+    });
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        if (child.exitCode === null) {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            /* already dead */
+          }
+        }
+        resolve();
+      }, 3000);
+    });
+
+    child.kill('SIGTERM');
+    await Promise.race([exited, timeout]);
+    this.state.child = null;
+    log.debug({ sessionId: this.id }, 'claude session killed');
   }
 
   async interrupt(): Promise<void> {
@@ -261,12 +323,21 @@ export class ClaudeSession implements AdapterSession {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const cliMode = mode === 'yolo' ? 'bypassPermissions' : mode;
+    // Track non-plan modes so setPlanMode(false) can restore whatever the user
+    // last picked (default/acceptEdits/bypassPermissions).
+    if (cliMode !== 'plan') {
+      this.basePermissionMode = cliMode;
+    }
     const payload = {
       type: 'control_request',
       request_id: crypto.randomUUID(),
       request: { subtype: 'set_permission_mode', mode: cliMode },
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
+  }
+
+  async setPlanMode(on: boolean): Promise<void> {
+    await this.setPermissionMode(on ? 'plan' : this.basePermissionMode);
   }
 
   async setModel(model: string): Promise<void> {
@@ -291,6 +362,7 @@ export class ClaudeSession implements AdapterSession {
       parent_tool_use_id: null,
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
+    this.state.lastActivityAt = Date.now();
   }
 
   async sendMessage(message: string, images?: { mediaType: string; data: string }[], uuid?: string): Promise<void> {
@@ -313,6 +385,7 @@ export class ClaudeSession implements AdapterSession {
     };
     if (uuid) payload.uuid = uuid;
     child.stdin?.write(JSON.stringify(payload) + '\n');
+    this.state.lastActivityAt = Date.now();
   }
 
   async respondToPermission(response: ControlResponse): Promise<void> {

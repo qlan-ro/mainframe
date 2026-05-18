@@ -26,7 +26,11 @@ export interface LifecycleManagerDeps {
   messages: MessageCache;
   permissions: PermissionManager;
   emitEvent: (event: DaemonEvent) => void;
-  buildSink: (chatId: string, respondToPermission: (response: ControlResponse) => Promise<void>) => SessionSink;
+  buildSink: (
+    chatId: string,
+    sessionId: string,
+    respondToPermission: (response: ControlResponse) => Promise<void>,
+  ) => SessionSink;
   /** Stop launch processes for a project+path pair (e.g. before worktree removal) */
   stopLaunchProcesses?: (projectId: string, projectPath: string) => Promise<void>;
 }
@@ -52,9 +56,21 @@ export class ChatLifecycleManager {
     return this.loadingChats;
   }
 
-  async createChat(projectId: string, adapterId: string, model?: string, permissionMode?: string): Promise<Chat> {
+  async createChat(
+    projectId: string,
+    adapterId: string,
+    model?: string,
+    permissionMode?: string,
+    worktreePath?: string,
+    branchName?: string,
+  ): Promise<Chat> {
     const chat = this.deps.db.chats.create(projectId, adapterId, model, permissionMode);
-    log.info({ chatId: chat.id, projectId, adapterId }, 'chat created');
+    if (worktreePath && branchName) {
+      this.deps.db.chats.update(chat.id, { worktreePath, branchName });
+      chat.worktreePath = worktreePath;
+      chat.branchName = branchName;
+    }
+    log.info({ chatId: chat.id, projectId, adapterId, worktreePath }, 'chat created');
     this.deps.activeChats.set(chat.id, { chat, session: null });
     this.deps.emitEvent({ type: 'chat.created', chat });
     return chat;
@@ -65,19 +81,30 @@ export class ChatLifecycleManager {
     adapterId: string,
     model?: string,
     permissionMode?: string,
+    worktreePath?: string,
+    branchName?: string,
   ): Promise<Chat> {
     let effectiveModel = model;
     let effectiveMode = permissionMode;
+    let effectivePlanMode = false;
 
-    if (!effectiveModel || !effectiveMode) {
+    if (!effectiveModel || !effectiveMode || !effectivePlanMode) {
       const defaultModel = this.deps.db.settings.get('provider', `${adapterId}.defaultModel`);
       const defaultMode = this.deps.db.settings.get('provider', `${adapterId}.defaultMode`);
+      const defaultPlanMode = this.deps.db.settings.get('provider', `${adapterId}.defaultPlanMode`);
 
       if (!effectiveModel && defaultModel) effectiveModel = defaultModel;
       if (!effectiveMode && defaultMode) effectiveMode = defaultMode;
+      if (defaultPlanMode === 'true') effectivePlanMode = true;
     }
 
-    return this.createChat(projectId, adapterId, effectiveModel, effectiveMode);
+    const chat = await this.createChat(projectId, adapterId, effectiveModel, effectiveMode, worktreePath, branchName);
+    if (effectivePlanMode) {
+      chat.planMode = true;
+      this.deps.db.chats.update(chat.id, { planMode: true });
+    }
+
+    return chat;
   }
 
   async resumeChat(chatId: string): Promise<void> {
@@ -188,7 +215,7 @@ export class ChatLifecycleManager {
     if (deleteWorktree && chat?.worktreePath && chat?.branchName) {
       await this.deps.stopLaunchProcesses?.(chat.projectId, chat.worktreePath);
       const project = this.deps.db.projects.get(chat.projectId);
-      if (project) removeWorktree(project.path, chat.worktreePath, chat.branchName);
+      if (project) await removeWorktree(project.path, chat.worktreePath, chat.branchName);
     }
 
     this.deps.activeChats.delete(chatId);
@@ -333,6 +360,8 @@ export class ChatLifecycleManager {
         // Scan history for PR URLs with command-level correlation.
         // Walk messages in order: assistant tool_use blocks identify PR-create
         // commands; subsequent tool_result blocks with PR URLs are classified.
+        const scanned: { url: string; owner: string; repo: string; number: number; source: 'created' | 'mentioned' }[] =
+          [];
         const seenPrs = new Set<string>();
         const pendingCreates = new Set<string>();
         for (const msg of cached) {
@@ -361,7 +390,19 @@ export class ChatLifecycleManager {
             const toolUseId = (block as Record<string, unknown>).toolUseId as string | undefined;
             const source = toolUseId && pendingCreates.has(toolUseId) ? ('created' as const) : ('mentioned' as const);
             if (source === 'created') pendingCreates.delete(toolUseId!);
-            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr: { ...pr, source } });
+            scanned.push({ ...pr, source });
+          }
+        }
+
+        // Persist to DB so subsequent renderer connects (or sidebar views that
+        // never trigger a loadChat for this session) can surface PRs without
+        // re-running history replay. Emit `chat.prDetected` only for entries
+        // that are actually new or had their source upgraded — addDetectedPrs
+        // returns the diff. The renderer's `detectedPrs` Map merges idempotently.
+        if (scanned.length > 0) {
+          const persisted = this.deps.db.chats.addDetectedPrs(chatId, scanned);
+          for (const pr of persisted) {
+            this.deps.emitEvent({ type: 'chat.prDetected', chatId, pr });
           }
         }
       }
@@ -405,12 +446,19 @@ export class ChatLifecycleManager {
     });
     active.session = session;
 
-    const sink = this.deps.buildSink(chatId, (response) => session.respondToPermission(response));
+    const sink = this.deps.buildSink(chatId, session.id, (response) => session.respondToPermission(response));
 
     const executablePath = this.deps.db.settings.get('provider', `${chat.adapterId}.executablePath`) ?? undefined;
     const systemPrompt = this.deps.db.settings.get('provider', `${chat.adapterId}.systemPrompt`) ?? undefined;
     const processInfo = await session.spawn(
-      { model: chat.model, permissionMode: chat.permissionMode, executablePath, systemPrompt },
+      {
+        model: chat.model,
+        permissionMode: chat.permissionMode,
+        planMode: chat.planMode ?? false,
+        executablePath,
+        systemPrompt,
+        effort: chat.effort,
+      },
       sink,
     );
     log.info({ chatId }, 'chat session started');

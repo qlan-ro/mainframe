@@ -65,6 +65,7 @@ export function StopPopover({ onClose }: Props): React.ReactElement {
       {runningConfigs.map((c) => (
         <button
           key={c.name}
+          data-testid={`sandbox-button-stop-process-${c.name}`}
           onClick={() => void handleStop(c.name)}
           className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
         >
@@ -74,6 +75,7 @@ export function StopPopover({ onClose }: Props): React.ReactElement {
       ))}
       <div className="border-t border-mf-divider my-1" />
       <button
+        data-testid="sandbox-button-stop-all"
         onClick={() => void handleStopAll()}
         className="w-full text-left px-3 py-1.5 text-xs text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
       >

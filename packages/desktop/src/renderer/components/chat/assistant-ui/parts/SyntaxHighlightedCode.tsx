@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { HighlighterCore } from 'shiki';
 import { createLogger } from '../../../../lib/logger';
 
@@ -25,12 +25,7 @@ const LANGS = [
   'diff',
   'toml',
   'xml',
-  'c',
-  'cpp',
   'java',
-  'ruby',
-  'swift',
-  'kotlin',
 ];
 
 function getHighlighter(): Promise<HighlighterCore> {
@@ -56,10 +51,7 @@ const LANG_ALIASES: Record<string, string> = {
   zsh: 'bash',
   yml: 'yaml',
   md: 'markdown',
-  'c++': 'cpp',
   rs: 'rust',
-  rb: 'ruby',
-  kt: 'kotlin',
 };
 
 function resolveLang(lang: string | undefined): string {
@@ -106,7 +98,7 @@ export function SyntaxHighlightedCode({ code, language }: { code: string; langua
   if (html) {
     return (
       <div
-        className="[&>pre]:!bg-transparent [&>pre]:!m-0 [&>pre]:p-3 [&>pre]:overflow-x-auto [&>pre>code]:!text-[14px] [&>pre>code]:!leading-[20px] [&>pre>code]:!font-[var(--font-mono)]"
+        className="[&>pre]:!bg-transparent [&>pre]:!border-0 [&>pre]:!rounded-none [&>pre]:!m-0 [&>pre]:p-3 [&>pre]:overflow-x-auto [&>pre>code]:!text-[14px] [&>pre>code]:!leading-[20px] [&>pre>code]:!font-[var(--font-mono)]"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );

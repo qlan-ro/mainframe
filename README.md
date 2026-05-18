@@ -23,6 +23,12 @@
   </picture>
 </p>
 
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/3eca698b-824f-4e9f-a80b-bcb6e74f31c9" controls muted playsinline width="720">
+    Your browser doesn't support inline video. <a href="https://github.com/user-attachments/assets/3eca698b-824f-4e9f-a80b-bcb6e74f31c9">Download the demo</a>.
+  </video>
+</p>
+
 ---
 
 ## What is Mainframe?
@@ -31,19 +37,25 @@ Mainframe is an open-source desktop app that brings all your AI coding agents in
 
 AI CLI tools are powerful, but they live in the terminal. Mainframe adds the layer terminals can't: visual file editing, live sandbox previews, task management, cross-project session history, and a mobile companion for working on the go.
 
-> **Work in progress.** Mainframe is under active development — some features are incomplete and the mobile companion app is not yet published. Expect rough edges.
+> **One person, weekends, lots of coffee.** I poke at this when the mood strikes, ship what I feel like shipping, and change my mind a lot. The roadmap is a sticky note. If you're here this early, welcome to the construction site — bring a hard hat.
+>
+> **Work in progress.** Mainframe is under active development — some features are incomplete and the mobile companion app is not yet published. Currently focusing on fixing any annoying bugs.
+>
+> **Windows and Linux** Apps not tested at all, I am open to help with any initial issues found, but not my focus at all for now
+>
+> **HELP NEEDED** UI/UX experts contributions are a blessing, I'm not the best guy for building UIs
 
 ## Features
 
-- **Unified provider interface** — One app for Claude, Gemini, and other AI coding agents — switch providers without changing your workflow
+- **Unified provider interface** — One app for Claude, Codex, and potentially other AI coding agents — switch providers without changing your workflow
 - **Multi-project session management** — Run sessions across multiple projects with instant context switching and full session history
 - **In-app file editing** — View and edit files, diffs, and code directly in Mainframe without switching to your IDE
 - **Sandbox preview** — Launch dev servers and preview your app with a built-in browser and inspector for adding precise context
 - **Task management** — Integrated kanban board to track agent work and your own todos alongside sessions
 - **Content referencing** — @-mention files, add context on diff viewer, add context from the file editor, to give agents exactly the context they need
-- **AI tools management** — Makes sure your project is AI ready. Handling Subagents, Skills, MCPs, context files.
+- **AI tools management - WIP** — Makes sure your project is AI ready. Handling Subagents, Skills, MCPs, context files.
 - **Mobile companion** — Monitor and interact with your sessions from your phone — review, approve, and respond on the go
-- **Extensible plugin system** — Add UI panels, databases, event listeners, and new AI adapters through a capability-based plugin API
+- **Extensible plugin system - WIP** — Add UI panels, databases, event listeners, and new AI adapters through a capability-based plugin API
 - **API-first daemon** — Run the daemon standalone and build your own UI, integrations, or automations on top of its HTTP and WebSocket API
 
 ## Getting Started
@@ -60,7 +72,7 @@ Install the standalone daemon if you want to run it headless or build your own i
 curl -fsSL https://raw.githubusercontent.com/qlan-ro/mainframe/main/scripts/install.sh | bash
 ```
 
-### Remote Access (e.g. Mobile App)
+### Remote Access to Mainframe Daemon (e.g. Mobile App)
 
 The mobile companion app and any remote access require a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — a secure outbound connection from your machine to Cloudflare's edge, so you don't need to open ports or configure a firewall.
 
@@ -69,10 +81,7 @@ The mobile companion app and any remote access require a [Cloudflare Tunnel](htt
 
 See the [Cloudflare Tunnel guide](docs/guides/cloudflare-tunnel.md) for named tunnels with a persistent URL, self-managed setups, and troubleshooting.
 
-### Mobile Companion App
-
-- [App Store](https://apps.apple.com/app/mainframe/id000000000)
-- [Google Play](https://play.google.com/store/apps/details?id=com.qlan.mainframe)
+### Mobile Companion App - Publishing soon, if you want to join TestFlight testing I would be really happy to help you join
 
 **Pairing with your desktop:**
 
@@ -110,44 +119,27 @@ pnpm install && pnpm build && pnpm dev
 
 Env vars override `~/.mainframe/config.json`, which overrides defaults.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DAEMON_PORT` | 31415 | Daemon HTTP + WebSocket port |
-| `VITE_PORT` | 5173 | Vite dev server port |
-| `MAINFRAME_DATA_DIR` | `~/.mainframe` | Data directory (DB, config, plugins, logs) |
-| `LOG_LEVEL` | info | Logging verbosity |
-| `AUTH_TOKEN_SECRET` | auto-generated | JWT signing secret for mobile pairing |
-| `TUNNEL` | — | Set `true` to enable Cloudflare tunnel |
-| `TUNNEL_URL` | — | Named tunnel URL |
-| `TUNNEL_TOKEN` | — | Cloudflare tunnel token |
-| `VITE_DAEMON_HOST` | `127.0.0.1` | Daemon host for desktop renderer |
-| `VITE_DAEMON_HTTP_PORT` | 31415 | Daemon HTTP port for desktop renderer |
-| `VITE_DAEMON_WS_PORT` | 31415 | Daemon WebSocket port for desktop renderer |
-
-See the [Developer Guide](docs/DEVELOPER-GUIDE.md#environment-variables) for details on IntelliJ run configurations and precedence.
+See the [Developer Guide](docs/DEVELOPER-GUIDE.md#environment-variables) for details.
 
 | Document | Description |
 |----------|-------------|
 | [Architecture](docs/ARCHITECTURE.md) | System design, data flow, package breakdown |
 | [API Reference](docs/API-REFERENCE.md) | HTTP and WebSocket API for the daemon |
 | [Developer Guide](docs/DEVELOPER-GUIDE.md) | Setup, workflow, monorepo conventions |
-| [Plugin Developer Guide](docs/PLUGIN-DEVELOPER-GUIDE.md) | Build plugins: manifest, APIs, UI panels, events |
 | [Contributing](CONTRIBUTING.md) | How to contribute, code standards, PR process |
 
 ## Plugin System
 
-Mainframe is built to be extended. Plugins can add UI panels, store data in isolated databases, listen to daemon events, expose HTTP endpoints, and even register new AI CLI adapters.
+Ideally Mainframe should be easily extended. Plugins can add UI panels, listen to daemon events, expose HTTP endpoints, and even register new AI CLI adapters. But for now this is basically just an idea with a basic implementation. Probably needs to be revisited, better architecture. When I'll have time :)
 
 **What ships built-in:**
 
-- **Claude adapter** — the Claude CLI integration is itself a plugin
+- **Claude adapter** — the Claude Code integration is itself a plugin
 - **Task board** — the kanban task manager is a plugin with its own database, attachment storage, and fullview panel
 
 **Build your own:** Write a `manifest.json` declaring your capabilities, export an `activate()` function in `index.js`, and drop it in `~/.mainframe/plugins/`. The daemon loads it on startup.
 
-See the [Plugin Developer Guide](docs/PLUGIN-DEVELOPER-GUIDE.md) for the full API reference — manifest schema, database access, UI zones, event bus, attachments, config, services, and adapter integration.
-
-We welcome plugin contributions. If you've built something useful, open a PR to include it as a builtin or share it with the community.
+See the [Plugin Developer Guide](docs/PLUGIN-DEVELOPER-GUIDE.md)
 
 ## Contributing
 

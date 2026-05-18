@@ -1,4 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Stub out executable resolution so GET /api/settings/providers tests don't
+// spawn real child processes and hit unpredictable timeouts.
+vi.mock('../../adapters/resolve-executable.js', () => ({
+  resolveAdapterExecutable: vi.fn().mockResolvedValue({ path: 'claude', source: 'fallback', valid: false }),
+  resolveAdapterExecutableCached: vi.fn().mockResolvedValue({ path: 'claude', source: 'fallback', valid: false }),
+  clearResolveMemo: () => {},
+  defaultRun: vi.fn(),
+  BARE_NAMES: { claude: 'claude', codex: 'codex', gemini: 'gemini', opencode: 'opencode' },
+}));
+
 import { settingRoutes } from '../../server/routes/settings.js';
 import type { RouteContext } from '../../server/routes/types.js';
 
@@ -15,7 +26,7 @@ function createMockContext(): RouteContext {
       },
     } as any,
     chats: { getChat: vi.fn(), on: vi.fn() } as any,
-    adapters: { get: vi.fn(), list: vi.fn() } as any,
+    adapters: { get: vi.fn(), list: vi.fn(), getAll: vi.fn().mockReturnValue([]) } as any,
   };
 }
 
@@ -41,7 +52,7 @@ describe('settingRoutes', () => {
   });
 
   describe('GET /api/settings/providers', () => {
-    it('returns grouped provider settings', () => {
+    it('returns grouped provider settings', async () => {
       (ctx.db.settings.getByCategory as any).mockReturnValue({
         'claude.defaultModel': 'opus',
         'claude.defaultMode': 'normal',
@@ -52,16 +63,17 @@ describe('settingRoutes', () => {
       const handler = extractHandler(router, 'get', '/api/settings/providers');
       const res = mockRes();
 
-      handler({ params: {}, query: {} }, res, vi.fn());
+      await handler({ params: {}, query: {} }, res, vi.fn());
 
       expect(ctx.db.settings.getByCategory).toHaveBeenCalledWith('provider');
       const call = res.json.mock.calls[0][0];
       expect(call.success).toBe(true);
-      expect(call.data.claude).toEqual({ defaultModel: 'opus', defaultMode: 'normal' });
-      expect(call.data.gemini).toEqual({ defaultModel: 'pro' });
+      // resolvedExecutable is now added per adapter; use toMatchObject to tolerate the new key
+      expect(call.data.claude).toMatchObject({ defaultModel: 'opus', defaultMode: 'normal' });
+      expect(call.data.gemini).toMatchObject({ defaultModel: 'pro' });
     });
 
-    it('maps legacy skipPermissions to defaultMode yolo', () => {
+    it('maps legacy skipPermissions to defaultMode yolo', async () => {
       (ctx.db.settings.getByCategory as any).mockReturnValue({
         'claude.skipPermissions': 'true',
       });
@@ -70,30 +82,32 @@ describe('settingRoutes', () => {
       const handler = extractHandler(router, 'get', '/api/settings/providers');
       const res = mockRes();
 
-      handler({ params: {}, query: {} }, res, vi.fn());
+      await handler({ params: {}, query: {} }, res, vi.fn());
 
       const call = res.json.mock.calls[0][0];
       expect(call.data.claude.defaultMode).toBe('yolo');
       expect(call.data.claude.skipPermissions).toBeUndefined();
     });
 
-    it('does not override existing defaultMode with skipPermissions', () => {
+    it('does not override existing defaultMode with skipPermissions', async () => {
       (ctx.db.settings.getByCategory as any).mockReturnValue({
         'claude.skipPermissions': 'true',
-        'claude.defaultMode': 'plan',
+        'claude.defaultMode': 'default',
+        'claude.defaultPlanMode': 'true',
       });
 
       const router = settingRoutes(ctx);
       const handler = extractHandler(router, 'get', '/api/settings/providers');
       const res = mockRes();
 
-      handler({ params: {}, query: {} }, res, vi.fn());
+      await handler({ params: {}, query: {} }, res, vi.fn());
 
       const call = res.json.mock.calls[0][0];
-      expect(call.data.claude.defaultMode).toBe('plan');
+      expect(call.data.claude.defaultMode).toBe('default');
+      expect(call.data.claude.defaultPlanMode).toBe('true');
     });
 
-    it('skips keys without a dot separator', () => {
+    it('skips keys without a dot separator', async () => {
       (ctx.db.settings.getByCategory as any).mockReturnValue({
         noDotsHere: 'value',
         'claude.model': 'opus',
@@ -103,11 +117,12 @@ describe('settingRoutes', () => {
       const handler = extractHandler(router, 'get', '/api/settings/providers');
       const res = mockRes();
 
-      handler({ params: {}, query: {} }, res, vi.fn());
+      await handler({ params: {}, query: {} }, res, vi.fn());
 
       const call = res.json.mock.calls[0][0];
       expect(call.data.noDotsHere).toBeUndefined();
-      expect(call.data.claude).toEqual({ model: 'opus' });
+      // resolvedExecutable is now added per adapter; use toMatchObject to tolerate the new key
+      expect(call.data.claude).toMatchObject({ model: 'opus' });
     });
   });
 
@@ -143,6 +158,17 @@ describe('settingRoutes', () => {
 
       expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'claude.defaultMode', 'yolo');
       expect(ctx.db.settings.delete).toHaveBeenCalledWith('provider', 'claude.skipPermissions');
+    });
+
+    it('sets defaultPlanMode', () => {
+      const router = settingRoutes(ctx);
+      const handler = extractHandler(router, 'put', '/api/settings/providers/:adapterId');
+      const res = mockRes();
+
+      handler({ params: { adapterId: 'claude' }, query: {}, body: { defaultPlanMode: 'true' } }, res, vi.fn());
+
+      expect(ctx.db.settings.set).toHaveBeenCalledWith('provider', 'claude.defaultPlanMode', 'true');
+      expect(res.json).toHaveBeenCalledWith({ success: true });
     });
 
     it('sets executablePath', () => {

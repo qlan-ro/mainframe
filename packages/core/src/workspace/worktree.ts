@@ -1,9 +1,11 @@
 import { execFile, execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { ProjectsRepository } from '../db/projects.js';
 import { createChildLogger } from '../logger.js';
+import { execGit } from '../server/routes/exec-git.js';
 
 const log = createChildLogger('worktree-backfill');
 
@@ -104,20 +106,25 @@ export async function backfillWorktreeRelationships(projects: ProjectsRepository
   }
 }
 
-export function removeWorktree(projectPath: string, worktreePath: string, branchName: string): void {
+export async function removeWorktree(projectPath: string, worktreePath: string, branchName: string): Promise<void> {
   try {
-    execFileSync('git', ['worktree', 'remove', worktreePath, '--force'], {
-      cwd: projectPath,
-      encoding: 'utf-8',
-      stdio: 'pipe',
-    });
+    await execGit(['worktree', 'remove', worktreePath, '--force'], projectPath);
   } catch {
-    if (existsSync(worktreePath)) rmSync(worktreePath, { recursive: true, force: true });
     try {
-      execFileSync('git', ['worktree', 'prune'], { cwd: projectPath, encoding: 'utf-8', stdio: 'pipe' });
-    } catch {}
+      await rm(worktreePath, { recursive: true, force: true });
+    } catch {
+      /* best-effort: worktree dir may already be gone */
+    }
+    try {
+      await execGit(['worktree', 'prune'], projectPath);
+    } catch {
+      /* best-effort */
+    }
   }
+  // best-effort: branch may not exist or may still be checked out in another worktree
   try {
-    execFileSync('git', ['branch', '-D', branchName], { cwd: projectPath, encoding: 'utf-8', stdio: 'pipe' });
-  } catch {}
+    await execGit(['branch', '-D', branchName], projectPath);
+  } catch {
+    /* best-effort */
+  }
 }

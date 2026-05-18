@@ -1,4 +1,5 @@
 import { makeAssistantToolUI } from '@assistant-ui/react';
+import { useMainframeRuntime } from '../MainframeRuntimeProvider';
 import { EditFileCard } from './tools/EditFileCard';
 import { WriteFileCard } from './tools/WriteFileCard';
 import { BashCard } from './tools/BashCard';
@@ -11,38 +12,74 @@ import { TaskProgressCard } from './tools/TaskProgressCard';
 import { PlanCard } from './tools/PlanCard';
 import { SlashCommandCard } from './tools/SlashCommandCard';
 import { AskUserQuestionToolCard } from './tools/AskUserQuestionToolCard';
+import { WorktreeStatusPill } from './tools/WorktreeStatusPill';
+import { SchedulePill } from './tools/SchedulePill';
 
 export const EditToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Edit',
-  render: ({ args, result, isError }) => {
+  render: ({ args, result, isError, toolCallId }) => {
+    const { chatId } = useMainframeRuntime();
     if (args.old_string === undefined) return null;
-    return <EditFileCard args={args} result={result} isError={isError} />;
+    return <EditFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
   },
 });
 
 export const WriteToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Write',
-  render: ({ args, result, isError }) => <WriteFileCard args={args} result={result} isError={isError} />,
+  render: ({ args, result, isError, toolCallId }) => {
+    const { chatId } = useMainframeRuntime();
+    return <WriteFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
+  },
 });
 
 export const BashToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Bash',
-  render: ({ args, result, isError }) => <BashCard args={args} result={result} isError={isError} />,
+  render: ({ args, result, isError, toolCallId }) => {
+    const { chatId } = useMainframeRuntime();
+    return <BashCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
+  },
 });
 
 export const ReadToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Read',
-  render: ({ args, result, isError }) => <ReadFileCard args={args} result={result} isError={isError} />,
+  render: ({ args, result, isError, toolCallId }) => {
+    const { chatId } = useMainframeRuntime();
+    return <ReadFileCard args={args} result={result} isError={isError} chatId={chatId} toolCallId={toolCallId} />;
+  },
 });
 
 export const GlobToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Glob',
-  render: ({ args, result, isError }) => <SearchCard toolName="Glob" args={args} result={result} isError={isError} />,
+  render: ({ args, result, isError, toolCallId }) => {
+    const { chatId } = useMainframeRuntime();
+    return (
+      <SearchCard
+        toolName="Glob"
+        args={args}
+        result={result}
+        isError={isError}
+        chatId={chatId}
+        toolCallId={toolCallId}
+      />
+    );
+  },
 });
 
 export const GrepToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'Grep',
-  render: ({ args, result, isError }) => <SearchCard toolName="Grep" args={args} result={result} isError={isError} />,
+  render: ({ args, result, isError, toolCallId }) => {
+    const { chatId } = useMainframeRuntime();
+    return (
+      <SearchCard
+        toolName="Grep"
+        args={args}
+        result={result}
+        isError={isError}
+        chatId={chatId}
+        toolCallId={toolCallId}
+      />
+    );
+  },
 });
 
 export const TaskToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
@@ -81,29 +118,33 @@ export const TaskProgressUI = makeAssistantToolUI<Record<string, unknown>, unkno
   render: ({ args }) => <TaskProgressCard args={args} />,
 });
 
-// Tools that should be hidden (rendered as null)
-const HIDDEN_TOOLS = [
-  'TaskCreate',
-  'TaskUpdate',
-  'TaskList',
-  'TaskGet',
-  'TaskOutput',
-  'TaskStop',
-  'TodoWrite',
-  'EnterPlanMode',
-  'ToolSearch',
-] as const;
-export const HiddenToolUIs = HIDDEN_TOOLS.map((toolName) =>
-  makeAssistantToolUI<Record<string, unknown>, unknown>({
-    toolName,
-    render: () => null,
-  }),
-);
-
 export const AskUserQuestionToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
   toolName: 'AskUserQuestion',
   render: ({ args, result }) => <AskUserQuestionToolCard args={args} result={result} />,
 });
+
+export const EnterWorktreeToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
+  toolName: 'EnterWorktree',
+  render: ({ args, result, isError }) => (
+    <WorktreeStatusPill toolName="EnterWorktree" args={args} result={result as never} isError={isError} />
+  ),
+});
+export const ExitWorktreeToolUI = makeAssistantToolUI<Record<string, unknown>, unknown>({
+  toolName: 'ExitWorktree',
+  render: ({ args, result, isError }) => (
+    <WorktreeStatusPill toolName="ExitWorktree" args={args} result={result as never} isError={isError} />
+  ),
+});
+
+const SCHEDULE_TOOLS = ['ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList', 'Monitor'] as const;
+export const ScheduleToolUIs = SCHEDULE_TOOLS.map((toolName) =>
+  makeAssistantToolUI<Record<string, unknown>, unknown>({
+    toolName,
+    render: ({ args, result, isError }) => (
+      <SchedulePill toolName={toolName} args={args} result={result as never} isError={isError} />
+    ),
+  }),
+);
 
 export const AllToolUIs = [
   EditToolUI,
@@ -117,8 +158,10 @@ export const AllToolUIs = [
   ExitPlanModeToolUI,
   SkillToolUI,
   AskUserQuestionToolUI,
+  EnterWorktreeToolUI,
+  ExitWorktreeToolUI,
   ToolGroupUI,
   TaskGroupUI,
   TaskProgressUI,
-  ...HiddenToolUIs,
+  ...ScheduleToolUIs,
 ];

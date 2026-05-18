@@ -4,6 +4,7 @@ import { MockBaseSession } from './mock-session.js';
 export class MockBaseAdapter implements Adapter {
   id = 'mock';
   name = 'Mock Adapter';
+  readonly capabilities = { planMode: false };
 
   private readonly sessionFactory?: (options: SessionOptions) => AdapterSession;
 

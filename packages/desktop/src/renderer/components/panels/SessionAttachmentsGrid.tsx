@@ -53,6 +53,7 @@ export function SessionAttachmentsGrid({ chatId, attachments }: SessionAttachmen
             <button
               key={attachment.id}
               type="button"
+              data-testid={`sessions-attachment-${attachment.id}`}
               onClick={() => {
                 if (!isImage || !data) return;
                 const imageIndex = imageItems.findIndex((item) => item === data);

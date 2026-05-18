@@ -12,6 +12,7 @@ import type {
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
+import type { ChatListFilters } from '../db/chats.js';
 import { existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { createChildLogger } from '../logger.js';
@@ -26,6 +27,7 @@ import { ChatConfigManager } from './config-manager.js';
 import { ChatLifecycleManager } from './lifecycle-manager.js';
 import { EventHandler } from './event-handler.js';
 import { ExternalSessionService } from './external-session-service.js';
+import { IdleSessionScanner } from './idle-scanner.js';
 import type { ActiveChat } from './types.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
@@ -44,6 +46,7 @@ export class ChatManager {
   private lifecycle: ChatLifecycleManager;
   private eventHandler: EventHandler;
   private externalSessions: ExternalSessionService;
+  private idleScanner: IdleSessionScanner;
 
   constructor(
     private db: DatabaseManager,
@@ -63,11 +66,15 @@ export class ChatManager {
         const adapter = chat ? this.adapters.get(chat.adapterId) : undefined;
         return adapter?.getToolCategories?.();
       },
+      (chatId, uuid) => this.handleQueuedProcessed(chatId, uuid),
+      (chatId) => this.clearAllQueuedForChat(chatId),
+      (chatId) => this.getQueuedForChat(chatId),
     );
     this.planMode = new PlanModeHandler({
       permissions: this.permissions,
       messages: this.messages,
       db: this.db,
+      adapters: this.adapters,
       getActiveChat: (chatId) => this.activeChats.get(chatId),
       emitEvent: (event) => this.emitEvent(event),
       clearDisplayCache: (chatId) => this.eventHandler.clearDisplayCache(chatId),
@@ -82,7 +89,8 @@ export class ChatManager {
       messages: this.messages,
       permissions: this.permissions,
       emitEvent: (event) => this.emitEvent(event),
-      buildSink: (chatId, respondToPermission) => this.eventHandler.buildSink(chatId, respondToPermission),
+      buildSink: (chatId, sessionId, respondToPermission) =>
+        this.eventHandler.buildSink(chatId, sessionId, respondToPermission),
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,
@@ -106,6 +114,18 @@ export class ChatManager {
       emitEvent: (event) => this.emitEvent(event),
     });
     this.externalSessions = new ExternalSessionService(this.db, this.adapters, (e) => this.emitEvent(e));
+    this.idleScanner = new IdleSessionScanner(this.activeChats);
+    this.idleScanner.start();
+  }
+
+  /** Stop background timers. Idempotent. Tests and shutdown should call this. */
+  dispose(): void {
+    this.idleScanner.stop();
+  }
+
+  /** Exposed for tests — runs one idle-eviction pass immediately. */
+  async scanIdleSessions(): Promise<void> {
+    await this.idleScanner.scan();
   }
 
   /** Late-bind a callback to stop launch processes before worktree removal */
@@ -116,6 +136,7 @@ export class ChatManager {
 
   setPushService(service: import('../push/push-service.js').PushService): void {
     this.eventHandler.setPushService(service);
+    this.permissionHandler.setPushService(service);
   }
 
   getExternalSessionService(): ExternalSessionService {
@@ -139,8 +160,10 @@ export class ChatManager {
     adapterId: string,
     model?: string,
     permissionMode?: string,
+    worktreePath?: string,
+    branchName?: string,
   ): Promise<Chat> {
-    return this.lifecycle.createChatWithDefaults(projectId, adapterId, model, permissionMode);
+    return this.lifecycle.createChatWithDefaults(projectId, adapterId, model, permissionMode, worktreePath, branchName);
   }
 
   async resumeChat(chatId: string): Promise<void> {
@@ -152,8 +175,9 @@ export class ChatManager {
     adapterId?: string,
     model?: string,
     permissionMode?: Chat['permissionMode'],
+    planMode?: boolean,
   ): Promise<void> {
-    return this.configManager.updateChatConfig(chatId, adapterId, model, permissionMode);
+    return this.configManager.updateChatConfig(chatId, adapterId, model, permissionMode, planMode);
   }
 
   async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
@@ -256,7 +280,14 @@ export class ChatManager {
     const outgoingContent =
       textPrefix.length > 0 ? (content ? `${textPrefix.join('\n')}\n\n${content}` : textPrefix.join('\n')) : content;
 
-    const isQueued = postStart.chat.processState === 'working';
+    // Only treat the message as queued for adapters whose protocol echoes a
+    // per-message replay ack (Claude CLI stream-json). Adapters that consume
+    // sendMessage synchronously (Codex turn/start, Claude SDK streamFollowUp)
+    // never call `sink.onQueuedProcessed`, so leaving them on the queued path
+    // would strand `queuedRefs` and pin `processState='working'` forever via
+    // the new `getQueuedCount` gate in onResult.
+    const adapterAcksReplay = postStart.session.supportsReplayAck === true;
+    const isQueued = adapterAcksReplay && postStart.chat.processState === 'working';
     const transientMetadata: Record<string, unknown> = {};
     if (isQueued) transientMetadata.queued = true;
     if (attachmentPreviews.length > 0) transientMetadata.attachments = attachmentPreviews;
@@ -363,6 +394,25 @@ export class ChatManager {
     logger.info({ chatId, uuid, messageId: ref.messageId }, 'CLI processed queued message');
   }
 
+  /** Return all queued refs for a chat, oldest-first. */
+  getQueuedForChat(chatId: string): QueuedMessageRef[] {
+    return [...this.queuedRefs.values()].filter((r) => r.chatId === chatId);
+  }
+
+  /** Drop every queuedRef belonging to a chat. Called when the CLI process exits. */
+  clearAllQueuedForChat(chatId: string): void {
+    let removed = 0;
+    for (const [uuid, ref] of this.queuedRefs) {
+      if (ref.chatId === chatId) {
+        this.queuedRefs.delete(uuid);
+        removed++;
+      }
+    }
+    if (removed > 0) {
+      logger.info({ chatId, removed }, 'cleared queued refs for exited chat');
+    }
+  }
+
   async respondToPermission(chatId: string, response: ControlResponse): Promise<void> {
     logger.info({ chatId, behavior: response.behavior, toolName: response.toolName }, 'permission answered');
     return this.permissionHandler.respondToPermission(chatId, response);
@@ -377,6 +427,14 @@ export class ChatManager {
   async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
     await this.lifecycle.archiveChat(chatId, deleteWorktree);
     this.eventHandler.clearDisplayCache(chatId);
+  }
+
+  unarchiveChat(chatId: string): Chat | null {
+    this.db.chats.update(chatId, { status: 'active' });
+    const chat = this.db.chats.get(chatId);
+    if (!chat) return null;
+    this.emitEvent({ type: 'chat.updated', chat });
+    return chat;
   }
 
   async endChat(chatId: string): Promise<void> {
@@ -414,11 +472,36 @@ export class ChatManager {
     return chats.map((chat) => this.enrichChat(chat));
   }
 
+  listFiltered(filters: ChatListFilters): Chat[] {
+    const chats = this.db.chats.listFiltered(filters);
+    return chats.map((chat) => this.enrichChat(chat));
+  }
+
+  /** Re-emit chat.updated for every non-archived chat bound to the given worktree path so clients pick up the new worktreeMissing flag. */
+  notifyWorktreeDeleted(worktreePath: string): void {
+    for (const raw of this.db.chats.listAll()) {
+      if (raw.worktreePath !== worktreePath) continue;
+      const enriched = this.enrichChat(raw);
+      this.emitEvent({ type: 'chat.updated', chat: enriched });
+    }
+  }
+
   getChat(chatId: string): Chat | null {
     const active = this.activeChats.get(chatId);
     const chat = active ? active.chat : this.db.chats.get(chatId);
     if (!chat) return null;
     return this.enrichChat(chat);
+  }
+
+  /**
+   * Sync the in-memory tags of a cached active chat. The tags route persists
+   * to the DB, but `activeChats[id].chat.tags` would otherwise stay stale and
+   * a later `chat.updated` emission (e.g. from resumeChat) would broadcast the
+   * old tags and clobber the renderer's store.
+   */
+  syncChatTags(chatId: string, tags: string[]): void {
+    const active = this.activeChats.get(chatId);
+    if (active) active.chat.tags = tags;
   }
 
   getEffectivePath(chatId: string): string | null {

@@ -27,6 +27,7 @@ vi.mock('../../renderer/store/chats.js', () => {
     pendingPermissions: new Map(),
     setMessages: vi.fn(),
     addPendingPermission: vi.fn(),
+    setLoadingChat: vi.fn(),
   };
   return {
     useChatsStore: Object.assign((selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state), {

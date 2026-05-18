@@ -8,6 +8,7 @@ import { useSkillsStore } from '../store/skills';
 import { useSettingsStore } from '../store/settings';
 import { useAdaptersStore } from '../store/adapters';
 import { usePluginLayoutStore } from '../store';
+import { useTagsStore } from '../store/tags';
 import { routeEvent } from '../lib/ws-event-router';
 import { createLogger } from '../lib/logger';
 import { fetchLaunchStatuses } from '../lib/launch';
@@ -37,13 +38,15 @@ export function useAppInit(): void {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [projectsResult, adaptersResult, providerResult, pluginsResult, chatsResult] = await Promise.allSettled([
-          getProjects(),
-          getAdapters(),
-          getProviderSettings(),
-          getPlugins(),
-          getAllChats(),
-        ]);
+        const [projectsResult, adaptersResult, providerResult, pluginsResult, chatsResult, tagsResult] =
+          await Promise.allSettled([
+            getProjects(),
+            getAdapters(),
+            getProviderSettings(),
+            getPlugins(),
+            getAllChats(),
+            useTagsStore.getState().refreshRegistry(),
+          ]);
 
         if (projectsResult.status === 'fulfilled') {
           setProjects(projectsResult.value);
@@ -67,8 +70,9 @@ export function useAppInit(): void {
         if (pluginsResult.status === 'fulfilled') {
           const store = usePluginLayoutStore.getState();
           for (const plugin of pluginsResult.value) {
-            if (plugin.panel) {
-              store.registerContribution({ pluginId: plugin.id, ...plugin.panel });
+            const panels = plugin.panels ?? (plugin.panel ? [plugin.panel] : []);
+            for (const panel of panels) {
+              store.registerContribution({ pluginId: plugin.id, ...panel });
             }
             if (plugin.actions) {
               for (const action of plugin.actions) {
@@ -84,23 +88,41 @@ export function useAppInit(): void {
           const chatsList = chatsResult.value;
           useChatsStore.getState().setChats(chatsList);
 
-          // Restore active chat from localStorage
+          // Restore active chat from localStorage. Archived chats are hidden
+          // from the flat list but still returned by the daemon, so we must
+          // skip them explicitly — otherwise activeChatId points to a chat
+          // the user cannot see or switch away from.
           const lastChatId = localStorage.getItem('mf:activeChatId');
-          if (lastChatId && chatsList.some((c) => c.id === lastChatId)) {
-            useChatsStore.getState().setActiveChat(lastChatId);
-            daemonClient.subscribe(lastChatId);
-          } else if (chatsList.length > 0) {
+          const visibleChats = chatsList.filter((c) => c.status !== 'archived');
+          let restoredChat: (typeof chatsList)[number] | undefined;
+          const lastChat = lastChatId ? visibleChats.find((c) => c.id === lastChatId) : undefined;
+          if (lastChat) {
+            restoredChat = lastChat;
+            useChatsStore.getState().setActiveChat(lastChat.id);
+            daemonClient.subscribe(lastChat.id);
+          } else if (visibleChats.length > 0) {
             // Fall back to most recently updated chat
-            const sorted = [...chatsList].sort(
+            const sorted = [...visibleChats].sort(
               (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
             );
-            const mostRecent = sorted[0]!;
-            useChatsStore.getState().setActiveChat(mostRecent.id);
-            useTabsStore.getState().openChatTab(mostRecent.id, mostRecent.title);
-            daemonClient.subscribe(mostRecent.id);
+            restoredChat = sorted[0]!;
+            useChatsStore.getState().setActiveChat(restoredChat.id);
+            useTabsStore.getState().openChatTab(restoredChat.id, restoredChat.title);
+            daemonClient.subscribe(restoredChat.id);
+          } else if (lastChatId) {
+            // No visible chats — clear the stale pointer so it doesn't
+            // resurface on a subsequent boot once data changes.
+            localStorage.removeItem('mf:activeChatId');
           }
+
+          // setActiveChat reconciles filterProjectId on its own: it clears the
+          // filter to null when the new active chat lives in a different project.
         } else {
           log.warn('chat fetch failed', { err: String(chatsResult.reason) });
+        }
+
+        if (tagsResult.status === 'rejected') {
+          log.warn('tag registry fetch failed', { err: String(tagsResult.reason) });
         }
       } catch {
         setError('Failed to connect to daemon');

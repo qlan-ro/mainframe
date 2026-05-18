@@ -34,7 +34,7 @@ describe('createWorktree', () => {
     rmSync(repoDir, { recursive: true, force: true });
   });
 
-  it('creates worktree with explicit baseBranch and branchName', () => {
+  it('creates worktree with explicit baseBranch and branchName', async () => {
     const info = createWorktree(repoDir, 'test1234', '.worktrees', defaultBranch, 'feat/my-feature');
     expect(info.branchName).toBe('feat/my-feature');
     expect(info.worktreePath).toContain('.worktrees');
@@ -46,10 +46,10 @@ describe('createWorktree', () => {
     });
     expect(log).toContain('init');
 
-    removeWorktree(repoDir, info.worktreePath, info.branchName);
+    await removeWorktree(repoDir, info.worktreePath, info.branchName);
   });
 
-  it('creates worktree from a non-default base branch', () => {
+  it('creates worktree from a non-default base branch', async () => {
     // Add a commit on develop so it diverges from main
     execFileSync('git', ['checkout', 'develop'], { cwd: repoDir, stdio: 'pipe' });
     execFileSync('git', ['commit', '--allow-empty', '-m', 'develop-commit'], { cwd: repoDir, stdio: 'pipe' });
@@ -64,13 +64,13 @@ describe('createWorktree', () => {
     });
     expect(log).toContain('develop-commit');
 
-    removeWorktree(repoDir, info.worktreePath, info.branchName);
+    await removeWorktree(repoDir, info.worktreePath, info.branchName);
   });
 
-  it('uses sanitized branch name for worktree directory name', () => {
+  it('uses sanitized branch name for worktree directory name', async () => {
     const info = createWorktree(repoDir, 'abcdef12rest', '.worktrees', defaultBranch, 'session/abcdef12');
     expect(info.worktreePath).toContain('session-abcdef12');
     expect(info.worktreePath).not.toContain('abcdef12rest');
-    removeWorktree(repoDir, info.worktreePath, info.branchName);
+    await removeWorktree(repoDir, info.worktreePath, info.branchName);
   });
 });

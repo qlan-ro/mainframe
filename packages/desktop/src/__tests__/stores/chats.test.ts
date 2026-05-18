@@ -181,11 +181,31 @@ describe('useChatsStore', () => {
       expect(state.chats).toHaveLength(2);
     });
 
-    it('adds a chat if it does not exist', () => {
+    it('is a no-op when the chat is not in the store', () => {
+      // updateChat must not re-insert a chat that was intentionally removed
+      // (e.g. optimistic archive). chat.created / addChat handle insertion.
       const chat = makeChat({ id: 'new' });
       useChatsStore.getState().updateChat(chat);
-      expect(useChatsStore.getState().chats).toHaveLength(1);
-      expect(useChatsStore.getState().chats[0]!.id).toBe('new');
+      expect(useChatsStore.getState().chats).toHaveLength(0);
+    });
+
+    it('does not re-insert a running chat after optimistic archive removal', () => {
+      // Regression: archiving a running chat triggers a chat.updated daemon event
+      // (from the dying CLI process). updateChat must not re-add the chat after
+      // removeChat has already removed it.
+      const chat = makeChat({ id: 'running', processState: 'working' as const });
+      useChatsStore.getState().setChats([chat]);
+
+      // Simulate optimistic archive removal
+      useChatsStore.getState().removeChat('running');
+      expect(useChatsStore.getState().chats).toHaveLength(0);
+
+      // Simulate chat.updated WebSocket event arriving from the dying CLI
+      const updatedChat = { ...chat, processState: null };
+      useChatsStore.getState().updateChat(updatedChat);
+
+      // Chat must remain removed
+      expect(useChatsStore.getState().chats).toHaveLength(0);
     });
   });
 
@@ -358,6 +378,58 @@ describe('useChatsStore', () => {
         useChatsStore.getState().addMessage(`chat-${i}`, makeMessage({ id: `msg-${i}`, chatId: `chat-${i}` }));
       }
       expect(useChatsStore.getState().messages.size).toBeLessThanOrEqual(50);
+    });
+  });
+
+  describe('filterProjectId / activeChatId boot-time reconciliation', () => {
+    // setActiveChat clears filterProjectId to null when the new active chat
+    // lives in a different project than the persisted filter. This keeps the
+    // sidebar badge from pointing at a project the user is no longer viewing
+    // and avoids yanking the filter to an unrelated project the user did not
+    // explicitly choose.
+
+    it('clears filterProjectId when restored active chat is in a different project', () => {
+      const chatA = makeChat({ id: 'chat-a', projectId: 'proj-a' });
+      const chatB = makeChat({ id: 'chat-b', projectId: 'proj-b' });
+      useChatsStore.setState({ filterProjectId: 'proj-a' });
+      useChatsStore.getState().setChats([chatA, chatB]);
+
+      useChatsStore.getState().setActiveChat('chat-b');
+
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
+      expect(useChatsStore.getState().activeChatId).toBe('chat-b');
+    });
+
+    it('leaves filterProjectId unchanged when it already matches the restored active chat', () => {
+      const chatA = makeChat({ id: 'chat-a', projectId: 'proj-a' });
+      useChatsStore.setState({ filterProjectId: 'proj-a' });
+      useChatsStore.getState().setChats([chatA]);
+
+      useChatsStore.getState().setActiveChat('chat-a');
+
+      expect(useChatsStore.getState().filterProjectId).toBe('proj-a');
+    });
+
+    it('leaves filterProjectId null (All) untouched regardless of active chat project', () => {
+      const chatA = makeChat({ id: 'chat-a', projectId: 'proj-a' });
+      useChatsStore.setState({ filterProjectId: null });
+      useChatsStore.getState().setChats([chatA]);
+
+      useChatsStore.getState().setActiveChat('chat-a');
+
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
+    });
+
+    it('clears filterProjectId on fall-back-to-most-recent across projects', () => {
+      const chatOld = makeChat({ id: 'chat-old', projectId: 'proj-a', updatedAt: '2026-01-01T00:00:00Z' });
+      const chatNew = makeChat({ id: 'chat-new', projectId: 'proj-b', updatedAt: '2026-01-02T00:00:00Z' });
+      useChatsStore.setState({ filterProjectId: 'proj-a' });
+      useChatsStore.getState().setChats([chatOld, chatNew]);
+
+      useChatsStore.getState().setActiveChat('chat-new');
+
+      expect(useChatsStore.getState().activeChatId).toBe('chat-new');
+      expect(useChatsStore.getState().filterProjectId).toBeNull();
     });
   });
 });

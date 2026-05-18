@@ -1,11 +1,21 @@
 import type { DiffHunk } from './chat.js';
 
+export interface AskUserQuestionAnswer {
+  question: string;
+  answer: string[];
+  preview?: string;
+  notes?: string;
+}
+
 export interface ToolCallResult {
   content: string;
   isError: boolean;
   structuredPatch?: DiffHunk[];
   originalFile?: string;
   modifiedFile?: string;
+  truncated?: boolean;
+  fullBytes?: number;
+  askUserQuestion?: AskUserQuestionAnswer[];
 }
 
 export interface ToolCategories {
@@ -16,9 +26,9 @@ export interface ToolCategories {
 }
 
 export type DisplayContent =
-  | { type: 'text'; text: string }
-  | { type: 'thinking'; thinking: string }
-  | { type: 'image'; mediaType: string; data: string }
+  | { type: 'text'; text: string; parentToolUseId?: string }
+  | { type: 'thinking'; thinking: string; parentToolUseId?: string }
+  | { type: 'image'; mediaType: string; data: string; parentToolUseId?: string }
   | {
       type: 'tool_call';
       id: string;
@@ -26,6 +36,7 @@ export type DisplayContent =
       input: Record<string, unknown>;
       category: 'default' | 'explore' | 'hidden' | 'progress' | 'subagent';
       result?: ToolCallResult;
+      parentToolUseId?: string;
     }
   | { type: 'tool_group'; calls: DisplayContent[] }
   | {
@@ -36,7 +47,9 @@ export type DisplayContent =
       result?: ToolCallResult;
     }
   | { type: 'permission_request'; request: unknown }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string }
+  | { type: 'compaction'; parentToolUseId?: string };
 
 export interface DisplayMessage {
   id: string;

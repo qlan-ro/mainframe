@@ -14,6 +14,31 @@ const VALID_CAPABILITIES = [
   'http:outbound',
 ] as const;
 
+const UIZoneContributionSchema = z.object({
+  zone: z.enum([
+    'fullview',
+    'left-top',
+    'left-bottom',
+    'right-top',
+    'right-bottom',
+    'bottom-left',
+    'bottom-right',
+    // Legacy zone names supported in manifest.json for backwards compatibility
+    'left-panel',
+    'right-panel',
+    'left-tab',
+    'right-tab',
+  ]),
+  label: z.string(),
+  icon: z.string().optional(),
+});
+
+/**
+ * Accepts both legacy single-object and new array forms.
+ * Both are valid on disk; the validator normalizes to the TypeScript union.
+ */
+const UIFieldSchema = z.union([UIZoneContributionSchema, z.array(UIZoneContributionSchema)]).optional();
+
 const ManifestSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9-]*$/, 'id must be lowercase alphanumeric with hyphens'),
@@ -23,13 +48,7 @@ const ManifestSchema = z
     author: z.string().optional(),
     license: z.string().optional(),
     capabilities: z.array(z.enum(VALID_CAPABILITIES)),
-    ui: z
-      .object({
-        zone: z.enum(['fullview', 'left-panel', 'right-panel', 'left-tab', 'right-tab']),
-        label: z.string(),
-        icon: z.string().optional(),
-      })
-      .optional(),
+    ui: UIFieldSchema,
     adapter: z
       .object({
         binaryName: z.string().min(1),
@@ -44,10 +63,12 @@ const ManifestSchema = z
         message: 'adapter field is required when "adapters" capability is declared',
       });
     }
-    if (data.ui?.zone && !data.capabilities.includes('ui:panels')) {
+    const contributions = data.ui ? (Array.isArray(data.ui) ? data.ui : [data.ui]) : [];
+    const hasZone = contributions.length > 0;
+    if (hasZone && !data.capabilities.includes('ui:panels')) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Manifest declares ui.zone but is missing the "ui:panels" capability',
+        message: 'Manifest declares ui zone(s) but is missing the "ui:panels" capability',
         path: ['capabilities'],
       });
     }

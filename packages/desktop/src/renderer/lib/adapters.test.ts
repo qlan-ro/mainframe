@@ -6,10 +6,11 @@ describe('adapters model metadata', () => {
   const adapters: AdapterInfo[] = [
     {
       id: 'claude',
-      name: 'Claude CLI',
+      name: 'Claude Code',
       description: 'Claude adapter',
       installed: true,
       version: '1.0.0',
+      capabilities: { planMode: true },
       models: [
         { id: 'claude-opus-4-6', label: 'Opus 4.6', contextWindow: 200_000 },
         { id: 'claude-opus-4-5-20251101', label: 'Opus 4.5', contextWindow: 200_000 },
@@ -23,7 +24,7 @@ describe('adapters model metadata', () => {
 
     expect(modelIds.has('claude-opus-4-6')).toBe(true);
     expect(modelIds.has('claude-opus-4-5-20251101')).toBe(true);
-    expect(adapterOptions).toEqual([{ id: 'claude', label: 'Claude CLI' }]);
+    expect(adapterOptions).toEqual([{ id: 'claude', label: 'Claude Code' }]);
   });
 
   it('resolves known model labels from adapter metadata', () => {
@@ -35,6 +36,8 @@ describe('adapters model metadata', () => {
     expect(getAdapterLabel('unknown')).toBe('unknown');
     expect(getModelLabel('custom-model', adapters)).toBe('custom-model');
     expect(getModelLabel(undefined, adapters)).toBe('');
-    expect(getModelContextWindow('unknown-model', adapters)).toBe(200_000);
+    expect(getModelContextWindow('unknown-model', adapters)).toBeUndefined();
+    expect(getModelContextWindow(undefined, adapters)).toBeUndefined();
+    expect(getModelContextWindow('claude-opus-4-6', adapters)).toBe(200_000);
   });
 });

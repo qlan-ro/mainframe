@@ -1,6 +1,6 @@
 {
   "name": "@qlan-ro/mainframe-types",
-  "version": "0.10.2",
+  "version": "0.18.2",
   "description": "Shared TypeScript types for Mainframe",
   "license": "MIT",
   "repository": {
@@ -28,11 +28,14 @@
     "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist",
     "dev": "tsc --watch",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "pino": "^10.3.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.0"
   }
 }

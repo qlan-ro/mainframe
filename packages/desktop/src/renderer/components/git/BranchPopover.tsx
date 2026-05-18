@@ -8,6 +8,22 @@ import { BranchSubmenu } from './BranchSubmenu';
 import { NewBranchDialog } from './NewBranchDialog';
 import { ConflictView } from './ConflictView';
 import { useBranchActions } from './useBranchActions';
+import { useHorizontalResize } from '../../hooks/useHorizontalResize';
+
+const RESIZE_STORAGE_KEY = 'mf:branch-popover-width';
+const RESIZE_DEFAULT = 320;
+const RESIZE_MIN = 280;
+const RESIZE_MAX = 800;
+
+function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }): React.ReactElement {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="absolute top-0 right-0 h-full w-1 cursor-ew-resize hover:bg-mf-hover"
+      style={{ touchAction: 'none' }}
+    />
+  );
+}
 
 type View = 'list' | 'submenu' | 'new-branch' | 'conflict' | 'rename';
 
@@ -32,6 +48,12 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
   const [renameValue, setRenameValue] = useState('');
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const { width, onHandleMouseDown } = useHorizontalResize({
+    storageKey: RESIZE_STORAGE_KEY,
+    defaultWidth: RESIZE_DEFAULT,
+    minWidth: RESIZE_MIN,
+    maxWidth: RESIZE_MAX,
+  });
 
   // Switch to conflict view when conflicts or active operation detected
   useEffect(() => {
@@ -108,8 +130,13 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
 
   if (!branches) {
     return (
-      <div ref={popoverRef} className="bg-mf-app-bg border border-mf-border rounded-lg shadow-xl p-4">
+      <div
+        ref={popoverRef}
+        className="relative bg-mf-app-bg border border-mf-border rounded-lg shadow-xl p-4"
+        style={{ width }}
+      >
         <Loader2 size={16} className="animate-spin text-mf-text-secondary mx-auto" />
+        <ResizeHandle onMouseDown={onHandleMouseDown} />
       </div>
     );
   }
@@ -119,7 +146,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
   return (
     <div ref={popoverRef} className="flex items-start gap-1">
       {/* Main panel */}
-      <div className="bg-mf-app-bg border border-mf-border rounded-lg shadow-xl min-w-[300px] max-w-[360px]">
+      <div className="relative bg-mf-app-bg border border-mf-border rounded-lg shadow-xl" style={{ width }}>
         {activeChat?.worktreePath && (
           <div className="flex items-center gap-2 px-3 py-2 mb-1 text-mf-label text-mf-accent bg-mf-accent/10 rounded-mf-input">
             <GitBranch size={12} />
@@ -163,6 +190,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
               <div className="flex-1 flex items-center gap-1 px-2 py-1 rounded border border-mf-border bg-mf-app-bg">
                 <Search size={12} className="text-mf-text-secondary shrink-0" />
                 <input
+                  data-testid="branch-popover-search-input"
                   ref={searchRef}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -173,6 +201,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid="branch-popover-fetch"
                     onClick={actions.handleFetch}
                     disabled={busy}
                     aria-label="Fetch"
@@ -195,6 +224,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
             {/* Quick actions */}
             <div className="border-b border-mf-border">
               <button
+                data-testid="branch-popover-new-branch"
                 onClick={() => {
                   setNewBranchFrom(undefined);
                   setView('new-branch');
@@ -205,6 +235,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                 <span>New Branch...</span>
               </button>
               <button
+                data-testid="branch-popover-update-all"
                 onClick={actions.handleUpdateAll}
                 disabled={busy}
                 className={cn(
@@ -216,6 +247,7 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
                 <span>Update All</span>
               </button>
               <button
+                data-testid="branch-popover-push"
                 onClick={handleGlobalPush}
                 disabled={busy}
                 className={cn(
@@ -236,9 +268,13 @@ export function BranchPopover({ projectId, onBranchChanged, onClose }: BranchPop
               currentBranch={branches.current}
               search={search}
               onSelectBranch={handleSelectBranch}
+              onDeleteWorktree={actions.handleDeleteWorktree}
+              onNewSession={actions.handleNewSession}
+              busyAction={busyAction}
             />
           </>
         )}
+        <ResizeHandle onMouseDown={onHandleMouseDown} />
       </div>
 
       {/* Flyout submenu — side by side */}
@@ -297,12 +333,13 @@ function RenameView({
   return (
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-1.5">
-        <button onClick={onBack} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
+        <button data-testid="rename-branch-back" onClick={onBack} className="p-0.5 hover:bg-mf-hover rounded text-mf-text-secondary">
           <ArrowLeft size={14} />
         </button>
         <span className="text-sm font-medium text-mf-text-primary">Rename Branch</span>
       </div>
       <input
+        data-testid="rename-branch-name-input"
         ref={inputRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -314,12 +351,14 @@ function RenameView({
       />
       <div className="flex justify-end gap-2">
         <button
+          data-testid="rename-branch-cancel"
           onClick={onBack}
           className="px-3 py-1 text-sm rounded border border-mf-border text-mf-text-secondary hover:bg-mf-hover"
         >
           Cancel
         </button>
         <button
+          data-testid="rename-branch-rename"
           onClick={onSubmit}
           disabled={busy || !value.trim()}
           className={cn(

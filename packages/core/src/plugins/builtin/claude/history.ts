@@ -22,19 +22,79 @@ export function deriveModifiedFile(
   return undefined;
 }
 
-function extractSkillPathFromText(content: Array<Record<string, unknown>>): string | null {
-  for (const block of content) {
-    if (block.type !== 'text') continue;
-    const text = block.text as string;
-    const match = text.match(/^Base directory for this skill: (.+)/);
-    if (match?.[1]) {
-      return path.join(match[1].trim(), 'SKILL.md');
-    }
-  }
-  return null;
+import { resolveSkillPath } from './skill-path.js';
+import { createChildLogger } from '../../../logger.js';
+
+const log = createChildLogger('claude:history');
+
+/**
+ * isMeta user entries whose first text block starts with
+ * "Base directory for this skill: <dir>" are the CLI's skill-content
+ * injections. We keep them out of the chat transcript (as before) but
+ * synthesize a transient system message with a `skill_loaded` block so
+ * SkillLoadedCard renders on history replay.
+ */
+/**
+ * "Unknown command: /X" user entries are CLI feedback — the CLI never writes
+ * the original user-typed /X to JSONL, so on replay the typed bubble is lost.
+ * Synthesize both components: the invocation bubble and the error pill, so
+ * history mirrors what the user saw live.
+ */
+function synthesizeUnknownCommandFromUserEntry(entry: Record<string, unknown>, chatId: string): ChatMessage[] | null {
+  const message = entry.message as { content?: unknown } | undefined;
+  const content = message?.content;
+  if (typeof content !== 'string') return null;
+  // Match both CLI error variants. "Unknown command:" comes from the
+  // MalformedCommandError path (processSlashCommand.tsx:820) and retains the
+  // leading slash. "Unknown skill:" comes from the !hasCommand path
+  // (processSlashCommand.tsx:347) and omits the slash — we add it back so the
+  // synthesized user bubble consistently reads like "/foo".
+  const match = /^Unknown (?:command|skill):\s+\/?(\S+)/.exec(content.trim());
+  if (!match?.[1]) return null;
+  const cmd = `/${match[1]}`;
+  const uuid = (entry.uuid as string) ?? nanoid();
+  const timestamp = (entry.timestamp as string) ?? new Date().toISOString();
+  return [
+    {
+      id: `unknown-cmd-user-${uuid}`,
+      chatId,
+      type: 'user',
+      content: [{ type: 'text', text: cmd }],
+      timestamp,
+    },
+    {
+      id: `unknown-cmd-err-${uuid}`,
+      chatId,
+      type: 'system',
+      content: [{ type: 'text', text: content.trim() }],
+      timestamp,
+    },
+  ];
 }
 
-function extractToolResultContent(content: unknown): string {
+function synthesizeSkillLoadedFromUserEntry(entry: Record<string, unknown>, chatId: string): ChatMessage | null {
+  const message = entry.message as { content?: unknown } | undefined;
+  const content = message?.content;
+  if (!Array.isArray(content) || content.length === 0) return null;
+  const first = content[0] as { type?: string; text?: string } | undefined;
+  if (first?.type !== 'text' || typeof first.text !== 'string') return null;
+  const match = /^Base directory for this skill:\s*(.+?)(?:\n|$)/m.exec(first.text);
+  if (!match?.[1]) return null;
+  const baseDir = match[1].trim();
+  const skillName = path.basename(baseDir);
+  const skillPath = path.extname(baseDir) ? baseDir : path.join(baseDir, 'SKILL.md');
+  const skillContent = first.text.replace(/^Base directory for this skill:[^\n]*\n?/m, '').trim();
+  const uuid = (entry.uuid as string) ?? nanoid();
+  return {
+    id: `skill-loaded-${uuid}`,
+    chatId,
+    type: 'system',
+    content: [{ type: 'skill_loaded', skillName, path: skillPath, content: skillContent }],
+    timestamp: (entry.timestamp as string) ?? new Date().toISOString(),
+  };
+}
+
+export function extractToolResultContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     const texts: string[] = [];
@@ -186,7 +246,7 @@ export function convertHistoryEntry(entry: Record<string, unknown>, chatId: stri
       id: (entry.uuid as string) || nanoid(),
       chatId,
       type: 'system',
-      content: [{ type: 'text', text: 'Context compacted' }],
+      content: [{ type: 'compaction' }],
       timestamp: (entry.timestamp as string) || new Date().toISOString(),
       metadata: { source: 'history', internal: true },
     };
@@ -213,15 +273,6 @@ export function convertHistoryEntry(entry: Record<string, unknown>, chatId: stri
   return null;
 }
 
-export function filterSkillExpansions(messages: ChatMessage[]): ChatMessage[] {
-  return messages.filter((msg) => {
-    if (msg.type !== 'user') return true;
-    // Filter slash-command invocation markers — they contain <command-name> tags and
-    // are purely CLI metadata that should never appear in the rendered conversation.
-    return !msg.content.some((b) => b.type === 'text' && /<command-name>/.test((b as { text: string }).text));
-  });
-}
-
 function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: Map<string, MessageContent[]>): void {
   const parentId = entry.parentToolUseID as string | undefined;
   if (!parentId) return;
@@ -232,17 +283,25 @@ function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: M
   const content = inner.content as Array<Record<string, unknown>> | undefined;
   if (!Array.isArray(content)) return;
 
+  const existing = agentTools.get(parentId) ?? [];
   for (const block of content) {
-    if (block.type !== 'tool_use') continue;
-    const existing = agentTools.get(parentId) ?? [];
-    existing.push({
-      type: 'tool_use',
-      id: (block.id as string) || nanoid(),
-      name: block.name as string,
-      input: (block.input as Record<string, unknown>) ?? {},
-    });
-    agentTools.set(parentId, existing);
+    if (block.type === 'tool_use') {
+      existing.push({
+        type: 'tool_use',
+        id: (block.id as string) || nanoid(),
+        name: block.name as string,
+        input: (block.input as Record<string, unknown>) ?? {},
+        parentToolUseId: parentId,
+      });
+    } else if (block.type === 'text') {
+      const text = (block.text as string) || '';
+      if (text.trim()) existing.push({ type: 'text', text, parentToolUseId: parentId });
+    } else if (block.type === 'thinking') {
+      const t = (block.thinking as string) || '';
+      if (t.trim()) existing.push({ type: 'thinking', thinking: t, parentToolUseId: parentId });
+    }
   }
+  if (existing.length > 0) agentTools.set(parentId, existing);
 }
 
 /** Extract tool_result blocks from subagent JSONL user entries. */
@@ -264,6 +323,66 @@ function collectSubagentToolResults(
   }
 }
 
+/**
+ * Capture the agentId → parent tool_use_id mapping from a parent-JSONL user
+ * entry whose tool_result corresponds to a Task/Agent dispatch. CLI 2.1.118+
+ * does not write parentToolUseID into subagent JSONL entries; this map is the
+ * only way to link a subagent's blocks back to its dispatching tool_use.
+ */
+function captureAgentIdMapping(entry: Record<string, unknown>, map: Map<string, string>): void {
+  if (entry.type !== 'user') return;
+  const tur = (entry.toolUseResult ?? entry.tool_use_result) as Record<string, unknown> | undefined;
+  const agentId = typeof tur?.agentId === 'string' ? (tur.agentId as string) : undefined;
+  if (!agentId) return;
+  const message = entry.message as { content?: unknown } | undefined;
+  const content = message?.content;
+  if (!Array.isArray(content)) return;
+  for (const block of content as Array<Record<string, unknown>>) {
+    if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+      map.set(agentId, block.tool_use_id);
+      return;
+    }
+  }
+}
+
+/** Collect assistant text/thinking/tool_use blocks from subagent JSONL assistant entries. */
+function collectSubagentAssistantBlocks(
+  entry: Record<string, unknown>,
+  agentTools: Map<string, MessageContent[]>,
+  agentIdMap?: Map<string, string>,
+): void {
+  let parentId = entry.parentToolUseID as string | undefined;
+  if (!parentId && agentIdMap) {
+    const agentId = entry.agentId as string | undefined;
+    if (agentId) parentId = agentIdMap.get(agentId);
+  }
+  if (!parentId) return;
+  if (entry.type !== 'assistant') return;
+  const message = entry.message as Record<string, unknown> | undefined;
+  const content = message?.content as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(content)) return;
+
+  const existing = agentTools.get(parentId) ?? [];
+  for (const block of content) {
+    if (block.type === 'tool_use') {
+      existing.push({
+        type: 'tool_use',
+        id: (block.id as string) || nanoid(),
+        name: block.name as string,
+        input: (block.input as Record<string, unknown>) ?? {},
+        parentToolUseId: parentId,
+      });
+    } else if (block.type === 'text') {
+      const text = (block.text as string) || '';
+      if (text.trim()) existing.push({ type: 'text', text, parentToolUseId: parentId });
+    } else if (block.type === 'thinking') {
+      const t = (block.thinking as string) || '';
+      if (t.trim()) existing.push({ type: 'thinking', thinking: t, parentToolUseId: parentId });
+    }
+  }
+  if (existing.length > 0) agentTools.set(parentId, existing);
+}
+
 /** Inject subagent tool_result blocks after their matching tool_use in assistant messages. */
 function attachSubagentToolResults(
   messages: ChatMessage[],
@@ -276,7 +395,7 @@ function attachSubagentToolResults(
       newContent.push(block);
       if (block.type === 'tool_use') {
         const toolResult = results.get(block.id);
-        if (toolResult) newContent.push(toolResult);
+        if (toolResult) newContent.push({ ...toolResult, parentToolUseId: block.parentToolUseId });
       }
     }
     msg.content = newContent;
@@ -370,6 +489,10 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
   // Map of toolUseId → tool_result block, populated from subagent JONLs
   const subagentToolResults = new Map<string, MessageContent & { type: 'tool_result' }>();
   const seenUuids = new Set<string>();
+  // CLI 2.1.118+ subagent JSONLs omit parentToolUseID. The link is kept on the
+  // parent's tool_result via toolUseResult.agentId. Build that map as we walk
+  // the parent file so subagent-file processing can resolve the parent id.
+  const agentIdToParentToolUseId = new Map<string, string>();
 
   for (const file of jsonlFiles) {
     const isSubagentFile = subagentFiles.has(file);
@@ -378,22 +501,77 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
       const rl = createInterface({ input: stream, crlfDelay: Infinity });
       for await (const line of rl) {
         if (!line.trim()) continue;
+        log.trace({ sessionId, file, line }, '[jsonl]');
         try {
           const entry = JSON.parse(line);
+
+          // isMeta user messages carrying skill content are written to JSONL
+          // only (never emitted over stream-json), so history replay is the
+          // only chance to surface a SkillLoadedCard for these turns. Detect
+          // and synthesize a system 'skill_loaded' message BEFORE the generic
+          // isMeta filter drops them below.
+          //
+          // Skip subagent and sidechain entries: each subagent loads its own
+          // skills and writes its own "Base directory for this skill:" entry.
+          // Live mode hides those from the parent thread (subagent activity
+          // surfaces only through agent_progress + the parent's Task tool_use),
+          // so promoting them on replay creates ghost SkillLoadedCards that
+          // never appeared during the live session.
+          if (entry.isMeta === true && entry.type === 'user' && !isSubagentFile && entry.isSidechain !== true) {
+            const synthesized = synthesizeSkillLoadedFromUserEntry(entry, sessionId);
+            if (synthesized) {
+              if (!seenUuids.has(synthesized.id)) {
+                seenUuids.add(synthesized.id);
+                messages.push(synthesized);
+              }
+              continue;
+            }
+          }
+
           if (entry.isMeta === true) continue;
           if (entry.isCompactSummary === true || entry.isVisibleInTranscriptOnly === true) continue;
+
+          // Subagent JSONL files: extract tool_result and assistant blocks to
+          // inline under the parent's Agent tool_use. These entries must NOT
+          // appear as top-level chat messages — they're surfaced via the
+          // injectAgentChildren / attachSubagentToolResults pipeline below.
+          if (isSubagentFile) {
+            collectSubagentToolResults(entry, subagentToolResults);
+            collectSubagentAssistantBlocks(entry, agentTools, agentIdToParentToolUseId);
+            continue;
+          }
+
+          // Capture agentId → parent tool_use_id mapping from the parent's
+          // tool_result for any Task/Agent dispatch. discoverSessionJsonlFiles
+          // returns the parent file before subagent files, so the map is built
+          // by the time subagent processing needs it.
+          if (entry.type === 'user') captureAgentIdMapping(entry, agentIdToParentToolUseId);
+
+          // Sidechain entries are subagent activity (Task/Agent tool spawns its
+          // own CLI session whose messages share our sessionId but live in a
+          // sibling JSONL). The subagent's first user message is its dispatch
+          // prompt — converting it would render a ghost user bubble in the
+          // parent thread. Skill-loaded synthesis above runs first so user-typed
+          // /skill invocations are preserved.
+          if (entry.isSidechain === true) continue;
+
+          // "Unknown command: /X" — CLI feedback for slash commands that don't
+          // resolve. Split into invocation bubble + error pill on replay.
+          if (entry.type === 'user') {
+            const synthesized = synthesizeUnknownCommandFromUserEntry(entry, sessionId);
+            if (synthesized) {
+              for (const m of synthesized) {
+                if (seenUuids.has(m.id)) continue;
+                seenUuids.add(m.id);
+                messages.push(m);
+              }
+              continue;
+            }
+          }
 
           // Collect tool_use blocks from agent_progress events
           if (entry.type === 'progress' && entry.data?.type === 'agent_progress') {
             collectAgentProgressTools(entry, agentTools);
-            continue;
-          }
-
-          // Subagent JSONL files: only extract tool_result data to populate
-          // the tool_use blocks injected via agent_progress. The subagent's own
-          // assistant/user messages must NOT appear as top-level chat messages.
-          if (isSubagentFile) {
-            collectSubagentToolResults(entry, subagentToolResults);
             continue;
           }
 
@@ -423,7 +601,7 @@ export async function loadHistory(sessionId: string, projectPath: string): Promi
     attachSubagentToolResults(messages, subagentToolResults);
   }
 
-  return filterSkillExpansions(messages);
+  return messages;
 }
 
 export async function extractPlanFilePaths(sessionId: string, projectPath: string): Promise<string[]> {
@@ -462,7 +640,15 @@ export async function extractSkillFilePaths(sessionId: string, projectPath: stri
   const { allFiles: jsonlFiles } = await discoverSessionJsonlFiles(sessionId, projectPath);
   if (jsonlFiles.length === 0) return [];
 
+  const seen = new Set<string>();
+  const cache = new Map<string, string>();
   const skillFiles: SkillFileEntry[] = [];
+  const push = (name: string): void => {
+    const trimmed = name.trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    skillFiles.push({ path: resolveSkillPath(projectPath, trimmed, cache), displayName: trimmed });
+  };
 
   for (const file of jsonlFiles) {
     const stream = createReadStream(file);
@@ -472,15 +658,14 @@ export async function extractSkillFilePaths(sessionId: string, projectPath: stri
         if (!line.trim()) continue;
         try {
           const entry = JSON.parse(line);
-          if (entry.type !== 'user' || entry.isMeta !== true) continue;
+          if (entry.type !== 'assistant') continue;
           const content = entry.message?.content;
           if (!Array.isArray(content)) continue;
-          const skillPath = extractSkillPathFromText(content);
-          if (skillPath) {
-            const segments = skillPath.split('/');
-            const file = segments.pop() ?? skillPath;
-            const displayName = file === 'SKILL.md' && segments.length > 0 ? segments.pop()! : file;
-            skillFiles.push({ path: skillPath, displayName });
+          for (const block of content) {
+            if (block?.type === 'tool_use' && block.name === 'Skill') {
+              const skill = (block.input as { skill?: unknown } | undefined)?.skill;
+              if (typeof skill === 'string' && skill) push(skill);
+            }
           }
         } catch {
           /* skip malformed */

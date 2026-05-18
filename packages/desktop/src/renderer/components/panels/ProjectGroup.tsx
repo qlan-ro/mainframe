@@ -1,277 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Plus,
-  Archive,
-  Pencil,
-  ChevronDown,
-  ChevronRight,
-  Bot,
-  GitBranch,
-  GitPullRequest,
-  Clock,
-  Loader2,
-  Pin,
-} from 'lucide-react';
+import React, { useCallback } from 'react';
+import { Plus, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
-import type { SessionStatus } from '../../store/chats';
-import { useChatsStore } from '../../store';
-import { useTabsStore } from '../../store/tabs';
-import { useAdaptersStore } from '../../store/adapters';
 import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
-import { archiveChat, renameChat } from '../../lib/api';
-import { deleteDraft } from '../chat/assistant-ui/composer/composer-drafts.js';
-import { cn } from '../../lib/utils';
+import { deleteProjectWithCleanup } from '../../lib/delete-project';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { getAdapterLabel } from '../../lib/adapters';
-import { createLogger } from '../../lib/logger';
-
-const log = createLogger('renderer:project-group');
-
-function SessionStatusDot({
-  status,
-  worktreeMissing,
-  isUnread,
-}: {
-  status: SessionStatus;
-  worktreeMissing?: boolean;
-  isUnread?: boolean;
-}) {
-  const isWorking = status === 'working' || status === 'waiting';
-  return (
-    <div className="w-3 h-3 shrink-0 flex items-center justify-center">
-      {worktreeMissing ? (
-        <div data-testid="chat-status-missing" className="w-2 h-2 rounded-full bg-mf-destructive" />
-      ) : isWorking ? (
-        <Loader2 data-testid="chat-status-working" size={12} className="text-mf-accent animate-spin" />
-      ) : (
-        <div
-          data-testid="chat-status-idle"
-          className={cn('w-2 h-2 rounded-full', isUnread ? 'bg-mf-accent' : 'bg-mf-text-secondary opacity-40')}
-        />
-      )}
-    </div>
-  );
-}
-
-function formatRelativeTime(isoString: string): string {
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-  if (date.toDateString() === now.toDateString()) return `Today ${time}`;
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
-  if (diffDays < 7) return `${date.toLocaleDateString([], { weekday: 'long' })} ${time}`;
-  if (diffDays < 14) return 'Last week';
-  if (date.getFullYear() === now.getFullYear()) return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-interface ChatRowProps {
-  chat: Chat;
-  isActive: boolean;
-  adapters: import('@qlan-ro/mainframe-types').AdapterInfo[];
-  onSelect: (chatId: string, title?: string) => void;
-  isArchiving?: boolean;
-  onArchive: (e: React.MouseEvent, chatId: string) => void;
-  onContextMenu?: (e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => void;
-  registerRenameCallback?: (chatId: string, trigger: () => void) => void;
-  unregisterRenameCallback?: (chatId: string) => void;
-}
-
-function ChatRow({
-  chat,
-  isActive,
-  isArchiving,
-  adapters,
-  onSelect,
-  onArchive,
-  onContextMenu,
-  registerRenameCallback,
-  unregisterRenameCallback,
-}: ChatRowProps) {
-  const [editing, setEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleStartRename = useCallback(
-    (e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      setEditTitle(chat.title || '');
-      setEditing(true);
-      requestAnimationFrame(() => inputRef.current?.select());
-    },
-    [chat.title],
-  );
-
-  useEffect(() => {
-    registerRenameCallback?.(chat.id, handleStartRename);
-    return () => unregisterRenameCallback?.(chat.id);
-  }, [chat.id, handleStartRename, registerRenameCallback, unregisterRenameCallback]);
-
-  const updateChat = useChatsStore((s) => s.updateChat);
-  const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
-  const isUnread = unreadChatIds.has(chat.id);
-  const createdPrUrl = useChatsStore((s) => {
-    const prs = s.detectedPrs.get(chat.id);
-    return prs?.find((p) => p.source === 'created')?.url ?? null;
-  });
-
-  const handleCommitRename = useCallback(() => {
-    setEditing(false);
-    const trimmed = editTitle.trim();
-    if (trimmed && trimmed !== chat.title) {
-      updateChat({ ...chat, title: trimmed });
-      useTabsStore.getState().updateTabLabel(`chat:${chat.id}`, trimmed);
-      renameChat(chat.id, trimmed).catch((err) => log.warn('rename failed', { err: String(err) }));
-    }
-  }, [chat, editTitle, updateChat]);
-
-  const handleRenameKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') handleCommitRename();
-      if (e.key === 'Escape') setEditing(false);
-    },
-    [handleCommitRename],
-  );
-
-  return (
-    <div
-      data-testid="chat-list-item"
-      onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId, chat.id)}
-      className={cn(
-        'group w-full rounded-mf-input transition-colors flex items-center gap-2 ml-2',
-        isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover/50',
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => onSelect(chat.id, chat.title)}
-        className="flex-1 min-w-0 px-3 py-1.5 text-left rounded-mf-input"
-      >
-        <div className="flex items-center gap-2">
-          <SessionStatusDot
-            status={chat.displayStatus ?? 'idle'}
-            worktreeMissing={chat.worktreeMissing}
-            isUnread={isUnread}
-          />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1">
-              {editing ? (
-                <input
-                  ref={inputRef}
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  onBlur={handleCommitRename}
-                  onKeyDown={handleRenameKeyDown}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-full bg-mf-panel-bg text-mf-small text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
-                />
-              ) : (
-                <div className="flex items-center gap-1 min-w-0">
-                  {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
-                  {createdPrUrl && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          role="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(createdPrUrl, '_blank');
-                          }}
-                          className="shrink-0 text-[#1a7f37] hover:opacity-70 cursor-pointer"
-                          aria-label="Open PR"
-                        >
-                          <GitPullRequest size={12} />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>Open PR</TooltipContent>
-                    </Tooltip>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div
-                        className={cn(
-                          'text-mf-small truncate',
-                          isActive ? 'text-mf-text-primary font-medium' : 'text-mf-text-secondary',
-                          isUnread && !isActive ? 'font-semibold text-mf-text-primary' : '',
-                        )}
-                        tabIndex={0}
-                      >
-                        {chat.title || 'Untitled session'}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>{chat.title || 'Untitled session'}</TooltipContent>
-                  </Tooltip>
-                </div>
-              )}
-            </div>
-            <div className="text-mf-status text-mf-text-secondary mt-0.5 flex items-center gap-1 overflow-hidden">
-              <Bot size={10} className="shrink-0" />
-              <span className="truncate">{getAdapterLabel(chat.adapterId, adapters)}</span>
-              {chat.worktreePath && (
-                <>
-                  <span className="shrink-0">{'·'}</span>
-                  <GitBranch size={10} className="shrink-0" />
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="truncate max-w-[100px]" tabIndex={0}>
-                        {chat.worktreePath.split('/').pop()}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>{chat.worktreePath}</TooltipContent>
-                  </Tooltip>
-                </>
-              )}
-              <span className="shrink-0">{'·'}</span>
-              <Clock size={10} className="shrink-0" />
-              <span className="shrink-0">{formatRelativeTime(chat.updatedAt)}</span>
-            </div>
-          </div>
-        </div>
-      </button>
-      {chat.displayStatus === 'waiting' && (
-        <span className="shrink-0 mr-2 px-2 py-1 rounded-full text-xs font-medium border border-mf-warning text-mf-warning">
-          Waiting
-        </span>
-      )}
-      <div className={cn('shrink-0 mr-1 flex items-center gap-0.5', isArchiving ? 'flex' : 'hidden group-hover:flex')}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={handleStartRename}
-              className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors shrink-0"
-              aria-label="Rename session"
-            >
-              <Pencil size={14} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Rename session</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={(e) => onArchive(e, chat.id)}
-              disabled={isArchiving}
-              className={cn(
-                'w-6 h-6 rounded flex items-center justify-center text-mf-text-secondary transition-colors shrink-0',
-                isArchiving ? '' : 'hover:bg-mf-hover hover:text-mf-text-primary',
-              )}
-              aria-label="Archive session"
-            >
-              {isArchiving ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Archive session</TooltipContent>
-        </Tooltip>
-      </div>
-    </div>
-  );
-}
+import { FlatSessionRow } from './FlatSessionRow';
 
 interface ProjectGroupProps {
   project: Project;
@@ -282,6 +16,8 @@ interface ProjectGroupProps {
   onContextMenu?: (e: React.MouseEvent, sessionId: string | undefined, chatId?: string) => void;
   registerRenameCallback?: (chatId: string, trigger: () => void) => void;
   unregisterRenameCallback?: (chatId: string) => void;
+  registerOpenTagPopover?: (chatId: string, trigger: (rect: DOMRect) => void) => void;
+  unregisterOpenTagPopover?: (chatId: string) => void;
 }
 
 export const ProjectGroup = React.memo(function ProjectGroup({
@@ -293,70 +29,23 @@ export const ProjectGroup = React.memo(function ProjectGroup({
   onContextMenu,
   registerRenameCallback,
   unregisterRenameCallback,
+  registerOpenTagPopover,
+  unregisterOpenTagPopover,
 }: ProjectGroupProps): React.ReactElement {
-  const activeChatId = useChatsStore((s) => s.activeChatId);
-  const setActiveChat = useChatsStore((s) => s.setActiveChat);
-  const removeChat = useChatsStore((s) => s.removeChat);
-  const adapters = useAdaptersStore((s) => s.adapters);
-
-  const handleSelectChat = useCallback(
-    (chatId: string, title?: string) => {
-      setActiveChat(chatId);
-      useTabsStore.getState().openChatTab(chatId, title);
-      daemonClient.resumeChat(chatId);
-    },
-    [setActiveChat],
-  );
-
-  const [archivingIds, setArchivingIds] = useState<Set<string>>(new Set());
-
-  const handleArchiveChat = useCallback(
-    (e: React.MouseEvent, chatId: string) => {
-      e.stopPropagation();
-      if (archivingIds.has(chatId)) return;
-      const chat = chats.find((c) => c.id === chatId);
-      let deleteWorktree = true;
-      if (chat?.worktreePath) {
-        const choice = window.confirm(
-          `This session has a worktree at:\n${chat.worktreePath}\n\nOK = Archive and delete worktree\nCancel = Archive only (keep worktree)`,
-        );
-        deleteWorktree = choice;
-      }
-      setArchivingIds((prev) => new Set(prev).add(chatId));
-      archiveChat(chatId, deleteWorktree)
-        .then(() => {
-          const wasActive = activeChatId === chatId;
-          removeChat(chatId);
-          deleteDraft(chatId);
-          useTabsStore.getState().closeTab(`chat:${chatId}`);
-          if (wasActive) {
-            const next = chats
-              .filter((c) => c.id !== chatId)
-              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-            if (next) {
-              setActiveChat(next.id);
-              useTabsStore.getState().openChatTab(next.id, next.title);
-            }
-          }
-        })
-        .catch((err) => {
-          log.warn('archive failed', { err: String(err) });
-          setArchivingIds((prev) => {
-            const next = new Set(prev);
-            next.delete(chatId);
-            return next;
-          });
-        });
-    },
-    [chats, removeChat, archivingIds, activeChatId, setActiveChat],
-  );
-
   const handleNewSession = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       daemonClient.createChat(project.id, 'claude', getDefaultModelForAdapter('claude'));
     },
     [project.id],
+  );
+
+  const handleDeleteProject = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      await deleteProjectWithCleanup(project);
+    },
+    [project],
   );
 
   return (
@@ -372,34 +61,54 @@ export const ProjectGroup = React.memo(function ProjectGroup({
             onToggleCollapse();
           }
         }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors cursor-pointer"
+        className="group flex items-center h-7 px-2 gap-2 min-w-0 w-full rounded-mf-input text-mf-label hover:bg-mf-hover/50 transition-colors cursor-pointer"
       >
-        {collapsed ? <ChevronRight size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
-        <div className="flex-1 min-w-0 text-left">
-          <span className="text-mf-text-primary truncate block text-mf-small font-medium">{project.name}</span>
+        {/* Left cluster: chevron + name */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="inline-flex w-4 items-center justify-center shrink-0">
+            {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+          </span>
+          <span className="truncate text-sm text-mf-text-primary font-medium">{project.name}</span>
           {parentName && (
-            <span className="text-mf-status text-mf-text-secondary truncate block">
-              {'↳ branch of '}
+            <span className="text-mf-status text-mf-text-secondary truncate ml-1">
+              {'↳ '}
               {parentName}
             </span>
           )}
         </div>
-        <span className="text-mf-status bg-mf-hover text-mf-text-secondary px-1.5 py-0.5 rounded-full shrink-0">
+        <span className="h-5 px-1.5 text-[10px] tabular-nums rounded-full bg-mf-hover text-mf-text-secondary flex items-center shrink-0">
           {chats.length}
         </span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={handleNewSession}
-              className="w-6 h-6 rounded-mf-input flex items-center justify-center text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors shrink-0"
-              aria-label={`New session in ${project.name}`}
-            >
-              <Plus size={12} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>New Session</TooltipContent>
-        </Tooltip>
+        <div className="shrink-0 hidden group-hover:flex items-center gap-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                data-testid={`chats-project-new-session-${project.id}`}
+                onClick={handleNewSession}
+                className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors"
+                aria-label={`New session in ${project.name}`}
+              >
+                <Plus size={12} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{`New session in ${project.name}`}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                data-testid={`chats-project-delete-${project.id}`}
+                onClick={handleDeleteProject}
+                className="h-7 w-6 inline-flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:text-mf-destructive hover:bg-mf-hover transition-colors"
+                aria-label={`Delete project ${project.name}`}
+              >
+                <Trash2 size={12} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Delete Project</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Chat list */}
@@ -409,18 +118,17 @@ export const ProjectGroup = React.memo(function ProjectGroup({
             <div className="pl-6 py-1 text-mf-status text-mf-text-secondary">No sessions</div>
           ) : (
             chats.map((chat) => (
-              <ChatRow
-                key={chat.id}
-                chat={chat}
-                isActive={activeChatId === chat.id}
-                isArchiving={archivingIds.has(chat.id)}
-                adapters={adapters}
-                onSelect={handleSelectChat}
-                onArchive={handleArchiveChat}
-                onContextMenu={onContextMenu}
-                registerRenameCallback={registerRenameCallback}
-                unregisterRenameCallback={unregisterRenameCallback}
-              />
+              <div key={chat.id} className="ml-2">
+                <FlatSessionRow
+                  chat={chat}
+                  projectName={project.name}
+                  onContextMenu={onContextMenu}
+                  registerRenameCallback={registerRenameCallback}
+                  unregisterRenameCallback={unregisterRenameCallback}
+                  registerOpenTagPopover={registerOpenTagPopover}
+                  unregisterOpenTagPopover={unregisterOpenTagPopover}
+                />
+              </div>
             ))
           )}
         </div>

@@ -101,6 +101,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
+                      data-testid={`sandbox-button-toggle-process-${c.name}`}
                       onClick={(e) => void handleToggleProcess(e, c)}
                       disabled={status === 'starting'}
                       className={cn(
@@ -120,6 +121,7 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
       )}
       {configs.length > 0 && <div className="border-t border-mf-divider my-1" />}
       <button
+        data-testid="sandbox-button-generate-with-agent"
         onClick={() => {
           if (!activeProject) return;
           const chatId = useChatsStore.getState().activeChatId;

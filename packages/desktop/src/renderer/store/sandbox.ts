@@ -7,6 +7,7 @@ export interface Capture {
   type: 'element' | 'screenshot';
   imageDataUrl: string;
   selector?: string;
+  annotation?: string;
 }
 
 interface SandboxState {

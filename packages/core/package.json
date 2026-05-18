@@ -1,6 +1,6 @@
 {
   "name": "@qlan-ro/mainframe-core",
-  "version": "0.10.2",
+  "version": "0.18.2",
   "description": "Mainframe daemon — session lifecycle, agent process management, and metadata storage",
   "license": "MIT",
   "repository": {
@@ -31,7 +31,6 @@
     "status": "node dist/index.js status"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.83",
     "@qlan-ro/mainframe-types": "workspace:*",
     "@vscode/ripgrep": "^1.17.1",
     "better-sqlite3": "^12.8.0",

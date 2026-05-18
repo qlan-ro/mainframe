@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
+import { useExpandable } from './use-expandable';
 
 interface CollapsibleToolCardProps {
   /** 'primary' for file/command cards, 'compact' for read/search/metadata cards */
@@ -12,6 +13,8 @@ interface CollapsibleToolCardProps {
   disabled?: boolean;
   /** Start expanded */
   defaultOpen?: boolean;
+  /** Hide the Maximize2/Minimize2 icon. Whole header row stays clickable. */
+  hideToggle?: boolean;
   /** Status dot rendered at the start of the line */
   statusDot?: React.ReactNode;
   /** Content after status dot */
@@ -29,19 +32,21 @@ export function CollapsibleToolCard({
   wrapperClassName,
   disabled,
   defaultOpen = false,
+  hideToggle,
   statusDot,
   header,
   trailing,
   subHeader,
   children,
 }: CollapsibleToolCardProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const { open, toggle, ref } = useExpandable<HTMLDivElement>(defaultOpen);
   const isPrimary = variant === 'primary';
 
   return (
-    <div data-testid="tool-card" className={wrapperClassName ?? 'overflow-hidden'}>
+    <div ref={ref} data-testid="tool-card" className={wrapperClassName ?? 'overflow-hidden'}>
       <button
-        onClick={() => !disabled && setOpen((v) => !v)}
+        data-testid="tool-card-toggle"
+        onClick={() => !disabled && toggle()}
         className={cn(
           'w-full flex items-center gap-2 px-3 text-mf-body transition-colors',
           isPrimary ? 'py-1.5 hover:bg-mf-hover/30' : 'py-0.5 hover:bg-mf-hover/20',
@@ -52,7 +57,7 @@ export function CollapsibleToolCard({
         {header}
         <span className="flex-1" />
         {trailing}
-        {!disabled && (
+        {!disabled && !hideToggle && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0" tabIndex={0}>
@@ -73,7 +78,7 @@ export function CollapsibleToolCard({
           </Tooltip>
         )}
       </button>
-      {!open && subHeader}
+      {subHeader}
       {open && children}
     </div>
   );

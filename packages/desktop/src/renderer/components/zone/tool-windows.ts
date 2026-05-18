@@ -9,6 +9,7 @@ import { FilesTab } from '../panels/FilesTab';
 import { ContextTab } from '../panels/ContextTab';
 import { ChangesTab } from '../panels/ChangesTab';
 import { PreviewTab } from '../sandbox/PreviewTab';
+import { PluginView } from '../plugins/PluginView';
 
 const LazyTerminalPanel = React.lazy(() =>
   import('../terminal/TerminalPanel').then((m) => ({ default: m.TerminalPanel })),
@@ -79,12 +80,19 @@ export function getToolWindowsForZone(zone: ZoneId): ToolWindowDef[] {
 }
 
 export function registerPluginToolWindow(manifest: ToolWindowManifest): void {
+  // Render the plugin's zone-scoped component via PluginView. We bake pluginId
+  // + zone into a thin wrapper so the Zone renderer just mounts a nullary
+  // component like the built-in tool windows do.
+  const pluginId = manifest.pluginId;
+  const zone = manifest.defaultZone;
+  const WrappedPluginView = pluginId ? () => React.createElement(PluginView, { pluginId, zone }) : undefined;
+
   const def: ToolWindowDef = {
     id: manifest.id,
     label: manifest.label,
     icon: undefined,
-    component: undefined,
-    defaultZone: manifest.defaultZone,
+    component: WrappedPluginView,
+    defaultZone: zone,
     isBuiltin: false,
   };
   pluginToolWindows.set(manifest.id, def);

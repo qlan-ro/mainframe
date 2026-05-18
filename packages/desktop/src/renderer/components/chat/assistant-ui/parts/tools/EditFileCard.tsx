@@ -1,6 +1,5 @@
 import React from 'react';
 import { ExternalLink } from 'lucide-react';
-import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { useTabsStore } from '../../../../../store/tabs';
 import { FileTypeIcon } from '../FileTypeIcon';
@@ -10,6 +9,7 @@ import {
   StatusDot,
   cardStyle,
   isStructuredResult,
+  isTruncatedResult,
   stripErrorXml,
   countDiffStats,
   computeFallbackHunks,
@@ -18,14 +18,22 @@ import {
   DiffFallback,
   type ToolCardProps,
 } from './shared';
+import { ToolResultExpand } from '../../ToolResultExpand';
 
-export function EditFileCard({ args, result, isError }: ToolCardProps) {
+export function EditFileCard({ args, result, isError, chatId, toolCallId }: ToolCardProps) {
   const filePath = (args.file_path as string) || '';
   const oldString = (args.old_string as string) || '';
   const newString = (args.new_string as string) || '';
 
   const structured = isStructuredResult(result);
-  const rawResultText = structured ? result.content : typeof result === 'string' ? result : undefined;
+  const truncated = isTruncatedResult(result);
+  const rawResultText = structured
+    ? result.content
+    : truncated
+      ? result.content
+      : typeof result === 'string'
+        ? result
+        : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
   const hunks = structured ? result.structuredPatch : null;
   const displayHunks = hunks ?? (oldString || newString ? computeFallbackHunks(oldString, newString) : null);
@@ -51,14 +59,15 @@ export function EditFileCard({ args, result, isError }: ToolCardProps) {
   return (
     <CollapsibleToolCard
       defaultOpen
+      hideToggle
       wrapperClassName={cardStyle(result, isError)}
       header={
         <>
           <FileTypeIcon filePath={filePath} />
+          <span className="text-mf-body text-mf-text-secondary/60">Edit</span>
           <ClickableFilePath filePath={filePath} />
         </>
       }
-      statusDot={<StatusDot result={result} isError={isError} />}
       trailing={
         <>
           {addedCount !== null && removedCount !== null && (
@@ -85,6 +94,7 @@ export function EditFileCard({ args, result, isError }: ToolCardProps) {
             </TooltipTrigger>
             <TooltipContent>Open in diff editor</TooltipContent>
           </Tooltip>
+          <StatusDot result={result} isError={isError} />
         </>
       }
     >
@@ -96,11 +106,20 @@ export function EditFileCard({ args, result, isError }: ToolCardProps) {
             <DiffFallback oldStr={oldString} newStr={newString} startLine={null} />
           )}
         </div>
-        {resultText && (
-          <div className={cn('border-t border-mf-divider px-3 py-1.5', isError && 'bg-mf-chat-error-surface/20')}>
-            <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary">
-              {resultText}
-            </pre>
+        {resultText && isError && (
+          <div className="border-t border-mf-divider px-3 py-1.5 bg-mf-chat-error-surface/20">
+            {truncated && chatId && toolCallId ? (
+              <ToolResultExpand
+                chatId={chatId}
+                toolUseId={toolCallId}
+                truncatedContent={resultText}
+                fullBytes={(result as { fullBytes: number }).fullBytes}
+              />
+            ) : (
+              <pre className="text-mf-small font-mono overflow-x-auto whitespace-pre-wrap text-mf-text-secondary">
+                {resultText}
+              </pre>
+            )}
           </div>
         )}
       </div>

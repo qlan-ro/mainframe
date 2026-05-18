@@ -8,7 +8,9 @@ export {
   getAllChats,
   renameChat,
   archiveChat,
+  unarchiveChat,
   pinChat,
+  setChatEffort,
   getChatMessages,
   getAdapters,
 } from './projects-api';
@@ -18,6 +20,7 @@ export {
   getFilesList,
   searchFiles,
   getFileContent,
+  getExternalFileContent,
   getFileBinary,
   getPendingPermission,
   getSessionFiles,
@@ -93,4 +96,7 @@ export {
   forkToWorktree,
   getWorktrees as getProjectWorktrees,
   attachWorktree,
+  deleteWorktree,
 } from './worktree-api';
+
+export { listTags, createTag, updateTag, deleteTag, getChatTags, setChatTags } from './tags-api';

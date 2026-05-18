@@ -1,7 +1,7 @@
 import React from 'react';
 import { FileText } from 'lucide-react';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { ErrorDot, stripErrorXml, type ToolCardProps } from './shared';
+import { StatusDot, stripErrorXml, type ToolCardProps } from './shared';
 
 export function PlanCard({ result, isError }: ToolCardProps) {
   const rawResultText = typeof result === 'string' ? result : undefined;
@@ -11,13 +11,15 @@ export function PlanCard({ result, isError }: ToolCardProps) {
     <CollapsibleToolCard
       variant="compact"
       disabled={!resultText}
+      hideToggle
+      wrapperClassName="border border-mf-divider rounded-mf-card overflow-hidden"
       header={
         <>
           <FileText size={15} className="text-mf-text-secondary/40 shrink-0" />
           <span className="text-mf-body text-mf-text-secondary/60">Updated plan</span>
         </>
       }
-      statusDot={<ErrorDot isError={isError} />}
+      trailing={<StatusDot result={result} isError={isError} />}
     >
       {resultText && (
         <div className="ml-5 border-l border-mf-divider/50 py-1">

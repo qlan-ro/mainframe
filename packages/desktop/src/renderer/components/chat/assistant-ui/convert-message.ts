@@ -19,8 +19,12 @@ function mapDisplayContentToToolCall(block: DisplayContent & { type: 'tool_call'
           structuredPatch: block.result.structuredPatch,
           originalFile: block.result.originalFile,
           modifiedFile: block.result.modifiedFile,
+          truncated: block.result.truncated,
+          fullBytes: block.result.fullBytes,
         }
-      : block.result.content
+      : block.result.truncated
+        ? { content: block.result.content, truncated: true as const, fullBytes: block.result.fullBytes ?? 0 }
+        : block.result.content
     : undefined;
 
   return {
@@ -52,15 +56,29 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
       };
     }
 
-    case 'system':
+    case 'system': {
+      // Skill-loaded blocks are passed through message metadata so the SystemMessage
+      // component can render a SkillLoadedCard rather than a plain text bubble.
+      const skillBlock = message.content.find(
+        (c): c is DisplayContent & { type: 'skill_loaded' } => c.type === 'skill_loaded',
+      );
+      const textParts = message.content
+        .filter((c): c is DisplayContent & { type: 'text' } => c.type === 'text')
+        .map((c) => ({ type: 'text' as const, text: c.text }));
+
+      const meta: Record<string, unknown> = { ...(message.metadata ?? {}) };
+      if (skillBlock) {
+        meta.skillLoaded = { skillName: skillBlock.skillName, path: skillBlock.path, content: skillBlock.content };
+      }
+
       return {
         role: 'system',
-        content: message.content
-          .filter((c): c is DisplayContent & { type: 'text' } => c.type === 'text')
-          .map((c) => ({ type: 'text' as const, text: c.text })),
+        content: textParts.length > 0 ? textParts : [{ type: 'text' as const, text: '' }],
         id: message.id,
         createdAt: new Date(message.timestamp),
+        ...(Object.keys(meta).length > 0 && { metadata: meta }),
       };
+    }
 
     case 'assistant': {
       const parts: ContentPart[] = [];
@@ -77,8 +95,13 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
             // Images in user messages are handled by UserMessage component; skip here
             break;
           case 'tool_call':
-            parts.push(mapDisplayContentToToolCall(block));
+            if (block.category !== 'hidden') {
+              parts.push(mapDisplayContentToToolCall(block));
+            }
             break;
+          // tool_group and task_group inner calls are not filtered here — hidden
+          // tools should not appear in pre-grouped output; if they do, that is a
+          // daemon pipeline bug.
           case 'tool_group': {
             const calls = block.calls.filter(
               (c): c is DisplayContent & { type: 'tool_call' } => c.type === 'tool_call',
@@ -95,30 +118,46 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
                   result: c.result,
                   isError: c.result?.isError,
                 })),
-              } as import('assistant-stream/utils').ReadonlyJSONObject,
+              } as unknown as import('assistant-stream/utils').ReadonlyJSONObject,
               result: 'grouped',
             });
             break;
           }
           case 'task_group': {
-            const calls = block.calls.filter(
-              (c): c is DisplayContent & { type: 'tool_call' } => c.type === 'tool_call',
-            );
+            const children = block.calls
+              .map((c) => {
+                if (c.type === 'tool_call') {
+                  return {
+                    kind: 'tool' as const,
+                    toolCallId: c.id,
+                    toolName: c.name,
+                    args: c.input,
+                    result: c.result,
+                    isError: c.result?.isError,
+                  };
+                }
+                if (c.type === 'text') return { kind: 'text' as const, text: c.text };
+                if (c.type === 'thinking') return { kind: 'thinking' as const, thinking: c.thinking };
+                if (c.type === 'skill_loaded') {
+                  return { kind: 'skill_loaded' as const, skillName: c.skillName, path: c.path, content: c.content };
+                }
+                if (c.type === 'image') return { kind: 'image' as const, mediaType: c.mediaType, data: c.data };
+                return null;
+              })
+              .filter((x): x is NonNullable<typeof x> => x !== null);
+
+            // Preserve the historical fallback that the agent's outer tool_result lives on the
+            // first tool child (when block.result is missing). Only consider tool children here.
+            const firstTool = children.find((c) => c.kind === 'tool') as { kind: 'tool'; result: unknown } | undefined;
             parts.push({
               type: 'tool-call',
               toolCallId: block.agentId,
               toolName: '_TaskGroup',
               args: {
                 taskArgs: block.taskArgs,
-                children: calls.map((c) => ({
-                  toolCallId: c.id,
-                  toolName: c.name,
-                  args: c.input,
-                  result: c.result,
-                  isError: c.result?.isError,
-                })),
-              } as import('assistant-stream/utils').ReadonlyJSONObject,
-              result: block.result ?? calls[0]?.result,
+                children,
+              } as unknown as import('assistant-stream/utils').ReadonlyJSONObject,
+              result: block.result ?? firstTool?.result,
             });
             break;
           }

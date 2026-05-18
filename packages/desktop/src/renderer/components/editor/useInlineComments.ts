@@ -31,6 +31,8 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
   const [comments, setComments] = useState<CommentEntry[]>([]);
   const commentsRef = useRef(comments);
   commentsRef.current = comments;
+  // Tracks per-comment layout listeners so they can be disposed on close.
+  const layoutListenersRef = useRef<Map<string, monacoType.IDisposable>>(new Map());
 
   const openComment = useCallback(
     (editor: monacoType.editor.ICodeEditor, targetLine?: number) => {
@@ -59,6 +61,25 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
 
       const domNode = document.createElement('div');
       domNode.style.zIndex = '10';
+      domNode.style.overflow = 'hidden';
+      domNode.style.boxSizing = 'border-box';
+
+      // Pin the view-zone node width to the editor's content column so it never
+      // inflates Monaco's scrollWidth and causes the horizontal scrollbar to
+      // diverge. Leave a small gap before the vertical scrollbar — contentWidth
+      // can abut the scrollbar track, and without clearance the two hit-regions
+      // conflict visually and on hover.
+      const SCROLLBAR_CLEARANCE = 12;
+      const updateWidth = () => {
+        const info = editor.getLayoutInfo();
+        domNode.style.width = `${Math.max(0, info.contentWidth - SCROLLBAR_CLEARANCE)}px`;
+      };
+
+      // Monaco swallows wheel events inside view zones and drives its own
+      // scroll. Treat the widget as an island: stop propagation so the
+      // textarea (and any future scrollable children) handle the wheel
+      // natively without scrolling the editor underneath.
+      domNode.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
 
       let zoneId = '';
       changeViewZones((accessor) => {
@@ -69,7 +90,31 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
         });
       });
 
+      // Monaco's _addZone sets domNode.style.width = '100%' synchronously
+      // (monaco-editor/.../viewZones.js), clobbering anything we set before
+      // addZone. Apply our width AFTER addZone so it sticks. Without this the
+      // first widget happens to get corrected by a later layout event, but the
+      // second widget stays at 100% because nothing fires after its addZone.
+      updateWidth();
+
+      // onDidLayoutChange covers outer-container changes (splitter drag, window
+      // resize, sidebar toggle, font/option change). onDidContentSizeChange
+      // covers internal content-size changes — most importantly when a vertical
+      // scrollbar appears/disappears as a side effect of addZone shrinking
+      // contentWidth. Together they keep every open widget in lockstep.
+      const layoutListener = editor.onDidLayoutChange(updateWidth);
+      const contentSizeListener = editor.onDidContentSizeChange((e) => {
+        if (e.contentWidthChanged) updateWidth();
+      });
+      const composite: monacoType.IDisposable = {
+        dispose: () => {
+          layoutListener.dispose();
+          contentSizeListener.dispose();
+        },
+      };
+
       const id = `comment-${++nextId}`;
+      layoutListenersRef.current.set(id, composite);
       setComments((prev) => [...prev, { id, startLine, endLine, lineContent, zoneId, domNode, text: '' }]);
     },
     [changeViewZones, getModel],
@@ -81,6 +126,8 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
       if (entry && changeViewZones) {
         changeViewZones((accessor) => accessor.removeZone(entry.zoneId));
       }
+      layoutListenersRef.current.get(id)?.dispose();
+      layoutListenersRef.current.delete(id);
       setComments((prev) => prev.filter((c) => c.id !== id));
     },
     [changeViewZones],
@@ -94,6 +141,10 @@ export function useInlineComments(changeViewZones: ChangeViewZones | null, getMo
         }
       });
     }
+    for (const listener of layoutListenersRef.current.values()) {
+      listener.dispose();
+    }
+    layoutListenersRef.current.clear();
     setComments([]);
   }, [changeViewZones]);
 

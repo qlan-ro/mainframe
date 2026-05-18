@@ -4,6 +4,8 @@ import { cn } from '../../lib/utils';
 export interface ContextMenuItem {
   label: string;
   onClick: () => void;
+  destructive?: boolean;
+  'data-testid'?: string;
 }
 
 interface ContextMenuProps {
@@ -11,9 +13,10 @@ interface ContextMenuProps {
   y: number;
   items: ContextMenuItem[];
   onClose: () => void;
+  'data-testid'?: string;
 }
 
-export function ContextMenu({ x, y, items, onClose }: ContextMenuProps): React.ReactElement {
+export function ContextMenu({ x, y, items, onClose, 'data-testid': dataTestId }: ContextMenuProps): React.ReactElement {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,6 +42,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps): React.R
         'bg-mf-panel-bg border border-mf-border shadow-lg',
       )}
       style={{ left: x, top: y }}
+      data-testid={dataTestId}
     >
       {items.map((item) => (
         <button
@@ -47,7 +51,11 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps): React.R
             item.onClick();
             onClose();
           }}
-          className="w-full text-left px-3 py-1.5 text-mf-small text-mf-text-primary hover:bg-mf-hover transition-colors"
+          className={cn(
+            'w-full text-left px-3 py-1.5 text-mf-small hover:bg-mf-hover transition-colors',
+            item.destructive ? 'text-mf-destructive' : 'text-mf-text-primary',
+          )}
+          data-testid={item['data-testid']}
         >
           {item.label}
         </button>

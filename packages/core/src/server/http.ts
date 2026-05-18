@@ -23,6 +23,7 @@ import {
   contentSearchRoutes,
   lspRoutes,
   worktreeRoutes,
+  tagRoutes,
 } from './routes/index.js';
 import { authRoutes } from './routes/auth.js';
 import { tunnelRoutes } from './routes/tunnel.js';
@@ -114,6 +115,7 @@ export function createHttpServer(
   app.use(launchRoutes(ctx));
   app.use(externalSessionRoutes(ctx));
   app.use(worktreeRoutes(ctx));
+  app.use(tagRoutes(ctx));
 
   // Plugin routes — the PluginManager owns a parent router with listing + per-plugin sub-routers
   if (pluginManager) {

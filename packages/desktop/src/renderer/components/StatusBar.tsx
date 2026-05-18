@@ -11,6 +11,7 @@ import { getGitBranch, getGitStatus } from '../lib/api';
 import { isConflictStatus } from '../lib/git-utils';
 import { cn } from '../lib/utils';
 import { BranchPopover } from './git/BranchPopover';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 const GIT_POLL_INTERVAL = 60_000;
 
@@ -23,20 +24,25 @@ function UpdateIndicator(): React.ReactElement | null {
 
   if (status.state === 'available') {
     return (
-      <button
-        className="flex items-center gap-1 text-mf-accent hover:text-mf-text-primary transition-colors"
-        onClick={() => {
-          try {
-            window.mainframe.updates.download();
-          } catch (err) {
-            console.warn('[UpdateIndicator] download failed', err);
-          }
-        }}
-        title={`Download update v${status.version}`}
-      >
-        <Download size={12} />
-        <span>Update v{status.version}</span>
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            data-testid="status-bar-update-download"
+            className="flex items-center gap-1 text-mf-accent hover:text-mf-text-primary transition-colors"
+            onClick={() => {
+              try {
+                window.mainframe.updates.download();
+              } catch (err) {
+                console.warn('[UpdateIndicator] download failed', err);
+              }
+            }}
+          >
+            <Download size={12} />
+            <span>Update v{status.version}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">Download update v{status.version}</TooltipContent>
+      </Tooltip>
     );
   }
 
@@ -51,29 +57,41 @@ function UpdateIndicator(): React.ReactElement | null {
 
   if (status.state === 'downloaded') {
     return (
-      <button
-        className="flex items-center gap-1 text-mf-success hover:text-mf-text-primary transition-colors"
-        onClick={() => {
-          try {
-            window.mainframe.updates.install();
-          } catch (err) {
-            console.warn('[UpdateIndicator] install failed', err);
-          }
-        }}
-        title={`Restart to install v${status.version}`}
-      >
-        <RotateCcw size={12} />
-        <span>Restart to update</span>
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            data-testid="status-bar-update-install"
+            className="flex items-center gap-1 text-mf-success hover:text-mf-text-primary transition-colors"
+            onClick={() => {
+              try {
+                window.mainframe.updates.install();
+              } catch (err) {
+                console.warn('[UpdateIndicator] install failed', err);
+              }
+            }}
+          >
+            <RotateCcw size={12} />
+            <span>Restart to update</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">Restart to install v{status.version}</TooltipContent>
+      </Tooltip>
     );
   }
 
   if (status.state === 'error') {
     return (
-      <span className="flex items-center gap-1 text-mf-destructive" title={status.message}>
-        <AlertTriangle size={12} />
-        <span>Update error</span>
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="flex items-center gap-1 text-mf-destructive cursor-default">
+            <AlertTriangle size={12} />
+            <span>Update error</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap break-words">
+          {status.message}
+        </TooltipContent>
+      </Tooltip>
     );
   }
 
@@ -86,13 +104,14 @@ export function StatusBar(): React.ReactElement {
   const chats = useChatsStore((s) => s.chats);
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const inWorktree = useChatsStore((s) => !!s.chats.find((c) => c.id === s.activeChatId)?.worktreePath);
+  const worktreeMissing = useChatsStore((s) => !!s.chats.find((c) => c.id === s.activeChatId)?.worktreeMissing);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [hasConflicts, setHasConflicts] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchBranchAndStatus = useCallback(() => {
-    if (!activeProjectId) {
+    if (!activeProjectId || worktreeMissing) {
       setGitBranch(null);
       setHasConflicts(false);
       return;
@@ -112,7 +131,7 @@ export function StatusBar(): React.ReactElement {
         console.warn('[StatusBar] git status fetch failed', err);
         setHasConflicts(false);
       });
-  }, [activeProjectId, activeChatId]);
+  }, [activeProjectId, activeChatId, worktreeMissing]);
 
   useEffect(() => {
     fetchBranchAndStatus();

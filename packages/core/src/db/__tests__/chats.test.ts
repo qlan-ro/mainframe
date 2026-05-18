@@ -80,7 +80,7 @@ describe('ChatsRepository', () => {
       expect(all[2]!.id).toBe(chat1.id);
     });
 
-    it('excludes archived chats', () => {
+    it('includes archived chats', () => {
       const p1 = projects.create('/project/one');
       const chat1 = chats.create(p1.id, 'claude');
       chats.update(chat1.id, { status: 'archived' });
@@ -88,7 +88,8 @@ describe('ChatsRepository', () => {
       chats.create(p1.id, 'claude');
 
       const all = chats.listAll();
-      expect(all).toHaveLength(1);
+      expect(all).toHaveLength(2);
+      expect(all.map((c) => c.status)).toContain('archived');
     });
   });
 });

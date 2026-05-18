@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, ChevronDown, GitBranch, Star } from 'lucide-react';
+import { ChevronRight, ChevronDown, GitBranch, Star, Trash2, Plus, Loader2 } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
@@ -16,6 +16,9 @@ interface BranchListProps {
   currentBranch: string;
   search: string;
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
+  onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
+  onNewSession?: (worktreeDirName: string, branchName: string | undefined) => void;
+  busyAction?: string | null;
 }
 
 function groupBranches(branches: BranchInfo[]): { groups: BranchGroup[]; ungrouped: BranchInfo[] } {
@@ -77,6 +80,7 @@ function BranchRow({
 
   return (
     <button
+      data-testid={`branch-row-select-${name}`}
       onClick={onClick}
       className={cn(
         'w-full flex items-center gap-1.5 px-3 py-1 text-left text-sm',
@@ -85,7 +89,12 @@ function BranchRow({
       )}
     >
       {isMain ? <Star size={12} className="text-mf-warning shrink-0" /> : <GitBranch size={12} className="shrink-0" />}
-      <span className="truncate">{displayName}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="truncate">{displayName}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{name}</TooltipContent>
+      </Tooltip>
       {((!!ahead && ahead > 0) || (!!behind && behind > 0)) && (
         <span className="flex items-center gap-0.5 shrink-0 ml-1 text-xs text-mf-text-secondary">
           <span className="opacity-40">·</span>
@@ -122,6 +131,7 @@ function GroupSection({
   return (
     <div>
       <button
+        data-testid={`branch-group-toggle-${prefix}`}
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-1 px-2 py-0.5 text-sm text-mf-text-secondary hover:text-mf-text-primary"
       >
@@ -152,24 +162,73 @@ function WorktreeSection({
   branches,
   currentBranch,
   onSelectBranch,
+  onDeleteWorktree,
+  onNewSession,
+  busyAction,
 }: {
   name: string;
   branches: BranchInfo[];
   currentBranch: string;
   onSelectBranch: (branch: string, isCurrent: boolean, isRemote: boolean) => void;
+  onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
+  onNewSession?: (worktreeDirName: string, branchName: string | undefined) => void;
+  busyAction?: string | null;
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
+  const branchName = branches[0]?.name;
+  const isDeleting = busyAction === `deleteWorktree:${name}`;
 
   return (
     <>
       <div className="border-t border-mf-border my-1" />
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
-      >
-        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-        {name}
-      </button>
+      <div className="flex items-center">
+        <button
+          data-testid={`worktree-section-toggle-${name}`}
+          onClick={() => setExpanded(!expanded)}
+          className="flex-1 flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
+        >
+          {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+          {name}
+        </button>
+        {onNewSession && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                data-testid={`worktree-section-new-session-${name}`}
+                onClick={() => onNewSession(name, branchName)}
+                disabled={isDeleting}
+                className={cn(
+                  'p-1 mr-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors',
+                  isDeleting && 'opacity-40 cursor-not-allowed',
+                )}
+                aria-label={`New session on worktree ${name}`}
+              >
+                <Plus size={11} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">New session on this worktree</TooltipContent>
+          </Tooltip>
+        )}
+        {onDeleteWorktree && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                data-testid={`worktree-section-delete-${name}`}
+                onClick={() => onDeleteWorktree(name, branchName)}
+                disabled={isDeleting}
+                className={cn(
+                  'p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-destructive transition-colors',
+                  isDeleting && 'opacity-60 cursor-not-allowed',
+                )}
+                aria-label={`Delete worktree ${name}`}
+              >
+                {isDeleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">{isDeleting ? 'Deleting…' : 'Delete worktree'}</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
       {expanded &&
         branches.map((b) => (
           <BranchRow
@@ -194,6 +253,9 @@ export function BranchList({
   currentBranch,
   search,
   onSelectBranch,
+  onDeleteWorktree,
+  onNewSession,
+  busyAction,
 }: BranchListProps): React.ReactElement {
   const mainBranches = useMemo(
     () =>
@@ -228,6 +290,7 @@ export function BranchList({
     <div className="max-h-60 overflow-y-auto">
       {/* Local branches */}
       <button
+        data-testid="branch-list-local-toggle"
         onClick={() => setLocalExpanded(!localExpanded)}
         className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
       >
@@ -276,6 +339,9 @@ export function BranchList({
           branches={wt.branches}
           currentBranch={currentBranch}
           onSelectBranch={onSelectBranch}
+          onDeleteWorktree={onDeleteWorktree}
+          onNewSession={onNewSession}
+          busyAction={busyAction}
         />
       ))}
 
@@ -284,6 +350,7 @@ export function BranchList({
         <>
           <div className="border-t border-mf-border my-1" />
           <button
+            data-testid="branch-list-remote-toggle"
             onClick={() => setRemoteExpanded(!remoteExpanded)}
             className="w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold text-mf-text-secondary uppercase tracking-wider"
           >
@@ -294,6 +361,7 @@ export function BranchList({
             filteredRemote.map((r) => (
               <button
                 key={r}
+                data-testid={`branch-list-remote-row-${r}`}
                 onClick={() => onSelectBranch(r, false, true)}
                 className="w-full flex items-center gap-1.5 px-3 py-1 text-left text-sm text-mf-text-secondary hover:bg-mf-hover rounded transition-colors"
               >

@@ -1,4 +1,5 @@
 // packages/core/src/plugins/builtin/codex/types.ts
+import type { ThreadItem } from './item-types.js';
 
 // --- JSON-RPC 2.0 framing ---
 
@@ -143,73 +144,20 @@ export type TurnStatus = 'inProgress' | 'completed' | 'interrupted' | 'failed';
 
 // --- Items ---
 
-export type ThreadItem =
-  | AgentMessageItem
-  | ReasoningItem
-  | CommandExecutionItem
-  | FileChangeItem
-  | McpToolCallItem
-  | WebSearchItem
-  | UserMessageItem;
-
-export interface AgentMessageItem {
-  id: string;
-  type: 'agentMessage';
-  text: string;
-  phase: string | null;
-}
-
-export interface ReasoningItem {
-  id: string;
-  type: 'reasoning';
-  summary: string[];
-  content: string[];
-}
-
-export interface CommandExecutionItem {
-  id: string;
-  type: 'commandExecution';
-  command: string;
-  aggregatedOutput: string;
-  exitCode?: number;
-  status: 'in_progress' | 'completed' | 'failed';
-}
-
-export interface FileChangeItem {
-  id: string;
-  type: 'fileChange';
-  changes: Array<{ path: string; kind: 'add' | 'delete' | 'update' }>;
-  status: 'completed' | 'failed';
-}
-
-export interface McpToolCallItem {
-  id: string;
-  type: 'mcpToolCall';
-  server: string;
-  tool: string;
-  arguments: Record<string, unknown>;
-  result?: { content: unknown[]; structuredContent: unknown | null };
-  error: string | null;
-  status: 'in_progress' | 'completed' | 'failed';
-}
-
-export interface WebSearchItem {
-  id: string;
-  type: 'webSearch';
-  query: string;
-}
-
-export interface TodoListItem {
-  id: string;
-  type: 'todoList';
-  items: Array<{ text: string; completed: boolean }>;
-}
-
-export interface UserMessageItem {
-  id: string;
-  type: 'userMessage';
-  text: string;
-}
+export type {
+  ThreadItem,
+  AgentMessageItem,
+  ReasoningItem,
+  CommandExecutionItem,
+  PatchChangeKind,
+  PatchApplyStatus,
+  FileChangeItem,
+  McpToolCallItem,
+  WebSearchItem,
+  ImageGenerationItem,
+  TodoListItem,
+  UserMessageItem,
+} from './item-types.js';
 
 // --- Approvals ---
 
@@ -237,23 +185,16 @@ export interface ThreadStartedParams {
   thread: { id: string };
 }
 
-export interface ItemStartedParams {
-  threadId: string;
-  turnId: string;
-  item: ThreadItem;
-}
-
 export interface ItemCompletedParams {
   threadId: string;
   turnId: string;
   item: ThreadItem;
 }
 
-export interface AgentMessageDeltaParams {
+export interface ItemStartedParams {
   threadId: string;
   turnId: string;
-  itemId: string;
-  delta: string;
+  item: ThreadItem;
 }
 
 export interface TurnStartedParams {
@@ -274,11 +215,6 @@ export interface TurnCompletedParams {
 export interface TokenUsageUpdatedParams {
   threadId: string;
   usage: Usage;
-}
-
-export interface TurnFailedParams {
-  threadId: string;
-  turn: { id: string; error: { message: string } };
 }
 
 // --- Config ---

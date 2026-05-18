@@ -16,6 +16,7 @@ interface MonacoDiffEditorProps {
   language?: string;
   filePath?: string;
   startLine?: number;
+  renderSideBySide?: boolean;
   onLineComment?: (startLine: number, endLine: number, lineContent: string, comment: string) => void;
   onSubmitReview?: (comments: { startLine: number; endLine: number; lineContent: string; comment: string }[]) => void;
 }
@@ -26,6 +27,7 @@ export function MonacoDiffEditor({
   language,
   filePath,
   startLine,
+  renderSideBySide = false,
   onLineComment,
   onSubmitReview,
 }: MonacoDiffEditorProps): React.ReactElement {
@@ -164,10 +166,11 @@ export function MonacoDiffEditor({
   const hasNonEmpty = comments.some((c) => c.text.trim());
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="mf-editor-selectable h-full flex flex-col">
       {hasComments && (
         <div className="flex items-center justify-end px-3 py-1 shrink-0 border-b border-mf-divider">
           <button
+            data-testid="editor-submit-review"
             onClick={handleSubmitReview}
             disabled={!hasNonEmpty}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded text-mf-small font-medium text-mf-accent hover:bg-mf-accent/10 disabled:opacity-30 transition-colors"
@@ -190,13 +193,13 @@ export function MonacoDiffEditor({
           options={{
             readOnly: true,
             minimap: { enabled: false },
-            lineNumbersMinChars: 5,
-            lineDecorationsWidth: 4,
+            lineNumbersMinChars: 3,
+            lineDecorationsWidth: 0,
             scrollBeyondLastLine: false,
             fontSize: 13,
             lineHeight: 20,
             fontFamily: "'JetBrains Mono', monospace",
-            renderSideBySide: false,
+            renderSideBySide,
             hideUnchangedRegions: { enabled: false },
             renderOverviewRuler: false,
             overviewRulerBorder: false,
@@ -206,7 +209,13 @@ export function MonacoDiffEditor({
             renderIndicators: false,
             ignoreTrimWhitespace: true,
             stickyScroll: { enabled: false },
-            scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
+            scrollbar: {
+              vertical: 'auto',
+              horizontal: 'auto',
+              verticalScrollbarSize: 6,
+              horizontalScrollbarSize: 6,
+              useShadows: false,
+            },
             padding: { top: 4, bottom: 4 },
             ...(lineOffset > 0 ? { lineNumbers: (n: number) => String(n + lineOffset) } : {}),
           }}
