@@ -82,6 +82,8 @@ export interface ClaudeSessionState {
   skillPathCache: Map<string, string>;
   /** Accumulated V2 task events (TaskCreate/TaskUpdate/TaskStop) for progressive todo updates. */
   taskV2Events: import('../../../todos/normalize.js').TaskV2Event[];
+  /** Epoch ms of last stdin write or stdout event — drives idle eviction. */
+  lastActivityAt: number;
 }
 
 /**
@@ -129,11 +131,16 @@ export class ClaudeSession implements AdapterSession {
       toolUseRegistry: new Map(),
       skillPathCache: new Map(),
       taskV2Events: [],
+      lastActivityAt: Date.now(),
     };
   }
 
   get isSpawned(): boolean {
     return this.state.child !== null;
+  }
+
+  get lastActivityAt(): number {
+    return this.state.lastActivityAt;
   }
 
   getProcessInfo(): AdapterProcess | null {
@@ -202,6 +209,7 @@ export class ClaudeSession implements AdapterSession {
     this.state.child = child;
     this.state.pid = child.pid || 0;
     this.state.status = 'starting';
+    this.state.lastActivityAt = Date.now();
 
     log.debug(
       {
@@ -354,6 +362,7 @@ export class ClaudeSession implements AdapterSession {
       parent_tool_use_id: null,
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
+    this.state.lastActivityAt = Date.now();
   }
 
   async sendMessage(message: string, images?: { mediaType: string; data: string }[], uuid?: string): Promise<void> {
@@ -376,6 +385,7 @@ export class ClaudeSession implements AdapterSession {
     };
     if (uuid) payload.uuid = uuid;
     child.stdin?.write(JSON.stringify(payload) + '\n');
+    this.state.lastActivityAt = Date.now();
   }
 
   async respondToPermission(response: ControlResponse): Promise<void> {
