@@ -215,7 +215,7 @@ export class ChatLifecycleManager {
     if (deleteWorktree && chat?.worktreePath && chat?.branchName) {
       await this.deps.stopLaunchProcesses?.(chat.projectId, chat.worktreePath);
       const project = this.deps.db.projects.get(chat.projectId);
-      if (project) removeWorktree(project.path, chat.worktreePath, chat.branchName);
+      if (project) await removeWorktree(project.path, chat.worktreePath, chat.branchName);
     }
 
     this.deps.activeChats.delete(chatId);
