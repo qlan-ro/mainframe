@@ -243,6 +243,7 @@ export function TutorialOverlay() {
           <div style={{ color: '#a1a1aa', fontSize: 12, lineHeight: 1.5 }}>{stepConfig.description}</div>
           {!stepConfig.requiresAction && (
             <button
+              data-testid="tutorial-next-btn"
               onClick={nextStep}
               style={{
                 marginTop: 10,
@@ -264,6 +265,7 @@ export function TutorialOverlay() {
 
       {/* Skip link */}
       <button
+        data-testid="tutorial-skip-btn"
         onClick={skip}
         style={{
           position: 'fixed',

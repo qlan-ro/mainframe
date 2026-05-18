@@ -61,7 +61,7 @@ export const ReviewPanel: React.FC = () => {
   const selectedFileDiff = selectedFile ? diffs[selectedFile] : null;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-mf-overlay/60 z-50">
+    <div data-testid="review-modal" className="fixed inset-0 flex items-center justify-center bg-mf-overlay/60 z-50">
       <div className="flex h-5/6 w-5/6 flex-col rounded-lg border border-mf-border bg-mf-app-bg shadow-2xl">
         <ReviewPanelHeader
           isWorktree={isWorktree}

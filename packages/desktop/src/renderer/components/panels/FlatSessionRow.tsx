@@ -77,8 +77,6 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
 
   const [archiving, setArchiving] = useState(false);
 
-  const addChat = useChatsStore((s) => s.addChat);
-
   const handleArchive = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -91,35 +89,30 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
         deleteWorktree = choice;
       }
 
-      // Optimistically remove the chat from the UI immediately so switching to
-      // another session is never blocked by the in-flight archive HTTP request.
       const wasActive = activeChatId === chat.id;
-      removeChat(chat.id);
-      deleteDraft(chat.id);
-      useTabsStore.getState().closeTab(`chat:${chat.id}`);
-      if (wasActive) {
-        const next = chats
-          .filter((c) => c.id !== chat.id && c.projectId === chat.projectId)
-          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-        if (next) {
-          setActiveChat(next.id);
-          useTabsStore.getState().openChatTab(next.id, next.title);
-        }
-      }
-
       setArchiving(true);
       archiveChat(chat.id, deleteWorktree)
         .then(() => {
+          removeChat(chat.id);
+          deleteDraft(chat.id);
+          useTabsStore.getState().closeTab(`chat:${chat.id}`);
+          if (wasActive) {
+            const next = chats
+              .filter((c) => c.id !== chat.id && c.projectId === chat.projectId)
+              .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+            if (next) {
+              setActiveChat(next.id);
+              useTabsStore.getState().openChatTab(next.id, next.title);
+            }
+          }
           setArchiving(false);
         })
         .catch((err) => {
           log.warn('archive failed', { err: String(err) });
-          // Restore the chat to the store so the user can retry.
-          addChat(chat);
           setArchiving(false);
         });
     },
-    [chat, chats, removeChat, addChat, setActiveChat, activeChatId, archiving],
+    [chat, chats, removeChat, setActiveChat, activeChatId, archiving],
   );
 
   const [editing, setEditing] = useState(false);
@@ -256,6 +249,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
             {/* title + select target */}
             <button
               type="button"
+              data-testid={`chats-session-select-${chat.id}`}
               onClick={handleSelect}
               className={cn('min-w-0 text-left flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}
             >
@@ -263,6 +257,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               {editing ? (
                 <input
                   ref={inputRef}
+                  data-testid={`chats-session-rename-input-${chat.id}`}
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
                   onBlur={handleCommitRename}
@@ -380,6 +375,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
                 <TooltipTrigger asChild>
                   <button
                     ref={tagButtonRef}
+                    data-testid={`chats-session-tags-${chat.id}`}
                     onClick={openTagPopover}
                     className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                     aria-label="Edit tags"
@@ -392,6 +388,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid={`chats-session-rename-${chat.id}`}
                     onClick={handleStartRename}
                     className="w-6 h-6 rounded flex items-center justify-center hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
                     aria-label="Rename session"
@@ -404,6 +401,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid={`chats-session-archive-${chat.id}`}
                     onClick={handleArchive}
                     disabled={archiving}
                     className={cn(

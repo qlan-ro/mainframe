@@ -153,6 +153,7 @@ export function TerminalPanel(): React.ReactElement {
       <Tooltip>
         <TooltipTrigger asChild>
           <button
+            data-testid="terminal-button-new"
             onClick={() => void createTerminal()}
             className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
           >

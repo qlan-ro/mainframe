@@ -118,6 +118,9 @@ export function initializeSchema(db: Database.Database): void {
     db.exec('ALTER TABLE chats ADD COLUMN plan_mode INTEGER NOT NULL DEFAULT 0');
     db.exec("UPDATE chats SET plan_mode = 1, permission_mode = 'default' WHERE permission_mode = 'plan'");
   }
+  if (!cols.some((c) => c.name === 'session_file_path')) {
+    db.exec('ALTER TABLE chats ADD COLUMN session_file_path TEXT');
+  }
 
   const sdkChats = db.prepare("SELECT COUNT(*) as n FROM chats WHERE adapter_id = 'claude-sdk'").get() as { n: number };
   if (sdkChats.n > 0) {

@@ -95,6 +95,7 @@ function ChipGroup<T extends string>({
         <button
           key={item}
           type="button"
+          data-testid={`todos-filter-chip-${item}`}
           onClick={() => onToggle(item)}
           className={cn(chipBase, selected.includes(item) ? chipOn : chipOff)}
         >
@@ -149,6 +150,7 @@ function LabelsPopover({
       <button
         ref={btnRef}
         type="button"
+        data-testid="todos-filter-labels-toggle"
         onClick={toggle}
         className={cn(
           'flex items-center gap-1 px-1.5 py-0.5 rounded text-mf-status cursor-pointer select-none transition-colors',
@@ -171,6 +173,7 @@ function LabelsPopover({
               <button
                 key={label}
                 type="button"
+                data-testid={`todos-filter-label-option-${label}`}
                 onClick={() => onToggle(label)}
                 className="w-full flex items-center gap-2 px-2.5 py-1 text-mf-small text-mf-text-primary hover:bg-mf-hover transition-colors text-left"
               >
@@ -212,6 +215,7 @@ function SortControl({ sort, onSortChange }: { sort: TodoSort; onSortChange: (s:
         <button
           key={key}
           type="button"
+          data-testid={`todos-sort-${key}`}
           onClick={() => cycle(key)}
           className={cn(chipBase, sort.key === key ? chipOn : chipOff, 'flex items-center gap-0.5')}
         >
@@ -265,6 +269,7 @@ export function TodoFilterBar({ filters, onChange, allLabels, sort, onSortChange
           <>
             <div className={divider} />
             <button
+              data-testid="todos-filter-clear"
               onClick={clearAll}
               className="text-mf-status text-mf-accent hover:underline whitespace-nowrap shrink-0"
             >
@@ -279,6 +284,7 @@ export function TodoFilterBar({ filters, onChange, allLabels, sort, onSortChange
           <div className="flex items-center gap-1 w-40 bg-mf-app-bg border border-mf-border rounded-mf-input px-2 py-0.5">
             <Search size={12} className="text-mf-text-secondary shrink-0" />
             <input
+              data-testid="todos-filter-search"
               type="text"
               value={filters.search}
               onChange={(e) => onChange({ ...filters, search: e.target.value })}
@@ -286,7 +292,7 @@ export function TodoFilterBar({ filters, onChange, allLabels, sort, onSortChange
               className="flex-1 bg-transparent text-mf-small text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none min-w-0"
             />
             {filters.search && (
-              <button onClick={() => onChange({ ...filters, search: '' })} className="text-mf-text-secondary">
+              <button data-testid="todos-filter-search-clear" onClick={() => onChange({ ...filters, search: '' })} className="text-mf-text-secondary">
                 <X size={10} />
               </button>
             )}

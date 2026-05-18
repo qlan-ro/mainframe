@@ -183,7 +183,7 @@ export function DirectoryPickerModal({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border">
           <h2 className="text-mf-body font-semibold text-mf-text-primary">Select Project Directory</h2>
-          <button onClick={onCancel} className="text-mf-text-secondary hover:text-mf-text-primary transition-colors">
+          <button data-testid="directory-picker-close" onClick={onCancel} className="text-mf-text-secondary hover:text-mf-text-primary transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -200,6 +200,7 @@ export function DirectoryPickerModal({
           </span>
           <div className="flex items-center gap-2">
             <button
+              data-testid="directory-picker-cancel"
               onClick={onCancel}
               className="px-3 py-1.5 text-mf-body text-mf-text-secondary hover:text-mf-text-primary transition-colors"
             >

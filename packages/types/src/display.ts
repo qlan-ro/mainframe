@@ -13,6 +13,8 @@ export interface ToolCallResult {
   structuredPatch?: DiffHunk[];
   originalFile?: string;
   modifiedFile?: string;
+  truncated?: boolean;
+  fullBytes?: number;
   askUserQuestion?: AskUserQuestionAnswer[];
 }
 

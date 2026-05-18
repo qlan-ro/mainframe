@@ -138,6 +138,7 @@ export function SchedulePill({ toolName, args, result, isError }: Props) {
 
   const pill = (
     <button
+      data-testid="tool-schedule-expand"
       type="button"
       onClick={() => expandable && toggle()}
       disabled={!expandable}

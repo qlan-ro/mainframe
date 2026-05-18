@@ -15,6 +15,7 @@ export interface Chat {
   projectId: string;
   title?: string;
   claudeSessionId?: string;
+  sessionFilePath?: string;
   model?: string;
   permissionMode?: 'default' | 'acceptEdits' | 'yolo';
   planMode?: boolean;

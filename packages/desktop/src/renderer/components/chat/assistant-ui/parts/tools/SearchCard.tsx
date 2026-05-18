@@ -2,23 +2,35 @@ import { Search } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { CollapsibleToolCard } from './CollapsibleToolCard';
-import { StatusDot, stripErrorXml } from './shared';
+import { StatusDot, stripErrorXml, isTruncatedResult } from './shared';
+import { ToolResultExpand } from '../../ToolResultExpand';
 
 export function SearchCard({
   toolName,
   args,
   result,
   isError,
+  chatId,
+  toolCallId,
 }: {
   toolName: string;
   args: Record<string, unknown>;
   result: unknown;
   isError: boolean | undefined;
+  chatId?: string;
+  toolCallId?: string;
 }) {
   const pattern = (args.pattern as string) || (args.glob as string) || '';
   const path = args.path ? String(args.path) : '';
+  const truncated = isTruncatedResult(result);
   const rawResultText =
-    typeof result === 'string' ? result : result !== undefined ? JSON.stringify(result, null, 2) : undefined;
+    typeof result === 'string'
+      ? result
+      : truncated
+        ? result.content
+        : result !== undefined
+          ? JSON.stringify(result, null, 2)
+          : undefined;
   const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
 
   return (
@@ -56,14 +68,25 @@ export function SearchCard({
     >
       {resultText && (
         <div className="border-t border-mf-divider/50">
-          <pre
-            className={cn(
-              'text-mf-small font-mono overflow-x-auto whitespace-pre-wrap px-3 py-2 max-h-[300px] overflow-y-auto',
-              isError ? 'text-mf-chat-error-muted bg-mf-chat-error-surface/20' : 'text-mf-text-secondary/60',
-            )}
-          >
-            {resultText}
-          </pre>
+          {truncated && chatId && toolCallId ? (
+            <div className="px-3 py-2">
+              <ToolResultExpand
+                chatId={chatId}
+                toolUseId={toolCallId}
+                truncatedContent={resultText}
+                fullBytes={result.fullBytes}
+              />
+            </div>
+          ) : (
+            <pre
+              className={cn(
+                'text-mf-small font-mono overflow-x-auto whitespace-pre-wrap px-3 py-2 max-h-[300px] overflow-y-auto',
+                isError ? 'text-mf-chat-error-muted bg-mf-chat-error-surface/20' : 'text-mf-text-secondary/60',
+              )}
+            >
+              {resultText}
+            </pre>
+          )}
         </div>
       )}
     </CollapsibleToolCard>

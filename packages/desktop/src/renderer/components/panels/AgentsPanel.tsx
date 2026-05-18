@@ -46,6 +46,7 @@ function AgentItem({
       </div>
       <div className="relative shrink-0">
         <button
+          data-testid={`agents-item-menu-${agent.id}`}
           onClick={(e) => {
             e.stopPropagation();
             setMenuOpen(!menuOpen);
@@ -60,6 +61,7 @@ function AgentItem({
             onMouseLeave={() => setMenuOpen(false)}
           >
             <button
+              data-testid={`agents-item-edit-${agent.id}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setMenuOpen(false);
@@ -70,6 +72,7 @@ function AgentItem({
               <Pencil size={14} /> Edit
             </button>
             <button
+              data-testid={`agents-item-delete-${agent.id}`}
               onClick={(e) => {
                 e.stopPropagation();
                 setMenuOpen(false);

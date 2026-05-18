@@ -141,6 +141,7 @@ export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathMod
   return (
     <div className="fixed inset-0 z-50 flex justify-center" style={{ paddingTop: '15%' }} onClick={onClose}>
       <div
+        data-testid="find-in-path-modal"
         className="w-[960px] max-w-[90%] h-fit max-h-[60vh] bg-mf-panel-bg border border-mf-border rounded-mf-card shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -158,6 +159,7 @@ export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathMod
             </Tooltip>
           </div>
           <button
+            data-testid="find-in-path-close"
             onClick={onClose}
             className="text-mf-text-secondary hover:text-mf-text-primary transition-colors mt-0.5"
           >
@@ -170,6 +172,7 @@ export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathMod
           <div className="flex items-center gap-2">
             <Search size={14} className="text-mf-text-secondary shrink-0" />
             <input
+              data-testid="find-in-path-input"
               ref={inputRef}
               type="text"
               value={query}
@@ -182,6 +185,7 @@ export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathMod
           {scopeType === 'directory' && (
             <label className="flex items-center gap-2 mt-2 text-mf-status text-mf-text-secondary cursor-pointer select-none">
               <input
+                data-testid="find-in-path-include-ignored"
                 type="checkbox"
                 checked={includeIgnored}
                 onChange={(e) => setIncludeIgnored(e.target.checked)}
@@ -217,6 +221,7 @@ export function FindInPathModal({ scopePath, scopeType, onClose }: FindInPathMod
                     return (
                       <button
                         key={`${hit.file}:${hit.line}:${hit.column}`}
+                        data-testid={`find-in-path-result-${hit.file}:${hit.line}:${hit.column}`}
                         ref={isSelected ? selectedItemRef : null}
                         onClick={() => openResult(hit)}
                         onMouseEnter={() => setSelectedIndex(idx)}

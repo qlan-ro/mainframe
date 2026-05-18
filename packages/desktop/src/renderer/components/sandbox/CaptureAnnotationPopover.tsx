@@ -75,6 +75,7 @@ export function CaptureAnnotationPopover({
         </span>
         <button
           type="button"
+          data-testid={`sandbox-button-remove-capture-${index}`}
           onClick={onRemove}
           className="p-0.5 rounded text-mf-text-secondary hover:text-mf-text-primary"
           aria-label={`Remove capture ${index}`}
@@ -84,6 +85,7 @@ export function CaptureAnnotationPopover({
       </div>
       <textarea
         ref={textareaRef}
+        data-testid={`sandbox-textarea-annotation-${index}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Annotation (optional)…"

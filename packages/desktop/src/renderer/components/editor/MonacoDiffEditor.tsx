@@ -170,6 +170,7 @@ export function MonacoDiffEditor({
       {hasComments && (
         <div className="flex items-center justify-end px-3 py-1 shrink-0 border-b border-mf-divider">
           <button
+            data-testid="editor-submit-review"
             onClick={handleSubmitReview}
             disabled={!hasNonEmpty}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded text-mf-small font-medium text-mf-accent hover:bg-mf-accent/10 disabled:opacity-30 transition-colors"

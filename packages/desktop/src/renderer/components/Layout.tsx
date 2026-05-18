@@ -45,6 +45,7 @@ function CenterSplit({ centerPanel }: { centerPanel: React.ReactNode }): React.R
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  data-testid="layout-expand-file-view"
                   onClick={toggleFileViewCollapsed}
                   aria-label="Expand file view"
                   className="p-1.5 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"

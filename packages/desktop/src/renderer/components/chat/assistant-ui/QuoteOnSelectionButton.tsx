@@ -123,6 +123,7 @@ export function QuoteOnSelectionButton(): React.ReactElement | null {
 
   return (
     <button
+      data-testid="thread-quote"
       type="button"
       // mousedown in capture would clear the selection; prevent default to keep it.
       onMouseDown={(e) => e.preventDefault()}

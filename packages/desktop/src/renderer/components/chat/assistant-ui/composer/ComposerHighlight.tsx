@@ -42,6 +42,7 @@ export function ComposerHighlight() {
 
   return (
     <div
+      data-testid="composer-prompt-highlight"
       className="absolute inset-0 px-3 py-2 font-sans text-mf-chat text-mf-text-primary pointer-events-none whitespace-pre-wrap break-words"
       aria-hidden="true"
     >

@@ -157,6 +157,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     logger.info('Shutting down...');
+    chats.dispose();
     await pluginManager.unloadAll();
     adapters.killAll();
     await launchRegistry.stopAll();

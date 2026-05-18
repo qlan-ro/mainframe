@@ -24,6 +24,7 @@ export function SkillLoadedCard({ skillName, path, content }: SkillLoadedCardPro
 
   const pill = (
     <button
+      data-testid="tool-skill-expand"
       type="button"
       onClick={() => toggle()}
       className="inline-flex items-center gap-1.5 rounded-full bg-mf-hover/50 px-3 py-1 hover:bg-mf-hover/70 transition-colors"

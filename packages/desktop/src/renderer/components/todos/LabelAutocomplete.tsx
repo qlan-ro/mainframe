@@ -72,6 +72,7 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
             {label}
             <button
               type="button"
+              data-testid={`todos-label-remove-${label}`}
               onClick={(e) => {
                 e.stopPropagation();
                 removeLabel(label);
@@ -86,6 +87,7 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
         <span className="relative flex-1 min-w-[80px]">
           <input
             ref={inputRef}
+            data-testid="todos-label-input"
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
