@@ -51,7 +51,7 @@ export async function sendCapturesDirect(captures: ReadonlyArray<CaptureLike>, e
           unsub();
           void uploadAndSend(newChat.id, captures)
             .catch((err: unknown) => {
-              console.warn('[send-captures-direct] uploadAndSend failed', err);
+              log.warn('uploadAndSend failed', { err });
             })
             .finally(resolve);
         }
