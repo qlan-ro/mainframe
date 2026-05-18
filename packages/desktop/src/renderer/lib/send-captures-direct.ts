@@ -4,6 +4,8 @@ import { useChatsStore } from '../store/chats.js';
 import { getActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { getDefaultModelForAdapter } from './adapters.js';
 import { formatCaptures, type CaptureLike } from './format-captures.js';
+
+export type { CaptureLike } from './format-captures.js';
 import { createLogger } from './logger.js';
 
 const log = createLogger('renderer:captures');
@@ -60,4 +62,30 @@ export async function sendCapturesDirect(captures: ReadonlyArray<CaptureLike>, e
 
     daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
   });
+}
+
+export interface PendingCaptureInput {
+  id: string;
+  dataUrl: string;
+  annotation: string;
+}
+
+export function buildCaptureLikes(pending: readonly PendingCaptureInput[]): CaptureLike[] {
+  return pending.map((c) => ({
+    id: c.id,
+    type: 'screenshot' as const,
+    imageDataUrl: c.dataUrl,
+    ...(c.annotation.trim() ? { annotation: c.annotation.trim() } : {}),
+  }));
+}
+
+export function submitCapturesDirect(
+  pending: readonly PendingCaptureInput[],
+  opts: { onSuccess: () => void },
+  send: (captures: ReadonlyArray<CaptureLike>) => Promise<void> = sendCapturesDirect,
+): void {
+  if (pending.length === 0) return;
+  void send(buildCaptureLikes(pending))
+    .then(opts.onSuccess)
+    .catch((err) => console.warn('[sandbox] direct capture send failed', err));
 }
