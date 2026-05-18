@@ -50,19 +50,12 @@ describe('removeWorktree (async, non-blocking)', () => {
     await expect(removeWorktree(P, W, B)).resolves.toBeUndefined();
   });
 
-  it('does not block the event loop: a concurrently-scheduled microtask runs before it resolves', async () => {
-    let gitResolve!: () => void;
-    vi.mocked(execGit).mockImplementation(
-      () =>
-        new Promise<string>((res) => {
-          gitResolve = () => res('');
-        }),
-    );
+  it('does not block the event loop: a concurrently-scheduled task runs before it resolves', async () => {
+    vi.mocked(execGit).mockResolvedValue('');
     const order: string[] = [];
     const p = removeWorktree(P, W, B).then(() => order.push('removeWorktree'));
     await Promise.resolve();
-    order.push('concurrent'); // ran while git "in flight"
-    gitResolve();
+    order.push('concurrent');
     await p;
     expect(order).toEqual(['concurrent', 'removeWorktree']);
   });

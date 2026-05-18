@@ -122,5 +122,9 @@ export async function removeWorktree(projectPath: string, worktreePath: string, 
     }
   }
   // best-effort: branch may not exist or may still be checked out in another worktree
-  void execGit(['branch', '-D', branchName], projectPath).catch(() => {});
+  try {
+    await execGit(['branch', '-D', branchName], projectPath);
+  } catch {
+    /* best-effort */
+  }
 }
