@@ -8,7 +8,7 @@ scope="${2:-$ROOT}"
 if [ "$mode" = "coverage" ]; then
   miss=0
   while IFS= read -r f; do
-    case "$f" in *__tests__*) continue;; esac
+    case "$f" in *__tests__*|*.test.tsx|*.spec.tsx) continue;; esac
     n=$(grep -oE '<(button|input|select|textarea)\b' "$f" | wc -l | tr -d ' ')
     t=$(grep -oE 'data-testid=' "$f" | wc -l | tr -d ' ')
     if [ "$n" -gt "$t" ]; then echo "UNTAGGED ($((n-t))): $f"; miss=$((miss+1)); fi
@@ -18,7 +18,7 @@ if [ "$mode" = "coverage" ]; then
 elif [ "$mode" = "dupes" ]; then
   bad=0
   while IFS= read -r f; do
-    case "$f" in *__tests__*) continue;; esac
+    case "$f" in *__tests__*|*.test.tsx|*.spec.tsx) continue;; esac
     dups=$(grep -oE 'data-testid="[^"$]+"' "$f" | sort | uniq -d || true)
     if [ -n "$dups" ]; then echo "DUPES in $f:"; echo "$dups"; bad=$((bad+1)); fi
   done < <(grep -rlE 'data-testid=' "$scope" --include='*.tsx')
