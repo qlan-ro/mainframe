@@ -11,7 +11,6 @@ export function Toggle({ checked, onChange, disabled = false, id, ...rest }: Tog
   return (
     <button
       id={id}
-      data-testid="toggle"
       role="switch"
       aria-checked={checked}
       disabled={disabled}

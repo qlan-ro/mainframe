@@ -8,7 +8,10 @@ scope="${2:-$ROOT}"
 if [ "$mode" = "coverage" ]; then
   miss=0
   while IFS= read -r f; do
-    case "$f" in *__tests__*|*.test.tsx|*.spec.tsx) continue;; esac
+    # ui/ holds shared primitives: passthrough by design, never a static
+    # data-testid (it would clone one id onto every usage). They are tagged at
+    # call sites, so the n>t heuristic would falsely flag them forever.
+    case "$f" in *__tests__*|*.test.tsx|*.spec.tsx|*/components/ui/*) continue;; esac
     n=$(grep -oE '<(button|input|select|textarea)\b' "$f" | wc -l | tr -d ' ')
     t=$(grep -oE 'data-testid=' "$f" | wc -l | tr -d ' ')
     if [ "$n" -gt "$t" ]; then echo "UNTAGGED ($((n-t))): $f"; miss=$((miss+1)); fi
