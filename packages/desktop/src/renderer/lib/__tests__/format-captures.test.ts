@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { formatCaptures, SANDBOX_CAPTURE_SENTINEL, parseSandboxCaptureBlock } from '../format-captures.js';
+import {
+  formatCaptures,
+  SANDBOX_CAPTURE_SENTINEL,
+  parseSandboxCaptureBlock,
+  capturesToRows,
+} from '../format-captures.js';
 
 const img = 'data:image/png;base64,QUJD'; // base64 "ABC" -> 3 bytes
 
@@ -41,5 +46,23 @@ describe('parseSandboxCaptureBlock', () => {
 
   it('returns null when no sentinel present', () => {
     expect(parseSandboxCaptureBlock('just a normal message')).toBeNull();
+  });
+});
+
+describe('capturesToRows', () => {
+  it('uses the same labels as formatCaptures and maps id/image by label', () => {
+    const caps = [
+      { id: 'i1', type: 'element' as const, imageDataUrl: 'data:,A', selector: 'a > b' },
+      { id: 's1', type: 'screenshot' as const, imageDataUrl: 'data:,B', annotation: 'note' },
+      { id: 'i2', type: 'element' as const, imageDataUrl: 'data:,C' },
+    ];
+    const { rows, images, idByLabel } = capturesToRows(caps);
+    expect(rows).toEqual([
+      { label: 'element1', imageName: 'element1.png', selector: 'a > b' },
+      { label: 'screenshot1', imageName: 'screenshot1.png', annotation: 'note' },
+      { label: 'element2', imageName: 'element2.png' },
+    ]);
+    expect(images).toEqual({ 'element1.png': 'data:,A', 'screenshot1.png': 'data:,B', 'element2.png': 'data:,C' });
+    expect(idByLabel).toEqual({ element1: 'i1', screenshot1: 's1', element2: 'i2' });
   });
 });

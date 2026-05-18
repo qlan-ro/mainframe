@@ -51,9 +51,30 @@ export function formatCaptures(captures: ReadonlyArray<CaptureLike>): {
   return { markdown: `${SANDBOX_CAPTURE_SENTINEL}\n${lines.join('\n')}`, attachments };
 }
 
-export function parseSandboxCaptureBlock(
-  text: string,
-): { rows: CaptureRow[]; rest: string } | null {
+export function capturesToRows(captures: ReadonlyArray<CaptureLike>): {
+  rows: CaptureRow[];
+  images: Record<string, string>;
+  idByLabel: Record<string, string>;
+} {
+  const rows: CaptureRow[] = [];
+  const images: Record<string, string> = {};
+  const idByLabel: Record<string, string> = {};
+  let el = 0;
+  let sc = 0;
+  for (const c of captures) {
+    const label = c.type === 'element' ? `element${(el += 1)}` : `screenshot${(sc += 1)}`;
+    const imageName = `${label}.png`;
+    const row: CaptureRow = { label, imageName };
+    if (c.selector) row.selector = c.selector;
+    if (c.annotation) row.annotation = c.annotation;
+    rows.push(row);
+    images[imageName] = c.imageDataUrl;
+    idByLabel[label] = c.id;
+  }
+  return { rows, images, idByLabel };
+}
+
+export function parseSandboxCaptureBlock(text: string): { rows: CaptureRow[]; rest: string } | null {
   if (!text.startsWith(SANDBOX_CAPTURE_SENTINEL)) return null;
   const body = text.slice(SANDBOX_CAPTURE_SENTINEL.length).replace(/^\n/, '');
   const all = body.split('\n');

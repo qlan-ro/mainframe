@@ -21,6 +21,8 @@ import { WorktreePopover } from './WorktreePopover';
 import { QueuedMessageBanner } from './QueuedMessageBanner';
 import { PlanModeToggle } from './PlanModeToggle';
 import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
+import { capturesToRows } from '../../../../lib/format-captures.js';
+import { SandboxCaptureContext } from '../parts/SandboxCaptureContext.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip';
 
@@ -116,7 +118,7 @@ function SendButton({
 }
 
 export function ComposerCard() {
-  const { chatId, composerError, dismissComposerError, openLightbox, sendPendingCaptures } = useMainframeRuntime();
+  const { chatId, composerError, dismissComposerError, sendPendingCaptures } = useMainframeRuntime();
   const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
   const adapters = useAdaptersStore((s) => s.adapters);
   const messages = useChatsStore((s) => s.messages.get(chatId));
@@ -315,38 +317,21 @@ export function ComposerCard() {
             Attachment: ImageAttachmentPreview,
           }}
         />
-        {captures.map((c, i) => (
-          <div key={c.id} className="relative group w-14 h-14">
-            <button
-              type="button"
-              data-testid="capture-thumb"
-              className="w-full h-full rounded overflow-hidden border border-mf-border"
-              onClick={() => {
-                const images = captures.map((cap) => {
-                  const match = cap.imageDataUrl.match(/^data:([^;]+);base64,(.+)$/);
-                  return { mediaType: match?.[1] ?? 'image/png', data: match?.[2] ?? '' };
-                });
-                openLightbox(images, i);
-              }}
-            >
-              <img
-                src={c.imageDataUrl}
-                alt={c.annotation ?? (c.type === 'screenshot' ? 'screenshot' : (c.selector ?? 'element'))}
-                title={c.annotation}
-                className="w-full h-full object-cover"
-              />
-            </button>
-            <button
-              type="button"
-              data-testid={`composer-capture-remove-${c.id}`}
-              onClick={() => removeCapture(c.id)}
-              className="absolute -top-1 -right-1 w-4 h-4 bg-mf-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              aria-label="Remove capture"
-            >
-              <X size={10} className="text-mf-panel-bg" />
-            </button>
-          </div>
-        ))}
+        {captures.length > 0
+          ? (() => {
+              const { rows, images, idByLabel } = capturesToRows(captures);
+              return (
+                <SandboxCaptureContext
+                  rows={rows}
+                  images={images}
+                  onRemove={(label) => {
+                    const id = idByLabel[label];
+                    if (id) removeCapture(id);
+                  }}
+                />
+              );
+            })()
+          : null}
       </div>
       {composerError && (
         <div className="mx-3 mt-2 rounded-md bg-mf-chat-error/15 px-3 py-2 text-mf-small text-mf-chat-error-subtle flex items-center justify-between gap-2 shadow-chat-error-inset">
