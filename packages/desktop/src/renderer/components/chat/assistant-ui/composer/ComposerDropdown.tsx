@@ -22,6 +22,7 @@ export function ComposerDropdown({
   icon,
   className,
   'data-tutorial': dataTutorial,
+  'data-testid': dataTestId,
 }: {
   items: Item[];
   value: string;
@@ -30,6 +31,7 @@ export function ComposerDropdown({
   icon?: React.ReactNode;
   className?: string;
   'data-tutorial'?: string;
+  'data-testid'?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -58,6 +60,7 @@ export function ComposerDropdown({
         <LabelWithTooltip item={selected}>
           <button
             type="button"
+            data-testid={dataTestId}
             disabled={disabled}
             onClick={() => setOpen(!open)}
             className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${className ?? ''}`}
@@ -68,6 +71,7 @@ export function ComposerDropdown({
       ) : (
         <button
           type="button"
+          data-testid={dataTestId}
           disabled={disabled}
           onClick={() => setOpen(!open)}
           className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${className ?? ''}`}
@@ -81,6 +85,7 @@ export function ComposerDropdown({
             <LabelWithTooltip key={item.id} item={item}>
               <button
                 type="button"
+                data-testid={dataTestId ? `${dataTestId}-option-${item.id}` : undefined}
                 onClick={() => {
                   onChange(item.id);
                   setOpen(false);

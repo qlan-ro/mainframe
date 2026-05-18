@@ -59,6 +59,7 @@ function StopButton() {
   if (!thread.isRunning) return null;
   return (
     <ComposerPrimitive.Cancel
+      data-testid="composer-stop"
       className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-destructive transition-colors"
       title="Stop response"
       aria-label="Stop response"
@@ -86,6 +87,7 @@ function SendButton({
   return (
     <button
       type="button"
+      data-testid="composer-send"
       disabled={disabled}
       onClick={() => {
         try {
@@ -284,6 +286,7 @@ export function ComposerCard() {
       <div className="flex items-center gap-1 px-2 pt-2">
         <button
           type="button"
+          data-testid="composer-context-picker"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             setPickerOpen((p) => !p);
@@ -296,6 +299,7 @@ export function ComposerCard() {
           <ContextPickerIcon />
         </button>
         <ComposerPrimitive.AddAttachment
+          data-testid="composer-attach"
           className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
           title="Add attachment"
           aria-label="Add attachment"
@@ -334,6 +338,7 @@ export function ComposerCard() {
             </button>
             <button
               type="button"
+              data-testid={`composer-capture-remove-${c.id}`}
               onClick={() => removeCapture(c.id)}
               className="absolute -top-1 -right-1 w-4 h-4 bg-mf-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
               aria-label="Remove capture"
@@ -348,6 +353,7 @@ export function ComposerCard() {
           <span>{composerError}</span>
           <button
             type="button"
+            data-testid="composer-dismiss-error"
             onClick={dismissComposerError}
             className="shrink-0 text-mf-chat-error-subtle/80 hover:text-mf-text-primary transition-colors"
             aria-label="Dismiss attachment error"
@@ -389,6 +395,7 @@ export function ComposerCard() {
           <ComposerHighlight />
           <ComposerPrimitive.Input
             data-mf-composer-input
+            data-testid="composer-prompt-input"
             rows={2}
             autoFocus
             spellCheck={false}
@@ -415,13 +422,20 @@ export function ComposerCard() {
         <div className="flex items-center gap-1">
           <ComposerDropdown
             data-tutorial="step-4"
+            data-testid="composer-adapter-select"
             items={adapterOptions}
             value={currentAdapter}
             onChange={handleAdapterChange}
             disabled={hasMessages}
           />
-          <ComposerDropdown items={dropdownOptions} value={currentModel} onChange={handleModelChange} />
           <ComposerDropdown
+            data-testid="composer-model-select"
+            items={dropdownOptions}
+            value={currentModel}
+            onChange={handleModelChange}
+          />
+          <ComposerDropdown
+            data-testid="composer-permission-mode-select"
             items={PERMISSION_MODES}
             value={currentMode}
             onChange={handleModeChange}
@@ -438,6 +452,7 @@ export function ComposerCard() {
                 <TooltipTrigger asChild>
                   <button
                     type="button"
+                    data-testid="composer-worktree"
                     onClick={() => setWorktreePopoverOpen((o) => !o)}
                     className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
                       chat?.worktreePath

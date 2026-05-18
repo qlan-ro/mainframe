@@ -26,6 +26,7 @@ function QueuedItem({ chatId, ref: qRef }: { chatId: string; ref: QueuedMessageR
       {editing ? (
         <>
           <textarea
+            data-testid="composer-queued-edit-input"
             className="flex-1 bg-mf-surface border border-mf-border rounded px-2 py-0.5 text-mf-small text-mf-text-primary resize-none"
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -39,7 +40,7 @@ function QueuedItem({ chatId, ref: qRef }: { chatId: string; ref: QueuedMessageR
             autoFocus
             rows={1}
           />
-          <button onClick={handleSaveEdit} className="p-0.5 hover:bg-mf-hover rounded" title="Save edit">
+          <button data-testid="composer-queued-save" onClick={handleSaveEdit} className="p-0.5 hover:bg-mf-hover rounded" title="Save edit">
             <Check size={14} />
           </button>
         </>
@@ -47,6 +48,7 @@ function QueuedItem({ chatId, ref: qRef }: { chatId: string; ref: QueuedMessageR
         <>
           <span className="flex-1 truncate">{qRef.content}</span>
           <button
+            data-testid="composer-queued-edit"
             onClick={() => {
               setText(qRef.content);
               setEditing(true);
@@ -58,7 +60,7 @@ function QueuedItem({ chatId, ref: qRef }: { chatId: string; ref: QueuedMessageR
           </button>
         </>
       )}
-      <button onClick={handleCancel} className="p-0.5 hover:bg-mf-hover rounded" title="Cancel queued message">
+      <button data-testid="composer-queued-cancel" onClick={handleCancel} className="p-0.5 hover:bg-mf-hover rounded" title="Cancel queued message">
         <X size={12} />
       </button>
     </div>
