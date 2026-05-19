@@ -184,6 +184,29 @@ describe('convertMessage', () => {
       });
     });
 
+    it('preserves askUserQuestion on AskUserQuestion tool results', () => {
+      const answers = [
+        { question: 'Q with "quotes"?', answer: ['Free, text, with commas'] },
+        { question: 'Q2?', answer: ['A2'] },
+      ];
+      const msg = display('assistant', [
+        {
+          type: 'tool_call',
+          id: 'tu1',
+          name: 'AskUserQuestion',
+          input: { questions: [{ question: 'Q with "quotes"?' }, { question: 'Q2?' }] },
+          category: 'default',
+          result: { content: 'User has answered your questions: ...', isError: false, askUserQuestion: answers },
+        },
+      ]);
+      const result = convertMessage(msg);
+      const part = (result.content as unknown as Array<Record<string, unknown>>)[0]!;
+      expect(part.result).toEqual({
+        content: 'User has answered your questions: ...',
+        askUserQuestion: answers,
+      });
+    });
+
     it('converts error blocks to ERROR_PLACEHOLDER', () => {
       const msg = display('assistant', [{ type: 'error', message: 'something went wrong' }]);
       const result = convertMessage(msg);
