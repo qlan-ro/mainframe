@@ -58,7 +58,10 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # This job only runs `changeset status`, which reads .changeset/ and git
+      # history. Skip lifecycle scripts so it doesn't need a native toolchain
+      # (node-pty / better-sqlite3 builds) that the minimal runner lacks.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
