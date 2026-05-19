@@ -30,6 +30,7 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish",
+    "postinstall": "node scripts/install-electron.mjs",
     "prepare": "husky"
   },
   "devDependencies": {
