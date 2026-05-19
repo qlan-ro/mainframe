@@ -22,7 +22,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:playwright": "playwright test -c playwright-ct.config.ts",
-    "package": "electron-rebuild -o node-pty && electron-builder",
+    "package": "electron-rebuild -o node-pty && electron-rebuild -m ../core -o better-sqlite3 -f -v $(node -p \"require('electron/package.json').version\") && electron-builder",
     "postinstall": "node scripts/fix-pty-permissions.mjs"
   },
   "dependencies": {
