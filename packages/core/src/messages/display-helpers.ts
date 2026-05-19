@@ -4,7 +4,7 @@ import type { GroupedMessage } from './message-grouping.js';
 import type { PartEntry } from './tool-grouping.js';
 import { groupToolCallParts, groupTaskChildren } from './tool-grouping.js';
 import { truncateToolContent } from './truncate-tool-content.js';
-import { parseAskUserQuestionResult } from './parse-ask-user-question.js';
+import { parseAskUserQuestionResult, type KnownQuestion } from './parse-ask-user-question.js';
 
 const INTERNAL_USER_RE = /<mainframe-command[\s>]/;
 
@@ -31,8 +31,24 @@ export function categorizeToolCall(
   return 'default';
 }
 
+function extractKnownQuestions(toolInput: unknown): KnownQuestion[] | undefined {
+  if (typeof toolInput !== 'object' || toolInput === null) return undefined;
+  const q = (toolInput as { questions?: unknown }).questions;
+  if (!Array.isArray(q)) return undefined;
+  return q
+    .filter((item): item is { question: string } => typeof item?.question === 'string')
+    .map((item) => {
+      const i = item as { question: string; multiSelect?: boolean; options?: { label: string }[] };
+      return { question: i.question, multiSelect: i.multiSelect, options: i.options };
+    });
+}
+
 /** Build a ToolCallResult from a tool_result content block. */
-export function toToolCallResult(block: MessageContent & { type: 'tool_result' }, toolName?: string): ToolCallResult {
+export function toToolCallResult(
+  block: MessageContent & { type: 'tool_result' },
+  toolName?: string,
+  toolInput?: unknown,
+): ToolCallResult {
   const t = truncateToolContent(block.content);
   return {
     content: t.content,
@@ -41,7 +57,9 @@ export function toToolCallResult(block: MessageContent & { type: 'tool_result' }
     ...(block.structuredPatch && { structuredPatch: block.structuredPatch }),
     ...(block.originalFile && { originalFile: block.originalFile }),
     ...(block.modifiedFile && { modifiedFile: block.modifiedFile }),
-    ...(toolName === 'AskUserQuestion' ? { askUserQuestion: parseAskUserQuestionResult(block.content) } : {}),
+    ...(toolName === 'AskUserQuestion'
+      ? { askUserQuestion: parseAskUserQuestionResult(block.content, extractKnownQuestions(toolInput)) }
+      : {}),
   };
 }
 
@@ -86,7 +104,7 @@ export function convertAssistantContent(grouped: GroupedMessage, categories?: To
         category: block.name === 'AskUserQuestion' && resultBlock ? 'default' : baseCategory,
         ...withParentId(block.parentToolUseId),
       };
-      if (resultBlock) call.result = toToolCallResult(resultBlock, block.name);
+      if (resultBlock) call.result = toToolCallResult(resultBlock, block.name, block.input);
       content.push(call);
     }
   }
