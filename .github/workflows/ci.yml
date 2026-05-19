@@ -23,6 +23,11 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
+      # node-pty has no Linux prebuild and compiles via `node-gyp rebuild`.
+      # node-gyp is not on the install-script PATH on the runner, so install
+      # it globally before native deps are built.
+      - run: npm install -g node-gyp
+
       - run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

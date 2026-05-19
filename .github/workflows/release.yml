@@ -26,6 +26,11 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
+      # node-pty has no Linux prebuild and compiles via `node-gyp rebuild`;
+      # node-gyp is not on the install-script PATH on the runner.
+      - name: Install node-gyp
+        run: npm install -g node-gyp
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
         env:
@@ -86,6 +91,10 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+
+      # node-pty has no Linux prebuild and compiles via `node-gyp rebuild`;
+      # node-gyp is not on the install-script PATH on the runner.
+      - run: npm install -g node-gyp
 
       - run: pnpm install --frozen-lockfile
         env:
