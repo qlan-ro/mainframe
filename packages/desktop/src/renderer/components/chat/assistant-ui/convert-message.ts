@@ -24,7 +24,9 @@ function mapDisplayContentToToolCall(block: DisplayContent & { type: 'tool_call'
         }
       : block.result.truncated
         ? { content: block.result.content, truncated: true as const, fullBytes: block.result.fullBytes ?? 0 }
-        : block.result.content
+        : block.name === 'AskUserQuestion'
+          ? { content: block.result.content, askUserQuestion: block.result.askUserQuestion }
+          : block.result.content
     : undefined;
 
   return {
