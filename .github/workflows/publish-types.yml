@@ -22,8 +22,11 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
+      # Only builds/publishes the pure-TS types package; no native code.
+      # Skip lifecycle scripts so node-pty/better-sqlite3 (no Linux prebuild)
+      # don't need a native toolchain here.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

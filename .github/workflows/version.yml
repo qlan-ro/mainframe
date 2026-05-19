@@ -25,7 +25,10 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # This job only runs `changeset version`; it never builds native code.
+      # Skip lifecycle scripts so node-pty/better-sqlite3 (no Linux prebuild)
+      # don't need a native toolchain here.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
