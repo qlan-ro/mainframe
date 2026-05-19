@@ -1,12 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import {
-  AssistantRuntimeProvider,
-  useExternalStoreRuntime,
-  type AppendMessage,
-  type PendingAttachment,
-  type CompleteAttachment,
-} from '@assistant-ui/react';
-import type { AttachmentAdapter, ExternalStoreThreadListAdapter } from '@assistant-ui/react';
+import { AssistantRuntimeProvider, useExternalStoreRuntime, type AppendMessage } from '@assistant-ui/react';
+import type { ExternalStoreThreadListAdapter } from '@assistant-ui/react';
+import { createAttachmentAdapter, FILE_SIZE_LIMIT_MB } from './composer/attachment-adapter.js';
+import { AttachmentRejectionToaster } from './composer/AttachmentRejectionToaster.js';
 import { useChatSession } from '../../../hooks/useChatSession';
 import { convertMessage } from './convert-message';
 import { daemonClient } from '../../../lib/client';
@@ -26,11 +22,9 @@ interface MainframeRuntimeProviderProps {
   children: React.ReactNode;
 }
 
-const MAX_SIZE = 5 * 1024 * 1024;
 const DATA_URL_RE = /^data:([^;]+);base64,(.+)$/;
 const IMAGE_COORDINATE_NOTE_RE =
   /\[Image:\s*original\s+\d+x\d+,\s*displayed at\s+\d+x\d+\.\s*Multiply coordinates by\s+[0-9.]+\s+to map to original image\.\]/g;
-const FILE_SIZE_LIMIT_MB = 5;
 
 interface MainframeRuntimeContextValue {
   chatId: string;
@@ -107,15 +101,6 @@ function appendCapturesToAttachments(captures: ReadonlyArray<SandboxCaptureLike>
   return `[Preview captures: ${labels.join(', ')}]\n\n`;
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 function formatComposerError(error: unknown): string {
   const fallback = `Attachment upload failed. Files must be ${FILE_SIZE_LIMIT_MB}MB or smaller.`;
   const raw = error instanceof Error ? error.message : String(error ?? '');
@@ -151,40 +136,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
     setComposerError(null);
   }, [chatId]);
 
-  const attachmentAdapter = useMemo<AttachmentAdapter>(
-    () => ({
-      accept: '*/*',
-      async add({ file }) {
-        if (file.size > MAX_SIZE) {
-          setComposerError(`"${file.name}" is too large. Max file size is ${FILE_SIZE_LIMIT_MB}MB.`);
-          throw new Error(`File too large (max ${FILE_SIZE_LIMIT_MB}MB)`);
-        }
-        const dataUrl = await readFileAsDataUrl(file);
-        const isImage = file.type.startsWith('image/');
-        return {
-          id: crypto.randomUUID(),
-          type: isImage ? 'image' : 'document',
-          name: file.name,
-          contentType: file.type || 'application/octet-stream',
-          file,
-          content: isImage ? [{ type: 'image', image: dataUrl }] : [{ type: 'text', text: dataUrl }],
-          status: { type: 'requires-action', reason: 'composer-send' },
-        } satisfies PendingAttachment;
-      },
-      async remove() {},
-      async send(attachment) {
-        return {
-          id: attachment.id,
-          type: attachment.type as 'image' | 'document',
-          name: attachment.name,
-          contentType: attachment.contentType,
-          content: attachment.content ?? [],
-          status: { type: 'complete' },
-        } satisfies CompleteAttachment;
-      },
-    }),
-    [setComposerError],
-  );
+  const attachmentAdapter = useMemo(() => createAttachmentAdapter(), []);
 
   const onNew = useCallback(
     async (message: AppendMessage) => {
@@ -386,6 +338,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      <AttachmentRejectionToaster />
       {AllToolUIs.map((ToolUI, i) => (
         <ToolUI key={i} />
       ))}
