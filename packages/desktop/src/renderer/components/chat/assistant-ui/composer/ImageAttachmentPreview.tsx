@@ -1,4 +1,3 @@
-import React from 'react';
 import { X } from 'lucide-react';
 import { AttachmentPrimitive, useAttachment } from '@assistant-ui/react';
 import { useMainframeRuntime } from '../MainframeRuntimeProvider';
