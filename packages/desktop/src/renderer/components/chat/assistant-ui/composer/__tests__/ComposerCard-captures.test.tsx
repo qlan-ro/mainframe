@@ -1,17 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import type { Capture } from '../../../../../store/sandbox.js';
-import { capturesToRows } from '../../../../../lib/format-captures.js';
-
-// --- sandbox store mock ---
-const mockRemoveCapture = vi.fn();
-let mockCaptures: Capture[] = [];
-
-vi.mock('../../../../../store/sandbox.js', () => ({
-  useSandboxStore: (sel: (s: { captures: Capture[]; removeCapture: (id: string) => void }) => unknown) =>
-    sel({ captures: mockCaptures, removeCapture: mockRemoveCapture }),
-}));
+import { useSandboxStore } from '../../../../../store/sandbox.js';
 
 // --- MainframeRuntimeProvider mock ---
 vi.mock('../../MainframeRuntimeProvider.js', () => ({
@@ -154,54 +144,60 @@ vi.mock('../../../ui/tooltip.js', () => ({
 
 import { ComposerCard } from '../ComposerCard.js';
 
-const elementCapture: Capture = {
-  id: 'cap-element-1',
-  type: 'element',
-  imageDataUrl: 'data:image/png;base64,QUJD',
-  selector: 'div.card > h2',
-};
-
-const screenshotCapture: Capture = {
-  id: 'cap-screenshot-1',
-  type: 'screenshot',
-  imageDataUrl: 'data:image/png;base64,WFla',
-  annotation: 'the header',
-};
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  mockCaptures = [];
-});
-
-describe('ComposerCard capture area', () => {
-  it('renders SandboxCaptureContext with selector-crumb and annotation when captures are present', () => {
-    mockCaptures = [elementCapture, screenshotCapture];
-    render(<ComposerCard />);
-    expect(screen.getByTestId('sandbox-capture-context')).toBeTruthy();
-    expect(screen.getAllByTestId('selector-crumb').length).toBeGreaterThan(0);
-    expect(screen.getByText('the header')).toBeTruthy();
-    expect(screen.getAllByRole('img').length).toBe(2);
+describe('ComposerCard sandbox captures', () => {
+  beforeEach(() => {
+    useSandboxStore.getState().clearCaptures();
   });
 
-  it('clicking capture-remove calls removeCapture with the correct capture id', () => {
-    mockCaptures = [elementCapture, screenshotCapture];
+  it('renders captures as thumbs with name captions in composer-attachments', () => {
+    useSandboxStore.getState().addCapture({
+      type: 'screenshot',
+      imageDataUrl: 'data:image/png;base64,AAA',
+    });
+    useSandboxStore.getState().addCapture({
+      type: 'element',
+      imageDataUrl: 'data:image/png;base64,BBB',
+      selector: 'main > button',
+    });
     render(<ComposerCard />);
-
-    const { idByLabel } = capturesToRows(mockCaptures);
-
-    const removeBtns = screen.getAllByTestId('capture-remove');
-    expect(removeBtns.length).toBe(2);
-
-    fireEvent.click(removeBtns[0]!);
-    expect(mockRemoveCapture).toHaveBeenCalledWith(idByLabel['element1']);
-
-    fireEvent.click(removeBtns[1]!);
-    expect(mockRemoveCapture).toHaveBeenCalledWith(idByLabel['screenshot1']);
+    const row = screen.getByTestId('composer-attachments');
+    const thumbs = row.querySelectorAll('[data-testid="capture-thumb"]');
+    expect(thumbs).toHaveLength(2);
+    const names = Array.from(row.querySelectorAll('[data-testid="capture-thumb-name"]')).map((n) => n.textContent);
+    expect(names).toEqual(['screenshot1', 'element1']);
   });
 
-  it('does not render sandbox-capture-context when captures is empty', () => {
-    mockCaptures = [];
+  it('renders SandboxCaptureContext (metadata sidecar) only for rows with selector/annotation', () => {
+    useSandboxStore.getState().addCapture({
+      type: 'screenshot',
+      imageDataUrl: 'data:image/png;base64,AAA',
+    });
+    useSandboxStore.getState().addCapture({
+      type: 'element',
+      imageDataUrl: 'data:image/png;base64,BBB',
+      selector: 'main > button.go',
+    });
     render(<ComposerCard />);
-    expect(screen.queryByTestId('sandbox-capture-context')).toBeNull();
+    const meta = screen.getByTestId('sandbox-capture-context');
+    const rows = meta.querySelectorAll('[data-testid="capture-meta-row"]');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.textContent).toContain('element1');
+    expect(rows[0]!.querySelectorAll('[data-testid="selector-crumb"]').length).toBe(2);
+  });
+
+  it('× on a capture thumb removes that capture from the sandbox store', () => {
+    useSandboxStore.getState().addCapture({
+      type: 'screenshot',
+      imageDataUrl: 'data:image/png;base64,AAA',
+    });
+    useSandboxStore.getState().addCapture({
+      type: 'screenshot',
+      imageDataUrl: 'data:image/png;base64,BBB',
+    });
+    render(<ComposerCard />);
+    const removes = screen.getAllByTestId('capture-thumb-remove');
+    fireEvent.click(removes[0]!);
+    expect(useSandboxStore.getState().captures).toHaveLength(1);
+    expect(useSandboxStore.getState().captures[0]!.imageDataUrl).toBe('data:image/png;base64,BBB');
   });
 });
