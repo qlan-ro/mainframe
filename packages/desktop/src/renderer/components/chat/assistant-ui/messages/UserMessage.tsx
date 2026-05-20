@@ -57,7 +57,7 @@ export function UserMessage() {
   const rawUserText = firstText?.text ?? '';
 
   // Use metadata when available, fall back to runtime parsing for bare /command patterns
-  let parsed: { commandName: string; userText: string; isCommand: boolean } | null = null;
+  let parsed: { commandName: string; userText: string; isCommand?: boolean } | null = null;
   if (metaCommand) {
     const isCommand = metaCommand.source === 'commands';
     parsed = {
