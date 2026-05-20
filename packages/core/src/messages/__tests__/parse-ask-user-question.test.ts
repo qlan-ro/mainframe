@@ -44,6 +44,74 @@ describe('parseAskUserQuestionResult', () => {
     ]);
   });
 
+  describe('anchored parsing with known questions', () => {
+    it('preserves a question whose text contains double quotes (real session data)', () => {
+      const q = '"Prepare Release Bugs" is ambiguous to me — what do you want done?';
+      const s = `${PREFIX}"${q}"="1. cannot paste/attach images anymore in composer"${SUFFIX}`;
+      expect(parseAskUserQuestionResult(s, [{ question: q, multiSelect: false }])).toEqual([
+        { question: q, answer: ['1. cannot paste/attach images anymore in composer'] },
+      ]);
+    });
+
+    it('keeps free-text answers verbatim, including internal commas and quotes (real session data)', () => {
+      const q1 = 'When you try to paste or attach an image in the composer, what exactly happens?';
+      const q2 = 'Which entry points are broken?';
+      const a1 =
+        'nothing happens at all, but forgot to mention that i run on that debug/queued-messages branch which also contains latest main';
+      const a2 =
+        'both, paperclip works until i choose the image i want to upload. once i hit "open" nothing shows up in the composer';
+      const s = `${PREFIX}"${q1}"="${a1}", "${q2}"="${a2}"${SUFFIX}`;
+      expect(
+        parseAskUserQuestionResult(s, [
+          { question: q1, multiSelect: false },
+          { question: q2, multiSelect: false },
+        ]),
+      ).toEqual([
+        { question: q1, answer: [a1] },
+        { question: q2, answer: [a2] },
+      ]);
+    });
+
+    it('splits multi-select answers by comma only for multiSelect questions', () => {
+      const s = `${PREFIX}"Pick"="Red,Blue"${SUFFIX}`;
+      expect(
+        parseAskUserQuestionResult(s, [
+          { question: 'Pick', multiSelect: true, options: [{ label: 'Red' }, { label: 'Blue' }] },
+        ]),
+      ).toEqual([{ question: 'Pick', answer: ['Red', 'Blue'] }]);
+    });
+
+    it('extracts preview and notes on the anchored path', () => {
+      const s = `${PREFIX}"Layout?"="Grid" selected preview:\n<div>grid</div> user notes: prefer dense, "Theme?"="Dark"${SUFFIX}`;
+      expect(
+        parseAskUserQuestionResult(s, [
+          { question: 'Layout?', multiSelect: false },
+          { question: 'Theme?', multiSelect: false },
+        ]),
+      ).toEqual([
+        { question: 'Layout?', answer: ['Grid'], preview: '<div>grid</div>', notes: 'prefer dense' },
+        { question: 'Theme?', answer: ['Dark'] },
+      ]);
+    });
+
+    it('omits questions the user did not answer', () => {
+      const s = `${PREFIX}"Q1"="A1"${SUFFIX}`;
+      expect(
+        parseAskUserQuestionResult(s, [
+          { question: 'Q1', multiSelect: false },
+          { question: 'Q2', multiSelect: false },
+        ]),
+      ).toEqual([{ question: 'Q1', answer: ['A1'] }]);
+    });
+
+    it('falls back to legacy parsing when no question matches', () => {
+      const s = `${PREFIX}"Different"="X"${SUFFIX}`;
+      expect(parseAskUserQuestionResult(s, [{ question: 'Unrelated', multiSelect: false }])).toEqual([
+        { question: 'Different', answer: ['X'] },
+      ]);
+    });
+  });
+
   it('returns [] for non-AskUserQuestion or malformed content, never throws', () => {
     expect(parseAskUserQuestionResult('')).toEqual([]);
     expect(parseAskUserQuestionResult('totally unrelated tool output')).toEqual([]);
