@@ -15,14 +15,14 @@ describe('SelectorBreadcrumb', () => {
     for (const c of crumbs.slice(0, -1)) {
       expect(c.dataset.crumb).toBe('ancestor');
     }
-    expect(crumbs[crumbs.length - 1].dataset.crumb).toBe('target');
+    expect(crumbs.at(-1)!.dataset.crumb).toBe('target');
   });
 
   it('keeps chevron clip-path on every segment except the first', () => {
     const { getAllByTestId } = render(<SelectorBreadcrumb path="a > b > c" />);
     const crumbs = getAllByTestId('selector-crumb');
-    expect(crumbs[0].getAttribute('style')).not.toContain('8px 50%');
-    expect(crumbs[1].getAttribute('style')).toContain('8px 50%');
-    expect(crumbs[2].getAttribute('style')).toContain('8px 50%');
+    expect(crumbs[0]!.getAttribute('style')).not.toContain('8px 50%');
+    expect(crumbs[1]!.getAttribute('style')).toContain('8px 50%');
+    expect(crumbs[2]!.getAttribute('style')).toContain('8px 50%');
   });
 });
