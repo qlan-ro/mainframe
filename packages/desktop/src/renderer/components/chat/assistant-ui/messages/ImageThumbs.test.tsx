@@ -44,4 +44,23 @@ describe('ImageThumbs (assistant image rendering)', () => {
     expect(openLightbox).toHaveBeenCalledOnce();
     expect(openLightbox).toHaveBeenCalledWith(blocks, 0);
   });
+
+  it('renders each thumbnail with its caption when names are provided', () => {
+    const blocks = [
+      { type: 'image' as const, mediaType: 'image/png', data: 'AAA' },
+      { type: 'image' as const, mediaType: 'image/png', data: 'BBB' },
+    ];
+    render(<ImageThumbs imageBlocks={blocks} names={['screenshot1', 'element1']} openLightbox={vi.fn()} />);
+    const captions = screen.getAllByTestId('thumb-name').map((n) => n.textContent);
+    expect(captions).toEqual(['screenshot1', 'element1']);
+  });
+
+  it('omits captions when no names provided (back-compat)', () => {
+    const blocks = [
+      { type: 'image' as const, mediaType: 'image/png', data: 'AAA' },
+      { type: 'image' as const, mediaType: 'image/png', data: 'BBB' },
+    ];
+    render(<ImageThumbs imageBlocks={blocks} openLightbox={vi.fn()} />);
+    expect(screen.queryByTestId('thumb-name')).toBeNull();
+  });
 });

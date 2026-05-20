@@ -3,28 +3,43 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
 
 export function ImageThumbs({
   imageBlocks,
+  names,
   openLightbox,
 }: {
   imageBlocks: { type: 'image'; mediaType: string; data: string }[];
+  names?: ReadonlyArray<string>;
   openLightbox: (images: { mediaType: string; data: string }[], index: number) => void;
 }) {
   if (imageBlocks.length === 0) return null;
   return (
     <div className="flex gap-2 max-w-[75%] flex-wrap w-fit">
-      {imageBlocks.map((img, i) => (
-        <button
-          key={i}
-          data-testid="message-image-thumb"
-          onClick={() => openLightbox(imageBlocks, i)}
-          className="w-16 h-16 rounded overflow-hidden hover:ring-2 hover:ring-mf-accent transition-all"
-        >
-          <img
-            src={`data:${img.mediaType};base64,${img.data}`}
-            alt={`Attached image ${i + 1}`}
-            className="w-full h-full object-cover"
-          />
-        </button>
-      ))}
+      {imageBlocks.map((img, i) => {
+        const name = names?.[i];
+        return (
+          <div key={i} className="flex flex-col items-center gap-1 w-16">
+            <button
+              data-testid="message-image-thumb"
+              onClick={() => openLightbox(imageBlocks, i)}
+              className="w-16 h-16 rounded overflow-hidden hover:ring-2 hover:ring-mf-accent transition-all"
+            >
+              <img
+                src={`data:${img.mediaType};base64,${img.data}`}
+                alt={name ?? `Attached image ${i + 1}`}
+                className="w-full h-full object-cover"
+              />
+            </button>
+            {name ? (
+              <span
+                data-testid="thumb-name"
+                className="text-[10px] font-mono text-mf-text-secondary truncate max-w-full"
+                title={name}
+              >
+                {name}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
