@@ -98,7 +98,7 @@ vi.mock('@assistant-ui/react', async () => {
     },
     useComposerRuntime: () => fakeRuntime,
     useThread: () => ({ isRunning: false }),
-    useSyncExternalStore: (subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
+    useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
   };
 });
 
