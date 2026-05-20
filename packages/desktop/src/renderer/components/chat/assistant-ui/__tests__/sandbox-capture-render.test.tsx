@@ -1,92 +1,81 @@
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import type { DisplayMessage } from '@qlan-ro/mainframe-types';
-import { formatCaptures } from '../../../../lib/format-captures.js';
-
-let currentMessage: DisplayMessage;
+import * as React from 'react';
+import { UserMessage } from '../messages/UserMessage.js';
+import { SANDBOX_CAPTURE_SENTINEL } from '../../../../lib/format-captures.js';
 
 vi.mock('@assistant-ui/react', () => ({
-  MessagePrimitive: { Root: ({ children }: { children: React.ReactNode }) => <div>{children}</div> },
-  useMessage: (sel?: (m: unknown) => unknown) => {
-    const threadMsg = {
-      role: 'user',
-      content: currentMessage.content
-        .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-        .map((c) => ({ type: 'text' as const, text: c.text })),
-      __original: [currentMessage],
-    };
-    return sel ? sel(threadMsg) : threadMsg;
+  useMessage: vi.fn(),
+  getExternalStoreMessages: vi.fn(),
+  makeAssistantToolUI: vi.fn(() => () => null),
+  MessagePrimitive: {
+    Root: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+      <div className={className}>{children}</div>
+    ),
   },
-  getExternalStoreMessages: (m: { __original: DisplayMessage[] }) => m.__original,
-}));
-
-vi.mock('../../../../store/skills', () => ({
-  useSkillsStore: (sel: (s: unknown) => unknown) => sel({ skills: [], commands: [] }),
 }));
 
 vi.mock('../MainframeRuntimeProvider', () => ({
-  useMainframeRuntime: () => ({ openLightbox: vi.fn() }),
+  useMainframeRuntime: () => ({ openLightbox: () => {} }),
 }));
 
-import { UserMessage } from '../messages/UserMessage';
+vi.mock('../../../../store/skills', () => ({
+  useSkillsStore: (sel: (s: { skills: never[]; commands: never[] }) => unknown) => sel({ skills: [], commands: [] }),
+}));
 
-function userMsg(
-  text: string,
-  opts?: { images?: { mediaType: string; data: string }[]; attachments?: unknown[] },
-): DisplayMessage {
-  return {
-    id: 'm1',
-    chatId: 'c1',
-    type: 'user',
-    timestamp: '2026-01-01T00:00:00.000Z',
-    content: [
-      { type: 'text', text },
-      ...(opts?.images ?? []).map((i) => ({ type: 'image' as const, mediaType: i.mediaType, data: i.data })),
-    ],
-    ...(opts?.attachments ? { metadata: { attachments: opts.attachments } } : {}),
-  } as DisplayMessage;
-}
+import { useMessage, getExternalStoreMessages } from '@assistant-ui/react';
 
-describe('sandbox capture sentinel rendering in a sent user message', () => {
-  it('renders SandboxCaptureContext + rest, hides sentinel/markdown', () => {
-    const { markdown } = formatCaptures([
-      {
-        id: 'a',
-        type: 'element',
-        imageDataUrl: 'data:image/png;base64,QUJD',
-        selector: 'div.card > h2',
-        annotation: 'tweak this',
-      },
-      { id: 'b', type: 'screenshot', imageDataUrl: 'data:image/png;base64,WFla' },
+const buildMessage = (text: string, images: { mediaType: string; data: string }[]) => ({
+  id: 'm1',
+  role: 'user' as const,
+  content: [
+    { type: 'text' as const, text },
+    ...images.map((img) => ({ type: 'image' as const, mediaType: img.mediaType, data: img.data })),
+  ],
+  metadata: {
+    attachments: images.map((_, i) => ({
+      name: `${i === 0 ? 'screenshot1' : 'element1'}.png`,
+      kind: 'image' as const,
+    })),
+  },
+});
+
+describe('UserMessage sandbox capture rendering', () => {
+  it('renders ImageThumbs (with name captions) below the bubble and SandboxCaptureContext below thumbs', () => {
+    const sentinelText = `${SANDBOX_CAPTURE_SENTINEL}\n> **Preview captures**\n> - \`screenshot1\` — "first note"\n> - \`element1\` — selector \`main > button.go\``;
+    const msg = buildMessage(sentinelText, [
+      { mediaType: 'image/png', data: 'AAA' },
+      { mediaType: 'image/png', data: 'BBB' },
     ]);
-    currentMessage = userMsg(markdown + '\n\nfix the header', {
-      images: [
-        { mediaType: 'image/png', data: 'QUJD' },
-        { mediaType: 'image/png', data: 'WFla' },
-      ],
-      attachments: [
-        { name: 'element1.png', kind: 'image' },
-        { name: 'screenshot1.png', kind: 'image' },
-      ],
-    });
+    vi.mocked(useMessage).mockReturnValue({ content: msg.content } as never);
+    vi.mocked(getExternalStoreMessages).mockReturnValue([msg] as never);
 
     render(<UserMessage />);
 
-    expect(screen.getByTestId('sandbox-capture-context')).toBeTruthy();
-    expect(screen.getAllByTestId('selector-crumb').map((s) => s.textContent)).toEqual(['div.card', 'h2']);
-    expect(screen.getByText('tweak this')).toBeTruthy();
+    const thumbs = screen.getAllByTestId('message-image-thumb');
+    expect(thumbs).toHaveLength(2);
+    const names = screen.getAllByTestId('thumb-name').map((n) => n.textContent);
+    expect(names).toEqual(['screenshot1', 'element1']);
 
-    const body = document.body.textContent ?? '';
-    expect(body).not.toContain('__MF_SANDBOX_CAPTURE__');
-    expect(body).not.toContain('> - `element1`');
-    expect(screen.getByText(/fix the header/)).toBeTruthy();
+    const meta = screen.getByTestId('sandbox-capture-context');
+    const rows = meta.querySelectorAll('[data-testid="capture-meta-row"]');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.textContent).toContain('first note');
+    expect(rows[1]!.querySelectorAll('[data-testid="selector-crumb"]').length).toBe(2);
+
+    expect(document.querySelectorAll('[class*="rounded-[12px_12px_4px_12px]"]')).toHaveLength(0);
   });
 
-  it('renders a normal user message without the sentinel unchanged (regression)', () => {
-    currentMessage = userMsg('just a normal message');
+  it('renders a bubble with text when sentinel has trailing body text', () => {
+    const sentinelText = `${SANDBOX_CAPTURE_SENTINEL}\n> **Preview captures**\n> - \`screenshot1\`\n\nhello body`;
+    const msg = buildMessage(sentinelText, [{ mediaType: 'image/png', data: 'AAA' }]);
+    vi.mocked(useMessage).mockReturnValue({ content: msg.content } as never);
+    vi.mocked(getExternalStoreMessages).mockReturnValue([msg] as never);
+
     render(<UserMessage />);
-    expect(screen.queryByTestId('sandbox-capture-context')).toBeNull();
-    expect(screen.getByText('just a normal message')).toBeTruthy();
+
+    const bubbles = document.querySelectorAll('[class*="rounded-[12px_12px_4px_12px]"]');
+    expect(bubbles).toHaveLength(1);
+    expect(bubbles[0]!.textContent).toContain('hello body');
   });
 });

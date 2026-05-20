@@ -88,26 +88,22 @@ export function UserMessage() {
     const imageNames = Array.isArray(original?.metadata?.attachments)
       ? (original!.metadata!.attachments as Array<{ name?: string; kind?: string }>)
           .filter((a) => a.kind === 'image' && !!a.name)
-          .map((a) => a.name!)
+          .map((a) => a.name!.replace(/\.png$/i, ''))
       : [];
-    const images: Record<string, string> = {};
-    imageBlocks.forEach((img, i) => {
-      const name = imageNames[i];
-      if (name) images[name] = `data:${img.mediaType};base64,${img.data}`;
-    });
     return (
       <MessagePrimitive.Root className="flex flex-col items-end gap-2 pt-2">
         {queuedBadge}
-        <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5 flex flex-col gap-2">
-          <SandboxCaptureContext rows={sandbox.rows} images={images} />
-          {sandbox.rest ? (
+        {sandbox.rest ? (
+          <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5">
             <ReadMoreBubble>
               <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userComponents}>
                 {sandbox.rest}
               </Markdown>
             </ReadMoreBubble>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
+        <ImageThumbs imageBlocks={imageBlocks} names={imageNames} openLightbox={openLightbox} />
+        <SandboxCaptureContext rows={sandbox.rows} />
         <FileAttachmentThumbs attachments={mergedFileAttachments} />
       </MessagePrimitive.Root>
     );
