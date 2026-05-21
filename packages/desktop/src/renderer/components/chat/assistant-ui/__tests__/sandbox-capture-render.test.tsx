@@ -61,7 +61,8 @@ describe('UserMessage sandbox capture rendering', () => {
     const rows = meta.querySelectorAll('[data-testid="capture-meta-row"]');
     expect(rows).toHaveLength(2);
     expect(rows[0]!.textContent).toContain('first note');
-    expect(rows[0]!.textContent).not.toContain('screenshot1');
+    const rowLabels = Array.from(meta.querySelectorAll('[data-testid="capture-row-label"]')).map((n) => n.textContent);
+    expect(rowLabels).toEqual(['screenshot1', 'element1']);
     expect(rows[1]!.querySelectorAll('[data-testid="selector-crumb"]').length).toBe(2);
 
     const thumbs = screen.getAllByTestId('message-image-thumb');

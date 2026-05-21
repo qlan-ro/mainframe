@@ -8,7 +8,7 @@ describe('SandboxCaptureContext (metadata-only)', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders one row per capture with breadcrumb + annotation (no label prefix)', () => {
+  it('renders each row with a label badge correlating to its attachment', () => {
     render(
       <SandboxCaptureContext
         rows={[
@@ -19,9 +19,12 @@ describe('SandboxCaptureContext (metadata-only)', () => {
     );
     const items = screen.getAllByTestId('capture-meta-row');
     expect(items).toHaveLength(2);
+
+    const labels = screen.getAllByTestId('capture-row-label').map((n) => n.textContent);
+    expect(labels).toEqual(['element1', 'screenshot1']);
+
     expect(items[0]!.querySelectorAll('[data-testid="selector-crumb"]').length).toBe(3);
-    expect(items[0]!.textContent).not.toContain('element1');
-    expect(items[1]!.textContent).toBe('note here');
+    expect(items[1]!.textContent).toContain('note here');
   });
 
   it('skips rows that have neither selector nor annotation', () => {
