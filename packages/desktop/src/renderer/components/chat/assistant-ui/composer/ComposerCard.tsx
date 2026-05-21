@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, CopySlash, FolderGit } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
@@ -17,6 +17,7 @@ import { ComposerDropdown } from './ComposerDropdown';
 import { EffortPicker } from './EffortPicker';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
+import { CaptureThumb } from './CaptureThumb';
 import { WorktreePopover } from './WorktreePopover';
 import { QueuedMessageBanner } from './QueuedMessageBanner';
 import { PlanModeToggle } from './PlanModeToggle';
@@ -129,6 +130,7 @@ export function ComposerCard() {
   const [isGitProject, setIsGitProject] = useState(false);
   const captures = useSandboxStore((s) => s.captures);
   const removeCapture = useSandboxStore((s) => s.removeCapture);
+  const captureView = useMemo(() => capturesToRows(captures), [captures]);
 
   const composerRuntimeRef = useRef(composerRuntime);
   composerRuntimeRef.current = composerRuntime;
@@ -317,56 +319,23 @@ export function ComposerCard() {
             Attachment: ImageAttachmentPreview,
           }}
         />
-        {captures.length > 0
-          ? (() => {
-              const { rows, images, idByLabel } = capturesToRows(captures);
-              return rows.map((r) => (
-                <div
-                  key={r.label}
-                  data-testid="capture-thumb"
-                  className="relative group flex flex-col items-center gap-1 w-14"
-                >
-                  <div className="relative w-14 h-14">
-                    <img
-                      src={images[r.imageName]}
-                      alt={r.label}
-                      className="w-full h-full rounded object-cover border border-mf-border"
-                    />
-                    <button
-                      type="button"
-                      data-testid="capture-thumb-remove"
-                      aria-label={`Remove ${r.label}`}
-                      onClick={() => {
-                        const id = idByLabel[r.label];
-                        if (id) removeCapture(id);
-                      }}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-mf-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X size={10} className="text-mf-panel-bg" />
-                    </button>
-                  </div>
-                  <span
-                    data-testid="capture-thumb-name"
-                    className="text-[10px] font-mono text-mf-text-secondary truncate max-w-full"
-                    title={r.label}
-                  >
-                    {r.label}
-                  </span>
-                </div>
-              ));
-            })()
-          : null}
+        {captureView.rows.map((r) => (
+          <CaptureThumb
+            key={r.label}
+            label={r.label}
+            imageUrl={captureView.images[r.imageName]}
+            onRemove={() => {
+              const id = captureView.idByLabel[r.label];
+              if (id) removeCapture(id);
+            }}
+          />
+        ))}
       </div>
-      {captures.length > 0
-        ? (() => {
-            const { rows } = capturesToRows(captures);
-            return (
-              <div className="px-3 pt-1.5">
-                <SandboxCaptureContext rows={rows} />
-              </div>
-            );
-          })()
-        : null}
+      {captureView.rows.length > 0 && (
+        <div className="px-3 pt-1.5">
+          <SandboxCaptureContext rows={captureView.rows} />
+        </div>
+      )}
       {composerError && (
         <div className="mx-3 mt-2 rounded-md bg-mf-chat-error/15 px-3 py-2 text-mf-small text-mf-chat-error-subtle flex items-center justify-between gap-2 shadow-chat-error-inset">
           <span>{composerError}</span>

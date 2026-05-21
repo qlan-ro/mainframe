@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { ImageThumbs } from './ImageThumbs';
+import { ImageThumbs } from '../ImageThumbs';
 
 describe('ImageThumbs (assistant image rendering)', () => {
   it('renders nothing when imageBlocks is empty', () => {

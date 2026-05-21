@@ -42,6 +42,7 @@ export function ImageAttachmentPreview() {
           </div>
         )}
         <AttachmentPrimitive.Remove
+          data-testid="attachment-remove"
           aria-label="Remove"
           className="absolute -top-1 -right-1 w-4 h-4 bg-mf-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
         >
