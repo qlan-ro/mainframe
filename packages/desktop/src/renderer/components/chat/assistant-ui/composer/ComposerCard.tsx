@@ -319,11 +319,10 @@ export function ComposerCard() {
             Attachment: ImageAttachmentPreview,
           }}
         />
-        {captureView.rows.map((r, i) => (
+        {captureView.rows.map((r) => (
           <CaptureThumb
             key={r.label}
             label={r.label}
-            index={i}
             imageUrl={captureView.images[r.imageName]}
             onRemove={() => {
               const id = captureView.idByLabel[r.label];

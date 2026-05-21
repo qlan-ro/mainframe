@@ -1,6 +1,5 @@
 import { FileText } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../ui/tooltip';
-import { captureColor } from '../../../../lib/capture-colors.js';
 
 export function ImageThumbs({
   imageBlocks,
@@ -32,7 +31,7 @@ export function ImageThumbs({
             {name ? (
               <span
                 data-testid="thumb-name"
-                className={`text-[10px] font-mono truncate max-w-full ${captureColor(i).caption}`}
+                className="text-[10px] font-mono text-mf-text-secondary truncate max-w-full"
                 title={name}
               >
                 {name}

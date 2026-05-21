@@ -1,18 +1,14 @@
 import { X } from 'lucide-react';
-import { captureColor } from '../../../../lib/capture-colors.js';
 
 export function CaptureThumb({
   label,
   imageUrl,
-  index,
   onRemove,
 }: {
   label: string;
   imageUrl: string | undefined;
-  index: number;
   onRemove: () => void;
 }) {
-  const color = captureColor(index);
   return (
     <div data-testid="capture-thumb" className="relative group flex flex-col items-center gap-1 w-14">
       <div className="relative w-14 h-14">
@@ -29,7 +25,7 @@ export function CaptureThumb({
       </div>
       <span
         data-testid="capture-thumb-name"
-        className={`text-[10px] font-mono truncate max-w-full ${color.caption}`}
+        className="text-[10px] font-mono text-mf-text-secondary truncate max-w-full"
         title={label}
       >
         {label}
