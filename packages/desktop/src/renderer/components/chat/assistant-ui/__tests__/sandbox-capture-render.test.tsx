@@ -41,7 +41,7 @@ const buildMessage = (text: string, images: { mediaType: string; data: string }[
 });
 
 describe('UserMessage sandbox capture rendering', () => {
-  it('renders ImageThumbs (with name captions) below the bubble and SandboxCaptureContext below thumbs', () => {
+  it('renders metadata sidecar INSIDE the bubble, image thumbs below; no label prefix in rows', () => {
     const sentinelText = `${SANDBOX_CAPTURE_SENTINEL}\n> **Preview captures**\n> - \`screenshot1\` — "first note"\n> - \`element1\` — selector \`main > button.go\``;
     const msg = buildMessage(sentinelText, [
       { mediaType: 'image/png', data: 'AAA' },
@@ -52,22 +52,29 @@ describe('UserMessage sandbox capture rendering', () => {
 
     render(<UserMessage />);
 
-    const thumbs = screen.getAllByTestId('message-image-thumb');
-    expect(thumbs).toHaveLength(2);
-    const names = screen.getAllByTestId('thumb-name').map((n) => n.textContent);
-    expect(names).toEqual(['screenshot1', 'element1']);
+    const bubbles = document.querySelectorAll('[class*="rounded-[12px_12px_4px_12px]"]');
+    expect(bubbles).toHaveLength(1);
 
     const meta = screen.getByTestId('sandbox-capture-context');
+    expect(bubbles[0]!.contains(meta)).toBe(true);
+
     const rows = meta.querySelectorAll('[data-testid="capture-meta-row"]');
     expect(rows).toHaveLength(2);
     expect(rows[0]!.textContent).toContain('first note');
+    expect(rows[0]!.textContent).not.toContain('screenshot1');
     expect(rows[1]!.querySelectorAll('[data-testid="selector-crumb"]').length).toBe(2);
 
-    expect(document.querySelectorAll('[class*="rounded-[12px_12px_4px_12px]"]')).toHaveLength(0);
+    const thumbs = screen.getAllByTestId('message-image-thumb');
+    expect(thumbs).toHaveLength(2);
+    for (const t of thumbs) {
+      expect(bubbles[0]!.contains(t)).toBe(false);
+    }
+    const names = screen.getAllByTestId('thumb-name').map((n) => n.textContent);
+    expect(names).toEqual(['screenshot1', 'element1']);
   });
 
-  it('renders a bubble with text when sentinel has trailing body text', () => {
-    const sentinelText = `${SANDBOX_CAPTURE_SENTINEL}\n> **Preview captures**\n> - \`screenshot1\`\n\nhello body`;
+  it('renders both metadata sidecar and text body inside the same bubble', () => {
+    const sentinelText = `${SANDBOX_CAPTURE_SENTINEL}\n> **Preview captures**\n> - \`element1\` — selector \`main > button.go\`\n\nhello body`;
     const msg = buildMessage(sentinelText, [{ mediaType: 'image/png', data: 'AAA' }]);
     vi.mocked(useMessage).mockReturnValue({ content: msg.content } as never);
     vi.mocked(getExternalStoreMessages).mockReturnValue([msg] as never);
@@ -76,6 +83,21 @@ describe('UserMessage sandbox capture rendering', () => {
 
     const bubbles = document.querySelectorAll('[class*="rounded-[12px_12px_4px_12px]"]');
     expect(bubbles).toHaveLength(1);
-    expect(bubbles[0]!.textContent).toContain('hello body');
+    const bubble = bubbles[0]!;
+    const meta = screen.getByTestId('sandbox-capture-context');
+    expect(bubble.contains(meta)).toBe(true);
+    expect(bubble.textContent).toContain('hello body');
+  });
+
+  it('omits the bubble entirely when there is no body text and no selector/annotation metadata', () => {
+    const sentinelText = `${SANDBOX_CAPTURE_SENTINEL}\n> **Preview captures**\n> - \`screenshot1\``;
+    const msg = buildMessage(sentinelText, [{ mediaType: 'image/png', data: 'AAA' }]);
+    vi.mocked(useMessage).mockReturnValue({ content: msg.content } as never);
+    vi.mocked(getExternalStoreMessages).mockReturnValue([msg] as never);
+
+    render(<UserMessage />);
+    expect(document.querySelectorAll('[class*="rounded-[12px_12px_4px_12px]"]')).toHaveLength(0);
+    expect(screen.queryByTestId('sandbox-capture-context')).toBeNull();
+    expect(screen.getAllByTestId('message-image-thumb')).toHaveLength(1);
   });
 });

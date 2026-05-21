@@ -8,14 +8,24 @@ describe('SelectorBreadcrumb', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('marks only the last segment as primary', () => {
-    const { getAllByTestId } = render(<SelectorBreadcrumb path="body > main.container > section.hero > button.go" />);
+  it('renders all segments when path has ≤ 3 segments, last is primary', () => {
+    const { getAllByTestId } = render(<SelectorBreadcrumb path="body > main.container > button.go" />);
     const crumbs = getAllByTestId('selector-crumb');
-    expect(crumbs.map((c) => c.textContent)).toEqual(['body', 'main.container', 'section.hero', 'button.go']);
-    for (const c of crumbs.slice(0, -1)) {
-      expect(c.dataset.crumb).toBe('ancestor');
-    }
+    expect(crumbs.map((c) => c.textContent)).toEqual(['body', 'main.container', 'button.go']);
+    expect(crumbs[0]!.dataset.crumb).toBe('ancestor');
+    expect(crumbs[1]!.dataset.crumb).toBe('ancestor');
     expect(crumbs.at(-1)!.dataset.crumb).toBe('target');
+  });
+
+  it('collapses deep paths to leading ellipsis + last 3 segments', () => {
+    const path = 'body > main.container > section.hero > div.card > button.go';
+    const { getAllByTestId, container } = render(<SelectorBreadcrumb path={path} />);
+    const crumbs = getAllByTestId('selector-crumb');
+    expect(crumbs.map((c) => c.textContent)).toEqual(['…', 'section.hero', 'div.card', 'button.go']);
+    expect(crumbs[0]!.dataset.crumb).toBe('ancestor');
+    expect(crumbs.at(-1)!.dataset.crumb).toBe('target');
+    // Full untruncated path remains in the wrapper's title for hover discoverability
+    expect(container.querySelector('[title]')!.getAttribute('title')).toBe(path);
   });
 
   it('keeps chevron clip-path on every segment except the first', () => {

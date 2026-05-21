@@ -90,20 +90,24 @@ export function UserMessage() {
           .filter((a) => a.kind === 'image' && !!a.name)
           .map((a) => a.name!.replace(/\.png$/i, ''))
       : [];
+    const hasMetadata = sandbox.rows.some((r) => r.selector || r.annotation);
+    const hasBubbleContent = !!sandbox.rest || hasMetadata;
     return (
       <MessagePrimitive.Root className="flex flex-col items-end gap-2 pt-2">
         {queuedBadge}
-        {sandbox.rest ? (
-          <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5">
-            <ReadMoreBubble>
-              <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userComponents}>
-                {sandbox.rest}
-              </Markdown>
-            </ReadMoreBubble>
+        {hasBubbleContent ? (
+          <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5 flex flex-col gap-2">
+            <SandboxCaptureContext rows={sandbox.rows} />
+            {sandbox.rest ? (
+              <ReadMoreBubble>
+                <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userComponents}>
+                  {sandbox.rest}
+                </Markdown>
+              </ReadMoreBubble>
+            ) : null}
           </div>
         ) : null}
         <ImageThumbs imageBlocks={imageBlocks} names={imageNames} openLightbox={openLightbox} />
-        <SandboxCaptureContext rows={sandbox.rows} />
         <FileAttachmentThumbs attachments={mergedFileAttachments} />
       </MessagePrimitive.Root>
     );

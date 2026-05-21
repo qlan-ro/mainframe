@@ -181,7 +181,7 @@ describe('ComposerCard sandbox captures', () => {
     const meta = screen.getByTestId('sandbox-capture-context');
     const rows = meta.querySelectorAll('[data-testid="capture-meta-row"]');
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.textContent).toContain('element1');
+    expect(rows[0]!.textContent).not.toContain('element1');
     expect(rows[0]!.querySelectorAll('[data-testid="selector-crumb"]').length).toBe(2);
   });
 

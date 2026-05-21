@@ -8,7 +8,7 @@ describe('SandboxCaptureContext (metadata-only)', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders one row per capture with name, breadcrumb, and annotation', () => {
+  it('renders one row per capture with breadcrumb + annotation (no label prefix)', () => {
     render(
       <SandboxCaptureContext
         rows={[
@@ -19,10 +19,21 @@ describe('SandboxCaptureContext (metadata-only)', () => {
     );
     const items = screen.getAllByTestId('capture-meta-row');
     expect(items).toHaveLength(2);
-    expect(items[0]!.textContent).toContain('element1');
     expect(items[0]!.querySelectorAll('[data-testid="selector-crumb"]').length).toBe(3);
-    expect(items[1]!.textContent).toContain('screenshot1');
-    expect(items[1]!.textContent).toContain('note here');
+    expect(items[0]!.textContent).not.toContain('element1');
+    expect(items[1]!.textContent).toBe('note here');
+  });
+
+  it('skips rows that have neither selector nor annotation', () => {
+    render(
+      <SandboxCaptureContext
+        rows={[
+          { label: 'screenshot1', imageName: 'screenshot1.png' },
+          { label: 'element1', imageName: 'element1.png', selector: 'main > button.go' },
+        ]}
+      />,
+    );
+    expect(screen.getAllByTestId('capture-meta-row')).toHaveLength(1);
   });
 
   it('renders no <img> elements (images live in attachment renderers now)', () => {

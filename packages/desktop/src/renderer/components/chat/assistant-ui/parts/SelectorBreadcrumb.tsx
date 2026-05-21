@@ -1,12 +1,15 @@
+const MAX_SEGMENTS = 3;
+
 export function SelectorBreadcrumb({ path }: { path: string }) {
-  const parts = path
+  const raw = path
     .split(' > ')
     .map((p) => p.trim())
     .filter(Boolean);
-  if (parts.length === 0) return null;
+  if (raw.length === 0) return null;
+  const parts = raw.length > MAX_SEGMENTS ? ['…', ...raw.slice(-MAX_SEGMENTS)] : raw;
   const lastIndex = parts.length - 1;
   return (
-    <div className="flex flex-wrap items-center">
+    <div className="flex flex-wrap items-center" title={path}>
       {parts.map((p, i) => {
         const isTarget = i === lastIndex;
         return (
@@ -16,7 +19,7 @@ export function SelectorBreadcrumb({ path }: { path: string }) {
             data-crumb={isTarget ? 'target' : 'ancestor'}
             className={[
               'relative inline-flex items-center text-[11px] font-mono py-0.5 pr-2.5',
-              isTarget ? 'bg-mf-accent text-mf-panel-bg' : 'bg-mf-hover text-mf-text-secondary',
+              isTarget ? 'bg-mf-accent text-mf-panel-bg' : 'bg-mf-panel-bg text-mf-text-secondary',
             ].join(' ')}
             style={{
               paddingLeft: i === 0 ? '0.5rem' : '0.875rem',
