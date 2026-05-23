@@ -24,7 +24,9 @@ export function SandboxCaptureContext({ rows }: { rows: ReadonlyArray<CaptureRow
             </span>
             {r.selector ? <SelectorBreadcrumb path={r.selector} /> : null}
           </div>
-          {r.annotation ? <span className="truncate pl-1">{r.annotation}</span> : null}
+          {r.annotation ? (
+            <span className="text-mf-chat text-mf-text-primary truncate pl-1">{r.annotation}</span>
+          ) : null}
         </li>
       ))}
     </ul>

@@ -31,7 +31,7 @@ export function ImageThumbs({
             {name ? (
               <span
                 data-testid="thumb-name"
-                className="text-mf-chat text-mf-text-primary truncate max-w-full"
+                className="text-[10px] font-mono text-mf-text-secondary truncate max-w-full"
                 title={name}
               >
                 {name}
