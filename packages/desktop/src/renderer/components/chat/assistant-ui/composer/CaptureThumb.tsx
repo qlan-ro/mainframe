@@ -25,7 +25,7 @@ export function CaptureThumb({
       </div>
       <span
         data-testid="capture-thumb-name"
-        className="text-[10px] font-mono text-mf-text-secondary truncate max-w-full"
+        className="text-mf-chat text-mf-text-primary truncate max-w-full"
         title={label}
       >
         {label}
