@@ -16,6 +16,7 @@ import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
 import { AllToolUIs } from './parts/tool-ui-registry';
 import { useSkillsStore } from '../../../store/skills';
 import { useSandboxStore } from '../../../store/sandbox';
+import { formatCaptures, type CaptureLike } from '../../../lib/format-captures.js';
 
 interface MainframeRuntimeProviderProps {
   chatId: string;
@@ -64,41 +65,10 @@ interface AttachmentItem {
   originalPath?: string;
 }
 
-interface SandboxCaptureLike {
-  type: 'screenshot' | 'element';
-  imageDataUrl: string;
-  selector?: string;
-  annotation?: string;
-}
-
-/** Pushes captures onto the attachment list and returns the preamble text. Mutates `out`. */
-function appendCapturesToAttachments(captures: ReadonlyArray<SandboxCaptureLike>, out: AttachmentItem[]): string {
-  if (captures.length === 0) return '';
-  let screenshotIdx = 0;
-  let elementIdx = 0;
-  const labels: string[] = [];
-  for (const c of captures) {
-    const base64 = c.imageDataUrl.split(',')[1] ?? '';
-    let identifier: string;
-    if (c.type === 'element') {
-      elementIdx += 1;
-      identifier = `element${elementIdx}`;
-    } else {
-      screenshotIdx += 1;
-      identifier = `screenshot${screenshotIdx}`;
-    }
-    out.push({
-      name: `${identifier}.png`,
-      mediaType: 'image/png',
-      sizeBytes: Math.floor((base64.length * 3) / 4),
-      kind: 'image',
-      data: base64,
-    });
-    const selectorSuffix = c.type === 'element' && c.selector ? ` (\`${c.selector}\`)` : '';
-    const annotationSuffix = c.annotation ? ` — "${c.annotation}"` : '';
-    labels.push(`${identifier}${selectorSuffix}${annotationSuffix}`);
-  }
-  return `[Preview captures: ${labels.join(', ')}]\n\n`;
+export function appendCapturesToAttachments(captures: ReadonlyArray<CaptureLike>, out: AttachmentItem[]): string {
+  const { markdown, attachments } = formatCaptures(captures);
+  for (const a of attachments) out.push(a);
+  return markdown ? `${markdown}\n\n` : '';
 }
 
 function formatComposerError(error: unknown): string {
