@@ -550,6 +550,7 @@ export class ChatManager {
       const session = adapter.createSession({
         projectPath: chat.worktreePath ?? project.path,
         chatId: chat.claudeSessionId,
+        mainframeChatId: chatId,
       });
       const history = await session.loadHistory();
       // loadHistory embeds the Claude sessionId as chatId — remap to Mainframe chatId
@@ -581,6 +582,7 @@ export class ChatManager {
       const session = adapter.createSession({
         projectPath: chat.worktreePath ?? project.path,
         chatId: chat.claudeSessionId,
+        mainframeChatId: chatId,
       });
       const history = await session.loadHistory();
       return history.map((msg) => ({ ...msg, chatId }));

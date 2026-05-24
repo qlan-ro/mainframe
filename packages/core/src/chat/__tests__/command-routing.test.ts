@@ -113,7 +113,10 @@ function createManager(adapter: TrackingAdapter) {
   const manager = new ChatManager(db as any, registry, undefined, () => {});
 
   // Pre-seed an active spawned session so sendMessage doesn't try to spawn
-  const session = adapter.createSession({ projectPath: '/tmp/test' }) as TrackingSession;
+  const session = adapter.createSession({
+    projectPath: '/tmp/test',
+    mainframeChatId: 'test-chat-id',
+  }) as TrackingSession;
   void session.spawn();
   (manager as any).activeChats.set('chat-1', {
     chat: { ...TEST_CHAT },

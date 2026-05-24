@@ -7,7 +7,7 @@ describe('ClaudeSession.stopBackgroundTask()', () => {
   });
 
   it('returns stdin-unavailable when child has no stdin', async () => {
-    const session = new ClaudeSession({ projectPath: '/tmp' } as any);
+    const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
     session.state.child = { stdin: undefined } as any;
 
     const result = await session.stopBackgroundTask('task-1');
@@ -17,7 +17,7 @@ describe('ClaudeSession.stopBackgroundTask()', () => {
   });
 
   it('returns stdin-unavailable when stdin is destroyed', async () => {
-    const session = new ClaudeSession({ projectPath: '/tmp' } as any);
+    const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
     session.state.child = { stdin: { destroyed: true, write: vi.fn() } } as any;
 
     const result = await session.stopBackgroundTask('task-2');
@@ -28,7 +28,7 @@ describe('ClaudeSession.stopBackgroundTask()', () => {
 
   it('resolves timeout after 5s when no callback arrives', async () => {
     vi.useFakeTimers();
-    const session = new ClaudeSession({ projectPath: '/tmp' } as any);
+    const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
     const fakeStdin = { destroyed: false, write: vi.fn() };
     session.state.child = { stdin: fakeStdin } as any;
 
@@ -46,7 +46,7 @@ describe('ClaudeSession.stopBackgroundTask()', () => {
   });
 
   it('resolves with ok:true when the pending callback is invoked', async () => {
-    const session = new ClaudeSession({ projectPath: '/tmp' } as any);
+    const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
     const fakeStdin = { destroyed: false, write: vi.fn() };
     session.state.child = { stdin: fakeStdin } as any;
 
@@ -71,7 +71,7 @@ describe('ClaudeSession.stopBackgroundTask()', () => {
   });
 
   it('writes a JSON stop_task control_request to stdin', async () => {
-    const session = new ClaudeSession({ projectPath: '/tmp' } as any);
+    const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
     const writes: string[] = [];
     const fakeStdin = {
       destroyed: false,

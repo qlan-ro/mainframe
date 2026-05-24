@@ -52,6 +52,8 @@ const nullSink: SessionSink = {
 
 export interface ClaudeSessionState {
   chatId: string;
+  /** Mainframe-side chat ID — used for tracker/WS routing. Distinct from `chatId` (Claude session ID). */
+  mainframeChatId: string;
   buffer: string;
   lastAssistantUsage?: {
     input_tokens?: number;
@@ -132,6 +134,7 @@ export class ClaudeSession implements AdapterSession {
     this.onExit = onExit;
     this.state = {
       chatId: options.chatId ?? '',
+      mainframeChatId: options.mainframeChatId,
       buffer: '',
       child: null,
       status: 'starting',
