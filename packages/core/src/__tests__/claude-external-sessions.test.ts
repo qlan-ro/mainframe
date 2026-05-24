@@ -7,8 +7,6 @@ vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
   readdir: vi.fn(),
   stat: vi.fn(),
-  access: vi.fn(),
-  constants: { R_OK: 4 },
 }));
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -23,14 +21,13 @@ vi.mock('node:readline', () => ({
   createInterface: vi.fn(),
 }));
 
-import { readFile, readdir, stat, access } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 const mockReadFile = vi.mocked(readFile);
 const mockReaddir = vi.mocked(readdir);
 const mockStat = vi.mocked(stat);
-const mockAccess = vi.mocked(access);
 const mockCreateReadStream = vi.mocked(createReadStream);
 const mockCreateInterface = vi.mocked(createInterface);
 
@@ -52,8 +49,9 @@ describe('listExternalSessions', () => {
     // Default: no index, no JSONL files
     mockReadFile.mockRejectedValue(new Error('ENOENT'));
     mockReaddir.mockRejectedValue(new Error('ENOENT'));
-    // Default: JSONL files exist on disk (for sessions-index tests)
-    mockAccess.mockResolvedValue(undefined);
+    // Default: index-referenced JSONL files exist on disk with a known mtime.
+    // Individual tests can override mockStat when they care about the timestamp.
+    mockStat.mockResolvedValue({ mtime: new Date('2026-01-01T00:00:00Z') } as never);
   });
 
   describe('from sessions-index.json', () => {
@@ -393,7 +391,6 @@ describe('listExternalSessions', () => {
       });
       mockStat.mockResolvedValue({ mtime: new Date('2026-01-01T00:00:00Z') } as never);
       mockReadFile.mockRejectedValue(new Error('ENOENT')); // no sessions-index.json
-      mockAccess.mockResolvedValue(undefined);
 
       let nextLines: string[] = [];
       mockCreateInterface.mockImplementation(
@@ -463,7 +460,6 @@ describe('listExternalSessions', () => {
     });
     mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
     mockStat.mockResolvedValue({ mtime: new Date('2025-12-31T00:00:00Z') } as never);
-    mockAccess.mockResolvedValue(undefined);
 
     const result = await listExternalSessions('/test/project', []);
     expect(result).toHaveLength(1);

@@ -1,4 +1,4 @@
-import { access, constants, readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
@@ -35,7 +35,12 @@ function projectsRoot(): string {
   return path.join(homedir(), '.claude', 'projects');
 }
 
-/** Belongs to this project if cwd equals the root or is nested under it. */
+/**
+ * Belongs to this project if cwd equals the root or is nested under it.
+ * Claude writes cwd as a native path matching the OS where it ran, so we use
+ * `path.sep` rather than a hardcoded '/' — Mainframe stores projectPath in the
+ * same native form, so both sides share separators on the host that scans.
+ */
 function cwdBelongsToProject(cwd: string | undefined, projectPath: string): boolean {
   if (!cwd) return false;
   if (cwd === projectPath) return true;
@@ -125,11 +130,7 @@ async function listFromIndex(
       const s = await stat(jsonlPath);
       fileMtimeIso = s.mtime.toISOString();
     } catch {
-      try {
-        await access(jsonlPath, constants.R_OK);
-      } catch {
-        continue; // JSONL deleted — skip ghost entry
-      }
+      continue; // JSONL deleted/unreachable — skip ghost index entry
     }
 
     const indexMtimeIso = typeof entry.fileMtime === 'number' ? new Date(entry.fileMtime).toISOString() : undefined;
