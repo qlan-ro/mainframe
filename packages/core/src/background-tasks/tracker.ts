@@ -8,9 +8,6 @@ type TerminalUpdate = {
   usage: BackgroundTask['usage'];
 };
 
-type StartedListener = (chatId: string, task: BackgroundTask) => void;
-type EndedListener = (chatId: string, task: BackgroundTask) => void;
-
 const TERMINAL = new Set<BackgroundTaskStatus>(['completed', 'failed', 'stopped']);
 
 export class BackgroundTaskTracker {
@@ -70,9 +67,10 @@ export class BackgroundTaskTracker {
     this.byChat.delete(chatId);
   }
 
-  on(event: 'background_task.started', listener: StartedListener): void;
-  on(event: 'background_task.ended', listener: EndedListener): void;
-  on(event: string, listener: (...args: unknown[]) => void): void {
+  on(
+    event: 'background_task.started' | 'background_task.ended',
+    listener: (chatId: string, task: BackgroundTask) => void,
+  ): void {
     this.emitter.on(event, listener);
   }
 }
