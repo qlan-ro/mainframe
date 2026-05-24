@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import type { PluginManifest } from '@qlan-ro/mainframe-types';
 import request from 'supertest';
 import express from 'express';
+import Database from 'better-sqlite3';
 
 const todosManifest: PluginManifest = {
   id: 'todos',
@@ -108,6 +109,28 @@ describe('todos plugin routes', () => {
     await request(app).delete(`/todos/${id}`);
     const list = await request(app).get('/todos?projectId=proj-1');
     expect(list.body.todos).toHaveLength(0);
+  });
+
+  it('GET /todos tolerates a row with malformed JSON columns', async () => {
+    const { app } = makeApp();
+    await request(app)
+      .post('/todos')
+      .send({ projectId: 'proj-1', title: 'Good todo', labels: ['ok'] });
+    const bad = await request(app).post('/todos').send({ projectId: 'proj-1', title: 'Corrupt todo' });
+    const badId = bad.body.todo.id as string;
+
+    // Simulate the historical double-encoded value seen in production data.
+    const raw = new Database(join(tmpDir, 'data.db'));
+    raw.prepare('UPDATE todos SET labels = ? WHERE id = ?').run('[\\"workflows\\",\\"design\\"]', badId);
+    raw.close();
+
+    const res = await request(app).get('/todos?projectId=proj-1');
+    expect(res.status).toBe(200);
+    expect(res.body.todos).toHaveLength(2);
+    const corrupt = res.body.todos.find((t: { id: string }) => t.id === badId);
+    expect(corrupt.labels).toEqual([]);
+    const good = res.body.todos.find((t: { title: string }) => t.title === 'Good todo');
+    expect(good.labels).toEqual(['ok']);
   });
 
   it('POST /todos/:id/start-session creates a chat and emits event', async () => {
