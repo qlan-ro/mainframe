@@ -100,3 +100,5 @@ export {
 } from './worktree-api';
 
 export { listTags, createTag, updateTag, deleteTag, getChatTags, setChatTags } from './tags-api';
+
+export * from './background-tasks-api.js';
