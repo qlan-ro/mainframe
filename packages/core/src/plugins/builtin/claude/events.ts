@@ -583,7 +583,11 @@ function handleControlRequestEvent(_session: ClaudeSession, event: Record<string
   }
 }
 
-function handleControlResponseEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+export function handleControlResponseEvent(
+  session: ClaudeSession,
+  event: Record<string, unknown>,
+  sink: SessionSink,
+): void {
   const response = event.response as Record<string, unknown> | undefined;
   if (!response) return;
 
@@ -605,6 +609,20 @@ function handleControlResponseEvent(session: ClaudeSession, event: Record<string
     if (callback) {
       session.state.pendingCancelCallbacks.delete(requestId);
       callback(innerResponse.cancelled);
+    }
+  }
+
+  // Route stop_task responses to pending callbacks (mirrors cancel above)
+  if (requestId && innerResponse && typeof innerResponse.subtype === 'string') {
+    const stopCb = session.state.pendingStopTaskCallbacks.get(requestId);
+    if (stopCb) {
+      session.state.pendingStopTaskCallbacks.delete(requestId);
+      if (innerResponse.subtype === 'success') {
+        stopCb({ ok: true });
+      } else {
+        const errMsg = typeof innerResponse.error === 'string' ? innerResponse.error : 'unknown error';
+        stopCb({ ok: false, error: errMsg });
+      }
     }
   }
 }
