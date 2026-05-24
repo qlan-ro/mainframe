@@ -74,6 +74,16 @@ async function main(): Promise<void> {
   const tunnelManager = new TunnelManager((event) => broadcastEvent(event));
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 
+  // Forward tracker emissions through the late-bound broadcastEvent closure.
+  // The closure captures broadcastEvent by reference, so by the time tracker
+  // events fire from live CLI sessions, the var will point to server.broadcastEvent.
+  backgroundTasks.on('background_task.started', (chatId, task) => {
+    broadcastEvent({ type: 'background_task.started', chatId, task });
+  });
+  backgroundTasks.on('background_task.ended', (chatId, task) => {
+    broadcastEvent({ type: 'background_task.ended', chatId, task });
+  });
+
   chats.setStopLaunchProcesses(async (projectId, projectPath) => {
     const manager = launchRegistry.get(projectId, projectPath);
     if (manager) await manager.stopAll();
