@@ -99,6 +99,18 @@ describe('DirectoryPickerModal: mode="file"', () => {
     expect(screen.getByTestId('dir-picker-select-btn')).toBeDisabled();
   });
 
+  it('uses a file-mode title by default in file mode (no "Project Directory" wording)', async () => {
+    render(<DirectoryPickerModal open mode="file" onSelect={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('claude')).toBeInTheDocument());
+    expect(screen.queryByText(/project directory/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/select file/i)).toBeInTheDocument();
+  });
+
+  it('renders a caller-supplied title verbatim', async () => {
+    render(<DirectoryPickerModal open mode="file" title="Select Executable" onSelect={vi.fn()} onCancel={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('Select Executable')).toBeInTheDocument());
+  });
+
   it('selecting a file enables confirm and calls onSelect with the file absolute path', async () => {
     const onSelect = vi.fn();
     const user = userEvent.setup();

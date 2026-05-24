@@ -19,6 +19,7 @@ interface DirectoryPickerModalProps {
   onSelect: (path: string) => void;
   onCancel: () => void;
   mode?: 'directory' | 'file';
+  title?: string;
 }
 
 export function DirectoryPickerModal({
@@ -26,7 +27,9 @@ export function DirectoryPickerModal({
   onSelect,
   onCancel,
   mode = 'directory',
+  title,
 }: DirectoryPickerModalProps): React.ReactElement | null {
+  const resolvedTitle = title ?? (mode === 'file' ? 'Select File' : 'Select Project Directory');
   const [roots, setRoots] = useState<DirNode[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<'file' | 'directory' | null>(null);
@@ -182,8 +185,12 @@ export function DirectoryPickerModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-mf-border">
-          <h2 className="text-mf-body font-semibold text-mf-text-primary">Select Project Directory</h2>
-          <button data-testid="directory-picker-close" onClick={onCancel} className="text-mf-text-secondary hover:text-mf-text-primary transition-colors">
+          <h2 className="text-mf-body font-semibold text-mf-text-primary">{resolvedTitle}</h2>
+          <button
+            data-testid="directory-picker-close"
+            onClick={onCancel}
+            className="text-mf-text-secondary hover:text-mf-text-primary transition-colors"
+          >
             <X size={16} />
           </button>
         </div>
