@@ -603,6 +603,16 @@ export class ChatManager {
     return active?.session?.isSpawned === true;
   }
 
+  /**
+   * Returns the live AdapterSession for a chat, if a process is running.
+   * Used by the background-tasks routes to dispatch stop_task control_requests.
+   * Returns null when the chat is not active (no spawned CLI process).
+   */
+  getSessionForChat(chatId: string): import('@qlan-ro/mainframe-types').AdapterSession | null {
+    const active = this.activeChats.get(chatId);
+    return active?.session ?? null;
+  }
+
   addMention(chatId: string, mention: SessionMention): void {
     this.db.chats.addMention(chatId, mention);
     this.emitEvent({ type: 'context.updated', chatId });

@@ -114,6 +114,7 @@ async function main(): Promise<void> {
     () => daemonTunnelUrl,
     tunnelManager,
     config.port,
+    backgroundTasks,
   );
 
   await server.start(config.port);
