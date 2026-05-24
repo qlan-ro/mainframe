@@ -142,6 +142,7 @@ export function TagPopover({ chatId, anchorRect, onClose }: Props): React.ReactE
       <div className="text-xs text-mf-text-secondary uppercase tracking-wide px-2 py-1">Tag session</div>
       <input
         ref={inputRef}
+        data-testid="tags-input-search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
@@ -156,6 +157,7 @@ export function TagPopover({ chatId, anchorRect, onClose }: Props): React.ReactE
         {filtered.map((t: Tag) => (
           <button
             key={t.name}
+            data-testid={`tags-button-toggle-${t.name}`}
             type="button"
             onClick={() => void toggle(t.name)}
             onContextMenu={(e) => {
@@ -176,6 +178,7 @@ export function TagPopover({ chatId, anchorRect, onClose }: Props): React.ReactE
       {showCreate && (
         <button
           type="button"
+          data-testid="tags-button-create"
           onClick={() => void createAndApply()}
           className="w-full text-left px-2 py-1 rounded hover:bg-mf-hover text-sm text-mf-text-secondary mt-1 border-t border-mf-border"
         >
@@ -191,6 +194,7 @@ export function TagPopover({ chatId, anchorRect, onClose }: Props): React.ReactE
         >
           <button
             type="button"
+            data-testid="tags-button-tag-rename"
             className="w-full text-left px-2 py-1 rounded hover:bg-mf-hover text-sm text-mf-text-primary"
             onClick={() => {
               const current = registryMenu.tagName;
@@ -208,6 +212,7 @@ export function TagPopover({ chatId, anchorRect, onClose }: Props): React.ReactE
           </button>
           <button
             type="button"
+            data-testid="tags-button-tag-recolor"
             className="w-full text-left px-2 py-1 rounded hover:bg-mf-hover text-sm text-mf-text-primary"
             onClick={() => {
               setRecolorPanel({ x: registryMenu.x, y: registryMenu.y, tagName: registryMenu.tagName });
@@ -218,6 +223,7 @@ export function TagPopover({ chatId, anchorRect, onClose }: Props): React.ReactE
           </button>
           <button
             type="button"
+            data-testid="tags-button-tag-delete"
             className="w-full text-left px-2 py-1 rounded hover:bg-mf-hover text-sm text-mf-destructive"
             onClick={() => {
               const name = registryMenu.tagName;
@@ -244,6 +250,7 @@ export function TagPopover({ chatId, anchorRect, onClose }: Props): React.ReactE
             {TAG_PALETTE.map((c) => (
               <button
                 key={c}
+                data-testid={`tags-button-color-${c}`}
                 type="button"
                 aria-label={`Set color ${c}`}
                 className={`w-5 h-5 rounded-full bg-mf-tag-${c} hover:scale-110 transition-transform`}

@@ -12,6 +12,7 @@ export * from './launch.js';
 export * from './search.js';
 export * from './lsp.js';
 export * from './git.js';
+export * from './__fixtures__/ask-user-question.js';
 export type {
   PluginCapability,
   PluginManifest,

@@ -196,7 +196,7 @@ export class ChatConfigManager {
     await this.deps.stopLaunchProcesses?.(active.chat.projectId, active.chat.worktreePath);
 
     const project = this.deps.db.projects.get(active.chat.projectId);
-    if (project) removeWorktree(project.path, active.chat.worktreePath, active.chat.branchName!);
+    if (project) await removeWorktree(project.path, active.chat.worktreePath, active.chat.branchName!);
 
     active.chat.worktreePath = undefined;
     active.chat.branchName = undefined;

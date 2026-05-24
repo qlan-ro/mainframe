@@ -27,6 +27,7 @@ import { ChatConfigManager } from './config-manager.js';
 import { ChatLifecycleManager } from './lifecycle-manager.js';
 import { EventHandler } from './event-handler.js';
 import { ExternalSessionService } from './external-session-service.js';
+import { IdleSessionScanner } from './idle-scanner.js';
 import type { ActiveChat } from './types.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
@@ -45,6 +46,7 @@ export class ChatManager {
   private lifecycle: ChatLifecycleManager;
   private eventHandler: EventHandler;
   private externalSessions: ExternalSessionService;
+  private idleScanner: IdleSessionScanner;
 
   constructor(
     private db: DatabaseManager,
@@ -112,6 +114,18 @@ export class ChatManager {
       emitEvent: (event) => this.emitEvent(event),
     });
     this.externalSessions = new ExternalSessionService(this.db, this.adapters, (e) => this.emitEvent(e));
+    this.idleScanner = new IdleSessionScanner(this.activeChats);
+    this.idleScanner.start();
+  }
+
+  /** Stop background timers. Idempotent. Tests and shutdown should call this. */
+  dispose(): void {
+    this.idleScanner.stop();
+  }
+
+  /** Exposed for tests — runs one idle-eviction pass immediately. */
+  async scanIdleSessions(): Promise<void> {
+    await this.idleScanner.scan();
   }
 
   /** Late-bind a callback to stop launch processes before worktree removal */

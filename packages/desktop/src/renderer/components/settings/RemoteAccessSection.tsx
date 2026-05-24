@@ -313,6 +313,7 @@ function NamedTunnelSection({
           )}
           <div className="flex items-center gap-2">
             <button
+              data-testid="named-tunnel-toggle"
               onClick={handleStartStop}
               disabled={tunnel.togglingAction !== null}
               className={`px-3 py-1.5 text-mf-small rounded-mf-input transition-colors disabled:opacity-50 ${
@@ -333,6 +334,7 @@ function NamedTunnelSection({
               )}
             </button>
             <button
+              data-testid="named-tunnel-clear-config"
               onClick={handleClear}
               disabled={tunnel.togglingAction === 'stop'}
               className="px-3 py-1.5 text-mf-small text-mf-text-secondary bg-mf-hover border border-mf-divider rounded-mf-input hover:bg-mf-hover/80 disabled:opacity-50 transition-colors"
@@ -344,6 +346,7 @@ function NamedTunnelSection({
       ) : (
         <div className="space-y-2">
           <input
+            data-testid="named-tunnel-token-input"
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
@@ -351,6 +354,7 @@ function NamedTunnelSection({
             className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg border border-mf-divider rounded-mf-input text-mf-text-primary placeholder:text-mf-text-tertiary focus:outline-none focus:border-mf-accent"
           />
           <input
+            data-testid="named-tunnel-url-input"
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -359,6 +363,7 @@ function NamedTunnelSection({
           />
           {saveError && <p className="text-mf-small text-red-500">{saveError}</p>}
           <button
+            data-testid="named-tunnel-save"
             onClick={handleSaveAndStart}
             disabled={tunnel.togglingAction === 'start' || !token.trim() || !url.trim()}
             className="px-3 py-1.5 text-mf-small bg-mf-accent text-white rounded-mf-input hover:opacity-90 disabled:opacity-50 transition-opacity"
@@ -394,6 +399,7 @@ function QuickTunnelSection({ tunnel }: { tunnel: UseTunnelStatusResult }): Reac
           </p>
         </div>
         <button
+          data-testid="quick-tunnel-toggle"
           onClick={handleToggle}
           disabled={tunnel.togglingAction !== null}
           className={`px-3 py-1.5 text-mf-small rounded-mf-input transition-colors disabled:opacity-50 ${
@@ -464,7 +470,7 @@ function TunnelStatusRow({
       <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
         <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
         <code className="text-mf-small text-mf-text-primary truncate flex-1">{url}</code>
-        <CopyButton text={url} />
+        <CopyButton text={url} testId="tunnel-url-copy-ready" />
       </div>
     );
   }
@@ -475,13 +481,13 @@ function TunnelStatusRow({
         <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
           <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
           <code className="text-mf-small text-mf-text-secondary truncate flex-1">{url}</code>
-          <CopyButton text={url} />
+          <CopyButton text={url} testId="tunnel-url-copy-unreachable" />
         </div>
         <div className="flex items-center justify-between">
           <p className="text-mf-status text-yellow-500">
             DNS not yet propagated — tunnel may not be reachable. Pairing disabled.
           </p>
-          <button onClick={onRetryVerify} className="text-mf-small text-mf-accent hover:underline shrink-0 ml-2">
+          <button data-testid="tunnel-recheck-verify" onClick={onRetryVerify} className="text-mf-small text-mf-accent hover:underline shrink-0 ml-2">
             Re-check
           </button>
         </div>
@@ -550,13 +556,14 @@ function PairingSection(): React.ReactElement {
         <div className="space-y-2">
           <div className="flex items-center justify-center gap-3 p-4 bg-mf-input-bg border border-mf-divider rounded-mf-input">
             <span className="text-2xl font-mono font-bold tracking-[0.3em] text-mf-text-primary">{code}</span>
-            <CopyButton text={code} />
+            <CopyButton text={code} testId="pairing-code-copy" />
           </div>
           <div className="flex items-center justify-between">
             <span className="text-mf-status text-mf-text-tertiary">
               Expires in {minutes}:{seconds.toString().padStart(2, '0')}
             </span>
             <button
+              data-testid="pairing-regenerate-code"
               onClick={handleGenerate}
               disabled={generating}
               className="text-mf-small text-mf-accent hover:underline disabled:opacity-50"
@@ -567,6 +574,7 @@ function PairingSection(): React.ReactElement {
         </div>
       ) : (
         <button
+          data-testid="pairing-generate-code"
           onClick={handleGenerate}
           disabled={generating}
           className="px-3 py-1.5 text-mf-small bg-mf-accent text-white rounded-mf-input hover:opacity-90 disabled:opacity-50 transition-opacity"
@@ -642,6 +650,7 @@ function DevicesSection(): React.ReactElement {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    data-testid={`remote-access-device-remove-${device.deviceId}`}
                     onClick={() => handleRemove(device.deviceId)}
                     className="p-1 text-mf-text-tertiary hover:text-red-400 transition-colors"
                   >
@@ -658,7 +667,7 @@ function DevicesSection(): React.ReactElement {
   );
 }
 
-function CopyButton({ text }: { text: string }): React.ReactElement {
+function CopyButton({ text, testId }: { text: string; testId?: string }): React.ReactElement {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -675,6 +684,7 @@ function CopyButton({ text }: { text: string }): React.ReactElement {
     <Tooltip>
       <TooltipTrigger asChild>
         <button
+          data-testid={testId}
           onClick={handleCopy}
           className="p-1 text-mf-text-tertiary hover:text-mf-text-primary transition-colors shrink-0"
         >

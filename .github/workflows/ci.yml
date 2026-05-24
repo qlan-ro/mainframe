@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
@@ -22,6 +22,11 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+
+      # node-pty has no Linux prebuild and compiles via `node-gyp rebuild`.
+      # node-gyp is not on the install-script PATH on the runner, so install
+      # it globally before native deps are built.
+      - run: npm install -g node-gyp
 
       - run: pnpm install --frozen-lockfile
         env:
@@ -49,7 +54,7 @@ jobs:
 
       - run: git fetch origin main
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
 
@@ -58,7 +63,10 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # This job only runs `changeset status`, which reads .changeset/ and git
+      # history. Skip lifecycle scripts so it doesn't need a native toolchain
+      # (node-pty / better-sqlite3 builds) that the minimal runner lacks.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -40,6 +40,7 @@ export function MCPToolCard({ toolName, args, result, isError }: Props) {
       <Tooltip>
         <TooltipTrigger asChild>
           <button
+            data-testid="tool-mcp-expand"
             type="button"
             onClick={() => expandable && toggle()}
             className={

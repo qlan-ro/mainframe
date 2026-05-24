@@ -62,7 +62,7 @@ async function validateAndDeleteWorktree(
   if (!resolvedBranch) {
     throw new Error('Cannot determine branch name for worktree');
   }
-  removeWorktree(projectPath, worktreePath, resolvedBranch);
+  await removeWorktree(projectPath, worktreePath, resolvedBranch);
   ctx.chats.notifyWorktreeDeleted(worktreePath);
 }
 

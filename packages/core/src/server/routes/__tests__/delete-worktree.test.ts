@@ -83,7 +83,7 @@ describe('POST /api/projects/:id/git/delete-worktree', () => {
       { path: PROJECT_PATH, branch: 'refs/heads/main' },
       { path: WORKTREE_PATH, branch: 'refs/heads/feat-x' },
     ]);
-    vi.mocked(removeWorktree).mockReturnValue(undefined);
+    vi.mocked(removeWorktree).mockResolvedValue(undefined);
     const app = makeApp();
     const res = await request(app)
       .post('/api/projects/proj1/git/delete-worktree')
@@ -98,7 +98,7 @@ describe('POST /api/projects/:id/git/delete-worktree', () => {
       { path: PROJECT_PATH, branch: 'refs/heads/main' },
       { path: WORKTREE_PATH, branch: 'refs/heads/feat-x' },
     ]);
-    vi.mocked(removeWorktree).mockReturnValue(undefined);
+    vi.mocked(removeWorktree).mockResolvedValue(undefined);
     const ctx = makeCtx();
     const app = makeApp(ctx);
     const res = await request(app)
@@ -113,7 +113,7 @@ describe('POST /api/projects/:id/git/delete-worktree', () => {
       { path: PROJECT_PATH, branch: 'refs/heads/main' },
       { path: WORKTREE_PATH, branch: 'refs/heads/feat-x' },
     ]);
-    vi.mocked(removeWorktree).mockReturnValue(undefined);
+    vi.mocked(removeWorktree).mockResolvedValue(undefined);
     const app = makeApp();
     const res = await request(app)
       .post('/api/projects/proj1/git/delete-worktree')

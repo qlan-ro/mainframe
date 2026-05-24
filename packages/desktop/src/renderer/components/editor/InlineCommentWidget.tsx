@@ -31,6 +31,7 @@ export function InlineCommentWidget({ text, onTextChange, onSubmit, onClose }: I
       */}
       <div className="w-full h-[64px] bg-mf-input-bg border border-mf-divider rounded-md px-3.5 py-3 box-border focus-within:border-mf-accent/50">
         <textarea
+          data-testid="editor-inline-comment-input"
           ref={ref}
           value={text}
           onChange={(e) => onTextChange(e.target.value)}
@@ -55,12 +56,14 @@ export function InlineCommentWidget({ text, onTextChange, onSubmit, onClose }: I
       </div>
       <div className="flex items-center gap-2 mt-1">
         <button
+          data-testid="editor-inline-comment-cancel"
           onClick={onClose}
           className="px-2 py-0.5 rounded text-mf-small text-mf-text-secondary hover:bg-mf-hover/50 transition-colors"
         >
           Cancel
         </button>
         <button
+          data-testid="editor-inline-comment-send"
           onClick={handleSubmit}
           disabled={!text.trim()}
           className="flex items-center gap-1 px-2 py-0.5 rounded text-mf-small text-mf-accent hover:bg-mf-accent/10 disabled:opacity-30 transition-colors"

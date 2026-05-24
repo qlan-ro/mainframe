@@ -83,6 +83,7 @@ export function DependencyPicker({
               #{t.number} {t.title.length > 24 ? t.title.slice(0, 24) + '…' : t.title}
               <button
                 type="button"
+                data-testid={`todos-dep-remove-${t.number}`}
                 onClick={() => removeDep(t.number)}
                 className="hover:text-mf-text-primary transition-colors"
                 aria-label={`Remove dependency on #${t.number}`}
@@ -97,6 +98,7 @@ export function DependencyPicker({
         <div ref={containerRef} className="relative">
           <button
             type="button"
+            data-testid="todos-dep-add-toggle"
             className={cn(inputClass, 'flex items-center gap-1 cursor-pointer text-mf-text-secondary w-full')}
             onClick={() => setOpen(!open)}
           >
@@ -109,6 +111,7 @@ export function DependencyPicker({
                 <Search size={12} className="text-mf-text-secondary shrink-0" />
                 <input
                   ref={searchRef}
+                  data-testid="todos-dep-search"
                   type="text"
                   className="bg-transparent text-mf-small text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none w-full"
                   placeholder="Search tasks…"
@@ -124,6 +127,7 @@ export function DependencyPicker({
                   <li key={t.number}>
                     <button
                       type="button"
+                      data-testid={`todos-dep-option-${t.number}`}
                       className="w-full text-left px-2 py-1.5 text-mf-small text-mf-text-primary hover:bg-mf-hover transition-colors"
                       onClick={() => addDep(t.number)}
                     >

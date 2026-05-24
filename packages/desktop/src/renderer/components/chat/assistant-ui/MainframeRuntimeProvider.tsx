@@ -1,12 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import {
-  AssistantRuntimeProvider,
-  useExternalStoreRuntime,
-  type AppendMessage,
-  type PendingAttachment,
-  type CompleteAttachment,
-} from '@assistant-ui/react';
-import type { AttachmentAdapter, ExternalStoreThreadListAdapter } from '@assistant-ui/react';
+import { AssistantRuntimeProvider, useExternalStoreRuntime, type AppendMessage } from '@assistant-ui/react';
+import type { ExternalStoreThreadListAdapter } from '@assistant-ui/react';
+import { createAttachmentAdapter, FILE_SIZE_LIMIT_MB } from './composer/attachment-adapter.js';
+import { AttachmentRejectionToaster } from './composer/AttachmentRejectionToaster.js';
 import { useChatSession } from '../../../hooks/useChatSession';
 import { convertMessage } from './convert-message';
 import { daemonClient } from '../../../lib/client';
@@ -20,17 +16,16 @@ import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
 import { AllToolUIs } from './parts/tool-ui-registry';
 import { useSkillsStore } from '../../../store/skills';
 import { useSandboxStore } from '../../../store/sandbox';
+import { formatCaptures, type CaptureLike } from '../../../lib/format-captures.js';
 
 interface MainframeRuntimeProviderProps {
   chatId: string;
   children: React.ReactNode;
 }
 
-const MAX_SIZE = 5 * 1024 * 1024;
 const DATA_URL_RE = /^data:([^;]+);base64,(.+)$/;
 const IMAGE_COORDINATE_NOTE_RE =
   /\[Image:\s*original\s+\d+x\d+,\s*displayed at\s+\d+x\d+\.\s*Multiply coordinates by\s+[0-9.]+\s+to map to original image\.\]/g;
-const FILE_SIZE_LIMIT_MB = 5;
 
 interface MainframeRuntimeContextValue {
   chatId: string;
@@ -70,50 +65,10 @@ interface AttachmentItem {
   originalPath?: string;
 }
 
-interface SandboxCaptureLike {
-  type: 'screenshot' | 'element';
-  imageDataUrl: string;
-  selector?: string;
-  annotation?: string;
-}
-
-/** Pushes captures onto the attachment list and returns the preamble text. Mutates `out`. */
-function appendCapturesToAttachments(captures: ReadonlyArray<SandboxCaptureLike>, out: AttachmentItem[]): string {
-  if (captures.length === 0) return '';
-  let screenshotIdx = 0;
-  let elementIdx = 0;
-  const labels: string[] = [];
-  for (const c of captures) {
-    const base64 = c.imageDataUrl.split(',')[1] ?? '';
-    let identifier: string;
-    if (c.type === 'element') {
-      elementIdx += 1;
-      identifier = `element${elementIdx}`;
-    } else {
-      screenshotIdx += 1;
-      identifier = `screenshot${screenshotIdx}`;
-    }
-    out.push({
-      name: `${identifier}.png`,
-      mediaType: 'image/png',
-      sizeBytes: Math.floor((base64.length * 3) / 4),
-      kind: 'image',
-      data: base64,
-    });
-    const selectorSuffix = c.type === 'element' && c.selector ? ` (\`${c.selector}\`)` : '';
-    const annotationSuffix = c.annotation ? ` — "${c.annotation}"` : '';
-    labels.push(`${identifier}${selectorSuffix}${annotationSuffix}`);
-  }
-  return `[Preview captures: ${labels.join(', ')}]\n\n`;
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+export function appendCapturesToAttachments(captures: ReadonlyArray<CaptureLike>, out: AttachmentItem[]): string {
+  const { markdown, attachments } = formatCaptures(captures);
+  for (const a of attachments) out.push(a);
+  return markdown ? `${markdown}\n\n` : '';
 }
 
 function formatComposerError(error: unknown): string {
@@ -151,40 +106,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
     setComposerError(null);
   }, [chatId]);
 
-  const attachmentAdapter = useMemo<AttachmentAdapter>(
-    () => ({
-      accept: '*/*',
-      async add({ file }) {
-        if (file.size > MAX_SIZE) {
-          setComposerError(`"${file.name}" is too large. Max file size is ${FILE_SIZE_LIMIT_MB}MB.`);
-          throw new Error(`File too large (max ${FILE_SIZE_LIMIT_MB}MB)`);
-        }
-        const dataUrl = await readFileAsDataUrl(file);
-        const isImage = file.type.startsWith('image/');
-        return {
-          id: crypto.randomUUID(),
-          type: isImage ? 'image' : 'document',
-          name: file.name,
-          contentType: file.type || 'application/octet-stream',
-          file,
-          content: isImage ? [{ type: 'image', image: dataUrl }] : [{ type: 'text', text: dataUrl }],
-          status: { type: 'requires-action', reason: 'composer-send' },
-        } satisfies PendingAttachment;
-      },
-      async remove() {},
-      async send(attachment) {
-        return {
-          id: attachment.id,
-          type: attachment.type as 'image' | 'document',
-          name: attachment.name,
-          contentType: attachment.contentType,
-          content: attachment.content ?? [],
-          status: { type: 'complete' },
-        } satisfies CompleteAttachment;
-      },
-    }),
-    [setComposerError],
-  );
+  const attachmentAdapter = useMemo(() => createAttachmentAdapter(), []);
 
   const onNew = useCallback(
     async (message: AppendMessage) => {
@@ -386,6 +308,7 @@ export function MainframeRuntimeProvider({ chatId, children }: MainframeRuntimeP
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      <AttachmentRejectionToaster />
       {AllToolUIs.map((ToolUI, i) => (
         <ToolUI key={i} />
       ))}

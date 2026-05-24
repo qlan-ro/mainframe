@@ -116,6 +116,7 @@ function FilterPillBadge({
     >
       <button
         type="button"
+        data-testid={`chats-filter-pill-${label}`}
         onClick={onClick}
         className={cn('inline-flex items-center gap-1.5 py-1 rounded-full', showCaret ? 'pl-2.5 pr-1' : 'px-2.5')}
       >
@@ -129,6 +130,7 @@ function FilterPillBadge({
       {showCaret && (
         <button
           type="button"
+          data-testid={`chats-filter-pill-options-${label}`}
           onClick={onDropdownClick}
           aria-label={`Options for ${label}`}
           className="p-1 mr-1 rounded-full hover:bg-mf-hover text-white/80 hover:text-white transition-colors"
@@ -176,6 +178,7 @@ function NewSessionPopover({
           <TooltipTrigger asChild>
             <button
               type="button"
+              data-testid={`chats-new-session-project-${project.id}`}
               onClick={() => onSelect(project.id)}
               className="w-full text-left px-3 py-1.5 text-mf-small truncate hover:bg-mf-hover transition-colors text-mf-text-primary"
             >
@@ -453,6 +456,7 @@ export function ChatsPanel(): React.ReactElement {
           <TooltipTrigger asChild>
             <button
               type="button"
+              data-testid="chats-add-project"
               onClick={() => setShowDirPicker(true)}
               className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
             >
@@ -466,6 +470,7 @@ export function ChatsPanel(): React.ReactElement {
             <TooltipTrigger asChild>
               <button
                 type="button"
+                data-testid="chats-new-session"
                 onClick={handleNewSessionClick}
                 disabled={projects.length === 0}
                 className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40 disabled:pointer-events-none"
@@ -591,7 +596,7 @@ export function ChatsPanel(): React.ReactElement {
         ) : chats.length === 0 && (selectedTags.size > 0 || selectedSynthetic.size > 0) ? (
           <div className="py-4 text-center text-sm text-mf-text-secondary">
             No sessions match these filters.{' '}
-            <button type="button" onClick={clearTagFilters} className="underline hover:text-mf-text-primary">
+            <button type="button" data-testid="chats-clear-filters" onClick={clearTagFilters} className="underline hover:text-mf-text-primary">
               Clear filters
             </button>
           </div>

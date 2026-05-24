@@ -5,5 +5,5 @@ export function activate(ctx: PluginContext): void {
   const adapter = new ClaudeAdapter();
   ctx.adapters!.register(adapter);
   ctx.onUnload(() => adapter.killAll());
-  ctx.logger.info('Claude CLI adapter registered');
+  ctx.logger.info('Claude Code adapter registered');
 }

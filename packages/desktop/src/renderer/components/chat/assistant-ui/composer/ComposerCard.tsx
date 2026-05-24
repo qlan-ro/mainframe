@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowUp, Square, Paperclip, Shield, X, AlertTriangle, CopySlash, FolderGit } from 'lucide-react';
 import { createLogger } from '../../../../lib/logger';
 
@@ -17,10 +17,13 @@ import { ComposerDropdown } from './ComposerDropdown';
 import { EffortPicker } from './EffortPicker';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
+import { CaptureThumb } from './CaptureThumb';
 import { WorktreePopover } from './WorktreePopover';
 import { QueuedMessageBanner } from './QueuedMessageBanner';
 import { PlanModeToggle } from './PlanModeToggle';
 import { useSandboxStore, type Capture } from '../../../../store/sandbox.js';
+import { capturesToRows } from '../../../../lib/format-captures.js';
+import { SandboxCaptureContext } from '../parts/SandboxCaptureContext.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip';
 
@@ -59,6 +62,7 @@ function StopButton() {
   if (!thread.isRunning) return null;
   return (
     <ComposerPrimitive.Cancel
+      data-testid="composer-stop"
       className="w-7 h-7 flex items-center justify-center rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-destructive transition-colors"
       title="Stop response"
       aria-label="Stop response"
@@ -86,6 +90,7 @@ function SendButton({
   return (
     <button
       type="button"
+      data-testid="composer-send"
       disabled={disabled}
       onClick={() => {
         try {
@@ -114,7 +119,7 @@ function SendButton({
 }
 
 export function ComposerCard() {
-  const { chatId, composerError, dismissComposerError, openLightbox, sendPendingCaptures } = useMainframeRuntime();
+  const { chatId, composerError, dismissComposerError, sendPendingCaptures } = useMainframeRuntime();
   const chat = useChatsStore((s) => s.chats.find((c) => c.id === chatId));
   const adapters = useAdaptersStore((s) => s.adapters);
   const messages = useChatsStore((s) => s.messages.get(chatId));
@@ -125,6 +130,7 @@ export function ComposerCard() {
   const [isGitProject, setIsGitProject] = useState(false);
   const captures = useSandboxStore((s) => s.captures);
   const removeCapture = useSandboxStore((s) => s.removeCapture);
+  const captureView = useMemo(() => capturesToRows(captures), [captures]);
 
   const composerRuntimeRef = useRef(composerRuntime);
   composerRuntimeRef.current = composerRuntime;
@@ -284,6 +290,7 @@ export function ComposerCard() {
       <div className="flex items-center gap-1 px-2 pt-2">
         <button
           type="button"
+          data-testid="composer-context-picker"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             setPickerOpen((p) => !p);
@@ -296,6 +303,7 @@ export function ComposerCard() {
           <ContextPickerIcon />
         </button>
         <ComposerPrimitive.AddAttachment
+          data-testid="composer-attach"
           className="p-1.5 rounded-mf-input text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
           title="Add attachment"
           aria-label="Add attachment"
@@ -311,43 +319,29 @@ export function ComposerCard() {
             Attachment: ImageAttachmentPreview,
           }}
         />
-        {captures.map((c, i) => (
-          <div key={c.id} className="relative group w-14 h-14">
-            <button
-              type="button"
-              data-testid="capture-thumb"
-              className="w-full h-full rounded overflow-hidden border border-mf-border"
-              onClick={() => {
-                const images = captures.map((cap) => {
-                  const match = cap.imageDataUrl.match(/^data:([^;]+);base64,(.+)$/);
-                  return { mediaType: match?.[1] ?? 'image/png', data: match?.[2] ?? '' };
-                });
-                openLightbox(images, i);
-              }}
-            >
-              <img
-                src={c.imageDataUrl}
-                alt={c.annotation ?? (c.type === 'screenshot' ? 'screenshot' : (c.selector ?? 'element'))}
-                title={c.annotation}
-                className="w-full h-full object-cover"
-              />
-            </button>
-            <button
-              type="button"
-              onClick={() => removeCapture(c.id)}
-              className="absolute -top-1 -right-1 w-4 h-4 bg-mf-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              aria-label="Remove capture"
-            >
-              <X size={10} className="text-mf-panel-bg" />
-            </button>
-          </div>
+        {captureView.rows.map((r) => (
+          <CaptureThumb
+            key={r.label}
+            label={r.label}
+            imageUrl={captureView.images[r.imageName]}
+            onRemove={() => {
+              const id = captureView.idByLabel[r.label];
+              if (id) removeCapture(id);
+            }}
+          />
         ))}
       </div>
+      {captureView.rows.length > 0 && (
+        <div className="px-3 pt-1.5">
+          <SandboxCaptureContext rows={captureView.rows} />
+        </div>
+      )}
       {composerError && (
         <div className="mx-3 mt-2 rounded-md bg-mf-chat-error/15 px-3 py-2 text-mf-small text-mf-chat-error-subtle flex items-center justify-between gap-2 shadow-chat-error-inset">
           <span>{composerError}</span>
           <button
             type="button"
+            data-testid="composer-dismiss-error"
             onClick={dismissComposerError}
             className="shrink-0 text-mf-chat-error-subtle/80 hover:text-mf-text-primary transition-colors"
             aria-label="Dismiss attachment error"
@@ -389,6 +383,7 @@ export function ComposerCard() {
           <ComposerHighlight />
           <ComposerPrimitive.Input
             data-mf-composer-input
+            data-testid="composer-prompt-input"
             rows={2}
             autoFocus
             spellCheck={false}
@@ -415,13 +410,20 @@ export function ComposerCard() {
         <div className="flex items-center gap-1">
           <ComposerDropdown
             data-tutorial="step-4"
+            data-testid="composer-adapter-select"
             items={adapterOptions}
             value={currentAdapter}
             onChange={handleAdapterChange}
             disabled={hasMessages}
           />
-          <ComposerDropdown items={dropdownOptions} value={currentModel} onChange={handleModelChange} />
           <ComposerDropdown
+            data-testid="composer-model-select"
+            items={dropdownOptions}
+            value={currentModel}
+            onChange={handleModelChange}
+          />
+          <ComposerDropdown
+            data-testid="composer-permission-mode-select"
             items={PERMISSION_MODES}
             value={currentMode}
             onChange={handleModeChange}
@@ -438,6 +440,7 @@ export function ComposerCard() {
                 <TooltipTrigger asChild>
                   <button
                     type="button"
+                    data-testid="composer-worktree"
                     onClick={() => setWorktreePopoverOpen((o) => !o)}
                     className={`flex items-center gap-1 px-2 py-1 rounded-mf-input text-mf-small transition-colors ${
                       chat?.worktreePath

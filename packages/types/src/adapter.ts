@@ -159,6 +159,13 @@ export interface AdapterSession {
    */
   readonly supportsReplayAck?: boolean;
 
+  /**
+   * Epoch ms of last protocol activity (stdin write or stdout event). Optional
+   * — adapters that don't track activity may omit it, in which case the
+   * idle-eviction scanner treats the session as always-active.
+   */
+  readonly lastActivityAt?: number;
+
   spawn(options?: SessionSpawnOptions, sink?: SessionSink): Promise<AdapterProcess>;
   kill(): Promise<void>;
   getProcessInfo(): AdapterProcess | null;

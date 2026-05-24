@@ -7,6 +7,7 @@ import { EventEmitter } from 'node:events';
 import { ensureAuthSecret, getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
 import { AdapterRegistry } from './adapters/index.js';
+import { backfillAdapterExecutables, defaultRun } from './adapters/resolve-executable.js';
 import { ChatManager } from './chat/index.js';
 import { AttachmentStore } from './attachment/index.js';
 import { createServerManager } from './server/index.js';
@@ -17,8 +18,6 @@ import claudeManifest from './plugins/builtin/claude/manifest.json' with { type:
 import { activate as activateClaude } from './plugins/builtin/claude/index.js';
 import codexManifest from './plugins/builtin/codex/manifest.json' with { type: 'json' };
 import { activate as activateCodex } from './plugins/builtin/codex/index.js';
-import claudeSdkManifest from './plugins/builtin/claude-sdk/manifest.json' with { type: 'json' };
-import { activate as activateClaudeSdk } from './plugins/builtin/claude-sdk/index.js';
 import todosManifest from './plugins/builtin/todos/manifest.json' with { type: 'json' };
 import { activate as activateTodos } from './plugins/builtin/todos/index.js';
 import { logger } from './logger.js';
@@ -93,7 +92,6 @@ async function main(): Promise<void> {
   // Load builtin plugins first (always trusted, no consent dialog)
   await pluginManager.loadBuiltin(claudeManifest as PluginManifest, activateClaude);
   await pluginManager.loadBuiltin(codexManifest as PluginManifest, activateCodex);
-  await pluginManager.loadBuiltin(claudeSdkManifest as PluginManifest, activateClaudeSdk);
 
   const todosPluginDir = join(getDataDir(), 'plugins', 'todos');
   mkdirSync(todosPluginDir, { recursive: true });
@@ -132,6 +130,15 @@ async function main(): Promise<void> {
     logger.warn({ err }, 'Worktree relationship backfill failed');
   });
 
+  // Non-blocking: resolve + persist absolute CLI paths for registered adapters
+  // so spawns are explicit. Failure must not block serving requests.
+  backfillAdapterExecutables(
+    adapters.getAll().map((a) => a.id),
+    { settings: db.settings, run: defaultRun },
+  ).catch((err) => {
+    logger.warn({ err }, 'Adapter executable backfill failed');
+  });
+
   if (config.tunnel === true) {
     try {
       const tunnelOpts = config.tunnelToken ? { token: config.tunnelToken, url: config.tunnelUrl } : undefined;
@@ -150,6 +157,7 @@ async function main(): Promise<void> {
 
   const shutdown = async () => {
     logger.info('Shutting down...');
+    chats.dispose();
     await pluginManager.unloadAll();
     adapters.killAll();
     await launchRegistry.stopAll();

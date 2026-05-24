@@ -139,6 +139,7 @@ export function ChangesTab(): React.ReactElement {
         <Button
           variant="ghost"
           size="icon"
+          data-testid="changes-refresh"
           className="h-6 w-6"
           onClick={refresh}
           disabled={loading || (mode === 'session' && !activeChatId)}
@@ -200,6 +201,7 @@ function SessionFileList({
         return (
           <button
             key={filePath}
+            data-testid={`changes-session-file-${filePath}`}
             onClick={() => openDiffTab(filePath, 'git', activeChatId ?? undefined, undefined, mergeBase)}
             className={cn(
               'w-full flex items-center gap-2 px-2 py-1 rounded-mf-input text-left',
@@ -242,6 +244,7 @@ function StatusFileList({
         return (
           <button
             key={file.path}
+            data-testid={`changes-uncommitted-file-${file.path}`}
             onClick={() => openDiffTab(file.path, 'git', activeChatId ?? undefined)}
             className={cn(
               'w-full flex items-center gap-2 px-2 py-1 rounded-mf-input text-left',
@@ -293,6 +296,7 @@ function BranchFileList({
         return (
           <button
             key={file.path}
+            data-testid={`changes-branch-file-${file.path}`}
             onClick={() =>
               openDiffTab(file.path, 'git', activeChatId ?? undefined, file.oldPath, data.mergeBase ?? undefined)
             }

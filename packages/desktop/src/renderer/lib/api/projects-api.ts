@@ -89,6 +89,13 @@ export async function getChatMessages(chatId: string): Promise<DisplayMessage[]>
   return json.data;
 }
 
+export async function getToolResultContent(chatId: string, toolUseId: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/chats/${chatId}/tool-result/${toolUseId}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  return json.data.content as string;
+}
+
 export async function getAdapters(): Promise<AdapterInfo[]> {
   const res = await fetch(`${API_BASE}/api/adapters`);
   const json = await res.json();

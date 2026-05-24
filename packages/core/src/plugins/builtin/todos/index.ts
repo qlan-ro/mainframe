@@ -1,4 +1,5 @@
 import type { PluginContext } from '@qlan-ro/mainframe-types';
+import type { Logger } from 'pino';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
@@ -45,11 +46,26 @@ CREATE TABLE IF NOT EXISTS todos (
   updated_at TEXT NOT NULL
 );`;
 
-const parseTodo = (r: TodoRow): Todo => ({
+/**
+ * Parse a JSON array column defensively. Historical writes left some rows with
+ * double-encoded values (e.g. `[\"a\"]`) that crash `JSON.parse`. A single bad
+ * row must not take down the entire board, so fall back to `[]` and log.
+ */
+function safeJsonArray<T>(raw: string, column: string, todoId: string, logger?: Logger): T[] {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch (err) {
+    logger?.warn({ err: String(err), todoId, column, raw }, 'todos: malformed JSON column, defaulting to []');
+    return [];
+  }
+}
+
+const parseTodo = (r: TodoRow, logger?: Logger): Todo => ({
   ...r,
-  labels: JSON.parse(r.labels) as string[],
-  assignees: JSON.parse(r.assignees) as string[],
-  dependencies: JSON.parse(r.dependencies || '[]') as number[],
+  labels: safeJsonArray<string>(r.labels, 'labels', r.id, logger),
+  assignees: safeJsonArray<string>(r.assignees, 'assignees', r.id, logger),
+  dependencies: safeJsonArray<number>(r.dependencies, 'dependencies', r.id, logger),
 });
 
 const TodoSchema = z.object({
@@ -110,7 +126,7 @@ function registerTodoRoutes(ctx: PluginContext): void {
     const rows = ctx.db
       .prepare<TodoRow>('SELECT * FROM todos WHERE project_id = ? ORDER BY status, order_index, created_at')
       .all(projectId);
-    res.json({ todos: rows.map(parseTodo) });
+    res.json({ todos: rows.map((row) => parseTodo(row, ctx.logger)) });
   });
 
   r.post('/todos', (req, res) => {
@@ -147,7 +163,7 @@ function registerTodoRoutes(ctx: PluginContext): void {
         now,
       );
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
-    const todo = parseTodo(row);
+    const todo = parseTodo(row, ctx.logger);
     res.status(201).json({ todo });
   });
 
@@ -206,7 +222,7 @@ function registerTodoRoutes(ctx: PluginContext): void {
     vals.push(id);
     ctx.db.prepare(`UPDATE todos SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
     const row = ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE id = ?').get(id)!;
-    const updated = parseTodo(row);
+    const updated = parseTodo(row, ctx.logger);
     if (d.status !== undefined && d.status !== existingRow.status) {
       ctx.ui.notify({
         title: `#${updated.number} ${updated.title}`,
@@ -233,14 +249,14 @@ function registerTodoRoutes(ctx: PluginContext): void {
       res.status(404).json({ error: 'Not found' });
       return;
     }
-    const todo = parseTodo(row);
+    const todo = parseTodo(row, ctx.logger);
     if (status === 'done' && todo.dependencies.length > 0) {
       const openDeps = todo.dependencies
         .map((num) =>
           ctx.db.prepare<TodoRow>('SELECT * FROM todos WHERE number = ? AND project_id = ?').get(num, todo.project_id),
         )
         .filter((r): r is TodoRow => r !== undefined)
-        .map(parseTodo)
+        .map((r) => parseTodo(r, ctx.logger))
         .filter((d) => d.status !== 'done');
       if (openDeps.length > 0) {
         const names = openDeps.map((d) => `#${d.number} ${d.title}`).join(', ');
@@ -273,7 +289,7 @@ function registerSessionRoute(ctx: PluginContext): void {
       res.status(403).json({ error: 'chat:create capability required' });
       return;
     }
-    const todo = parseTodo(row);
+    const todo = parseTodo(row, ctx.logger);
     const depTodos =
       todo.dependencies.length > 0
         ? todo.dependencies
@@ -283,7 +299,7 @@ function registerSessionRoute(ctx: PluginContext): void {
                 .get(num, todo.project_id),
             )
             .filter((r): r is TodoRow => r !== undefined)
-            .map(parseTodo)
+            .map((r) => parseTodo(r, ctx.logger))
         : [];
     const { chatId } = await ctx.services.chats.createChat({ projectId: parsed.data.projectId });
     res.json({ chatId, initialMessage: buildInitialMessage(todo, depTodos) });

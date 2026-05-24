@@ -6,6 +6,8 @@ import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
 import { extractSessionFilePaths } from '../../messages/session-files.js';
+import { readToolResultFromJsonl } from '../../messages/read-tool-result-from-jsonl.js';
+import { computeSessionFilePath } from '../../chat/event-handler.js';
 
 const logger = createChildLogger('routes:chats');
 
@@ -198,6 +200,46 @@ export function chatRoutes(ctx: RouteContext): Router {
       const messages = await ctx.chats.getMessagesFromDisk(chatId);
       const files = extractSessionFilePaths(messages);
       res.json({ files });
+    }),
+  );
+
+  const ToolResultParams = z.object({
+    id: z.string().min(1),
+    toolUseId: z.string().regex(/^[a-zA-Z0-9_-]+$/),
+  });
+
+  router.get(
+    '/api/chats/:id/tool-result/:toolUseId',
+    asyncHandler(async (req: Request, res: Response) => {
+      const parsed = ToolResultParams.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: parsed.error.message });
+        return;
+      }
+      const chat = ctx.chats.getChat(parsed.data.id);
+      if (!chat) {
+        res.status(404).json({ success: false, error: 'Chat not found' });
+        return;
+      }
+      let filePath = chat.sessionFilePath;
+      if (!filePath && chat.claudeSessionId) {
+        const projectPath = ctx.db.projects.get(chat.projectId)?.path ?? null;
+        const cwd = chat.worktreePath ?? projectPath;
+        if (cwd) {
+          filePath = computeSessionFilePath(cwd, chat.claudeSessionId);
+          ctx.db.chats.update(chat.id, { sessionFilePath: filePath });
+        }
+      }
+      if (!filePath) {
+        res.status(404).json({ success: false, error: 'No session file for chat' });
+        return;
+      }
+      const content = await readToolResultFromJsonl(filePath, parsed.data.toolUseId);
+      if (content === null) {
+        res.status(404).json({ success: false, error: 'Tool result not available' });
+        return;
+      }
+      res.json({ success: true, data: { content } });
     }),
   );
 

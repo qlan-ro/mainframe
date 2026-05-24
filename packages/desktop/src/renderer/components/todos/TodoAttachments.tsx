@@ -42,6 +42,7 @@ function AttachmentThumbnail({
       {isImage && onPreview ? (
         <button
           type="button"
+          data-testid={`todos-attachment-preview-${att.id}`}
           onClick={onPreview}
           className="block w-20 h-20 focus:outline-none focus:ring-1 focus:ring-mf-accent"
           aria-label={`Preview ${att.filename}`}
@@ -67,6 +68,7 @@ function AttachmentThumbnail({
         <span className="text-mf-status text-white truncate block">{att.filename}</span>
       </div>
       <button
+        data-testid={`todos-attachment-delete-${att.id}`}
         onClick={onDelete}
         className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
         title="Remove attachment"
@@ -175,9 +177,10 @@ export function TodoAttachments({ todoId }: Props): React.ReactElement {
           onNavigate={setLightboxIndex}
         />
       )}
-      <input ref={inputRef} type="file" accept={IMAGE_ACCEPT} onChange={handleUpload} className="hidden" />
+      <input ref={inputRef} data-testid="todos-attachments-file-input" type="file" accept={IMAGE_ACCEPT} onChange={handleUpload} className="hidden" />
       <button
         type="button"
+        data-testid="todos-attachments-upload"
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
         className="flex items-center gap-1 w-fit px-2 py-1 rounded-mf-input text-mf-small text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-hover transition-colors disabled:opacity-40"

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import { Gauge } from 'lucide-react';
 import type { AdapterInfo, Chat, ChatEffort } from '@qlan-ro/mainframe-types';
 import { ComposerDropdown } from './ComposerDropdown';
@@ -20,7 +20,7 @@ export const EFFORT_OPTIONS: { id: ChatEffort; label: string; description: strin
  * Claude models without the capability (Haiku 3.5/4.5, older Sonnets).
  */
 export function shouldShowEffortPicker(adapterId: string, modelId: string, adapters: AdapterInfo[]): boolean {
-  if (adapterId !== 'claude' && adapterId !== 'claude-sdk') return false;
+  if (adapterId !== 'claude') return false;
   const adapter = adapters.find((a) => a.id === adapterId);
   if (!adapter) return false;
   const model = adapter.models.find((m) => m.id === modelId);
@@ -54,6 +54,7 @@ export function EffortPicker({
 
   return (
     <ComposerDropdown
+      data-testid="composer-effort-select"
       items={EFFORT_OPTIONS}
       value={current}
       onChange={handleChange}

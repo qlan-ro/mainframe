@@ -105,6 +105,7 @@ export function ImportSessionsPopover({
             <TooltipTrigger asChild>
               <button
                 type="button"
+                data-testid={`chats-import-project-${project.id}`}
                 onClick={() => setSelectedProjectId(project.id)}
                 className="w-full text-left px-3 py-1.5 text-mf-small truncate hover:bg-mf-hover transition-colors text-mf-text-primary"
               >

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '../../../../../ui/tooltip.js';
 import { BashCard } from '../BashCard.js';
 
@@ -16,5 +16,22 @@ describe('BashCard (U1 unified)', () => {
       wrap(<BashCard args={{ command: 'ls', description: 'list files' }} result={undefined} isError={false} />),
     );
     expect(getByText('list files')).toBeTruthy();
+  });
+
+  it('renders ToolResultExpand for a truncated result when chatId/toolCallId present', () => {
+    const { container, getByRole, getByText } = render(
+      wrap(
+        <BashCard
+          args={{ command: 'cat big.log' }}
+          result={{ content: 'HEAD…[truncated 9 lines · 50 KB — expand]…TAIL', truncated: true, fullBytes: 51200 }}
+          isError={false}
+          chatId="c1"
+          toolCallId="toolu_1"
+        />,
+      ),
+    );
+    fireEvent.click(container.querySelector('[data-testid="tool-card"] button')!);
+    expect(getByRole('button', { name: /show full output/i })).toBeTruthy();
+    expect(getByText(/HEAD…\[truncated 9 lines · 50 KB — expand\]…TAIL/)).toBeTruthy();
   });
 });
