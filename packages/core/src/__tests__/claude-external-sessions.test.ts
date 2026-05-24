@@ -319,7 +319,8 @@ describe('listExternalSessions', () => {
       ]);
 
       const result = await listExternalSessions('/test/project', ['skip']);
-      // 'skip' is excluded, only 'keep' should be processed
+      expect(result).toHaveLength(1);
+      expect(result[0]!.sessionId).toBe('keep');
       expect(mockStat).toHaveBeenCalledTimes(1);
     });
 
@@ -366,7 +367,8 @@ describe('listExternalSessions', () => {
       mockJsonlFile([JSON.stringify({ type: 'system', timestamp: '2026-01-01T00:00:00Z' })]);
 
       const result = await listExternalSessions('/test/project', []);
-      // Only session.jsonl should be processed
+      // Only session.jsonl is scanned; the system-type entry yields no firstPrompt → session dropped.
+      expect(result).toEqual([]);
       expect(mockStat).toHaveBeenCalledTimes(1);
     });
   });
