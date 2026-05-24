@@ -165,6 +165,7 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
       <DirectoryPickerModal
         open={showBinaryPicker}
         mode="file"
+        title={`Select ${label} Executable`}
         onSelect={handlePickBinary}
         onCancel={() => setShowBinaryPicker(false)}
       />
