@@ -187,8 +187,25 @@ function handleSystemEvent(session: ClaudeSession, event: Record<string, unknown
       type: event.task_type as string,
       command: event.command as string | undefined,
     });
+    if (session.state.chatId) {
+      session.state.taskEvents.handleTaskStarted(session.state.chatId, {
+        task_id: event.task_id as string,
+        tool_use_id: event.tool_use_id as string | undefined,
+        description: event.description as string | undefined,
+      });
+    }
   } else if (event.subtype === 'task_notification') {
     session.state.activeTasks.delete(event.task_id as string);
+    if (session.state.chatId) {
+      const usage = event.usage as { total_tokens: number; tool_uses: number; duration_ms: number } | undefined;
+      session.state.taskEvents.handleTaskNotification(session.state.chatId, {
+        task_id: event.task_id as string,
+        status: event.status as string,
+        output_file: event.output_file as string | undefined,
+        summary: event.summary as string | undefined,
+        usage,
+      });
+    }
   } else if (event.subtype === 'status') {
     if (event.status === 'compacting') {
       sink.onCompactStart();
@@ -246,6 +263,12 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
       if (id && name) {
         const command = (block.input as { command?: string } | undefined)?.command;
         session.state.toolUseRegistry.set(id, command ? { name, command } : { name });
+        if (session.state.chatId) {
+          session.state.taskEvents.captureToolUse(id, {
+            name: block.name,
+            input: block.input as { command?: string; description?: string; run_in_background?: boolean } | undefined,
+          });
+        }
       }
       if (name === 'Bash' || name === 'BashTool') {
         const input = block.input as { command?: string } | undefined;
