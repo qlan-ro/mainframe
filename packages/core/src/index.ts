@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { ensureAuthSecret, getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
+import { BackgroundTaskTracker } from './background-tasks/tracker.js';
 import { AdapterRegistry } from './adapters/index.js';
 import { backfillAdapterExecutables, defaultRun } from './adapters/resolve-executable.js';
 import { ChatManager } from './chat/index.js';
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
   logger.info({ port: config.port }, 'Starting daemon');
 
   const db = new DatabaseManager();
+  const backgroundTasks = new BackgroundTaskTracker();
   const adapters = new AdapterRegistry();
   const attachmentStore = new AttachmentStore(join(getDataDir(), 'attachments'));
 
@@ -90,7 +92,7 @@ async function main(): Promise<void> {
   });
 
   // Load builtin plugins first (always trusted, no consent dialog)
-  await pluginManager.loadBuiltin(claudeManifest as PluginManifest, activateClaude);
+  await pluginManager.loadBuiltin(claudeManifest as PluginManifest, (ctx) => activateClaude(ctx, backgroundTasks));
   await pluginManager.loadBuiltin(codexManifest as PluginManifest, activateCodex);
 
   const todosPluginDir = join(getDataDir(), 'plugins', 'todos');

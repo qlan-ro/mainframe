@@ -17,6 +17,8 @@ import type {
   SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
 import { handleStdout, handleStderr, type DetectedPrCore } from './events.js';
+import { ClaudeTaskEvents } from './task-events.js';
+import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
 import { MAINFRAME_SYSTEM_PROMPT_APPEND } from './constants.js';
 import { createChildLogger } from '../../../logger.js';
 import {
@@ -86,6 +88,8 @@ export interface ClaudeSessionState {
   taskV2Events: import('../../../todos/normalize.js').TaskV2Event[];
   /** Epoch ms of last stdin write or stdout event — drives idle eviction. */
   lastActivityAt: number;
+  /** Bridge that routes CLI background-task events to the BackgroundTaskTracker. */
+  taskEvents: ClaudeTaskEvents;
 }
 
 /**
@@ -114,7 +118,14 @@ export class ClaudeSession implements AdapterSession {
   private readonly resumeSessionId: string | undefined;
   private readonly onExit: (() => void) | undefined;
 
-  constructor(options: SessionOptions, onExit?: () => void) {
+  constructor(
+    options: SessionOptions,
+    onExit?: () => void,
+    // Default arg keeps the dozens of `new ClaudeSession(...)` test call sites
+    // compiling (session-spawn-args.test.ts, claude-spawn-args.test.ts,
+    // kill-awaits-close.test.ts, claude-events.test.ts).
+    backgroundTasks: BackgroundTaskTracker = new BackgroundTaskTracker(),
+  ) {
     this.id = nanoid();
     this.projectPath = options.projectPath;
     this.resumeSessionId = options.chatId;
@@ -135,6 +146,7 @@ export class ClaudeSession implements AdapterSession {
       skillPathCache: new Map(),
       taskV2Events: [],
       lastActivityAt: Date.now(),
+      taskEvents: new ClaudeTaskEvents(backgroundTasks),
     };
   }
 
