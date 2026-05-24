@@ -3,7 +3,6 @@ import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import { createChildLogger } from '../logger.js';
 import { deriveTitleFromMessage, generateTitle } from './title-generator.js';
-import { getWorktrees } from '../workspace/worktree.js';
 
 const logger = createChildLogger('chat:external-sessions');
 
@@ -29,11 +28,9 @@ export class ExternalSessionService {
 
     for (const adapter of allAdapters) {
       if (!adapter.listExternalSessions) continue;
-
       const excludeIds = this.db.chats.getImportedSessionIds(projectId);
-      const paths = await this.collectProjectPaths(project.path);
       try {
-        const sessions = await adapter.listExternalSessions(paths, excludeIds);
+        const sessions = await adapter.listExternalSessions(project.path, excludeIds);
         for (const session of sessions) {
           session.adapterId = adapter.id;
         }
@@ -81,17 +78,6 @@ export class ExternalSessionService {
     }
 
     return chat;
-  }
-
-  private async collectProjectPaths(projectPath: string): Promise<string[]> {
-    try {
-      const worktrees = await getWorktrees(projectPath);
-      const paths = [projectPath, ...worktrees.map((w) => w.path)];
-      return Array.from(new Set(paths));
-    } catch (err) {
-      logger.warn({ err: String(err), projectPath }, 'failed to enumerate worktrees, scanning project root only');
-      return [projectPath];
-    }
   }
 
   private async generateImportTitle(chat: Chat, content: string, adapterId: string): Promise<void> {

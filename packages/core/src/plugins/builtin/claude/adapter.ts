@@ -247,7 +247,7 @@ export class ClaudeAdapter implements Adapter {
     return skills.deleteAgent(agentId, projectPath);
   }
 
-  async listExternalSessions(projectPaths: string[], excludeSessionIds: string[]): Promise<ExternalSession[]> {
-    return listExternalSessions(projectPaths, excludeSessionIds);
+  async listExternalSessions(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]> {
+    return listExternalSessions(projectPath, excludeSessionIds);
   }
 }
