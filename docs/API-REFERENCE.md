@@ -7,7 +7,7 @@
 
 ## Response Format
 
-All REST endpoints return a standard envelope:
+Most REST endpoints return a standard envelope:
 
 ```typescript
 interface ApiResponse<T> {
@@ -16,6 +16,10 @@ interface ApiResponse<T> {
   error?: string;
 }
 ```
+
+Some older file, Git, LSP, plugin, and built-in plugin routes return plain JSON objects. Each endpoint below notes the actual shape when it differs.
+
+This file is maintained from the Express route definitions in `packages/core/src/server/routes/` and plugin routers in `packages/core/src/plugins/`.
 
 ---
 
@@ -29,7 +33,7 @@ GET /health
 
 Returns daemon health status.
 
-**Response**: `{ status: 'ok', timestamp: string }`
+**Response**: `{ status: 'ok', timestamp: string, tunnelUrl: string | null }`
 
 ---
 
@@ -99,6 +103,24 @@ Removes the project registration. Does not delete files.
 ---
 
 ### Chats
+
+#### List All Chats
+
+```
+GET /api/chats?project=<projectId>&tags=<tag1,tag2>&synthetic=has-worktree
+```
+
+Returns chats across projects. Filters are optional.
+
+**Query Parameters**:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `project` | string | Limit results to one project ID |
+| `tags` | comma-separated string | Require all listed tags. Tag values must match `[a-z0-9-]+` |
+| `synthetic` | comma-separated string | Supported value: `has-worktree` |
+
+**Response**: `ApiResponse<Chat[]>`
 
 #### List Chats
 
@@ -187,6 +209,43 @@ Returns display messages from daemon memory. Messages are ephemeral — they onl
 }
 ```
 
+#### Rename Chat
+
+```
+PATCH /api/chats/:id/title
+Content-Type: application/json
+```
+
+**Body**: `{ "title": "New chat title" }`
+
+**Response**: `ApiResponse<Chat>`
+
+#### Set Pinned State
+
+```
+PATCH /api/chats/:id/pinned
+Content-Type: application/json
+```
+
+**Body**: `{ "pinned": true }`
+
+**Response**: `ApiResponse<Chat>`
+
+#### Set Effort
+
+```
+PATCH /api/chats/:id/effort
+Content-Type: application/json
+```
+
+Stores the preferred reasoning effort for the chat. Use `null` to clear it.
+
+**Body**: `{ "effort": "medium" }`
+
+**Allowed values**: `"low"`, `"medium"`, `"high"`, `null`
+
+**Response**: `ApiResponse<Chat>`
+
 #### Archive Chat
 
 ```
@@ -230,13 +289,13 @@ Returns the current pending permission request (front of queue), or `null`.
 }
 ```
 
-#### Get Chat Changes
+#### Get Session Files
 
 ```
-GET /api/chats/:id/changes
+GET /api/chats/:id/session-files
 ```
 
-Returns files modified during this chat session.
+Returns file paths referenced by the chat's persisted session messages, including subagent file changes.
 
 **Response**: `{ files: string[] }`
 
@@ -284,6 +343,24 @@ POST /api/chats/:id/disable-worktree
 ```
 
 Removes the git worktree. Must be called before the session starts.
+
+**Response**: `{ "success": true }`
+
+#### Attach Worktree
+
+```
+POST /api/chats/:id/attach-worktree
+Content-Type: application/json
+```
+
+Associates an existing project worktree with a chat.
+
+**Body**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `worktreePath` | string | Yes | Absolute path to an existing project worktree |
+| `branchName` | string | Yes | Branch checked out in the worktree |
 
 **Response**: `{ "success": true }`
 
@@ -380,16 +457,34 @@ All project file system endpoints accept an optional `chatId` query parameter. W
 #### Browse Filesystem
 
 ```
-GET /api/filesystem/browse?path=<absolute-path>
+GET /api/filesystem/browse?path=<absolute-path>&includeFiles=true&includeHidden=true
 ```
 
-Browses directories within the user's home directory. Returns only non-hidden, non-ignored subdirectories. Defaults to the home directory when `path` is omitted.
+Browses the local filesystem. Defaults to the user's home directory when `path` is omitted. By default it returns visible directories only.
+
+**Query Parameters**:
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `path` | string | home directory | Absolute path or `~` path to browse |
+| `includeFiles` | boolean | `false` | Include files as well as directories |
+| `includeHidden` | boolean | `false` | Include dotfiles and hidden directories |
 
 **Response**:
 
 ```json
 { "path": "/Users/me/Projects", "entries": [{ "name": "my-project", "path": "/Users/me/Projects/my-project" }] }
 ```
+
+#### External File Content
+
+```
+GET /api/files/external?path=<absolute-file-path>
+```
+
+Reads a file outside a project root. The route resolves symlinks, rejects directories, blocks known sensitive paths such as SSH private keys and shadow password files, and caps file size at 2MB.
+
+**Response**: `{ path: string, content: string }`
 
 #### File Tree
 
@@ -417,6 +512,25 @@ GET /api/projects/:id/files?path=<relative-path>&chatId=<optional>&encoding=<opt
 Returns file content. Pass `encoding=base64` to receive binary files (max 10MB); default is UTF-8 text (max 2MB).
 
 **Response**: `{ path: string, content: string }` — or `{ path: string, content: string, encoding: 'base64' }` for base64.
+
+#### Write File Content
+
+```
+PUT /api/projects/:id/files
+Content-Type: application/json
+```
+
+Writes UTF-8 text content to a file inside the project or chat worktree.
+
+**Body**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | string | Yes | Relative file path |
+| `content` | string | Yes | New UTF-8 content |
+| `chatId` | string | No | Use the chat's worktree path |
+
+**Response**: `{ path: string, success: true }`
 
 #### File Search
 
@@ -452,9 +566,30 @@ Returns all file paths in the project (up to limit), excluding common ignore pat
 
 **Response**: `string[]`
 
+#### Content Search
+
+```
+GET /api/projects/:id/search/content?q=<query>&path=<relative-path>&chatId=<optional>&includeIgnored=true
+```
+
+Searches file contents under a project path. Query length must be at least 2 characters. Uses ripgrep when available and falls back to a bounded JavaScript search.
+
+**Query Parameters**:
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `q` | string | — | Search query |
+| `path` | string | — | Relative file or directory scope |
+| `chatId` | string | — | Use chat's worktree path |
+| `includeIgnored` | boolean | `false` | Include ignored files in the search |
+
+**Response**: `{ results: SearchContentResult[] }`
+
 ---
 
 ### Git
+
+Project Git endpoints accept an optional `chatId` query or body field. When present, the operation runs in the chat's worktree.
 
 #### Git Status
 
@@ -482,22 +617,42 @@ GET /api/projects/:id/git/branch?chatId=<optional>
 
 **Response**: `{ branch: string | null }`
 
+#### Git Branch Diffs
+
+```
+GET /api/projects/:id/git/branch-diffs?chatId=<optional>
+```
+
+Compares the current branch against the merge base with `main` or `master`.
+
+**Response**:
+
+```json
+{
+  "branch": "feature/example",
+  "baseBranch": "main",
+  "mergeBase": "abc123",
+  "files": [{ "status": "M", "path": "src/auth.ts" }]
+}
+```
+
 #### Diff
 
 ```
-GET /api/projects/:id/diff?file=<path>&source=git|session&oldPath=<optional>&chatId=<optional>
+GET /api/projects/:id/git/diff?file=<path>&source=git&oldPath=<optional>&chatId=<optional>&base=<optional>
 ```
 
 **Query Parameters**:
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| `file` | string | — | Specific file to diff |
-| `source` | `'git' \| 'session'` | `'git'` | Diff source |
+| `file` | string | — | Specific file to diff. Omit to return the full diff |
+| `source` | `'git'` | `'git'` | Only `git` is currently accepted |
 | `oldPath` | string | — | Original path for renames |
 | `chatId` | string | — | Chat ID for worktree context |
+| `base` | string | `HEAD` | Optional commit or ref to compare against |
 
-**`source=git`**: Returns `git diff` output plus original/modified file contents.
+Returns `git diff` output plus original and modified file contents when `file` is provided.
 
 ```json
 {
@@ -508,22 +663,174 @@ GET /api/projects/:id/diff?file=<path>&source=git|session&oldPath=<optional>&cha
 }
 ```
 
-**`source=session`** (no file): Returns list of files modified in the session.
+#### List Branches
 
-```json
-{ "files": ["src/auth.ts", "src/login.ts"], "source": "session" }
+```
+GET /api/projects/:id/git/branches?chatId=<optional>
 ```
 
-**`source=session`** (with file): Returns original (from HEAD) and current file content.
+**Response**: result from `GitService.branches()`
+
+#### Checkout Branch
+
+```
+POST /api/projects/:id/git/checkout?chatId=<optional>
+Content-Type: application/json
+```
+
+**Body**: `{ "branch": "feature/example" }`
+
+**Response**: `{ ok: true }`
+
+#### Create Branch
+
+```
+POST /api/projects/:id/git/branch?chatId=<optional>
+Content-Type: application/json
+```
+
+**Body**: `{ "name": "feature/example", "startPoint": "main" }`
+
+**Response**: `{ ok: true }`
+
+#### Fetch, Pull, Push, Merge, Rebase
+
+```
+POST /api/projects/:id/git/fetch
+POST /api/projects/:id/git/pull
+POST /api/projects/:id/git/push
+POST /api/projects/:id/git/merge
+POST /api/projects/:id/git/rebase
+POST /api/projects/:id/git/abort
+POST /api/projects/:id/git/update-all
+```
+
+These routes proxy common Git operations through `GitService`.
+
+**Bodies**:
+
+| Route | Body |
+|-------|------|
+| `fetch` | `{ "remote": "origin" }` |
+| `pull` | `{ "remote": "origin", "branch": "main", "localBranch": "main" }` |
+| `push` | `{ "remote": "origin", "branch": "feature/example" }` |
+| `merge` | `{ "branch": "main" }` |
+| `rebase` | `{ "branch": "main" }` |
+| `abort` | no body |
+| `update-all` | no body |
+
+**Response**: operation-specific result or `{ ok: true }`
+
+#### Rename Branch
+
+```
+POST /api/projects/:id/git/rename-branch
+Content-Type: application/json
+```
+
+**Body**: `{ "oldName": "old-name", "newName": "new-name" }`
+
+**Response**: `{ ok: true }`
+
+#### Delete Branch
+
+```
+POST /api/projects/:id/git/delete-branch
+Content-Type: application/json
+```
+
+**Body**: `{ "name": "feature/example", "force": false, "remote": false }`
+
+**Response**: `{ ok: true }`
+
+#### Chat Git Status
+
+```
+POST /api/git/status
+Content-Type: application/json
+```
+
+Runs Git status in the chat's effective working directory.
+
+**Body**: `{ "chatId": "chat_xyz" }`
+
+**Response**:
 
 ```json
 {
-  "original": "// from git HEAD",
-  "modified": "// current content",
-  "source": "session",
-  "file": "src/auth.ts"
+  "staged": ["src/staged.ts"],
+  "unstaged": ["src/changed.ts"],
+  "untracked": ["src/new.ts"]
 }
 ```
+
+#### Stage, Unstage, Commit, Push Chat Changes
+
+```
+POST /api/git/stage
+POST /api/git/unstage
+POST /api/git/commit
+POST /api/git/push
+```
+
+Runs Git operations in the chat's effective working directory.
+
+**Bodies**:
+
+| Route | Body |
+|-------|------|
+| `stage` | `{ "chatId": "chat_xyz", "files": ["src/auth.ts"] }` |
+| `unstage` | `{ "chatId": "chat_xyz", "files": ["src/auth.ts"] }` |
+| `commit` | `{ "chatId": "chat_xyz", "message": "Fix auth", "files": ["src/auth.ts"] }` |
+| `push` | `{ "chatId": "chat_xyz" }` |
+
+**Response**: `{ success: true }` or `{ hash: string }` for commit
+
+#### Diff Since Main
+
+```
+POST /api/projects/:id/git/diff-since-main
+Content-Type: application/json
+```
+
+Returns per-file `{ main, worktree }` content pairs for tracked files changed against the merge base with `main` or `master`. Untracked files are excluded.
+
+**Body**: `{ "chatId": "chat_xyz", "files": ["src/auth.ts"] }`
+
+**Response**:
+
+```json
+{
+  "diffs": {
+    "src/auth.ts": { "main": "// base", "worktree": "// current" }
+  },
+  "baseBranch": "main",
+  "mergeBase": "abc123"
+}
+```
+
+#### List Worktrees
+
+```
+GET /api/projects/:id/git/worktrees
+```
+
+Returns registered Git worktrees for the project, excluding the main worktree.
+
+**Response**: `{ worktrees: WorktreeInfo[] }`
+
+#### Delete Worktree
+
+```
+POST /api/projects/:id/git/delete-worktree
+Content-Type: application/json
+```
+
+Deletes a project worktree after validating that it belongs to the project and is not the main worktree.
+
+**Body**: `{ "worktreePath": "/path/to/worktree", "branchName": "feature/example" }`
+
+**Response**: `{ success: true }`
 
 ---
 
@@ -657,6 +964,73 @@ DELETE /api/adapters/:adapterId/agents/:id?projectPath=<path>
 
 ---
 
+### Tags
+
+#### List Tags
+
+```
+GET /api/tags
+```
+
+**Response**: `ApiResponse<Tag[]>`
+
+#### Create Tag
+
+```
+POST /api/tags
+Content-Type: application/json
+```
+
+Creates or updates a tag by name.
+
+**Body**: `{ "name": "feature", "color": "blue" }`
+
+**Response**: `ApiResponse<Tag>` with status `201`
+
+#### Update Tag
+
+```
+PATCH /api/tags/:name
+Content-Type: application/json
+```
+
+Renames a tag, changes its color, or both.
+
+**Body**: `{ "rename": "bugfix", "color": "red" }`
+
+**Response**: `ApiResponse<Tag>`
+
+#### Delete Tag
+
+```
+DELETE /api/tags/:name
+```
+
+Deletes the tag and returns `204 No Content`.
+
+#### Get Chat Tags
+
+```
+GET /api/chats/:id/tags
+```
+
+**Response**: `ApiResponse<Tag[]>`
+
+#### Set Chat Tags
+
+```
+PUT /api/chats/:id/tags
+Content-Type: application/json
+```
+
+Replaces the chat's tag list.
+
+**Body**: `{ "tags": ["feature", "bugfix"] }`
+
+**Response**: `ApiResponse<Tag[]>`
+
+---
+
 ### Settings
 
 #### Get General Settings
@@ -675,6 +1049,18 @@ Returns general application settings merged with defaults.
 PUT /api/settings/general
 Content-Type: application/json
 ```
+
+**Body**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `worktreeDir` | string | Directory name used for generated worktrees |
+| `notifications.chat.taskComplete` | boolean | Chat completion notification toggle |
+| `notifications.chat.sessionError` | boolean | Chat error notification toggle |
+| `notifications.permission.toolRequest` | boolean | Tool permission notification toggle |
+| `notifications.permission.userQuestion` | boolean | User question notification toggle |
+| `notifications.permission.planApproval` | boolean | Plan approval notification toggle |
+| `notifications.other.plugin` | boolean | Plugin notification toggle |
 
 **Response**: `ApiResponse<void>`
 
@@ -713,7 +1099,9 @@ Content-Type: application/json
 |-------|------|-------------|
 | `defaultModel` | string | Default model for new chats |
 | `defaultMode` | `'default' \| 'acceptEdits' \| 'plan' \| 'yolo'` | Default permission mode |
+| `defaultPlanMode` | `'true' \| 'false'` | Default plan-mode setting for new sessions |
 | `executablePath` | string | Path to the adapter CLI binary |
+| `systemPrompt` | string | Adapter-specific system prompt override |
 
 **Response**: `ApiResponse<void>`
 
@@ -764,6 +1152,7 @@ Exchanges a valid pairing code for a bearer token. The pairing code expires afte
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `pairingCode` | string | Yes | Code from `POST /api/auth/pair` |
+| `deviceName` | string | No | Human-readable device name to store with the issued token |
 
 **Response**: `ApiResponse<{ token: string, deviceId: string }>`
 
@@ -862,6 +1251,8 @@ Imports an external session as a new chat record.
 | `sessionId` | string | Yes | The external session ID (alphanumeric and hyphens) |
 | `adapterId` | string | Yes | Adapter that owns the session |
 | `title` | string | No | Display title for the imported chat |
+| `createdAt` | ISO datetime string | No | Original session creation time |
+| `modifiedAt` | ISO datetime string | No | Original session modification time |
 
 **Response**: `ApiResponse<Chat>`
 
@@ -874,7 +1265,7 @@ Launch manages dev-server processes defined in a project's `.mainframe/launch.js
 #### Get Launch Status
 
 ```
-GET /api/projects/:id/launch/status
+GET /api/projects/:id/launch/status?chatId=<optional>
 ```
 
 Returns the current status of all configured launch processes, plus any active tunnel URLs.
@@ -891,7 +1282,8 @@ Returns the current status of all configured launch processes, plus any active t
     },
     "tunnelUrls": {
       "dev": "https://abc123.tunnel.example.com"
-    }
+    },
+    "effectivePath": "/Users/me/Projects/app"
   }
 }
 ```
@@ -899,7 +1291,7 @@ Returns the current status of all configured launch processes, plus any active t
 #### Get Launch Configs
 
 ```
-GET /api/projects/:id/launch/configs
+GET /api/projects/:id/launch/configs?chatId=<optional>
 ```
 
 Returns the parsed launch configurations from `.mainframe/launch.json`. Returns an empty array if no file exists.
@@ -925,7 +1317,7 @@ Returns the parsed launch configurations from `.mainframe/launch.json`. Returns 
 #### Start Launch Process
 
 ```
-POST /api/projects/:id/launch/:name/start
+POST /api/projects/:id/launch/:name/start?chatId=<optional>
 ```
 
 Starts a named launch configuration. Reads the config from disk — the request body is not used.
@@ -935,12 +1327,136 @@ Starts a named launch configuration. Reads the config from disk — the request 
 #### Stop Launch Process
 
 ```
-POST /api/projects/:id/launch/:name/stop
+POST /api/projects/:id/launch/:name/stop?chatId=<optional>
 ```
 
 Stops a named running process.
 
 **Response**: `ApiResponse<void>`
+
+---
+
+### Tunnel
+
+Tunnel endpoints manage the daemon's remote access tunnel.
+
+#### Get Tunnel Status
+
+```
+GET /api/tunnel/status
+```
+
+**Response**: `ApiResponse<{ running: boolean, url: string | null, verified: boolean }>`
+
+#### Get Tunnel Config
+
+```
+GET /api/tunnel/config
+```
+
+Returns whether tunnel credentials are configured without exposing the token.
+
+**Response**: `ApiResponse<{ hasToken: boolean, url: string | null }>`
+
+#### Start Tunnel
+
+```
+POST /api/tunnel/start
+Content-Type: application/json
+```
+
+Starts the daemon tunnel. When `token` and `url` are provided, the route persists them for future starts.
+
+**Body**: `{ "token": "token", "url": "https://named-tunnel.example.com" }`
+
+**Response**: `ApiResponse<{ url: string }>`
+
+#### Stop Tunnel
+
+```
+POST /api/tunnel/stop
+Content-Type: application/json
+```
+
+Stops the daemon tunnel.
+
+**Body**: `{ "clearConfig": false }`
+
+**Response**: `ApiResponse<void>`
+
+---
+
+### Device Activity
+
+#### Update Desktop Activity
+
+```
+POST /api/device/activity
+Content-Type: application/json
+```
+
+Tells the push service whether the desktop is active or idle.
+
+**Body**: `{ "state": "active" }`
+
+**Allowed values**: `"active"`, `"idle"`
+
+**Response**: `ApiResponse<void>`
+
+---
+
+### LSP
+
+#### List LSP Languages
+
+```
+GET /api/lsp/languages?projectId=<projectId>
+```
+
+Returns installed and active language-server status for a project.
+
+**Response**: `{ languages: LspLanguageStatus[] }`
+
+---
+
+### Plugins
+
+Plugin routes are mounted at `/api/plugins`. Plugin-specific routes live under `/api/plugins/:pluginId/*` and depend on each plugin.
+
+#### List Plugins
+
+```
+GET /api/plugins
+```
+
+**Response**: `{ plugins: PluginSummary[] }`
+
+#### Get Plugin
+
+```
+GET /api/plugins/:id
+```
+
+**Response**: `PluginSummary`
+
+#### Built-in Todos Plugin
+
+When the built-in todos plugin is loaded, it registers these routes under `/api/plugins/todos`:
+
+```
+GET /api/plugins/todos/todos?projectId=<projectId>
+POST /api/plugins/todos/todos
+PATCH /api/plugins/todos/todos/:id
+PATCH /api/plugins/todos/todos/:id/move
+DELETE /api/plugins/todos/todos/:id
+POST /api/plugins/todos/todos/:id/start-session
+GET /api/plugins/todos/todos/:id/attachments
+POST /api/plugins/todos/todos/:id/attachments
+GET /api/plugins/todos/todos/:id/attachments/:attachmentId
+DELETE /api/plugins/todos/todos/:id/attachments/:attachmentId
+```
+
+Plugin routes use plugin-owned response shapes rather than the standard `ApiResponse<T>` envelope.
 
 ---
 
@@ -985,11 +1501,19 @@ Send JSON messages to perform actions:
 { "type": "chat.end", "chatId": "chat_xyz" }
 
 // Update chat configuration
-{ "type": "chat.updateConfig", "chatId": "chat_xyz", "model": "claude-opus-4-6" }
+{ "type": "chat.updateConfig", "chatId": "chat_xyz", "adapterId": "claude", "model": "claude-opus-4-6", "planMode": true }
+
+// Edit or cancel a queued message
+{ "type": "message.queue.edit", "chatId": "chat_xyz", "messageId": "queued_01", "content": "Updated prompt" }
+{ "type": "message.queue.cancel", "chatId": "chat_xyz", "messageId": "queued_01" }
 
 // Subscribe/unsubscribe to chat events
 { "type": "subscribe", "chatId": "chat_xyz" }
 { "type": "unsubscribe", "chatId": "chat_xyz" }
+
+// Subscribe/unsubscribe to file change events
+{ "type": "subscribe:file", "path": "/Users/me/Projects/app/src/index.ts" }
+{ "type": "unsubscribe:file", "path": "/Users/me/Projects/app/src/index.ts" }
 ```
 
 ### Server → Client (DaemonEvent)
@@ -997,6 +1521,9 @@ Send JSON messages to perform actions:
 Events are broadcast to clients subscribed to the relevant chat:
 
 ```typescript
+// Connection
+{ "type": "connection.ready", "clientId": "client_01" }
+
 // Chat lifecycle
 { "type": "chat.created", "chat": { /* Chat object */ } }
 { "type": "chat.created", "chat": { /* Chat object */ }, "source": "import" } // when imported
@@ -1010,7 +1537,15 @@ Events are broadcast to clients subscribed to the relevant chat:
 
 // Raw messages (internal, adapter-level)
 { "type": "message.added", "chatId": "chat_xyz", "message": { /* ChatMessage */ } }
-{ "type": "messages.cleared", "chatId": "chat_xyz" }
+{ "type": "message.updated", "chatId": "chat_xyz", "message": { /* ChatMessage */ } }
+
+// Queued messages
+{ "type": "message.queued", "chatId": "chat_xyz", "ref": { /* QueuedMessageRef */ } }
+{ "type": "message.queued.processed", "chatId": "chat_xyz", "uuid": "queued_01" }
+{ "type": "message.queued.cancelled", "chatId": "chat_xyz", "uuid": "queued_01" }
+{ "type": "message.queued.cancel_failed", "chatId": "chat_xyz", "uuid": "queued_01" }
+{ "type": "message.queued.cleared", "chatId": "chat_xyz" }
+{ "type": "message.queued.snapshot", "chatId": "chat_xyz", "refs": [ /* QueuedMessageRef[] */ ] }
 
 // Display messages (UI-ready, grouped and enriched)
 { "type": "display.message.added", "chatId": "chat_xyz", "message": { /* DisplayMessage */ } }
@@ -1018,16 +1553,27 @@ Events are broadcast to clients subscribed to the relevant chat:
 { "type": "display.messages.set", "chatId": "chat_xyz", "messages": [ /* DisplayMessage[] */ ] }
 
 // Permissions
-{ "type": "permission.requested", "chatId": "chat_xyz", "request": { /* ControlRequest */ } }
+{ "type": "permission.requested", "chatId": "chat_xyz", "request": { /* ControlRequest */ }, "notify": true }
 { "type": "permission.resolved", "chatId": "chat_xyz", "requestId": "req_001" }
 
 // Context
 { "type": "context.updated", "chatId": "chat_xyz" }
+{ "type": "chat.contextUsage", "chatId": "chat_xyz", "percentage": 42, "totalTokens": 42000, "maxTokens": 100000 }
+{ "type": "chat.compacting", "chatId": "chat_xyz" }
+{ "type": "chat.compactDone", "chatId": "chat_xyz" }
+{ "type": "todos.updated", "chatId": "chat_xyz", "todos": [ /* TodoItem[] */ ] }
+{ "type": "chat.prDetected", "chatId": "chat_xyz", "pr": { /* DetectedPr */ } }
+{ "type": "chat.notification", "chatId": "chat_xyz", "title": "Done", "body": "Task complete", "level": "success" }
 
 // Plugin UI
 { "type": "plugin.panel.registered", "pluginId": "my-plugin", "zone": "left-panel", "label": "My Panel", "icon": "LayoutDashboard" }
 { "type": "plugin.panel.unregistered", "pluginId": "my-plugin" }
+{ "type": "plugin.action.registered", "pluginId": "my-plugin", "actionId": "new-task", "label": "New Task" }
+{ "type": "plugin.action.unregistered", "pluginId": "my-plugin", "actionId": "new-task" }
 { "type": "plugin.notification", "pluginId": "my-plugin", "title": "Done", "body": "Task complete", "level": "info" }
+
+// Adapter models
+{ "type": "adapter.models.updated", "adapterId": "claude", "models": [ /* AdapterModel[] */ ] }
 
 // Launch process events
 { "type": "launch.output", "projectId": "abc123", "name": "dev", "data": "Server started\n", "stream": "stdout" }
@@ -1038,6 +1584,13 @@ Events are broadcast to clients subscribed to the relevant chat:
 
 // External sessions
 { "type": "sessions.external.count", "projectId": "abc123", "count": 3 }
+
+// File subscription
+{ "type": "subscribe:file:ack", "requestedPath": "/Users/me/Projects/app/src/index.ts", "resolvedPath": "/Users/me/Projects/app/src/index.ts" }
+{ "type": "file:changed", "path": "/Users/me/Projects/app/src/index.ts" }
+
+// Tunnel lifecycle
+{ "type": "tunnel:status", "state": "ready", "label": "Daemon tunnel", "url": "https://abc.tunnel.example.com", "dnsVerified": true }
 
 // Errors
 { "type": "error", "chatId": "chat_xyz", "error": "Process crashed unexpectedly" }
