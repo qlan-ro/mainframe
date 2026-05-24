@@ -504,6 +504,18 @@ export class ChatManager {
     if (active) active.chat.tags = tags;
   }
 
+  /**
+   * Apply a partial DB-backed update to the in-memory cached chat. Same reason
+   * as syncChatTags: any field persisted via a PATCH route that isn't mirrored
+   * here will be clobbered the next time `resumeChat` re-emits `chat.updated`
+   * from the stale cache.
+   */
+  syncChatFields(chatId: string, partial: Partial<Chat>): void {
+    const active = this.activeChats.get(chatId);
+    if (!active) return;
+    Object.assign(active.chat, partial);
+  }
+
   getEffectivePath(chatId: string): string | null {
     const chat = this.getChat(chatId);
     if (!chat) return null;

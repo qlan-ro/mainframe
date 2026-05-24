@@ -145,6 +145,7 @@ export function chatRoutes(ctx: RouteContext): Router {
         res.status(404).json({ success: false, error: 'Chat not found' });
         return;
       }
+      ctx.chats?.syncChatFields?.(chatId, { pinned: parsed.data.pinned });
       res.json({ success: true, data: chat });
     } catch (err) {
       logger.warn({ err, chatId }, 'Failed to update pinned state');
@@ -169,6 +170,7 @@ export function chatRoutes(ctx: RouteContext): Router {
         res.status(404).json({ success: false, error: 'Chat not found' });
         return;
       }
+      ctx.chats?.syncChatFields?.(chatId, { effort: effortUpdate as Chat['effort'] });
       res.json({ success: true, data: chat });
     } catch (err) {
       logger.warn({ err, chatId }, 'Failed to update effort');
