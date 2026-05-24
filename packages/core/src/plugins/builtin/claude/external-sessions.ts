@@ -1,4 +1,4 @@
-import { access, constants, readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
@@ -27,24 +27,53 @@ interface SessionIndex {
   entries: SessionIndexEntry[];
 }
 
-function getProjectDir(projectPath: string): string {
-  const encodedPath = projectPath.replace(/[^a-zA-Z0-9-]/g, '-');
-  return path.join(homedir(), '.claude', 'projects', encodedPath);
+function encodePath(p: string): string {
+  return p.replace(/[^a-zA-Z0-9-]/g, '-');
 }
 
-/** Try sessions-index.json first; fall back to JSONL scan. Aggregates across multiple paths. */
+function projectsRoot(): string {
+  return path.join(homedir(), '.claude', 'projects');
+}
+
+/**
+ * Belongs to this project if cwd equals the root or is nested under it.
+ * Claude writes cwd as a native path matching the OS where it ran, so we use
+ * `path.sep` rather than a hardcoded '/' — Mainframe stores projectPath in the
+ * same native form, so both sides share separators on the host that scans.
+ */
+function cwdBelongsToProject(cwd: string | undefined, projectPath: string): boolean {
+  if (!cwd) return false;
+  if (cwd === projectPath) return true;
+  return cwd.startsWith(projectPath + path.sep);
+}
+
+/** Discover every encoded dir under ~/.claude/projects whose prefix matches the project. */
+async function discoverProjectDirs(projectPath: string): Promise<string[]> {
+  const root = projectsRoot();
+  const encodedPrefix = encodePath(projectPath);
+  let entries: string[];
+  try {
+    entries = await readdir(root);
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((name) => name === encodedPrefix || name.startsWith(encodedPrefix + '-'))
+    .map((name) => path.join(root, name));
+}
+
+/** Scan all matching dirs for the project; verify each session by cwd. */
 export async function listExternalSessions(
-  projectPaths: string[],
+  projectPath: string,
   excludeSessionIds: string[],
 ): Promise<ExternalSession[]> {
   const excludeSet = new Set(excludeSessionIds);
-  const uniquePaths = Array.from(new Set(projectPaths));
+  const candidateDirs = await discoverProjectDirs(projectPath);
   const aggregated: ExternalSession[] = [];
 
-  for (const projectPath of uniquePaths) {
-    const projectDir = getProjectDir(projectPath);
-    const fromIndex = await listFromIndex(projectDir, projectPath, excludeSet);
-    const sessions = fromIndex ?? (await listFromJsonl(projectDir, projectPath, excludeSet));
+  for (const dir of candidateDirs) {
+    const fromIndex = await listFromIndex(dir, projectPath, excludeSet);
+    const sessions = fromIndex ?? (await listFromJsonl(dir, projectPath, excludeSet));
     aggregated.push(...sessions);
   }
 
@@ -52,6 +81,7 @@ export async function listExternalSessions(
   const deduped: ExternalSession[] = [];
   for (const session of aggregated) {
     if (seen.has(session.sessionId)) continue;
+    if (!cwdBelongsToProject(session.cwd, projectPath)) continue;
     seen.add(session.sessionId);
     deduped.push(session);
   }
@@ -70,7 +100,7 @@ async function listFromIndex(
   try {
     raw = await readFile(indexPath, 'utf-8');
   } catch {
-    return null; // No index — use fallback
+    return null;
   }
 
   let index: SessionIndex;
@@ -86,31 +116,43 @@ async function listFromIndex(
     return null;
   }
 
-  // Empty index — fall through to JSONL scan
   if (index.entries.length === 0) return null;
 
   const candidates = index.entries.filter(
     (e) => e.sessionId && !excludeSet.has(e.sessionId) && !e.isSidechain && e.firstPrompt,
   );
 
-  // Verify JSONL files exist on disk — the index can reference deleted sessions
   const verified: ExternalSession[] = [];
   for (const entry of candidates) {
     const jsonlPath = entry.fullPath ?? path.join(projectDir, entry.sessionId + '.jsonl');
+    let fileMtimeIso: string | undefined;
     try {
-      await access(jsonlPath, constants.R_OK);
+      const s = await stat(jsonlPath);
+      fileMtimeIso = s.mtime.toISOString();
     } catch {
-      continue; // JSONL deleted — skip ghost entry
+      continue; // JSONL deleted/unreachable — skip ghost index entry
     }
+
+    const indexMtimeIso = typeof entry.fileMtime === 'number' ? new Date(entry.fileMtime).toISOString() : undefined;
+
+    const createdAt = entry.created ?? entry.modified ?? indexMtimeIso ?? fileMtimeIso;
+    const modifiedAt = entry.modified ?? indexMtimeIso ?? fileMtimeIso ?? entry.created;
+    if (!createdAt || !modifiedAt) {
+      // Without any real timestamp, omit the session rather than fake "now".
+      logger.warn({ sessionId: entry.sessionId }, 'no timestamp available for session, skipping');
+      continue;
+    }
+
     verified.push({
       sessionId: entry.sessionId,
       adapterId: 'claude',
       projectPath,
+      cwd: entry.projectPath,
       firstPrompt: entry.firstPrompt,
       summary: entry.summary,
       messageCount: entry.messageCount,
-      createdAt: entry.created ?? new Date().toISOString(),
-      modifiedAt: entry.modified ?? entry.created ?? new Date().toISOString(),
+      createdAt,
+      modifiedAt,
       gitBranch: entry.gitBranch || undefined,
     });
   }
@@ -118,7 +160,6 @@ async function listFromIndex(
   return verified.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
 }
 
-/** Scan *.jsonl files, reading the first user message from each for metadata. */
 async function listFromJsonl(
   projectDir: string,
   projectPath: string,
@@ -142,8 +183,8 @@ async function listFromJsonl(
     try {
       const session = await extractSessionMeta(filePath, sessionId, projectPath);
       if (session) sessions.push(session);
-    } catch {
-      // Skip unreadable files
+    } catch (err) {
+      logger.warn({ err: String(err), filePath }, 'failed to read external session file');
     }
   }
 
@@ -162,6 +203,7 @@ async function extractSessionMeta(
   let firstPrompt: string | undefined;
   let createdAt: string | undefined;
   let gitBranch: string | undefined;
+  let cwd: string | undefined;
   let isSidechain = false;
   let linesRead = 0;
 
@@ -170,7 +212,7 @@ async function extractSessionMeta(
     for await (const line of rl) {
       if (!line.trim()) continue;
       linesRead++;
-      if (linesRead > 30) break;
+      if (linesRead > 50) break;
 
       try {
         const entry = JSON.parse(line);
@@ -182,18 +224,17 @@ async function extractSessionMeta(
 
         if (!createdAt && entry.timestamp) createdAt = entry.timestamp;
         if (!gitBranch && entry.gitBranch) gitBranch = entry.gitBranch;
+        if (!cwd && entry.cwd) cwd = entry.cwd;
 
         if (!firstPrompt && entry.type === 'user' && entry.message?.content) {
-          // Skip entries from parent sessions (subagent JSONLs interleave parent entries)
           if (entry.sessionId && entry.sessionId !== sessionId) continue;
-
           const content = entry.message.content;
           const raw = extractRawText(content, 2000);
           const cleaned = raw ? stripCommandBoilerplate(raw) : undefined;
           if (cleaned) firstPrompt = cleaned.slice(0, 500);
         }
 
-        if (firstPrompt && createdAt && gitBranch) break;
+        if (firstPrompt && createdAt && gitBranch && cwd) break;
       } catch {
         // Skip malformed lines
       }
@@ -203,15 +244,13 @@ async function extractSessionMeta(
   }
 
   if (isSidechain) return null;
-
-  // Non-session JSONL files (progress, queue-operation, file-history-snapshot)
-  // don't contain user messages — skip them.
   if (!firstPrompt) return null;
 
   return {
     sessionId,
     adapterId: 'claude',
     projectPath,
+    cwd,
     firstPrompt,
     createdAt: createdAt ?? modifiedAt,
     modifiedAt,
@@ -230,16 +269,10 @@ function extractRawText(content: unknown, limit = 200): string | undefined {
   return undefined;
 }
 
-/**
- * Strip Claude CLI command boilerplate from message text.
- * Sessions that start with /clear, /model, etc. embed XML tags like
- * `<local-command-caveat>`, `<command-name>`, `<command-message>`,
- * `<command-args>`, `<local-command-stdout>` before the real user text.
- */
 function stripCommandBoilerplate(text: string): string {
   return text
-    .replace(/<[^>]+>[^<]*<\/[^>]+>/g, '') // matched open/close tags with content
-    .replace(/<[^>]+>/g, '') // self-closing or orphan tags
+    .replace(/<[^>]+>[^<]*<\/[^>]+>/g, '')
+    .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
