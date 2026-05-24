@@ -64,6 +64,8 @@ export interface ClaudeSessionState {
   interruptTimer: ReturnType<typeof setTimeout> | null;
   /** Pending cancel_async_message callbacks keyed by request_id */
   pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
+  /** Pending stop_task callbacks keyed by request_id */
+  pendingStopTaskCallbacks: Map<string, (result: { ok: boolean; error?: string }) => void>;
   /** Tool_use IDs for Bash commands that match PR-create patterns (gh pr create, etc.) */
   pendingPrCreates: Set<string>;
   /** Tool_use IDs → parsed PR info for mutation commands (gh pr edit/ready/merge/close/reopen/comment/review, etc.) */
@@ -126,6 +128,7 @@ export class ClaudeSession implements AdapterSession {
       activeTasks: new Map(),
       interruptTimer: null,
       pendingCancelCallbacks: new Map(),
+      pendingStopTaskCallbacks: new Map(),
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),
       toolUseRegistry: new Map(),
@@ -475,6 +478,34 @@ export class ClaudeSession implements AdapterSession {
       this.state.pendingCancelCallbacks.set(requestId, (cancelled) => {
         clearTimeout(timeout);
         resolve(cancelled);
+      });
+    });
+  }
+
+  async stopBackgroundTask(taskId: string): Promise<{ ok: boolean; error?: string }> {
+    const stdin = this.state.child?.stdin;
+    if (!stdin || stdin.destroyed) {
+      log.warn({ sessionId: this.id, taskId }, 'stopBackgroundTask: stdin unavailable');
+      return { ok: false, error: 'stdin unavailable' };
+    }
+    const requestId = nanoid();
+    const payload = {
+      type: 'control_request',
+      request_id: requestId,
+      request: { subtype: 'stop_task', task_id: taskId },
+    };
+    log.info({ sessionId: this.id, taskId, requestId }, 'sending stop_task');
+    stdin.write(JSON.stringify(payload) + '\n');
+
+    return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.state.pendingStopTaskCallbacks.delete(requestId);
+        log.warn({ sessionId: this.id, taskId, requestId }, 'stop_task timed out');
+        resolve({ ok: false, error: 'timeout' });
+      }, 5000);
+      this.state.pendingStopTaskCallbacks.set(requestId, (result) => {
+        clearTimeout(timeout);
+        resolve(result);
       });
     });
   }
