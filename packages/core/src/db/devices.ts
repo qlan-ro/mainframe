@@ -1,9 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Device } from '@qlan-ro/mainframe-types';
-
-export interface DeviceRow extends Device {
-  authEpoch: number;
-}
+import type { Device, DeviceRow } from '@qlan-ro/mainframe-types';
 
 export class DevicesRepository {
   constructor(private db: Database.Database) {}
