@@ -115,15 +115,19 @@ export class ChatConfigManager {
     if (!project) throw new Error('Project not found');
 
     if (active.chat.claudeSessionId) {
-      // Mid-session path: stop, create worktree, move session files, restart
+      // Mid-session path: stop, create worktree, move session files (claude only), restart.
+      // Codex resumes by threadId + cwd and stores rollouts under ~/.codex/sessions/<date>/
+      // (not project-keyed), so there is nothing to relocate.
       await this.deps.stopChat(chatId);
 
       const worktreeDir = this.deps.db.settings.get('general', 'worktreeDir') ?? GENERAL_DEFAULTS.worktreeDir;
       const info = createWorktree(project.path, chatId, worktreeDir, baseBranch, branchName);
 
-      const oldProjectDir = getClaudeProjectDir(project.path);
-      const newProjectDir = getClaudeProjectDir(info.worktreePath);
-      await moveSessionFiles(active.chat.claudeSessionId, oldProjectDir, newProjectDir);
+      if (active.chat.adapterId === 'claude') {
+        const oldProjectDir = getClaudeProjectDir(project.path);
+        const newProjectDir = getClaudeProjectDir(info.worktreePath);
+        await moveSessionFiles(active.chat.claudeSessionId, oldProjectDir, newProjectDir);
+      }
 
       active.chat.worktreePath = info.worktreePath;
       active.chat.branchName = info.branchName;
@@ -159,9 +163,11 @@ export class ChatConfigManager {
 
       await this.deps.stopChat(chatId);
 
-      const oldProjectDir = getClaudeProjectDir(project.path);
-      const newProjectDir = getClaudeProjectDir(worktreePath);
-      await moveSessionFiles(active.chat.claudeSessionId, oldProjectDir, newProjectDir);
+      if (active.chat.adapterId === 'claude') {
+        const oldProjectDir = getClaudeProjectDir(project.path);
+        const newProjectDir = getClaudeProjectDir(worktreePath);
+        await moveSessionFiles(active.chat.claudeSessionId, oldProjectDir, newProjectDir);
+      }
 
       active.chat.worktreePath = worktreePath;
       active.chat.branchName = branchName;
