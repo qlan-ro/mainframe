@@ -49,7 +49,8 @@ export function initializeSchema(db: Database.Database): void {
       device_id   TEXT PRIMARY KEY,
       device_name TEXT NOT NULL,
       created_at  TEXT NOT NULL,
-      last_seen   TEXT
+      last_seen   TEXT,
+      auth_epoch  INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS tags (
@@ -130,6 +131,11 @@ export function initializeSchema(db: Database.Database): void {
   const projectCols = db.pragma('table_info(projects)') as { name: string }[];
   if (!projectCols.some((c) => c.name === 'parent_project_id')) {
     db.exec('ALTER TABLE projects ADD COLUMN parent_project_id TEXT REFERENCES projects(id)');
+  }
+
+  const deviceCols = db.pragma('table_info(devices)') as { name: string }[];
+  if (!deviceCols.some((c) => c.name === 'auth_epoch')) {
+    db.exec('ALTER TABLE devices ADD COLUMN auth_epoch INTEGER NOT NULL DEFAULT 0');
   }
 
   const planModeSettings = db
