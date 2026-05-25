@@ -25,7 +25,8 @@ export interface SessionResult {
 
 export interface SessionOptions {
   projectPath: string;
-  chatId?: string; // Claude session ID for resume
+  chatId?: string; // Claude session ID for resume (CLI-side identifier)
+  mainframeChatId: string; // Mainframe-side chat identifier — used by tracker/WS/routes
 }
 
 export interface SessionSpawnOptions {
@@ -212,7 +213,8 @@ export interface AdapterModel {
 export interface ExternalSession {
   sessionId: string; // CLI's native session UUID
   adapterId: string; // Which adapter discovered this session
-  projectPath: string;
+  projectPath: string; // Project root the session was attributed to (Mainframe-side)
+  cwd?: string; // Working directory the session actually ran in (worktree, subdir, or root)
   firstPrompt?: string; // First user message (truncated)
   summary?: string; // AI-generated summary if available
   messageCount?: number;
@@ -255,7 +257,7 @@ export interface Adapter {
   ): Promise<import('./skill.js').AgentConfig>;
   updateAgent?(agentId: string, projectPath: string, content: string): Promise<import('./skill.js').AgentConfig>;
   deleteAgent?(agentId: string, projectPath: string): Promise<void>;
-  listExternalSessions?(projectPaths: string[], excludeSessionIds: string[]): Promise<ExternalSession[]>;
+  listExternalSessions?(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]>;
 
   /**
    * Factory for an adapter-specific plan-mode action handler.

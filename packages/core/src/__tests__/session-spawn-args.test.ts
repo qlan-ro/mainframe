@@ -33,7 +33,7 @@ describe('ClaudeSession spawn args', () => {
 
   async function spawnWithMode(permissionMode: string | undefined): Promise<string[]> {
     const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
-    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
     await session.spawn({ permissionMode } as any).catch(() => {});
     return spawnMock.mock.calls[0]?.[1] as string[];
   }
@@ -80,7 +80,7 @@ describe('ClaudeSession spawn args', () => {
 
   it('omits --append-system-prompt by default', async () => {
     const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
-    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
     await session.spawn({} as any).catch(() => {});
     const args = spawnMock.mock.calls[0]?.[1] as string[];
     expect(args).not.toContain('--append-system-prompt');
@@ -89,7 +89,7 @@ describe('ClaudeSession spawn args', () => {
   it('includes --append-system-prompt when systemPrompt is enabled', async () => {
     const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
     const { MAINFRAME_SYSTEM_PROMPT_APPEND } = await import('../plugins/builtin/claude/constants.js');
-    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
     await session.spawn({ systemPrompt: 'enabled' } as any).catch(() => {});
     const args = spawnMock.mock.calls[0]?.[1] as string[];
     const idx = args.indexOf('--append-system-prompt');
@@ -99,7 +99,7 @@ describe('ClaudeSession spawn args', () => {
 
   it('omits --effort when effort is undefined', async () => {
     const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
-    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
     await session.spawn({} as any).catch(() => {});
     const args = spawnMock.mock.calls[0]?.[1] as string[];
     expect(args).not.toContain('--effort');
@@ -107,7 +107,7 @@ describe('ClaudeSession spawn args', () => {
 
   it.each(['low', 'medium', 'high'] as const)('passes --effort %s when set', async (effort) => {
     const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
-    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
     await session.spawn({ effort } as any).catch(() => {});
     const args = spawnMock.mock.calls[0]?.[1] as string[];
     const idx = args.indexOf('--effort');

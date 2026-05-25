@@ -36,15 +36,15 @@ describe('CodexAdapter', () => {
 
   it('createSession returns a CodexSession', () => {
     const adapter = new CodexAdapter();
-    const session = adapter.createSession({ projectPath: '/tmp' });
+    const session = adapter.createSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' });
     expect(session.adapterId).toBe('codex');
     expect(session.projectPath).toBe('/tmp');
   });
 
   it('killAll kills all tracked sessions', async () => {
     const adapter = new CodexAdapter();
-    const session1 = adapter.createSession({ projectPath: '/tmp' });
-    const session2 = adapter.createSession({ projectPath: '/tmp' });
+    const session1 = adapter.createSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' });
+    const session2 = adapter.createSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' });
     vi.spyOn(session1, 'kill').mockResolvedValue();
     vi.spyOn(session2, 'kill').mockResolvedValue();
 

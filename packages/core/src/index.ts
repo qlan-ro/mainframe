@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { ensureAuthSecret, getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
+import { BackgroundTaskTracker } from './background-tasks/tracker.js';
 import { AdapterRegistry } from './adapters/index.js';
 import { backfillAdapterExecutables, defaultRun } from './adapters/resolve-executable.js';
 import { ChatManager } from './chat/index.js';
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
   logger.info({ port: config.port }, 'Starting daemon');
 
   const db = new DatabaseManager();
+  const backgroundTasks = new BackgroundTaskTracker();
   const adapters = new AdapterRegistry();
   const attachmentStore = new AttachmentStore(join(getDataDir(), 'attachments'));
 
@@ -71,6 +73,16 @@ async function main(): Promise<void> {
   const chats = new ChatManager(db, adapters, attachmentStore, (event) => broadcastEvent(event));
   const tunnelManager = new TunnelManager((event) => broadcastEvent(event));
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
+
+  // Forward tracker emissions through the late-bound broadcastEvent closure.
+  // The closure captures broadcastEvent by reference, so by the time tracker
+  // events fire from live CLI sessions, the var will point to server.broadcastEvent.
+  backgroundTasks.on('background_task.started', (chatId, task) => {
+    broadcastEvent({ type: 'background_task.started', chatId, task });
+  });
+  backgroundTasks.on('background_task.ended', (chatId, task) => {
+    broadcastEvent({ type: 'background_task.ended', chatId, task });
+  });
 
   chats.setStopLaunchProcesses(async (projectId, projectPath) => {
     const manager = launchRegistry.get(projectId, projectPath);
@@ -90,7 +102,7 @@ async function main(): Promise<void> {
   });
 
   // Load builtin plugins first (always trusted, no consent dialog)
-  await pluginManager.loadBuiltin(claudeManifest as PluginManifest, activateClaude);
+  await pluginManager.loadBuiltin(claudeManifest as PluginManifest, (ctx) => activateClaude(ctx, backgroundTasks));
   await pluginManager.loadBuiltin(codexManifest as PluginManifest, activateCodex);
 
   const todosPluginDir = join(getDataDir(), 'plugins', 'todos');
@@ -112,6 +124,7 @@ async function main(): Promise<void> {
     () => daemonTunnelUrl,
     tunnelManager,
     config.port,
+    backgroundTasks,
   );
 
   await server.start(config.port);

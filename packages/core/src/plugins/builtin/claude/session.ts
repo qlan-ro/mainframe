@@ -17,6 +17,8 @@ import type {
   SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
 import { handleStdout, handleStderr, type DetectedPrCore } from './events.js';
+import { ClaudeTaskEvents } from './task-events.js';
+import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
 import { MAINFRAME_SYSTEM_PROMPT_APPEND } from './constants.js';
 import { createChildLogger } from '../../../logger.js';
 import {
@@ -50,6 +52,8 @@ const nullSink: SessionSink = {
 
 export interface ClaudeSessionState {
   chatId: string;
+  /** Mainframe-side chat ID — used for tracker/WS routing. Distinct from `chatId` (Claude session ID). */
+  mainframeChatId: string;
   buffer: string;
   lastAssistantUsage?: {
     input_tokens?: number;
@@ -64,6 +68,8 @@ export interface ClaudeSessionState {
   interruptTimer: ReturnType<typeof setTimeout> | null;
   /** Pending cancel_async_message callbacks keyed by request_id */
   pendingCancelCallbacks: Map<string, (cancelled: boolean) => void>;
+  /** Pending stop_task callbacks keyed by request_id */
+  pendingStopTaskCallbacks: Map<string, (result: { ok: boolean; error?: string }) => void>;
   /** Tool_use IDs for Bash commands that match PR-create patterns (gh pr create, etc.) */
   pendingPrCreates: Set<string>;
   /** Tool_use IDs → parsed PR info for mutation commands (gh pr edit/ready/merge/close/reopen/comment/review, etc.) */
@@ -84,6 +90,8 @@ export interface ClaudeSessionState {
   taskV2Events: import('../../../todos/normalize.js').TaskV2Event[];
   /** Epoch ms of last stdin write or stdout event — drives idle eviction. */
   lastActivityAt: number;
+  /** Bridge that routes CLI background-task events to the BackgroundTaskTracker. */
+  taskEvents: ClaudeTaskEvents;
 }
 
 /**
@@ -112,13 +120,21 @@ export class ClaudeSession implements AdapterSession {
   private readonly resumeSessionId: string | undefined;
   private readonly onExit: (() => void) | undefined;
 
-  constructor(options: SessionOptions, onExit?: () => void) {
+  constructor(
+    options: SessionOptions,
+    onExit?: () => void,
+    // Default arg keeps the dozens of `new ClaudeSession(...)` test call sites
+    // compiling (session-spawn-args.test.ts, claude-spawn-args.test.ts,
+    // kill-awaits-close.test.ts, claude-events.test.ts).
+    backgroundTasks: BackgroundTaskTracker = new BackgroundTaskTracker(),
+  ) {
     this.id = nanoid();
     this.projectPath = options.projectPath;
     this.resumeSessionId = options.chatId;
     this.onExit = onExit;
     this.state = {
       chatId: options.chatId ?? '',
+      mainframeChatId: options.mainframeChatId,
       buffer: '',
       child: null,
       status: 'starting',
@@ -126,12 +142,14 @@ export class ClaudeSession implements AdapterSession {
       activeTasks: new Map(),
       interruptTimer: null,
       pendingCancelCallbacks: new Map(),
+      pendingStopTaskCallbacks: new Map(),
       pendingPrCreates: new Set(),
       pendingPrMutations: new Map(),
       toolUseRegistry: new Map(),
       skillPathCache: new Map(),
       taskV2Events: [],
       lastActivityAt: Date.now(),
+      taskEvents: new ClaudeTaskEvents(backgroundTasks),
     };
   }
 
@@ -475,6 +493,34 @@ export class ClaudeSession implements AdapterSession {
       this.state.pendingCancelCallbacks.set(requestId, (cancelled) => {
         clearTimeout(timeout);
         resolve(cancelled);
+      });
+    });
+  }
+
+  async stopBackgroundTask(taskId: string): Promise<{ ok: boolean; error?: string }> {
+    const stdin = this.state.child?.stdin;
+    if (!stdin || stdin.destroyed) {
+      log.warn({ sessionId: this.id, taskId }, 'stopBackgroundTask: stdin unavailable');
+      return { ok: false, error: 'stdin unavailable' };
+    }
+    const requestId = nanoid();
+    const payload = {
+      type: 'control_request',
+      request_id: requestId,
+      request: { subtype: 'stop_task', task_id: taskId },
+    };
+    log.info({ sessionId: this.id, taskId, requestId }, 'sending stop_task');
+    stdin.write(JSON.stringify(payload) + '\n');
+
+    return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.state.pendingStopTaskCallbacks.delete(requestId);
+        log.warn({ sessionId: this.id, taskId, requestId }, 'stop_task timed out');
+        resolve({ ok: false, error: 'timeout' });
+      }, 5000);
+      this.state.pendingStopTaskCallbacks.set(requestId, (result) => {
+        clearTimeout(timeout);
+        resolve(result);
       });
     });
   }

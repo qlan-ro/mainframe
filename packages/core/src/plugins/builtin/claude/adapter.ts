@@ -12,6 +12,7 @@ import type {
   CreateAgentInput,
 } from '@qlan-ro/mainframe-types';
 import { ClaudeSession } from './session.js';
+import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
 import { probeModels as doProbeModels } from './probe-models.js';
 import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';
@@ -136,6 +137,13 @@ export class ClaudeAdapter implements Adapter {
   private sessions = new Set<ClaudeSession>();
   private dynamicModels: AdapterModel[] | null = null;
 
+  // Default arg keeps existing direct-construct call sites (tests under
+  // packages/core/src/__tests__/ and plugins/.../__tests__/) compiling
+  // without mass-editing them. Production wiring at core/src/index.ts
+  // passes the shared singleton explicitly; tests get their own throwaway
+  // instance.
+  constructor(private readonly backgroundTasks: BackgroundTaskTracker = new BackgroundTaskTracker()) {}
+
   createPlanModeHandler(): unknown {
     return new ClaudePlanModeHandler();
   }
@@ -197,7 +205,7 @@ export class ClaudeAdapter implements Adapter {
   }
 
   createSession(options: SessionOptions): AdapterSession {
-    const session = new ClaudeSession(options, () => this.sessions.delete(session));
+    const session = new ClaudeSession(options, () => this.sessions.delete(session), this.backgroundTasks);
     this.sessions.add(session);
     return session;
   }
@@ -247,7 +255,7 @@ export class ClaudeAdapter implements Adapter {
     return skills.deleteAgent(agentId, projectPath);
   }
 
-  async listExternalSessions(projectPaths: string[], excludeSessionIds: string[]): Promise<ExternalSession[]> {
-    return listExternalSessions(projectPaths, excludeSessionIds);
+  async listExternalSessions(projectPath: string, excludeSessionIds: string[]): Promise<ExternalSession[]> {
+    return listExternalSessions(projectPath, excludeSessionIds);
   }
 }

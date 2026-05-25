@@ -89,25 +89,7 @@ describe('ExternalSessionService', () => {
       chatsRepo.update(chat.id, { claudeSessionId: 'already-imported' });
 
       await service.scan(projectId);
-      expect(mockAdapter.listExternalSessions).toHaveBeenCalledWith(['/test/project'], ['already-imported']);
-    });
-
-    it('passes worktree paths alongside the project path to the adapter', async () => {
-      const mod = await import('../workspace/worktree.js');
-      const spy = vi.spyOn(mod, 'getWorktrees').mockResolvedValue([
-        { path: '/test/project', branch: 'refs/heads/main' },
-        { path: '/test/project/.worktrees/feat-a', branch: 'refs/heads/feat-a' },
-        { path: '/test/project/.worktrees/feat-b', branch: 'refs/heads/feat-b' },
-      ]);
-      try {
-        await service.scan(projectId);
-        expect(mockAdapter.listExternalSessions).toHaveBeenCalledWith(
-          ['/test/project', '/test/project/.worktrees/feat-a', '/test/project/.worktrees/feat-b'],
-          [],
-        );
-      } finally {
-        spy.mockRestore();
-      }
+      expect(mockAdapter.listExternalSessions).toHaveBeenCalledWith('/test/project', ['already-imported']);
     });
 
     it('returns empty array when adapter has no listExternalSessions', async () => {

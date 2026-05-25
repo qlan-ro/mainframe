@@ -75,7 +75,10 @@ export type DaemonEvent =
       error?: string;
     }
   | { type: 'file:changed'; path: string }
-  | { type: 'subscribe:file:ack'; requestedPath: string; resolvedPath: string };
+  | { type: 'subscribe:file:ack'; requestedPath: string; resolvedPath: string }
+  | { type: 'background_task.started'; chatId: string; task: import('./background-task.js').BackgroundTask }
+  | { type: 'background_task.updated'; chatId: string; task: import('./background-task.js').BackgroundTask }
+  | { type: 'background_task.ended'; chatId: string; task: import('./background-task.js').BackgroundTask };
 
 export type ClientEvent =
   | {

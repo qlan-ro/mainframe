@@ -16,19 +16,39 @@ function cleanPromptDisplay(text: string): string {
 
 function formatRelativeTime(isoString: string): string {
   const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const MIN = 60 * 1000;
+  const HOUR = 60 * MIN;
+  const DAY = 24 * HOUR;
   const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  if (date.toDateString() === now.toDateString()) return `Today ${time}`;
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
-  if (diffDays < 7) return `${date.toLocaleDateString([], { weekday: 'long' })} ${time}`;
-  if (diffDays < 14) return 'Last week';
-  if (date.getFullYear() === now.getFullYear()) return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  if (diffMs < HOUR) {
+    const mins = Math.max(1, Math.floor(diffMs / MIN));
+    return `${mins}m ago`;
+  }
+  if (diffMs < DAY) {
+    const hours = Math.floor(diffMs / HOUR);
+    return `${hours}h ago`;
+  }
+  if (diffMs < 2 * DAY) return `Yesterday ${time}`;
+  if (diffMs < 7 * DAY) {
+    const days = Math.floor(diffMs / DAY);
+    return `${days}d ago`;
+  }
+  if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
   return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function worktreeLabel(cwd: string | undefined, projectPath: string | undefined): string | null {
+  if (!cwd || !projectPath) return null;
+  if (cwd === projectPath) return null; // root — no label
+  const prefix = projectPath.endsWith('/') ? projectPath : projectPath + '/';
+  if (cwd.startsWith(prefix)) return cwd.slice(prefix.length);
+  return cwd;
 }
 
 interface ImportSessionsPopoverProps {
@@ -65,6 +85,11 @@ export function ImportSessionsPopover({
       .catch((err) => log.warn('failed to fetch external sessions', { err: String(err) }))
       .finally(() => setLoading(false));
   }, [selectedProjectId]);
+
+  const selectedProject = useMemo(
+    () => projects.find((p) => p.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId],
+  );
 
   const handleImport = useCallback(
     async (session: ExternalSession) => {
@@ -144,10 +169,28 @@ export function ImportSessionsPopover({
                     {session.gitBranch && (
                       <>
                         <GitBranch size={10} className="shrink-0" />
-                        <span className="truncate max-w-[100px]">{session.gitBranch}</span>
+                        <span className="truncate max-w-[100px]" data-testid="external-session-branch">
+                          {session.gitBranch}
+                        </span>
                         <span>{'·'}</span>
                       </>
                     )}
+                    {(() => {
+                      const label = worktreeLabel(session.cwd, selectedProject?.path);
+                      if (!label) return null;
+                      return (
+                        <>
+                          <span
+                            className="truncate max-w-[140px] font-mono"
+                            data-testid="external-session-worktree"
+                            title={session.cwd}
+                          >
+                            {label}
+                          </span>
+                          <span>{'·'}</span>
+                        </>
+                      );
+                    })()}
                     <Clock size={10} className="shrink-0" />
                     <span>{formatRelativeTime(session.modifiedAt)}</span>
                   </div>

@@ -13,6 +13,7 @@ import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import { LspRegistry, LspManager, LspConnectionHandler } from '../lsp/index.js';
 import { FileWatcherService } from '../files/file-watcher.js';
+import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 
 const log = createChildLogger('server');
 
@@ -32,6 +33,7 @@ export function createServerManager(
   getTunnelUrl?: () => string | null,
   tunnelManager?: TunnelManager,
   port?: number,
+  backgroundTasks?: BackgroundTaskTracker,
 ): ServerManager {
   const lspRegistry = new LspRegistry();
   const lspManager = new LspManager(lspRegistry);
@@ -48,6 +50,7 @@ export function createServerManager(
     tunnelManager,
     port,
     lspManager,
+    backgroundTasks,
   );
   chats.setPushService(pushService);
   const httpServer = createServer(app);
