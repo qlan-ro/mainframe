@@ -78,6 +78,26 @@ describe('mid-session enableWorktree', () => {
       branchName: 'my-branch',
     });
   });
+
+  it('skips moveSessionFiles for non-claude adapters but still stops/restarts', async () => {
+    const { moveSessionFiles } = await import('../../workspace/index.js');
+    (moveSessionFiles as ReturnType<typeof vi.fn>).mockClear();
+
+    const chat = makeChat({ adapterId: 'codex', claudeSessionId: 'thread-1' });
+    const active: ActiveChat = { chat, session: { isSpawned: true, kill: vi.fn() } as any };
+    const deps = makeDeps(active);
+
+    const manager = new ChatConfigManager(deps);
+    await manager.enableWorktree('chat-1', 'main', 'my-branch');
+
+    expect(deps.stopChat).toHaveBeenCalledWith('chat-1');
+    expect(moveSessionFiles).not.toHaveBeenCalled();
+    expect(deps.db.chats.update).toHaveBeenCalledWith('chat-1', {
+      worktreePath: '/repo/.worktrees/my-branch',
+      branchName: 'my-branch',
+    });
+    expect(deps.startChat).toHaveBeenCalledWith('chat-1');
+  });
 });
 
 describe('mid-session attachWorktree', () => {
@@ -119,5 +139,25 @@ describe('mid-session attachWorktree', () => {
       worktreePath: '/repo/.worktrees/existing-branch',
       branchName: 'existing-branch',
     });
+  });
+
+  it('skips moveSessionFiles for non-claude adapters but still stops/restarts', async () => {
+    const { moveSessionFiles } = await import('../../workspace/index.js');
+    (moveSessionFiles as ReturnType<typeof vi.fn>).mockClear();
+
+    const chat = makeChat({ adapterId: 'codex', claudeSessionId: 'thread-2' });
+    const active: ActiveChat = { chat, session: { isSpawned: true, kill: vi.fn() } as any };
+    const deps = makeDeps(active);
+
+    const manager = new ChatConfigManager(deps);
+    await manager.attachWorktree('chat-1', '/repo/.worktrees/existing-branch', 'existing-branch');
+
+    expect(deps.stopChat).toHaveBeenCalledWith('chat-1');
+    expect(moveSessionFiles).not.toHaveBeenCalled();
+    expect(deps.db.chats.update).toHaveBeenCalledWith('chat-1', {
+      worktreePath: '/repo/.worktrees/existing-branch',
+      branchName: 'existing-branch',
+    });
+    expect(deps.startChat).toHaveBeenCalledWith('chat-1');
   });
 });
