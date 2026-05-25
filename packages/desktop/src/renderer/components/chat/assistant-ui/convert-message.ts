@@ -84,6 +84,23 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
 
     case 'assistant': {
       const parts: ContentPart[] = [];
+      // assistant-ui keys each tool part by `toolCallId-<id>` and crashes the
+      // message with "Duplicate key" if two parts collide. Upstream we already
+      // emit unique ids, but a single defensive pass here keeps the renderer
+      // safe against any future regression (empty fallback ids, repeated
+      // agentIds, etc.). Suffix collisions with the part index so both parts
+      // still render.
+      const seenIds = new Set<string>();
+      const uniqueId = (id: string, idx: number): string => {
+        const candidate = id.length > 0 ? id : `idx-${idx}`;
+        if (!seenIds.has(candidate)) {
+          seenIds.add(candidate);
+          return candidate;
+        }
+        const suffixed = `${candidate}-${idx}`;
+        seenIds.add(suffixed);
+        return suffixed;
+      };
 
       for (const block of message.content) {
         switch (block.type) {
@@ -98,7 +115,12 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
             break;
           case 'tool_call':
             if (block.category !== 'hidden') {
-              parts.push(mapDisplayContentToToolCall(block));
+              const mapped = mapDisplayContentToToolCall(block);
+              if (mapped.type === 'tool-call') {
+                parts.push({ ...mapped, toolCallId: uniqueId(block.id, parts.length) });
+              } else {
+                parts.push(mapped);
+              }
             }
             break;
           // tool_group and task_group inner calls are not filtered here — hidden
@@ -110,7 +132,7 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
             );
             parts.push({
               type: 'tool-call',
-              toolCallId: calls[0]?.id ?? '',
+              toolCallId: uniqueId(calls[0]?.id ?? '', parts.length),
               toolName: '_ToolGroup',
               args: {
                 items: calls.map((c) => ({
@@ -153,7 +175,7 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
             const firstTool = children.find((c) => c.kind === 'tool') as { kind: 'tool'; result: unknown } | undefined;
             parts.push({
               type: 'tool-call',
-              toolCallId: block.agentId,
+              toolCallId: uniqueId(block.agentId, parts.length),
               toolName: '_TaskGroup',
               args: {
                 taskArgs: block.taskArgs,
