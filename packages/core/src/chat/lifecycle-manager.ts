@@ -328,7 +328,11 @@ export class ChatLifecycleManager {
     }
 
     if (chat.claudeSessionId) {
-      const session = adapter.createSession({ projectPath: effectivePath, chatId: chat.claudeSessionId });
+      const session = adapter.createSession({
+        projectPath: effectivePath,
+        chatId: chat.claudeSessionId,
+        mainframeChatId: chatId,
+      });
       const active = this.deps.activeChats.get(chatId)!;
       active.session = session;
 
@@ -443,6 +447,7 @@ export class ChatLifecycleManager {
     const session = adapter.createSession({
       projectPath: chat.worktreePath ?? project.path,
       chatId: chat.claudeSessionId,
+      mainframeChatId: chatId, // the function's own chatId param (Mainframe id)
     });
     active.session = session;
 

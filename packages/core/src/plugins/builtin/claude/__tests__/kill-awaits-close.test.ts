@@ -7,7 +7,7 @@ describe('ClaudeSession.kill() awaits close', () => {
   });
 
   it('resolves only after the child emits close', async () => {
-    const session = new ClaudeSession({ projectPath: '/tmp' } as any);
+    const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
     const listeners: Record<string, ((...args: any[]) => void)[]> = {};
     const fakeChild: any = {
       kill: vi.fn(),
@@ -36,7 +36,7 @@ describe('ClaudeSession.kill() awaits close', () => {
 
   it('falls back to SIGKILL after 3s if close never fires', async () => {
     vi.useFakeTimers();
-    const session = new ClaudeSession({ projectPath: '/tmp' } as any);
+    const session = new ClaudeSession({ projectPath: '/tmp', mainframeChatId: 'test-chat-id' } as any);
     const fakeChild: any = {
       kill: vi.fn(),
       exitCode: null,

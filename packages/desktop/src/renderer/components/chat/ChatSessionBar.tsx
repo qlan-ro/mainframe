@@ -7,6 +7,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { getAdapterLabel, getModelContextWindow, getModelLabel } from '../../lib/adapters';
 import { PrBadge } from './PrBadge';
 import { ChatActions } from './ChatActions';
+import { BackgroundTasksPill } from './BackgroundTasksPill.js';
 
 const ADAPTER_ACCENT: Record<string, string> = {
   claude: 'bg-mf-accent-claude',
@@ -160,6 +161,7 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
 
       {/* Right: token progress and actions */}
       <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+        <BackgroundTasksPill chatId={chatId} />
         <ChatActions chatId={chatId} />
         {usagePct !== null && (
           <div className="flex gap-px">

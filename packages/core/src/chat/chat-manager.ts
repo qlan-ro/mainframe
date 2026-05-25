@@ -550,6 +550,7 @@ export class ChatManager {
       const session = adapter.createSession({
         projectPath: chat.worktreePath ?? project.path,
         chatId: chat.claudeSessionId,
+        mainframeChatId: chatId,
       });
       const history = await session.loadHistory();
       // loadHistory embeds the Claude sessionId as chatId — remap to Mainframe chatId
@@ -581,6 +582,7 @@ export class ChatManager {
       const session = adapter.createSession({
         projectPath: chat.worktreePath ?? project.path,
         chatId: chat.claudeSessionId,
+        mainframeChatId: chatId,
       });
       const history = await session.loadHistory();
       return history.map((msg) => ({ ...msg, chatId }));
@@ -601,6 +603,16 @@ export class ChatManager {
   isChatRunning(chatId: string): boolean {
     const active = this.activeChats.get(chatId);
     return active?.session?.isSpawned === true;
+  }
+
+  /**
+   * Returns the live AdapterSession for a chat, if a process is running.
+   * Used by the background-tasks routes to dispatch stop_task control_requests.
+   * Returns null when the chat is not active (no spawned CLI process).
+   */
+  getSessionForChat(chatId: string): import('@qlan-ro/mainframe-types').AdapterSession | null {
+    const active = this.activeChats.get(chatId);
+    return active?.session ?? null;
   }
 
   addMention(chatId: string, mention: SessionMention): void {

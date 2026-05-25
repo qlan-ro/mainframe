@@ -13,6 +13,7 @@ export * from './search.js';
 export * from './lsp.js';
 export * from './git.js';
 export * from './__fixtures__/ask-user-question.js';
+export * from './background-task.js';
 export type {
   PluginCapability,
   PluginManifest,

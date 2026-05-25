@@ -25,7 +25,8 @@ export interface SessionResult {
 
 export interface SessionOptions {
   projectPath: string;
-  chatId?: string; // Claude session ID for resume
+  chatId?: string; // Claude session ID for resume (CLI-side identifier)
+  mainframeChatId: string; // Mainframe-side chat identifier — used by tracker/WS/routes
 }
 
 export interface SessionSpawnOptions {

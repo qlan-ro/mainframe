@@ -187,8 +187,25 @@ function handleSystemEvent(session: ClaudeSession, event: Record<string, unknown
       type: event.task_type as string,
       command: event.command as string | undefined,
     });
+    if (session.state.mainframeChatId) {
+      session.state.taskEvents.handleTaskStarted(session.state.mainframeChatId, {
+        task_id: event.task_id as string,
+        tool_use_id: event.tool_use_id as string | undefined,
+        description: event.description as string | undefined,
+      });
+    }
   } else if (event.subtype === 'task_notification') {
     session.state.activeTasks.delete(event.task_id as string);
+    if (session.state.mainframeChatId) {
+      const usage = event.usage as { total_tokens: number; tool_uses: number; duration_ms: number } | undefined;
+      session.state.taskEvents.handleTaskNotification(session.state.mainframeChatId, {
+        task_id: event.task_id as string,
+        status: event.status as string,
+        output_file: event.output_file as string | undefined,
+        summary: event.summary as string | undefined,
+        usage,
+      });
+    }
   } else if (event.subtype === 'status') {
     if (event.status === 'compacting') {
       sink.onCompactStart();
@@ -246,6 +263,12 @@ function handleAssistantEvent(session: ClaudeSession, event: Record<string, unkn
       if (id && name) {
         const command = (block.input as { command?: string } | undefined)?.command;
         session.state.toolUseRegistry.set(id, command ? { name, command } : { name });
+        if (session.state.mainframeChatId) {
+          session.state.taskEvents.captureToolUse(id, {
+            name: block.name,
+            input: block.input as { command?: string; description?: string; run_in_background?: boolean } | undefined,
+          });
+        }
       }
       if (name === 'Bash' || name === 'BashTool') {
         const input = block.input as { command?: string } | undefined;
@@ -583,7 +606,11 @@ function handleControlRequestEvent(_session: ClaudeSession, event: Record<string
   }
 }
 
-function handleControlResponseEvent(session: ClaudeSession, event: Record<string, unknown>, sink: SessionSink): void {
+export function handleControlResponseEvent(
+  session: ClaudeSession,
+  event: Record<string, unknown>,
+  sink: SessionSink,
+): void {
   const response = event.response as Record<string, unknown> | undefined;
   if (!response) return;
 
@@ -605,6 +632,20 @@ function handleControlResponseEvent(session: ClaudeSession, event: Record<string
     if (callback) {
       session.state.pendingCancelCallbacks.delete(requestId);
       callback(innerResponse.cancelled);
+    }
+  }
+
+  // Route stop_task responses to pending callbacks (mirrors cancel above)
+  if (requestId && innerResponse && typeof innerResponse.subtype === 'string') {
+    const stopCb = session.state.pendingStopTaskCallbacks.get(requestId);
+    if (stopCb) {
+      session.state.pendingStopTaskCallbacks.delete(requestId);
+      if (innerResponse.subtype === 'success') {
+        stopCb({ ok: true });
+      } else {
+        const errMsg = typeof innerResponse.error === 'string' ? innerResponse.error : 'unknown error';
+        stopCb({ ok: false, error: errMsg });
+      }
     }
   }
 }

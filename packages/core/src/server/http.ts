@@ -28,10 +28,12 @@ import {
 import { authRoutes } from './routes/auth.js';
 import { tunnelRoutes } from './routes/tunnel.js';
 import { deviceRoutes } from './routes/device.js';
+import { backgroundTaskRoutes } from './routes/background-tasks.js';
 import { PushService } from '../push/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 import type { LspManager } from '../lsp/index.js';
+import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 
 const log = createChildLogger('http');
 
@@ -46,6 +48,7 @@ export function createHttpServer(
   tunnelManager?: TunnelManager,
   port?: number,
   lspManager?: LspManager,
+  backgroundTasks?: BackgroundTaskTracker,
 ): { app: Express; pushService: PushService } {
   const app = express();
   app.set('trust proxy', 'loopback');
@@ -116,6 +119,19 @@ export function createHttpServer(
   app.use(externalSessionRoutes(ctx));
   app.use(worktreeRoutes(ctx));
   app.use(tagRoutes(ctx));
+
+  if (backgroundTasks) {
+    app.use(
+      backgroundTaskRoutes({
+        tracker: backgroundTasks,
+        // AdapterSession is narrower than SessionLike at the type level, but
+        // concrete adapters (ClaudeSession) implement stopBackgroundTask.
+        // The kill route returns 503 when session is null, so the cast is safe.
+        sessionForChat: (chatId) =>
+          chats.getSessionForChat(chatId) as import('../background-tasks/kill.js').SessionLike | null,
+      }),
+    );
+  }
 
   // Plugin routes — the PluginManager owns a parent router with listing + per-plugin sub-routers
   if (pluginManager) {

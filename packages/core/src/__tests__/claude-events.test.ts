@@ -4,7 +4,7 @@ import { ClaudeSession } from '../plugins/builtin/claude/session.js';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
 
 function createSession(projectPath = '/tmp') {
-  return new ClaudeSession({ projectPath, chatId: '' });
+  return new ClaudeSession({ projectPath, chatId: '', mainframeChatId: 'test-chat-id' });
 }
 
 function createSink(): SessionSink {

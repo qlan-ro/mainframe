@@ -41,7 +41,7 @@ function createMockChildProcess(_chatId: string) {
  */
 function injectMockChild(adapter: ClaudeAdapter, chatId: string) {
   const mock = createMockChildProcess(chatId);
-  const session = adapter.createSession({ projectPath: '/tmp', chatId }) as any;
+  const session = adapter.createSession({ projectPath: '/tmp', chatId, mainframeChatId: 'test-chat-id' }) as any;
   // Inject mock child — state.child being non-null makes isSpawned true
   session.state.child = mock.child;
   session.state.pid = mock.child.pid;
@@ -112,12 +112,12 @@ describe('ClaudeAdapter control requests', () => {
   });
 
   it('setPermissionMode throws when session not spawned', async () => {
-    const session = adapter.createSession({ projectPath: '/tmp', chatId }) as any;
+    const session = adapter.createSession({ projectPath: '/tmp', chatId, mainframeChatId: 'test-chat-id' }) as any;
     await expect(session.setPermissionMode('default')).rejects.toThrow('not spawned');
   });
 
   it('setModel throws when session not spawned', async () => {
-    const session = adapter.createSession({ projectPath: '/tmp', chatId }) as any;
+    const session = adapter.createSession({ projectPath: '/tmp', chatId, mainframeChatId: 'test-chat-id' }) as any;
     await expect(session.setModel('claude-opus-4-6')).rejects.toThrow('not spawned');
   });
 

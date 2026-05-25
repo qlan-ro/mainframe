@@ -37,7 +37,7 @@ describe('ClaudeSession spawn args', () => {
   });
 
   it('passes --replay-user-messages so the CLI emits isReplay acks for queued uuids', async () => {
-    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
     await session.spawn();
 
     expect(spawnSpy).toHaveBeenCalledTimes(1);
@@ -50,7 +50,7 @@ describe('ClaudeSession spawn args', () => {
   });
 
   it('passes --permission-mode plan when planMode=true', async () => {
-    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
     await session.spawn({ planMode: true, permissionMode: 'acceptEdits' });
 
     const args = spawnSpy.mock.calls[0][1] as string[];
@@ -59,7 +59,7 @@ describe('ClaudeSession spawn args', () => {
   });
 
   it('passes --permission-mode <base> when planMode=false', async () => {
-    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined });
+    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
     await session.spawn({ planMode: false, permissionMode: 'acceptEdits' });
 
     const args = spawnSpy.mock.calls[0][1] as string[];
