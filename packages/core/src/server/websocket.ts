@@ -7,7 +7,8 @@ import type { ChatManager } from '../chat/index.js';
 import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { ClientEventSchema } from './ws-schemas.js';
 import { createChildLogger } from '../logger.js';
-import { validateToken } from '../auth/token.js';
+import { validateAuthedToken } from '../auth/validate-authed-token.js';
+import type { DevicesRepository } from '../db/devices.js';
 import { LspConnectionHandler, parseLspUpgradePath } from '../lsp/index.js';
 import type { FileWatcherService } from '../files/file-watcher.js';
 
@@ -41,6 +42,7 @@ export class WebSocketManager {
     private chats: ChatManager,
     private lspHandler?: LspConnectionHandler,
     private fileWatcher?: FileWatcherService,
+    private devicesRepo?: DevicesRepository,
   ) {
     this.wss = new WebSocketServer({ noServer: true });
     this.setupUpgradeAuth(server);
@@ -64,7 +66,7 @@ export class WebSocketManager {
         const url = new URL(request.url ?? '', 'http://localhost');
         const token = url.searchParams.get('token');
 
-        if (!token || !validateToken(secret!, token)) {
+        if (!token || !this.devicesRepo || !validateAuthedToken(secret!, token, this.devicesRepo)) {
           log.warn({ ip }, 'ws upgrade rejected: invalid or missing token');
           socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
           socket.destroy();
