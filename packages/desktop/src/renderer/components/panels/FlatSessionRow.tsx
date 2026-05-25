@@ -171,6 +171,29 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
     [handleCommitRename],
   );
 
+  // Keep focus on the rename input across DOM reorders (e.g. list re-sort when
+  // a new message bumps this row's updatedAt). Without this, the input loses
+  // focus when React moves the row via insertBefore and onBlur would commit.
+  useLayoutEffect(() => {
+    if (editing && inputRef.current && document.activeElement !== inputRef.current) {
+      inputRef.current.focus();
+    }
+  });
+
+  // Commit on outside pointerdown instead of onBlur — blur fires on programmatic
+  // focus loss (list reorder) and would exit edit mode unintentionally.
+  useEffect(() => {
+    if (!editing) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const input = inputRef.current;
+      if (input && e.target instanceof Node && !input.contains(e.target)) {
+        handleCommitRename();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [editing, handleCommitRename]);
+
   const isActive = activeChatId === chat.id;
   const isWorking = chat.displayStatus === 'working' || chat.displayStatus === 'waiting';
 
@@ -246,26 +269,29 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
 
         <div className="min-w-0 space-y-2">
           <div data-testid="session-title-row" className="flex items-center min-w-0 gap-2">
-            {/* title + select target */}
-            <button
-              type="button"
-              data-testid={`chats-session-select-${chat.id}`}
-              onClick={handleSelect}
-              className={cn('min-w-0 text-left flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}
-            >
-              {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
-              {editing ? (
+            {/* title + select target. The rename input is rendered as a sibling
+                — not a child of <button> — to keep the HTML valid. */}
+            {editing ? (
+              <div className={cn('min-w-0 flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}>
+                {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
                 <input
                   ref={inputRef}
                   data-testid={`chats-session-rename-input-${chat.id}`}
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  onBlur={handleCommitRename}
                   onKeyDown={handleRenameKeyDown}
                   onClick={(e) => e.stopPropagation()}
                   className="flex-1 bg-mf-panel-bg text-sm text-mf-text-primary border border-mf-accent rounded px-1 py-0 outline-none"
                 />
-              ) : (
+              </div>
+            ) : (
+              <button
+                type="button"
+                data-testid={`chats-session-select-${chat.id}`}
+                onClick={handleSelect}
+                className={cn('min-w-0 text-left flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}
+              >
+                {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span
@@ -283,8 +309,8 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
                     {chat.title || 'Untitled session'}
                   </TooltipContent>
                 </Tooltip>
-              )}
-            </button>
+              </button>
+            )}
 
             {hasTags && (
               <div

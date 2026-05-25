@@ -1,7 +1,8 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
+import { renameChat } from '../../../lib/api';
 
 // vi.hoisted runs before vi.mock factories are executed, so these variables
 // are safe to reference inside factory closures.
@@ -281,5 +282,61 @@ describe('FlatSessionRow: non-optimistic archive', () => {
     // Spinner gone, button re-enabled
     expect(archiveBtn.querySelector('.animate-spin')).toBeNull();
     expect(archiveBtn).not.toBeDisabled();
+  });
+});
+
+describe('FlatSessionRow: rename input survives re-renders', () => {
+  it('stays in edit mode and keeps focus when the chat prop updates (e.g. new message bumps updatedAt)', async () => {
+    const chat = makeChat();
+    let triggerRename: (() => void) | undefined;
+    const register = (_id: string, fn: () => void) => {
+      triggerRename = fn;
+    };
+
+    const { rerender } = render(<FlatSessionRow chat={chat} registerRenameCallback={register} />);
+
+    act(() => triggerRename!());
+
+    const input = await screen.findByTestId('chats-session-rename-input-chat-1');
+    expect(document.activeElement).toBe(input);
+
+    // Simulate a new message: parent re-renders with a fresh chat object + new updatedAt.
+    // Pre-fix, the input would lose focus on blur and exit edit mode.
+    rerender(
+      <FlatSessionRow
+        chat={{ ...chat, updatedAt: '2026-01-03T00:00:00Z', displayStatus: 'working' }}
+        registerRenameCallback={register}
+      />,
+    );
+
+    // Still editing, still focused.
+    expect(screen.getByTestId('chats-session-rename-input-chat-1')).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByTestId('chats-session-rename-input-chat-1'));
+    expect(vi.mocked(renameChat)).not.toHaveBeenCalled();
+  });
+
+  it('commits on outside pointerdown', async () => {
+    const chat = makeChat();
+    let triggerRename: (() => void) | undefined;
+    const register = (_id: string, fn: () => void) => {
+      triggerRename = fn;
+    };
+
+    render(
+      <div>
+        <FlatSessionRow chat={chat} registerRenameCallback={register} />
+        <div data-testid="outside">outside</div>
+      </div>,
+    );
+
+    act(() => triggerRename!());
+    const input = await screen.findByTestId('chats-session-rename-input-chat-1');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Renamed');
+
+    fireEvent.pointerDown(screen.getByTestId('outside'));
+
+    expect(vi.mocked(renameChat)).toHaveBeenCalledWith('chat-1', 'Renamed');
+    expect(screen.queryByTestId('chats-session-rename-input-chat-1')).not.toBeInTheDocument();
   });
 });
