@@ -1,5 +1,4 @@
 import type { Request, Response, NextFunction } from 'express';
-import { validateToken } from '../../auth/token.js';
 import { validateAuthedToken } from '../../auth/validate-authed-token.js';
 import type { DevicesRepository } from '../../db/devices.js';
 
@@ -10,7 +9,8 @@ function isLocalhost(req: Request): boolean {
   return LOCALHOST_IPS.has(req.ip ?? '');
 }
 
-function tryAttachAuth(req: Request, secret: string, devicesRepo: DevicesRepository): void {
+function tryAttachAuth(req: Request, secret: string, devicesRepo: DevicesRepository | undefined): void {
+  if (!devicesRepo) return;
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) return;
   const payload = validateAuthedToken(secret, authHeader.slice(7), devicesRepo);
@@ -25,7 +25,7 @@ export function createAuthMiddleware(secret: string | null, devicesRepo?: Device
     if (req.path === '/health') return next();
 
     if (isLocalhost(req)) {
-      if (devicesRepo) tryAttachAuth(req, secret, devicesRepo);
+      tryAttachAuth(req, secret, devicesRepo);
       return next();
     }
 
@@ -35,23 +35,18 @@ export function createAuthMiddleware(secret: string | null, devicesRepo?: Device
       return;
     }
 
-    if (devicesRepo) {
-      const payload = validateAuthedToken(secret, authHeader.slice(7), devicesRepo);
-      if (!payload) {
-        res.status(401).json({ success: false, error: 'Unauthorized' });
-        return;
-      }
-      req.auth = payload;
-    } else {
-      // No device repo wired yet — fall back to bare signature check.
-      const payload = validateToken(secret, authHeader.slice(7));
-      if (!payload) {
-        res.status(401).json({ success: false, error: 'Unauthorized' });
-        return;
-      }
-      req.auth = payload;
+    if (!devicesRepo) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
     }
 
+    const payload = validateAuthedToken(secret, authHeader.slice(7), devicesRepo);
+    if (!payload) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    req.auth = payload;
     next();
   };
 }
