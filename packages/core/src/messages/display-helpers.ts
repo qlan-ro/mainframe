@@ -262,7 +262,12 @@ function convertGroupedPartsToDisplay(
     } else if (part.toolName === '_TaskGroup') {
       const children = part.args.children as PartEntry[];
       const taskArgs = part.args.taskArgs as Record<string, unknown>;
-      const agentId = (taskArgs?.description as string) ?? part.toolCallId;
+      // Use the unique tool_use id, not `description`. Two subagents in the same
+      // turn can share a description string (role label, repeat prompt) and
+      // collapsing them onto one id collides assistant-ui's per-part React key
+      // (`toolCallId-<id>`), crashing the message renderer. The user-facing
+      // label still reads from `taskArgs.description` in the TaskGroup card.
+      const agentId = part.toolCallId;
       result.push({
         type: 'task_group',
         agentId,

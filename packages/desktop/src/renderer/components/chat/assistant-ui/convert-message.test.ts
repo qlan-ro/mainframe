@@ -254,6 +254,7 @@ describe('convertMessage', () => {
         {
           type: 'task_group',
           agentId: 'agent-1',
+          taskArgs: { description: 'do work' },
           calls: [
             { type: 'tool_call', id: 'tu1', name: 'Task', input: { description: 'do work' }, category: 'subagent' },
             { type: 'tool_call', id: 'tu2', name: 'Bash', input: { command: 'ls' }, category: 'default' },
@@ -266,6 +267,51 @@ describe('convertMessage', () => {
       expect(part.type).toBe('tool-call');
       expect(part.toolCallId).toBe('agent-1');
       expect(part.toolName).toBe('_TaskGroup');
+    });
+
+    it('de-duplicates colliding toolCallIds across task_group blocks (regression: #184)', () => {
+      // Two CollabAgent spawns in one turn whose role/description collapsed to the same
+      // agentId crashed assistant-ui with "Duplicate key toolCallId-default in tapResources".
+      // The defensive dedup in convertMessage rewrites the second occurrence so the
+      // renderer can key both parts independently.
+      const msg = display('assistant', [
+        {
+          type: 'task_group',
+          agentId: 'default',
+          taskArgs: { description: 'default' },
+          calls: [{ type: 'tool_call', id: 'tu1', name: 'CollabAgent', input: {}, category: 'subagent' }],
+        },
+        {
+          type: 'task_group',
+          agentId: 'default',
+          taskArgs: { description: 'default' },
+          calls: [{ type: 'tool_call', id: 'tu2', name: 'CollabAgent', input: {}, category: 'subagent' }],
+        },
+      ]);
+      const result = convertMessage(msg);
+      const ids = (result.content as unknown as Array<Record<string, unknown>>).map((p) => p.toolCallId);
+      expect(ids).toHaveLength(2);
+      expect(new Set(ids).size).toBe(2);
+    });
+
+    it('substitutes a non-empty toolCallId when an empty id would be emitted (regression: #184)', () => {
+      // _ToolGroup falls back to '' if the first call has no id. Two such groups in one
+      // message used to collide on the empty key.
+      const msg = display('assistant', [
+        {
+          type: 'tool_group',
+          calls: [{ type: 'tool_call', id: '', name: 'Read', input: {}, category: 'explore' }],
+        },
+        {
+          type: 'tool_group',
+          calls: [{ type: 'tool_call', id: '', name: 'Grep', input: {}, category: 'explore' }],
+        },
+      ]);
+      const result = convertMessage(msg);
+      const ids = (result.content as unknown as Array<Record<string, unknown>>).map((p) => p.toolCallId);
+      expect(ids).toHaveLength(2);
+      expect(new Set(ids).size).toBe(2);
+      expect(ids.every((id) => typeof id === 'string' && (id as string).length > 0)).toBe(true);
     });
 
     it('skips image blocks in assistant messages (rendered directly from original DisplayMessage)', () => {
