@@ -1,39 +1,55 @@
 import type { Request, Response, NextFunction } from 'express';
 import { validateToken } from '../../auth/token.js';
+import { validateAuthedToken } from '../../auth/validate-authed-token.js';
+import type { DevicesRepository } from '../../db/devices.js';
 
 const LOCALHOST_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+const UNAUTHENTICATED_PATHS = new Set(['/api/auth/confirm', '/api/auth/status', '/api/auth/pair-status']);
 
 function isLocalhost(req: Request): boolean {
   return LOCALHOST_IPS.has(req.ip ?? '');
 }
 
-export function createAuthMiddleware(secret: string | null) {
+function tryAttachAuth(req: Request, secret: string, devicesRepo: DevicesRepository): void {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return;
+  const payload = validateAuthedToken(secret, authHeader.slice(7), devicesRepo);
+  if (payload) req.auth = payload;
+}
+
+export function createAuthMiddleware(secret: string | null, devicesRepo?: DevicesRepository) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    // No secret configured — auth disabled
     if (!secret) return next();
 
-    // Pairing flow routes must be accessible without auth
-    const UNAUTHENTICATED_PATHS = new Set(['/api/auth/confirm', '/api/auth/status', '/api/auth/register-push']);
     if (UNAUTHENTICATED_PATHS.has(req.path)) return next();
-
-    // Health check always accessible
     if (req.path === '/health') return next();
 
-    // Localhost is exempt
-    if (isLocalhost(req)) return next();
+    if (isLocalhost(req)) {
+      if (devicesRepo) tryAttachAuth(req, secret, devicesRepo);
+      return next();
+    }
 
-    // Extract Bearer token
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
       res.status(401).json({ success: false, error: 'Unauthorized' });
       return;
     }
 
-    const token = authHeader.slice(7);
-    const payload = validateToken(secret, token);
-    if (!payload) {
-      res.status(401).json({ success: false, error: 'Unauthorized' });
-      return;
+    if (devicesRepo) {
+      const payload = validateAuthedToken(secret, authHeader.slice(7), devicesRepo);
+      if (!payload) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+      req.auth = payload;
+    } else {
+      // No device repo wired yet — fall back to bare signature check.
+      const payload = validateToken(secret, authHeader.slice(7));
+      if (!payload) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+      req.auth = payload;
     }
 
     next();
