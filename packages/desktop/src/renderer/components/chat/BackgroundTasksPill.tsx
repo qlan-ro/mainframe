@@ -20,13 +20,7 @@ export function BackgroundTasksPill({ chatId }: Props): React.ReactElement | nul
   const applyEvent = useBackgroundTasksStore((s) => s.applyEvent);
   const [open, setOpen] = useState(false);
 
-  const counts = useMemo(() => {
-    const running = tasks.filter((t) => t.status === 'running').length;
-    // Terminal tasks are "viewable" only when they have an outputPath.
-    // User-killed tasks (stop_task path) have outputPath: null and are NOT viewable.
-    const viewable = tasks.filter((t) => t.status !== 'running' && t.outputPath !== null).length;
-    return { running, viewable };
-  }, [tasks]);
+  const runningTasks = useMemo(() => tasks.filter((t) => t.status === 'running'), [tasks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,13 +48,9 @@ export function BackgroundTasksPill({ chatId }: Props): React.ReactElement | nul
     });
   }, [chatId, applyEvent]);
 
-  // Visible when there's anything actionable: running tasks (kill) OR
-  // completed-with-output (view). Killed-without-output tasks are hidden
-  // because there is nothing the user can do with them.
-  if (counts.running === 0 && counts.viewable === 0) return null;
+  if (runningTasks.length === 0) return null;
 
-  const label =
-    counts.running > 0 ? `${counts.running} ${counts.running === 1 ? 'task' : 'tasks'}` : `${counts.viewable} done`;
+  const label = `${runningTasks.length} ${runningTasks.length === 1 ? 'task' : 'tasks'}`;
 
   return (
     <div className="relative">
@@ -74,7 +64,7 @@ export function BackgroundTasksPill({ chatId }: Props): React.ReactElement | nul
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 z-50">
-          <BackgroundTasksPopover chatId={chatId} tasks={tasks} />
+          <BackgroundTasksPopover chatId={chatId} tasks={runningTasks} />
         </div>
       )}
     </div>

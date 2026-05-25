@@ -35,19 +35,26 @@ describe('BackgroundTasksPopover', () => {
     expect(screen.getByTestId('bg-task-row-b')).toBeTruthy();
   });
 
-  it('disables View for running tasks (outputPath null)', () => {
-    render(<BackgroundTasksPopover chatId="c1" tasks={[task({ status: 'running', outputPath: null })]} />);
-    expect((screen.getByTestId('bg-task-view-t1') as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it('disables Kill for non-running tasks', () => {
-    render(<BackgroundTasksPopover chatId="c1" tasks={[task({ status: 'completed', outputPath: '/x' })]} />);
-    expect((screen.getByTestId('bg-task-kill-t1') as HTMLButtonElement).disabled).toBe(true);
+  it('Kill button is enabled for a running task', () => {
+    render(<BackgroundTasksPopover chatId="c1" tasks={[task()]} />);
+    expect((screen.getByTestId('bg-task-kill-t1') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('calls killBackgroundTaskApi on Kill click', async () => {
     render(<BackgroundTasksPopover chatId="c1" tasks={[task()]} />);
     fireEvent.click(screen.getByTestId('bg-task-kill-t1'));
     await waitFor(() => expect(killBackgroundTaskApi).toHaveBeenCalledWith('c1', 't1'));
+  });
+
+  it('filters out non-running tasks defensively', () => {
+    const tasks = [
+      task({ id: 'running-1', status: 'running' }),
+      task({ id: 'done-1', status: 'completed', outputPath: '/x', endedAt: Date.now() }),
+      task({ id: 'stopped-1', status: 'stopped', endedAt: Date.now() }),
+    ];
+    render(<BackgroundTasksPopover chatId="c1" tasks={tasks} />);
+    expect(screen.getByTestId('bg-task-row-running-1')).toBeTruthy();
+    expect(screen.queryByTestId('bg-task-row-done-1')).toBeNull();
+    expect(screen.queryByTestId('bg-task-row-stopped-1')).toBeNull();
   });
 });
