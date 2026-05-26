@@ -2,7 +2,12 @@ import { SelectorBreadcrumb } from './SelectorBreadcrumb.js';
 import type { CaptureRow } from '../../../../lib/format-captures.js';
 import { captureBadgeClass } from '../../../../lib/capture-colors.js';
 
-export function SandboxCaptureContext({ rows }: { rows: ReadonlyArray<CaptureRow> }) {
+interface SandboxCaptureContextProps {
+  rows: ReadonlyArray<CaptureRow>;
+  fadeColor?: string;
+}
+
+export function SandboxCaptureContext({ rows, fadeColor }: SandboxCaptureContextProps) {
   // Preserve the original index so per-capture colors stay stable even when a row
   // with no selector/annotation is filtered out before render.
   const visible = rows.map((row, index) => ({ row, index })).filter(({ row }) => row.selector || row.annotation);
@@ -22,7 +27,7 @@ export function SandboxCaptureContext({ rows }: { rows: ReadonlyArray<CaptureRow
             >
               {r.label}
             </span>
-            {r.selector ? <SelectorBreadcrumb path={r.selector} /> : null}
+            {r.selector ? <SelectorBreadcrumb path={r.selector} fadeColor={fadeColor} /> : null}
           </div>
           {r.annotation ? (
             <span className="text-mf-chat text-mf-text-primary truncate pl-1">{r.annotation}</span>

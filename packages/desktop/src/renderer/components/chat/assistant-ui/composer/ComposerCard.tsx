@@ -333,7 +333,7 @@ export function ComposerCard() {
       </div>
       {captureView.rows.length > 0 && (
         <div className="px-3 pt-1.5">
-          <SandboxCaptureContext rows={captureView.rows} />
+          <SandboxCaptureContext rows={captureView.rows} fadeColor="var(--mf-input-bg)" />
         </div>
       )}
       {composerError && (
