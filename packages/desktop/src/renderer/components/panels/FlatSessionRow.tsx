@@ -292,7 +292,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
             {/* title + select target. The rename input is rendered as a sibling
                 — not a child of <button> — to keep the HTML valid. */}
             {editing ? (
-              <div className="flex-1 min-w-0 flex items-center gap-1.5 min-h-[20px]">
+              <div className={cn('min-w-0 flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}>
                 {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
                 <input
                   ref={inputRef}
@@ -309,7 +309,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
                 type="button"
                 data-testid={`chats-session-select-${chat.id}`}
                 onClick={handleSelect}
-                className="flex-1 min-w-0 text-left flex items-center gap-1.5 min-h-[20px]"
+                className={cn('min-w-0 text-left flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}
               >
                 {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
                 <Tooltip>
@@ -336,7 +336,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               <div
                 ref={tagRowRef}
                 data-testid="session-row-tags"
-                className="shrink min-w-0 max-w-[50%] flex items-center gap-1 overflow-hidden whitespace-nowrap @max-[220px]:hidden"
+                className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden whitespace-nowrap @max-[220px]:hidden"
               >
                 {tagNames.slice(0, visibleTagCount).map((name) => (
                   <TagPill key={name} label={name} color={colorOf(name)} variant="row" />
