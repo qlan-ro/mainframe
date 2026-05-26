@@ -34,7 +34,7 @@ function SkillItem({
 
   return (
     <div
-      className="@container group w-full px-3 py-2 text-left rounded-mf-input transition-colors hover:bg-mf-hover/50 cursor-pointer flex items-start gap-2"
+      className="group w-full px-3 py-2 text-left rounded-mf-input transition-colors hover:bg-mf-hover/50 cursor-pointer flex items-start gap-2"
       onClick={() => onInvoke(skill)}
     >
       <Zap size={14} className="text-mf-accent mt-0.5 shrink-0 @max-[220px]:hidden" />

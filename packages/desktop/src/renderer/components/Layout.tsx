@@ -115,23 +115,30 @@ export function Layout({ centerPanel }: LayoutProps): React.ReactElement {
               {hasLeft && (
                 <>
                   <Panel id="left-column" defaultSize="22%" maxSize="40%">
-                    <Group orientation="vertical">
-                      {hasLeftTop && (
-                        <Panel id="left-top" defaultSize="60%" minSize="20%">
-                          <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-                            <Zone id="left-top" />
-                          </div>
-                        </Panel>
-                      )}
-                      {hasLeftTop && hasLeftBottom && <VerticalResizeHandle />}
-                      {hasLeftBottom && (
-                        <Panel id="left-bottom" defaultSize="40%" minSize="20%">
-                          <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
-                            <Zone id="left-bottom" />
-                          </div>
-                        </Panel>
-                      )}
-                    </Group>
+                    {/* @container so children (session rows, skill items, etc.)
+                        respond to the LEFT-COLUMN width via @max-... queries.
+                        Without this lift, each row queried its own width and
+                        narrow-mode triggered at different panel widths for
+                        sessions vs. skills. */}
+                    <div className="@container h-full">
+                      <Group orientation="vertical">
+                        {hasLeftTop && (
+                          <Panel id="left-top" defaultSize="60%" minSize="20%">
+                            <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
+                              <Zone id="left-top" />
+                            </div>
+                          </Panel>
+                        )}
+                        {hasLeftTop && hasLeftBottom && <VerticalResizeHandle />}
+                        {hasLeftBottom && (
+                          <Panel id="left-bottom" defaultSize="40%" minSize="20%">
+                            <div className="h-full bg-mf-panel-bg rounded-mf-panel overflow-hidden">
+                              <Zone id="left-bottom" />
+                            </div>
+                          </Panel>
+                        )}
+                      </Group>
+                    </div>
                   </Panel>
                   <HorizontalResizeHandle />
                 </>

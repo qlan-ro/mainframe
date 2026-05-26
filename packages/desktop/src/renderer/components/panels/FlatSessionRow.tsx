@@ -253,7 +253,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
       onClick={handleRowClick}
       onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId, chat.id)}
       className={cn(
-        '@container group w-full rounded-mf-input transition-colors cursor-pointer',
+        'group w-full rounded-mf-input transition-colors cursor-pointer',
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover',
       )}
     >
