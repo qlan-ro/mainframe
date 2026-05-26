@@ -228,9 +228,14 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   const [visibleTagCount, setVisibleTagCount] = useState(tagNames.length);
   // Last observed container width — guards the ResizeObserver against an
   // infinite reset loop: decrementing the visible count shrinks the row's own
-  // box, which would otherwise re-fire the RO and reset the count, hiding the
-  // +N pill forever. We only reset on actual *widening* of the row.
+  // box (when the tag row is content-sized), which would otherwise re-fire
+  // the RO and reset the count, hiding the +N pill forever. We only reset on
+  // actual *widening* of the row.
   const lastTagRowWidth = useRef(0);
+  // Force-render counter — bumped on every RO fire so the decrement
+  // useLayoutEffect re-measures on shrink (where no other state changes).
+  // Without this, shrinking the panel would not re-trigger the +N decrement.
+  const [, setRoTick] = useState(0);
 
   useLayoutEffect(() => {
     setVisibleTagCount(tagNames.length);
@@ -244,6 +249,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
       const w = el.clientWidth;
       if (w > lastTagRowWidth.current) setVisibleTagCount(tagNames.length);
       lastTagRowWidth.current = w;
+      setRoTick((t) => t + 1);
     });
     ro.observe(el);
     return () => ro.disconnect();
