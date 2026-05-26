@@ -4,6 +4,8 @@ import { createLogger } from '../../lib/logger';
 import { todosApi, type Todo } from '../../lib/api/todos-api';
 import { getActiveProjectId } from '../../hooks/useActiveProjectId';
 import { usePluginLayoutStore } from '../../store/plugins';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import { TruncatedLabel } from '../ui/truncated-label';
 
 const log = createLogger('renderer:todos-sidebar');
 
@@ -59,32 +61,39 @@ export function TodosSidebar(): React.ReactElement {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-3 py-2 border-b border-mf-border flex items-center gap-2">
-        <ListTodo size={14} className="text-mf-accent" />
-        <span className="text-mf-small text-mf-text-primary font-medium">Active tasks</span>
-        <span className="text-mf-status text-mf-text-secondary ml-auto">{todos.length}</span>
+      <div className="px-3 py-2 border-b border-mf-border flex items-center gap-2 min-w-0">
+        <ListTodo size={14} className="text-mf-accent shrink-0" />
+        <TruncatedLabel
+          text="Active tasks"
+          title="Active tasks"
+          className="text-mf-small text-mf-text-primary font-medium flex-1"
+        />
+        <span className="text-mf-status text-mf-text-secondary shrink-0">{todos.length}</span>
       </div>
       <div className="flex-1 overflow-y-auto py-1">
         {todos.map((t) => {
           const Icon = STATUS_ICONS[t.status] ?? Circle;
           const inProgress = t.status === 'in_progress';
+          const label = `#${t.number} ${t.title}`;
           return (
-            <button
-              key={t.id}
-              type="button"
-              data-testid={`todos-sidebar-item-${t.id}`}
-              onClick={() => activateFullview('todos')}
-              className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-mf-hover/40 transition-colors"
-              title={t.title}
-            >
-              <Icon
-                size={12}
-                className={`${inProgress ? 'text-mf-accent animate-spin' : 'text-mf-text-secondary'} shrink-0 mt-0.5`}
-              />
-              <span className="text-mf-small text-mf-text-primary truncate">
-                #{t.number} {t.title}
-              </span>
-            </button>
+            <Tooltip key={t.id}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-testid={`todos-sidebar-item-${t.id}`}
+                  onClick={() => activateFullview('todos')}
+                  aria-label={label}
+                  className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-mf-hover/40 transition-colors min-w-0"
+                >
+                  <Icon
+                    size={12}
+                    className={`${inProgress ? 'text-mf-accent animate-spin' : 'text-mf-text-secondary'} shrink-0 mt-0.5`}
+                  />
+                  <span className="text-mf-small text-mf-text-primary truncate min-w-0 flex-1">{label}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{label}</TooltipContent>
+            </Tooltip>
           );
         })}
       </div>
