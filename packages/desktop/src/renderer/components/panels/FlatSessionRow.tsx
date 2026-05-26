@@ -43,6 +43,8 @@ interface FlatSessionRowProps {
   unregisterRenameCallback?: (chatId: string) => void;
   registerOpenTagPopover?: (chatId: string, trigger: (rect: DOMRect) => void) => void;
   unregisterOpenTagPopover?: (chatId: string) => void;
+  registerArchiveCallback?: (chatId: string, trigger: () => void) => void;
+  unregisterArchiveCallback?: (chatId: string) => void;
 }
 
 export const FlatSessionRow = React.memo(function FlatSessionRow({
@@ -53,6 +55,8 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   unregisterRenameCallback,
   registerOpenTagPopover,
   unregisterOpenTagPopover,
+  registerArchiveCallback,
+  unregisterArchiveCallback,
 }: FlatSessionRowProps): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const chats = useChatsStore((s) => s.chats);
@@ -78,8 +82,8 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   const [archiving, setArchiving] = useState(false);
 
   const handleArchive = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
+    (e?: React.MouseEvent) => {
+      e?.stopPropagation();
       if (archiving) return;
       let deleteWorktree = true;
       if (chat.worktreePath) {
@@ -138,6 +142,11 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
     registerOpenTagPopover?.(chat.id, (rect) => setPopoverRect(rect));
     return () => unregisterOpenTagPopover?.(chat.id);
   }, [chat.id, registerOpenTagPopover, unregisterOpenTagPopover]);
+
+  useEffect(() => {
+    registerArchiveCallback?.(chat.id, () => handleArchive());
+    return () => unregisterArchiveCallback?.(chat.id);
+  }, [chat.id, handleArchive, registerArchiveCallback, unregisterArchiveCallback]);
 
   const updateChat = useChatsStore((s) => s.updateChat);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);

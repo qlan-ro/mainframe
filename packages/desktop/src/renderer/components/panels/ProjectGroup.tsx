@@ -19,6 +19,8 @@ interface ProjectGroupProps {
   unregisterRenameCallback?: (chatId: string) => void;
   registerOpenTagPopover?: (chatId: string, trigger: (rect: DOMRect) => void) => void;
   unregisterOpenTagPopover?: (chatId: string) => void;
+  registerArchiveCallback?: (chatId: string, trigger: () => void) => void;
+  unregisterArchiveCallback?: (chatId: string) => void;
 }
 
 export const ProjectGroup = React.memo(function ProjectGroup({
@@ -32,6 +34,8 @@ export const ProjectGroup = React.memo(function ProjectGroup({
   unregisterRenameCallback,
   registerOpenTagPopover,
   unregisterOpenTagPopover,
+  registerArchiveCallback,
+  unregisterArchiveCallback,
 }: ProjectGroupProps): React.ReactElement {
   const handleNewSession = useCallback(
     (e: React.MouseEvent) => {
@@ -135,6 +139,8 @@ export const ProjectGroup = React.memo(function ProjectGroup({
                   unregisterRenameCallback={unregisterRenameCallback}
                   registerOpenTagPopover={registerOpenTagPopover}
                   unregisterOpenTagPopover={unregisterOpenTagPopover}
+                  registerArchiveCallback={registerArchiveCallback}
+                  unregisterArchiveCallback={unregisterArchiveCallback}
                 />
               </div>
             ))
