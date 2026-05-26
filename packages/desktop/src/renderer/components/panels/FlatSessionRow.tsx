@@ -260,8 +260,11 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
       <div className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5">
         {/* status dot — vertically centered across title + metadata.
             Hidden when the row's container is too narrow to fit anything
-            but the title (see metadata + actions hidden below). */}
-        <div className="w-3 h-3 shrink-0 flex items-center justify-center @max-[360px]:hidden">
+            but the title (see metadata + actions hidden below). Explicit
+            grid-column placement on siblings is required because hiding this
+            with display:none would otherwise auto-shift the column-2 wrapper
+            into column 1's 12px track. */}
+        <div className="col-start-1 w-3 h-3 shrink-0 flex items-center justify-center @max-[360px]:hidden">
           {chat.worktreeMissing ? (
             <div className="w-2 h-2 rounded-full bg-mf-destructive" />
           ) : isWorking ? (
@@ -274,7 +277,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
           )}
         </div>
 
-        <div className="min-w-0 space-y-2">
+        <div className="col-start-2 min-w-0 space-y-2">
           <div data-testid="session-title-row" className="flex items-center min-w-0 gap-2">
             {/* title + select target. The rename input is rendered as a sibling
                 — not a child of <button> — to keep the HTML valid. */}
@@ -395,7 +398,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
 
         <div
           data-testid="session-row-actions"
-          className="relative self-center flex items-center justify-end gap-2 shrink-0 @max-[360px]:hidden"
+          className="col-start-3 relative self-center flex items-center justify-end gap-2 shrink-0 @max-[360px]:hidden"
         >
           <div className="h-8 shrink-0 flex items-center justify-end">
             {/* time — visible when not hovered. Compact single-line form:
