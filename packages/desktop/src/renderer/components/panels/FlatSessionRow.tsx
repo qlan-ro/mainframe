@@ -264,7 +264,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
             grid-column placement on siblings is required because hiding this
             with display:none would otherwise auto-shift the column-2 wrapper
             into column 1's 12px track. */}
-        <div className="col-start-1 w-3 h-3 shrink-0 flex items-center justify-center @max-[360px]:hidden">
+        <div className="col-start-1 w-3 h-3 shrink-0 flex items-center justify-center @max-[220px]:hidden">
           {chat.worktreeMissing ? (
             <div className="w-2 h-2 rounded-full bg-mf-destructive" />
           ) : isWorking ? (
@@ -326,7 +326,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               <div
                 ref={tagRowRef}
                 data-testid="session-row-tags"
-                className="shrink min-w-0 max-w-[50%] flex items-center gap-1 overflow-hidden whitespace-nowrap @max-[360px]:hidden"
+                className="shrink min-w-0 max-w-[50%] flex items-center gap-1 overflow-hidden whitespace-nowrap @max-[220px]:hidden"
               >
                 {tagNames.slice(0, visibleTagCount).map((name) => (
                   <TagPill key={name} label={name} color={colorOf(name)} variant="row" />
@@ -354,7 +354,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               per spec — only the title remains visible. */}
           <div
             data-testid="session-row-metadata"
-            className="min-w-0 flex items-center gap-1 flex-wrap @max-[360px]:hidden"
+            className="min-w-0 flex items-center gap-1 flex-wrap @max-[220px]:hidden"
           >
             <span className="shrink-0 text-xs font-medium text-mf-text-secondary opacity-80">{adapterLabel}</span>
 
@@ -398,7 +398,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
 
         <div
           data-testid="session-row-actions"
-          className="col-start-3 relative self-center flex items-center justify-end gap-2 shrink-0 @max-[360px]:hidden"
+          className="col-start-3 relative self-center flex items-center justify-end gap-2 shrink-0 @max-[220px]:hidden"
         >
           <div className="h-8 shrink-0 flex items-center justify-end">
             {/* time — visible when not hovered. Compact single-line form:
