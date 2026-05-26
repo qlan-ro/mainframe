@@ -1,4 +1,0 @@
----
----
-
-Update API reference documentation.
