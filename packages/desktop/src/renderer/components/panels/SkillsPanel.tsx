@@ -34,10 +34,10 @@ function SkillItem({
 
   return (
     <div
-      className="group w-full px-3 py-2 text-left rounded-mf-input transition-colors hover:bg-mf-hover/50 cursor-pointer flex items-start gap-2"
+      className="@container group w-full px-3 py-2 text-left rounded-mf-input transition-colors hover:bg-mf-hover/50 cursor-pointer flex items-start gap-2"
       onClick={() => onInvoke(skill)}
     >
-      <Zap size={14} className="text-mf-accent mt-0.5 shrink-0" />
+      <Zap size={14} className="text-mf-accent mt-0.5 shrink-0 @max-[220px]:hidden" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
           <TruncatedLabel
@@ -46,7 +46,7 @@ function SkillItem({
             data-testid={`skills-item-name-${skill.id}`}
             className="text-mf-body text-mf-text-primary font-medium flex-1"
           />
-          <span className="flex items-center gap-0.5 px-1.5 py-0 rounded-full bg-mf-hover text-mf-status text-mf-text-secondary shrink-0">
+          <span className="flex items-center gap-0.5 px-1.5 py-0 rounded-full bg-mf-hover text-mf-status text-mf-text-secondary shrink-0 @max-[220px]:hidden">
             {SCOPE_ICON[skill.scope]}
             {SCOPE_LABEL[skill.scope]}
           </span>
@@ -54,14 +54,14 @@ function SkillItem({
         {skill.description && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate" tabIndex={0}>
+              <div className="text-mf-label text-mf-text-secondary mt-0.5 truncate @max-[220px]:hidden" tabIndex={0}>
                 {skill.description}
               </div>
             </TooltipTrigger>
             <TooltipContent>{skill.description}</TooltipContent>
           </Tooltip>
         )}
-        <div className="text-mf-status text-mf-text-secondary mt-0.5 font-mono">
+        <div className="text-mf-status text-mf-text-secondary mt-0.5 font-mono @max-[220px]:hidden">
           /{skill.invocationName || skill.name}
         </div>
       </div>

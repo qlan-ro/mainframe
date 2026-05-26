@@ -70,7 +70,7 @@ export function TitleBar(): React.ReactElement {
   const handleCloseStopPopover = useCallback(() => setStopPopoverOpen(false), []);
 
   return (
-    <div className="h-11 bg-mf-app-bg grid grid-cols-[1fr_auto_1fr] items-center app-drag pr-11">
+    <div className="@container h-11 bg-mf-app-bg grid grid-cols-[1fr_auto_1fr] items-center app-drag pr-11">
       {/* Left: traffic-lights area + active project name */}
       <div className="flex items-center min-w-0 pl-[84px] pr-4 app-no-drag">
         <span className="text-mf-body font-medium text-mf-text-primary truncate" title={activeProjectName ?? ''}>
@@ -90,8 +90,10 @@ export function TitleBar(): React.ReactElement {
         </div>
       </div>
 
-      {/* Right: launch picker + play/stop */}
-      <div className="flex items-center justify-end gap-1 min-w-0 app-no-drag">
+      {/* Right: launch picker + play/stop. Hidden when the title bar is too
+          narrow to fit it without crowding the search box. Container query so
+          this responds to the actual window width, not the global viewport. */}
+      <div className="hidden @[700px]:flex items-center justify-end gap-1 min-w-0 app-no-drag">
         {/* Preview / Launch button */}
         <div className="relative flex items-center" data-launch-popover>
           <Tooltip>

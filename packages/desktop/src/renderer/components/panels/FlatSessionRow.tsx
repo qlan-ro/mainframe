@@ -253,13 +253,15 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
       onClick={handleRowClick}
       onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId, chat.id)}
       className={cn(
-        'group w-full rounded-mf-input transition-colors cursor-pointer',
+        '@container group w-full rounded-mf-input transition-colors cursor-pointer',
         isActive ? 'bg-mf-hover' : 'hover:bg-mf-hover',
       )}
     >
       <div className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5">
-        {/* status dot — vertically centered across title + metadata */}
-        <div className="w-3 h-3 shrink-0 flex items-center justify-center">
+        {/* status dot — vertically centered across title + metadata.
+            Hidden when the row's container is too narrow to fit anything
+            but the title (see metadata + actions hidden below). */}
+        <div className="w-3 h-3 shrink-0 flex items-center justify-center @max-[360px]:hidden">
           {chat.worktreeMissing ? (
             <div className="w-2 h-2 rounded-full bg-mf-destructive" />
           ) : isWorking ? (
@@ -277,7 +279,12 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
             {/* title + select target. The rename input is rendered as a sibling
                 — not a child of <button> — to keep the HTML valid. */}
             {editing ? (
-              <div className={cn('min-w-0 flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}>
+              <div
+                className={cn(
+                  'min-w-0 flex items-center gap-1.5 min-h-[20px]',
+                  hasTags && 'max-w-[50%] @max-[360px]:max-w-full',
+                )}
+              >
                 {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
                 <input
                   ref={inputRef}
@@ -294,7 +301,10 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
                 type="button"
                 data-testid={`chats-session-select-${chat.id}`}
                 onClick={handleSelect}
-                className={cn('min-w-0 text-left flex items-center gap-1.5 min-h-[20px]', hasTags && 'max-w-[50%]')}
+                className={cn(
+                  'min-w-0 text-left flex items-center gap-1.5 min-h-[20px]',
+                  hasTags && 'max-w-[50%] @max-[360px]:max-w-full',
+                )}
               >
                 {chat.pinned && <Pin size={10} className="shrink-0 text-mf-accent" />}
                 <Tooltip>
@@ -321,7 +331,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               <div
                 ref={tagRowRef}
                 data-testid="session-row-tags"
-                className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden whitespace-nowrap"
+                className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden whitespace-nowrap @max-[360px]:hidden"
               >
                 {tagNames.slice(0, visibleTagCount).map((name) => (
                   <TagPill key={name} label={name} color={colorOf(name)} variant="row" />
@@ -345,8 +355,12 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
             )}
           </div>
 
-          {/* metadata row: adapter + worktree + PR */}
-          <div data-testid="session-row-metadata" className="min-w-0 flex items-center gap-1 flex-wrap">
+          {/* metadata row: adapter + worktree + PR. Hidden at narrow widths
+              per spec — only the title remains visible. */}
+          <div
+            data-testid="session-row-metadata"
+            className="min-w-0 flex items-center gap-1 flex-wrap @max-[360px]:hidden"
+          >
             <span className="shrink-0 text-xs font-medium text-mf-text-secondary opacity-80">{adapterLabel}</span>
 
             {chat.worktreePath && worktreeName && (
@@ -389,7 +403,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
 
         <div
           data-testid="session-row-actions"
-          className="relative self-center flex items-center justify-end gap-2 shrink-0"
+          className="relative self-center flex items-center justify-end gap-2 shrink-0 @max-[360px]:hidden"
         >
           <div className="h-8 shrink-0 flex items-center justify-end">
             {/* time — visible when not hovered. Compact single-line form:
