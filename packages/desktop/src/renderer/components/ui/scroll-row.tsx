@@ -39,11 +39,24 @@ export function ScrollRow({
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    Array.from(el.children).forEach((child) => {
-      if (child instanceof Element) ro.observe(child);
+    const observeChildren = () => {
+      Array.from(el.children).forEach((child) => {
+        if (child instanceof Element) ro.observe(child);
+      });
+    };
+    observeChildren();
+    const mo = new MutationObserver(() => {
+      ro.disconnect();
+      ro.observe(el);
+      observeChildren();
+      measure();
     });
-    return () => ro.disconnect();
-  }, [measure, children]);
+    mo.observe(el, { childList: true });
+    return () => {
+      mo.disconnect();
+      ro.disconnect();
+    };
+  }, [measure]);
 
   const handleScroll = React.useCallback(() => measure(), [measure]);
 
