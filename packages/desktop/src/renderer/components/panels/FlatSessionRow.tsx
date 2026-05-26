@@ -217,6 +217,11 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   const adapterLabel = getAdapterLabel(chat.adapterId, adapters);
   const worktreeName = chat.worktreePath?.split('/').pop();
 
+  // Tag-row overflow uses a +N more popover (computed via ResizeObserver below),
+  // not the shared <ScrollRow> primitive. Session rows are dense list items;
+  // a horizontal scrollbar inside a list row conflicts with the list's vertical
+  // scroll and is fiddly to discover on hover. See
+  // docs/superpowers/specs/2026-05-25-visual-glitches-overflow-design.md § Coherence exception.
   // Tag row gets a full-width dedicated row. If pills overflow, hide trailing
   // ones and render a +N overflow pill that opens the existing TagPopover.
   const tagRowRef = useRef<HTMLDivElement>(null);
