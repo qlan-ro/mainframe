@@ -12,6 +12,7 @@ import { isConflictStatus } from '../lib/git-utils';
 import { cn } from '../lib/utils';
 import { BranchPopover } from './git/BranchPopover';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { TruncatedLabel } from './ui/truncated-label';
 
 const GIT_POLL_INTERVAL = 60_000;
 
@@ -152,16 +153,16 @@ export function StatusBar(): React.ReactElement {
 
   return (
     <div className="h-6 bg-mf-app-bg px-[10px] flex items-center justify-between text-mf-body">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 min-w-0 flex-1">
         {/* Connection status */}
-        <div data-testid="connection-status" className="flex items-center gap-[6px] text-mf-text-secondary">
+        <div data-testid="connection-status" className="flex items-center gap-[6px] text-mf-text-secondary shrink-0">
           <div className={cn('w-[6px] h-[6px] rounded-full', connected ? 'bg-mf-success' : 'bg-mf-destructive')} />
           <span>{connected ? 'Connected' : 'Disconnected'}</span>
         </div>
 
         {/* Git branch — clickable */}
         {gitBranch && (
-          <div className="relative">
+          <div className="relative min-w-0 shrink">
             <button
               data-testid="branch-button"
               onMouseDown={(e) => e.stopPropagation()}
@@ -169,14 +170,19 @@ export function StatusBar(): React.ReactElement {
                 if (!popoverOpen) fetchBranchAndStatus();
                 setPopoverOpen(!popoverOpen);
               }}
+              aria-label={`Git branch: ${gitBranch}`}
               className={cn(
-                'flex items-center gap-1 text-mf-text-secondary hover:text-mf-text-primary transition-colors',
+                'flex items-center gap-1 text-mf-text-secondary hover:text-mf-text-primary transition-colors max-w-full min-w-0',
                 popoverOpen && 'text-mf-text-primary',
               )}
             >
-              {hasConflicts && <AlertTriangle size={12} className="text-mf-warning" />}
-              {inWorktree ? <FolderGit size={14} className="text-mf-accent" /> : <GitBranch size={14} />}
-              <span>{gitBranch}</span>
+              {hasConflicts && <AlertTriangle size={12} className="text-mf-warning shrink-0" />}
+              {inWorktree ? (
+                <FolderGit size={14} className="text-mf-accent shrink-0" />
+              ) : (
+                <GitBranch size={14} className="shrink-0" />
+              )}
+              <TruncatedLabel text={gitBranch} data-testid="status-bar-branch" className="max-w-[220px]" />
             </button>
 
             {popoverOpen && activeProjectId && (
@@ -193,7 +199,7 @@ export function StatusBar(): React.ReactElement {
 
         {/* Session metrics */}
         {chats.length > 0 && (
-          <div className="flex items-center gap-2 text-mf-text-secondary">
+          <div className="flex items-center gap-2 text-mf-text-secondary shrink-0">
             {counts.working > 0 && <span>{counts.working} Working</span>}
             {counts.waiting > 0 && <span className="text-mf-warning">{counts.waiting} Needs Input</span>}
             <span>{counts.idle} Idle</span>
@@ -202,7 +208,7 @@ export function StatusBar(): React.ReactElement {
       </div>
 
       {/* Right side — update indicator */}
-      <div className="flex items-center gap-2 text-mf-body">
+      <div className="flex items-center gap-2 text-mf-body shrink-0">
         <UpdateIndicator />
       </div>
     </div>
