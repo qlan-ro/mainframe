@@ -40,12 +40,17 @@ function SkillItem({
       <Zap size={14} className="text-mf-accent mt-0.5 shrink-0 @max-[220px]:hidden" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
-          <TruncatedLabel
-            text={skill.invocationName || skill.displayName || skill.name}
-            title={skill.invocationName || skill.displayName || skill.name}
-            data-testid={`skills-item-name-${skill.id}`}
-            className="text-mf-body text-mf-text-primary font-medium flex-1"
-          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <TruncatedLabel
+                text={skill.invocationName || skill.displayName || skill.name}
+                data-testid={`skills-item-name-${skill.id}`}
+                className="text-mf-body text-mf-text-primary font-medium flex-1"
+                tabIndex={0}
+              />
+            </TooltipTrigger>
+            <TooltipContent>{skill.invocationName || skill.displayName || skill.name}</TooltipContent>
+          </Tooltip>
           <span className="flex items-center gap-0.5 px-1.5 py-0 rounded-full bg-mf-hover text-mf-status text-mf-text-secondary shrink-0 @max-[220px]:hidden">
             {SCOPE_ICON[skill.scope]}
             {SCOPE_LABEL[skill.scope]}
