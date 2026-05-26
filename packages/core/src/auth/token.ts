@@ -3,10 +3,12 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 export interface TokenPayload {
   deviceId: string;
   iat: number;
+  epoch?: number;
 }
 
-export function generateToken(secret: string, deviceId: string): string {
+export function generateToken(secret: string, deviceId: string, epoch?: number): string {
   const payload: TokenPayload = { deviceId, iat: Date.now() };
+  if (epoch !== undefined) payload.epoch = epoch;
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = createHmac('sha256', secret).update(payloadB64).digest('base64url');
   return `${payloadB64}.${sig}`;

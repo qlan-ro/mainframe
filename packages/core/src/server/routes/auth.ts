@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
-import { generateToken, validateToken, generatePairingCode } from '../../auth/token.js';
+import { z } from 'zod';
+import { generateToken, generatePairingCode } from '../../auth/token.js';
+import { validateAuthedToken } from '../../auth/validate-authed-token.js';
 import type { PushService } from '../../push/push-service.js';
 import type { DevicesRepository } from '../../db/devices.js';
 
@@ -16,12 +17,28 @@ interface RateLimitEntry {
   windowStart: number;
 }
 
+interface RecentPairing {
+  deviceId: string;
+  deviceName: string;
+  consumedAt: number;
+}
+
 const pendingPairings = new Map<string, PendingPairing>();
 const confirmRateLimit = new Map<string, RateLimitEntry>();
+const recentPairings = new Map<string, RecentPairing>();
+
 const PAIRING_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_PAIRING_ATTEMPTS = 5;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_FAILURES = 10;
+const RECENT_PAIRING_TTL_MS = 60 * 1000;
+
+function cleanRecentPairings(): void {
+  const now = Date.now();
+  for (const [code, entry] of recentPairings) {
+    if (now - entry.consumedAt > RECENT_PAIRING_TTL_MS) recentPairings.delete(code);
+  }
+}
 
 function cleanExpiredPairings(): void {
   const now = Date.now();
@@ -35,6 +52,7 @@ function cleanExpiredPairings(): void {
       confirmRateLimit.delete(ip);
     }
   }
+  cleanRecentPairings();
 }
 
 function isRateLimited(ip: string): boolean {
@@ -66,7 +84,21 @@ export interface AuthRouteOptions {
 export function _resetAuthState(): void {
   pendingPairings.clear();
   confirmRateLimit.clear();
+  recentPairings.clear();
 }
+
+const pairStatusQuerySchema = z.object({ code: z.string().regex(/^[A-Z0-9]{6}$/) });
+
+const confirmBodySchema = z.object({
+  pairingCode: z.string().min(1),
+  deviceName: z.string().min(1).optional(),
+  clientDeviceId: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+});
+
+const registerPushSchema = z.object({
+  deviceId: z.string().min(1),
+  pushToken: z.string().min(1),
+});
 
 export function authRoutes(options?: AuthRouteOptions): Router {
   const router = Router();
@@ -99,11 +131,12 @@ export function authRoutes(options?: AuthRouteOptions): Router {
       return;
     }
 
-    const { pairingCode, deviceName } = req.body as { pairingCode?: string; deviceName?: string };
-    if (!pairingCode) {
-      res.status(400).json({ success: false, error: 'Missing pairingCode' });
+    const parsed = confirmBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: 'Invalid request body' });
       return;
     }
+    const { pairingCode, deviceName, clientDeviceId } = parsed.data;
 
     cleanExpiredPairings();
 
@@ -125,11 +158,15 @@ export function authRoutes(options?: AuthRouteOptions): Router {
 
     pendingPairings.delete(pairingCode);
 
-    const deviceId = `mobile-${nanoid(10)}`;
-    const token = generateToken(secret, deviceId);
+    const deviceId = `mobile-${clientDeviceId}`;
     const name = deviceName ?? pairing.deviceName;
 
     options?.devicesRepo?.add(deviceId, name);
+    const epoch = options?.devicesRepo?.incrementAuthEpoch(deviceId) ?? 0;
+
+    const token = generateToken(secret, deviceId, epoch);
+
+    recentPairings.set(pairingCode, { deviceId, deviceName: name, consumedAt: Date.now() });
 
     res.json({ success: true, data: { token, deviceId } });
   });
@@ -147,17 +184,33 @@ export function authRoutes(options?: AuthRouteOptions): Router {
       return;
     }
 
-    const payload = validateToken(secret, authHeader.slice(7));
-    res.json({ success: true, data: { valid: !!payload, deviceId: payload?.deviceId } });
-  });
-
-  router.post('/api/auth/register-push', (req, res) => {
-    const { deviceId, pushToken } = req.body as { deviceId?: string; pushToken?: string };
-    if (!deviceId || !pushToken) {
-      res.status(400).json({ success: false, error: 'Missing deviceId or pushToken' });
+    if (!options?.devicesRepo) {
+      res.json({ success: true, data: { valid: false } });
       return;
     }
 
+    const payload = validateAuthedToken(secret, authHeader.slice(7), options.devicesRepo);
+    res.json({
+      success: true,
+      data: { valid: !!payload, deviceId: payload?.deviceId },
+    });
+  });
+
+  router.post('/api/auth/register-push', (req, res) => {
+    if (!req.auth) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+    const parsed = registerPushSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: 'Missing deviceId or pushToken' });
+      return;
+    }
+    const { deviceId, pushToken } = parsed.data;
+    if (deviceId !== req.auth.deviceId) {
+      res.status(403).json({ success: false, error: 'Device mismatch' });
+      return;
+    }
     options?.pushService?.registerDevice(deviceId, pushToken);
     res.json({ success: true });
   });
@@ -170,7 +223,26 @@ export function authRoutes(options?: AuthRouteOptions): Router {
   router.delete('/api/auth/devices/:deviceId', (req, res) => {
     const { deviceId } = req.params;
     options?.devicesRepo?.remove(deviceId);
+    options?.pushService?.unregisterDevice(deviceId);
     res.json({ success: true });
+  });
+
+  router.get('/api/auth/pair-status', (req, res) => {
+    const parsed = pairStatusQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: 'Invalid code' });
+      return;
+    }
+    cleanRecentPairings();
+    const entry = recentPairings.get(parsed.data.code);
+    if (!entry) {
+      res.json({ success: true, data: { paired: false } });
+      return;
+    }
+    res.json({
+      success: true,
+      data: { paired: true, deviceId: entry.deviceId, deviceName: entry.deviceName },
+    });
   });
 
   return router;

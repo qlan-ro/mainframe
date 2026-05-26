@@ -13,7 +13,8 @@ describe('DevicesRepository', () => {
         device_id   TEXT PRIMARY KEY,
         device_name TEXT NOT NULL,
         created_at  TEXT NOT NULL,
-        last_seen   TEXT
+        last_seen   TEXT,
+        auth_epoch  INTEGER NOT NULL DEFAULT 0
       )
     `);
     devices = new DevicesRepository(db);
@@ -56,5 +57,28 @@ describe('DevicesRepository', () => {
     const second = devices.getAll()[0]!;
     expect(second.createdAt).toBe(first);
     expect(second.deviceName).toBe('Renamed iPhone');
+  });
+
+  it('findByDeviceId returns null for unknown device', () => {
+    expect(devices.findByDeviceId('nope')).toBeNull();
+  });
+
+  it('findByDeviceId returns device with authEpoch', () => {
+    devices.add('mobile-1', 'My iPhone');
+    const row = devices.findByDeviceId('mobile-1');
+    expect(row).not.toBeNull();
+    expect(row!.deviceId).toBe('mobile-1');
+    expect(row!.authEpoch).toBe(0);
+  });
+
+  it('incrementAuthEpoch atomically bumps and returns the new value', () => {
+    devices.add('mobile-1', 'My iPhone');
+    expect(devices.incrementAuthEpoch('mobile-1')).toBe(1);
+    expect(devices.incrementAuthEpoch('mobile-1')).toBe(2);
+    expect(devices.findByDeviceId('mobile-1')!.authEpoch).toBe(2);
+  });
+
+  it('incrementAuthEpoch returns 0 for unknown device (no row updated)', () => {
+    expect(devices.incrementAuthEpoch('ghost')).toBe(0);
   });
 });

@@ -60,7 +60,7 @@ export function createServerManager(
   return {
     async start(port: number): Promise<void> {
       _fileWatcher = new FileWatcherService((event) => _wsManager?.broadcastEvent(event));
-      _wsManager = new WebSocketManager(httpServer, chats, lspHandler, _fileWatcher);
+      _wsManager = new WebSocketManager(httpServer, chats, lspHandler, _fileWatcher, db.devices);
 
       return new Promise((resolve) => {
         httpServer.listen(port, '127.0.0.1', () => {

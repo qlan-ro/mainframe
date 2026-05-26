@@ -4,3 +4,7 @@ export interface Device {
   createdAt: string;
   lastSeen: string | null;
 }
+
+export interface DeviceRow extends Device {
+  authEpoch: number;
+}
