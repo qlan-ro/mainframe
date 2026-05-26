@@ -4,6 +4,7 @@ import { useChatsStore } from '../../store/chats';
 import { useAdaptersStore } from '../../store/adapters';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import { TruncatedLabel } from '../ui/truncated-label';
 import { getAdapterLabel, getModelContextWindow, getModelLabel } from '../../lib/adapters';
 import { PrBadge } from './PrBadge';
 import { ChatActions } from './ChatActions';
@@ -126,24 +127,35 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
     <div data-testid="session-bar" className="h-7 flex items-center px-3 text-mf-status bg-mf-panel-bg shrink-0">
       {/* Left: identity */}
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0 shrink-0">
           <div className={cn('w-[6px] h-[6px] rounded-full shrink-0', accentClass)} />
-          <span data-testid="session-bar-adapter" className="text-mf-text-secondary">
+          <span data-testid="session-bar-adapter" className="text-mf-text-secondary shrink-0">
             {adapterLabel}
           </span>
-          {modelLabel && <span className="text-mf-text-secondary opacity-60">{modelLabel}</span>}
+          {modelLabel && (
+            <TruncatedLabel
+              text={modelLabel}
+              title={modelLabel}
+              data-testid="session-bar-model"
+              className="text-mf-text-secondary opacity-60 max-w-[140px]"
+            />
+          )}
         </div>
 
         {chat.branchName && (
           <>
             <Divider />
-            <div className="flex items-center gap-1 text-mf-text-secondary min-w-0">
+            <div className="flex items-center gap-1 text-mf-text-secondary min-w-0 shrink-0">
               <GitBranch size={11} className="shrink-0" />
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="font-mono truncate max-w-[120px]" tabIndex={0}>
-                    {chat.branchName}
-                  </span>
+                  <TruncatedLabel
+                    text={chat.branchName}
+                    as="span"
+                    data-testid="session-bar-branch"
+                    tabIndex={0}
+                    className="font-mono max-w-[120px]"
+                  />
                 </TooltipTrigger>
                 <TooltipContent>{chat.branchName}</TooltipContent>
               </Tooltip>
