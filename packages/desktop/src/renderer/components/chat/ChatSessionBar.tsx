@@ -127,7 +127,7 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
     <div data-testid="session-bar" className="h-7 flex items-center px-3 text-mf-status bg-mf-panel-bg shrink-0">
       {/* Left: identity */}
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <div className={cn('w-[6px] h-[6px] rounded-full shrink-0', accentClass)} />
           <span data-testid="session-bar-adapter" className="text-mf-text-secondary shrink-0">
             {adapterLabel}
@@ -145,7 +145,7 @@ export function ChatSessionBar({ chatId }: ChatSessionBarProps): React.ReactElem
         {chat.branchName && (
           <>
             <Divider />
-            <div className="flex items-center gap-1 text-mf-text-secondary min-w-0 shrink-0">
+            <div className="flex items-center gap-1 text-mf-text-secondary shrink-0">
               <GitBranch size={11} className="shrink-0" />
               <Tooltip>
                 <TooltipTrigger asChild>
