@@ -398,7 +398,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
 
         <div
           data-testid="session-row-actions"
-          className="col-start-3 relative self-center flex items-center justify-end gap-2 shrink-0 @max-[220px]:hidden"
+          className="col-start-3 relative self-center flex items-center justify-end gap-2 shrink-0 @max-[300px]:hidden"
         >
           <div className="h-8 shrink-0 flex items-center justify-end min-w-[78px]">
             {/* time — visible when not hovered. Compact single-line form:
