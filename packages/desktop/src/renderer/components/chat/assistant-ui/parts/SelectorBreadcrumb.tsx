@@ -22,7 +22,7 @@ export function SelectorBreadcrumb({ path, fadeColor }: SelectorBreadcrumbProps)
   const parts = raw.length > MAX_SEGMENTS ? ['…', ...raw.slice(-MAX_SEGMENTS)] : raw;
   const lastIndex = parts.length - 1;
   return (
-    <ScrollRow data-testid="selector-breadcrumb" className="max-w-full" fadeColor={fadeColor}>
+    <ScrollRow data-testid="selector-breadcrumb" className="flex-1 min-w-0" fadeColor={fadeColor}>
       <div className="flex items-center shrink-0" title={path}>
         {parts.map((p, i) => {
           const isTarget = i === lastIndex;
