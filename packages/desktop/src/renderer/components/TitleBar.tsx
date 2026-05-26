@@ -70,28 +70,28 @@ export function TitleBar(): React.ReactElement {
   const handleCloseStopPopover = useCallback(() => setStopPopoverOpen(false), []);
 
   return (
-    <div className="h-11 bg-mf-app-bg flex items-center app-drag relative">
-      {/* Traffic lights area + active project name */}
-      <div className="flex items-center pl-[84px] pr-4 z-10 app-no-drag">
-        <span className="text-mf-body font-medium text-mf-text-primary">
+    <div className="h-11 bg-mf-app-bg grid grid-cols-[1fr_auto_1fr] items-center app-drag pr-11">
+      {/* Left: traffic-lights area + active project name */}
+      <div className="flex items-center min-w-0 pl-[84px] pr-4 app-no-drag">
+        <span className="text-mf-body font-medium text-mf-text-primary truncate" title={activeProjectName ?? ''}>
           {activeProjectName}
           {worktreeBranch && <span className="text-mf-text-secondary font-normal"> / {worktreeBranch}</span>}
         </span>
       </div>
 
-      {/* Search box — centered in the title bar */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      {/* Center: search box — sized to content, capped, naturally centered by 1fr_auto_1fr */}
+      <div className="flex justify-center px-2">
         <div
           onClick={() => useSearchStore.getState().open()}
-          className="w-[480px] max-w-[90%] flex items-center gap-2 px-3 py-[5px] rounded-mf-card border border-mf-border text-mf-text-secondary text-mf-body app-no-drag cursor-pointer hover:border-mf-text-secondary transition-colors pointer-events-auto"
+          className="w-[480px] max-w-full flex items-center gap-2 px-3 py-[5px] rounded-mf-card border border-mf-border text-mf-text-secondary text-mf-body app-no-drag cursor-pointer hover:border-mf-text-secondary transition-colors"
         >
-          <Search size={14} />
-          <span>Search ⌘O</span>
+          <Search size={14} className="shrink-0" />
+          <span className="truncate">Search ⌘O</span>
         </div>
       </div>
 
-      {/* Right side — Preview + plugin icons */}
-      <div className="absolute right-11 flex items-center gap-1 app-no-drag z-10">
+      {/* Right: launch picker + play/stop */}
+      <div className="flex items-center justify-end gap-1 min-w-0 app-no-drag">
         {/* Preview / Launch button */}
         <div className="relative flex items-center" data-launch-popover>
           <Tooltip>
@@ -103,14 +103,14 @@ export function TitleBar(): React.ReactElement {
                   setStopPopoverOpen(false);
                 }}
                 className={cn(
-                  'flex items-center gap-1.5 px-2 py-1 text-mf-body rounded-mf-card hover:bg-mf-panel-bg transition-colors',
+                  'flex items-center gap-1.5 px-2 py-1 text-mf-body rounded-mf-card hover:bg-mf-panel-bg transition-colors min-w-0 max-w-[200px]',
                   selectedConfig
                     ? 'text-mf-text-secondary hover:text-mf-text-primary'
                     : 'text-mf-text-secondary opacity-60 hover:opacity-100',
                 )}
               >
-                <span>{selectedConfig?.name ?? 'No launch configurations'}</span>
-                <ChevronDown size={12} />
+                <span className="truncate min-w-0">{selectedConfig?.name ?? 'No launch configurations'}</span>
+                <ChevronDown size={12} className="shrink-0" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Launch configurations</TooltipContent>
