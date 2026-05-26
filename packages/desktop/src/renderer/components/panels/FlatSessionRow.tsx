@@ -400,32 +400,27 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
           data-testid="session-row-actions"
           className="col-start-3 relative self-center flex items-center justify-end gap-2 shrink-0 @max-[220px]:hidden"
         >
-          <div className="h-8 shrink-0 flex items-center justify-end">
+          <div className="h-8 shrink-0 flex items-center justify-end min-w-[78px]">
             {/* time — visible when not hovered. Compact single-line form:
                 if the day-label exists ("Yesterday", "May 4"), prefer that;
-                otherwise show the time ("11:29 AM"). Narrow rows can't afford
-                a stacked two-line layout — see docs/superpowers/specs/
-                2026-05-25-visual-glitches-overflow-design.md. */}
+                otherwise show the time ("11:29 AM"). The slot reserves
+                `min-w-[78px]` so the hover-action buttons (3 × 24px + gaps)
+                fit inline on hover without overflowing leftward onto the
+                title. Narrow widths skip this whole area via @max-[220px]:hidden
+                on the wrapper above. */}
             {(() => {
               const t = formatRelativeTime(chat.updatedAt);
               const label = t.primary || t.secondary || '';
               return (
-                <span className="text-xs text-mf-text-secondary tabular-nums whitespace-nowrap leading-tight text-right group-hover:invisible">
+                <span className="text-xs text-mf-text-secondary tabular-nums whitespace-nowrap leading-tight text-right group-hover:hidden">
                   {label}
                 </span>
               );
             })()}
 
-            {/* hover actions overlay (Tag / Rename / Archive) — absolute so the
-                action slot doesn't reserve width when not hovered. The time
-                element above is `invisible` (not `hidden`) so the row's height
-                stays stable as the actions appear. */}
-            <div
-              className={cn(
-                'absolute right-0 top-1/2 -translate-y-1/2 items-center gap-0.5 hidden group-hover:flex bg-mf-hover rounded-mf-input px-0.5',
-                archiving && 'flex',
-              )}
-            >
+            {/* hover actions (Tag / Rename / Archive) — inline. The min-w on
+                the slot guarantees they fit without pushing into the title. */}
+            <div className={cn('items-center gap-0.5 hidden group-hover:flex', archiving && 'flex')}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
