@@ -387,21 +387,36 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
           </div>
         </div>
 
-        <div data-testid="session-row-actions" className="self-center flex items-center justify-end gap-2 min-w-0">
-          <div className="w-[72px] h-8 shrink-0 flex items-center justify-end">
-            {/* time — visible when not hovered (stacked: weekday/label on top, time below) */}
+        <div
+          data-testid="session-row-actions"
+          className="relative self-center flex items-center justify-end gap-2 shrink-0"
+        >
+          <div className="h-8 shrink-0 flex items-center justify-end">
+            {/* time — visible when not hovered. Compact single-line form:
+                if the day-label exists ("Yesterday", "May 4"), prefer that;
+                otherwise show the time ("11:29 AM"). Narrow rows can't afford
+                a stacked two-line layout — see docs/superpowers/specs/
+                2026-05-25-visual-glitches-overflow-design.md. */}
             {(() => {
               const t = formatRelativeTime(chat.updatedAt);
+              const label = t.primary || t.secondary || '';
               return (
-                <span className="text-xs text-mf-text-secondary tabular-nums whitespace-nowrap leading-tight text-right group-hover:hidden flex flex-col items-end">
-                  <span>{t.primary}</span>
-                  {t.secondary && <span>{t.secondary}</span>}
+                <span className="text-xs text-mf-text-secondary tabular-nums whitespace-nowrap leading-tight text-right group-hover:invisible">
+                  {label}
                 </span>
               );
             })()}
 
-            {/* hover actions (Tag / Rename / Archive) */}
-            <div className={cn('items-center gap-0.5 hidden group-hover:flex', archiving && 'flex')}>
+            {/* hover actions overlay (Tag / Rename / Archive) — absolute so the
+                action slot doesn't reserve width when not hovered. The time
+                element above is `invisible` (not `hidden`) so the row's height
+                stays stable as the actions appear. */}
+            <div
+              className={cn(
+                'absolute right-0 top-1/2 -translate-y-1/2 items-center gap-0.5 hidden group-hover:flex bg-mf-hover rounded-mf-input px-0.5',
+                archiving && 'flex',
+              )}
+            >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button

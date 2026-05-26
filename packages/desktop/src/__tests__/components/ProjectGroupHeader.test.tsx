@@ -210,7 +210,9 @@ describe('ProjectGroup header layout', () => {
     const metadataRow = screen.getByTestId('session-row-metadata');
     const actionsArea = screen.getByTestId('session-row-actions');
 
-    expect(slot?.className).toContain('w-[72px]');
+    // Slot is content-sized (single-line time) rather than reserving a fixed
+    // 72px width — at narrow row widths, reserving 72px crowded the metadata
+    // row and produced the visible overlap. See spec.
     expect(slot?.className).toContain('shrink-0');
     expect(slot?.className).toContain('justify-end');
     expect(actionsArea.className).toContain('self-center');
