@@ -226,6 +226,11 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   // ones and render a +N overflow pill that opens the existing TagPopover.
   const tagRowRef = useRef<HTMLDivElement>(null);
   const [visibleTagCount, setVisibleTagCount] = useState(tagNames.length);
+  // Last observed container width — guards the ResizeObserver against an
+  // infinite reset loop: decrementing the visible count shrinks the row's own
+  // box, which would otherwise re-fire the RO and reset the count, hiding the
+  // +N pill forever. We only reset on actual *widening* of the row.
+  const lastTagRowWidth = useRef(0);
 
   useLayoutEffect(() => {
     setVisibleTagCount(tagNames.length);
@@ -234,7 +239,12 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   useLayoutEffect(() => {
     const el = tagRowRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setVisibleTagCount(tagNames.length));
+    lastTagRowWidth.current = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      if (w > lastTagRowWidth.current) setVisibleTagCount(tagNames.length);
+      lastTagRowWidth.current = w;
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, [tagNames.length]);
