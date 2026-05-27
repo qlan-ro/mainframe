@@ -98,6 +98,7 @@ export function createHttpServer(
     tunnelManager,
     setTunnelUrl,
     port,
+    backgroundTasks,
   };
 
   app.use(authRoutes({ pushService, devicesRepo: db.devices }));

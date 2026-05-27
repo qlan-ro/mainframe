@@ -5,6 +5,7 @@ import type { AdapterRegistry } from '../../adapters/index.js';
 import type { AttachmentStore } from '../../attachment/index.js';
 import type { LaunchRegistry } from '../../launch/index.js';
 import type { TunnelManager } from '../../tunnel/tunnel-manager.js';
+import type { BackgroundTaskTracker } from '../../background-tasks/tracker.js';
 
 export interface RouteContext {
   db: DatabaseManager;
@@ -16,6 +17,7 @@ export interface RouteContext {
   tunnelManager?: TunnelManager;
   setTunnelUrl?: (url: string | null) => void;
   port?: number;
+  backgroundTasks?: BackgroundTaskTracker;
 }
 
 /** Extract a route param as a string (Express 5 params may be string | string[]). */
