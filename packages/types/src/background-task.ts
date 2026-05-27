@@ -19,6 +19,8 @@ export interface BackgroundTask {
     toolUses: number;
     durationMs: number;
   } | null;
+  /** True when this entry was rehydrated by reconciliation, not produced by a live CLI session. */
+  recovered?: true;
 }
 
 export interface BackgroundTaskStartedEvent {
