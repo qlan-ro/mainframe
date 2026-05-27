@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { useTagsStore } from '../../store/tags';
 import { useChatsStore } from '../../store';
 import { TagPill } from '../tags/TagPill';
+import { ScrollRow } from '../ui/scroll-row';
 import type { TagColor, SyntheticTag } from '@qlan-ro/mainframe-types';
 
 export function SessionFilterBar(): React.ReactElement {
@@ -44,36 +45,43 @@ export function SessionFilterBar(): React.ReactElement {
   if (!showTagsRow) return <></>;
 
   return (
-    <div className="flex items-center gap-1 flex-wrap px-3 py-2 border-b border-mf-divider">
-      <span className="text-xs text-mf-text-secondary uppercase mr-1">Tags</span>
-      {tagsInUse.map((name) => (
-        <TagPill
-          key={name}
-          label={name}
-          color={colorByName.get(name) ?? 'gray'}
-          variant="filter"
-          active={selectedTags.has(name)}
-          onClick={() => toggleTag(name)}
-        />
-      ))}
-      {hasAnyPr && (
-        <TagPill
-          label="has-pr"
-          color="gray"
-          variant="filter"
-          active={selectedSynthetic.has('has-pr')}
-          onClick={() => toggleSynthetic('has-pr' as SyntheticTag)}
-        />
-      )}
-      {hasAnyWorktree && (
-        <TagPill
-          label="has-worktree"
-          color="gray"
-          variant="filter"
-          active={selectedSynthetic.has('has-worktree')}
-          onClick={() => toggleSynthetic('has-worktree' as SyntheticTag)}
-        />
-      )}
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-mf-divider">
+      <span className="text-xs text-mf-text-secondary uppercase shrink-0">Tags</span>
+      <ScrollRow data-testid="session-filter-tags" className="min-w-0 flex-1">
+        {tagsInUse.map((name) => (
+          <div key={name} className="shrink-0">
+            <TagPill
+              label={name}
+              color={colorByName.get(name) ?? 'gray'}
+              variant="filter"
+              active={selectedTags.has(name)}
+              onClick={() => toggleTag(name)}
+            />
+          </div>
+        ))}
+        {hasAnyPr && (
+          <div className="shrink-0">
+            <TagPill
+              label="has-pr"
+              color="gray"
+              variant="filter"
+              active={selectedSynthetic.has('has-pr')}
+              onClick={() => toggleSynthetic('has-pr' as SyntheticTag)}
+            />
+          </div>
+        )}
+        {hasAnyWorktree && (
+          <div className="shrink-0">
+            <TagPill
+              label="has-worktree"
+              color="gray"
+              variant="filter"
+              active={selectedSynthetic.has('has-worktree')}
+              onClick={() => toggleSynthetic('has-worktree' as SyntheticTag)}
+            />
+          </div>
+        )}
+      </ScrollRow>
     </div>
   );
 }

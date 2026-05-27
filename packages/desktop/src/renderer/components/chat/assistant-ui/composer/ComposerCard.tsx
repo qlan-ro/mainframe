@@ -333,7 +333,7 @@ export function ComposerCard() {
       </div>
       {captureView.rows.length > 0 && (
         <div className="px-3 pt-1.5">
-          <SandboxCaptureContext rows={captureView.rows} />
+          <SandboxCaptureContext rows={captureView.rows} fadeColor="var(--mf-input-bg)" />
         </div>
       )}
       {composerError && (
@@ -406,8 +406,8 @@ export function ComposerCard() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-2 pb-2">
-        <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 px-2 pb-2">
+        <div className="flex flex-wrap items-center gap-1">
           <ComposerDropdown
             data-tutorial="step-4"
             data-testid="composer-adapter-select"

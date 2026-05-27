@@ -361,6 +361,16 @@ export function ChatsPanel(): React.ReactElement {
     openTagPopoverCallbacks.current.delete(chatId);
   }, []);
 
+  const archiveCallbacks = useRef<Map<string, () => void>>(new Map());
+
+  const registerArchiveCallback = useCallback((chatId: string, trigger: () => void) => {
+    archiveCallbacks.current.set(chatId, trigger);
+  }, []);
+
+  const unregisterArchiveCallback = useCallback((chatId: string) => {
+    archiveCallbacks.current.delete(chatId);
+  }, []);
+
   const updateChat = useChatsStore((s) => s.updateChat);
 
   const handleContextMenu = useCallback(
@@ -392,6 +402,13 @@ export function ChatsPanel(): React.ReactElement {
                     const newPinned = !chat.pinned;
                     updateChat({ ...chat, pinned: newPinned });
                     pinChat(chat.id, newPinned).catch((err) => log.warn('pin failed', { err: String(err) }));
+                  },
+                },
+                {
+                  label: 'Archive',
+                  destructive: true,
+                  onClick: () => {
+                    archiveCallbacks.current.get(chat.id)?.();
                   },
                 },
               ]
@@ -596,7 +613,12 @@ export function ChatsPanel(): React.ReactElement {
         ) : chats.length === 0 && (selectedTags.size > 0 || selectedSynthetic.size > 0) ? (
           <div className="py-4 text-center text-sm text-mf-text-secondary">
             No sessions match these filters.{' '}
-            <button type="button" data-testid="chats-clear-filters" onClick={clearTagFilters} className="underline hover:text-mf-text-primary">
+            <button
+              type="button"
+              data-testid="chats-clear-filters"
+              onClick={clearTagFilters}
+              className="underline hover:text-mf-text-primary"
+            >
               Clear filters
             </button>
           </div>
@@ -615,6 +637,8 @@ export function ChatsPanel(): React.ReactElement {
                 unregisterRenameCallback={unregisterRenameCallback}
                 registerOpenTagPopover={registerOpenTagPopover}
                 unregisterOpenTagPopover={unregisterOpenTagPopover}
+                registerArchiveCallback={registerArchiveCallback}
+                unregisterArchiveCallback={unregisterArchiveCallback}
               />
             ))}
           </div>
@@ -633,6 +657,8 @@ export function ChatsPanel(): React.ReactElement {
                   unregisterRenameCallback={unregisterRenameCallback}
                   registerOpenTagPopover={registerOpenTagPopover}
                   unregisterOpenTagPopover={unregisterOpenTagPopover}
+                  registerArchiveCallback={registerArchiveCallback}
+                  unregisterArchiveCallback={unregisterArchiveCallback}
                 />
               ))
             )}

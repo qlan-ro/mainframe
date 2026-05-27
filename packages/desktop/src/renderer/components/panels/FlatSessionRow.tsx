@@ -43,6 +43,8 @@ interface FlatSessionRowProps {
   unregisterRenameCallback?: (chatId: string) => void;
   registerOpenTagPopover?: (chatId: string, trigger: (rect: DOMRect) => void) => void;
   unregisterOpenTagPopover?: (chatId: string) => void;
+  registerArchiveCallback?: (chatId: string, trigger: () => void) => void;
+  unregisterArchiveCallback?: (chatId: string) => void;
 }
 
 export const FlatSessionRow = React.memo(function FlatSessionRow({
@@ -53,6 +55,8 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   unregisterRenameCallback,
   registerOpenTagPopover,
   unregisterOpenTagPopover,
+  registerArchiveCallback,
+  unregisterArchiveCallback,
 }: FlatSessionRowProps): React.ReactElement {
   const activeChatId = useChatsStore((s) => s.activeChatId);
   const chats = useChatsStore((s) => s.chats);
@@ -78,8 +82,8 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   const [archiving, setArchiving] = useState(false);
 
   const handleArchive = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
+    (e?: React.MouseEvent) => {
+      e?.stopPropagation();
       if (archiving) return;
       let deleteWorktree = true;
       if (chat.worktreePath) {
@@ -138,6 +142,11 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
     registerOpenTagPopover?.(chat.id, (rect) => setPopoverRect(rect));
     return () => unregisterOpenTagPopover?.(chat.id);
   }, [chat.id, registerOpenTagPopover, unregisterOpenTagPopover]);
+
+  useEffect(() => {
+    registerArchiveCallback?.(chat.id, () => handleArchive());
+    return () => unregisterArchiveCallback?.(chat.id);
+  }, [chat.id, handleArchive, registerArchiveCallback, unregisterArchiveCallback]);
 
   const updateChat = useChatsStore((s) => s.updateChat);
   const unreadChatIds = useChatsStore((s) => s.unreadChatIds);
@@ -217,10 +226,25 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   const adapterLabel = getAdapterLabel(chat.adapterId, adapters);
   const worktreeName = chat.worktreePath?.split('/').pop();
 
+  // Tag-row overflow uses a +N more popover (computed via ResizeObserver below),
+  // not the shared <ScrollRow> primitive. Session rows are dense list items;
+  // a horizontal scrollbar inside a list row conflicts with the list's vertical
+  // scroll and is fiddly to discover on hover. See
+  // docs/superpowers/specs/2026-05-25-visual-glitches-overflow-design.md § Coherence exception.
   // Tag row gets a full-width dedicated row. If pills overflow, hide trailing
   // ones and render a +N overflow pill that opens the existing TagPopover.
   const tagRowRef = useRef<HTMLDivElement>(null);
   const [visibleTagCount, setVisibleTagCount] = useState(tagNames.length);
+  // Last observed container width — guards the ResizeObserver against an
+  // infinite reset loop: decrementing the visible count shrinks the row's own
+  // box (when the tag row is content-sized), which would otherwise re-fire
+  // the RO and reset the count, hiding the +N pill forever. We only reset on
+  // actual *widening* of the row.
+  const lastTagRowWidth = useRef(0);
+  // Force-render counter — bumped on every RO fire so the decrement
+  // useLayoutEffect re-measures on shrink (where no other state changes).
+  // Without this, shrinking the panel would not re-trigger the +N decrement.
+  const [, setRoTick] = useState(0);
 
   useLayoutEffect(() => {
     setVisibleTagCount(tagNames.length);
@@ -229,7 +253,13 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   useLayoutEffect(() => {
     const el = tagRowRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => setVisibleTagCount(tagNames.length));
+    lastTagRowWidth.current = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      if (w > lastTagRowWidth.current) setVisibleTagCount(tagNames.length);
+      lastTagRowWidth.current = w;
+      setRoTick((t) => t + 1);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, [tagNames.length]);
@@ -253,8 +283,13 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
       )}
     >
       <div className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5">
-        {/* status dot — vertically centered across title + metadata */}
-        <div className="w-3 h-3 shrink-0 flex items-center justify-center">
+        {/* status dot — vertically centered across title + metadata.
+            Hidden when the row's container is too narrow to fit anything
+            but the title (see metadata + actions hidden below). Explicit
+            grid-column placement on siblings is required because hiding this
+            with display:none would otherwise auto-shift the column-2 wrapper
+            into column 1's 12px track. */}
+        <div className="col-start-1 w-3 h-3 shrink-0 flex items-center justify-center @max-[220px]:hidden">
           {chat.worktreeMissing ? (
             <div className="w-2 h-2 rounded-full bg-mf-destructive" />
           ) : isWorking ? (
@@ -267,7 +302,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
           )}
         </div>
 
-        <div className="min-w-0 space-y-2">
+        <div className="col-start-2 min-w-0 space-y-2">
           <div data-testid="session-title-row" className="flex items-center min-w-0 gap-2">
             {/* title + select target. The rename input is rendered as a sibling
                 — not a child of <button> — to keep the HTML valid. */}
@@ -316,7 +351,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
               <div
                 ref={tagRowRef}
                 data-testid="session-row-tags"
-                className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden whitespace-nowrap"
+                className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden whitespace-nowrap @max-[220px]:hidden"
               >
                 {tagNames.slice(0, visibleTagCount).map((name) => (
                   <TagPill key={name} label={name} color={colorOf(name)} variant="row" />
@@ -340,8 +375,12 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
             )}
           </div>
 
-          {/* metadata row: adapter + worktree + PR */}
-          <div data-testid="session-row-metadata" className="min-w-0 flex items-center gap-1 flex-wrap">
+          {/* metadata row: adapter + worktree + PR. Hidden at narrow widths
+              per spec — only the title remains visible. */}
+          <div
+            data-testid="session-row-metadata"
+            className="min-w-0 flex items-center gap-1 flex-wrap @max-[220px]:hidden"
+          >
             <span className="shrink-0 text-xs font-medium text-mf-text-secondary opacity-80">{adapterLabel}</span>
 
             {chat.worktreePath && worktreeName && (
@@ -382,20 +421,30 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
           </div>
         </div>
 
-        <div data-testid="session-row-actions" className="self-center flex items-center justify-end gap-2 min-w-0">
-          <div className="w-[72px] h-8 shrink-0 flex items-center justify-end">
-            {/* time — visible when not hovered (stacked: weekday/label on top, time below) */}
+        <div
+          data-testid="session-row-actions"
+          className="col-start-3 relative self-center flex items-center justify-end gap-2 shrink-0 @max-[300px]:hidden"
+        >
+          <div className="h-8 shrink-0 flex items-center justify-end min-w-[78px]">
+            {/* time — visible when not hovered. Compact single-line form:
+                if the day-label exists ("Yesterday", "May 4"), prefer that;
+                otherwise show the time ("11:29 AM"). The slot reserves
+                `min-w-[78px]` so the hover-action buttons (3 × 24px + gaps)
+                fit inline on hover without overflowing leftward onto the
+                title. Narrow widths skip this whole area via @max-[220px]:hidden
+                on the wrapper above. */}
             {(() => {
               const t = formatRelativeTime(chat.updatedAt);
+              const label = t.primary || t.secondary || '';
               return (
-                <span className="text-xs text-mf-text-secondary tabular-nums whitespace-nowrap leading-tight text-right group-hover:hidden flex flex-col items-end">
-                  <span>{t.primary}</span>
-                  {t.secondary && <span>{t.secondary}</span>}
+                <span className="text-xs text-mf-text-secondary tabular-nums whitespace-nowrap leading-tight text-right group-hover:hidden">
+                  {label}
                 </span>
               );
             })()}
 
-            {/* hover actions (Tag / Rename / Archive) */}
+            {/* hover actions (Tag / Rename / Archive) — inline. The min-w on
+                the slot guarantees they fit without pushing into the title. */}
             <div className={cn('items-center gap-0.5 hidden group-hover:flex', archiving && 'flex')}>
               <Tooltip>
                 <TooltipTrigger asChild>
