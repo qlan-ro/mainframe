@@ -7,7 +7,8 @@ import type { ChatManager } from '../chat/index.js';
 import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { ClientEventSchema } from './ws-schemas.js';
 import { createChildLogger } from '../logger.js';
-import { validateToken } from '../auth/token.js';
+import { validateAuthedToken } from '../auth/validate-authed-token.js';
+import type { DevicesRepository } from '../db/devices.js';
 import { LspConnectionHandler, parseLspUpgradePath } from '../lsp/index.js';
 import type { FileWatcherService } from '../files/file-watcher.js';
 
@@ -41,6 +42,7 @@ export class WebSocketManager {
     private chats: ChatManager,
     private lspHandler?: LspConnectionHandler,
     private fileWatcher?: FileWatcherService,
+    private devicesRepo?: DevicesRepository,
   ) {
     this.wss = new WebSocketServer({ noServer: true });
     this.setupUpgradeAuth(server);
@@ -64,7 +66,7 @@ export class WebSocketManager {
         const url = new URL(request.url ?? '', 'http://localhost');
         const token = url.searchParams.get('token');
 
-        if (!token || !validateToken(secret!, token)) {
+        if (!token || !this.devicesRepo || !validateAuthedToken(secret!, token, this.devicesRepo)) {
           log.warn({ ip }, 'ws upgrade rejected: invalid or missing token');
           socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
           socket.destroy();
@@ -149,6 +151,13 @@ export class WebSocketManager {
       case 'chat.resume': {
         client.subscriptions.add(event.chatId);
         await this.chats.resumeChat(event.chatId);
+        // Rehydrate queued-message state for this client. Without this, a
+        // user switching away from and back to a chat would see stale
+        // `queuedMessages` entries (the renderer fetches fresh messages
+        // via REST which drops the transient `metadata.queued` flag, but
+        // the composer banner is driven by a separate map that only
+        // updates from snapshot events).
+        this.sendQueuedSnapshot(client, event.chatId);
         break;
       }
 
@@ -219,18 +228,7 @@ export class WebSocketManager {
 
       case 'subscribe': {
         client.subscriptions.add(event.chatId);
-        // Rehydrate queued-message state for this client — the daemon is the
-        // source of truth; the renderer's Zustand store may have drifted
-        // during a WS disconnect.
-        const refs = this.chats.getQueuedForChat(event.chatId);
-        const snapshot: DaemonEvent = {
-          type: 'message.queued.snapshot',
-          chatId: event.chatId,
-          refs,
-        };
-        if (client.ws.readyState === WebSocket.OPEN) {
-          client.ws.send(JSON.stringify(snapshot));
-        }
+        this.sendQueuedSnapshot(client, event.chatId);
         break;
       }
 
@@ -338,6 +336,18 @@ export class WebSocketManager {
   private sendError(ws: WebSocket, message: string): void {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'error', error: message }));
+    }
+  }
+
+  /** Send the daemon's current queued-message refs for a chat to a single
+   *  client. Used by both `subscribe` and `chat.resume` so the composer
+   *  banner reconverges on the daemon's truth whenever the client (re)opens
+   *  the chat — prevents stale entries from surviving a chat-switch. */
+  private sendQueuedSnapshot(client: ClientConnection, chatId: string): void {
+    const refs = this.chats.getQueuedForChat(chatId);
+    const snapshot: DaemonEvent = { type: 'message.queued.snapshot', chatId, refs };
+    if (client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(JSON.stringify(snapshot));
     }
   }
 }

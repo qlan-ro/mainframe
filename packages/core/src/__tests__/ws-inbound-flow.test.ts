@@ -261,6 +261,58 @@ describe('WS inbound flows', () => {
     b.close();
   }, 10_000);
 
+  it('chat.resume emits message.queued.snapshot so composer rehydrates on chat re-entry', async () => {
+    const adapter = new MockAdapter();
+    const { httpServer, chats } = createStack(adapter);
+    server = httpServer;
+    const port = await startServer(server);
+
+    // Pre-seed a queued ref as if a prior session had sent one. This mirrors
+    // the real bug: user sends a queued message in chat A, switches away
+    // (so the renderer's composer keeps the entry in its local map), then
+    // returns. Without the fix, chat.resume re-subscribes but never sends
+    // a snapshot, so the composer keeps whatever stale state it had — even
+    // after the CLI processed the message and the daemon pruned the ref.
+    const ref = {
+      uuid: 'preseeded-uuid',
+      chatId: 'test-chat',
+      messageId: 'm1',
+      content: 'hi',
+      timestamp: new Date().toISOString(),
+    };
+    (chats as unknown as { queuedRefs: Map<string, typeof ref> }).queuedRefs.set(ref.uuid, ref);
+
+    const { socket, events } = await connectWsCollecting(port);
+    ws = socket;
+    socket.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    await sleep(150);
+
+    const snapshot = events.find((e) => e.type === 'message.queued.snapshot');
+    expect(snapshot).toBeDefined();
+    expect((snapshot as { chatId: string }).chatId).toBe('test-chat');
+    expect((snapshot as { refs: Array<{ uuid: string }> }).refs.map((r) => r.uuid)).toEqual(['preseeded-uuid']);
+  }, 10_000);
+
+  it('chat.resume snapshot is empty when daemon has no queued refs (clears stranded composer entries)', async () => {
+    const adapter = new MockAdapter();
+    const { httpServer } = createStack(adapter);
+    server = httpServer;
+    const port = await startServer(server);
+
+    // No refs pre-seeded — this is the scenario the user hit: the daemon
+    // already pruned the ref while the client was unsubscribed, so on
+    // re-entry the snapshot must be empty to converge the renderer's
+    // stale composer state down to nothing.
+    const { socket, events } = await connectWsCollecting(port);
+    ws = socket;
+    socket.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    await sleep(150);
+
+    const snapshot = events.find((e) => e.type === 'message.queued.snapshot');
+    expect(snapshot).toBeDefined();
+    expect((snapshot as { refs: unknown[] }).refs).toEqual([]);
+  }, 10_000);
+
   it('invalid WS message sends back error type', async () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);

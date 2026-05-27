@@ -5,6 +5,7 @@ import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
 import { deleteProjectWithCleanup } from '../../lib/delete-project';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
+import { TruncatedLabel } from '../ui/truncated-label';
 import { FlatSessionRow } from './FlatSessionRow';
 
 interface ProjectGroupProps {
@@ -18,6 +19,8 @@ interface ProjectGroupProps {
   unregisterRenameCallback?: (chatId: string) => void;
   registerOpenTagPopover?: (chatId: string, trigger: (rect: DOMRect) => void) => void;
   unregisterOpenTagPopover?: (chatId: string) => void;
+  registerArchiveCallback?: (chatId: string, trigger: () => void) => void;
+  unregisterArchiveCallback?: (chatId: string) => void;
 }
 
 export const ProjectGroup = React.memo(function ProjectGroup({
@@ -31,6 +34,8 @@ export const ProjectGroup = React.memo(function ProjectGroup({
   unregisterRenameCallback,
   registerOpenTagPopover,
   unregisterOpenTagPopover,
+  registerArchiveCallback,
+  unregisterArchiveCallback,
 }: ProjectGroupProps): React.ReactElement {
   const handleNewSession = useCallback(
     (e: React.MouseEvent) => {
@@ -68,12 +73,19 @@ export const ProjectGroup = React.memo(function ProjectGroup({
           <span className="inline-flex w-4 items-center justify-center shrink-0">
             {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
           </span>
-          <span className="truncate text-sm text-mf-text-primary font-medium">{project.name}</span>
+          <TruncatedLabel
+            text={project.name}
+            title={project.name}
+            data-testid="project-group-name"
+            className="text-sm text-mf-text-primary font-medium flex-shrink"
+          />
           {parentName && (
-            <span className="text-mf-status text-mf-text-secondary truncate ml-1">
-              {'↳ '}
-              {parentName}
-            </span>
+            <TruncatedLabel
+              text={`↳ ${parentName}`}
+              title={parentName}
+              data-testid="project-group-parent"
+              className="text-mf-status text-mf-text-secondary ml-1 flex-shrink-[2]"
+            />
           )}
         </div>
         <span className="h-5 px-1.5 text-[10px] tabular-nums rounded-full bg-mf-hover text-mf-text-secondary flex items-center shrink-0">
@@ -127,6 +139,8 @@ export const ProjectGroup = React.memo(function ProjectGroup({
                   unregisterRenameCallback={unregisterRenameCallback}
                   registerOpenTagPopover={registerOpenTagPopover}
                   unregisterOpenTagPopover={unregisterOpenTagPopover}
+                  registerArchiveCallback={registerArchiveCallback}
+                  unregisterArchiveCallback={unregisterArchiveCallback}
                 />
               </div>
             ))

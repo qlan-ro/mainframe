@@ -120,8 +120,8 @@ export function ChangesTab(): React.ReactElement {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between px-2 py-0.5">
-        <span className="text-mf-label text-mf-text-secondary">
+      <div className="flex items-center gap-2 min-w-0 px-2 py-0.5">
+        <span className="text-mf-label text-mf-text-secondary shrink-0 whitespace-nowrap">
           {mode === 'session' && !activeChatId
             ? 'No active session'
             : `${fileCount} changed file${fileCount !== 1 ? 's' : ''}`}
@@ -129,7 +129,7 @@ export function ChangesTab(): React.ReactElement {
         {activeChat?.branchName && activeChat?.worktreePath && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="text-mf-label text-mf-accent" tabIndex={0}>
+              <span className="text-mf-label text-mf-accent min-w-0 truncate flex-1 text-right" tabIndex={0}>
                 Worktree: {activeChat.branchName}
               </span>
             </TooltipTrigger>
@@ -140,7 +140,7 @@ export function ChangesTab(): React.ReactElement {
           variant="ghost"
           size="icon"
           data-testid="changes-refresh"
-          className="h-6 w-6"
+          className="h-6 w-6 shrink-0 ml-auto"
           onClick={refresh}
           disabled={loading || (mode === 'session' && !activeChatId)}
         >

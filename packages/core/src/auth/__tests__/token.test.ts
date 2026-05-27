@@ -28,4 +28,20 @@ describe('token', () => {
     const code = generatePairingCode();
     expect(code).toMatch(/^[A-Z0-9]{6}$/);
   });
+
+  it('embeds epoch in the payload when provided', () => {
+    const secret = 'test-secret';
+    const token = generateToken(secret, 'mobile-1', 7);
+    const payload = validateToken(secret, token);
+    expect(payload).not.toBeNull();
+    expect(payload!.epoch).toBe(7);
+  });
+
+  it('omits epoch when not provided (backward compatible)', () => {
+    const secret = 'test-secret';
+    const token = generateToken(secret, 'mobile-1');
+    const payload = validateToken(secret, token);
+    expect(payload).not.toBeNull();
+    expect(payload!.epoch).toBeUndefined();
+  });
 });

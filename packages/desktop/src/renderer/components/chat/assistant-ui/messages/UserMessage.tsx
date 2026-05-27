@@ -97,7 +97,7 @@ export function UserMessage() {
         {queuedBadge}
         {hasBubbleContent ? (
           <div className="max-w-[75%] bg-mf-hover rounded-[12px_12px_4px_12px] px-4 py-2.5 flex flex-col gap-2">
-            <SandboxCaptureContext rows={sandbox.rows} />
+            <SandboxCaptureContext rows={sandbox.rows} fadeColor="var(--mf-hover)" />
             {sandbox.rest ? (
               <ReadMoreBubble>
                 <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userComponents}>

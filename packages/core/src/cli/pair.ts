@@ -44,22 +44,24 @@ export async function runPair(): Promise<void> {
     console.log('  No tunnel active — start daemon with TUNNEL=true for remote pairing.\n');
   }
 
-  // Poll for device confirmation
   console.log('  Waiting for device to pair...');
-  const startDevices = await fetchDevices(baseUrl);
-  const startIds = new Set(startDevices.map((d) => d.deviceId));
 
   const pollInterval = setInterval(async () => {
-    const devices = await fetchDevices(baseUrl);
-    const newDevice = devices.find((d) => !startIds.has(d.deviceId));
-    if (newDevice) {
-      clearInterval(pollInterval);
-      console.log('\n  Device paired: %s (%s)\n', newDevice.deviceName, newDevice.deviceId);
-      process.exit(0);
+    try {
+      const res = await fetch(`${baseUrl}/api/auth/pair-status?code=${encodeURIComponent(pairingCode)}`);
+      const body = (await res.json()) as {
+        data?: { paired: boolean; deviceId?: string; deviceName?: string };
+      };
+      if (body.data?.paired) {
+        clearInterval(pollInterval);
+        console.log('\n  Device paired: %s (%s)\n', body.data.deviceName ?? 'device', body.data.deviceId ?? '?');
+        process.exit(0);
+      }
+    } catch {
+      // transient network error — keep polling /* expected */
     }
   }, 2000);
 
-  // Timeout after 5 minutes (matches pairing code expiry)
   setTimeout(
     () => {
       clearInterval(pollInterval);
@@ -68,14 +70,4 @@ export async function runPair(): Promise<void> {
     },
     5 * 60 * 1000,
   );
-}
-
-async function fetchDevices(baseUrl: string): Promise<{ deviceId: string; deviceName: string }[]> {
-  try {
-    const res = await fetch(`${baseUrl}/api/auth/devices`);
-    const body = (await res.json()) as { data: { deviceId: string; deviceName: string }[] };
-    return body.data;
-  } catch {
-    return [];
-  }
 }

@@ -74,7 +74,7 @@ export function createHttpServer(
   app.use(express.json({ limit: '30mb' }));
 
   const authSecret = process.env.AUTH_TOKEN_SECRET ?? null;
-  app.use(createAuthMiddleware(authSecret));
+  app.use(createAuthMiddleware(authSecret, db.devices));
 
   app.get('/health', (_req, res) => {
     res.json({

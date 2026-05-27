@@ -142,18 +142,21 @@ export function SchedulePill({ toolName, args, result, isError }: Props) {
       type="button"
       onClick={() => expandable && toggle()}
       disabled={!expandable}
+      // SchedulePill uses local `truncate min-w-0` instead of <TruncatedLabel>
+      // because its label content is rich (ReactNode with accent spans), not a flat string.
+      // See docs/superpowers/specs/2026-05-25-visual-glitches-overflow-design.md § SchedulePill exception.
       className={
         errored
-          ? 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 border border-mf-chat-error/30'
-          : 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 bg-mf-hover/50 hover:bg-mf-hover/70 transition-colors disabled:cursor-default'
+          ? 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 border border-mf-chat-error/30 min-w-0 max-w-full'
+          : 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 bg-mf-hover/50 hover:bg-mf-hover/70 transition-colors disabled:cursor-default min-w-0 max-w-full'
       }
     >
       <Icon size={12} className="text-mf-text-secondary shrink-0" />
-      <span className="font-mono text-[11px] text-mf-text-secondary">{label}</span>
+      <span className="font-mono text-[11px] text-mf-text-secondary truncate min-w-0">{label}</span>
       {pending ? (
-        <span className="w-2 h-2 rounded-full bg-mf-text-secondary/40 animate-pulse" />
+        <span className="w-2 h-2 rounded-full bg-mf-text-secondary/40 animate-pulse shrink-0" />
       ) : errored ? (
-        <span className="w-2 h-2 rounded-full bg-mf-chat-error" />
+        <span className="w-2 h-2 rounded-full bg-mf-chat-error shrink-0" />
       ) : null}
       {expandable ? <Chevron size={12} className="text-mf-text-secondary/60 shrink-0" /> : null}
     </button>
