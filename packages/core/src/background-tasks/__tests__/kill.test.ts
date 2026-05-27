@@ -9,7 +9,7 @@ import treeKill from 'tree-kill';
 
 describe('killBackgroundTask', () => {
   const session = { stopBackgroundTask: vi.fn() };
-  const tracker = { get: vi.fn() };
+  const tracker = { get: vi.fn(), end: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -48,6 +48,26 @@ describe('killBackgroundTask', () => {
     expect(session.stopBackgroundTask).not.toHaveBeenCalled();
     expect(treeKill).toHaveBeenCalledWith(99, 'SIGKILL', expect.any(Function));
     expect(r).toEqual({ ok: true, via: 'tree_kill' });
+  });
+
+  it('marks the task stopped in the tracker after OS-path success', async () => {
+    const trackerEnd = vi.fn();
+    const localTracker = {
+      get: vi.fn(() => ({ id: 't1', status: 'running', outputPath: '/p/t1.out' })),
+      end: trackerEnd,
+    };
+    vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([99]).mockResolvedValueOnce([]);
+    const r = await killBackgroundTask({ chatId: 'c', taskId: 't1', session: null, tracker: localTracker as any });
+    expect(r).toEqual({ ok: true, via: 'tree_kill' });
+    expect(trackerEnd).toHaveBeenCalledWith(
+      'c',
+      't1',
+      expect.objectContaining({
+        status: 'stopped',
+        summary: 'killed via signal',
+        outputPath: '/p/t1.out',
+      }),
+    );
   });
 
   it('returns 404-style when task not in tracker', async () => {

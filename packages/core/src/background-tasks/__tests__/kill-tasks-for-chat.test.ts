@@ -10,7 +10,12 @@ import treeKill from 'tree-kill';
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-  return { ...actual, readdir: vi.fn().mockResolvedValue([]), realpath: vi.fn(async (p: string) => p) };
+  return {
+    ...actual,
+    readdir: vi.fn().mockResolvedValue([]),
+    realpath: vi.fn(async (p: string) => p),
+    lstat: vi.fn().mockResolvedValue({ isFile: () => true, isSymbolicLink: () => false }),
+  };
 });
 
 vi.mock('node:child_process', async () => {
@@ -77,11 +82,30 @@ describe('killTasksForChat (CLI + OS, no sweep)', () => {
   });
 }, 15_000);
 
-import { readdir } from 'node:fs/promises';
+import { readdir, lstat } from 'node:fs/promises';
 
 describe('killTasksForChat (worktree sweep)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('worktree sweep rejects symlinked spool files (does not lsof them)', async () => {
+    (readdir as ReturnType<typeof vi.fn>).mockResolvedValueOnce(['sess-a']).mockResolvedValueOnce(['leftover.output']);
+    (lstat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ isFile: () => true, isSymbolicLink: () => true });
+    const lsofSpy = vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValue([]);
+    const tracker = new BackgroundTaskTracker();
+    vi.useFakeTimers();
+    const p = killTasksForChat({
+      chatId: 'c1',
+      worktreePath: '/Users/x/wt',
+      session: null,
+      tracker,
+      spoolRoot: '/tmp/claude-501',
+    });
+    await vi.runAllTimersAsync();
+    await p;
+    vi.useRealTimers();
+    expect(lsofSpy).not.toHaveBeenCalled();
   });
 
   it('scans spool-prefix dir, kills writer PIDs, filters daemon pid', async () => {
@@ -89,6 +113,7 @@ describe('killTasksForChat (worktree sweep)', () => {
       .mockResolvedValueOnce(['sess-a', 'sess-b']) // <prefix> dirs
       .mockResolvedValueOnce(['leftover.output']) // sess-a/tasks
       .mockResolvedValueOnce([]); // sess-b/tasks
+    (lstat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ isFile: () => true, isSymbolicLink: () => false });
     vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([999, process.pid]);
     const tracker = new BackgroundTaskTracker();
     vi.useFakeTimers();

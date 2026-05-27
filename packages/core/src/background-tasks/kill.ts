@@ -1,5 +1,5 @@
 import treeKill from 'tree-kill';
-import { readdir, realpath as fsRealpath } from 'node:fs/promises';
+import { readdir, realpath as fsRealpath, lstat } from 'node:fs/promises';
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -58,9 +58,16 @@ export async function killBackgroundTask(args: KillArgs): Promise<KillResult> {
     if (!r.ok) log.warn({ pid, err: r.error }, 'tree-kill failed for one pid');
   }
   const remaining = await lsofWriters(task.outputPath);
-  return remaining.length === 0
-    ? { ok: true, via: 'tree_kill' }
-    : { ok: false, error: `pids still alive: ${remaining.join(',')}`, via: 'tree_kill' };
+  if (remaining.length === 0) {
+    args.tracker.end(args.chatId, args.taskId, {
+      status: 'stopped',
+      outputPath: task.outputPath,
+      summary: 'killed via signal',
+      usage: null,
+    });
+    return { ok: true, via: 'tree_kill' };
+  }
+  return { ok: false, error: `pids still alive: ${remaining.join(',')}`, via: 'tree_kill' };
 }
 
 // --- killTasksForChat orchestrator ---
@@ -173,6 +180,12 @@ export async function killTasksForChat(args: KillTasksForChatArgs): Promise<Kill
         for (const f of files) {
           if (!f.endsWith('.output')) continue;
           const fp = path.join(prefix, sess, 'tasks', f);
+          try {
+            const ls = await lstat(fp);
+            if (!ls.isFile() || ls.isSymbolicLink()) continue;
+          } catch {
+            continue;
+          }
           const writers = await lsofWriters(fp);
           for (const pid of writers) {
             if (pid === process.pid) continue;
