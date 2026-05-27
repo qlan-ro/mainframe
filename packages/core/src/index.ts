@@ -7,6 +7,8 @@ import { EventEmitter } from 'node:events';
 import { ensureAuthSecret, getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
 import { BackgroundTaskTracker } from './background-tasks/tracker.js';
+import { reconcileBackgroundTasks } from './background-tasks/reconcile.js';
+import { startLivenessScheduler } from './background-tasks/liveness.js';
 import { AdapterRegistry } from './adapters/index.js';
 import { backfillAdapterExecutables, defaultRun } from './adapters/resolve-executable.js';
 import { ChatManager } from './chat/index.js';
@@ -127,6 +129,9 @@ async function main(): Promise<void> {
     backgroundTasks,
   );
 
+  await reconcileBackgroundTasks({ tracker: backgroundTasks, db });
+  const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
+
   await server.start(config.port);
   broadcastEvent = (event) => server.broadcastEvent(event);
 
@@ -175,6 +180,7 @@ async function main(): Promise<void> {
     adapters.killAll();
     await launchRegistry.stopAll();
     tunnelManager.stopAll();
+    livenessScheduler.stop();
     await server.stop();
     db.close();
     process.exit(0);
