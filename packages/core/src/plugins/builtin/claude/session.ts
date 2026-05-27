@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, accessSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { realpath as fsRealpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
@@ -54,6 +55,8 @@ export interface ClaudeSessionState {
   chatId: string;
   /** Mainframe-side chat ID — used for tracker/WS routing. Distinct from `chatId` (Claude session ID). */
   mainframeChatId: string;
+  /** Realpath-resolved project directory — set in spawn() before any task_started can fire. */
+  realProjectPath: string;
   buffer: string;
   lastAssistantUsage?: {
     input_tokens?: number;
@@ -135,6 +138,7 @@ export class ClaudeSession implements AdapterSession {
     this.state = {
       chatId: options.chatId ?? '',
       mainframeChatId: options.mainframeChatId,
+      realProjectPath: options.projectPath, // overwritten in spawn() before any task_started can fire
       buffer: '',
       child: null,
       status: 'starting',
@@ -205,7 +209,7 @@ export class ClaudeSession implements AdapterSession {
 
     const executable = options.executablePath || 'claude';
     try {
-      accessSync(this.projectPath);
+      this.state.realProjectPath = await fsRealpath(this.projectPath);
     } catch {
       throw new Error(`Project directory does not exist or is not accessible: ${this.projectPath}`);
     }

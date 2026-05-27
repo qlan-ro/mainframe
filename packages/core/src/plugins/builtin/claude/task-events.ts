@@ -1,5 +1,7 @@
 import type { BackgroundTaskStatus, BackgroundTaskToolName } from '@qlan-ro/mainframe-types';
 import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
+import { encodeCwdSegment } from '../../../background-tasks/encoding.js';
+import { spoolRoot } from '../../../background-tasks/spool-root.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('claude:task-events');
@@ -59,15 +61,24 @@ export class ClaudeTaskEvents {
     this.evictionTimers.set(toolUseId, timer);
   }
 
-  handleTaskStarted(chatId: string, payload: TaskStartedPayload): void {
+  handleTaskStarted(
+    chatId: string,
+    payload: TaskStartedPayload,
+    ctx: { claudeSessionId: string; realCwd: string },
+  ): void {
     const meta = payload.tool_use_id ? this.consume(payload.tool_use_id) : null;
-    this.tracker.start(chatId, {
-      id: payload.task_id,
-      toolName: meta?.toolName ?? 'Bash',
-      toolUseId: payload.tool_use_id ?? '',
-      command: meta?.command ?? payload.description ?? '<unknown>',
-      description: payload.description ?? '',
-    });
+    const outputPath = `${spoolRoot()}/${encodeCwdSegment(ctx.realCwd)}/${ctx.claudeSessionId}/tasks/${payload.task_id}.output`;
+    this.tracker.start(
+      chatId,
+      {
+        id: payload.task_id,
+        toolName: meta?.toolName ?? 'Bash',
+        toolUseId: payload.tool_use_id ?? '',
+        command: meta?.command ?? payload.description ?? '<unknown>',
+        description: payload.description ?? '',
+      },
+      outputPath,
+    );
   }
 
   handleTaskNotification(chatId: string, payload: TaskNotificationPayload): void {
