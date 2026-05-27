@@ -29,6 +29,7 @@ import { EventHandler } from './event-handler.js';
 import { ExternalSessionService } from './external-session-service.js';
 import { IdleSessionScanner } from './idle-scanner.js';
 import type { ActiveChat } from './types.js';
+import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
 import { prepareMessagesForClient } from '../messages/display-pipeline.js';
@@ -51,6 +52,7 @@ export class ChatManager {
   constructor(
     private db: DatabaseManager,
     private adapters: AdapterRegistry,
+    private tracker: BackgroundTaskTracker,
     private attachmentStore?: AttachmentStore,
     private onEvent: (event: DaemonEvent) => void = () => {},
   ) {
@@ -91,6 +93,7 @@ export class ChatManager {
       emitEvent: (event) => this.emitEvent(event),
       buildSink: (chatId, sessionId, respondToPermission) =>
         this.eventHandler.buildSink(chatId, sessionId, respondToPermission),
+      tracker: this.tracker,
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,

@@ -1,3 +1,4 @@
+import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, vi } from 'vitest';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
@@ -36,7 +37,7 @@ describe('ChatManager.unarchiveChat', () => {
   it('flips the chat status to active in the DB', () => {
     const restoredChat = { id: 'c1', projectId: 'p1', status: 'active' };
     const db = makeDb(restoredChat);
-    const manager = new ChatManager(db, makeAdapters());
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker());
 
     manager.unarchiveChat('c1');
 
@@ -47,7 +48,7 @@ describe('ChatManager.unarchiveChat', () => {
     const restoredChat = { id: 'c1', projectId: 'p1', status: 'active' };
     const db = makeDb(restoredChat);
     const events: DaemonEvent[] = [];
-    const manager = new ChatManager(db, makeAdapters(), undefined, (e) => events.push(e));
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker(), undefined, (e) => events.push(e));
 
     manager.unarchiveChat('c1');
 
@@ -59,7 +60,7 @@ describe('ChatManager.unarchiveChat', () => {
   it('returns the refreshed chat', () => {
     const restoredChat = { id: 'c1', projectId: 'p1', status: 'active' };
     const db = makeDb(restoredChat);
-    const manager = new ChatManager(db, makeAdapters());
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker());
 
     expect(manager.unarchiveChat('c1')).toEqual(restoredChat);
   });
@@ -67,7 +68,7 @@ describe('ChatManager.unarchiveChat', () => {
   it('returns null and emits nothing when the chat does not exist', () => {
     const db = makeDb(null);
     const events: DaemonEvent[] = [];
-    const manager = new ChatManager(db, makeAdapters(), undefined, (e) => events.push(e));
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker(), undefined, (e) => events.push(e));
 
     expect(manager.unarchiveChat('missing')).toBeNull();
     expect(events.find((e) => e.type === 'chat.updated')).toBeUndefined();

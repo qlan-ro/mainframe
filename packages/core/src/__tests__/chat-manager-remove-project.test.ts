@@ -1,3 +1,4 @@
+import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, vi } from 'vitest';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
@@ -34,7 +35,7 @@ function makeAdapters(): AdapterRegistry {
 describe('ChatManager.removeProject', () => {
   it('calls removeWithChats when no chats are active', async () => {
     const db = makeDb([]);
-    const manager = new ChatManager(db, makeAdapters());
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker());
 
     await manager.removeProject('proj-1');
 
@@ -45,7 +46,7 @@ describe('ChatManager.removeProject', () => {
     const db = makeDb([{ id: 'chat-1' }]);
     const adapters = makeAdapters();
 
-    const manager = new ChatManager(db, adapters);
+    const manager = new ChatManager(db, adapters, new BackgroundTaskTracker());
 
     // Inject a fake active chat with a running session
     const killSpy = vi.fn().mockResolvedValue(undefined);

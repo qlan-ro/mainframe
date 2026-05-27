@@ -3,6 +3,7 @@ import { ChatManager } from '../index.js';
 import { wrapMainframeCommand } from '../../commands/wrap.js';
 import { MockBaseSession } from '../../__tests__/helpers/mock-session.js';
 import { MockBaseAdapter } from '../../__tests__/helpers/mock-adapter.js';
+import { BackgroundTaskTracker } from '../../background-tasks/tracker.js';
 import type { AdapterSession, SessionOptions } from '@qlan-ro/mainframe-types';
 
 // ── wrapMainframeCommand unit tests ──────────────────────────────────────────
@@ -110,7 +111,7 @@ class TrackingAdapter extends MockBaseAdapter {
 function createManager(adapter: TrackingAdapter) {
   const db = createMockDb();
   const registry = { get: vi.fn().mockReturnValue(adapter), all: vi.fn().mockReturnValue([adapter]) } as any;
-  const manager = new ChatManager(db as any, registry, undefined, () => {});
+  const manager = new ChatManager(db as any, registry, new BackgroundTaskTracker(), undefined, () => {});
 
   // Pre-seed an active spawned session so sendMessage doesn't try to spawn
   const session = adapter.createSession({

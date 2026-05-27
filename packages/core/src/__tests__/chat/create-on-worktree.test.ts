@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ChatLifecycleManager } from '../../chat/lifecycle-manager.js';
 import type { LifecycleManagerDeps } from '../../chat/lifecycle-manager.js';
 import type { Chat } from '@qlan-ro/mainframe-types';
+import { BackgroundTaskTracker } from '../../background-tasks/tracker.js';
 
 function makeChat(overrides: Partial<Chat> = {}): Chat {
   return {
@@ -49,6 +50,7 @@ function makeDeps(overrides: Partial<LifecycleManagerDeps> = {}): LifecycleManag
     } as any,
     emitEvent: vi.fn(),
     buildSink: vi.fn(),
+    tracker: new BackgroundTaskTracker(),
     ...overrides,
   };
 }

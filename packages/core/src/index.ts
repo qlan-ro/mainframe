@@ -72,7 +72,7 @@ async function main(): Promise<void> {
   // Late-bound broadcast: set after server starts. Events emitted before
   // server.start() (plugin loading) are safely dropped — no WS clients yet.
   let broadcastEvent: (event: DaemonEvent) => void = () => {};
-  const chats = new ChatManager(db, adapters, attachmentStore, (event) => broadcastEvent(event));
+  const chats = new ChatManager(db, adapters, backgroundTasks, attachmentStore, (event) => broadcastEvent(event));
   const tunnelManager = new TunnelManager((event) => broadcastEvent(event));
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 

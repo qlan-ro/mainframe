@@ -1,3 +1,4 @@
+import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, vi } from 'vitest';
 import type { DatabaseManager } from '../db/index.js';
 import type { AdapterRegistry } from '../adapters/index.js';
@@ -39,7 +40,7 @@ describe('ChatManager.syncChatFields', () => {
   it('updates cached active chat fields so a later chat.updated emission is not stale', () => {
     const cached = { id: 'c1', projectId: 'p1', status: 'active', pinned: false };
     const db = makeDb(cached);
-    const manager = new ChatManager(db, makeAdapters());
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker());
     // Inject an active chat directly — going through loadChat would require a
     // full adapter session. The bug under test is purely about cache freshness.
     const activeChats = (manager as unknown as { activeChats: Map<string, ActiveChat> }).activeChats;
@@ -54,7 +55,7 @@ describe('ChatManager.syncChatFields', () => {
 
   it('is a no-op when the chat is not in the active cache', () => {
     const db = makeDb({ id: 'c1', projectId: 'p1', status: 'active', pinned: false });
-    const manager = new ChatManager(db, makeAdapters());
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker());
 
     expect(() => manager.syncChatFields('c1', { pinned: true })).not.toThrow();
   });
@@ -62,7 +63,7 @@ describe('ChatManager.syncChatFields', () => {
   it('merges partial updates without dropping unrelated fields', () => {
     const cached = { id: 'c1', projectId: 'p1', status: 'active', pinned: false, effort: 'low', title: 'keep me' };
     const db = makeDb(cached);
-    const manager = new ChatManager(db, makeAdapters());
+    const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker());
     const activeChats = (manager as unknown as { activeChats: Map<string, ActiveChat> }).activeChats;
     activeChats.set('c1', { chat: { ...cached } } as unknown as ActiveChat);
 
