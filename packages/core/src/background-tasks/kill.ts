@@ -1,7 +1,14 @@
 import treeKill from 'tree-kill';
+import { readdir, realpath as fsRealpath } from 'node:fs/promises';
+import { execFile as execFileCb } from 'node:child_process';
+import { promisify } from 'node:util';
+import path from 'node:path';
 import type { BackgroundTaskTracker } from './tracker.js';
 import { lsofWriters } from './lsof.js';
 import { createChildLogger } from '../logger.js';
+import { encodeCwdSegment } from './encoding.js';
+
+const execFileP = promisify(execFileCb);
 
 const log = createChildLogger('background-tasks:kill');
 
@@ -90,6 +97,15 @@ async function sigtermThenKill(pid: number): Promise<{ ok: boolean; error?: stri
   });
 }
 
+async function commandForPid(pid: number): Promise<string> {
+  try {
+    const { stdout } = await execFileP('ps', ['-p', String(pid), '-o', 'comm='], { timeout: 1000, encoding: 'utf8' });
+    return (stdout as string).trim() || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export async function killTasksForChat(args: KillTasksForChatArgs): Promise<KillTasksForChatResult> {
   const result: KillTasksForChatResult = { killed: [], failed: [], swept: [] };
   const running = args.tracker.list(args.chatId).filter((t) => t.status === 'running');
@@ -137,7 +153,44 @@ export async function killTasksForChat(args: KillTasksForChatArgs): Promise<Kill
     }
   }
 
-  // Task 9 adds the worktree-sweep block here.
+  if (args.worktreePath) {
+    try {
+      const realWt = await fsRealpath(args.worktreePath);
+      const prefix = path.join(args.spoolRoot, encodeCwdSegment(realWt));
+      let sessionDirs: string[] = [];
+      try {
+        sessionDirs = await readdir(prefix);
+      } catch {
+        sessionDirs = [];
+      }
+      for (const sess of sessionDirs) {
+        let files: string[] = [];
+        try {
+          files = await readdir(path.join(prefix, sess, 'tasks'));
+        } catch {
+          continue;
+        }
+        for (const f of files) {
+          if (!f.endsWith('.output')) continue;
+          const fp = path.join(prefix, sess, 'tasks', f);
+          const writers = await lsofWriters(fp);
+          for (const pid of writers) {
+            if (pid === process.pid) continue;
+            const command = await commandForPid(pid);
+            const r = await sigtermThenKill(pid);
+            if (r.ok) {
+              result.swept.push({ pid, command });
+              log.info({ pid, command, file: fp }, 'worktree sweep killed pid');
+            } else {
+              log.error({ pid, command, err: r.error }, 'worktree sweep kill failed');
+            }
+          }
+        }
+      }
+    } catch (err) {
+      log.warn({ err, worktreePath: args.worktreePath }, 'worktree sweep aborted');
+    }
+  }
 
   return result;
 }

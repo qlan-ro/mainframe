@@ -13,6 +13,19 @@ vi.mock('node:fs/promises', async () => {
   return { ...actual, readdir: vi.fn().mockResolvedValue([]), realpath: vi.fn(async (p: string) => p) };
 });
 
+vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+  return {
+    ...actual,
+    execFile: vi.fn(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (err: null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: 'ps\n' });
+        return {} as ReturnType<typeof import('node:child_process').execFile>;
+      },
+    ),
+  };
+});
+
 function seed(tracker: BackgroundTaskTracker, chatId: string, id: string, outputPath: string) {
   tracker.start(chatId, { id, toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' }, outputPath);
 }
@@ -63,3 +76,34 @@ describe('killTasksForChat (CLI + OS, no sweep)', () => {
     expect(tracker.get('c1', 't1')!.status).toBe('running');
   });
 }, 15_000);
+
+import { readdir } from 'node:fs/promises';
+
+describe('killTasksForChat (worktree sweep)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('scans spool-prefix dir, kills writer PIDs, filters daemon pid', async () => {
+    (readdir as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(['sess-a', 'sess-b']) // <prefix> dirs
+      .mockResolvedValueOnce(['leftover.output']) // sess-a/tasks
+      .mockResolvedValueOnce([]); // sess-b/tasks
+    vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([999, process.pid]);
+    const tracker = new BackgroundTaskTracker();
+    vi.useFakeTimers();
+    const p = killTasksForChat({
+      chatId: 'c1',
+      worktreePath: '/Users/x/wt',
+      session: null,
+      tracker,
+      spoolRoot: '/tmp/claude-501',
+    });
+    await vi.runAllTimersAsync();
+    const out = await p;
+    vi.useRealTimers();
+    expect(treeKill).toHaveBeenCalledWith(999, expect.anything(), expect.any(Function));
+    expect(treeKill).not.toHaveBeenCalledWith(process.pid, expect.anything(), expect.anything());
+    expect(out.swept.find((s) => s.pid === 999)).toBeDefined();
+  });
+});
