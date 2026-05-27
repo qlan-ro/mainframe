@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { killBackgroundTask } from '../kill.js';
+import * as lsofMod from '../lsof.js';
 
 vi.mock('tree-kill', () => ({
-  default: vi.fn((pid: number, signal: string, cb: (err?: Error) => void) => cb()),
+  default: vi.fn((_pid: number, _sig: string, cb: (err?: Error) => void) => cb()),
 }));
 import treeKill from 'tree-kill';
 
@@ -12,55 +13,51 @@ describe('killBackgroundTask', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    tracker.get.mockReturnValue({ id: 't1', status: 'running' });
+    tracker.get.mockReturnValue({
+      id: 't1',
+      status: 'running',
+      outputPath: '/tmp/claude-501/-x/sess/tasks/t1.output',
+    });
   });
 
-  it('returns ok when stop_task succeeds; does NOT fall back', async () => {
+  it('returns ok via stop_task when CLI succeeds', async () => {
     session.stopBackgroundTask.mockResolvedValue({ ok: true });
-    const result = await killBackgroundTask({
-      chatId: 'c',
-      taskId: 't1',
-      session: session as any,
-      tracker: tracker as any,
-    });
-    expect(result).toEqual({ ok: true, via: 'stop_task' });
+    const r = await killBackgroundTask({ chatId: 'c', taskId: 't1', session: session as any, tracker: tracker as any });
+    expect(r).toEqual({ ok: true, via: 'stop_task' });
     expect(treeKill).not.toHaveBeenCalled();
   });
 
-  it('falls back to tree-kill when stop_task errors AND pid is known', async () => {
-    session.stopBackgroundTask.mockResolvedValue({ ok: false, error: 'taskmgr offline' });
-    tracker.get.mockReturnValue({ id: 't1', status: 'running', pid: 42 });
-    const result = await killBackgroundTask({
-      chatId: 'c',
-      taskId: 't1',
-      session: session as any,
-      tracker: tracker as any,
-    });
+  it('falls back to lsof + tree-kill when stop_task fails and a writer exists', async () => {
+    session.stopBackgroundTask.mockResolvedValue({ ok: false, error: 'offline' });
+    vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([42]).mockResolvedValueOnce([]);
+    const r = await killBackgroundTask({ chatId: 'c', taskId: 't1', session: session as any, tracker: tracker as any });
     expect(treeKill).toHaveBeenCalledWith(42, 'SIGKILL', expect.any(Function));
-    expect(result).toEqual({ ok: true, via: 'tree_kill' });
+    expect(r).toEqual({ ok: true, via: 'tree_kill' });
   });
 
-  it('reports failure when stop_task fails AND no pid is known', async () => {
+  it('reports failure when no writer AND stop_task failed', async () => {
     session.stopBackgroundTask.mockResolvedValue({ ok: false, error: 'timeout' });
-    tracker.get.mockReturnValue({ id: 't1', status: 'running' }); // no pid
-    const result = await killBackgroundTask({
-      chatId: 'c',
-      taskId: 't1',
-      session: session as any,
-      tracker: tracker as any,
-    });
-    expect(result).toEqual({ ok: false, error: 'timeout', via: 'none' });
+    vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([]);
+    const r = await killBackgroundTask({ chatId: 'c', taskId: 't1', session: session as any, tracker: tracker as any });
+    expect(r).toEqual({ ok: false, error: 'timeout', via: 'none' });
   });
 
-  it('returns 404-style result when task not in tracker', async () => {
+  it('works without a session: goes straight to OS path', async () => {
+    vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([99]).mockResolvedValueOnce([]);
+    const r = await killBackgroundTask({ chatId: 'c', taskId: 't1', session: null, tracker: tracker as any });
+    expect(session.stopBackgroundTask).not.toHaveBeenCalled();
+    expect(treeKill).toHaveBeenCalledWith(99, 'SIGKILL', expect.any(Function));
+    expect(r).toEqual({ ok: true, via: 'tree_kill' });
+  });
+
+  it('returns 404-style when task not in tracker', async () => {
     tracker.get.mockReturnValue(null);
-    const result = await killBackgroundTask({
+    const r = await killBackgroundTask({
       chatId: 'c',
       taskId: 'ghost',
       session: session as any,
       tracker: tracker as any,
     });
-    expect(result).toEqual({ ok: false, error: 'task not found', via: 'none' });
-    expect(session.stopBackgroundTask).not.toHaveBeenCalled();
+    expect(r).toEqual({ ok: false, error: 'task not found', via: 'none' });
   });
 });
