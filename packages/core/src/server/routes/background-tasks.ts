@@ -119,11 +119,7 @@ function makeKillHandler(
       res.status(404).json({ error: 'task not found' });
       return;
     }
-    const session = sessionForChat(p.data.chatId);
-    if (!session) {
-      res.status(503).json({ error: 'no active session for chat' });
-      return;
-    }
+    const session = sessionForChat(p.data.chatId); // may be null for recovered tasks
     const result = await killImpl({ chatId: p.data.chatId, taskId: p.data.taskId, session, tracker });
     if (result.ok) res.status(204).end();
     else res.status(502).json({ error: result.error });

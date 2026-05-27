@@ -123,10 +123,35 @@ describe('background-tasks routes', () => {
     expect(res.body.error).toBe('timeout');
   });
 
-  it('POST /kill → 503 when no session is available', async () => {
+  it('kill route falls back to OS path when no session is active', async () => {
     const tracker = new BackgroundTaskTracker();
-    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
-    const res = await request(makeApp({ tracker })).post('/api/chats/c1/background-tasks/t1/kill');
-    expect(res.status).toBe(503);
+    tracker.adopt('chat-a', {
+      id: 'rec-1',
+      toolName: 'Bash',
+      toolUseId: '',
+      command: '<recovered>',
+      description: '',
+      outputPath: '/tmp/claude-501/-x/sess/tasks/rec-1.output',
+      startedAt: 100,
+      endedAt: null,
+      status: 'running',
+      lastOutputLine: null,
+      summary: null,
+      usage: null,
+      recovered: true,
+    });
+    const killImpl = vi.fn().mockResolvedValue({ ok: true, via: 'tree_kill' });
+    const app = express()
+      .use(express.json())
+      .use(
+        backgroundTaskRoutes({
+          tracker,
+          sessionForChat: () => null,
+          killImpl,
+        }),
+      );
+    const res = await request(app).post('/api/chats/chat-a/background-tasks/rec-1/kill');
+    expect(res.status).toBe(204);
+    expect(killImpl).toHaveBeenCalledWith(expect.objectContaining({ session: null }));
   });
 });
