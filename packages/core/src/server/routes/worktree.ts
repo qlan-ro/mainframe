@@ -7,6 +7,8 @@ import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
 import { getWorktrees, removeWorktree } from '../../workspace/index.js';
 import { GitDeleteWorktreeBody } from './schemas.js';
+import { killTasksForChat, type SessionLike } from '../../background-tasks/kill.js';
+import { spoolRoot } from '../../background-tasks/spool-root.js';
 
 const log = createChildLogger('routes:worktree');
 
@@ -33,6 +35,7 @@ const AttachWorktreeBody = z.object({
 
 async function validateAndDeleteWorktree(
   ctx: RouteContext,
+  projectId: string,
   projectPath: string,
   worktreePath: string,
   branchName: string | undefined,
@@ -62,6 +65,45 @@ async function validateAndDeleteWorktree(
   if (!resolvedBranch) {
     throw new Error('Cannot determine branch name for worktree');
   }
+
+  if (ctx.backgroundTasks) {
+    // Match by realpath equality so a request path like '/wt/x/' or a symlinked alias
+    // still finds the chat registered with the canonical path.
+    const allChats = ctx.db.chats.list(projectId);
+    const affected: typeof allChats = [];
+    for (const c of allChats) {
+      if (!c.worktreePath) continue;
+      try {
+        const real = await realpath(c.worktreePath);
+        if (real === realWorktreePath || c.worktreePath === worktreePath) affected.push(c);
+      } catch {
+        // chat's worktreePath no longer exists on disk — fall back to raw string equality
+        // so we still kill any tracker entries for the chat.
+        if (c.worktreePath === worktreePath) affected.push(c);
+      }
+    }
+    for (const c of affected) {
+      try {
+        const session = ctx.chats.getSessionForChat?.(c.id) ?? null;
+        const result = await killTasksForChat({
+          chatId: c.id,
+          worktreePath: realWorktreePath, // pass the canonical path so sweep targets the right spool prefix
+          session: session as unknown as SessionLike | null,
+          tracker: ctx.backgroundTasks,
+          spoolRoot: spoolRoot(),
+        });
+        if (result.failed.length || result.swept.length) {
+          log.info(
+            { chatId: c.id, killed: result.killed, failed: result.failed, swept: result.swept },
+            'killTasksForChat result for delete-worktree',
+          );
+        }
+      } catch (err) {
+        log.warn({ err, chatId: c.id }, 'killTasksForChat failed during delete-worktree');
+      }
+    }
+  }
+
   await removeWorktree(projectPath, worktreePath, resolvedBranch);
   ctx.chats.notifyWorktreeDeleted(worktreePath);
 }
@@ -175,7 +217,7 @@ export function worktreeRoutes(ctx: RouteContext): Router {
       }
       const { worktreePath, branchName } = parsed.data;
       try {
-        await validateAndDeleteWorktree(ctx, projectPath, worktreePath, branchName);
+        await validateAndDeleteWorktree(ctx, projectId, projectPath, worktreePath, branchName);
         res.json({ success: true });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to delete worktree';
