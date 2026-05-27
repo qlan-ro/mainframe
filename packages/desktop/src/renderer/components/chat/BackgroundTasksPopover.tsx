@@ -44,6 +44,15 @@ export function BackgroundTasksPopover({ chatId, tasks }: Props): React.ReactEle
           <span className="w-2 h-2 rounded-full shrink-0 bg-mf-accent animate-pulse" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
+              {task.recovered && (
+                <span
+                  data-testid={`bg-task-recovered-${task.id}`}
+                  className="text-mf-small text-mf-text-secondary mr-1"
+                  title="Reconnected after daemon restart or wake — full metadata not available."
+                >
+                  ↻
+                </span>
+              )}
               <span className="font-mono text-mf-small text-mf-text-primary truncate" title={task.command}>
                 {task.command}
               </span>
