@@ -29,6 +29,8 @@ import { EventHandler } from './event-handler.js';
 import { ExternalSessionService } from './external-session-service.js';
 import { IdleSessionScanner } from './idle-scanner.js';
 import type { ActiveChat } from './types.js';
+import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
+import { killTasksForChat } from '../background-tasks/kill.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
 import { prepareMessagesForClient } from '../messages/display-pipeline.js';
@@ -51,6 +53,7 @@ export class ChatManager {
   constructor(
     private db: DatabaseManager,
     private adapters: AdapterRegistry,
+    private tracker: BackgroundTaskTracker,
     private attachmentStore?: AttachmentStore,
     private onEvent: (event: DaemonEvent) => void = () => {},
   ) {
@@ -91,6 +94,7 @@ export class ChatManager {
       emitEvent: (event) => this.emitEvent(event),
       buildSink: (chatId, sessionId, respondToPermission) =>
         this.eventHandler.buildSink(chatId, sessionId, respondToPermission),
+      tracker: this.tracker,
     });
     this.permissionHandler = new ChatPermissionHandler({
       permissions: this.permissions,
@@ -447,11 +451,21 @@ export class ChatManager {
     const chats = this.db.chats.list(projectId);
     for (const chat of chats) {
       const active = this.activeChats.get(chat.id);
+      try {
+        await killTasksForChat({
+          chatId: chat.id,
+          worktreePath: chat.worktreePath ?? undefined,
+          session: active?.session ?? null,
+          tracker: this.tracker,
+        });
+      } catch (err) {
+        logger.warn({ err, chatId: chat.id }, 'killTasksForChat failed on project removal');
+      }
       if (active?.session) {
         try {
           await active.session.kill();
         } catch (err) {
-          logger.warn({ err, chatId: chat.id }, 'failed to kill session on project removal');
+          logger.warn({ err, chatId: chat.id }, 'session.kill failed on project removal');
         }
       }
       this.activeChats.delete(chat.id);

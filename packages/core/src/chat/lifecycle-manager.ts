@@ -3,6 +3,8 @@ import type { AdapterRegistry } from '../adapters/index.js';
 import type { AttachmentStore } from '../attachment/index.js';
 import type { DatabaseManager } from '../db/index.js';
 import { removeWorktree } from '../workspace/index.js';
+import { killTasksForChat } from '../background-tasks/kill.js';
+import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { existsSync } from 'node:fs';
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -31,6 +33,7 @@ export interface LifecycleManagerDeps {
     sessionId: string,
     respondToPermission: (response: ControlResponse) => Promise<void>,
   ) => SessionSink;
+  tracker: BackgroundTaskTracker;
   /** Stop launch processes for a project+path pair (e.g. before worktree removal) */
   stopLaunchProcesses?: (projectId: string, projectPath: string) => Promise<void>;
 }
@@ -207,11 +210,17 @@ export class ChatLifecycleManager {
 
   async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
     const active = this.deps.activeChats.get(chatId);
-    if (active?.session) {
-      await active.session.kill();
-    }
-
     const chat = active?.chat ?? this.deps.db.chats.get(chatId);
+
+    await killTasksForChat({
+      chatId,
+      worktreePath: deleteWorktree ? chat?.worktreePath : undefined,
+      session: active?.session ?? null,
+      tracker: this.deps.tracker,
+    });
+
+    if (active?.session) await active.session.kill();
+
     if (deleteWorktree && chat?.worktreePath && chat?.branchName) {
       await this.deps.stopLaunchProcesses?.(chat.projectId, chat.worktreePath);
       const project = this.deps.db.projects.get(chat.projectId);
@@ -242,9 +251,13 @@ export class ChatLifecycleManager {
     const active = this.deps.activeChats.get(chatId);
     if (!active) return;
 
-    if (active.session) {
-      await active.session.kill();
-    }
+    await killTasksForChat({
+      chatId,
+      session: active.session ?? null,
+      tracker: this.deps.tracker,
+    });
+
+    if (active.session) await active.session.kill();
 
     this.deps.db.chats.update(chatId, { status: 'ended' });
     this.deps.activeChats.delete(chatId);

@@ -1,3 +1,4 @@
+import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { WebSocket } from 'ws';
@@ -116,7 +117,9 @@ function createServerStack(adapter: MockAdapter) {
   registry.register(adapter);
 
   const wsRef: { current: WebSocketManager | null } = { current: null };
-  const chats = new ChatManager(db as any, registry, undefined, (event) => wsRef.current?.broadcastEvent(event));
+  const chats = new ChatManager(db as any, registry, new BackgroundTaskTracker(), undefined, (event) =>
+    wsRef.current?.broadcastEvent(event),
+  );
   const { app } = createHttpServer(db as any, chats, registry);
   const httpServer = createServer(app);
   wsRef.current = new WebSocketManager(httpServer, chats);

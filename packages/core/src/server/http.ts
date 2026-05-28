@@ -98,6 +98,7 @@ export function createHttpServer(
     tunnelManager,
     setTunnelUrl,
     port,
+    backgroundTasks,
   };
 
   app.use(authRoutes({ pushService, devicesRepo: db.devices }));
@@ -124,11 +125,7 @@ export function createHttpServer(
     app.use(
       backgroundTaskRoutes({
         tracker: backgroundTasks,
-        // AdapterSession is narrower than SessionLike at the type level, but
-        // concrete adapters (ClaudeSession) implement stopBackgroundTask.
-        // The kill route returns 503 when session is null, so the cast is safe.
-        sessionForChat: (chatId) =>
-          chats.getSessionForChat(chatId) as import('../background-tasks/kill.js').SessionLike | null,
+        sessionForChat: (chatId) => chats.getSessionForChat(chatId),
       }),
     );
   }

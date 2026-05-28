@@ -397,6 +397,10 @@ export class CodexSession implements AdapterSession {
     return [];
   }
 
+  async stopBackgroundTask(_taskId: string): Promise<{ ok: boolean; error?: string }> {
+    return { ok: false, error: 'unsupported' };
+  }
+
   private mapPermissionMode(mode: string): { approvalPolicy: ApprovalPolicy; sandbox: SandboxMode } {
     if (mode === 'yolo') {
       return { approvalPolicy: 'never', sandbox: 'danger-full-access' };

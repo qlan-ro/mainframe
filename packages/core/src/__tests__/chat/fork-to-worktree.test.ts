@@ -6,6 +6,7 @@ import path from 'node:path';
 import { ChatLifecycleManager } from '../../chat/lifecycle-manager.js';
 import type { LifecycleManagerDeps } from '../../chat/lifecycle-manager.js';
 import type { Chat } from '@qlan-ro/mainframe-types';
+import { BackgroundTaskTracker } from '../../background-tasks/tracker.js';
 
 function initCleanGitRepo(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'fork-wt-test-'));
@@ -34,6 +35,7 @@ function makeDeps(overrides: Partial<LifecycleManagerDeps> = {}): LifecycleManag
     } as any,
     emitEvent: vi.fn(),
     buildSink: vi.fn(),
+    tracker: new BackgroundTaskTracker(),
     ...overrides,
   };
 }

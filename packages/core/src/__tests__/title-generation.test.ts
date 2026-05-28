@@ -1,3 +1,4 @@
+import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
@@ -96,7 +97,7 @@ describe.skipIf(!!process.env.CI)('generateTitle (integration — real claude -p
   it('generates a concise LLM title that replaces the truncated one', async () => {
     const db = createMockDb();
     const { events, onEvent } = makeEventCollector();
-    const manager = new ChatManager(db as any, registry, undefined, onEvent);
+    const manager = new ChatManager(db as any, registry, new BackgroundTaskTracker(), undefined, onEvent);
 
     await manager.sendMessage(
       chatId,
@@ -133,7 +134,7 @@ describe.skipIf(!!process.env.CI)('generateTitle (integration — real claude -p
 
   it('produces a relevant title for different types of tasks', async () => {
     const db = createMockDb();
-    const manager = new ChatManager(db as any, registry);
+    const manager = new ChatManager(db as any, registry, new BackgroundTaskTracker());
 
     await manager.sendMessage(chatId, 'Fix the bug where the login button does not respond to clicks on mobile Safari');
 
@@ -156,7 +157,7 @@ describe.skipIf(!!process.env.CI)('generateTitle (integration — real claude -p
       return null;
     });
     const db = createMockDb(settingsGet);
-    const manager = new ChatManager(db as any, registry);
+    const manager = new ChatManager(db as any, registry, new BackgroundTaskTracker());
 
     await manager.sendMessage(chatId, 'This should not trigger LLM');
     // Give it time — if LLM were called it would take seconds
@@ -168,7 +169,7 @@ describe.skipIf(!!process.env.CI)('generateTitle (integration — real claude -p
 
   it('does not regenerate title on subsequent messages', async () => {
     const db = createMockDb();
-    const manager = new ChatManager(db as any, registry);
+    const manager = new ChatManager(db as any, registry, new BackgroundTaskTracker());
 
     await manager.sendMessage(chatId, 'First message about authentication');
 

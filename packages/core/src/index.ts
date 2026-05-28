@@ -7,6 +7,8 @@ import { EventEmitter } from 'node:events';
 import { ensureAuthSecret, getConfig, getDataDir } from './config.js';
 import { DatabaseManager } from './db/index.js';
 import { BackgroundTaskTracker } from './background-tasks/tracker.js';
+import { reconcileBackgroundTasks } from './background-tasks/reconcile.js';
+import { startLivenessScheduler } from './background-tasks/liveness.js';
 import { AdapterRegistry } from './adapters/index.js';
 import { backfillAdapterExecutables, defaultRun } from './adapters/resolve-executable.js';
 import { ChatManager } from './chat/index.js';
@@ -70,7 +72,7 @@ async function main(): Promise<void> {
   // Late-bound broadcast: set after server starts. Events emitted before
   // server.start() (plugin loading) are safely dropped — no WS clients yet.
   let broadcastEvent: (event: DaemonEvent) => void = () => {};
-  const chats = new ChatManager(db, adapters, attachmentStore, (event) => broadcastEvent(event));
+  const chats = new ChatManager(db, adapters, backgroundTasks, attachmentStore, (event) => broadcastEvent(event));
   const tunnelManager = new TunnelManager((event) => broadcastEvent(event));
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 
@@ -127,6 +129,9 @@ async function main(): Promise<void> {
     backgroundTasks,
   );
 
+  await reconcileBackgroundTasks({ tracker: backgroundTasks, db });
+  const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
+
   await server.start(config.port);
   broadcastEvent = (event) => server.broadcastEvent(event);
 
@@ -175,6 +180,7 @@ async function main(): Promise<void> {
     adapters.killAll();
     await launchRegistry.stopAll();
     tunnelManager.stopAll();
+    livenessScheduler.stop();
     await server.stop();
     db.close();
     process.exit(0);

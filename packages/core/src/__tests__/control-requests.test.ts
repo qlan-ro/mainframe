@@ -1,3 +1,4 @@
+import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { Writable } from 'node:stream';
@@ -270,7 +271,9 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
       return session;
     };
 
-    manager = new ChatManager(db as any, registry, undefined, (e) => capturedEvents.push(e));
+    manager = new ChatManager(db as any, registry, new BackgroundTaskTracker(), undefined, (e) =>
+      capturedEvents.push(e),
+    );
 
     await manager.createChat('proj-1', 'claude', 'claude-opus-4-6', 'default');
     await manager.startChat(chatId);

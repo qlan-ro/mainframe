@@ -188,11 +188,15 @@ function handleSystemEvent(session: ClaudeSession, event: Record<string, unknown
       command: event.command as string | undefined,
     });
     if (session.state.mainframeChatId) {
-      session.state.taskEvents.handleTaskStarted(session.state.mainframeChatId, {
-        task_id: event.task_id as string,
-        tool_use_id: event.tool_use_id as string | undefined,
-        description: event.description as string | undefined,
-      });
+      session.state.taskEvents.handleTaskStarted(
+        session.state.mainframeChatId,
+        {
+          task_id: event.task_id as string,
+          tool_use_id: event.tool_use_id as string | undefined,
+          description: event.description as string | undefined,
+        },
+        { claudeSessionId: session.state.chatId, realCwd: session.state.realProjectPath },
+      );
     }
   } else if (event.subtype === 'task_notification') {
     session.state.activeTasks.delete(event.task_id as string);

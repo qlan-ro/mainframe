@@ -1,3 +1,4 @@
+import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../chat/index.js';
 
@@ -11,7 +12,7 @@ describe('ChatManager.isChatRunning', () => {
       settings: { get: vi.fn() },
     } as any;
     const mockAdapters = { get: vi.fn(), all: vi.fn().mockReturnValue([]) } as any;
-    manager = new ChatManager(mockDb, mockAdapters);
+    manager = new ChatManager(mockDb, mockAdapters, new BackgroundTaskTracker());
   });
 
   it('returns false for non-existent chat', () => {

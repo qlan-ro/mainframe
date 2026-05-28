@@ -1,3 +1,4 @@
+import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventHandler } from '../chat/event-handler.js';
 import { MessageCache } from '../chat/message-cache.js';
@@ -220,7 +221,7 @@ describe('ChatManager — queued refs access', () => {
       settings: { get: vi.fn() },
     };
     const adapters: any = { get: vi.fn(), list: vi.fn().mockReturnValue([]) };
-    const manager = new ChatManager(db, adapters);
+    const manager = new ChatManager(db, adapters, new BackgroundTaskTracker());
     const internal = manager as unknown as { queuedRefs: Map<string, any> };
     internal.queuedRefs.set('u1', { uuid: 'u1', chatId: 'A', messageId: 'mA', content: '', timestamp: '' });
     internal.queuedRefs.set('u2', { uuid: 'u2', chatId: 'A', messageId: 'mA2', content: '', timestamp: '' });

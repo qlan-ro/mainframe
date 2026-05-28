@@ -1,3 +1,4 @@
+import { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../chat/index.js';
 import { AdapterRegistry } from '../adapters/index.js';
@@ -157,7 +158,7 @@ describe('restorePendingPermission (via getMessages + hasPendingPermission)', ()
   function setup(history: ChatMessage[]) {
     adapter.historyToReturn = history;
     const db = createMockDb(testChat, testProject);
-    manager = new ChatManager(db as any, registry);
+    manager = new ChatManager(db as any, registry, new BackgroundTaskTracker());
   }
 
   it('restores pending permission for unanswered tool_use', async () => {
@@ -326,7 +327,7 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
     ];
 
     db = createMockDb(testChat, testProject);
-    manager = new ChatManager(db as any, registry);
+    manager = new ChatManager(db as any, registry, new BackgroundTaskTracker());
   }
 
   it('escalates permission mode before spawning CLI when approving ExitPlanMode', async () => {
@@ -407,7 +408,7 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
     };
     adapter.historyToReturn = [userText('Do something'), assistantToolUse('Write', 'toolu_write')];
     db = createMockDb(testChat, testProject);
-    manager = new ChatManager(db as any, registry);
+    manager = new ChatManager(db as any, registry, new BackgroundTaskTracker());
 
     await manager.loadChat(chatId);
 
@@ -478,7 +479,7 @@ describe('respondToPermission clearContext ExitPlanMode', () => {
 
     adapter.historyToReturn = history;
     db = createMockDb(testChat, testProject);
-    manager = new ChatManager(db as any, registry);
+    manager = new ChatManager(db as any, registry, new BackgroundTaskTracker());
     await manager.loadChat(chatId);
     await manager.startChat(chatId);
   }
