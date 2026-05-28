@@ -184,6 +184,9 @@ export interface AdapterSession {
   loadHistory(): Promise<import('./chat.js').ChatMessage[]>;
   extractPlanFiles(): Promise<string[]>;
   extractSkillFiles(): Promise<import('./context.js').SkillFileEntry[]>;
+
+  /** Stop a running background task by id. Adapters that don't support bg tasks may resolve `{ok: false, error: 'unsupported'}`. */
+  stopBackgroundTask(taskId: string): Promise<{ ok: boolean; error?: string }>;
 }
 
 export interface AdapterInfo {

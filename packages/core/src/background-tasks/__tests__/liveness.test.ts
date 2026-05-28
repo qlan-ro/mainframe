@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runLivenessSweep, startLivenessScheduler } from '../liveness.js';
+import { runLivenessSweep, startLivenessScheduler, getMissCount, type MissMap } from '../liveness.js';
 import * as lsofMod from '../lsof.js';
 import { BackgroundTaskTracker } from '../tracker.js';
 
@@ -9,7 +9,7 @@ function seedRunning(tracker: BackgroundTaskTracker, chatId: string, id: string,
 
 describe('runLivenessSweep (one tick)', () => {
   let tracker: BackgroundTaskTracker;
-  let missMap: Map<string, number>;
+  let missMap: MissMap;
   beforeEach(() => {
     vi.clearAllMocks();
     tracker = new BackgroundTaskTracker();
@@ -30,7 +30,7 @@ describe('runLivenessSweep (one tick)', () => {
     vi.spyOn(lsofMod, 'lsofWritersDetailed').mockResolvedValue({ ok: true, pids: [] });
     await runLivenessSweep({ tracker, missMap, now: taskStart + 100_000, forceWake: false });
     expect(tracker.get('c1', 't1')!.status).toBe('running');
-    expect(missMap.get('c1/t1')).toBe(1);
+    expect(getMissCount(missMap, 'c1', 't1')).toBe(1);
   });
 
   it('two-strike grace: second consecutive empty observation ends the task', async () => {
@@ -68,9 +68,9 @@ describe('runLivenessSweep (one tick)', () => {
       .mockResolvedValueOnce({ ok: true, pids: [] })
       .mockResolvedValueOnce({ ok: true, pids: [555] });
     await runLivenessSweep({ tracker, missMap, now: taskStart + 100_000, forceWake: false });
-    expect(missMap.get('c1/t1')).toBe(1);
+    expect(getMissCount(missMap, 'c1', 't1')).toBe(1);
     await runLivenessSweep({ tracker, missMap, now: taskStart + 160_000, forceWake: false });
-    expect(missMap.get('c1/t1')).toBeUndefined();
+    expect(getMissCount(missMap, 'c1', 't1')).toBe(0);
     expect(tracker.getPid('c1', 't1')).toBe(555);
   });
 });

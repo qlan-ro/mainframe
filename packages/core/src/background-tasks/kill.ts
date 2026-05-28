@@ -1,20 +1,21 @@
 import treeKill from 'tree-kill';
-import { readdir, realpath as fsRealpath, lstat } from 'node:fs/promises';
+import { realpath as fsRealpath, lstat } from 'node:fs/promises';
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
-import path from 'node:path';
 import type { BackgroundTaskTracker } from './tracker.js';
 import { lsofWriters } from './lsof.js';
 import { createChildLogger } from '../logger.js';
 import { encodeCwdSegment } from './encoding.js';
+import { spoolRoot as defaultSpoolRoot } from './spool-root.js';
+import { walkSpoolTasks } from './spool-walker.js';
 
 const execFileP = promisify(execFileCb);
 
 const log = createChildLogger('background-tasks:kill');
 
 export type KillResult =
-  | { ok: true; via: 'stop_task' | 'tree_kill' }
-  | { ok: false; error: string; via: 'stop_task' | 'tree_kill' | 'none' };
+  | { ok: true; via: 'stop_task' | 'signal' }
+  | { ok: false; error: string; via: 'stop_task' | 'signal' | 'none' };
 
 export interface SessionLike {
   stopBackgroundTask(taskId: string): Promise<{ ok: boolean; error?: string }>;
@@ -26,66 +27,6 @@ export interface KillArgs {
   /** Null when no live CLI for this chat (e.g. recovered orphan). */
   session: SessionLike | null;
   tracker: BackgroundTaskTracker;
-}
-
-async function osKillOne(pid: number): Promise<{ ok: true } | { ok: false; error: string }> {
-  return new Promise((resolve) => {
-    treeKill(pid, 'SIGKILL', (err?: Error) => {
-      if (err) resolve({ ok: false, error: err.message });
-      else resolve({ ok: true });
-    });
-  });
-}
-
-export async function killBackgroundTask(args: KillArgs): Promise<KillResult> {
-  const task = args.tracker.get(args.chatId, args.taskId);
-  if (!task) return { ok: false, error: 'task not found', via: 'none' };
-
-  let stopErr: string | undefined;
-  if (args.session) {
-    const stop = await args.session.stopBackgroundTask(args.taskId);
-    if (stop.ok) return { ok: true, via: 'stop_task' };
-    stopErr = stop.error;
-    log.warn({ chatId: args.chatId, taskId: args.taskId, err: stop.error }, 'stop_task failed; OS fallback');
-  }
-
-  if (!task.outputPath) return { ok: false, error: stopErr ?? 'no outputPath for OS fallback', via: 'none' };
-  const writers = await lsofWriters(task.outputPath);
-  if (writers.length === 0) return { ok: false, error: stopErr ?? 'no live writer', via: 'none' };
-
-  for (const pid of writers) {
-    const r = await osKillOne(pid);
-    if (!r.ok) log.warn({ pid, err: r.error }, 'tree-kill failed for one pid');
-  }
-  const remaining = await lsofWriters(task.outputPath);
-  if (remaining.length === 0) {
-    args.tracker.end(args.chatId, args.taskId, {
-      status: 'stopped',
-      outputPath: task.outputPath,
-      summary: 'killed via signal',
-      usage: null,
-    });
-    return { ok: true, via: 'tree_kill' };
-  }
-  return { ok: false, error: `pids still alive: ${remaining.join(',')}`, via: 'tree_kill' };
-}
-
-// --- killTasksForChat orchestrator ---
-
-export interface KillTasksForChatArgs {
-  chatId: string;
-  /** Optional. When set, Task 9's worktree sweep targets `${spoolRoot}/{encoded(worktreePath)}/...`. */
-  worktreePath?: string;
-  session: SessionLike | null;
-  tracker: BackgroundTaskTracker;
-  /** Spool root, e.g. /tmp/claude-501. Injected so tests don't depend on /tmp. */
-  spoolRoot: string;
-}
-
-export interface KillTasksForChatResult {
-  killed: Array<{ taskId: string; via: 'stop_task' | 'signal' }>;
-  failed: Array<{ taskId: string; error: string }>;
-  swept: Array<{ pid: number; command: string }>;
 }
 
 export const GRACE_MS = 800;
@@ -113,6 +54,80 @@ async function commandForPid(pid: number): Promise<string> {
   }
 }
 
+/**
+ * OS-level kill for a single task: identify writers via lsof, signal them, then
+ * re-check there are no survivors. Used by both single-task and per-chat paths.
+ */
+async function killOneTaskOS(
+  task: { outputPath: string | null },
+  signaller: (pid: number) => Promise<{ ok: boolean; error?: string }>,
+): Promise<
+  { ok: true; via: 'signal' } | { ok: false; reason: 'no_output_path' | 'no_writer' | 'survivors'; error: string }
+> {
+  if (!task.outputPath) return { ok: false, reason: 'no_output_path', error: 'no outputPath' };
+  const writers = await lsofWriters(task.outputPath);
+  if (writers.length === 0) return { ok: false, reason: 'no_writer', error: 'no live writer' };
+  for (const pid of writers) {
+    const r = await signaller(pid);
+    if (!r.ok) log.warn({ pid, err: r.error }, 'signal failed for one pid');
+  }
+  const remaining = await lsofWriters(task.outputPath);
+  if (remaining.length > 0) {
+    return { ok: false, reason: 'survivors', error: `pids still alive: ${remaining.join(',')}` };
+  }
+  return { ok: true, via: 'signal' };
+}
+
+export async function killBackgroundTask(args: KillArgs): Promise<KillResult> {
+  const task = args.tracker.get(args.chatId, args.taskId);
+  if (!task) return { ok: false, error: 'task not found', via: 'none' };
+
+  let stopErr: string | undefined;
+  if (args.session) {
+    const stop = await args.session.stopBackgroundTask(args.taskId);
+    if (stop.ok) return { ok: true, via: 'stop_task' };
+    stopErr = stop.error;
+    log.warn({ chatId: args.chatId, taskId: args.taskId, err: stop.error }, 'stop_task failed; OS fallback');
+  }
+
+  const os = await killOneTaskOS(task, sigtermThenKill);
+  if (os.ok) {
+    args.tracker.end(args.chatId, args.taskId, {
+      status: 'stopped',
+      outputPath: task.outputPath ?? '',
+      summary: 'killed via signal',
+      usage: null,
+    });
+    return { ok: true, via: 'signal' };
+  }
+  // Preserve previous behavior for failure-only paths: when there's no live
+  // writer or no outputPath and stop_task already failed, callers expect
+  // via:'none'. When the OS signal actually ran but survivors remained,
+  // surface via:'signal'.
+  if (os.reason === 'survivors') {
+    return { ok: false, error: stopErr ?? os.error, via: 'signal' };
+  }
+  return { ok: false, error: stopErr ?? os.error, via: 'none' };
+}
+
+// --- killTasksForChat orchestrator ---
+
+export interface KillTasksForChatArgs {
+  chatId: string;
+  /** Optional. When set, Task 9's worktree sweep targets `${spoolRoot}/{encoded(worktreePath)}/...`. */
+  worktreePath?: string;
+  session: SessionLike | null;
+  tracker: BackgroundTaskTracker;
+  /** Test-only override. Production callers omit this and default to spoolRoot(). */
+  spoolRoot?: string;
+}
+
+export interface KillTasksForChatResult {
+  killed: Array<{ taskId: string; via: 'stop_task' | 'signal' }>;
+  failed: Array<{ taskId: string; error: string }>;
+  swept: Array<{ pid: number; command: string }>;
+}
+
 export async function killTasksForChat(args: KillTasksForChatArgs): Promise<KillTasksForChatResult> {
   const result: KillTasksForChatResult = { killed: [], failed: [], swept: [] };
   const running = args.tracker.list(args.chatId).filter((t) => t.status === 'running');
@@ -133,58 +148,34 @@ export async function killTasksForChat(args: KillTasksForChatArgs): Promise<Kill
       log.warn({ chatId: args.chatId, taskId: task.id, err: stop.error }, 'stop_task failed; OS fallback');
     }
 
-    if (!task.outputPath) {
-      result.failed.push({ taskId: task.id, error: 'no outputPath' });
-      continue;
-    }
-    const writers = await lsofWriters(task.outputPath);
-    if (writers.length === 0) {
-      result.failed.push({ taskId: task.id, error: 'no live writer' });
-      continue;
-    }
-    for (const pid of writers) {
-      const r = await sigtermThenKill(pid);
-      if (!r.ok) log.error({ pid, taskId: task.id, err: r.error }, 'OS kill failed for one pid');
-    }
-    const remaining = await lsofWriters(task.outputPath);
-    if (remaining.length === 0) {
+    const os = await killOneTaskOS(task, sigtermThenKill);
+    if (os.ok) {
       args.tracker.end(args.chatId, task.id, {
         status: 'stopped',
-        outputPath: task.outputPath,
+        outputPath: task.outputPath ?? '',
         summary: 'killed via signal',
         usage: null,
       });
       result.killed.push({ taskId: task.id, via: 'signal' });
     } else {
-      result.failed.push({ taskId: task.id, error: `pids still alive: ${remaining.join(',')}` });
+      result.failed.push({ taskId: task.id, error: os.error });
     }
   }
 
   if (args.worktreePath) {
     try {
       const realWt = await fsRealpath(args.worktreePath);
-      const prefix = path.join(args.spoolRoot, encodeCwdSegment(realWt));
-      let sessionDirs: string[] = [];
-      try {
-        sessionDirs = await readdir(prefix);
-      } catch {
-        sessionDirs = [];
-      }
-      for (const sess of sessionDirs) {
-        let files: string[] = [];
-        try {
-          files = await readdir(path.join(prefix, sess, 'tasks'));
-        } catch {
-          continue;
-        }
-        for (const f of files) {
-          if (!f.endsWith('.output')) continue;
-          const fp = path.join(prefix, sess, 'tasks', f);
+      const scopedCwdSeg = encodeCwdSegment(realWt);
+      const root = args.spoolRoot ?? defaultSpoolRoot();
+      await walkSpoolTasks({
+        root,
+        scopedCwdSeg,
+        onTask: async ({ fp }) => {
           try {
             const ls = await lstat(fp);
-            if (!ls.isFile() || ls.isSymbolicLink()) continue;
+            if (!ls.isFile() || ls.isSymbolicLink()) return;
           } catch {
-            continue;
+            return;
           }
           const writers = await lsofWriters(fp);
           for (const pid of writers) {
@@ -198,11 +189,18 @@ export async function killTasksForChat(args: KillTasksForChatArgs): Promise<Kill
               log.error({ pid, command, err: r.error }, 'worktree sweep kill failed');
             }
           }
-        }
-      }
+        },
+      });
     } catch (err) {
       log.warn({ err, worktreePath: args.worktreePath }, 'worktree sweep aborted');
     }
+  }
+
+  if (result.failed.length > 0) {
+    log.warn({ chatId: args.chatId, failed: result.failed }, 'killTasksForChat: some failures');
+  }
+  if (result.swept.length > 0) {
+    log.info({ chatId: args.chatId, swept: result.swept }, 'worktree sweep killed extras');
   }
 
   return result;

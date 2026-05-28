@@ -30,8 +30,7 @@ import { ExternalSessionService } from './external-session-service.js';
 import { IdleSessionScanner } from './idle-scanner.js';
 import type { ActiveChat } from './types.js';
 import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
-import { killTasksForChat, type SessionLike } from '../background-tasks/kill.js';
-import { spoolRoot } from '../background-tasks/spool-root.js';
+import { killTasksForChat } from '../background-tasks/kill.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
 import { prepareMessagesForClient } from '../messages/display-pipeline.js';
@@ -456,9 +455,8 @@ export class ChatManager {
         await killTasksForChat({
           chatId: chat.id,
           worktreePath: chat.worktreePath ?? undefined,
-          session: (active?.session as unknown as SessionLike | undefined) ?? null,
+          session: active?.session ?? null,
           tracker: this.tracker,
-          spoolRoot: spoolRoot(),
         });
       } catch (err) {
         logger.warn({ err, chatId: chat.id }, 'killTasksForChat failed on project removal');

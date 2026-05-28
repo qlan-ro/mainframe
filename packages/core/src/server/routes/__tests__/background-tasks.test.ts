@@ -140,7 +140,7 @@ describe('background-tasks routes', () => {
       usage: null,
       recovered: true,
     });
-    const killImpl = vi.fn().mockResolvedValue({ ok: true, via: 'tree_kill' });
+    const killImpl = vi.fn().mockResolvedValue({ ok: true, via: 'signal' });
     const app = express()
       .use(express.json())
       .use(

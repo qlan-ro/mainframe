@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { killBackgroundTask } from '../kill.js';
 import * as lsofMod from '../lsof.js';
 
@@ -13,11 +13,15 @@ describe('killBackgroundTask', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     tracker.get.mockReturnValue({
       id: 't1',
       status: 'running',
       outputPath: '/tmp/claude-501/-x/sess/tasks/t1.output',
     });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('returns ok via stop_task when CLI succeeds', async () => {
@@ -27,12 +31,15 @@ describe('killBackgroundTask', () => {
     expect(treeKill).not.toHaveBeenCalled();
   });
 
-  it('falls back to lsof + tree-kill when stop_task fails and a writer exists', async () => {
+  it('falls back to lsof + signal when stop_task fails and a writer exists', async () => {
     session.stopBackgroundTask.mockResolvedValue({ ok: false, error: 'offline' });
     vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([42]).mockResolvedValueOnce([]);
-    const r = await killBackgroundTask({ chatId: 'c', taskId: 't1', session: session as any, tracker: tracker as any });
+    const p = killBackgroundTask({ chatId: 'c', taskId: 't1', session: session as any, tracker: tracker as any });
+    await vi.runAllTimersAsync();
+    const r = await p;
+    expect(treeKill).toHaveBeenCalledWith(42, 'SIGTERM', expect.any(Function));
     expect(treeKill).toHaveBeenCalledWith(42, 'SIGKILL', expect.any(Function));
-    expect(r).toEqual({ ok: true, via: 'tree_kill' });
+    expect(r).toEqual({ ok: true, via: 'signal' });
   });
 
   it('reports failure when no writer AND stop_task failed', async () => {
@@ -44,10 +51,12 @@ describe('killBackgroundTask', () => {
 
   it('works without a session: goes straight to OS path', async () => {
     vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([99]).mockResolvedValueOnce([]);
-    const r = await killBackgroundTask({ chatId: 'c', taskId: 't1', session: null, tracker: tracker as any });
+    const p = killBackgroundTask({ chatId: 'c', taskId: 't1', session: null, tracker: tracker as any });
+    await vi.runAllTimersAsync();
+    const r = await p;
     expect(session.stopBackgroundTask).not.toHaveBeenCalled();
     expect(treeKill).toHaveBeenCalledWith(99, 'SIGKILL', expect.any(Function));
-    expect(r).toEqual({ ok: true, via: 'tree_kill' });
+    expect(r).toEqual({ ok: true, via: 'signal' });
   });
 
   it('marks the task stopped in the tracker after OS-path success', async () => {
@@ -57,8 +66,10 @@ describe('killBackgroundTask', () => {
       end: trackerEnd,
     };
     vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([99]).mockResolvedValueOnce([]);
-    const r = await killBackgroundTask({ chatId: 'c', taskId: 't1', session: null, tracker: localTracker as any });
-    expect(r).toEqual({ ok: true, via: 'tree_kill' });
+    const p = killBackgroundTask({ chatId: 'c', taskId: 't1', session: null, tracker: localTracker as any });
+    await vi.runAllTimersAsync();
+    const r = await p;
+    expect(r).toEqual({ ok: true, via: 'signal' });
     expect(trackerEnd).toHaveBeenCalledWith(
       'c',
       't1',

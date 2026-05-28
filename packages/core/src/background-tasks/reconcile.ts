@@ -1,15 +1,15 @@
-import { readdir, realpath, lstat, stat } from 'node:fs/promises';
-import path from 'node:path';
-import type { Chat } from '@qlan-ro/mainframe-types';
+import { realpath, lstat, stat } from 'node:fs/promises';
+import type { Stats } from 'node:fs';
+import type { BackgroundTask, Chat } from '@qlan-ro/mainframe-types';
 import type { BackgroundTaskTracker } from './tracker.js';
 import { encodeCwdSegment } from './encoding.js';
 import { lsofWriters } from './lsof.js';
 import { makeSpoolValidator, type SpoolValidator } from './spool-validator.js';
 import { spoolRoot as defaultSpoolRoot } from './spool-root.js';
+import { walkSpoolTasks } from './spool-walker.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('background-tasks:reconcile');
-const TASK_ID_RE = /^[a-z0-9]{6,16}$/;
 
 export interface ReconcileDeps {
   tracker: BackgroundTaskTracker;
@@ -31,6 +31,25 @@ export async function reconcileBackgroundTasks(deps: ReconcileDeps): Promise<voi
   }
 }
 
+function buildRecoveredSnapshot(taskId: string, fp: string, st: Stats, writers: number[]): BackgroundTask {
+  const running = writers.length > 0;
+  return {
+    id: taskId,
+    toolName: 'Bash',
+    toolUseId: '',
+    command: '<recovered>',
+    description: '',
+    outputPath: fp,
+    startedAt: st.ctimeMs,
+    endedAt: running ? null : st.mtimeMs,
+    status: running ? 'running' : 'stopped',
+    lastOutputLine: null,
+    summary: running ? null : 'recovered after daemon restart',
+    usage: null,
+    recovered: true,
+  };
+}
+
 async function reconcileInner(deps: ReconcileDeps, spoolRoot: string): Promise<void> {
   const sessionToChat = new Map<string, Chat>();
   for (const chat of deps.db.chats.listAll()) {
@@ -48,80 +67,36 @@ async function reconcileInner(deps: ReconcileDeps, spoolRoot: string): Promise<v
       env: process.env,
     });
 
-  let cwdSegs: string[];
-  try {
-    cwdSegs = await readdir(spoolRoot);
-  } catch {
-    return;
-  }
-
-  for (const cwdSeg of cwdSegs) {
-    let sessDirs: string[];
-    try {
-      sessDirs = await readdir(path.join(spoolRoot, cwdSeg));
-    } catch {
-      continue;
-    }
-    for (const sess of sessDirs) {
+  await walkSpoolTasks({
+    root: spoolRoot,
+    onTask: async ({ cwdSeg, sess, taskId, fp }) => {
       const chat = sessionToChat.get(sess);
-      if (!chat) continue;
-
+      if (!chat) return;
       const project = deps.db.projects.get(chat.projectId);
       const effectivePath = chat.worktreePath ?? project?.path;
-      if (!effectivePath) continue;
+      if (!effectivePath) return;
       let realEffective: string;
       try {
         realEffective = await realpath(effectivePath);
       } catch {
-        continue;
+        return;
       }
-      if (encodeCwdSegment(realEffective) !== cwdSeg) continue;
+      if (encodeCwdSegment(realEffective) !== cwdSeg) return;
 
-      const tasksDir = path.join(spoolRoot, cwdSeg, sess, 'tasks');
-      let files: string[];
+      if (!(await validator(fp, taskId))) return;
+
+      let st: Stats;
       try {
-        files = await readdir(tasksDir);
+        const ls = await lstat(fp);
+        if (!ls.isFile() || ls.isSymbolicLink()) return;
+        st = await stat(fp);
       } catch {
-        continue;
+        return;
       }
 
-      for (const f of files) {
-        if (!f.endsWith('.output')) continue;
-        const taskId = f.slice(0, -'.output'.length);
-        if (!TASK_ID_RE.test(taskId)) continue;
-        const fp = path.join(tasksDir, f);
-
-        if (!(await validator(fp, taskId))) continue;
-
-        let ls, st;
-        try {
-          ls = await lstat(fp);
-          if (!ls.isFile() || ls.isSymbolicLink()) continue;
-          st = await stat(fp);
-        } catch {
-          continue;
-        }
-
-        const writers = await lsofWriters(fp);
-        const running = writers.length > 0;
-
-        deps.tracker.adopt(chat.id, {
-          id: taskId,
-          toolName: 'Bash',
-          toolUseId: '',
-          command: '<recovered>',
-          description: '',
-          outputPath: fp,
-          startedAt: st.ctimeMs,
-          endedAt: running ? null : st.mtimeMs,
-          status: running ? 'running' : 'stopped',
-          lastOutputLine: null,
-          summary: running ? null : 'recovered after daemon restart',
-          usage: null,
-          recovered: true,
-        });
-        if (running) deps.tracker.setPid(chat.id, taskId, writers[0]!);
-      }
-    }
-  }
+      const writers = await lsofWriters(fp);
+      deps.tracker.adopt(chat.id, buildRecoveredSnapshot(taskId, fp, st, writers));
+      if (writers.length > 0) deps.tracker.setPid(chat.id, taskId, writers[0]!);
+    },
+  });
 }

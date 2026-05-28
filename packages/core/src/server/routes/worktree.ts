@@ -7,8 +7,7 @@ import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
 import { getWorktrees, removeWorktree } from '../../workspace/index.js';
 import { GitDeleteWorktreeBody } from './schemas.js';
-import { killTasksForChat, type SessionLike } from '../../background-tasks/kill.js';
-import { spoolRoot } from '../../background-tasks/spool-root.js';
+import { killTasksForChat } from '../../background-tasks/kill.js';
 
 const log = createChildLogger('routes:worktree');
 
@@ -85,19 +84,12 @@ async function validateAndDeleteWorktree(
     for (const c of affected) {
       try {
         const session = ctx.chats.getSessionForChat?.(c.id) ?? null;
-        const result = await killTasksForChat({
+        await killTasksForChat({
           chatId: c.id,
           worktreePath: realWorktreePath, // pass the canonical path so sweep targets the right spool prefix
-          session: session as unknown as SessionLike | null,
+          session,
           tracker: ctx.backgroundTasks,
-          spoolRoot: spoolRoot(),
         });
-        if (result.failed.length || result.swept.length) {
-          log.info(
-            { chatId: c.id, killed: result.killed, failed: result.failed, swept: result.swept },
-            'killTasksForChat result for delete-worktree',
-          );
-        }
       } catch (err) {
         log.warn({ err, chatId: c.id }, 'killTasksForChat failed during delete-worktree');
       }

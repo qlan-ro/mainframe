@@ -87,6 +87,10 @@ export class MockBaseSession implements AdapterSession {
     return [];
   }
 
+  async stopBackgroundTask(_taskId: string): Promise<{ ok: boolean; error?: string }> {
+    return { ok: false, error: 'unsupported' };
+  }
+
   // ── Test simulation helpers ───────────────────────────────────────────────
 
   simulateInit(sessionId: string): void {

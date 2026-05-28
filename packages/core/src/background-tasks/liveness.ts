@@ -8,6 +8,8 @@ export const TICK_MS = 60_000;
 export const GRACE_MS = 90_000;
 export const WAKE_DELTA_MULT = 2;
 
+export type MissMap = Map<string, Map<string, number>>;
+
 export interface LivenessDeps {
   tracker: BackgroundTaskTracker;
   intervalMs?: number;
@@ -19,18 +21,41 @@ export interface LivenessSchedulerHandle {
 
 export interface SweepArgs {
   tracker: BackgroundTaskTracker;
-  missMap: Map<string, number>;
+  missMap: MissMap;
   now: number;
   forceWake: boolean;
+}
+
+/** Read the current miss count for `(chatId, taskId)`. Exported for tests. */
+export function getMissCount(missMap: MissMap, chatId: string, taskId: string): number {
+  return missMap.get(chatId)?.get(taskId) ?? 0;
+}
+
+function setMiss(missMap: MissMap, chatId: string, taskId: string, count: number): void {
+  const inner = missMap.get(chatId) ?? new Map<string, number>();
+  inner.set(taskId, count);
+  missMap.set(chatId, inner);
+}
+
+function deleteMiss(missMap: MissMap, chatId: string, taskId: string): void {
+  const inner = missMap.get(chatId);
+  if (!inner) return;
+  inner.delete(taskId);
+  if (inner.size === 0) missMap.delete(chatId);
 }
 
 /** One-shot sweep. Exported for direct testing. */
 export async function runLivenessSweep(args: SweepArgs): Promise<void> {
   const { tracker, missMap, now, forceWake } = args;
-  const seenKeys = new Set<string>();
+  const liveByChat = new Map<string, Set<string>>();
   for (const { chatId, task } of tracker.listAllRunning()) {
-    const key = `${chatId}/${task.id}`;
-    seenKeys.add(key);
+    let set = liveByChat.get(chatId);
+    if (!set) {
+      set = new Set();
+      liveByChat.set(chatId, set);
+    }
+    set.add(task.id);
+
     if (now - task.startedAt < GRACE_MS) continue;
     if (!task.outputPath) {
       log.warn({ chatId, taskId: task.id }, 'liveness skip: no outputPath');
@@ -42,14 +67,14 @@ export async function runLivenessSweep(args: SweepArgs): Promise<void> {
       continue;
     }
     if (r.pids.length > 0) {
-      missMap.delete(key);
+      deleteMiss(missMap, chatId, task.id);
       tracker.setPid(chatId, task.id, r.pids[0]!);
       continue;
     }
     // Empty observation
-    const prev = missMap.get(key) ?? 0;
+    const prev = getMissCount(missMap, chatId, task.id);
     if (forceWake || prev >= 1) {
-      missMap.delete(key);
+      deleteMiss(missMap, chatId, task.id);
       tracker.end(chatId, task.id, {
         status: 'stopped',
         outputPath: task.outputPath,
@@ -57,16 +82,25 @@ export async function runLivenessSweep(args: SweepArgs): Promise<void> {
         usage: null,
       });
     } else {
-      missMap.set(key, prev + 1);
+      setMiss(missMap, chatId, task.id, prev + 1);
     }
   }
-  // GC misses for tasks no longer in tracker
-  for (const k of [...missMap.keys()]) if (!seenKeys.has(k)) missMap.delete(k);
+  // GC chats no longer tracked; tasks no longer running.
+  for (const chatId of [...missMap.keys()]) {
+    const live = liveByChat.get(chatId);
+    if (!live) {
+      missMap.delete(chatId);
+      continue;
+    }
+    const inner = missMap.get(chatId)!;
+    for (const taskId of [...inner.keys()]) if (!live.has(taskId)) inner.delete(taskId);
+    if (inner.size === 0) missMap.delete(chatId);
+  }
 }
 
 export function startLivenessScheduler(deps: LivenessDeps): LivenessSchedulerHandle {
   const intervalMs = deps.intervalMs ?? TICK_MS;
-  const missMap = new Map<string, number>();
+  const missMap: MissMap = new Map();
   let lastTick = Date.now();
   let stopped = false;
 
