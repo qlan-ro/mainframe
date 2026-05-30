@@ -124,5 +124,14 @@ describe('AttachmentStore', () => {
       ]);
       expect(meta).toBeDefined();
     });
+
+    it('rejects a traversal attachmentId on get (decoded ../ escapes the chat dir)', async () => {
+      // Plant a file in a sibling chat dir, then try to read it via a traversal id.
+      await store.save('chat-victim', [
+        { name: 's.txt', mediaType: 'text/plain', sizeBytes: 1, kind: 'file', data: '' },
+      ]);
+      expect(await store.get('chat-a', '../chat-victim/some-id')).toBeNull();
+      expect(await store.get('chat-a', '..%2Fchat-victim')).toBeNull();
+    });
   });
 });

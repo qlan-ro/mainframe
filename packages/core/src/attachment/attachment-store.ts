@@ -5,6 +5,9 @@ import { createChildLogger } from '../logger.js';
 
 const logger = createChildLogger('attachment-store');
 
+/** A single safe path segment — matches nanoid's alphabet; rejects `..`, `/`, etc. */
+const SAFE_SEGMENT = /^[A-Za-z0-9_-]+$/;
+
 export interface StoredAttachment {
   name: string;
   mediaType: string;
@@ -35,7 +38,7 @@ export class AttachmentStore {
    * the path-traversal seam (`join(baseDir, chatId)`).
    */
   private chatDir(chatId: string): string {
-    if (!/^[A-Za-z0-9_-]+$/.test(chatId)) {
+    if (!SAFE_SEGMENT.test(chatId)) {
       throw new Error(`Invalid chatId path segment: ${JSON.stringify(chatId)}`);
     }
     return join(this.baseDir, chatId);
@@ -83,6 +86,10 @@ export class AttachmentStore {
   }
 
   async get(chatId: string, attachmentId: string): Promise<StoredAttachment | null> {
+    // `attachmentId` is a caller-supplied path segment (`${id}.json`). Express
+    // decodes `%2F`, so without this guard `..%2Fother-chat%2Fsecret` would escape
+    // the chat dir. Reject anything that isn't a single safe segment.
+    if (!SAFE_SEGMENT.test(attachmentId)) return null;
     try {
       const filePath = join(this.chatDir(chatId), `${attachmentId}.json`);
       const content = await readFile(filePath, 'utf-8');

@@ -53,6 +53,14 @@ describe('resolveAndValidatePath', () => {
     expect(result).toBe(fs.realpathSync(tmpDir));
   });
 
+  it('treats a filesystem root base as containing everything (no double-separator)', () => {
+    // isWithinBase('/', '/tmp') must be true — '/' already ends in the separator.
+    const root = path.parse(tmpDir).root;
+    const target = fs.realpathSync(tmpDir);
+    const result = resolveAndValidatePath(root, path.relative(root, target));
+    expect(result).toBe(target);
+  });
+
   it('returns null for a sibling directory sharing the base name prefix', () => {
     // Boundary bug: base "<tmp>/proj" must NOT admit "<tmp>/proj-evil"
     // (a naive startsWith(realBase) check would accept it).

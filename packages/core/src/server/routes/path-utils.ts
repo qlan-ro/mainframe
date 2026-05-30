@@ -4,11 +4,14 @@ import path from 'node:path';
 
 /**
  * True when `realTarget` is `realBase` itself or lies strictly beneath it.
- * The `+ path.sep` guard is security-critical: a bare `startsWith(realBase)`
- * would admit a sibling like `/proj-evil` for base `/proj`.
+ * The separator guard is security-critical: a bare `startsWith(realBase)` would
+ * admit a sibling like `/proj-evil` for base `/proj`. A filesystem root already
+ * ends in the separator, so we must not append a second one (`'//'`).
  */
 export function isWithinBase(realBase: string, realTarget: string): boolean {
-  return realTarget === realBase || realTarget.startsWith(realBase + path.sep);
+  if (realTarget === realBase) return true;
+  const prefix = realBase.endsWith(path.sep) ? realBase : realBase + path.sep;
+  return realTarget.startsWith(prefix);
 }
 
 export function resolveAndValidatePath(basePath: string, requestedPath: string): string | null {
