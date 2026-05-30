@@ -106,7 +106,10 @@ export async function launchApp(): Promise<AppFixture> {
     // Launch Electron in development mode so it skips its own daemon startup.
     // Both the renderer and the daemon share MAINFRAME_DATA_DIR for a consistent view.
     app = await electron.launch({
-      args: [APP_MAIN],
+      // Isolate Electron's Chromium profile (localStorage/zustand-persist for zone layout,
+      // tutorial state, etc.) per launch. Without this it lives in the shared default userData
+      // dir and bleeds across runs — e.g. a minimized zone in one spec hides controls in the next.
+      args: [APP_MAIN, `--user-data-dir=${path.join(testDataDir, 'electron-profile')}`],
       env: {
         ...process.env,
         NODE_ENV: 'development',

@@ -72,17 +72,27 @@ export async function createTestProject(page: Page, options?: { claudeMd?: strin
   }
   if (!found) throw new Error(`Project not registered in API after picker selection: ${projectPath}`);
 
-  // Best-effort: let the sessions panel reflect the project so subsequent UI is settled. Non-fatal
-  // — specs that assert on project-group-name do their own waits. (intentional silent catch)
-  await page
-    .locator('[data-testid="project-group-name"]', { hasText: projectName })
-    .first()
-    .waitFor({ timeout: 10_000 })
-    .catch(() => {});
+  // Ensure the renderer reflects the project. The project.created WS event is occasionally missed
+  // (notably with a fresh Chromium profile), leaving the sessions panel on "No projects yet" — a
+  // reload forces a refetch from the daemon, which already has the project.
+  const group = page.locator('[data-testid="project-group-name"]', { hasText: projectName }).first();
+  try {
+    await group.waitFor({ timeout: 8_000 });
+  } catch {
+    await page.reload();
+    await page
+      .locator('[data-testid="connection-status"]')
+      .getByText('Connected', { exact: true })
+      .waitFor({ timeout: 15_000 });
+    await group.waitFor({ timeout: 10_000 });
+  }
 
   return { projectPath, projectId: found.id };
 }
 
-export async function cleanupProject({ projectPath }: ProjectFixture): Promise<void> {
-  rmSync(projectPath, { recursive: true, force: true });
+export async function cleanupProject(project?: ProjectFixture): Promise<void> {
+  // Tolerate undefined: when beforeAll fails before assigning the project, afterAll still calls
+  // this — throwing here would skip the subsequent closeApp() and leak the daemon on the test port.
+  if (!project) return;
+  rmSync(project.projectPath, { recursive: true, force: true });
 }
