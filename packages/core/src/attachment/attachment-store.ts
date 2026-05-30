@@ -25,8 +25,21 @@ export interface StoredAttachmentMeta {
 export class AttachmentStore {
   constructor(private baseDir: string) {}
 
+  /**
+   * Resolve a chat's attachment dir, rejecting any chatId that is not a single
+   * safe path segment. The character class matches nanoid's alphabet, so no
+   * legitimate id is rejected — but `..`, `/`, and absolute paths are, closing
+   * the path-traversal seam (`join(baseDir, chatId)`).
+   */
+  private chatDir(chatId: string): string {
+    if (!/^[A-Za-z0-9_-]+$/.test(chatId)) {
+      throw new Error(`Invalid chatId path segment: ${JSON.stringify(chatId)}`);
+    }
+    return join(this.baseDir, chatId);
+  }
+
   async save(chatId: string, attachments: StoredAttachment[]): Promise<StoredAttachmentMeta[]> {
-    const dir = join(this.baseDir, chatId);
+    const dir = this.chatDir(chatId);
     await mkdir(dir, { recursive: true });
     const filesDir = join(dir, 'files');
     await mkdir(filesDir, { recursive: true });
@@ -66,8 +79,8 @@ export class AttachmentStore {
   }
 
   async get(chatId: string, attachmentId: string): Promise<StoredAttachment | null> {
-    const filePath = join(this.baseDir, chatId, `${attachmentId}.json`);
     try {
+      const filePath = join(this.chatDir(chatId), `${attachmentId}.json`);
       const content = await readFile(filePath, 'utf-8');
       return JSON.parse(content);
     } catch {
@@ -76,8 +89,9 @@ export class AttachmentStore {
   }
 
   async list(chatId: string): Promise<StoredAttachmentMeta[]> {
-    const dir = join(this.baseDir, chatId);
+    let dir: string;
     try {
+      dir = this.chatDir(chatId);
       await stat(dir);
     } catch {
       return [];
@@ -112,11 +126,10 @@ export class AttachmentStore {
   }
 
   async deleteChat(chatId: string): Promise<void> {
-    const dir = join(this.baseDir, chatId);
     try {
-      await rm(dir, { recursive: true, force: true });
+      await rm(this.chatDir(chatId), { recursive: true, force: true });
     } catch {
-      // Directory may not exist
+      // Invalid chatId segment, or directory may not exist
     }
   }
 

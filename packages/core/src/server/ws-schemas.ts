@@ -50,7 +50,9 @@ const MessageSend = z
       .object({
         command: z
           .object({
-            name: z.string().min(1),
+            // Interpolated into <mainframe-command name="..."> and <command-name>/...</command-name>
+            // written to the CLI stdin — constrain to the identifier charset to close the injection seam.
+            name: z.string().regex(/^[a-zA-Z0-9_-]+$/),
             source: z.string().min(1),
             args: z.string().optional(),
           })

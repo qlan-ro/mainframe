@@ -6,6 +6,7 @@ import type { RouteContext } from './types.js';
 import { getEffectivePath, param } from './types.js';
 import type { SearchContentResult } from '@qlan-ro/mainframe-types';
 import { asyncHandler } from './async-handler.js';
+import { isWithinBase } from './path-utils.js';
 import { validate } from './schemas.js';
 import { listProjectFiles, hasBinaryExtension } from '../fs-utils.js';
 import { searchWithRipgrep, isRipgrepAvailable } from '../ripgrep.js';
@@ -25,12 +26,11 @@ const ContentSearchQuery = z.object({
   includeIgnored: z.string().optional(),
 });
 
-async function isWithinBase(basePath: string, targetPath: string): Promise<string | null> {
+async function resolveWithinBase(basePath: string, targetPath: string): Promise<string | null> {
   try {
     const realBase = await realpath(basePath);
     const realTarget = await realpath(path.resolve(basePath, targetPath));
-    if (realTarget.startsWith(realBase + path.sep) || realTarget === realBase) return realTarget;
-    return null;
+    return isWithinBase(realBase, realTarget) ? realTarget : null;
   } catch {
     /* expected — path does not exist or symlink outside base */
     return null;
@@ -110,7 +110,7 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
     return;
   }
 
-  const resolvedScope = await isWithinBase(basePath, scopePath);
+  const resolvedScope = await resolveWithinBase(basePath, scopePath);
   if (!resolvedScope) {
     res.status(403).json({ error: 'Path outside project' });
     return;

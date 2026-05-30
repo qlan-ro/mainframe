@@ -52,4 +52,17 @@ describe('resolveAndValidatePath', () => {
     const result = resolveAndValidatePath(tmpDir, '.');
     expect(result).toBe(fs.realpathSync(tmpDir));
   });
+
+  it('returns null for a sibling directory sharing the base name prefix', () => {
+    // Boundary bug: base "<tmp>/proj" must NOT admit "<tmp>/proj-evil"
+    // (a naive startsWith(realBase) check would accept it).
+    const base = path.join(tmpDir, 'proj');
+    const sibling = path.join(tmpDir, 'proj-evil');
+    fs.mkdirSync(base, { recursive: true });
+    fs.mkdirSync(sibling, { recursive: true });
+    fs.writeFileSync(path.join(sibling, 'secret.txt'), 'top secret');
+
+    const result = resolveAndValidatePath(base, '../proj-evil/secret.txt');
+    expect(result).toBeNull();
+  });
 });

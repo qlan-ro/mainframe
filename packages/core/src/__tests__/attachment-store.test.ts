@@ -103,4 +103,26 @@ describe('AttachmentStore', () => {
       expect(meta!.materializedPath).toMatch(/attachment\.bin$/);
     });
   });
+
+  describe('chatId path-traversal guard', () => {
+    it('rejects a traversal chatId on save (write)', async () => {
+      await expect(
+        store.save('../evil', [{ name: 'x.txt', mediaType: 'text/plain', sizeBytes: 1, kind: 'file', data: '' }]),
+      ).rejects.toThrow(/Invalid chatId/);
+    });
+
+    it('returns null/[] for traversal chatId on read paths instead of escaping baseDir', async () => {
+      expect(await store.get('../../etc', 'passwd')).toBeNull();
+      expect(await store.list('../evil')).toEqual([]);
+      // deleteChat must not throw and must not remove anything outside baseDir
+      await expect(store.deleteChat('../evil')).resolves.toBeUndefined();
+    });
+
+    it('accepts normal nanoid-style chat ids', async () => {
+      const [meta] = await store.save('aB3_x-Yz', [
+        { name: 'a.png', mediaType: 'image/png', sizeBytes: 1, kind: 'image', data: '' },
+      ]);
+      expect(meta).toBeDefined();
+    });
+  });
 });
