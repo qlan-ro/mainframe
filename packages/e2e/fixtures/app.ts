@@ -88,38 +88,47 @@ export async function launchApp(): Promise<AppFixture> {
   });
   closeSync(daemonLogFd); // parent no longer needs the fd; child keeps it open
 
-  // Wait until the daemon's HTTP server is accepting connections
-  await waitForDaemon();
+  // If any post-spawn step throws, kill the daemon before rethrowing so a failed beforeAll never
+  // leaks a process holding the port (which would cascade-fail every later spec via assertPortFree).
+  let app: ElectronApplication | undefined;
+  try {
+    // Wait until the daemon's HTTP server is accepting connections
+    await waitForDaemon();
 
-  // Set Haiku as the default model — tests run fast and cheap.
-  // Tests that exercise model-switching override this per-chat via chat.updateConfig.
-  await fetch(`${DAEMON_BASE}/api/settings/providers/claude`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ defaultModel: 'claude-haiku-4-5-20251001' }),
-  });
+    // Set Haiku as the default model — tests run fast and cheap.
+    // Tests that exercise model-switching override this per-chat via chat.updateConfig.
+    await fetch(`${DAEMON_BASE}/api/settings/providers/claude`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ defaultModel: 'claude-haiku-4-5-20251001' }),
+    });
 
-  // Launch Electron in development mode so it skips its own daemon startup.
-  // Both the renderer and the daemon share MAINFRAME_DATA_DIR for a consistent view.
-  const app = await electron.launch({
-    args: [APP_MAIN],
-    env: {
-      ...process.env,
-      NODE_ENV: 'development',
-      MAINFRAME_DATA_DIR: testDataDir,
-      DAEMON_PORT, // main-process helpers (idle-reporter) target the test daemon
-    },
-  });
-  const page = await app.firstWindow();
-  await page.waitForLoadState('domcontentloaded');
+    // Launch Electron in development mode so it skips its own daemon startup.
+    // Both the renderer and the daemon share MAINFRAME_DATA_DIR for a consistent view.
+    app = await electron.launch({
+      args: [APP_MAIN],
+      env: {
+        ...process.env,
+        NODE_ENV: 'development',
+        MAINFRAME_DATA_DIR: testDataDir,
+        DAEMON_PORT, // main-process helpers (idle-reporter) target the test daemon
+      },
+    });
+    const page = await app.firstWindow();
+    await page.waitForLoadState('domcontentloaded');
 
-  // Wait until the renderer's WebSocket connects and the status bar says "Connected"
-  await page
-    .locator('[data-testid="connection-status"]')
-    .getByText('Connected', { exact: true })
-    .waitFor({ timeout: 15_000 });
+    // Wait until the renderer's WebSocket connects and the status bar says "Connected"
+    await page
+      .locator('[data-testid="connection-status"]')
+      .getByText('Connected', { exact: true })
+      .waitFor({ timeout: 15_000 });
 
-  return { app, page, testDataDir, daemon };
+    return { app, page, testDataDir, daemon };
+  } catch (err) {
+    await app?.close().catch(() => {}); /* best-effort cleanup on launch failure */
+    daemon.kill('SIGKILL');
+    throw err;
+  }
 }
 
 export async function closeApp(fixture: AppFixture): Promise<void> {

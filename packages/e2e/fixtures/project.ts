@@ -58,18 +58,27 @@ export async function createTestProject(page: Page, options?: { claudeMd?: strin
 
   await openPickerAndSelectPath(page, projectPath);
 
-  // Wait for the Sessions panel to show the newly registered project group
+  // Gate on the daemon API (deterministic) rather than the sessions-panel DOM — the renderer's
+  // project-group render lags intermittently, which made a hard DOM wait flaky in beforeAll.
   const projectName = path.basename(projectPath);
+  const deadline = Date.now() + 15_000;
+  let found: { id: string; path: string } | undefined;
+  while (Date.now() < deadline) {
+    const res = await page.request.get(`${DAEMON_BASE}/api/projects`);
+    const { data: projects } = (await res.json()) as { data: { id: string; path: string }[] };
+    found = projects.find((p) => p.path === projectPath);
+    if (found) break;
+    await page.waitForTimeout(200);
+  }
+  if (!found) throw new Error(`Project not registered in API after picker selection: ${projectPath}`);
+
+  // Best-effort: let the sessions panel reflect the project so subsequent UI is settled. Non-fatal
+  // — specs that assert on project-group-name do their own waits. (intentional silent catch)
   await page
     .locator('[data-testid="project-group-name"]', { hasText: projectName })
     .first()
-    .waitFor({ timeout: 15_000 });
-
-  // Fetch the project ID from the API
-  const res = await page.request.get(`${DAEMON_BASE}/api/projects`);
-  const { data: projects } = (await res.json()) as { data: { id: string; path: string }[] };
-  const found = projects.find((p) => p.path === projectPath);
-  if (!found) throw new Error(`Project not found in API after picker selection: ${projectPath}`);
+    .waitFor({ timeout: 10_000 })
+    .catch(() => {});
 
   return { projectPath, projectId: found.id };
 }
