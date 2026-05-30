@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { writeFileSync } from 'fs';
+import path from 'path';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
@@ -42,5 +44,19 @@ test.describe('§53 Editor — comments & save', () => {
     await expect(save).toBeVisible({ timeout: 5_000 });
     await save.click();
     await expect(save).toHaveCount(0, { timeout: 10_000 });
+  });
+
+  test('F10/F11: disk-change banner offers reload + keep-mine', async () => {
+    const { page } = fixture;
+    // Make the open editor dirty…
+    await page.locator('.monaco-editor').first().locator('.view-line').first().click();
+    await page.keyboard.type('// local change\n');
+    // …then change the same file on disk — the daemon's file watcher emits file:changed.
+    writeFileSync(path.join(project.projectPath, 'index.ts'), 'export const changedOnDisk = true;\n');
+    const keepMine = page.locator('[data-testid="center-button-keep-mine"]');
+    await expect(keepMine).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="center-button-reload-from-disk"]')).toBeVisible();
+    await keepMine.click(); // keep local edits
+    await expect(keepMine).toHaveCount(0, { timeout: 5_000 });
   });
 });
