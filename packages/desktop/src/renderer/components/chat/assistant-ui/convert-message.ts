@@ -7,8 +7,8 @@ type ContentPart = Exclude<ThreadMessageLike['content'], string>[number];
 // Re-export for consumers that import from this module
 export type { ToolGroupItem, TaskProgressItem, PartEntry } from '@qlan-ro/mainframe-core/messages';
 
-// Sentinel placeholders — null-byte prefix prevents collision with user content
-export const ERROR_PLACEHOLDER = Object.freeze({ type: 'text' as const, text: '\0__MF_ERROR__' });
+// Sentinel placeholder for permission_request — rendered as null (no visible UI needed here).
+// A null-byte prefix prevents collision with user content.
 export const PERMISSION_PLACEHOLDER = Object.freeze({ type: 'text' as const, text: '\0__MF_PERMISSION__' });
 
 function mapDisplayContentToToolCall(block: DisplayContent & { type: 'tool_call' }): ContentPart {
@@ -186,7 +186,11 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
             break;
           }
           case 'error':
-            parts.push(ERROR_PLACEHOLDER);
+            // Carry the message text directly so the renderer can display it without
+            // a sentinel round-trip or cross-message scan. The renderer identifies error
+            // parts by looking up the original DisplayMessage (via getExternalStoreMessages)
+            // and matching the text to the error block's message field.
+            parts.push({ type: 'text', text: block.message });
             break;
           case 'permission_request':
             parts.push(PERMISSION_PLACEHOLDER);
@@ -202,13 +206,16 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
       };
     }
 
-    case 'error':
+    case 'error': {
+      const errorBlock = message.content.find((c): c is DisplayContent & { type: 'error' } => c.type === 'error');
+      const errorText = errorBlock?.message ?? 'An error occurred';
       return {
         role: 'assistant',
-        content: [ERROR_PLACEHOLDER],
+        content: [{ type: 'text', text: errorText }],
         id: message.id,
         createdAt: new Date(message.timestamp),
       };
+    }
 
     case 'permission':
       return {

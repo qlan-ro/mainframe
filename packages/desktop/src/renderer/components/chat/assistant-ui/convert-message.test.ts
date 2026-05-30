@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertMessage, ERROR_PLACEHOLDER, PERMISSION_PLACEHOLDER } from './convert-message';
+import { convertMessage, PERMISSION_PLACEHOLDER } from './convert-message';
 import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 
 /* ── helpers ─────────────────────────────────────────────────────── */
@@ -22,18 +22,12 @@ function display(
 /* ── sentinel placeholders ───────────────────────────────────────── */
 
 describe('sentinel placeholders', () => {
-  it('ERROR_PLACEHOLDER has null-byte prefix', () => {
-    expect(ERROR_PLACEHOLDER.text).toBe('\0__MF_ERROR__');
-    expect(ERROR_PLACEHOLDER.type).toBe('text');
-  });
-
   it('PERMISSION_PLACEHOLDER has null-byte prefix', () => {
     expect(PERMISSION_PLACEHOLDER.text).toBe('\0__MF_PERMISSION__');
     expect(PERMISSION_PLACEHOLDER.type).toBe('text');
   });
 
-  it('placeholders are frozen', () => {
-    expect(Object.isFrozen(ERROR_PLACEHOLDER)).toBe(true);
+  it('PERMISSION_PLACEHOLDER is frozen', () => {
     expect(Object.isFrozen(PERMISSION_PLACEHOLDER)).toBe(true);
   });
 });
@@ -207,11 +201,13 @@ describe('convertMessage', () => {
       });
     });
 
-    it('converts error blocks to ERROR_PLACEHOLDER', () => {
+    it('carries error block message text directly in the text part (no sentinel)', () => {
       const msg = display('assistant', [{ type: 'error', message: 'something went wrong' }]);
       const result = convertMessage(msg);
       expect(result.content).toHaveLength(1);
-      expect((result.content as unknown as Array<Record<string, unknown>>)[0]).toBe(ERROR_PLACEHOLDER);
+      const part = (result.content as unknown as Array<Record<string, unknown>>)[0]!;
+      expect(part.type).toBe('text');
+      expect(part.text).toBe('something went wrong');
     });
 
     it('converts permission_request blocks to PERMISSION_PLACEHOLDER', () => {
@@ -350,19 +346,33 @@ describe('convertMessage', () => {
       const types = (result.content as unknown as Array<Record<string, unknown>>).map((p) => p.type);
       expect(types).toEqual(['reasoning', 'text', 'tool-call', 'text']);
 
-      // The last one should be the error placeholder
+      // The last part carries the actual error message text (no sentinel)
       const last = (result.content as unknown as Array<Record<string, unknown>>)[3]!;
-      expect(last).toBe(ERROR_PLACEHOLDER);
+      expect(last.type).toBe('text');
+      expect(last.text).toBe('oops');
     });
   });
 
   describe('error messages', () => {
-    it('converts error type messages to assistant role with ERROR_PLACEHOLDER', () => {
+    it('converts error type messages to assistant role carrying the error message text', () => {
       const msg = display('error', [{ type: 'error', message: 'crash' }]);
       const result = convertMessage(msg);
 
       expect(result.role).toBe('assistant');
-      expect(result.content).toEqual([ERROR_PLACEHOLDER]);
+      const parts = result.content as unknown as Array<Record<string, unknown>>;
+      expect(parts).toHaveLength(1);
+      expect(parts[0]!.type).toBe('text');
+      expect(parts[0]!.text).toBe('crash');
+    });
+
+    it('falls back to default message when error block is missing', () => {
+      // error type message with no error block in content
+      const msg = display('error', []);
+      const result = convertMessage(msg);
+
+      expect(result.role).toBe('assistant');
+      const parts = result.content as unknown as Array<Record<string, unknown>>;
+      expect(parts[0]!.text).toBe('An error occurred');
     });
   });
 
