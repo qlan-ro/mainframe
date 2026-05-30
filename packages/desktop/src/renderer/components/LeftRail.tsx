@@ -35,6 +35,7 @@ export function LeftRail(): React.ReactElement {
       {fullviewContributions.map((c) => (
         <RailButton
           key={c.pluginId}
+          testId={`left-rail-fullview-${c.pluginId}`}
           active={activeFullviewId === c.pluginId}
           onClick={() => usePluginLayoutStore.getState().activateFullview(c.pluginId)}
           title={c.label}
@@ -47,7 +48,11 @@ export function LeftRail(): React.ReactElement {
       <RailButton testId="left-rail-settings" onClick={() => useSettingsStore.getState().open()} title="Settings">
         <Settings size={16} />
       </RailButton>
-      <RailButton testId="left-rail-help" onClick={() => useSettingsStore.getState().open(undefined, 'about')} title="Help">
+      <RailButton
+        testId="left-rail-help"
+        onClick={() => useSettingsStore.getState().open(undefined, 'about')}
+        title="Help"
+      >
         <HelpCircle size={16} />
       </RailButton>
     </div>
