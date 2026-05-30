@@ -52,16 +52,24 @@ test.describe('§44 Composer config selects', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('M6: effort select (Claude models that support it)', async () => {
+  test('M6: effort select appears for an effort-capable model and updates', async () => {
     const { page } = fixture;
-    const effort = page.locator('[data-testid="composer-effort-select"]');
-    // Effort only renders for Claude models with supportsEffort — skip if the default model lacks it.
-    if (!(await effort.isVisible().catch(() => false))) {
-      test.skip(true, 'active model does not support effort');
+    // Effort only renders for Claude models with supportsEffort (Sonnet 4.x / Opus 4.x), so switch
+    // to one first (the test daemon defaults to Haiku, which lacks it).
+    await page.locator('[data-testid="composer-model-select"]').click();
+    // Probed model ids are CLI aliases (sonnet/opus/haiku/default), not full version strings.
+    const effortModel = page
+      .locator('[data-testid="composer-model-select-option-sonnet"], [data-testid="composer-model-select-option-opus"]')
+      .first();
+    if (!(await effortModel.isVisible({ timeout: 5_000 }).catch(() => false))) {
+      test.skip(true, 'no effort-capable model probed in this environment');
       return;
     }
+    await effortModel.click();
+
+    const effort = page.locator('[data-testid="composer-effort-select"]');
+    await expect(effort).toBeVisible({ timeout: 5_000 });
     await effort.click();
-    await expect(page.locator('[data-testid="composer-effort-select-option-high"]')).toBeVisible({ timeout: 5_000 });
     await page.locator('[data-testid="composer-effort-select-option-high"]').click();
     await expect(effort).toContainText(/high/i);
   });
