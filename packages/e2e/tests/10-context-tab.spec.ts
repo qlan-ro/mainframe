@@ -41,4 +41,13 @@ test.describe('§10–11 Context & Files tabs', () => {
     await fixture.page.locator('[data-testid="files-tree-node-index.ts"]').click();
     await expect(fixture.page.locator('.monaco-editor').first()).toBeVisible({ timeout: 15_000 });
   });
+
+  test('F12: review-changes modal opens and closes', async () => {
+    const { page } = fixture;
+    // The AI edit above left session changes for this chat to review.
+    await page.locator('[data-testid="chat-review-changes-button"]').click();
+    await expect(page.locator('[data-testid="review-modal"]')).toBeVisible({ timeout: 10_000 });
+    await page.locator('[data-testid="review-button-close"]').click();
+    await expect(page.locator('[data-testid="review-modal"]')).toHaveCount(0, { timeout: 5_000 });
+  });
 });
