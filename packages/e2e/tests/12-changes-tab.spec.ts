@@ -47,4 +47,24 @@ test.describe('§12–13 Changes tab & diff viewer', () => {
     await fixture.page.locator('[data-testid^="changes-session-file-"]').first().click();
     await expect(fixture.page.locator('.monaco-diff-editor').first()).toBeVisible({ timeout: 15_000 });
   });
+
+  test('file view collapses, re-expands, and reveals in tree (F3/F4)', async () => {
+    const { page } = fixture;
+    // Ensure a diff is open in the file view.
+    await openZone(page, 'zone-rail-button-changes', 'zone-button-tab-dropdown');
+    await setChangesMode(page, 'session');
+    await page.locator('[data-testid="changes-refresh"]').click();
+    await page.locator('[data-testid^="changes-session-file-"]').first().click();
+    await expect(page.locator('.monaco-diff-editor').first()).toBeVisible({ timeout: 15_000 });
+
+    // Collapse → the narrow expand rail appears; expand → the header returns.
+    await page.locator('[data-testid="fileview-collapse"]').click();
+    await expect(page.locator('[data-testid="layout-expand-file-view"]')).toBeVisible({ timeout: 5_000 });
+    await page.locator('[data-testid="layout-expand-file-view"]').click();
+    await expect(page.locator('[data-testid="fileview-collapse"]')).toBeVisible({ timeout: 5_000 });
+
+    // Reveal the open file back in the Files tree.
+    await page.locator('[data-testid="fileview-reveal-in-tree"]').click();
+    await expect(page.locator('[data-testid="files-tree-node-index.ts"]')).toBeVisible({ timeout: 10_000 });
+  });
 });
