@@ -1,18 +1,16 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references (126). Unused: 223._
+_Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references (161). Unused: 190._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator. Some of these
 > elements ARE exercised via role/text locators (e.g. permission buttons via getByRole), so
 > this lists selector gaps, not necessarily untested behavior. `${…}` marks templated id families.
 
-## todos (40)
+## todos (35)
 - `todos-attachment-delete-${…}`
 - `todos-attachment-preview-${…}`
 - `todos-attachments-file-input`
 - `todos-attachments-upload`
-- `todos-card-delete-${…}`
-- `todos-card-edit-${…}`
 - `todos-card-start-${…}`
 - `todos-dep-add-toggle`
 - `todos-dep-option-${…}`
@@ -22,14 +20,11 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `todos-filter-clear`
 - `todos-filter-label-option-${…}`
 - `todos-filter-labels-toggle`
-- `todos-filter-search`
-- `todos-filter-search-clear`
 - `todos-label-input`
 - `todos-label-remove-${…}`
 - `todos-modal-assignees-input`
 - `todos-modal-attachment-preview-${…}`
 - `todos-modal-attachment-remove-${…}`
-- `todos-modal-body-input`
 - `todos-modal-cancel`
 - `todos-modal-file-input`
 - `todos-modal-milestone-input`
@@ -48,7 +43,7 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `todos-sidebar-item-${…}`
 - `todos-sort-${…}`
 
-## chat (27)
+## chat (26)
 - `chat-lightbox-close-button`
 - `chat-lightbox-next-button`
 - `chat-lightbox-prev-button`
@@ -73,23 +68,8 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `chat-question-other-input`
 - `chat-question-skip-button`
 - `chat-question-submit-button`
-- `chat-review-changes-button`
 - `chat-session-bar-bg-tasks-pill`
 - `chat-session-bar-bg-tasks-popover`
-
-## composer (12)
-- `composer-attach`
-- `composer-attachments`
-- `composer-context-picker`
-- `composer-dismiss-error`
-- `composer-prompt-highlight`
-- `composer-prompt-input`
-- `composer-queued-cancel`
-- `composer-queued-edit`
-- `composer-queued-edit-input`
-- `composer-queued-save`
-- `composer-send`
-- `composer-stop`
 
 ## sandbox (12)
 - `sandbox-button-generate-with-agent`
@@ -105,6 +85,19 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `sandbox-capture-context`
 - `sandbox-textarea-annotation-${…}`
 
+## composer (11)
+- `composer-attach`
+- `composer-attachments`
+- `composer-context-picker`
+- `composer-dismiss-error`
+- `composer-prompt-highlight`
+- `composer-queued-cancel`
+- `composer-queued-edit`
+- `composer-queued-edit-input`
+- `composer-queued-save`
+- `composer-send`
+- `composer-stop`
+
 ## branch (8)
 - `branch-group-toggle-${…}`
 - `branch-list-local-toggle`
@@ -115,16 +108,6 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `branch-popover-update-all`
 - `branch-submenu-dialog`
 
-## tags (8)
-- `tags-button-color-${…}`
-- `tags-button-create`
-- `tags-button-filter-${…}`
-- `tags-button-tag-delete`
-- `tags-button-tag-recolor`
-- `tags-button-tag-rename`
-- `tags-button-toggle-${…}`
-- `tags-input-search`
-
 ## session (7)
 - `session-bar-branch`
 - `session-bar-model`
@@ -134,37 +117,19 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `session-row-tags`
 - `session-title-row`
 
-## thread (7)
-- `thread-find-close`
-- `thread-find-input`
-- `thread-find-next`
-- `thread-find-prev`
-- `thread-quote`
-- `thread-tool-result-collapse`
-- `thread-tool-result-expand`
-
-## editor (6)
+## editor (5)
 - `editor-inline-comment-cancel`
-- `editor-inline-comment-send`
 - `editor-line-comment-close`
 - `editor-line-comment-input`
 - `editor-line-comment-send`
 - `editor-submit-review`
 
-## find (6)
-- `find-bar`
+## find (5)
 - `find-in-path-close`
 - `find-in-path-include-ignored`
 - `find-in-path-input`
 - `find-in-path-modal`
 - `find-in-path-result-${…}`
-
-## chats (5)
-- `chats-clear-filters`
-- `chats-project-delete-${…}`
-- `chats-project-new-session-${…}`
-- `chats-session-select-${…}`
-- `chats-session-tags-${…}`
 
 ## named (5)
 - `named-tunnel-clear-config`
@@ -173,11 +138,11 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `named-tunnel-token-input`
 - `named-tunnel-url-input`
 
-## fileview (4)
-- `fileview-collapse`
-- `fileview-next-change`
-- `fileview-prev-change`
-- `fileview-reveal-in-tree`
+## chats (4)
+- `chats-clear-filters`
+- `chats-project-delete-${…}`
+- `chats-project-new-session-${…}`
+- `chats-session-select-${…}`
 
 ## new (4)
 - `new-branch-back`
@@ -207,11 +172,6 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `bg-task-recovered-${…}`
 - `bg-task-row-${…}`
 
-## center (3)
-- `center-button-keep-mine`
-- `center-button-reload-from-disk`
-- `center-button-save`
-
 ## files (3)
 - `files-context-item-${…}`
 - `files-refresh`
@@ -222,11 +182,6 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `message-part-copy-url`
 - `message-part-thinking-toggle`
 
-## review (3)
-- `review-button-close`
-- `review-button-mode-${…}`
-- `review-modal`
-
 ## skills (3)
 - `skills-item-delete-${…}`
 - `skills-item-edit-${…}`
@@ -236,6 +191,11 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `task-card`
 - `task-card-agent`
 - `task-card-model`
+
+## thread (3)
+- `thread-find-prev`
+- `thread-tool-result-collapse`
+- `thread-tool-result-expand`
 
 ## attachment (2)
 - `attachment-name`
@@ -249,13 +209,13 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `conflict-view-abort`
 - `conflict-view-dialog`
 
-## directory (2)
-- `directory-picker-cancel`
-- `directory-picker-close`
-
 ## external (2)
 - `external-session-branch`
 - `external-session-worktree`
+
+## fileview (2)
+- `fileview-next-change`
+- `fileview-prev-change`
 
 ## model (2)
 - `model-dropdown-option-${…}`
@@ -277,10 +237,6 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `status-bar-update-download`
 - `status-bar-update-install`
 
-## terminal (2)
-- `terminal-button-new`
-- `terminal-panel`
-
 ## changes (1)
 - `changes-branch-file-${…}`
 
@@ -295,9 +251,6 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 
 ## general (1)
 - `general-theme-option-${…}`
-
-## layout (1)
-- `layout-expand-file-view`
 
 ## line (1)
 - `line-comment-widget`
@@ -317,6 +270,9 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 ## remote (1)
 - `remote-access-device-remove-${…}`
 
+## review (1)
+- `review-button-mode-${…}`
+
 ## search (1)
 - `search-palette-session-${…}`
 
@@ -325,6 +281,9 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 
 ## settings (1)
 - `settings-modal-sidebar-provider-${…}`
+
+## tags (1)
+- `tags-button-filter-${…}`
 
 ## thumb (1)
 - `thumb-name`
