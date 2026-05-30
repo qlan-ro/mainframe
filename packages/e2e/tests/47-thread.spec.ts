@@ -38,4 +38,27 @@ test.describe('§47 Thread interactions', () => {
       await toggle.click();
     }
   });
+
+  test('TH1: find-in-thread finds matches and closes', async () => {
+    const { page } = fixture;
+    await page.keyboard.press('Meta+f');
+    const findInput = page.locator('[data-testid="thread-find-input"]');
+    await expect(findInput).toBeVisible({ timeout: 5_000 });
+    await findInput.fill('sentence'); // appears in the long TH7 message
+    // With matches, next/prev become enabled.
+    await expect(page.locator('[data-testid="thread-find-next"]')).toBeEnabled({ timeout: 5_000 });
+    await page.locator('[data-testid="thread-find-close"]').click();
+    await expect(page.locator('[data-testid="find-bar"]')).toHaveCount(0);
+  });
+
+  test('TH2: quoting a message inserts it into the composer', async () => {
+    const { page } = fixture;
+    // Select some message text (triple-click selects the paragraph), then click Quote.
+    await page.getByText('deliberately long sentence', { exact: false }).first().click({ clickCount: 3 });
+    const quote = page.locator('[data-testid="thread-quote"]');
+    await expect(quote).toBeVisible({ timeout: 5_000 });
+    await quote.click();
+    // The quoted text is blockquote-prefixed into the composer.
+    await expect(page.locator('[data-testid="composer-prompt-input"]')).toHaveValue(/>/, { timeout: 5_000 });
+  });
 });
