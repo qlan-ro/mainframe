@@ -123,6 +123,41 @@ describe('background-tasks routes', () => {
     expect(res.body.error).toBe('timeout');
   });
 
+  // A rejected promise inside a bare async handler escapes Express's error path
+  // (hung request / unlogged crash) unless the handler is wrapped in asyncHandler.
+  function makeAppWithErrorTrap(opts: Parameters<typeof makeApp>[0]) {
+    const app = makeApp(opts);
+    app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(500).json({ error: String(err) });
+    });
+    return app;
+  }
+
+  it('GET /output → 500 (via error middleware) when the validator rejects, not a hung request', async () => {
+    const tracker = new BackgroundTaskTracker();
+    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
+    tracker.end('c1', 't1', { status: 'completed', outputPath: '/etc/passwd', summary: '', usage: null });
+    const res = await request(
+      makeAppWithErrorTrap({
+        tracker,
+        validator: async () => {
+          throw new Error('validator boom');
+        },
+      }),
+    ).get('/api/chats/c1/background-tasks/t1/output');
+    expect(res.status).toBe(500);
+  });
+
+  it('POST /kill → 500 (via error middleware) when killImpl rejects, not a hung request', async () => {
+    const tracker = new BackgroundTaskTracker();
+    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
+    const killImpl = vi.fn().mockRejectedValue(new Error('kill boom'));
+    const res = await request(
+      makeAppWithErrorTrap({ tracker, sessionForChat: () => ({ stopBackgroundTask: vi.fn() }), killImpl }),
+    ).post('/api/chats/c1/background-tasks/t1/kill');
+    expect(res.status).toBe(500);
+  });
+
   it('kill route falls back to OS path when no session is active', async () => {
     const tracker = new BackgroundTaskTracker();
     tracker.adopt('chat-a', {
