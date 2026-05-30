@@ -35,7 +35,7 @@ describe('createWorktree', () => {
   });
 
   it('creates worktree with explicit baseBranch and branchName', async () => {
-    const info = await createWorktree(repoDir, 'test1234', '.worktrees', defaultBranch, 'feat/my-feature');
+    const info = await createWorktree(repoDir, '.worktrees', defaultBranch, 'feat/my-feature');
     expect(info.branchName).toBe('feat/my-feature');
     expect(info.worktreePath).toContain('.worktrees');
 
@@ -55,7 +55,7 @@ describe('createWorktree', () => {
     execFileSync('git', ['commit', '--allow-empty', '-m', 'develop-commit'], { cwd: repoDir, stdio: 'pipe' });
     execFileSync('git', ['checkout', defaultBranch], { cwd: repoDir, stdio: 'pipe' });
 
-    const info = await createWorktree(repoDir, 'test5678', '.worktrees', 'develop', 'feat/from-develop');
+    const info = await createWorktree(repoDir, '.worktrees', 'develop', 'feat/from-develop');
     expect(info.branchName).toBe('feat/from-develop');
 
     const log = execFileSync('git', ['log', '--oneline', '-1', 'feat/from-develop'], {
@@ -68,20 +68,17 @@ describe('createWorktree', () => {
   });
 
   it('uses sanitized branch name for worktree directory name', async () => {
-    const info = await createWorktree(repoDir, 'abcdef12rest', '.worktrees', defaultBranch, 'session/abcdef12');
+    const info = await createWorktree(repoDir, '.worktrees', defaultBranch, 'session/abcdef12');
     expect(info.worktreePath).toContain('session-abcdef12');
-    expect(info.worktreePath).not.toContain('abcdef12rest');
     await removeWorktree(repoDir, info.worktreePath, info.branchName);
   });
 
   it('does not block the event loop: a concurrent microtask runs while createWorktree awaits', async () => {
     const order: string[] = [];
-    const p = createWorktree(repoDir, 'concurrent01', '.worktrees', defaultBranch, 'feat/concurrent').then(
-      async (info) => {
-        order.push('createWorktree');
-        await removeWorktree(repoDir, info.worktreePath, info.branchName);
-      },
-    );
+    const p = createWorktree(repoDir, '.worktrees', defaultBranch, 'feat/concurrent').then(async (info) => {
+      order.push('createWorktree');
+      await removeWorktree(repoDir, info.worktreePath, info.branchName);
+    });
     await Promise.resolve();
     order.push('concurrent');
     await p;

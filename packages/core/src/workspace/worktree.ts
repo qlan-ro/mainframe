@@ -62,7 +62,6 @@ export async function isGitRepo(projectPath: string): Promise<boolean> {
 
 export async function createWorktree(
   projectPath: string,
-  chatId: string,
   dirName: string,
   baseBranch: string,
   branchName: string,
