@@ -234,10 +234,10 @@ describe('groupToolCallParts', () => {
       p.type === 'text' ? `text:${p.text}` : `tool:${(p as PartEntry & { type: 'tool-call' }).toolName}`,
     );
     // The inner explore-grouping loop scans past TodoWrite (hidden) and TaskCreate
-    // (task progress) without breaking the explore run, but also without adding
-    // TaskCreate to the outer taskItems collector. So TaskCreate is consumed and
-    // no _TaskProgress entry appears.
-    expect(names).toEqual(['text:starting', 'tool:_ToolGroup', 'tool:Bash', 'text:done']);
+    // (task progress) without breaking the explore run. TodoWrite is suppressed,
+    // but TaskCreate is accumulated into the taskItems collector, so a single
+    // _TaskProgress entry appears at the position where the task tool was seen.
+    expect(names).toEqual(['text:starting', 'tool:_TaskProgress', 'tool:_ToolGroup', 'tool:Bash', 'text:done']);
   });
 
   it('produces _TaskProgress when task tools are NOT inside an explore run', () => {

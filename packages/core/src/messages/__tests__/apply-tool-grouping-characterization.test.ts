@@ -298,24 +298,14 @@ describe('applyToolGrouping — _TaskProgress accumulation and position', () => 
     expect(out[2]).toEqual({ type: 'text', text: 'After' });
   });
 
-  it('scattered progress tools (non-progress between them): only the FIRST progress is in items; second is DROPPED', () => {
-    // CHARACTERIZATION: this is a known limitation of the current implementation.
-    // groupToolCallParts walks parts linearly and collects progress tools it
-    // encounters. When tc1 (Read) is encountered, the look-ahead for the
-    // explore group starts — it scans forward and skips hidden+progress tools
-    // inside the explore run. BUT tp2 comes AFTER tc1's explore group ends
-    // (position 3), so tp2 falls outside the scope of the explore group loop.
-    // However, tp2 IS still a progress tool so it should be collected…
-    //
-    // Actually: tc1 is explore, so it enters the explore group loop starting
-    // from i=2 (after tp1 at i=1). j starts at i+1 = 3, which is tp2. tp2 is
-    // a progress tool, so it is skipped inside the explore look-ahead (j++).
-    // But tp2 is also added to taskItems inside the main loop? No — once we
-    // enter the explore branch at i=2, j advances over tp2 as a progress/hidden
-    // skipped entry, then i = j = 4. tp2 was consumed by the explore look-ahead
-    // without being added to taskItems. Result: tp2 is silently DROPPED.
-    //
-    // This is a CHARACTERIZATION — pin it as-is, do NOT fix it here.
+  it('scattered progress tools (explore between them): BOTH progress tools are accumulated, none dropped', () => {
+    // A progress tool consumed inside the explore look-ahead must still be
+    // collected. groupToolCallParts walks parts linearly: tp1 is collected in
+    // the main loop (slot 1). When tc1 (Read) is encountered the explore
+    // look-ahead starts at j=3 (tp2); tp2 is a progress tool, so the look-ahead
+    // accumulates it into taskItems rather than discarding it. The single
+    // _TaskProgress is inserted at taskInsertIndex (1, where tp1 was seen) and
+    // carries BOTH tp1 and tp2.
     const input: DisplayContent[] = [
       { type: 'text', text: 'Before' },
       { type: 'tool_call', id: 'tp1', name: 'TodoWrite', input: { task: 'a' }, category: 'progress' },
@@ -326,7 +316,7 @@ describe('applyToolGrouping — _TaskProgress accumulation and position', () => 
 
     const out = applyToolGrouping(input, CAT);
 
-    // CHARACTERIZATION: tp2 is dropped; only tp1 is in items; tc1 (Read) solo
+    // [text, _TaskProgress(tp1,tp2), Read, text]
     expect(out).toHaveLength(4);
     expect(out[0]).toEqual({ type: 'text', text: 'Before' });
 
@@ -335,9 +325,10 @@ describe('applyToolGrouping — _TaskProgress accumulation and position', () => 
     const prog = out[1] as DisplayContent & { type: 'tool_call' };
     expect(prog.name).toBe('_TaskProgress');
     const items = (prog.input as { items: Array<{ toolCallId: string }> }).items;
-    // CHARACTERIZATION: only tp1 — tp2 is DROPPED by explore look-ahead
-    expect(items).toHaveLength(1);
+    // both progress tools survive — tp2 is no longer dropped
+    expect(items).toHaveLength(2);
     expect(items[0]!.toolCallId).toBe('tp1');
+    expect(items[1]!.toolCallId).toBe('tp2');
 
     // tc1 (Read) is still present as a solo explore (not wrapped in tool_group)
     expect(out[2]).toEqual({

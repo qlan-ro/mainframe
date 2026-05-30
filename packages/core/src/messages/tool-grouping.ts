@@ -99,13 +99,21 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
         if (next.type !== 'tool-call') break;
         if (isExploreTool(next.toolName, categories)) {
           group.push(next);
-        } else if (
-          !isHiddenToolPart(next.toolName, next.category, categories) &&
-          !isTaskProgressTool(next.toolName, categories)
-        ) {
+        } else if (isTaskProgressTool(next.toolName, categories)) {
+          // A progress tool inside the run is accumulated, not dropped.
+          if (taskInsertIndex === -1) taskInsertIndex = result.length;
+          taskItems.push({
+            toolCallId: next.toolCallId,
+            toolName: next.toolName,
+            args: next.args,
+            result: next.result,
+            isError: next.isError,
+            ...(next.parentToolUseId && { parentToolUseId: next.parentToolUseId }),
+          });
+        } else if (!isHiddenToolPart(next.toolName, next.category, categories)) {
           break;
         }
-        // hidden and task tools within the run are skipped/collected separately
+        // hidden tools within the run are skipped
         j++;
       }
 
