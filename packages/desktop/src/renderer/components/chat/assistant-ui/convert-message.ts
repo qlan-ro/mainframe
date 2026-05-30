@@ -208,7 +208,10 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
 
     case 'error': {
       const errorBlock = message.content.find((c): c is DisplayContent & { type: 'error' } => c.type === 'error');
-      const errorText = errorBlock?.message ?? 'An error occurred';
+      // `||` (not `??`) so an empty-string message also falls back — an error
+      // bubble must always render visible text, and MainframeText drops empty
+      // text parts before its error check.
+      const errorText = errorBlock?.message || 'An error occurred';
       return {
         role: 'assistant',
         content: [{ type: 'text', text: errorText }],

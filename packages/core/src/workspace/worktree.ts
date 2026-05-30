@@ -72,7 +72,10 @@ export async function createWorktree(
   const worktreePath = path.join(worktreeDir, sanitizedBranch);
 
   await mkdir(worktreeDir, { recursive: true });
-  await execGit(['worktree', 'add', '-b', branchName, worktreePath, baseBranch], projectPath);
+  // No timeout: `worktree add` can clone/checkout a large tree and run hooks,
+  // which legitimately exceeds the default 30s cap (the previous sync impl had
+  // no timeout either).
+  await execGit(['worktree', 'add', '-b', branchName, worktreePath, baseBranch], projectPath, { timeout: 0 });
   return { worktreePath, branchName };
 }
 

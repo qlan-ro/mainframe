@@ -374,6 +374,17 @@ describe('convertMessage', () => {
       const parts = result.content as unknown as Array<Record<string, unknown>>;
       expect(parts[0]!.text).toBe('An error occurred');
     });
+
+    it('falls back to default message when the error block message is empty', () => {
+      // An empty error string must not collapse to an empty text part —
+      // MainframeText drops empty text before its error check, which would
+      // hide the error bubble entirely.
+      const msg = display('error', [{ type: 'error', message: '' }]);
+      const result = convertMessage(msg);
+
+      const parts = result.content as unknown as Array<Record<string, unknown>>;
+      expect(parts[0]!.text).toBe('An error occurred');
+    });
   });
 
   describe('permission messages', () => {

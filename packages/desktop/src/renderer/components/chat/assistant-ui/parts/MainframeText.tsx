@@ -28,11 +28,16 @@ const MainframeTextInner: TextMessagePartComponent = (props) => {
   const { text } = props;
   const originalMessages = useMessage((m) => getExternalStoreMessages<DisplayMessage>(m));
 
-  // Check if this text part corresponds to an error block in the current message.
+  // Error parts live only in error-type DisplayMessages, whose single rendered
+  // text part IS the error. Key off the message type rather than matching the
+  // message string (which could collide with ordinary text). The block-message
+  // match is kept as a defensive fallback for any future path that embeds an
+  // error block inside a non-error message.
   // The outer message always maps to a single DisplayMessage at index 0.
   const original = originalMessages[0];
   const isError =
-    original !== undefined && original.content.some((block) => block.type === 'error' && block.message === text);
+    original !== undefined &&
+    (original.type === 'error' || original.content.some((block) => block.type === 'error' && block.message === text));
 
   if (isError) {
     return <ErrorPart message={text} />;
