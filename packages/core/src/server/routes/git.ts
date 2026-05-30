@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
+import { z } from 'zod';
 import type { RouteContext } from './types.js';
 import { getEffectivePath, param } from './types.js';
 import { resolveAndValidatePath } from './path-utils.js';
@@ -8,6 +9,14 @@ import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
 import { gitWriteRoutes } from './git-write.js';
 import { gitChatRoutes } from './git-chat.js';
+
+const GitDiffQuery = z.object({
+  chatId: z.string().optional(),
+  file: z.string().optional(),
+  oldPath: z.string().optional(),
+  source: z.enum(['git']).optional(),
+  base: z.string().optional(),
+});
 
 const logger = createChildLogger('routes:git');
 
@@ -131,17 +140,18 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
 
 /** GET /api/projects/:id/git/diff?file=path&source=git&chatId=X&base=SHA */
 async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promise<void> {
-  const chatId = req.query.chatId as string | undefined;
+  const qParsed = GitDiffQuery.safeParse(req.query);
+  if (!qParsed.success) {
+    res.status(400).json({ error: qParsed.error.issues.map((i) => i.message).join(', ') });
+    return;
+  }
+
+  const { chatId, file, oldPath, source = 'git', base } = qParsed.data;
   const basePath = getEffectivePath(ctx, param(req, 'id'), chatId);
   if (!basePath) {
     res.status(404).json({ error: 'Project not found' });
     return;
   }
-
-  const file = req.query.file as string;
-  const oldPath = (req.query.oldPath as string) || undefined;
-  const source = (req.query.source as string) || 'git';
-  const base = req.query.base as string | undefined;
 
   if (source === 'git') {
     try {

@@ -76,6 +76,37 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe('GET /api/projects/:id/git/diff', () => {
+  it('returns diff for a valid git source query', async () => {
+    mockSvc.diff.mockResolvedValueOnce('diff output');
+    mockSvc.show.mockResolvedValueOnce('original content');
+    const { readFile } = await import('node:fs/promises');
+    (readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce('modified content');
+
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/git/diff');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { source: 'git', file: 'src/foo.ts' } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ diff: 'diff output', source: 'git' }));
+  });
+
+  it('returns 400 when source is not "git"', async () => {
+    const ctx = createCtx('/some/project');
+    const router = gitRoutes(ctx);
+    const handler = extractHandler(router, 'get', '/api/projects/:id/git/diff');
+    const res = mockRes();
+
+    handler({ params: { id: 'proj-1' }, query: { source: 'svn' } }, res, vi.fn());
+    await waitForResponse(res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+});
+
 describe('POST /api/projects/:id/git/diff-since-main', () => {
   it('returns { main, worktree } shape for each changed file', async () => {
     const { readFile } = await import('node:fs/promises');

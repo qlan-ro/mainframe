@@ -109,13 +109,13 @@ export function chatRoutes(ctx: RouteContext): Router {
 
   router.patch('/api/chats/:id/title', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
-    const { title } = req.body as { title?: string };
-    if (!title || typeof title !== 'string' || !title.trim()) {
+    const parsed = titleSchema.safeParse(req.body);
+    if (!parsed.success) {
       res.status(400).json({ success: false, error: 'Title is required' });
       return;
     }
     try {
-      ctx.chats.renameChat(chatId, title.trim());
+      ctx.chats.renameChat(chatId, parsed.data.title);
       const chat = ctx.chats.getChat(chatId);
       if (!chat) {
         res.status(404).json({ success: false, error: 'Chat not found' });
@@ -128,6 +128,7 @@ export function chatRoutes(ctx: RouteContext): Router {
     }
   });
 
+  const titleSchema = z.object({ title: z.string().trim().min(1) });
   const pinSchema = z.object({ pinned: z.boolean() });
   const effortSchema = z.object({ effort: z.enum(['low', 'medium', 'high']).nullable() });
 

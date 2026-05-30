@@ -156,6 +156,11 @@ export const GitDeleteWorktreeBody = z.object({
   branchName: z.string().optional(),
 });
 
+// Shared query params
+export const ProjectPathQuery = z.object({
+  projectPath: z.string().min(1),
+});
+
 // --- Validation helper ---
 
 export function validate<T>(

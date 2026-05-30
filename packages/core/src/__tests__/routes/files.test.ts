@@ -605,3 +605,56 @@ describe('GET /api/files/external', () => {
     expect(res.status).toHaveBeenCalledWith(403);
   });
 });
+
+describe('PUT /api/projects/:id/files', () => {
+  it('writes file content to an existing path successfully', async () => {
+    const filePath = join(projectDir, 'hello.txt');
+    await writeFile(filePath, '');
+
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'put', '/api/projects/:id/files');
+    const res = mockRes();
+
+    await handler(
+      { params: { id: 'proj-1' }, query: {}, body: { path: 'hello.txt', content: 'hello world' } },
+      res,
+      vi.fn(),
+    );
+
+    expect(res.json).toHaveBeenCalledWith({ path: 'hello.txt', success: true });
+  });
+
+  it('returns 400 when path is missing', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'put', '/api/projects/:id/files');
+    const res = mockRes();
+
+    await handler({ params: { id: 'proj-1' }, query: {}, body: { content: 'hello' } }, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('returns 400 when content is missing', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'put', '/api/projects/:id/files');
+    const res = mockRes();
+
+    await handler({ params: { id: 'proj-1' }, query: {}, body: { path: 'hello.txt' } }, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('returns 400 when body is empty', async () => {
+    const ctx = createCtx(projectDir);
+    const router = fileRoutes(ctx);
+    const handler = extractHandler(router, 'put', '/api/projects/:id/files');
+    const res = mockRes();
+
+    await handler({ params: { id: 'proj-1' }, query: {}, body: {} }, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+});

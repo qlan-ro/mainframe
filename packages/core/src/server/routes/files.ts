@@ -247,18 +247,20 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
 
 /** PUT /api/projects/:id/files — write file content */
 async function handleWriteFile(ctx: RouteContext, req: Request, res: Response): Promise<void> {
-  const basePath = getEffectivePath(ctx, param(req, 'id'), req.body?.chatId as string | undefined);
+  const parsed = validate(WriteFileBody, req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  const basePath = getEffectivePath(ctx, param(req, 'id'), parsed.data.chatId);
   if (!basePath) {
     res.status(404).json({ error: 'Project not found' });
     return;
   }
 
-  const filePath = req.body?.path as string;
-  const content = req.body?.content as string;
-  if (!filePath || content == null) {
-    res.status(400).json({ error: 'path and content required' });
-    return;
-  }
+  const filePath = parsed.data.path;
+  const content = parsed.data.content;
 
   try {
     const fullPath = resolveAndValidatePath(basePath, filePath);
@@ -274,6 +276,12 @@ async function handleWriteFile(ctx: RouteContext, req: Request, res: Response): 
     res.status(500).json({ error: 'Failed to write file' });
   }
 }
+
+const WriteFileBody = z.object({
+  chatId: z.string().optional(),
+  path: z.string().min(1),
+  content: z.string(),
+});
 
 const ExternalFileQuery = z.object({
   path: z.string().min(1),
