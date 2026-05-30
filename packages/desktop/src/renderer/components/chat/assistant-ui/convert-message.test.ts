@@ -375,15 +375,15 @@ describe('convertMessage', () => {
       expect(parts[0]!.text).toBe('An error occurred');
     });
 
-    it('falls back to default message when the error block message is empty', () => {
-      // An empty error string must not collapse to an empty text part —
-      // MainframeText drops empty text before its error check, which would
-      // hide the error bubble entirely.
-      const msg = display('error', [{ type: 'error', message: '' }]);
-      const result = convertMessage(msg);
-
-      const parts = result.content as unknown as Array<Record<string, unknown>>;
-      expect(parts[0]!.text).toBe('An error occurred');
+    it('falls back to default message when the error block message is empty or whitespace-only', () => {
+      // An empty or whitespace-only error string must not collapse to a blank
+      // text part — MainframeText drops blank-after-trim text before its error
+      // check, which would hide the error bubble entirely.
+      for (const blank of ['', '   ', '\n\t']) {
+        const msg = display('error', [{ type: 'error', message: blank }]);
+        const parts = convertMessage(msg).content as unknown as Array<Record<string, unknown>>;
+        expect(parts[0]!.text).toBe('An error occurred');
+      }
     });
   });
 
