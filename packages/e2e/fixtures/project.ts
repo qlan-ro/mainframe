@@ -3,10 +3,12 @@ import { execSync } from 'child_process';
 import { homedir } from 'os';
 import path from 'path';
 import type { Page } from '@playwright/test';
+import { DAEMON_PORT } from './app.js';
 
 // Use 127.0.0.1 explicitly — localhost resolves to ::1 (IPv6) first on macOS/Node 17+,
-// but the daemon binds to 127.0.0.1 (IPv4) only.
-const DAEMON_BASE = `http://127.0.0.1:${process.env['PORT'] ?? '31415'}`;
+// but the daemon binds to 127.0.0.1 (IPv4) only. Share the harness port (default 31416) so this
+// never points at a different daemon than the one launchApp() started.
+const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 export interface ProjectFixture {
   projectPath: string;
@@ -24,12 +26,10 @@ const DEFAULT_CLAUDE_MD =
 export async function openPickerAndSelectPath(page: Page, projectPath: string): Promise<void> {
   const parentDir = path.dirname(projectPath);
 
-  // Ensure the dropdown is closed before toggling it open (selector click is a toggle)
-  if (await page.locator('[data-testid="project-dropdown"]').isVisible()) {
-    await page.locator('[data-testid="project-selector"]').click();
-  }
-  await page.locator('[data-testid="project-selector"]').click();
-  await page.locator('[data-testid="project-dropdown"]').getByText('Add project').click();
+  // Open the directory picker from the Sessions panel "add project" button.
+  // (The old TitleBar project-selector → project-dropdown → "Add project" flow was
+  // removed; projects now live in the Sessions panel and are added via this button.)
+  await page.locator('[data-testid="chats-add-project"]').click();
 
   await page.locator('[data-testid="dir-picker-modal"]').waitFor({ timeout: 5_000 });
   await page.locator(`[data-testid="dir-entry-${parentDir}"]`).waitFor({ timeout: 5_000 });
@@ -58,12 +58,12 @@ export async function createTestProject(page: Page, options?: { claudeMd?: strin
 
   await openPickerAndSelectPath(page, projectPath);
 
-  // Wait for the selector to reflect the newly registered project
+  // Wait for the Sessions panel to show the newly registered project group
   const projectName = path.basename(projectPath);
   await page
-    .locator('[data-testid="project-selector"]')
-    .getByText(projectName, { exact: true })
-    .waitFor({ timeout: 5_000 });
+    .locator('[data-testid="project-group-name"]', { hasText: projectName })
+    .first()
+    .waitFor({ timeout: 15_000 });
 
   // Fetch the project ID from the API
   const res = await page.request.get(`${DAEMON_BASE}/api/projects`);

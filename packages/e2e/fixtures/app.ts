@@ -16,8 +16,34 @@ const APP_MAIN = path.resolve(__dirname, '../../../packages/desktop/out/main/ind
 // (better-sqlite3 is compiled for system Node.js, not Electron's bundled runtime).
 const DAEMON_ENTRY = path.resolve(__dirname, '../../../packages/core/dist/index.js');
 
-const DAEMON_PORT = '31415';
+// Dedicated e2e port (NOT the dev default 31415) so the harness never collides with — and
+// silently runs against — a developer's running Mainframe. The renderer is built to talk to
+// this port (VITE_DAEMON_HTTP_PORT/WS_PORT); see `pnpm build:app` in this package.
+export const DAEMON_PORT = process.env['MF_E2E_DAEMON_PORT'] ?? '31416';
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
+
+/**
+ * Fail fast if something is already answering on our port. Without this, a foreign daemon
+ * (e.g. a dev Mainframe) would absorb the bind and the suite would run against — and pollute —
+ * real data. See git history: this exact footgun registered junk projects in a real instance.
+ */
+async function assertPortFree(): Promise<void> {
+  let reachable = false;
+  try {
+    const res = await fetch(`${DAEMON_BASE}/api/projects`, { signal: AbortSignal.timeout(1_000) });
+    reachable = res.ok;
+  } catch {
+    reachable = false; /* connection refused / timeout = port is free, which is what we want */
+  }
+  if (reachable) {
+    throw new Error(
+      `A daemon is already answering on port ${DAEMON_PORT}. The e2e harness needs an exclusive ` +
+        `port so it never runs against (and pollutes) a real instance. Free it first:\n` +
+        `  lsof -ti :${DAEMON_PORT} | xargs kill\n` +
+        `or run with a different port: MF_E2E_DAEMON_PORT=<port> (rebuild the app to match).`,
+    );
+  }
+}
 
 export interface AppFixture {
   app: ElectronApplication;
@@ -41,6 +67,9 @@ async function waitForDaemon(maxMs = 10_000): Promise<void> {
 }
 
 export async function launchApp(): Promise<AppFixture> {
+  // Refuse to run if the port is already taken — prevents pollution of a real daemon.
+  await assertPortFree();
+
   // Isolated data dir — never touches ~/.mainframe
   const testDataDir = mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
 
@@ -51,7 +80,10 @@ export async function launchApp(): Promise<AppFixture> {
   // Inspect testDataDir/daemon.log if a test fails and you need daemon logs.
   const daemonLogFd = openSync(path.join(testDataDir, 'daemon.log'), 'w');
   const daemon = spawn('node', [DAEMON_ENTRY], {
-    env: { ...process.env, MAINFRAME_DATA_DIR: testDataDir, PORT: DAEMON_PORT },
+    // The daemon reads DAEMON_PORT (see core/src/config.ts), NOT PORT. The old harness passed
+    // PORT, so the spawned daemon silently fell back to its default 31415 — which is why it only
+    // ever "worked" when 31415 happened to be free (CI) and collided with a dev instance locally.
+    env: { ...process.env, MAINFRAME_DATA_DIR: testDataDir, DAEMON_PORT },
     stdio: ['ignore', daemonLogFd, daemonLogFd],
   });
   closeSync(daemonLogFd); // parent no longer needs the fd; child keeps it open
@@ -75,6 +107,7 @@ export async function launchApp(): Promise<AppFixture> {
       ...process.env,
       NODE_ENV: 'development',
       MAINFRAME_DATA_DIR: testDataDir,
+      DAEMON_PORT, // main-process helpers (idle-reporter) target the test daemon
     },
   });
   const page = await app.firstWindow();

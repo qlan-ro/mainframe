@@ -5,12 +5,12 @@ import type { Page } from '@playwright/test';
  * Uses the chat status dot as the signal.
  */
 export async function waitForAIIdle(page: Page, timeout = 60_000): Promise<void> {
-  // Catch fast responses — the working state may appear and disappear quickly
-  await page
-    .locator('[data-testid="chat-status-working"]')
-    .waitFor({ timeout: 5_000 })
-    .catch(() => {});
-  await page.locator('[data-testid="chat-status-working"]').waitFor({ state: 'hidden', timeout });
+  // The session bar shows "Thinking" inside [data-testid="session-bar-status"] while the
+  // agent works, and clears it when idle. Catch fast responses where the working state
+  // appears and disappears quickly, then wait for it to clear.
+  const thinking = page.locator('[data-testid="session-bar-status"]').getByText('Thinking', { exact: true });
+  await thinking.waitFor({ timeout: 5_000 }).catch(() => {});
+  await thinking.waitFor({ state: 'hidden', timeout });
 }
 
 /**
