@@ -474,6 +474,7 @@ export function ChatsPanel(): React.ReactElement {
             <button
               type="button"
               data-testid="chats-add-project"
+              data-tutorial="step-1"
               onClick={() => setShowDirPicker(true)}
               className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors"
             >
@@ -488,6 +489,7 @@ export function ChatsPanel(): React.ReactElement {
               <button
                 type="button"
                 data-testid="chats-new-session"
+                data-tutorial="step-2"
                 onClick={handleNewSessionClick}
                 disabled={projects.length === 0}
                 className="p-1 rounded hover:bg-mf-hover text-mf-text-secondary hover:text-mf-text-primary transition-colors disabled:opacity-40 disabled:pointer-events-none"

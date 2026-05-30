@@ -3,22 +3,13 @@ import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import type { ProjectFixture } from '../fixtures/project.js';
 
-// SKIPPED: blocked by a product gap, not stale selectors. The tutorial's step-1 ("Add a project")
-// and step-2 ("Start a session") configs have requiresAction:true but NO matching `data-tutorial`
-// target elements exist in the renderer (only step-3/step-4 are wired, on the composer). With no
-// target, TutorialOverlay computes a null rect and renders nothing, so the overlay never appears
-// for steps 1–2 — this whole spec asserts that flow. Un-skip after wiring data-tutorial="step-1"
-// (chats-add-project) and "step-2" (chats-new-session) in the product, then rewrite the
-// project-selector/project-dropdown usage (removed UI) to the chats-add-project flow.
-test.describe.skip('§26 Tutorial overlay', () => {
+test.describe('§26 Tutorial overlay', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
 
   test.beforeAll(async () => {
     fixture = await launchApp();
-
-    // Clear all persisted Zustand stores — Electron localStorage persists across
-    // test runs. Tutorial auto-advances based on projects/chats store state, so
-    // clearing only mf:tutorial isn't enough.
+    // Fresh Chromium profile already means empty localStorage, but clear + reload defensively so
+    // the tutorial starts at step 1 regardless of any default persisted state.
     await fixture.page.evaluate(() => localStorage.clear());
     await fixture.page.reload();
     await fixture.page
@@ -32,119 +23,68 @@ test.describe.skip('§26 Tutorial overlay', () => {
 
   test('step 1 shows on fresh launch with correct content', async () => {
     const { page } = fixture;
-
     const overlay = page.locator('[data-testid="tutorial-overlay"]');
     await expect(overlay).toBeVisible({ timeout: 5_000 });
-
-    // Verify step 1 content
     await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Add a project');
-
-    // No "Next" button on action-required steps
+    // Action-required step → no "Next" button
     await expect(overlay.getByRole('button', { name: /Next/ })).toHaveCount(0);
-
-    // Skip tutorial link is present
-    await expect(page.getByText('Skip tutorial')).toBeVisible();
+    await expect(page.locator('[data-testid="tutorial-skip-btn"]')).toBeVisible();
   });
 
-  test('tutorial hides when directory picker modal opens', async () => {
+  test('tutorial hides when the directory picker opens', async () => {
     const { page } = fixture;
-
-    // Open dropdown and click Add project to open the modal
-    await page.locator('[data-testid="project-selector"]').click();
-    await page.locator('[data-testid="project-dropdown"]').getByText('Add project').click();
+    // The step-1 target (chats-add-project) is interactive through the spotlight.
+    await page.locator('[data-testid="chats-add-project"]').click();
     await page.locator('[data-testid="dir-picker-modal"]').waitFor({ timeout: 5_000 });
-
-    // Tutorial overlay should be hidden while modal is open
     await expect(page.locator('[data-testid="tutorial-overlay"]')).toHaveCount(0);
 
-    // Close the modal
     await page.keyboard.press('Escape');
     await expect(page.locator('[data-testid="dir-picker-modal"]')).toHaveCount(0);
-
-    // Tutorial reappears
     await expect(page.locator('[data-testid="tutorial-overlay"]')).toBeVisible({ timeout: 5_000 });
   });
 
-  test('step 1 → 2: auto-advances when project is added', async () => {
+  test('step 1 → 2: auto-advances when a project is added', async () => {
     const { page } = fixture;
-
-    // Verify we're on step 1
     await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Add a project');
-
-    // Add a project (this triggers auto-advance)
     const project = await createTestProject(page);
-
-    // Should auto-advance to step 2
-    await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Start a session', {
-      timeout: 5_000,
-    });
-
-    // Still no "Next" button on step 2
+    await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Start a session', { timeout: 5_000 });
     await expect(page.locator('[data-testid="tutorial-overlay"]').getByRole('button', { name: /Next/ })).toHaveCount(0);
-
-    // Store project for cleanup
     (fixture as unknown as Record<string, unknown>)._tutorialProject = project;
   });
 
-  test('step 2 → 3: auto-advances when session is created', async () => {
+  test('step 2 → 3: auto-advances when a session is created', async () => {
     const { page } = fixture;
-    const project = (fixture as unknown as Record<string, unknown>)._tutorialProject as ProjectFixture;
-
-    // Verify we're on step 2
     await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Start a session');
-
-    // Click the new session button (step-2 target)
+    // The step-2 target is the new-session button.
     await page.locator('[data-tutorial="step-2"]').click();
-
-    // Wait for composer to appear (session created)
-    await page.getByRole('textbox').waitFor({ timeout: 10_000 });
-
-    // Should auto-advance to step 3
-    await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Chat with your agent', {
-      timeout: 5_000,
-    });
-
-    // Step 3 has a "Next" button (not action-required)
-    await expect(page.locator('[data-testid="tutorial-overlay"]').getByRole('button', { name: /Next/ })).toBeVisible();
-
-    // Clean up
-    await cleanupProject(project);
+    await page.getByRole('textbox').first().waitFor({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Chat with your agent', { timeout: 5_000 });
+    // Step 3 is not action-required → it has a Next button
+    await expect(page.locator('[data-testid="tutorial-next-btn"]')).toBeVisible();
   });
 
-  test('step 3 → 4: advances via Next button', async () => {
+  test('step 3 → 4: advances via the Next button', async () => {
     const { page } = fixture;
-
-    // Verify we're on step 3
     await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Chat with your agent');
-
-    // Click Next
-    await page.locator('[data-testid="tutorial-overlay"]').getByRole('button', { name: /Next/ }).click();
-
-    // Should advance to step 4
-    await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Select a provider', {
-      timeout: 5_000,
-    });
+    await page.locator('[data-testid="tutorial-next-btn"]').click();
+    await expect(page.locator('[data-testid="tutorial-title"]')).toHaveText('Select a provider', { timeout: 5_000 });
   });
 
-  test('skip tutorial dismisses the overlay permanently', async () => {
+  test('skip dismisses the overlay permanently', async () => {
     const { page } = fixture;
-
-    // Tutorial should be visible
+    const project = (fixture as unknown as Record<string, unknown>)._tutorialProject as ProjectFixture | undefined;
     await expect(page.locator('[data-testid="tutorial-overlay"]')).toBeVisible();
-
-    // Click skip
-    await page.getByText('Skip tutorial').click();
-
-    // Overlay should disappear
+    await page.locator('[data-testid="tutorial-skip-btn"]').click();
     await expect(page.locator('[data-testid="tutorial-overlay"]')).toHaveCount(0);
 
-    // Reload the page — tutorial should stay dismissed (persisted in localStorage)
+    // Stays dismissed across a reload (persisted in localStorage)
     await page.reload();
     await page
       .locator('[data-testid="connection-status"]')
       .getByText('Connected', { exact: true })
       .waitFor({ timeout: 15_000 });
-
     await expect(page.locator('[data-testid="tutorial-overlay"]')).toHaveCount(0);
+
+    if (project) await cleanupProject(project);
   });
 });
