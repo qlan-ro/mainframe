@@ -46,7 +46,8 @@ export type PartEntry =
       category?: string;
       parentToolUseId?: string;
     }
-  | { type: 'text'; text: string; parentToolUseId?: string };
+  | { type: 'text'; text: string; parentToolUseId?: string }
+  | { type: 'passthrough'; content: import('@qlan-ro/mainframe-types').DisplayContent; parentToolUseId?: string };
 
 /**
  * Post-processes parts to group consecutive explore tools, suppress hidden tools,

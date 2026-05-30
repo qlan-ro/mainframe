@@ -174,11 +174,6 @@ export function convertUserContent(content: MessageContent[]): {
 
 /** Apply tool grouping (explore groups, task groups, progress accumulation). */
 export function applyToolGrouping(content: DisplayContent[], categories: ToolCategories): DisplayContent[] {
-  // The grouping functions only understand text and tool-call PartEntry values.
-  // Non-groupable content (thinking, image, etc.) is encoded as sentinel text
-  // entries (`\0ng:N`) so they pass through grouping untouched, then decoded back.
-  const nonGroupable: DisplayContent[] = [];
-
   const parts: PartEntry[] = content.map((c) => {
     if (c.type === 'tool_call') {
       return {
@@ -193,13 +188,13 @@ export function applyToolGrouping(content: DisplayContent[], categories: ToolCat
       };
     }
     if (c.type === 'text') return { type: 'text' as const, text: c.text, ...withParentId(c.parentToolUseId) };
-    // Encode non-groupable content as sentinel text so it survives grouping in-place.
-    // Carry parentToolUseId so groupTaskChildren can include sentinels belonging to a subagent.
-    const idx = nonGroupable.length;
-    nonGroupable.push(c);
+    // Non-groupable content (thinking, image, etc.) is carried as a first-class
+    // passthrough entry so it flows through grouping in-place without encoding.
+    // parentToolUseId is preserved so groupTaskChildren can include passthrough
+    // entries belonging to a subagent's children.
     return {
-      type: 'text' as const,
-      text: `\0ng:${idx}`,
+      type: 'passthrough' as const,
+      content: c,
       ...withParentId('parentToolUseId' in c ? c.parentToolUseId : undefined),
     };
   });
@@ -207,28 +202,27 @@ export function applyToolGrouping(content: DisplayContent[], categories: ToolCat
   let grouped = groupToolCallParts(parts, categories);
   grouped = groupTaskChildren(grouped, categories);
 
-  return convertGroupedPartsToDisplay(grouped, content, categories, nonGroupable);
+  return convertGroupedPartsToDisplay(grouped, content, categories);
 }
-
-const NG_SENTINEL_RE = /^\0ng:(\d+)$/;
 
 /** Convert PartEntry[] back to DisplayContent[], handling virtual group entries. */
 function convertGroupedPartsToDisplay(
   parts: PartEntry[],
   originalContent: DisplayContent[],
   categories: ToolCategories,
-  nonGroupable: DisplayContent[] = [],
 ): DisplayContent[] {
   const result: DisplayContent[] = [];
 
   for (const part of parts) {
+    if (part.type === 'passthrough') {
+      // Non-groupable content flows through directly; the original DisplayContent
+      // already carries parentToolUseId from the mapping step.
+      result.push(part.content);
+      continue;
+    }
+
     if (part.type === 'text') {
-      // Decode sentinel markers back to original non-groupable content
-      const match = NG_SENTINEL_RE.exec(part.text);
-      if (match) {
-        const item = nonGroupable[Number(match[1])];
-        if (item) result.push(item);
-      } else if (part.text) {
+      if (part.text) {
         result.push({
           type: 'text',
           text: part.text,
@@ -273,15 +267,12 @@ function convertGroupedPartsToDisplay(
         agentId,
         taskArgs: taskArgs ?? {},
         calls: children.map((child) => {
+          if (child.type === 'passthrough') {
+            // The original DisplayContent already carries parentToolUseId;
+            // pass it through unchanged.
+            return child.content;
+          }
           if (child.type === 'text') {
-            const m = NG_SENTINEL_RE.exec(child.text);
-            if (m) {
-              const original = nonGroupable[Number(m[1])];
-              // The original DisplayContent already carries parentToolUseId from
-              // applyToolGrouping's encoding step; pass it through unchanged.
-              if (original) return original;
-              return { type: 'text' as const, text: '', ...withParentId(child.parentToolUseId) };
-            }
             return { type: 'text' as const, text: child.text, ...withParentId(child.parentToolUseId) };
           }
           return {
