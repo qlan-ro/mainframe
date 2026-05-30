@@ -215,7 +215,12 @@ describe('convertMessage', () => {
     });
 
     it('converts permission_request blocks to PERMISSION_PLACEHOLDER', () => {
-      const msg = display('assistant', [{ type: 'permission_request', request: { tool: 'Bash' } as never }]);
+      const msg = display('assistant', [
+        {
+          type: 'permission_request',
+          request: { requestId: 'req-1', toolName: 'Bash', toolUseId: 'tu-1', input: {}, suggestions: [] },
+        },
+      ]);
       const result = convertMessage(msg);
       expect(result.content).toHaveLength(1);
       expect((result.content as unknown as Array<Record<string, unknown>>)[0]).toBe(PERMISSION_PLACEHOLDER);
@@ -363,7 +368,12 @@ describe('convertMessage', () => {
 
   describe('permission messages', () => {
     it('converts permission type messages to assistant role with PERMISSION_PLACEHOLDER', () => {
-      const msg = display('permission', [{ type: 'permission_request', request: {} as never }]);
+      const msg = display('permission', [
+        {
+          type: 'permission_request',
+          request: { requestId: 'req-1', toolName: 'Bash', toolUseId: 'tu-1', input: {}, suggestions: [] },
+        },
+      ]);
       const result = convertMessage(msg);
 
       expect(result.role).toBe('assistant');

@@ -1,6 +1,7 @@
 import type { SessionMention } from './context.js';
-import type { DetectedPr } from './adapter.js';
+import type { DetectedPr, ControlRequest } from './adapter.js';
 import type { ExecutionMode } from './settings.js';
+import type { LeafContent } from './content.js';
 
 export interface TodoItem {
   content: string;
@@ -84,9 +85,7 @@ export interface DiffHunk {
  * variants carrying the field are tolerated and rendered at root as usual.
  */
 export type MessageContent =
-  | { type: 'text'; text: string; parentToolUseId?: string }
-  | { type: 'image'; mediaType: string; data: string; parentToolUseId?: string }
-  | { type: 'thinking'; thinking: string; parentToolUseId?: string }
+  | LeafContent
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown>; parentToolUseId?: string }
   | {
       type: 'tool_result';
@@ -98,9 +97,8 @@ export type MessageContent =
       modifiedFile?: string;
       parentToolUseId?: string;
     }
-  | { type: 'permission_request'; request: import('./adapter.js').ControlRequest; parentToolUseId?: string }
+  | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }
   | { type: 'error'; message: string; parentToolUseId?: string }
-  | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string }
   | { type: 'compaction'; parentToolUseId?: string };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
