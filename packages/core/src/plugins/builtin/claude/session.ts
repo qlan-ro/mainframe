@@ -18,7 +18,8 @@ import type {
   SkillFileEntry,
   ExecutionMode,
 } from '@qlan-ro/mainframe-types';
-import { handleStdout, handleStderr, type DetectedPrCore } from './events.js';
+import { handleStdout, handleStderr } from './events.js';
+import type { DetectedPrCore } from './pr-detection.js';
 import { ClaudeTaskEvents } from './task-events.js';
 import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
 import { MAINFRAME_SYSTEM_PROMPT_APPEND } from './constants.js';

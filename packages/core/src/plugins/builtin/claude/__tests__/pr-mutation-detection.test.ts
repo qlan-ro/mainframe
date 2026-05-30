@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
-import { handleStdout, isPrMutationCommand, parsePrIdentifierFromArgs } from '../events.js';
+import { handleStdout } from '../events.js';
+import { isPrMutationCommand, parsePrIdentifierFromArgs } from '../pr-detection.js';
 import type { ClaudeSession } from '../session.js';
 
 function createMockSink(): SessionSink {
