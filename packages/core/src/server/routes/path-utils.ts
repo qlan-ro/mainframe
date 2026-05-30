@@ -17,6 +17,7 @@ export function resolveAndValidatePath(basePath: string, requestedPath: string):
     const fullPath = realpathSync(path.resolve(basePath, requestedPath));
     return isWithinBase(realBase, fullPath) ? fullPath : null;
   } catch {
+    /* expected: path does not exist or resolves outside the allowed base */
     return null;
   }
 }
@@ -31,6 +32,7 @@ export function resolveClaudeConfigPath(basePath: string, requestedPath: string)
     const fullPath = realpathSync(path.resolve(basePath, requestedPath));
     return isWithinBase(claudeDir, fullPath) ? fullPath : null;
   } catch {
+    /* expected: path does not exist or resolves outside the allowed base */
     return null;
   }
 }

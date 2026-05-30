@@ -182,6 +182,7 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
         try {
           fileStat = await stat(absFile);
         } catch {
+          /* expected: file vanished between listing and stat */
           continue;
         }
 

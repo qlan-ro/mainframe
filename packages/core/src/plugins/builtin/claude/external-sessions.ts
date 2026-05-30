@@ -55,6 +55,7 @@ async function discoverProjectDirs(projectPath: string): Promise<string[]> {
   try {
     entries = await readdir(root);
   } catch {
+    /* expected: no Claude session dir for this project */
     return [];
   }
   return entries
@@ -100,6 +101,7 @@ async function listFromIndex(
   try {
     raw = await readFile(indexPath, 'utf-8');
   } catch {
+    /* expected: no Claude session file for this project */
     return null;
   }
 
@@ -169,6 +171,7 @@ async function listFromJsonl(
   try {
     entries = await readdir(projectDir);
   } catch {
+    /* expected: no Claude session dir/file for this project */
     return [];
   }
 

@@ -18,7 +18,10 @@ import * as skills from './skills.js';
 import { listExternalSessions } from './external-sessions.js';
 import { ClaudePlanModeHandler } from './plan-mode-handler.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
+import { createChildLogger } from '../../../logger.js';
 import manifest from './manifest.json' with { type: 'json' };
+
+const log = createChildLogger('claude:adapter');
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const EXTENDED_CONTEXT_WINDOW = 1_000_000;
@@ -212,7 +215,7 @@ export class ClaudeAdapter implements Adapter {
 
   killAll(): void {
     for (const session of this.sessions) {
-      session.kill().catch(() => {});
+      session.kill().catch((err) => log.warn({ err }, 'failed to kill claude session during killAll'));
     }
     this.sessions.clear();
   }

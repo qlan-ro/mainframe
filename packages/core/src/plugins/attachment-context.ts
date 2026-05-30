@@ -50,6 +50,7 @@ export function createPluginAttachmentContext(baseDir: string): PluginAttachment
         const buf = await readFile(join(dir, dataFile));
         return { data: buf.toString('base64'), meta };
       } catch {
+        /* expected: attachment dir or file does not exist */
         return null;
       }
     },
@@ -69,6 +70,7 @@ export function createPluginAttachmentContext(baseDir: string): PluginAttachment
             try {
               return JSON.parse(await readFile(join(dir, f), 'utf-8')) as PluginAttachmentMeta;
             } catch {
+              /* expected: attachment metadata file missing or malformed */
               return null;
             }
           }),

@@ -289,7 +289,7 @@ export class LspClientManager {
           textDocument: { uri, languageId: language, version: 1, text: data.content },
         });
       })
-      .catch(() => {});
+      .catch((err) => console.warn('[lsp] preloadDocument didOpen failed', err));
   }
 
   disposeClient(projectId: string, language: string): void {

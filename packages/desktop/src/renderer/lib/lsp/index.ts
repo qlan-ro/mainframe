@@ -13,5 +13,5 @@ win.__lspClientManager = lspClientManager;
 // Auto-connect LSP clients when files are opened (once, not on every HMR).
 if (!win.__lspAutoConnect) {
   win.__lspAutoConnect = true;
-  import('./auto-connect.js').catch(() => {});
+  import('./auto-connect.js').catch((err) => console.warn('[lsp] auto-connect import failed', err));
 }

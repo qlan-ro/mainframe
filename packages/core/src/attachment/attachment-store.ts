@@ -1,6 +1,9 @@
 import { mkdir, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { nanoid } from 'nanoid';
+import { createChildLogger } from '../logger.js';
+
+const logger = createChildLogger('attachment-store');
 
 export interface StoredAttachment {
   name: string;
@@ -53,7 +56,8 @@ export class AttachmentStore {
             const safeName = this.sanitizeFileName(attachment.name);
             materializedPath = join(filesDir, `${id}-${safeName}`);
             await writeFile(materializedPath, Buffer.from(attachment.data, 'base64'));
-          } catch {
+          } catch (err) {
+            logger.warn({ err, chatId, name: attachment.name }, 'failed to materialize attachment file');
             materializedPath = undefined;
           }
         }
@@ -84,6 +88,7 @@ export class AttachmentStore {
       const content = await readFile(filePath, 'utf-8');
       return JSON.parse(content);
     } catch {
+      /* expected: attachment not found */
       return null;
     }
   }
@@ -94,6 +99,7 @@ export class AttachmentStore {
       dir = this.chatDir(chatId);
       await stat(dir);
     } catch {
+      /* expected: no attachments for this chat */
       return [];
     }
     try {
@@ -115,12 +121,14 @@ export class AttachmentStore {
                 materializedPath: parsed.materializedPath,
               };
             } catch {
+              /* expected: attachment metadata missing or malformed */
               return null;
             }
           }),
       );
       return results.filter((x): x is StoredAttachmentMeta => x !== null);
     } catch {
+      /* expected: attachment dir not readable */
       return [];
     }
   }

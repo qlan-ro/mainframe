@@ -47,6 +47,7 @@ export async function getWorktrees(projectPath: string): Promise<WorktreeEntry[]
     });
     return parseWorktreeList(stdout);
   } catch {
+    /* best-effort: not a git repo / no worktrees */
     return [];
   }
 }
@@ -61,6 +62,7 @@ export function isGitRepo(projectPath: string): boolean {
     execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: projectPath, encoding: 'utf-8', stdio: 'pipe' });
     return true;
   } catch {
+    /* best-effort: not a git repo / no worktrees */
     return false;
   }
 }

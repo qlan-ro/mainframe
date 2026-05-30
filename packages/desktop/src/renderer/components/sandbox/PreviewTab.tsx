@@ -386,7 +386,10 @@ export function PreviewTab(): React.ReactElement {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wv = webviewRef.current as any;
     if (inspecting) {
-      if (wv) wv.executeJavaScript(INSPECT_CANCEL_SCRIPT).catch(() => {});
+      if (wv)
+        wv.executeJavaScript(INSPECT_CANCEL_SCRIPT).catch((err: unknown) =>
+          console.warn('[preview] inspect-cancel script failed', err),
+        );
       setInspecting(false);
       return;
     }
