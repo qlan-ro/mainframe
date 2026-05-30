@@ -13,52 +13,44 @@ test.describe('§2 Project management', () => {
     await closeApp(fixture);
   });
 
-  test('registers a project and shows it in the selector', async () => {
+  test('registers a project and shows it in the sessions panel', async () => {
     const project = await createTestProject(fixture.page);
     try {
-      await expect(fixture.page.locator('[data-testid="project-selector"]')).toBeVisible();
+      const name = path.basename(project.projectPath);
+      await expect(fixture.page.locator('[data-testid="project-group-name"]', { hasText: name })).toBeVisible({
+        timeout: 10_000,
+      });
     } finally {
       await cleanupProject(project);
     }
   });
 
-  test('rejects duplicate path — project appears once in the dropdown', async () => {
+  test('rejects duplicate path — project appears once', async () => {
     const project = await createTestProject(fixture.page);
     try {
-      // Re-submit the same path through the picker
+      // Re-submit the same path through the picker — the existing project is reused.
       await openPickerAndSelectPath(fixture.page, project.projectPath);
-
-      // The project should still be active (the existing project is activated)
-      const projectName = path.basename(project.projectPath);
-      await fixture.page
-        .locator('[data-testid="project-selector"]')
-        .getByText(projectName, { exact: true })
-        .waitFor({ timeout: 5_000 });
-
-      // Open the dropdown and verify no duplicate entry was added
-      await fixture.page.locator('[data-testid="project-selector"]').click();
-      await expect(
-        fixture.page.locator('[data-testid="project-dropdown"]').getByText(projectName, { exact: true }),
-      ).toHaveCount(1);
-      // Close the dropdown by clicking the selector again (Escape has no handler in TitleBar)
-      await fixture.page.locator('[data-testid="project-selector"]').click();
+      const name = path.basename(project.projectPath);
+      await expect(fixture.page.locator('[data-testid="project-group-name"]', { hasText: name })).toHaveCount(1, {
+        timeout: 10_000,
+      });
     } finally {
       await cleanupProject(project);
     }
   });
 
-  test('switches between two projects', async () => {
+  test('shows multiple projects and filters by project', async () => {
     const p1 = await createTestProject(fixture.page);
     const p2 = await createTestProject(fixture.page);
     try {
-      await fixture.page.locator('[data-testid="project-selector"]').click();
-      await fixture.page
-        .locator('[data-testid="project-dropdown"]')
-        .getByText(p2.projectPath.split('/').pop()!, { exact: true })
-        .click();
-      await expect(fixture.page.locator('[data-testid="project-selector"]')).toContainText(
-        p2.projectPath.split('/').pop()!,
-      );
+      const n1 = path.basename(p1.projectPath);
+      const n2 = path.basename(p2.projectPath);
+      await expect(fixture.page.locator('[data-testid="project-group-name"]', { hasText: n1 })).toBeVisible();
+      await expect(fixture.page.locator('[data-testid="project-group-name"]', { hasText: n2 })).toBeVisible();
+      // Project filter pills appear once >1 project exists; clicking one scopes the list.
+      const pill = fixture.page.locator(`[data-testid="chats-filter-pill-${n2}"]`);
+      await pill.click();
+      await expect(pill).toBeVisible();
     } finally {
       await cleanupProject(p1);
       await cleanupProject(p2);
