@@ -17,6 +17,22 @@ function capabilityGuard(capability: string): never {
   throw new Error(`Plugin capability '${capability}' is required but not declared in manifest`);
 }
 
+/**
+ * Return the real subsystem when its capability is declared, otherwise a guard
+ * Proxy whose every method throws `capabilityGuard(capLabel)`. Centralizes the
+ * gating boilerplate that each gated subsystem (db, attachments, events, ui)
+ * would otherwise repeat verbatim.
+ */
+function gated<T extends object>(enabled: boolean, capLabel: string, build: () => T): T {
+  if (enabled) return build();
+  return new Proxy({} as T, {
+    get:
+      () =>
+      (..._args: unknown[]) =>
+        capabilityGuard(capLabel),
+  });
+}
+
 export interface PluginContextDeps {
   manifest: PluginManifest;
   pluginDir: string;
@@ -33,44 +49,21 @@ export function buildPluginContext(deps: PluginContextDeps): PluginContext {
   const { manifest, pluginDir } = deps;
   const has = (cap: string) => manifest.capabilities.includes(cap as never);
 
-  const dbContext = has('storage')
-    ? createPluginDatabaseContext(`${pluginDir}/data.db`)
-    : new Proxy({} as ReturnType<typeof createPluginDatabaseContext>, {
-        get:
-          () =>
-          (..._args: unknown[]) =>
-            capabilityGuard('storage'),
-      });
+  const dbContext = gated(has('storage'), 'storage', () => createPluginDatabaseContext(`${pluginDir}/data.db`));
 
-  const attachmentContext = has('storage')
-    ? createPluginAttachmentContext(`${pluginDir}/attachments`)
-    : new Proxy({} as ReturnType<typeof createPluginAttachmentContext>, {
-        get:
-          () =>
-          (..._args: unknown[]) =>
-            capabilityGuard('storage'),
-      });
+  const attachmentContext = gated(has('storage'), 'storage', () =>
+    createPluginAttachmentContext(`${pluginDir}/attachments`),
+  );
 
-  const eventBus = has('daemon:public-events')
-    ? createPluginEventBus(manifest.id, deps.daemonBus)
-    : new Proxy({} as ReturnType<typeof createPluginEventBus>, {
-        get:
-          () =>
-          (..._args: unknown[]) =>
-            capabilityGuard('daemon:public-events'),
-      });
+  const eventBus = gated(has('daemon:public-events'), 'daemon:public-events', () =>
+    createPluginEventBus(manifest.id, deps.daemonBus),
+  );
 
-  const uiContext =
-    has('ui:panels') || has('ui:notifications')
-      ? createPluginUIContext(manifest.id, deps.emitEvent, {
-          isPluginNotifyEnabled: () => readNotificationConfig(deps.db).other.plugin,
-        })
-      : new Proxy({} as ReturnType<typeof createPluginUIContext>, {
-          get:
-            () =>
-            (..._args: unknown[]) =>
-              capabilityGuard('ui:panels or ui:notifications'),
-        });
+  const uiContext = gated(has('ui:panels') || has('ui:notifications'), 'ui:panels or ui:notifications', () =>
+    createPluginUIContext(manifest.id, deps.emitEvent, {
+      isPluginNotifyEnabled: () => readNotificationConfig(deps.db).other.plugin,
+    }),
+  );
 
   const config = createPluginConfig(
     manifest.id,
