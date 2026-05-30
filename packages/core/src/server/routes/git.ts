@@ -10,6 +10,7 @@ import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
 import { gitWriteRoutes } from './git-write.js';
 import { gitChatRoutes } from './git-chat.js';
+import { isNotGitRepo, parseDiffNameStatus, parseStatusLines } from '../../git/git-parse.js';
 
 const GitDiffQuery = z.object({
   chatId: z.string().optional(),
@@ -22,52 +23,6 @@ const GitDiffQuery = z.object({
 });
 
 const logger = createChildLogger('routes:git');
-
-function isNotGitRepo(err: unknown): boolean {
-  return (
-    typeof (err as { message?: unknown }).message === 'string' &&
-    (err as { message: string }).message.includes('not a git repository')
-  );
-}
-
-function parseStatusLines(output: string): { status: string; path: string; oldPath?: string }[] {
-  return output
-    .split('\n')
-    .filter(Boolean)
-    .map((line: string) => {
-      const code = line.slice(0, 2).trim();
-      const rest = line.slice(3);
-      if (code.startsWith('R') || code.startsWith('C')) {
-        const arrow = rest.indexOf(' -> ');
-        if (arrow !== -1) return { status: code, path: rest.slice(arrow + 4), oldPath: rest.slice(0, arrow) };
-      }
-      return { status: code, path: rest };
-    })
-    .filter((f) => !f.path.endsWith('/'));
-}
-
-function parseDiffNameStatus(output: string): { status: string; path: string; oldPath?: string }[] {
-  return output
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split('\t');
-      const status = parts[0] ?? '';
-      if (status.startsWith('R') || status.startsWith('C')) {
-        return { status: status[0]!, path: parts[2] ?? '', oldPath: parts[1] };
-      }
-      return { status, path: parts[1] ?? '' };
-    })
-    .filter((f) => f.path.length > 0);
-}
-
-async function detectMergeBase(svc: GitService): Promise<{ baseBranch: string; mergeBase: string } | null> {
-  for (const base of ['main', 'master']) {
-    const sha = await svc.mergeBase(base, 'HEAD');
-    if (sha) return { baseBranch: base, mergeBase: sha };
-  }
-  return null;
-}
 
 /** GET /api/projects/:id/git/status?chatId=X */
 async function handleGitStatus(ctx: RouteContext, req: Request, res: Response): Promise<void> {
@@ -121,7 +76,7 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
   try {
     const svc = GitService.forProject(basePath);
     const branch = await svc.currentBranch();
-    const baseInfo = await detectMergeBase(svc);
+    const baseInfo = await svc.detectBaseBranch();
 
     if (!baseInfo || branch === baseInfo.baseBranch) {
       res.json({ branch, baseBranch: null, mergeBase: null, files: [] });

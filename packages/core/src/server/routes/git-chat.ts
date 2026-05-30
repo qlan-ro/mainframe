@@ -7,51 +7,9 @@ import { resolveAndValidatePath } from './path-utils.js';
 import { asyncHandler } from './async-handler.js';
 import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
+import { isNotGitRepo, parseDiffNameStatus, parseStatusBuckets } from '../../git/git-parse.js';
 
 const logger = createChildLogger('routes:git-chat');
-
-function isNotGitRepo(err: unknown): boolean {
-  return (
-    typeof (err as { message?: unknown }).message === 'string' &&
-    (err as { message: string }).message.includes('not a git repository')
-  );
-}
-
-function parseDiffNameStatus(output: string): { status: string; path: string; oldPath?: string }[] {
-  return output
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split('\t');
-      const status = parts[0] ?? '';
-      if (status.startsWith('R') || status.startsWith('C')) {
-        return { status: status[0]!, path: parts[2] ?? '', oldPath: parts[1] };
-      }
-      return { status, path: parts[1] ?? '' };
-    })
-    .filter((f) => f.path.length > 0);
-}
-
-function parsePortcelainStatus(output: string): { staged: string[]; unstaged: string[]; untracked: string[] } {
-  const staged: string[] = [];
-  const unstaged: string[] = [];
-  const untracked: string[] = [];
-
-  for (const line of output.split('\n').filter(Boolean)) {
-    const indexStatus = line[0] ?? ' ';
-    const workingStatus = line[1] ?? ' ';
-    const filename = line.slice(3);
-
-    if (indexStatus === '?' && workingStatus === '?') {
-      untracked.push(filename);
-      continue;
-    }
-    if (indexStatus !== ' ') staged.push(filename);
-    if (workingStatus !== ' ') unstaged.push(filename);
-  }
-
-  return { staged, unstaged, untracked };
-}
 
 const StatusBody = z.object({ chatId: z.string() });
 const PushBody = z.object({ chatId: z.string() });
@@ -129,20 +87,12 @@ async function handleDiffSinceMain(ctx: RouteContext, req: Request, res: Respons
 
   try {
     const svc = GitService.forProject(basePath);
-    let baseBranch: string | null = null;
-    let mergeBase: string | null = null;
-    for (const base of ['main', 'master']) {
-      const sha = await svc.mergeBase(base, 'HEAD');
-      if (sha) {
-        baseBranch = base;
-        mergeBase = sha;
-        break;
-      }
-    }
-    if (!mergeBase) {
+    const baseInfo = await svc.detectBaseBranch();
+    if (!baseInfo) {
       res.json({ diffs: {}, baseBranch: null, mergeBase: null });
       return;
     }
+    const { baseBranch, mergeBase } = baseInfo;
 
     const nameStatusArgs = ['--name-status', mergeBase, ...(files ? ['--', ...files] : [])];
     const nameStatusOutput = await svc.diff(nameStatusArgs);
@@ -187,7 +137,7 @@ export function gitChatRoutes(ctx: RouteContext): Router {
   router.post(
     '/api/git/status',
     chatRoute(ctx, StatusBody, 'status', async (svc) => {
-      return parsePortcelainStatus(await svc.statusRaw());
+      return parseStatusBuckets(await svc.statusRaw());
     }),
   );
 

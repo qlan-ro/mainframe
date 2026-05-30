@@ -256,4 +256,60 @@ describe('GitService', () => {
       expect(result).toEqual({ aborted: false });
     });
   });
+
+  describe('detectBaseBranch()', () => {
+    beforeEach(() => {
+      // Reset implementation (not just calls) so prior tests' mockResolvedValue don't bleed in.
+      mockGit.raw.mockReset();
+    });
+
+    it('returns main branch when main has a merge-base with HEAD', async () => {
+      mockGit.raw.mockResolvedValueOnce('abc123\n'); // merge-base main HEAD succeeds
+
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.detectBaseBranch();
+
+      expect(result).toEqual({ baseBranch: 'main', mergeBase: 'abc123' });
+      expect(mockGit.raw).toHaveBeenCalledTimes(1);
+      expect(mockGit.raw).toHaveBeenCalledWith(['merge-base', 'main', 'HEAD']);
+    });
+
+    it('falls back to master when main has no merge-base', async () => {
+      mockGit.raw
+        .mockRejectedValueOnce(new Error('no common ancestor')) // main fails
+        .mockResolvedValueOnce('def456\n'); // master succeeds
+
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.detectBaseBranch();
+
+      expect(result).toEqual({ baseBranch: 'master', mergeBase: 'def456' });
+      expect(mockGit.raw).toHaveBeenCalledTimes(2);
+      expect(mockGit.raw).toHaveBeenNthCalledWith(1, ['merge-base', 'main', 'HEAD']);
+      expect(mockGit.raw).toHaveBeenNthCalledWith(2, ['merge-base', 'master', 'HEAD']);
+    });
+
+    it('returns null when neither main nor master has a merge-base', async () => {
+      mockGit.raw
+        .mockRejectedValueOnce(new Error('no common ancestor')) // main fails
+        .mockRejectedValueOnce(new Error('no common ancestor')); // master fails
+
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.detectBaseBranch();
+
+      expect(result).toBeNull();
+    });
+
+    it('prefers main over master (main wins when both would resolve)', async () => {
+      // Both would succeed, but main is checked first and short-circuits
+      mockGit.raw
+        .mockResolvedValueOnce('sha999\n') // main succeeds
+        .mockResolvedValueOnce('sha111\n'); // master (never reached)
+
+      const svc = GitService.forProject('/fake/path');
+      const result = await svc.detectBaseBranch();
+
+      expect(result).toEqual({ baseBranch: 'main', mergeBase: 'sha999' });
+      expect(mockGit.raw).toHaveBeenCalledTimes(1);
+    });
+  });
 });

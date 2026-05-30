@@ -176,6 +176,18 @@ export class GitService {
     }
   }
 
+  /**
+   * Tries 'main' then 'master' to find a common merge-base with HEAD.
+   * Returns the first match or null when neither resolves.
+   */
+  async detectBaseBranch(): Promise<{ baseBranch: string; mergeBase: string } | null> {
+    for (const base of ['main', 'master']) {
+      const sha = await this.mergeBase(base, 'HEAD');
+      if (sha) return { baseBranch: base, mergeBase: sha };
+    }
+    return null;
+  }
+
   async checkout(branch: string): Promise<void> {
     return this.withLock(async () => {
       // If it looks like a remote ref (e.g. "origin/feat/foo"), strip the

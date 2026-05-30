@@ -121,7 +121,7 @@ export class ChatConfigManager {
       await this.deps.stopChat(chatId);
 
       const worktreeDir = this.deps.db.settings.get('general', 'worktreeDir') ?? GENERAL_DEFAULTS.worktreeDir;
-      const info = createWorktree(project.path, chatId, worktreeDir, baseBranch, branchName);
+      const info = await createWorktree(project.path, chatId, worktreeDir, baseBranch, branchName);
 
       if (active.chat.adapterId === 'claude') {
         const oldProjectDir = getClaudeProjectDir(project.path);
@@ -144,7 +144,7 @@ export class ChatConfigManager {
     }
 
     const worktreeDir = this.deps.db.settings.get('general', 'worktreeDir') ?? GENERAL_DEFAULTS.worktreeDir;
-    const info = createWorktree(project.path, chatId, worktreeDir, baseBranch, branchName);
+    const info = await createWorktree(project.path, chatId, worktreeDir, baseBranch, branchName);
     active.chat.worktreePath = info.worktreePath;
     active.chat.branchName = info.branchName;
     this.deps.db.chats.update(chatId, { worktreePath: info.worktreePath, branchName: info.branchName });

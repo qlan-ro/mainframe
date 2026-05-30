@@ -5,6 +5,7 @@ import type { RouteContext } from '../../server/routes/types.js';
 const mockSvc = {
   diff: vi.fn(),
   mergeBase: vi.fn(),
+  detectBaseBranch: vi.fn(),
   currentBranch: vi.fn(),
   statusRaw: vi.fn(),
   show: vi.fn(),
@@ -111,7 +112,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
   it('returns { main, worktree } shape for each changed file', async () => {
     const { readFile } = await import('node:fs/promises');
     const nameStatusOutput = 'M\tsrc/foo.ts';
-    mockSvc.mergeBase.mockResolvedValueOnce('abc123');
+    mockSvc.detectBaseBranch.mockResolvedValueOnce({ baseBranch: 'main', mergeBase: 'abc123' });
     mockSvc.diff.mockResolvedValueOnce(nameStatusOutput);
     mockSvc.show.mockResolvedValueOnce('original content');
     (readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce('modified content');
@@ -137,7 +138,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
 
   it('returns empty main for added files', async () => {
     const { readFile } = await import('node:fs/promises');
-    mockSvc.mergeBase.mockResolvedValueOnce('abc123');
+    mockSvc.detectBaseBranch.mockResolvedValueOnce({ baseBranch: 'main', mergeBase: 'abc123' });
     mockSvc.diff.mockResolvedValueOnce('A\tsrc/new.ts');
     (readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce('new file content');
 
@@ -158,7 +159,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
   });
 
   it('returns empty worktree for deleted files', async () => {
-    mockSvc.mergeBase.mockResolvedValueOnce('abc123');
+    mockSvc.detectBaseBranch.mockResolvedValueOnce({ baseBranch: 'main', mergeBase: 'abc123' });
     mockSvc.diff.mockResolvedValueOnce('D\tsrc/gone.ts');
     mockSvc.show.mockResolvedValueOnce('old content');
 
@@ -178,7 +179,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
   });
 
   it('uses worktree path when chat has a worktree', async () => {
-    mockSvc.mergeBase.mockResolvedValueOnce('abc123');
+    mockSvc.detectBaseBranch.mockResolvedValueOnce({ baseBranch: 'main', mergeBase: 'abc123' });
     mockSvc.diff.mockResolvedValueOnce('');
 
     const ctx = createCtx('/some/project', '/some/project/.worktrees/feat-x');
@@ -195,7 +196,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
   });
 
   it('filters to specific files when files array is provided', async () => {
-    mockSvc.mergeBase.mockResolvedValueOnce('abc123');
+    mockSvc.detectBaseBranch.mockResolvedValueOnce({ baseBranch: 'main', mergeBase: 'abc123' });
     mockSvc.diff.mockResolvedValueOnce('');
 
     const ctx = createCtx('/some/project');
@@ -225,7 +226,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
   });
 
   it('returns empty diffs when no merge base is found', async () => {
-    mockSvc.mergeBase.mockResolvedValue(null);
+    mockSvc.detectBaseBranch.mockResolvedValue(null);
 
     const ctx = createCtx('/some/project');
     const router = gitRoutes(ctx);
@@ -239,7 +240,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
   });
 
   it('returns 400 when git diff fails', async () => {
-    mockSvc.mergeBase.mockResolvedValueOnce('abc123');
+    mockSvc.detectBaseBranch.mockResolvedValueOnce({ baseBranch: 'main', mergeBase: 'abc123' });
     mockSvc.diff.mockRejectedValueOnce(new Error('not a git repository'));
 
     const ctx = createCtx('/some/project');
