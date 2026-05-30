@@ -692,6 +692,7 @@ export function PreviewTab(): React.ReactElement {
                       anchorRect={c.rect}
                       containerRef={webviewWrapperRef}
                       index={idx + 1}
+                      captureId={c.id}
                       value={c.annotation}
                       autoFocus={autoFocusId === c.id}
                       onChange={(next) => updateAnnotation(c.id, next)}

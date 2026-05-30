@@ -12,16 +12,17 @@ interface ToggleRowProps {
   description?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  testId?: string;
 }
 
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps): React.ReactElement {
+function ToggleRow({ label, description, checked, onChange, testId }: ToggleRowProps): React.ReactElement {
   return (
     <div className="flex items-center justify-between gap-4 py-2">
       <div className="flex-1 min-w-0">
         <p className="text-mf-small text-mf-text-primary">{label}</p>
         {description && <p className="text-mf-status text-mf-text-tertiary mt-0.5">{description}</p>}
       </div>
-      <Toggle checked={checked} onChange={onChange} />
+      <Toggle checked={checked} onChange={onChange} data-testid={testId} />
     </div>
   );
 }
@@ -104,12 +105,14 @@ export function NotificationsSection(): React.ReactElement {
           description="Notify when the assistant finishes a turn."
           checked={notifications.chat.taskComplete}
           onChange={patchChat('taskComplete')}
+          testId="settings-notify-task-complete-toggle"
         />
         <ToggleRow
           label="Session Error"
           description="Notify when a run fails or errors out."
           checked={notifications.chat.sessionError}
           onChange={patchChat('sessionError')}
+          testId="settings-notify-session-error-toggle"
         />
       </Group>
 
@@ -119,18 +122,21 @@ export function NotificationsSection(): React.ReactElement {
           description="Notify when the CLI asks to run a tool."
           checked={notifications.permission.toolRequest}
           onChange={patchPermission('toolRequest')}
+          testId="settings-notify-tool-request-toggle"
         />
         <ToggleRow
           label="User Question"
           description="Notify when the agent asks an interactive question."
           checked={notifications.permission.userQuestion}
           onChange={patchPermission('userQuestion')}
+          testId="settings-notify-user-question-toggle"
         />
         <ToggleRow
           label="Plan Approval"
           description="Notify when the agent presents a plan for approval."
           checked={notifications.permission.planApproval}
           onChange={patchPermission('planApproval')}
+          testId="settings-notify-plan-approval-toggle"
         />
       </Group>
 
@@ -140,6 +146,7 @@ export function NotificationsSection(): React.ReactElement {
           description="Notify for events from plugins (todos, PR detection, etc.)."
           checked={notifications.other.plugin}
           onChange={patchOther('plugin')}
+          testId="settings-notify-plugin-toggle"
         />
       </Group>
     </div>
