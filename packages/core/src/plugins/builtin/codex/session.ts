@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import type {
   AdapterProcess,
   AdapterSession,
+  ExecutionMode,
   SessionSpawnOptions,
   SessionOptions,
   SessionSink,
@@ -72,7 +73,7 @@ export class CodexSession implements AdapterSession {
   readonly state: CodexSessionState = { threadId: null, currentTurnId: null, currentTurnPlan: null };
 
   private pendingModel: string | undefined;
-  private pendingPermissionMode: string = 'default';
+  private pendingPermissionMode: ExecutionMode = 'default';
   private pendingPlanMode: boolean = false;
   private pid = 0;
   private status: 'starting' | 'ready' | 'running' | 'stopped' | 'error' = 'starting';
@@ -279,7 +280,7 @@ export class CodexSession implements AdapterSession {
     this.pendingModel = model;
   }
 
-  async setPermissionMode(mode: string): Promise<void> {
+  async setPermissionMode(mode: ExecutionMode): Promise<void> {
     this.pendingPermissionMode = mode;
   }
 
@@ -401,7 +402,7 @@ export class CodexSession implements AdapterSession {
     return { ok: false, error: 'unsupported' };
   }
 
-  private mapPermissionMode(mode: string): { approvalPolicy: ApprovalPolicy; sandbox: SandboxMode } {
+  private mapPermissionMode(mode: ExecutionMode): { approvalPolicy: ApprovalPolicy; sandbox: SandboxMode } {
     if (mode === 'yolo') {
       return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
     }

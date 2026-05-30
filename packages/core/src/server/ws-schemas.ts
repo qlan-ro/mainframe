@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { EXECUTION_MODES } from '@qlan-ro/mainframe-types';
 
-const permissionModeSchema = z.enum(['default', 'acceptEdits', 'yolo']).optional();
+const permissionModeSchema = z.enum(EXECUTION_MODES).optional();
 
 const ChatCreate = z
   .object({
@@ -75,7 +76,7 @@ const PermissionRespond = z.object({
     updatedInput: z.record(z.string(), z.unknown()).optional(),
     updatedPermissions: z.array(z.unknown()).optional(),
     message: z.string().optional(),
-    executionMode: z.enum(['default', 'acceptEdits', 'yolo']).optional(),
+    executionMode: z.enum(EXECUTION_MODES).optional(),
     clearContext: z.boolean().optional(),
   }),
 });

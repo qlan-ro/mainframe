@@ -2,6 +2,7 @@ import type { Chat, ChatMessage, QueuedMessageRef } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
 import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
+import type { ExecutionMode } from './settings.js';
 
 export type DaemonEvent =
   | { type: 'connection.ready'; clientId: string }
@@ -86,7 +87,7 @@ export type ClientEvent =
       projectId: string;
       adapterId: string;
       model?: string;
-      permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+      permissionMode?: ExecutionMode;
       worktreePath?: string;
       branchName?: string;
     }
@@ -107,7 +108,7 @@ export type ClientEvent =
       chatId: string;
       adapterId?: string;
       model?: string;
-      permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+      permissionMode?: ExecutionMode;
       planMode?: boolean;
     }
   | { type: 'chat.interrupt'; chatId: string }

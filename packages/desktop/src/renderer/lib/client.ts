@@ -1,4 +1,4 @@
-import type { ClientEvent, DaemonEvent, ControlResponse } from '@qlan-ro/mainframe-types';
+import type { ClientEvent, DaemonEvent, ControlResponse, ExecutionMode } from '@qlan-ro/mainframe-types';
 import { createLogger } from './logger';
 
 const env = (import.meta as { env?: Record<string, string> }).env ?? {};
@@ -147,7 +147,7 @@ export class DaemonClient {
     projectId: string,
     adapterId: string,
     model?: string,
-    permissionMode?: 'default' | 'acceptEdits' | 'yolo',
+    permissionMode?: ExecutionMode,
     attachWorktree?: { worktreePath: string; branchName: string },
   ): void {
     this.send({
@@ -166,7 +166,7 @@ export class DaemonClient {
     chatId: string,
     adapterId?: string,
     model?: string,
-    permissionMode?: 'default' | 'acceptEdits' | 'yolo',
+    permissionMode?: ExecutionMode,
     planMode?: boolean,
   ): void {
     this.send({ type: 'chat.updateConfig', chatId, adapterId, model, permissionMode, planMode });

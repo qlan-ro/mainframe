@@ -3,7 +3,7 @@ import { ClipboardList, ShieldOff, FileEdit, Shield, ChevronDown } from 'lucide-
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { urlTransform, remarkAppLinks } from '../../lib/markdown-url-transform';
-import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
+import type { ControlRequest, ControlUpdate, ExecutionMode } from '@qlan-ro/mainframe-types';
 import { Button } from '../ui/button';
 
 interface PlanApprovalCardProps {
@@ -22,8 +22,6 @@ interface AllowedPrompt {
   tool: string;
   prompt: string;
 }
-
-type ExecutionMode = 'default' | 'acceptEdits' | 'yolo';
 
 const EXEC_MODES: { id: ExecutionMode; label: string; icon: React.ElementType }[] = [
   { id: 'default', label: 'Interactive', icon: Shield },
@@ -194,10 +192,20 @@ export function PlanApprovalCard({ request, onRespond }: PlanApprovalCardProps):
 
               {/* Action buttons */}
               <div className="flex gap-2">
-                <Button data-testid="chat-plan-reject-button" variant="ghost" size="sm" onClick={() => onRespond('deny')}>
+                <Button
+                  data-testid="chat-plan-reject-button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRespond('deny')}
+                >
                   Reject
                 </Button>
-                <Button data-testid="chat-plan-revise-button" variant="outline" size="sm" onClick={() => setRevising(true)}>
+                <Button
+                  data-testid="chat-plan-revise-button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRevising(true)}
+                >
                   Revise
                 </Button>
                 <Button

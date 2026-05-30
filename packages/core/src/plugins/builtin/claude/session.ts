@@ -341,25 +341,29 @@ export class ClaudeSession implements AdapterSession {
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
-  async setPermissionMode(mode: string): Promise<void> {
+  async setPermissionMode(mode: import('@qlan-ro/mainframe-types').ExecutionMode): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const cliMode = mode === 'yolo' ? 'bypassPermissions' : mode;
     // Track non-plan modes so setPlanMode(false) can restore whatever the user
     // last picked (default/acceptEdits/bypassPermissions).
-    if (cliMode !== 'plan') {
-      this.basePermissionMode = cliMode;
-    }
+    this.basePermissionMode = cliMode;
+    this.writeCliPermissionMode(child, cliMode);
+  }
+
+  async setPlanMode(on: boolean): Promise<void> {
+    const child = this.state.child;
+    if (!child) throw new Error(`Session ${this.id} not spawned`);
+    this.writeCliPermissionMode(child, on ? 'plan' : this.basePermissionMode);
+  }
+
+  private writeCliPermissionMode(child: ChildProcess, cliMode: string): void {
     const payload = {
       type: 'control_request',
       request_id: crypto.randomUUID(),
       request: { subtype: 'set_permission_mode', mode: cliMode },
     };
     child.stdin?.write(JSON.stringify(payload) + '\n');
-  }
-
-  async setPlanMode(on: boolean): Promise<void> {
-    await this.setPermissionMode(on ? 'plan' : this.basePermissionMode);
   }
 
   async setModel(model: string): Promise<void> {

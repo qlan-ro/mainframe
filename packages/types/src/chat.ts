@@ -1,5 +1,6 @@
 import type { SessionMention } from './context.js';
 import type { DetectedPr } from './adapter.js';
+import type { ExecutionMode } from './settings.js';
 
 export interface TodoItem {
   content: string;
@@ -17,7 +18,7 @@ export interface Chat {
   claudeSessionId?: string;
   sessionFilePath?: string;
   model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+  permissionMode?: ExecutionMode;
   planMode?: boolean;
   status: 'active' | 'paused' | 'ended' | 'archived';
   createdAt: string;
