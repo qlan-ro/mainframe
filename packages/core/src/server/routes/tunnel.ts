@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { RouteContext } from './types.js';
+import { validate } from './schemas.js';
 import { getConfig, saveConfig } from '../../config.js';
 
 const TunnelStartBody = z.object({
@@ -38,9 +39,9 @@ export function tunnelRoutes(ctx: RouteContext): Router {
       return;
     }
 
-    const parsedStart = TunnelStartBody.safeParse(req.body ?? {});
+    const parsedStart = validate(TunnelStartBody, req.body ?? {});
     if (!parsedStart.success) {
-      res.status(400).json({ success: false, error: parsedStart.error.issues.map((i) => i.message).join(', ') });
+      res.status(400).json({ success: false, error: parsedStart.error });
       return;
     }
 
@@ -84,9 +85,9 @@ export function tunnelRoutes(ctx: RouteContext): Router {
       return;
     }
 
-    const parsedStop = TunnelStopBody.safeParse(req.body ?? {});
+    const parsedStop = validate(TunnelStopBody, req.body ?? {});
     if (!parsedStop.success) {
-      res.status(400).json({ success: false, error: parsedStop.error.issues.map((i) => i.message).join(', ') });
+      res.status(400).json({ success: false, error: parsedStop.error });
       return;
     }
 

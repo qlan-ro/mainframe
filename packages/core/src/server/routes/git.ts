@@ -5,6 +5,7 @@ import type { RouteContext } from './types.js';
 import { getEffectivePath, param } from './types.js';
 import { resolveAndValidatePath } from './path-utils.js';
 import { asyncHandler } from './async-handler.js';
+import { validate } from './schemas.js';
 import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
 import { gitWriteRoutes } from './git-write.js';
@@ -14,6 +15,8 @@ const GitDiffQuery = z.object({
   chatId: z.string().optional(),
   file: z.string().optional(),
   oldPath: z.string().optional(),
+  // Validated (rejects a non-git source with 400) but not branched on — this
+  // endpoint only serves git, and the response hardcodes source: 'git'.
   source: z.enum(['git']).optional(),
   base: z.string().optional(),
 });
@@ -140,56 +143,52 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
 
 /** GET /api/projects/:id/git/diff?file=path&source=git&chatId=X&base=SHA */
 async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promise<void> {
-  const qParsed = GitDiffQuery.safeParse(req.query);
-  if (!qParsed.success) {
-    res.status(400).json({ error: qParsed.error.issues.map((i) => i.message).join(', ') });
+  const parsed = validate(GitDiffQuery, req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error });
     return;
   }
 
-  const { chatId, file, oldPath, source = 'git', base } = qParsed.data;
+  const { chatId, file, oldPath, base } = parsed.data;
   const basePath = getEffectivePath(ctx, param(req, 'id'), chatId);
   if (!basePath) {
     res.status(404).json({ error: 'Project not found' });
     return;
   }
 
-  if (source === 'git') {
-    try {
-      const svc = GitService.forProject(basePath);
-      const diffArgs = file ? (base ? [`${base}..HEAD`, '--', file] : ['--', file]) : base ? [`${base}..HEAD`] : [];
-      const diff = await svc.diff(diffArgs);
-      let original = '';
-      if (file) {
-        const headPath = oldPath || file;
-        const ref = base ?? 'HEAD';
-        try {
-          original = await svc.show(`${ref}:${headPath}`);
-        } catch {
-          /* new file */
-        }
+  try {
+    const svc = GitService.forProject(basePath);
+    const diffArgs = file ? (base ? [`${base}..HEAD`, '--', file] : ['--', file]) : base ? [`${base}..HEAD`] : [];
+    const diff = await svc.diff(diffArgs);
+    let original = '';
+    if (file) {
+      const headPath = oldPath || file;
+      const ref = base ?? 'HEAD';
+      try {
+        original = await svc.show(`${ref}:${headPath}`);
+      } catch {
+        /* new file */
       }
-      let modified = '';
-      if (file) {
-        const resolvedFile = resolveAndValidatePath(basePath, file);
-        if (!resolvedFile) {
-          res.status(403).json({ error: 'Path outside project' });
-          return;
-        }
-        try {
-          modified = await readFile(resolvedFile, 'utf-8');
-        } catch {
-          /* deleted file */
-        }
-      }
-      res.json({ diff, original, modified, source: 'git' });
-    } catch (err) {
-      if (!isNotGitRepo(err)) {
-        logger.warn({ err, basePath, file }, 'Failed to compute git diff');
-      }
-      res.json({ diff: '', original: '', modified: '', source: 'git' });
     }
-  } else {
-    res.status(400).json({ error: 'Invalid source. Use "git".' });
+    let modified = '';
+    if (file) {
+      const resolvedFile = resolveAndValidatePath(basePath, file);
+      if (!resolvedFile) {
+        res.status(403).json({ error: 'Path outside project' });
+        return;
+      }
+      try {
+        modified = await readFile(resolvedFile, 'utf-8');
+      } catch {
+        /* deleted file */
+      }
+    }
+    res.json({ diff, original, modified, source: 'git' });
+  } catch (err) {
+    if (!isNotGitRepo(err)) {
+      logger.warn({ err, basePath, file }, 'Failed to compute git diff');
+    }
+    res.json({ diff: '', original: '', modified: '', source: 'git' });
   }
 }
 

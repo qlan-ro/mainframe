@@ -16,6 +16,7 @@ import type {
   ChatMessage,
   ContextFile,
   SkillFileEntry,
+  ExecutionMode,
 } from '@qlan-ro/mainframe-types';
 import { handleStdout, handleStderr, type DetectedPrCore } from './events.js';
 import { ClaudeTaskEvents } from './task-events.js';
@@ -341,7 +342,7 @@ export class ClaudeSession implements AdapterSession {
     child.stdin?.write(JSON.stringify(payload) + '\n');
   }
 
-  async setPermissionMode(mode: import('@qlan-ro/mainframe-types').ExecutionMode): Promise<void> {
+  async setPermissionMode(mode: ExecutionMode): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     const cliMode = mode === 'yolo' ? 'bypassPermissions' : mode;

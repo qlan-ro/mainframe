@@ -329,7 +329,7 @@ function registerAttachmentRoutes(ctx: PluginContext): void {
     }
     const parsed = AttachmentUploadSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.issues.map((i) => i.message).join(', ') });
+      res.status(400).json({ error: 'Invalid input' });
       return;
     }
     const { filename, mimeType, data, sizeBytes } = parsed.data;
