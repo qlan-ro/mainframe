@@ -13,7 +13,7 @@ export async function createTestChat(
   page: Page,
   projectId: string,
   permissionMode: 'default' | 'acceptEdits' | 'plan' | 'yolo' = 'default',
-  adapterId = 'claude',
+  adapterId = process.env['E2E_MODE'] === 'mock' ? 'mock-cli' : 'claude',
 ): Promise<void> {
   const wantsPlanMode = permissionMode === 'plan';
   // createChat's permissionMode no longer accepts 'plan'; map it to 'default' (cast is safe — the

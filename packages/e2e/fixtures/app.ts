@@ -1,8 +1,8 @@
 import { _electron as electron } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { mkdtempSync, rmSync, openSync, closeSync } from 'fs';
+import { mkdtempSync, rmSync, openSync, closeSync, mkdirSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,6 +21,25 @@ const DAEMON_ENTRY = path.resolve(__dirname, '../../../packages/core/dist/index.
 // this port (VITE_DAEMON_HTTP_PORT/WS_PORT); see `pnpm build:app` in this package.
 export const DAEMON_PORT = process.env['MF_E2E_DAEMON_PORT'] ?? '31416';
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
+
+const E2E_MODE = process.env['E2E_MODE'];
+const RECORDINGS_DIR = path.resolve(__dirname, '../fixtures/recordings');
+const MOCK_PLUGIN_DIR = path.resolve(__dirname, '../plugins/mock-cli');
+const ESBUILD_BIN = path.resolve(__dirname, '../../../node_modules/.bin/esbuild');
+
+function buildMockPlugin(): void {
+  execFileSync(
+    ESBUILD_BIN,
+    [
+      'plugins/mock-cli/src/index.ts',
+      '--bundle',
+      '--platform=node',
+      '--format=cjs',
+      '--outfile=plugins/mock-cli/index.js',
+    ],
+    { cwd: path.resolve(__dirname, '..'), stdio: 'inherit' },
+  );
+}
 
 /**
  * Fail fast if something is already answering on our port. Without this, a foreign daemon
@@ -66,12 +85,28 @@ async function waitForDaemon(maxMs = 10_000): Promise<void> {
   throw new Error(`Daemon did not become ready within ${maxMs}ms`);
 }
 
-export async function launchApp(): Promise<AppFixture> {
+export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFixture> {
   // Refuse to run if the port is already taken — prevents pollution of a real daemon.
   await assertPortFree();
 
   // Isolated data dir — never touches ~/.mainframe
   const testDataDir = mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
+
+  // E2E record/replay wiring. In mock mode, build + symlink the external plugin into the isolated
+  // data dir's plugins/ (the daemon scans getDataDir()/plugins). In record mode, the real claude
+  // adapter is wrapped in-daemon. Both modes get the recordings dir + optional stable key.
+  const e2eEnv: Record<string, string> = {};
+  if (E2E_MODE) {
+    e2eEnv['E2E_MODE'] = E2E_MODE;
+    e2eEnv['E2E_RECORDINGS_DIR'] = RECORDINGS_DIR;
+    if (opts?.recordingKey) e2eEnv['E2E_RECORDING_KEY'] = opts.recordingKey;
+  }
+  if (E2E_MODE === 'mock') {
+    buildMockPlugin();
+    const pluginsDir = path.join(testDataDir, 'plugins');
+    mkdirSync(pluginsDir, { recursive: true });
+    symlinkSync(MOCK_PLUGIN_DIR, path.join(pluginsDir, 'mock-cli'), 'dir');
+  }
 
   // Start daemon as a plain Node.js process.
   // This avoids the native module ABI mismatch that occurs when daemon.cjs runs
@@ -83,7 +118,7 @@ export async function launchApp(): Promise<AppFixture> {
     // The daemon reads DAEMON_PORT (see core/src/config.ts), NOT PORT. The old harness passed
     // PORT, so the spawned daemon silently fell back to its default 31415 — which is why it only
     // ever "worked" when 31415 happened to be free (CI) and collided with a dev instance locally.
-    env: { ...process.env, MAINFRAME_DATA_DIR: testDataDir, DAEMON_PORT },
+    env: { ...process.env, MAINFRAME_DATA_DIR: testDataDir, DAEMON_PORT, ...e2eEnv },
     stdio: ['ignore', daemonLogFd, daemonLogFd],
   });
   closeSync(daemonLogFd); // parent no longer needs the fd; child keeps it open
