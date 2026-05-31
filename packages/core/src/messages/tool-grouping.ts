@@ -60,6 +60,21 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
   let taskInsertIndex = -1;
   let i = 0;
 
+  // Accumulate a progress tool into the single _TaskProgress entry, anchoring
+  // its insert position at the first one seen. Shared by the main loop and the
+  // explore look-ahead so the item schema lives in one place.
+  const collectTaskItem = (p: Extract<PartEntry, { type: 'tool-call' }>): void => {
+    if (taskInsertIndex === -1) taskInsertIndex = result.length;
+    taskItems.push({
+      toolCallId: p.toolCallId,
+      toolName: p.toolName,
+      args: p.args,
+      result: p.result,
+      isError: p.isError,
+      ...(p.parentToolUseId && { parentToolUseId: p.parentToolUseId }),
+    });
+  };
+
   while (i < parts.length) {
     const part = parts[i]!;
 
@@ -74,15 +89,7 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
     // they never render as raw tool cards) and `progress` (so they surface as a
     // single _TaskProgress entry). Progress must win, or they'd be dropped.
     if (isTaskProgressTool(part.toolName, categories)) {
-      if (taskInsertIndex === -1) taskInsertIndex = result.length;
-      taskItems.push({
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
-        args: part.args,
-        result: part.result,
-        isError: part.isError,
-        ...(part.parentToolUseId && { parentToolUseId: part.parentToolUseId }),
-      });
+      collectTaskItem(part);
       i++;
       continue;
     }
@@ -104,15 +111,7 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
           group.push(next);
         } else if (isTaskProgressTool(next.toolName, categories)) {
           // A progress tool inside the run is accumulated, not dropped.
-          if (taskInsertIndex === -1) taskInsertIndex = result.length;
-          taskItems.push({
-            toolCallId: next.toolCallId,
-            toolName: next.toolName,
-            args: next.args,
-            result: next.result,
-            isError: next.isError,
-            ...(next.parentToolUseId && { parentToolUseId: next.parentToolUseId }),
-          });
+          collectTaskItem(next);
         } else if (!isHiddenToolPart(next.toolName, next.category, categories)) {
           break;
         }
