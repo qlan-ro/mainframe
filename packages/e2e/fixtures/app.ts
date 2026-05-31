@@ -2,7 +2,7 @@ import { _electron as electron } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { spawn, execFileSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { mkdtempSync, rmSync, openSync, closeSync, mkdirSync, cpSync } from 'fs';
+import { mkdtempSync, rmSync, openSync, closeSync, mkdirSync, cpSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,6 +11,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Path to the built Electron main entry point
 const APP_MAIN = path.resolve(__dirname, '../../../packages/desktop/out/main/index.js');
+const RENDERER_INDEX_HTML = path.resolve(__dirname, '../../../packages/desktop/out/renderer/index.html');
+const PROD_DAEMON_PORT = '31415';
 
 // Core daemon entry — run with plain Node.js to avoid native module ABI mismatch
 // (better-sqlite3 is compiled for system Node.js, not Electron's bundled runtime).
@@ -39,6 +41,35 @@ function buildMockPlugin(): void {
     ],
     { cwd: path.resolve(__dirname, '..'), stdio: 'inherit' },
   );
+}
+
+/**
+ * Fail fast if the built renderer targets the prod daemon port instead of the e2e port.
+ *
+ * The renderer's daemon port is baked at build time (VITE_DAEMON_HTTP_PORT/WS_PORT + the CSP
+ * connect-src). `build:app` bakes DAEMON_PORT (31416), but a plain `pnpm build` re-bakes the
+ * default 31415 — and the spawned Electron would then connect to a running prod daemon and create
+ * projects/chats in real data. assertPortFree only guards the daemon bind, not the renderer target,
+ * so this is the second half of that guard. (This incident happened once — see git history.)
+ */
+function assertRendererBuiltForTestPort(): void {
+  let html: string;
+  try {
+    html = readFileSync(RENDERER_INDEX_HTML, 'utf8');
+  } catch {
+    throw new Error(
+      `Built renderer not found at ${RENDERER_INDEX_HTML}. Run \`pnpm --filter @qlan-ro/mainframe-e2e build:app\` first.`,
+    );
+  }
+  const targetsTestPort = html.includes(`:${DAEMON_PORT}`);
+  const targetsProd = DAEMON_PORT !== PROD_DAEMON_PORT && html.includes(`:${PROD_DAEMON_PORT}`);
+  if (!targetsTestPort || targetsProd) {
+    throw new Error(
+      `The built renderer does not target the e2e daemon port ${DAEMON_PORT} (found prod ${PROD_DAEMON_PORT}). ` +
+        `A plain \`pnpm build\` re-bakes the prod port and would point the test app at a real daemon. ` +
+        `Rebuild with \`pnpm --filter @qlan-ro/mainframe-e2e build:app\` before running e2e.`,
+    );
+  }
 }
 
 /**
@@ -86,7 +117,9 @@ async function waitForDaemon(maxMs = 10_000): Promise<void> {
 }
 
 export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFixture> {
-  // Refuse to run if the port is already taken — prevents pollution of a real daemon.
+  // Refuse to run if the built renderer points at the prod daemon, or if something already answers
+  // on our port — both would route the test app at real data.
+  assertRendererBuiltForTestPort();
   await assertPortFree();
 
   // Isolated data dir — never touches ~/.mainframe
