@@ -2,13 +2,7 @@ import { test, expect } from '@playwright/test';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
-import {
-  sendMessage,
-  waitForAIIdle,
-  waitForPermissionCard,
-  waitForPermissionCardHandlingPlan,
-  waitForAskQuestionCard,
-} from '../helpers/wait.js';
+import { sendMessage, waitForAIIdle, waitForPermissionCardHandlingPlan } from '../helpers/wait.js';
 
 test.describe('§6 Permission system — Interactive', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
@@ -34,7 +28,10 @@ test.describe('§6 Permission system — Interactive', () => {
   test('Deny blocks the tool and AI acknowledges', async () => {
     await fixture.page.locator('[data-testid="permission-card"]').getByRole('button', { name: /deny/i }).click();
     await waitForAIIdle(fixture.page);
-    await expect(fixture.page.locator('[data-testid="chat-status-idle"]')).toBeVisible();
+    // Idle = the session-bar "Thinking" indicator is cleared (there is no affirmative idle testid).
+    await expect(
+      fixture.page.locator('[data-testid="session-bar-status"]').getByText('Thinking', { exact: true }),
+    ).toBeHidden();
   });
 
   test('Allow Once permits the tool but next request prompts again', async () => {

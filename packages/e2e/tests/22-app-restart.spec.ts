@@ -26,7 +26,9 @@ test.describe('§22 App restart & state persistence', () => {
     const APP_MAIN = path.default.resolve(__dirname, '../../../packages/desktop/out/main/index.js');
 
     const app2 = await electron.launch({
-      args: [APP_MAIN],
+      // Reuse the SAME Chromium profile launchApp() created, so localStorage (active chat, layout)
+      // persists across the restart — otherwise the relaunch gets a fresh default profile.
+      args: [APP_MAIN, `--user-data-dir=${path.default.join(testDataDir, 'electron-profile')}`],
       env: { ...process.env, NODE_ENV: 'development', MAINFRAME_DATA_DIR: testDataDir },
     });
     const page2 = await app2.firstWindow();

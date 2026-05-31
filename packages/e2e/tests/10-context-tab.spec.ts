@@ -3,6 +3,7 @@ import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
 import { chat } from '../helpers/wait.js';
+import { openZone, setChangesMode } from '../helpers/zones.js';
 
 test.describe('§10–11 Context & Files tabs', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
@@ -21,22 +22,32 @@ test.describe('§10–11 Context & Files tabs', () => {
 
   test('modified file appears in Changes tab after AI edits it', async () => {
     await chat(fixture.page, 'Edit index.ts and add a comment at the top', 90_000);
-    const panel = fixture.page.locator('[data-testid="right-panel"]');
-    await panel.getByRole('tab', { name: /changes/i }).click();
-    await expect(panel.getByText('index.ts', { exact: true }).first()).toBeVisible();
+    await openZone(fixture.page, 'zone-rail-button-changes', 'zone-button-tab-dropdown');
+    await setChangesMode(fixture.page, 'session');
+    await fixture.page.locator('[data-testid="changes-refresh"]').click();
+    await expect(fixture.page.locator('[data-testid^="changes-session-file-"]').first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test('files tab shows project file tree', async () => {
-    const panel = fixture.page.locator('[data-testid="right-panel"]');
-    await panel.getByRole('tab', { name: /files/i }).click();
-    await expect(panel.getByText('index.ts', { exact: true }).first()).toBeVisible();
-    await expect(panel.getByText('utils.ts', { exact: true }).first()).toBeVisible();
+    await openZone(fixture.page, 'zone-rail-button-files', 'files-root-toggle');
+    await expect(fixture.page.locator('[data-testid="files-tree-node-index.ts"]')).toBeVisible({ timeout: 10_000 });
+    await expect(fixture.page.locator('[data-testid="files-tree-node-utils.ts"]')).toBeVisible();
   });
 
   test('clicking a file in the files tab opens the editor', async () => {
-    const panel = fixture.page.locator('[data-testid="right-panel"]');
-    await panel.getByRole('tab', { name: /files/i }).click();
-    await panel.getByText('index.ts', { exact: true }).first().click();
+    await openZone(fixture.page, 'zone-rail-button-files', 'files-root-toggle');
+    await fixture.page.locator('[data-testid="files-tree-node-index.ts"]').click();
     await expect(fixture.page.locator('.monaco-editor').first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('F12: review-changes modal opens and closes', async () => {
+    const { page } = fixture;
+    // The AI edit above left session changes for this chat to review.
+    await page.locator('[data-testid="chat-review-changes-button"]').click();
+    await expect(page.locator('[data-testid="review-modal"]')).toBeVisible({ timeout: 10_000 });
+    await page.locator('[data-testid="review-button-close"]').click();
+    await expect(page.locator('[data-testid="review-modal"]')).toHaveCount(0, { timeout: 5_000 });
   });
 });

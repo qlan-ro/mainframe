@@ -49,7 +49,13 @@ export function useAppInit(): void {
           ]);
 
         if (projectsResult.status === 'fulfilled') {
-          setProjects(projectsResult.value);
+          // Don't wipe a populated list with a transient empty result. On reconnect this fetch can
+          // race a just-created project (addProject already applied) and resolve [], clobbering it.
+          // The initial load (current list empty) still sets the genuine state.
+          const fetched = projectsResult.value;
+          if (fetched.length > 0 || useProjectsStore.getState().projects.length === 0) {
+            setProjects(fetched);
+          }
         } else {
           throw projectsResult.reason;
         }
@@ -86,37 +92,43 @@ export function useAppInit(): void {
 
         if (chatsResult.status === 'fulfilled') {
           const chatsList = chatsResult.value;
-          useChatsStore.getState().setChats(chatsList);
+          // Anti-clobber guard (same as projects): a racy empty reconnect fetch must not wipe an
+          // existing chat list. Skip the apply+restore when the fetch is empty but we already have chats.
+          if (chatsList.length === 0 && useChatsStore.getState().chats.length > 0) {
+            // keep current chats
+          } else {
+            useChatsStore.getState().setChats(chatsList);
 
-          // Restore active chat from localStorage. Archived chats are hidden
-          // from the flat list but still returned by the daemon, so we must
-          // skip them explicitly — otherwise activeChatId points to a chat
-          // the user cannot see or switch away from.
-          const lastChatId = localStorage.getItem('mf:activeChatId');
-          const visibleChats = chatsList.filter((c) => c.status !== 'archived');
-          let restoredChat: (typeof chatsList)[number] | undefined;
-          const lastChat = lastChatId ? visibleChats.find((c) => c.id === lastChatId) : undefined;
-          if (lastChat) {
-            restoredChat = lastChat;
-            useChatsStore.getState().setActiveChat(lastChat.id);
-            daemonClient.subscribe(lastChat.id);
-          } else if (visibleChats.length > 0) {
-            // Fall back to most recently updated chat
-            const sorted = [...visibleChats].sort(
-              (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-            );
-            restoredChat = sorted[0]!;
-            useChatsStore.getState().setActiveChat(restoredChat.id);
-            useTabsStore.getState().openChatTab(restoredChat.id, restoredChat.title);
-            daemonClient.subscribe(restoredChat.id);
-          } else if (lastChatId) {
-            // No visible chats — clear the stale pointer so it doesn't
-            // resurface on a subsequent boot once data changes.
-            localStorage.removeItem('mf:activeChatId');
+            // Restore active chat from localStorage. Archived chats are hidden
+            // from the flat list but still returned by the daemon, so we must
+            // skip them explicitly — otherwise activeChatId points to a chat
+            // the user cannot see or switch away from.
+            const lastChatId = localStorage.getItem('mf:activeChatId');
+            const visibleChats = chatsList.filter((c) => c.status !== 'archived');
+            let restoredChat: (typeof chatsList)[number] | undefined;
+            const lastChat = lastChatId ? visibleChats.find((c) => c.id === lastChatId) : undefined;
+            if (lastChat) {
+              restoredChat = lastChat;
+              useChatsStore.getState().setActiveChat(lastChat.id);
+              daemonClient.subscribe(lastChat.id);
+            } else if (visibleChats.length > 0) {
+              // Fall back to most recently updated chat
+              const sorted = [...visibleChats].sort(
+                (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+              );
+              restoredChat = sorted[0]!;
+              useChatsStore.getState().setActiveChat(restoredChat.id);
+              useTabsStore.getState().openChatTab(restoredChat.id, restoredChat.title);
+              daemonClient.subscribe(restoredChat.id);
+            } else if (lastChatId) {
+              // No visible chats — clear the stale pointer so it doesn't
+              // resurface on a subsequent boot once data changes.
+              localStorage.removeItem('mf:activeChatId');
+            }
+
+            // setActiveChat reconciles filterProjectId on its own: it clears the
+            // filter to null when the new active chat lives in a different project.
           }
-
-          // setActiveChat reconciles filterProjectId on its own: it clears the
-          // filter to null when the new active chat lives in a different project.
         } else {
           log.warn('chat fetch failed', { err: String(chatsResult.reason) });
         }

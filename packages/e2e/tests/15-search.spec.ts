@@ -18,32 +18,32 @@ test.describe('§15 Search palette', () => {
     await closeApp(fixture);
   });
 
-  test('Cmd+F opens the search palette', async () => {
-    await fixture.page.keyboard.press('Meta+f');
-    await expect(fixture.page.getByRole('dialog')).toBeVisible();
+  // The global search palette is Cmd+O now (Cmd+F is find-in-thread).
+  test('Cmd+O opens the search palette', async () => {
+    await fixture.page.keyboard.press('Meta+o');
+    await expect(fixture.page.locator('[data-testid="search-palette-dialog"]')).toBeVisible();
   });
 
   test('typing finds matching files', async () => {
-    await fixture.page.keyboard.type('index');
-    await expect(fixture.page.getByText('index.ts')).toBeVisible();
+    await fixture.page.locator('[data-testid="search-palette-input"]').fill('index');
+    await expect(fixture.page.getByText('index.ts')).toBeVisible({ timeout: 5_000 });
   });
 
   test('Escape closes the palette', async () => {
     await fixture.page.keyboard.press('Escape');
-    await expect(fixture.page.getByRole('dialog')).toHaveCount(0);
+    await expect(fixture.page.locator('[data-testid="search-palette-dialog"]')).toHaveCount(0);
   });
 
-  test('Enter on a file result opens it in the editor', async () => {
-    await fixture.page.keyboard.press('Meta+f');
-    // Wait for the search input to be ready before typing — without this the
-    // initial characters are lost while the dialog's focus useEffect fires.
-    const searchInput = fixture.page.getByRole('dialog').getByRole('textbox');
+  test('clicking a file result opens it in the editor', async () => {
+    await fixture.page.keyboard.press('Meta+o');
+    const searchInput = fixture.page.locator('[data-testid="search-palette-input"]');
     await searchInput.waitFor({ state: 'visible' });
     await searchInput.fill('utils');
-    // Wait for file results to appear (300ms debounce + network)
-    await expect(fixture.page.getByText('utils.ts')).toBeVisible({ timeout: 5_000 });
-    await fixture.page.keyboard.press('ArrowDown');
-    await fixture.page.keyboard.press('Enter');
+    // Wait for file results (300ms debounce + network). Click the file result directly — the
+    // palette lists sessions first, so ArrowDown+Enter would select a session, not the file.
+    const fileResult = fixture.page.locator('[data-testid^="search-palette-file-"]').first();
+    await fileResult.waitFor({ timeout: 5_000 });
+    await fileResult.click();
     await expect(fixture.page.locator('.monaco-editor').first()).toBeVisible({ timeout: 15_000 });
   });
 });

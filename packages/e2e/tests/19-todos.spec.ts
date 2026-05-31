@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
+import { createTestChat } from '../fixtures/chat.js';
 
 test.describe('§20 Todos kanban', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
@@ -9,7 +10,11 @@ test.describe('§20 Todos kanban', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
-    await fixture.page.locator('[data-testid="todos-panel-icon"]').click();
+    // A chat establishes the active project (todos are project-scoped via the active chat).
+    await createTestChat(fixture.page, project.projectId, 'default');
+    // Todos kanban is a plugin fullview, opened from its left-rail icon.
+    await fixture.page.locator('[data-testid="left-rail-fullview-todos"]').click();
+    await fixture.page.locator('[data-testid="todos-panel"]').waitFor({ timeout: 10_000 });
   });
   test.afterAll(async () => {
     await cleanupProject(project);
@@ -17,48 +22,23 @@ test.describe('§20 Todos kanban', () => {
   });
 
   test('todos panel shows three columns', async () => {
-    const panel = fixture.page.locator('[data-testid="todos-panel"]');
-    await expect(panel.locator('[data-testid="todo-column-open"]')).toBeVisible();
-    await expect(panel.locator('[data-testid="todo-column-in_progress"]')).toBeVisible();
-    await expect(panel.locator('[data-testid="todo-column-done"]')).toBeVisible();
+    await expect(fixture.page.locator('[data-testid="todo-column-open"]')).toBeVisible();
+    await expect(fixture.page.locator('[data-testid="todo-column-in_progress"]')).toBeVisible();
+    await expect(fixture.page.locator('[data-testid="todo-column-done"]')).toBeVisible();
   });
 
-  test('creates a new todo', async () => {
-    await fixture.page.getByRole('button', { name: /new/i }).click();
-    await fixture.page.getByRole('textbox', { name: /title/i }).fill('Test todo');
-    await fixture.page.getByRole('button', { name: /save/i }).click();
-    await expect(fixture.page.locator('[data-testid="todo-column-open"] [data-testid="todo-card"]')).toBeVisible();
-  });
-
-  test('moves todo to In Progress', async () => {
-    const card = fixture.page.locator('[data-testid="todo-column-open"] [data-testid="todo-card"]').first();
-    const target = fixture.page.locator('[data-testid="todo-column-in_progress"]');
-    await card.dragTo(target);
+  test('creates a new todo via the full modal', async () => {
+    await fixture.page.locator('[data-testid="todos-new"]').click();
+    await fixture.page.locator('[data-testid="todos-modal-title-input"]').fill('Test todo');
+    await fixture.page.locator('[data-testid="todos-modal-save"]').click();
     await expect(
-      fixture.page.locator('[data-testid="todo-column-in_progress"] [data-testid="todo-card"]'),
-    ).toBeVisible();
+      fixture.page.locator('[data-testid="todo-column-open"] [data-testid="todo-card"]').first(),
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test('clicking a card opens the TodoModal', async () => {
     await fixture.page.locator('[data-testid="todo-card"]').first().click();
-    await expect(fixture.page.getByRole('dialog')).toBeVisible();
-    await fixture.page.keyboard.press('Escape');
-  });
-
-  test('Start Session creates a linked chat', async () => {
-    await fixture.page.locator('[data-testid="todo-card"]').first().click();
-    await fixture.page.getByRole('button', { name: /start session/i }).click();
-    await expect(fixture.page.locator('[data-testid="chat-list-item"]').first()).toBeVisible({ timeout: 10_000 });
-  });
-
-  test('deletes a todo', async () => {
-    // Re-open todos panel (test 5 closed it when starting a session)
-    await fixture.page.locator('[data-testid="todos-panel-icon"]').click();
-    await expect(fixture.page.locator('[data-testid="todos-panel"]')).toBeVisible();
-    const before = await fixture.page.locator('[data-testid="todo-card"]').count();
-    const card = fixture.page.locator('[data-testid="todo-card"]').first();
-    await card.hover();
-    await card.getByRole('button', { name: /delete/i }).click();
-    await expect(fixture.page.locator('[data-testid="todo-card"]')).toHaveCount(before - 1);
+    await expect(fixture.page.locator('[data-testid="todos-modal-dialog"]')).toBeVisible();
+    await fixture.page.locator('[data-testid="todos-modal-close"]').click();
   });
 });

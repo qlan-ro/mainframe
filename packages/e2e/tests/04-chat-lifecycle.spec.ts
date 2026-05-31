@@ -33,7 +33,12 @@ test.describe('§4 Chat lifecycle', () => {
     const before = await fixture.page.locator('[data-testid="chat-list-item"]').count();
     const first = fixture.page.locator('[data-testid="chat-list-item"]').first();
     await first.hover();
-    await first.getByRole('button', { name: /archive/i }).click();
+    // Row actions only render/size on hover; dispatch the click via the DOM to avoid fighting the
+    // reveal timing (force-click still needs a hit box, which these don't reliably have).
+    await first
+      .locator('[data-testid^="chats-session-archive-"]')
+      .first()
+      .evaluate((el) => (el as HTMLElement).click());
     await expect(fixture.page.locator('[data-testid="chat-list-item"]')).toHaveCount(before - 1);
   });
 });
