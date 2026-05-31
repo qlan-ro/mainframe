@@ -22,7 +22,7 @@
 **New (core — canonical, unit-tested):**
 - `packages/core/src/testing/recording-format.ts` — `RecordedEvent` type, `safeArgs`, `sanitizeKey`, `fixtureFileName`, `parseFixture`.
 - `packages/core/src/testing/recording-sink.ts` — `createRecordingSink(real, deps)` generic Proxy sink.
-- `packages/core/src/testing/replay-core.ts` — pure batch logic (`createReplayState`, `nextBatch`, `skipToResult`, `isExhausted`).
+- `packages/core/src/testing/replay-core.ts` — pure split logic (`createReplayState`, `consumeInput`, `drainOutputs`, `isExhausted`).
 - `packages/core/src/testing/record-wrapper.ts` — `wrapClaudeForRecording(adapters)` daemon hook.
 - `packages/core/src/__tests__/testing/recording-format.test.ts`, `recording-sink.test.ts`, `replay-core.test.ts`.
 
@@ -79,10 +79,12 @@ describe('recording-format', () => {
     expect(fixtureFileName('permissions-interactive', 0)).toBe('permissions-interactive.0.ndjson');
   });
   it('parseFixture parses NDJSON, ignoring blank lines', () => {
-    const text = '{"method":"onInit","args":["s1"],"delayMs":0}\n\n{"method":"onExit","args":[0],"delayMs":5}\n';
+    const text =
+      '{"dir":"in","method":"sendMessage","args":["hi"],"delayMs":0}\n\n{"dir":"out","method":"onExit","args":[0],"delayMs":5}\n';
     const events: RecordedEvent[] = parseFixture(text);
     expect(events).toHaveLength(2);
-    expect(events[0]).toEqual({ method: 'onInit', args: ['s1'], delayMs: 0 });
+    expect(events[0]).toEqual({ dir: 'in', method: 'sendMessage', args: ['hi'], delayMs: 0 });
+    expect(events[1]?.dir).toBe('out');
   });
 });
 ```
@@ -97,6 +99,8 @@ Expected: FAIL — `Cannot find module '../../testing/recording-format.js'`.
 ```ts
 // packages/core/src/testing/recording-format.ts
 export interface RecordedEvent {
+  /** 'in' = daemon called the session (sendMessage/respondToPermission/interrupt); 'out' = session called the sink. */
+  dir: 'in' | 'out';
   method: string;
   args: unknown[];
   /** Milliseconds since session start when this call happened. */
@@ -183,8 +187,8 @@ describe('createRecordingSink', () => {
     expect(real.onInit).toHaveBeenCalledWith('s1');
     expect(real.onExit).toHaveBeenCalledWith(0);
     expect(recorded).toEqual([
-      { method: 'onInit', args: ['s1'], delayMs: 0 },
-      { method: 'onExit', args: [0], delayMs: 120 },
+      { dir: 'out', method: 'onInit', args: ['s1'], delayMs: 0 },
+      { dir: 'out', method: 'onExit', args: [0], delayMs: 120 },
     ]);
   });
 
@@ -193,7 +197,7 @@ describe('createRecordingSink', () => {
     const real = { onError: vi.fn() };
     const sink = createRecordingSink(real as never, { write: (e) => recorded.push(e), now: () => 0 });
     (sink as unknown as { onError(e: Error): void }).onError(new Error('boom'));
-    expect(recorded[0]).toEqual({ method: 'onError', args: [{ name: 'Error', message: 'boom' }], delayMs: 0 });
+    expect(recorded[0]).toEqual({ dir: 'out', method: 'onError', args: [{ name: 'Error', message: 'boom' }], delayMs: 0 });
   });
 });
 ```
@@ -212,22 +216,23 @@ import { safeArgs, type RecordedEvent } from './recording-format.js';
 
 export interface RecordingSinkDeps {
   write: (event: RecordedEvent) => void;
+  /** Returns ms elapsed since session start. Shared with the `in`-marker writer so all events
+   *  sit on one timeline (lets replay base each output's delay off the preceding `in` marker). */
   now: () => number;
 }
 
 /**
  * Wraps a real SessionSink in a Proxy. Every method call is recorded as
- * {method, args, delayMs} and then forwarded to the real sink. Generic: any
+ * {dir:'out', method, args, delayMs} and then forwarded to the real sink. Generic: any
  * present or future sink method is captured with no code change.
  */
 export function createRecordingSink(real: SessionSink, deps: RecordingSinkDeps): SessionSink {
-  const start = deps.now();
   return new Proxy(real, {
     get(target, prop, receiver) {
       const orig = Reflect.get(target, prop, receiver) as unknown;
       if (typeof prop === 'string' && typeof orig === 'function') {
         return (...args: unknown[]): unknown => {
-          deps.write({ method: prop, args: safeArgs(args), delayMs: deps.now() - start });
+          deps.write({ dir: 'out', method: prop, args: safeArgs(args), delayMs: deps.now() });
           return (orig as (...a: unknown[]) => unknown).apply(target, args);
         };
       }
@@ -236,6 +241,8 @@ export function createRecordingSink(real: SessionSink, deps: RecordingSinkDeps):
   });
 }
 ```
+
+(The Task 2 test already passes `now: () => clock` with `clock` set to the elapsed value at each call — `0` then `120` — so dropping the internal `start` subtraction yields the same `delayMs` and keeps the test green.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -262,41 +269,45 @@ git commit -m "feat(core): generic proxy RecordingSink for E2E recording"
 ```ts
 // packages/core/src/__tests__/testing/replay-core.test.ts
 import { describe, it, expect } from 'vitest';
-import { createReplayState, nextBatch, skipToResult, isExhausted } from '../../testing/replay-core.js';
+import { createReplayState, drainOutputs, consumeInput, isExhausted } from '../../testing/replay-core.js';
 
+// Mirrors the real cadence: spawn emits nothing (onInit arrives after the first message), then each
+// `in` marker is followed by its run of `out` events.
 const FIXTURE = [
-  '{"method":"onInit","args":["s1"],"delayMs":0}',
-  '{"method":"onMessage","args":[[{"type":"text","text":"hi"}]],"delayMs":10}',
-  '{"method":"onPermission","args":[{"requestId":"r1"}],"delayMs":20}',
-  '{"method":"onToolResult","args":[[]],"delayMs":30}',
-  '{"method":"onResult","args":[{}],"delayMs":40}',
-  '{"method":"onExit","args":[0],"delayMs":50}',
+  '{"dir":"in","method":"sendMessage","args":["create"],"delayMs":0}',
+  '{"dir":"out","method":"onInit","args":["s1"],"delayMs":40}',
+  '{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"ok"}]],"delayMs":50}',
+  '{"dir":"out","method":"onPermission","args":[{"requestId":"r1"}],"delayMs":60}',
+  '{"dir":"in","method":"respondToPermission","args":[{"requestId":"r1"}],"delayMs":100}',
+  '{"dir":"out","method":"onResult","args":[{}],"delayMs":120}',
 ].join('\n');
 
 describe('replay-core', () => {
-  it('first batch drains up to and including the first onPermission', () => {
+  it('spawn drains zero leading outputs (first event is an in-marker)', () => {
     const state = createReplayState(FIXTURE);
-    const batch = nextBatch(state);
-    expect(batch.map((e) => e.method)).toEqual(['onInit', 'onMessage', 'onPermission']);
+    expect(drainOutputs(state).map((e) => e.method)).toEqual([]);
+    expect(state.cursor).toBe(0);
   });
-  it('next batch resumes after the permission, stopping at onResult', () => {
+  it('consumeInput skips one in-marker, then drainOutputs returns that turn', () => {
     const state = createReplayState(FIXTURE);
-    nextBatch(state);
-    const batch = nextBatch(state);
-    expect(batch.map((e) => e.method)).toEqual(['onToolResult', 'onResult']);
+    drainOutputs(state); // spawn (no-op)
+    expect(consumeInput(state)?.method).toBe('sendMessage');
+    expect(drainOutputs(state).map((e) => e.method)).toEqual(['onInit', 'onMessage', 'onPermission']);
   });
-  it('final batch returns onExit and then reports exhausted', () => {
+  it('next interaction consumes its in-marker and drains to the end', () => {
     const state = createReplayState(FIXTURE);
-    nextBatch(state);
-    nextBatch(state);
-    const last = nextBatch(state);
-    expect(last.map((e) => e.method)).toEqual(['onExit']);
+    drainOutputs(state);
+    consumeInput(state);
+    drainOutputs(state);
+    expect(consumeInput(state)?.method).toBe('respondToPermission');
+    expect(drainOutputs(state).map((e) => e.method)).toEqual(['onResult']);
     expect(isExhausted(state)).toBe(true);
   });
-  it('skipToResult jumps to the next onResult/onExit', () => {
+  it('consumeInput returns null when the cursor is on an out event', () => {
     const state = createReplayState(FIXTURE);
-    const batch = skipToResult(state);
-    expect(batch[batch.length - 1]?.method).toBe('onResult');
+    consumeInput(state); // skip the leading sendMessage marker
+    expect(consumeInput(state)).toBeNull(); // now on onInit (out)
+    expect(state.cursor).toBe(1);
   });
 });
 ```
@@ -312,9 +323,6 @@ Expected: FAIL — module not found.
 // packages/core/src/testing/replay-core.ts
 import { parseFixture, type RecordedEvent } from './recording-format.js';
 
-/** A recorded interaction ends at one of these sink calls. */
-export const BATCH_BOUNDARIES: ReadonlySet<string> = new Set(['onPermission', 'onResult', 'onExit']);
-
 export interface ReplayState {
   events: RecordedEvent[];
   cursor: number;
@@ -324,34 +332,30 @@ export function createReplayState(text: string): ReplayState {
   return { events: parseFixture(text), cursor: 0 };
 }
 
-/** Drain events up to and including the next boundary method (or end of queue). Advances the cursor. */
-export function nextBatch(state: ReplayState, boundaries: ReadonlySet<string> = BATCH_BOUNDARIES): RecordedEvent[] {
-  const batch: RecordedEvent[] = [];
-  while (state.cursor < state.events.length) {
-    const ev = state.events[state.cursor];
-    state.cursor++;
-    if (!ev) break;
-    batch.push(ev);
-    if (boundaries.has(ev.method)) break;
-  }
-  return batch;
-}
-
-/** Skip forward to (and including) the next onResult/onExit. */
-export function skipToResult(state: ReplayState): RecordedEvent[] {
-  const batch: RecordedEvent[] = [];
-  while (state.cursor < state.events.length) {
-    const ev = state.events[state.cursor];
-    state.cursor++;
-    if (!ev) break;
-    batch.push(ev);
-    if (ev.method === 'onResult' || ev.method === 'onExit') break;
-  }
-  return batch;
-}
-
 export function isExhausted(state: ReplayState): boolean {
   return state.cursor >= state.events.length;
+}
+
+/** If the cursor is on an `in` marker, consume it (advance) and return it; otherwise return null. */
+export function consumeInput(state: ReplayState): RecordedEvent | null {
+  const ev = state.events[state.cursor];
+  if (ev && ev.dir === 'in') {
+    state.cursor++;
+    return ev;
+  }
+  return null;
+}
+
+/** Drain the run of consecutive `out` events from the cursor (stops at the next `in` marker or end). */
+export function drainOutputs(state: ReplayState): RecordedEvent[] {
+  const out: RecordedEvent[] = [];
+  while (state.cursor < state.events.length) {
+    const ev = state.events[state.cursor];
+    if (!ev || ev.dir !== 'out') break;
+    out.push(ev);
+    state.cursor++;
+  }
+  return out;
 }
 ```
 
@@ -381,7 +385,7 @@ No unit test — this is bootstrap wiring, verified by `pnpm build` (typecheck) 
 
 ```ts
 // packages/core/src/testing/record-wrapper.ts
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   Adapter,
@@ -393,15 +397,28 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import type { AdapterRegistry } from '../adapters/index.js';
 import { createRecordingSink } from './recording-sink.js';
-import { fixtureFileName } from './recording-format.js';
+import { fixtureFileName, safeArgs, type RecordedEvent } from './recording-format.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('e2e:record');
 
+/** Per-session writer shared by the output sink and the input markers (one timeline via `elapsed`). */
+interface Recorder {
+  write: (event: RecordedEvent) => void;
+  writeIn: (method: string, args: unknown[]) => void;
+  elapsed: () => number;
+}
+
+// Daemon→session calls we record as `in` markers, so replay can split on the exact interaction cadence.
+const INPUT_METHODS = new Set(['sendMessage', 'respondToPermission', 'interrupt']);
+
 /**
- * Replaces the registered `claude` adapter with a Proxy that injects a
- * RecordingSink at spawn time, writing one NDJSON fixture per session.
- * Only called when E2E_MODE==='record'. Production never enters this path.
+ * Replaces the registered `claude` adapter with a Proxy that, per session,
+ * (a) tees every sink output to an NDJSON fixture and (b) records an `in` marker
+ * before each sendMessage/respondToPermission/interrupt. The fixture file is
+ * truncated at session creation so re-recording (index resets to 0 each daemon
+ * run) overwrites cleanly. Only called when E2E_MODE==='record' — production
+ * never enters this path.
  */
 export function wrapClaudeForRecording(adapters: AdapterRegistry): void {
   const real = adapters.get('claude');
@@ -420,11 +437,19 @@ export function wrapClaudeForRecording(adapters: AdapterRegistry): void {
     get(target, prop, receiver) {
       if (prop === 'createSession') {
         return (options: SessionOptions): AdapterSession => {
-          const session = target.createSession(options);
           const index = indexByKey.get(key) ?? 0;
           indexByKey.set(key, index + 1);
           const file = join(dir, fixtureFileName(key, index));
-          return wrapSession(session, file);
+          writeFileSync(file, ''); // truncate any fixture from a previous record run
+          const start = Date.now();
+          const elapsed = () => Date.now() - start;
+          const write = (e: RecordedEvent) => appendFileSync(file, JSON.stringify(e) + '\n');
+          const recorder: Recorder = {
+            write,
+            elapsed,
+            writeIn: (method, args) => write({ dir: 'in', method, args: safeArgs(args), delayMs: elapsed() }),
+          };
+          return wrapSession(target.createSession(options), recorder);
         };
       }
       return Reflect.get(target, prop, receiver);
@@ -435,18 +460,20 @@ export function wrapClaudeForRecording(adapters: AdapterRegistry): void {
   log.info({ key, dir }, 'Claude adapter wrapped for E2E recording');
 }
 
-function wrapSession(session: AdapterSession, file: string): AdapterSession {
+function wrapSession(session: AdapterSession, rec: Recorder): AdapterSession {
   return new Proxy(session, {
     get(target, prop, receiver) {
       if (prop === 'spawn') {
         return (options?: SessionSpawnOptions, sink?: SessionSink): Promise<AdapterProcess> => {
-          const recordingSink = sink
-            ? createRecordingSink(sink, {
-                write: (e) => appendFileSync(file, JSON.stringify(e) + '\n'),
-                now: () => Date.now(),
-              })
-            : sink;
+          const recordingSink = sink ? createRecordingSink(sink, { write: rec.write, now: rec.elapsed }) : sink;
           return target.spawn(options, recordingSink);
+        };
+      }
+      if (typeof prop === 'string' && INPUT_METHODS.has(prop)) {
+        const orig = Reflect.get(target, prop, receiver) as (...a: unknown[]) => Promise<unknown>;
+        return (...args: unknown[]): Promise<unknown> => {
+          rec.writeIn(prop, args);
+          return orig.apply(target, args);
         };
       }
       return Reflect.get(target, prop, receiver);
@@ -454,6 +481,10 @@ function wrapSession(session: AdapterSession, file: string): AdapterSession {
   }) as AdapterSession;
 }
 ```
+
+> Note: `in` markers and `out` events share one timeline (`elapsed()` = ms since session creation,
+> passed to both the marker writer and `createRecordingSink`'s `now`). Replay bases each turn's first
+> output delay off the consumed `in` marker, so recorded test/user think-time is not replayed.
 
 - [ ] **Step 2: Align the user-plugins dir to the data dir**
 
@@ -583,12 +614,11 @@ This is a deliberate small mirror of `packages/core/src/testing/replay-core.ts` 
 // plugin bundles without importing workspace internals (reference impl for 3rd-party adapters).
 
 export interface RecordedEvent {
+  dir: 'in' | 'out';
   method: string;
   args: unknown[];
   delayMs: number;
 }
-
-const BOUNDARIES = new Set(['onPermission', 'onResult', 'onExit']);
 
 export interface ReplayState {
   events: RecordedEvent[];
@@ -603,28 +633,30 @@ export function createReplayState(text: string): ReplayState {
   return { events, cursor: 0 };
 }
 
-export function nextBatch(state: ReplayState): RecordedEvent[] {
-  const batch: RecordedEvent[] = [];
-  while (state.cursor < state.events.length) {
-    const ev = state.events[state.cursor];
-    state.cursor++;
-    if (!ev) break;
-    batch.push(ev);
-    if (BOUNDARIES.has(ev.method)) break;
-  }
-  return batch;
+export function isExhausted(state: ReplayState): boolean {
+  return state.cursor >= state.events.length;
 }
 
-export function skipToResult(state: ReplayState): RecordedEvent[] {
-  const batch: RecordedEvent[] = [];
+/** If the cursor is on an `in` marker, consume it and return it; otherwise return null. */
+export function consumeInput(state: ReplayState): RecordedEvent | null {
+  const ev = state.events[state.cursor];
+  if (ev && ev.dir === 'in') {
+    state.cursor++;
+    return ev;
+  }
+  return null;
+}
+
+/** Drain the run of consecutive `out` events from the cursor (stops at the next `in` marker or end). */
+export function drainOutputs(state: ReplayState): RecordedEvent[] {
+  const out: RecordedEvent[] = [];
   while (state.cursor < state.events.length) {
     const ev = state.events[state.cursor];
+    if (!ev || ev.dir !== 'out') break;
+    out.push(ev);
     state.cursor++;
-    if (!ev) break;
-    batch.push(ev);
-    if (ev.method === 'onResult' || ev.method === 'onExit') break;
   }
-  return batch;
+  return out;
 }
 ```
 
@@ -694,7 +726,7 @@ import type {
   SessionSpawnOptions,
   SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
-import { createReplayState, nextBatch, skipToResult, type ReplayState, type RecordedEvent } from './fixture';
+import { createReplayState, drainOutputs, consumeInput, isExhausted, type ReplayState, type RecordedEvent } from './fixture';
 
 function sanitizeKey(key: string): string {
   return key.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -726,7 +758,8 @@ export class ReplaySession implements AdapterSession {
   async spawn(_options?: SessionSpawnOptions, sink?: SessionSink): Promise<AdapterProcess> {
     this.spawned = true;
     this.sink = sink;
-    this.emit(nextBatch(this.state));
+    // Leading outputs only (usually none — onInit arrives after the first message).
+    this.emit(drainOutputs(this.state));
     return {
       id: this.id,
       adapterId: this.adapterId,
@@ -738,13 +771,33 @@ export class ReplaySession implements AdapterSession {
   }
 
   async sendMessage(): Promise<void> {
-    this.emit(nextBatch(this.state));
+    this.advance('sendMessage');
   }
   async respondToPermission(_response: ControlResponse): Promise<void> {
-    this.emit(nextBatch(this.state));
+    this.advance('respondToPermission');
   }
   async interrupt(): Promise<void> {
-    this.emit(skipToResult(this.state));
+    this.advance('interrupt');
+  }
+
+  /**
+   * Consume this interaction's `in` marker (which must match `expected` — markers are the
+   * synchronization contract) and emit the run of outputs that followed it. The first output's
+   * delay is based off the marker, so recorded think-time between turns is not replayed.
+   */
+  private advance(expected: string): void {
+    const marker = isExhausted(this.state) ? null : consumeInput(this.state);
+    if (!marker || marker.method !== expected) {
+      this.sink?.onError(
+        new Error(
+          `mock-cli: expected an '${expected}' marker but the fixture had '${marker?.method ?? 'nothing (exhausted)'}' — ` +
+            `the test drives a different interaction order than was recorded. Re-record.`,
+        ),
+      );
+      return;
+    }
+    this.lastDelay = marker.delayMs;
+    this.emit(drainOutputs(this.state));
   }
 
   private emit(batch: RecordedEvent[]): void {
@@ -900,7 +953,10 @@ In `packages/e2e/fixtures/chat.ts`, change the `adapterId` default:
 
 - [ ] **Step 4: package.json scripts**
 
-Add to `packages/e2e/package.json` `scripts`:
+Add to `packages/e2e/package.json` `scripts`. `test:record`/`test:mock` are **driver prefixes** — always
+pass the enrolled spec/grep so they never blanket-run the suite (an un-enrolled AI spec in mock mode
+fails fast: `ReplaySession` throws "fixture not found"; a non-AI spec that never sends a message would
+spawn a mock session with no fixture and also throw). Example: `pnpm --filter @qlan-ro/mainframe-e2e test:mock 06-permissions.spec.ts -g Interactive`.
 
 ```json
     "build:mock": "node ../../node_modules/.bin/esbuild plugins/mock-cli/src/index.ts --bundle --platform=node --format=cjs --outfile=plugins/mock-cli/index.js",
@@ -969,8 +1025,13 @@ lsof -ti :31416 | xargs kill 2>/dev/null || true
 
 - [ ] **Step 4: Inspect the fixture**
 
-Run: `head -5 packages/e2e/fixtures/recordings/permissions-interactive.0.ndjson`
-Expected: NDJSON lines beginning with `{"method":"onInit"...` and including at least one `{"method":"onPermission"...`. If it's empty or has no `onPermission`, re-record (Step 3).
+Run:
+```bash
+head -5 packages/e2e/fixtures/recordings/permissions-interactive.0.ndjson
+grep -c '"dir":"in","method":"sendMessage"' packages/e2e/fixtures/recordings/permissions-interactive.0.ndjson
+grep -c '"dir":"out","method":"onPermission"' packages/e2e/fixtures/recordings/permissions-interactive.0.ndjson
+```
+Expected: the first line is an `in` marker (`{"dir":"in","method":"sendMessage",...}`); there is at least one `dir:"in"` `sendMessage` and at least one `dir:"out"` `onPermission`. If the file is empty or has no `onPermission`, re-record (Step 3).
 
 - [ ] **Step 5: Replay in mock mode — the proof**
 
@@ -1044,17 +1105,24 @@ git commit -m "chore(e2e): changeset + document mock-cli unblock path"
 
 **Spec coverage:**
 - Three modes (unset/record/mock) → Tasks 4 (record hook), 8 (harness env/adapter switch). ✓
-- Generic proxy fixture format → Tasks 1–2 (RecordingSink), 3/6 (replay). ✓
+- Generic proxy fixture format with `dir` in/out markers → Tasks 1–2 (RecordingSink), 3/6 (replay). ✓
+- **Input markers** (record `in` for sendMessage/respondToPermission/interrupt; split replay on them) → record-wrapper (Task 4), replay-core `consumeInput`/`drainOutputs` (Task 3), session `advance()` (Task 7). ✓
 - mock-cli external plugin (manifest, adapter, session, build) → Tasks 5–7. ✓
-- Single production hook → Task 4 (E2E_MODE block); plus the documented `getDataDir()` alignment (changeset in Task 10). ✓
-- Per-session-index keying → `indexByKey` in record-wrapper (Task 4) and MockCliAdapter (Task 7), keyed by `E2E_RECORDING_KEY` (the random-temp-path fix). ✓
+- Production hooks → Task 4 (E2E_MODE record block + `getDataDir()` plugin-dir alignment; changeset in Task 10). ✓
+- Per-session-index keying by `E2E_RECORDING_KEY` → `indexByKey` in record-wrapper (Task 4) and MockCliAdapter (Task 7). ✓
+- Fixture truncated on re-record → `writeFileSync(file,'')` at createSession (Task 4). ✓
 - delayMs honored → `ReplaySession.emit` (Task 7). ✓
-- Missing fixture → clear throw; exhaustion handled by empty batches → Task 7. ✓
+- Missing fixture → clear throw; **exhaustion → `onError`** (fail-fast, not silent) → `advance()` (Task 7). ✓
+- Mock runs scoped to enrolled specs (no blanket suite run) → Task 8 scripts note. ✓
 - First milestone = 06-permissions Interactive → Task 9. ✓
 - Unit tests for recording + replay → Tasks 1–3. ✓
 
 **Placeholder scan:** No TBD/TODO; every code step has complete code. ✓
 
-**Type consistency:** `RecordedEvent {method,args,delayMs}` identical in core (`recording-format.ts`) and plugin (`fixture.ts`). `createRecordingSink(real, {write, now})` signature matches its test and the record-wrapper call. `nextBatch`/`skipToResult` names match between core `replay-core.ts`, its tests, and the plugin `fixture.ts` + `session.ts`. `wrapClaudeForRecording(adapters)` matches the index.ts call. `launchApp({recordingKey})` matches the 06-permissions call. ✓
+**Type consistency:** `RecordedEvent {dir,method,args,delayMs}` identical in core (`recording-format.ts`) and plugin (`fixture.ts`). `createRecordingSink(real, {write, now})` matches its test and the record-wrapper call. `createReplayState`/`consumeInput`/`drainOutputs`/`isExhausted` names match between core `replay-core.ts`, its tests, the plugin `fixture.ts`, and `session.ts`. `wrapClaudeForRecording(adapters)` matches the index.ts call. `launchApp({recordingKey})` matches the 06-permissions call. ✓
 
-**Known deviation from the design doc:** the design said "spec files unchanged"; in practice each *recorded* spec needs a one-line `recordingKey` in its `beforeAll` (random temp project paths can't be the fixture key). Non-recorded specs are untouched. Documented in Task 9 and COVERAGE-GAPS (Task 10).
+**Codex review (iteration 1) fixes applied:** (1) input markers replace output-type boundaries — `spawn` no longer consumes the first turn's response; (2) fixture truncated at session creation so re-recording doesn't concatenate; (3) exhaustion emits `onError` instead of returning silently; (4) `test:mock` is a driver prefix scoped to enrolled specs.
+
+**Codex review (iteration 2) fixes applied:** (5) unified `in`/`out` timeline (`createRecordingSink.now` = elapsed-since-start, shared with the marker writer) and `advance()` bases the turn's first output delay off the consumed marker — recorded think-time is no longer replayed; (6) `advance(expected)` validates the marker method and emits `onError` on mismatch (markers are the sync contract); (7) Task 9 fixture-inspection updated for the `dir:"in"/"out"` format.
+
+**Known deviation from the design doc:** each *recorded* spec needs a one-line `recordingKey` in its `beforeAll` (random temp project paths can't key a cross-run fixture). Non-recorded specs are untouched. Documented in Task 9 and COVERAGE-GAPS (Task 10).

@@ -83,52 +83,71 @@ mock:    test → daemon → mock-cli plugin → MockCliAdapter.createSession()
 
 ## Generic fixture format
 
-NDJSON, one object per recorded `SessionSink` call. **The recorder does not know the method names** —
+NDJSON. Each line is either an **output** event (`dir:"out"` — a `SessionSink` call the daemon
+emitted) or an **input** marker (`dir:"in"` — a session method the daemon *called*:
+`sendMessage`/`respondToPermission`/`interrupt`). **The recorder does not enumerate method names** —
 it records whatever was called. This is the core fix for the 8→17 drift.
 
+The input markers are essential (see "Why input markers" below): they record the exact cadence of
+daemon→session calls, so replay re-emits the right run of outputs after each one — without guessing
+which output belongs to which interaction.
+
 ```jsonl
-{"method":"onInit","args":["sess_abc"],"delayMs":0}
-{"method":"onMessage","args":[[{"type":"text","text":"I'll create that file."}]],"delayMs":120}
-{"method":"onPermission","args":[{"requestId":"r1","toolName":"Write","input":{"path":"/tmp/x"}}],"delayMs":900}
-{"method":"onToolResult","args":[[{"type":"tool_result","content":"ok"}]],"delayMs":40}
-{"method":"onResult","args":[{"cost":0.01,"durationMs":5200}],"delayMs":2000}
+{"dir":"in","method":"sendMessage","args":["Create a file at /tmp/x"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["sess_abc"],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll create that file."}]],"delayMs":120}
+{"dir":"out","method":"onPermission","args":[{"requestId":"r1","toolName":"Write","input":{"path":"/tmp/x"}}],"delayMs":900}
+{"dir":"in","method":"respondToPermission","args":[{"requestId":"r1","behavior":"deny"}],"delayMs":1500}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Okay, cancelled."}]],"delayMs":1600}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.01}],"delayMs":2000}
 ```
 
-- `method` — any `SessionSink` method name.
-- `args` — the exact arguments array passed (serialized as-is).
-- `delayMs` — ms since session start when the call happened; replay waits this long *relative to the
-  previous event* before emitting (so loading/intermediate states render).
+- `dir` — `"in"` (daemon called the session) or `"out"` (session called the sink).
+- `method` — any session/sink method name.
+- `args` — the exact arguments array passed (serialized as-is; non-JSON-able values reduced).
+- `delayMs` — ms since session start when the call happened (`in` and `out` share one timeline).
+  Replay fires each turn's outputs *relative to the `in` marker that preceded them* (not relative to
+  the prior output), so recorded test/user think-time between turns is never replayed — only the
+  intra-turn output spacing is.
 
-Filenames: `{sanitized-project-path}.{session-index}.ndjson`. Path is sanitized (separators/special
-chars → `-`, collapse repeats, trim). A per-project counter increments on each `createSession`, so
-multiple chats on one project key to `.0`, `.1`, … Both recorder and replayer maintain this counter.
+### Why input markers
 
-## Recording (`packages/core/src/testing/recording-sink.ts`)
+`ChatManager` spawns a session lazily on the first `sendMessage`, and Claude's `onInit` fires only
+*after* the first API call — so there is no reliable output-only boundary between "startup", "first
+user turn", and "permission response". Splitting replay on output types (e.g. "drain until
+`onPermission`") desyncs: `spawn()` would consume the first turn's response before the test even
+sends a message. Recording the `in` markers makes the split exact and content-agnostic.
 
-`createRecordingSink(realSink, filePath)` returns a `Proxy<SessionSink>`:
+Filenames: `{sanitized-recording-key}.{session-index}.ndjson`. The key comes from
+`E2E_RECORDING_KEY` (not the project path — e2e project paths are random temp dirs, so they can't
+key a fixture that must match across separate record and replay runs). A per-key counter increments
+on each `createSession`, so multiple chats under one key map to `.0`, `.1`, … Both recorder and
+replayer maintain this counter. The key is set per-describe via `launchApp({ recordingKey })`.
 
-- `get(target, prop)`: returns a function that (1) appends `{method: prop, args, delayMs}` to
-  `filePath`, then (2) calls `realSink[prop](...args)`. Non-function props pass through.
-- `delayMs` = `now - sessionStart` captured at first call; relative deltas computed on write.
-- Writes are append-only (one line per call). A serialization guard reduces non-JSON-able args
-  (e.g. an `Error` in `onError` becomes `{name,message}`) and logs a warning, so the file stays
-  valid NDJSON.
+## Recording (`packages/core/src/testing/`)
 
-### Daemon hook (`packages/core/src/index.ts`)
+`createRecordingSink(realSink, deps)` returns a `Proxy<SessionSink>`:
 
-A single block, after the Claude builtin registers and before user plugins load:
+- `get(target, prop)`: returns a function that (1) writes `{dir:"out", method, args, delayMs}`, then
+  (2) calls `realSink[prop](...args)`. Non-function props pass through.
+- `delayMs` = `now() - sessionStart`. `deps.write`/`deps.now` are injected (file append + `Date.now`
+  in the daemon; captured array + fake clock in tests).
+- A serialization guard reduces non-JSON-able args (e.g. an `Error` in `onError` becomes
+  `{name,message}`) so the file stays valid NDJSON.
 
-```ts
-if (process.env.E2E_MODE === 'record') {
-  const dir = requireEnv('E2E_RECORDINGS_DIR');
-  wrapCreateSessionForRecording(adapters.get('claude'), dir); // Proxy createSession → inject sink at spawn
-}
-```
+### Daemon hook (`packages/core/src/index.ts` + `record-wrapper.ts`)
 
-`wrapCreateSessionForRecording` returns a `Proxy` over the adapter whose `createSession` returns a
-`Proxy` over the session whose `spawn(options, sink)` is called with `createRecordingSink(sink, file)`.
-The file path is derived from the session's `projectPath` + per-project index. Nothing runs unless
-`E2E_MODE==='record'`, so production is untouched.
+A single `E2E_MODE==='record'` block replaces the registered `claude` adapter with a recording Proxy.
+The session Proxy does two things:
+
+1. **`spawn(options, sink)`** — injects `createRecordingSink(sink, …)` so every output is teed.
+2. **`sendMessage` / `respondToPermission` / `interrupt`** — writes a `{dir:"in", method, args,
+   delayMs}` marker *before* delegating to the real method.
+
+Both share one writer + clock per session. The fixture file is **truncated when the session is
+created** (so re-recording overwrites cleanly — the per-key index resets to `0` each daemon run and
+would otherwise append to the previous run's file). Nothing runs unless `E2E_MODE==='record'`, so
+production is untouched.
 
 ## Replay (`packages/e2e/plugins/mock-cli/`)
 
@@ -136,27 +155,28 @@ The file path is derived from the session's `projectPath` + per-project index. N
 
 - `id="mock-cli"`, `name="Mock CLI"`, `capabilities={planMode:true}`.
 - `isInstalled()→true`, `getVersion()→"0.1.0"`, `listModels()→` static list mirroring Claude's.
-- `createSession(options)→ new ReplaySession(options, recordingsDir, indexFor(projectPath))`.
+- `createSession(options)→ new ReplaySession(options, recordingsDir, key, indexForKey(key))`.
 - `killAll()→` no-op. Optional `Adapter` methods return `[]`/static values to satisfy the interface.
 
 ### ReplaySession implements `AdapterSession`
 
-Loads `{project}.{index}.ndjson` on construction (throws a clear error naming the path if missing).
-Holds a queue of events and a cursor. Replay is **generic**: emit an event by `sink[method](...args)`,
-honoring `delayMs` via `setTimeout`.
+Loads `{key}.{index}.ndjson` on construction (throws a clear error naming the path if missing).
+Holds the parsed event list and a cursor. Replay is **generic**: emit an event by
+`sink[method](...args)`, honoring `delayMs` via `setTimeout`.
 
-Drain boundaries (an interaction emits events up to and including the boundary):
+Splitting is driven by the `in` markers, never by output type:
 
-| Method | Drains until |
-|--------|--------------|
-| `spawn(options, sink)` | stores sink; drains until first `onPermission` or queue empty (covers `onInit` + any pre-input messages). Returns a stub `AdapterProcess`. |
-| `sendMessage()` | next `onPermission`, `onResult`, or `onExit` |
-| `respondToPermission()` | resumes from cursor; same boundaries |
-| `interrupt()` | skips forward to next `onResult`/`onExit` |
+| Method | Behavior |
+|--------|----------|
+| `spawn(options, sink)` | stores sink; **drains leading `out` events** (up to the first `in` marker — usually none, since Claude's `onInit` arrives after the first message). Returns a stub `AdapterProcess`. |
+| `sendMessage()` | if exhausted → `onError`; else consume the next `in` marker, then drain the following run of `out` events (until the next `in` marker or end). |
+| `respondToPermission()` | same as `sendMessage`. |
+| `interrupt()` | same as `sendMessage` (the recorded `in` interrupt marker is followed by its result outputs). |
 
-- **Positional matching only.** Nth interaction → Nth recorded batch. The session never inspects
-  message content. E2E tests drive a fixed interaction order, so this is sufficient.
-- Queue exhausted before the test finishes → emit `onError` with a descriptive message.
+- **Positional matching only.** Nth daemon call → Nth recorded `in` marker + its outputs. Content is
+  never inspected. E2E tests drive a fixed interaction order, so this is sufficient.
+- **Exhausted before the test finishes** → emit `onError(new Error(...))` so Playwright fails fast
+  with a clear desync message instead of waiting for a timeout.
 - Replay is fully deterministic: the same fixture yields the same event sequence every run, so any
   conditional UI helper (e.g. `waitForPermissionCardHandlingPlan`) behaves identically each replay.
 - Irrelevant methods (`setModel`, `setPermissionMode`, `setPlanMode`, `sendCommand`, `loadHistory`,
@@ -166,17 +186,23 @@ Drain boundaries (an interaction emits events up to and including the boundary):
 ## E2E harness changes
 
 ### `fixtures/app.ts`
-When `E2E_MODE` is set: build the mock-cli plugin once (idempotent `pnpm --filter mock-cli build`),
-symlink `packages/e2e/plugins/mock-cli` → `~/.mainframe/plugins/mock-cli` (under the **isolated test
-data dir**, not the real `~/.mainframe`), and pass `E2E_MODE` + `E2E_RECORDINGS_DIR` into the spawned
-daemon's env. Remove the symlink on teardown.
+`launchApp({ recordingKey? })`. When `E2E_MODE` is set: pass `E2E_MODE`, `E2E_RECORDINGS_DIR`, and
+(if provided) `E2E_RECORDING_KEY` into the spawned daemon's env. In **mock** mode also build the
+plugin (esbuild → single CJS `index.js`) and symlink `packages/e2e/plugins/mock-cli` into
+`<testDataDir>/plugins/mock-cli` — the isolated data dir, never the real `~/.mainframe` (the daemon
+now scans `getDataDir()/plugins`; see Production-code impact).
 
 ### `fixtures/chat.ts`
 `createTestChat` adapter id defaults to `mock-cli` when `E2E_MODE==='mock'`, else `claude`. The
 `adapterId` parameter and its threading through `createChat` → ChatManager already exist.
 
 ### Spec files
-Unchanged. They call `sendMessage` / `waitForAIIdle` / `waitForPermissionCardHandlingPlan` as today.
+A spec is **enrolled** for record/replay by giving its describe's `beforeAll` a
+`launchApp({ recordingKey: '<stable-key>' })`; otherwise its body is unchanged (still
+`sendMessage` / `waitForAIIdle` / `waitForPermissionCardHandlingPlan`). Non-enrolled specs are not
+touched. **Mock mode is only meaningful for enrolled specs** — running an un-enrolled AI spec in
+mock mode fails fast (the `ReplaySession` constructor throws "fixture not found"), so the
+`test:mock` runs target enrolled specs explicitly rather than the whole suite.
 
 ## First milestone — the one proof
 
@@ -196,17 +222,22 @@ recording is messy, re-record — it's a manual step.)
 
 ## Production-code impact
 
-One `E2E_MODE`-gated block in `packages/core/src/index.ts` plus a new `packages/core/src/testing/`
-module that is only imported from that block. No other production files change.
+Two changes in `packages/core/src/index.ts`:
+1. One `E2E_MODE==='record'`-gated block (calls into the new `packages/core/src/testing/` module).
+2. The user-plugin scan dir changes from a hardcoded `~/.mainframe/plugins` to `getDataDir()/plugins`
+   — behavior-neutral in production (`getDataDir()` defaults to `~/.mainframe`), and it aligns with
+   the todos builtin already using `getDataDir()`. This is what lets the harness load the plugin
+   from the isolated test data dir. Tracked with a core `patch` changeset.
+
+The `packages/core/src/testing/` module is only imported from the record block.
 
 ## Testing
 
-- **Unit (core):** `recording-sink` records `{method,args,delayMs}` and forwards to the real sink;
-  delay math; non-serializable-arg guard.
-- **Unit (plugin):** `ReplaySession` drain boundaries against a hand-written fixture — `spawn` drains
-  to first permission; `sendMessage` to next boundary; `respondToPermission` resumes; exhaustion →
-  `onError`; missing file → clear throw.
-- **Integration (the proof):** recorded `06-permissions` Interactive block replays green in mock mode.
+- **Unit (core):** `recording-sink` records `{dir:"out",method,args,delayMs}` and forwards to the
+  real sink; delay math; non-serializable-arg guard. `replay-core` split logic: `drainOutputs` stops
+  at the next `in` marker; `consumeInput` skips one `in` marker; `isExhausted`.
+- **Integration (the proof):** recorded `06-permissions` Interactive block replays green in mock mode
+  (covers `spawn`/`sendMessage`/`respondToPermission` splitting and exhaustion `onError` end-to-end).
 
 ## Edge cases
 
