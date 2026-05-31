@@ -39,3 +39,13 @@ export function resolveClaudeConfigPath(basePath: string, requestedPath: string)
     return null;
   }
 }
+
+/**
+ * Resolve a requested path for reading: validated inside the project base, or —
+ * as a fallback — under ~/.claude/. Returns the validated absolute path or null.
+ * Centralizes the dual-resolution so every read route applies identical
+ * path-traversal checks.
+ */
+export function resolveReadablePath(basePath: string, requestedPath: string): string | null {
+  return resolveAndValidatePath(basePath, requestedPath) ?? resolveClaudeConfigPath(basePath, requestedPath);
+}

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { nanoid } from 'nanoid';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
-import { resolveAndValidatePath, resolveClaudeConfigPath } from './path-utils.js';
+import { resolveReadablePath } from './path-utils.js';
 import { validate, AddMentionBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
@@ -53,8 +53,7 @@ export function contextRoutes(ctx: RouteContext): Router {
 
       try {
         const sessionBase = chat.worktreePath ?? project.path;
-        const fullPath =
-          resolveAndValidatePath(sessionBase, filePath) ?? resolveClaudeConfigPath(sessionBase, filePath);
+        const fullPath = resolveReadablePath(sessionBase, filePath);
         if (!fullPath) {
           res.status(403).json({ success: false, error: 'Path outside project' });
           return;

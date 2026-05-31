@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 import { z } from 'zod';
 import type { RouteContext } from './types.js';
 import { getEffectivePath, param } from './types.js';
-import { resolveAndValidatePath, resolveClaudeConfigPath } from './path-utils.js';
+import { resolveAndValidatePath, resolveReadablePath } from './path-utils.js';
 import { asyncHandler } from './async-handler.js';
 import { createChildLogger } from '../../logger.js';
 import { BrowseFilesystemQuery, validate } from './schemas.js';
@@ -219,7 +219,7 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
   const encoding = req.query.encoding as string | undefined;
 
   try {
-    const fullPath = resolveAndValidatePath(basePath, filePath) ?? resolveClaudeConfigPath(basePath, filePath);
+    const fullPath = resolveReadablePath(basePath, filePath);
     if (!fullPath) {
       res.status(403).json({ error: 'Path outside project' });
       return;
