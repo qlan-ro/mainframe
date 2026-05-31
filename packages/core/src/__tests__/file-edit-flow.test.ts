@@ -112,7 +112,7 @@ describe('file-edit flow', () => {
     const chats = new ChatManager(db as any, registry, new BackgroundTaskTracker(), undefined, (event) =>
       wsRef.current?.broadcastEvent(event),
     );
-    const { app } = createHttpServer(db as any, chats, registry);
+    const { app } = createHttpServer({ db: db as any, chats, adapters: registry });
     server = createServer(app);
     wsRef.current = new WebSocketManager(server, chats);
     const port = await startServer(server);

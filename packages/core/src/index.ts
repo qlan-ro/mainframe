@@ -116,18 +116,18 @@ async function main(): Promise<void> {
 
   let daemonTunnelUrl: string | null = null;
 
-  const server = createServerManager(
+  const server = createServerManager({
     db,
     chats,
     adapters,
     attachmentStore,
     pluginManager,
     launchRegistry,
-    () => daemonTunnelUrl,
+    getTunnelUrl: () => daemonTunnelUrl,
     tunnelManager,
-    config.port,
+    port: config.port,
     backgroundTasks,
-  );
+  });
 
   await reconcileBackgroundTasks({ tracker: backgroundTasks, db });
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
