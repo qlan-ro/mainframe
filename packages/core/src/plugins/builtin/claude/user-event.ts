@@ -6,7 +6,7 @@ import { buildToolResultBlocks, extractToolResultContent } from './history.js';
 import { shouldScanToolResultForPr, extractPrFromToolResult } from './pr-detection.js';
 import { createChildLogger } from '../../../logger.js';
 
-const log = createChildLogger('claude:events');
+const log = createChildLogger('claude:user-event');
 
 /**
  * Extract a skill_loaded block from a text block when it carries the CLI's
