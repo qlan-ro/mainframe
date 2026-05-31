@@ -9,7 +9,8 @@ test.describe('§6 Permission system — Interactive', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    // recordingKey enrolls this describe for mock-cli record/replay (E2E_MODE=record|mock).
+    fixture = await launchApp({ recordingKey: 'permissions-interactive' });
     project = await createTestProject(fixture.page);
     await createTestChat(fixture.page, project.projectId, 'default');
   });
