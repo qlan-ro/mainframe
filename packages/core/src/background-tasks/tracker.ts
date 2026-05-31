@@ -91,6 +91,11 @@ export class BackgroundTaskTracker {
     return out;
   }
 
+  removeChat(chatId: string): void {
+    this.byChat.delete(chatId);
+    this.pidByChat.delete(chatId);
+  }
+
   setPid(chatId: string, taskId: string, pid: number): void {
     const m = this.pidByChat.get(chatId) ?? new Map<string, number>();
     m.set(taskId, pid);

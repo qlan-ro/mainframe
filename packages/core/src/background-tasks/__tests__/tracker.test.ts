@@ -78,6 +78,12 @@ describe('BackgroundTaskTracker', () => {
     expect(tracker.list('chat-b').map((t) => t.id)).toEqual(['b']);
   });
 
+  it('removeChat drops all tasks for that chat', () => {
+    tracker.start('chat-a', makeTask(), '/tmp/spool/task-1.output');
+    tracker.removeChat('chat-a');
+    expect(tracker.list('chat-a')).toEqual([]);
+  });
+
   describe('adopt (reconciliation)', () => {
     it('inserts a fully-formed task without emitting started/ended', () => {
       const local: { kind: string }[] = [];
@@ -171,6 +177,17 @@ describe('BackgroundTaskTracker', () => {
       expect(tracker.getPid('chat-a', 't1')).toBe(111);
       expect(tracker.getPid('chat-b', 't1')).toBe(222);
       expect(tracker.getPid('chat-a', 'missing')).toBeNull();
+    });
+
+    it('removeChat clears the pid map slice for that chat', () => {
+      tracker.start(
+        'chat-a',
+        { id: 't1', toolName: 'Bash', toolUseId: 'u', command: 'x', description: '' },
+        '/p/t1.out',
+      );
+      tracker.setPid('chat-a', 't1', 111);
+      tracker.removeChat('chat-a');
+      expect(tracker.getPid('chat-a', 't1')).toBeNull();
     });
   });
 
