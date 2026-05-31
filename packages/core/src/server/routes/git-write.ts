@@ -43,9 +43,9 @@ function gitRoute<T>(
     try {
       const result = await handler(GitService.forProject(projectPath), parsed.data);
       res.json(result ?? { ok: true });
-    } catch (err: any) {
+    } catch (err) {
       logger.warn({ err }, `${label} failed`);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 }
@@ -57,9 +57,9 @@ function gitRouteNoBody(ctx: RouteContext, handler: (svc: GitService) => Promise
     try {
       const result = await handler(GitService.forProject(projectPath));
       res.json(result ?? { ok: true });
-    } catch (err: any) {
+    } catch (err) {
       logger.warn({ err }, `${label} failed`);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 }

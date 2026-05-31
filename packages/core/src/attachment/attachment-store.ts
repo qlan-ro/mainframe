@@ -143,8 +143,10 @@ export class AttachmentStore {
   async deleteChat(chatId: string): Promise<void> {
     try {
       await rm(this.chatDir(chatId), { recursive: true, force: true });
-    } catch {
-      // Invalid chatId segment, or directory may not exist
+    } catch (err) {
+      // `rm` with force ignores a missing dir, so reaching here means an invalid
+      // chatId segment (chatDir threw) — worth surfacing rather than swallowing.
+      logger.warn({ err, chatId }, 'failed to delete chat attachments');
     }
   }
 
