@@ -566,8 +566,8 @@ git commit -m "feat(core): E2E record hook + honor MAINFRAME_DATA_DIR for plugin
 ```json
 {
   "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "target": "es2022",
     "strict": true,
     "noEmit": true,
@@ -577,6 +577,11 @@ git commit -m "feat(core): E2E record hook + honor MAINFRAME_DATA_DIR for plugin
   "include": ["src"]
 }
 ```
+
+> `moduleResolution: "bundler"` (not `nodenext`) is required: the plugin uses extensionless relative
+> imports so esbuild bundles them, and bundler resolution is the matching type-check mode. Also add
+> `"exclude": ["dist", "node_modules", "plugins/mock-cli"]` to **`packages/e2e/tsconfig.json`** so the
+> e2e package's NodeNext program doesn't try (and fail) to resolve the plugin's extensionless imports.
 
 - [ ] **Step 4: src/index.ts** (extensionless relative imports — esbuild resolves `.ts`)
 
