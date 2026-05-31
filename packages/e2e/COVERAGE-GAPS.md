@@ -39,9 +39,14 @@ Not to be automated in this suite. **10 ids.**
 
 ## 2. Blocked — AI-coupled (needs a live agent turn)
 
+> **Unblock mechanism (in progress):** the mock-cli record/replay plugin (`plugins/mock-cli/`, see its
+> `DESIGN.md`/`PLAN.md`) lets these specs run in CI with no API call. Enroll a spec by giving its
+> `beforeAll` a `launchApp({ recordingKey })`, recording once with `E2E_MODE=record`, and committing
+> the fixture; CI then runs it with `E2E_MODE=mock`. First proof target: `06-permissions` (Interactive).
+
 These render only after Claude produces a plan, a question, tool calls, or a PR — or the control
 itself dispatches a message to the agent. Coverable, but each adds a real API turn (cost +
-nondeterminism). Park behind an opt-in `@ai` tag if pursued. **~40 ids.**
+nondeterminism) **unless recorded via mock-cli (above)**. **~40 ids.**
 
 | Group | Ids | Trigger required |
 |-------|-----|------------------|
