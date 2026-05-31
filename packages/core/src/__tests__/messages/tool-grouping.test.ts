@@ -10,14 +10,19 @@ import type { ToolCategories } from '../../messages/tool-categorization.js';
 
 /* ── fixtures ────────────────────────────────────────────────────── */
 
+// Mirrors ClaudeAdapter.getToolCategories(): the V2 task tools are BOTH hidden
+// (never rendered as raw tool cards) AND progress (surfaced as _TaskProgress).
+// Progress therefore takes precedence over hidden in grouping.
 const CLAUDE_CATEGORIES: ToolCategories = {
   explore: new Set(['Read', 'Glob', 'Grep']),
   hidden: new Set([
+    'TodoWrite',
+    'TaskCreate',
+    'TaskUpdate',
     'TaskList',
     'TaskGet',
     'TaskOutput',
     'TaskStop',
-    'TodoWrite',
     'Skill',
     'EnterPlanMode',
     'AskUserQuestion',

@@ -20,9 +20,12 @@ import type { DisplayContent, ToolCategories } from '@qlan-ro/mainframe-types';
 // ---------------------------------------------------------------------------
 // Shared fixture categories (mirrors a realistic Claude adapter declaration)
 // ---------------------------------------------------------------------------
+// TodoWrite is in BOTH hidden and progress, mirroring how ClaudeAdapter marks
+// the real V2 task tools: hidden (never a raw tool card) yet surfaced as a
+// single _TaskProgress entry. Progress takes precedence over hidden.
 const CAT: ToolCategories = {
   explore: new Set(['Read', 'Grep', 'Glob', 'LS']),
-  hidden: new Set(['HiddenTool']),
+  hidden: new Set(['HiddenTool', 'TodoWrite']),
   progress: new Set(['TodoWrite']),
   subagent: new Set(['Task', 'Agent']),
 };

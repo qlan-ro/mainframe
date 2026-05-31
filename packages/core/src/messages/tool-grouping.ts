@@ -69,13 +69,10 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
       continue;
     }
 
-    // Skip hidden tools
-    if (isHiddenToolPart(part.toolName, part.category, categories)) {
-      i++;
-      continue;
-    }
-
-    // Collect task progress tools for accumulated display
+    // Collect task progress tools for accumulated display. Checked BEFORE the
+    // hidden suppression: adapters mark the V2 task tools as both `hidden` (so
+    // they never render as raw tool cards) and `progress` (so they surface as a
+    // single _TaskProgress entry). Progress must win, or they'd be dropped.
     if (isTaskProgressTool(part.toolName, categories)) {
       if (taskInsertIndex === -1) taskInsertIndex = result.length;
       taskItems.push({
@@ -86,6 +83,12 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
         isError: part.isError,
         ...(part.parentToolUseId && { parentToolUseId: part.parentToolUseId }),
       });
+      i++;
+      continue;
+    }
+
+    // Skip hidden tools
+    if (isHiddenToolPart(part.toolName, part.category, categories)) {
       i++;
       continue;
     }
