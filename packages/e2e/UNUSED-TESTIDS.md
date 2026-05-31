@@ -1,47 +1,10 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references (170). Unused: 183._
+_Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references (193). Unused: 164._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator. Some of these
 > elements ARE exercised via role/text locators (e.g. permission buttons via getByRole), so
 > this lists selector gaps, not necessarily untested behavior. `${…}` marks templated id families.
-
-## todos (35)
-- `todos-attachment-delete-${…}`
-- `todos-attachment-preview-${…}`
-- `todos-attachments-file-input`
-- `todos-attachments-upload`
-- `todos-card-start-${…}`
-- `todos-dep-add-toggle`
-- `todos-dep-option-${…}`
-- `todos-dep-remove-${…}`
-- `todos-dep-search`
-- `todos-filter-chip-${…}`
-- `todos-filter-clear`
-- `todos-filter-label-option-${…}`
-- `todos-filter-labels-toggle`
-- `todos-label-input`
-- `todos-label-remove-${…}`
-- `todos-modal-assignees-input`
-- `todos-modal-attachment-preview-${…}`
-- `todos-modal-attachment-remove-${…}`
-- `todos-modal-cancel`
-- `todos-modal-file-input`
-- `todos-modal-milestone-input`
-- `todos-modal-priority-select`
-- `todos-modal-start-session`
-- `todos-modal-status-select`
-- `todos-modal-type-select`
-- `todos-modal-upload`
-- `todos-quick-attachment-preview-${…}`
-- `todos-quick-attachment-remove-${…}`
-- `todos-quick-body-input`
-- `todos-quick-create`
-- `todos-quick-dialog`
-- `todos-quick-title-input`
-- `todos-retry`
-- `todos-sidebar-item-${…}`
-- `todos-sort-${…}`
 
 ## chat (26)
 - `chat-lightbox-close-button`
@@ -70,6 +33,24 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `chat-question-submit-button`
 - `chat-session-bar-bg-tasks-pill`
 - `chat-session-bar-bg-tasks-popover`
+
+## todos (16)
+- `todos-attachment-delete-${…}`
+- `todos-attachment-preview-${…}`
+- `todos-attachments-file-input`
+- `todos-attachments-upload`
+- `todos-card-start-${…}`
+- `todos-filter-chip-${…}`
+- `todos-modal-attachment-preview-${…}`
+- `todos-modal-attachment-remove-${…}`
+- `todos-modal-file-input`
+- `todos-modal-start-session`
+- `todos-modal-upload`
+- `todos-quick-attachment-preview-${…}`
+- `todos-quick-attachment-remove-${…}`
+- `todos-quick-body-input`
+- `todos-retry`
+- `todos-sidebar-item-${…}`
 
 ## sandbox (12)
 - `sandbox-button-generate-with-agent`
