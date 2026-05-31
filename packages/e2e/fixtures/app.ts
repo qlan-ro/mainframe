@@ -73,6 +73,24 @@ function assertRendererBuiltForTestPort(): void {
 }
 
 /**
+ * Reap leftover e2e Electron processes before launching.
+ *
+ * The app enables the Chrome DevTools port (9222) in NODE_ENV=development — which e2e uses — so
+ * every e2e Electron binds 9222. If a run's beforeAll fails, its Electron can be orphaned still
+ * holding 9222, and the *next* launch then hangs (electron.launch never gets a window) → its
+ * beforeAll times out → another orphan, cascading. The suite is serial (workers:1), so any live
+ * e2e Electron at launch time is a zombie and safe to kill. Scoped to the `mf-e2e-data-` temp
+ * profile prefix (which only this harness creates), so it never touches a real Mainframe instance.
+ */
+function reapStrayE2eElectrons(): void {
+  try {
+    execFileSync('pkill', ['-9', '-f', 'mf-e2e-data-'], { stdio: 'ignore' });
+  } catch {
+    // pkill exits non-zero when nothing matched — the normal, healthy case. /* expected */
+  }
+}
+
+/**
  * Fail fast if something is already answering on our port. Without this, a foreign daemon
  * (e.g. a dev Mainframe) would absorb the bind and the suite would run against — and pollute —
  * real data. See git history: this exact footgun registered junk projects in a real instance.
@@ -117,6 +135,9 @@ async function waitForDaemon(maxMs = 10_000): Promise<void> {
 }
 
 export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFixture> {
+  // Kill any orphaned e2e Electron from a previously-failed run (they hold the shared 9222 debug
+  // port and would hang this launch). Serial suite, so this only ever targets zombies.
+  reapStrayE2eElectrons();
   // Refuse to run if the built renderer points at the prod daemon, or if something already answers
   // on our port — both would route the test app at real data.
   assertRendererBuiltForTestPort();
