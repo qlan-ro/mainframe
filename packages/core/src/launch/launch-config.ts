@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { LaunchConfig, LaunchConfiguration } from '@qlan-ro/mainframe-types';
+import type { LaunchConfig } from '@qlan-ro/mainframe-types';
 import { expandVariables } from './expand-variables.js';
 
 // Allowed executables: common package managers + node. No shell operators.
@@ -61,12 +61,4 @@ export function parseLaunchConfig(
     return { success: false, error: result.error.issues.map((i) => i.message).join(', ') };
   }
   return { success: true, data: result.data as LaunchConfig };
-}
-
-export function getPreviewUrl(configurations: LaunchConfiguration[]): string | null {
-  const preview = configurations.find((c) => c.preview);
-  if (!preview) return null;
-  if (preview.url) return preview.url;
-  if (preview.port) return `http://localhost:${preview.port}`;
-  return null;
 }

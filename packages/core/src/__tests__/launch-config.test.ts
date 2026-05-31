@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseLaunchConfig, getPreviewUrl } from '../launch/launch-config.js';
+import { parseLaunchConfig } from '../launch/launch-config.js';
 
 const VALID_CONFIG = {
   version: '0.0.1',
@@ -82,33 +82,5 @@ describe('parseLaunchConfig', () => {
       ],
     });
     expect(result.success).toBe(true);
-  });
-});
-
-describe('getPreviewUrl', () => {
-  it('uses url field when present', () => {
-    const config = {
-      ...VALID_CONFIG,
-      configurations: [
-        {
-          name: 'UI',
-          runtimeExecutable: 'pnpm',
-          runtimeArgs: [],
-          port: 3000,
-          url: 'http://myproxy.local',
-          preview: true,
-        },
-      ],
-    };
-    expect(getPreviewUrl(config.configurations)).toBe('http://myproxy.local');
-  });
-
-  it('constructs localhost url from port', () => {
-    expect(getPreviewUrl(VALID_CONFIG.configurations)).toBe('http://localhost:3000');
-  });
-
-  it('returns null when no preview config', () => {
-    const configs = [{ name: 'API', runtimeExecutable: 'node', runtimeArgs: [], port: 4000, url: null }];
-    expect(getPreviewUrl(configs)).toBeNull();
   });
 });
