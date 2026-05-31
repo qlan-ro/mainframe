@@ -1,6 +1,6 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references (161). Unused: 190._
+_Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references (170). Unused: 183._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator. Some of these
 > elements ARE exercised via role/text locators (e.g. permission buttons via getByRole), so
@@ -124,13 +124,6 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 - `editor-line-comment-send`
 - `editor-submit-review`
 
-## find (5)
-- `find-in-path-close`
-- `find-in-path-include-ignored`
-- `find-in-path-input`
-- `find-in-path-modal`
-- `find-in-path-result-${…}`
-
 ## named (5)
 - `named-tunnel-clear-config`
 - `named-tunnel-save`
@@ -212,10 +205,6 @@ _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references 
 ## external (2)
 - `external-session-branch`
 - `external-session-worktree`
-
-## fileview (2)
-- `fileview-next-change`
-- `fileview-prev-change`
 
 ## model (2)
 - `model-dropdown-option-${…}`
