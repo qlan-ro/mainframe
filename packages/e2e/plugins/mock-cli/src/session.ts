@@ -84,9 +84,15 @@ export class ReplaySession implements AdapterSession {
   private advance(expected: string): void {
     const marker = isExhausted(this.state) ? null : consumeInput(this.state);
     if (!marker || marker.method !== expected) {
+      // Distinguish exhaustion from a mid-turn desync (cursor sitting on an `out` event).
+      const had = marker
+        ? `'${marker.method}'`
+        : isExhausted(this.state)
+          ? 'nothing (fixture exhausted)'
+          : `an out-event ('${this.state.events[this.state.cursor]?.method}') — fixture is mid-turn`;
       this.sink?.onError(
         new Error(
-          `mock-cli: expected an '${expected}' marker but the fixture had '${marker?.method ?? 'nothing (exhausted)'}' — ` +
+          `mock-cli: expected an '${expected}' marker but the fixture had ${had} — ` +
             `the test drives a different interaction order than was recorded. Re-record.`,
         ),
       );

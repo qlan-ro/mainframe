@@ -1,4 +1,7 @@
 // packages/core/src/testing/record-wrapper.ts
+// Sync fs here is intentional and exempt from the "no sync I/O in server code" rule: this path runs
+// only under E2E_MODE=record (never production), and synchronous appends keep each recorded event's
+// `elapsed()` timestamp ordered without await races. Do not refactor to async — it would reorder events. /* expected */
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
