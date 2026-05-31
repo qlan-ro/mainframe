@@ -2,7 +2,7 @@ import { _electron as electron } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { spawn, execFileSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { mkdtempSync, rmSync, openSync, closeSync, mkdirSync, symlinkSync } from 'fs';
+import { mkdtempSync, rmSync, openSync, closeSync, mkdirSync, cpSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -105,7 +105,10 @@ export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFi
     buildMockPlugin();
     const pluginsDir = path.join(testDataDir, 'plugins');
     mkdirSync(pluginsDir, { recursive: true });
-    symlinkSync(MOCK_PLUGIN_DIR, path.join(pluginsDir, 'mock-cli'), 'dir');
+    // Copy (not symlink) the built plugin into the data dir: the daemon's plugin loader skips
+    // symlinked entries (readdirSync withFileTypes reports a symlinked dir as isDirectory()===false),
+    // so a symlink would never be discovered. A real directory copy is loaded.
+    cpSync(MOCK_PLUGIN_DIR, path.join(pluginsDir, 'mock-cli'), { recursive: true });
   }
 
   // Start daemon as a plain Node.js process.
