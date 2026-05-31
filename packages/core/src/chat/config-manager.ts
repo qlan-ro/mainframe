@@ -24,6 +24,33 @@ export class ChatConfigManager {
     this.deps.stopLaunchProcesses = fn;
   }
 
+  private requireActiveChat(chatId: string): ActiveChat {
+    const active = this.deps.getActiveChat(chatId);
+    if (!active) throw new Error(`Chat ${chatId} not found`);
+    return active;
+  }
+
+  /** Kill the spawned adapter session, if any, and detach it from the active chat. */
+  private async detachSession(active: ActiveChat): Promise<void> {
+    if (active.session?.isSpawned) {
+      await active.session.kill();
+      active.session = null;
+    }
+  }
+
+  /** Persist a worktree path/branch change (undefined clears it) and broadcast it. */
+  private applyWorktreeUpdate(
+    active: ActiveChat,
+    chatId: string,
+    worktreePath: string | undefined,
+    branchName: string | undefined,
+  ): void {
+    active.chat.worktreePath = worktreePath;
+    active.chat.branchName = branchName;
+    this.deps.db.chats.update(chatId, { worktreePath, branchName });
+    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+  }
+
   async updateChatConfig(
     chatId: string,
     adapterId?: string,
@@ -31,8 +58,7 @@ export class ChatConfigManager {
     permissionMode?: Chat['permissionMode'],
     planMode?: boolean,
   ): Promise<void> {
-    const active = this.deps.getActiveChat(chatId);
-    if (!active) throw new Error(`Chat ${chatId} not found`);
+    const active = this.requireActiveChat(chatId);
 
     if (adapterId !== undefined && adapterId !== active.chat.adapterId && active.chat.claudeSessionId) {
       throw new Error('Cannot change adapter after a session has started');
@@ -107,8 +133,7 @@ export class ChatConfigManager {
   }
 
   async enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
-    const active = this.deps.getActiveChat(chatId);
-    if (!active) throw new Error(`Chat ${chatId} not found`);
+    const active = this.requireActiveChat(chatId);
     if (active.chat.worktreePath) return;
 
     const project = this.deps.db.projects.get(active.chat.projectId);
@@ -129,31 +154,21 @@ export class ChatConfigManager {
         await moveSessionFiles(active.chat.claudeSessionId, oldProjectDir, newProjectDir);
       }
 
-      active.chat.worktreePath = info.worktreePath;
-      active.chat.branchName = info.branchName;
-      this.deps.db.chats.update(chatId, { worktreePath: info.worktreePath, branchName: info.branchName });
-      this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+      this.applyWorktreeUpdate(active, chatId, info.worktreePath, info.branchName);
       await this.deps.startChat(chatId);
       return;
     }
 
     // Pre-session path: kill any untracked process and create worktree
-    if (active.session?.isSpawned) {
-      await active.session.kill();
-      active.session = null;
-    }
+    await this.detachSession(active);
 
     const worktreeDir = this.deps.db.settings.get('general', 'worktreeDir') ?? GENERAL_DEFAULTS.worktreeDir;
     const info = await createWorktree(project.path, worktreeDir, baseBranch, branchName);
-    active.chat.worktreePath = info.worktreePath;
-    active.chat.branchName = info.branchName;
-    this.deps.db.chats.update(chatId, { worktreePath: info.worktreePath, branchName: info.branchName });
-    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+    this.applyWorktreeUpdate(active, chatId, info.worktreePath, info.branchName);
   }
 
   async attachWorktree(chatId: string, worktreePath: string, branchName: string): Promise<void> {
-    const active = this.deps.getActiveChat(chatId);
-    if (!active) throw new Error(`Chat ${chatId} not found`);
+    const active = this.requireActiveChat(chatId);
     if (active.chat.worktreePath) return;
 
     if (active.chat.claudeSessionId) {
@@ -169,24 +184,14 @@ export class ChatConfigManager {
         await moveSessionFiles(active.chat.claudeSessionId, oldProjectDir, newProjectDir);
       }
 
-      active.chat.worktreePath = worktreePath;
-      active.chat.branchName = branchName;
-      this.deps.db.chats.update(chatId, { worktreePath, branchName });
-      this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+      this.applyWorktreeUpdate(active, chatId, worktreePath, branchName);
       await this.deps.startChat(chatId);
       return;
     }
 
     // Pre-session path
-    if (active.session?.isSpawned) {
-      await active.session.kill();
-      active.session = null;
-    }
-
-    active.chat.worktreePath = worktreePath;
-    active.chat.branchName = branchName;
-    this.deps.db.chats.update(chatId, { worktreePath, branchName });
-    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+    await this.detachSession(active);
+    this.applyWorktreeUpdate(active, chatId, worktreePath, branchName);
   }
 
   async disableWorktree(chatId: string): Promise<void> {
@@ -194,19 +199,13 @@ export class ChatConfigManager {
     if (!active?.chat.worktreePath) return;
     if (active.chat.claudeSessionId) throw new Error('Cannot disable worktree after session has started');
 
-    if (active.session?.isSpawned) {
-      await active.session.kill();
-      active.session = null;
-    }
+    await this.detachSession(active);
 
     await this.deps.stopLaunchProcesses?.(active.chat.projectId, active.chat.worktreePath);
 
     const project = this.deps.db.projects.get(active.chat.projectId);
     if (project) await removeWorktree(project.path, active.chat.worktreePath, active.chat.branchName!);
 
-    active.chat.worktreePath = undefined;
-    active.chat.branchName = undefined;
-    this.deps.db.chats.update(chatId, { worktreePath: undefined, branchName: undefined });
-    this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
+    this.applyWorktreeUpdate(active, chatId, undefined, undefined);
   }
 }
