@@ -889,7 +889,7 @@ git commit -m "feat(e2e): MockCliAdapter + ReplaySession (positional replay)"
 Add to the imports at the top of `packages/e2e/fixtures/app.ts`:
 
 ```ts
-import { mkdtempSync, rmSync, openSync, closeSync, mkdirSync, symlinkSync } from 'fs';
+import { mkdtempSync, rmSync, openSync, closeSync, mkdirSync, cpSync } from 'fs';
 import { spawn, execFileSync } from 'child_process';
 ```
 (extend the existing `fs`/`child_process` import lines — do not duplicate them).
@@ -935,9 +935,13 @@ After `const testDataDir = mkdtempSync(...)`, add:
     buildMockPlugin();
     const pluginsDir = path.join(testDataDir, 'plugins');
     mkdirSync(pluginsDir, { recursive: true });
-    symlinkSync(MOCK_PLUGIN_DIR, path.join(pluginsDir, 'mock-cli'), 'dir');
+    // Copy, not symlink: the daemon's loadAll() skips symlinked entries (readdirSync withFileTypes
+    // reports a symlinked dir as isDirectory()===false), so a symlinked plugin is never discovered.
+    cpSync(MOCK_PLUGIN_DIR, path.join(pluginsDir, 'mock-cli'), { recursive: true });
   }
 ```
+
+(Import `cpSync` from `fs`, not `symlinkSync`.)
 
 Then merge `e2eEnv` into the daemon spawn env:
 

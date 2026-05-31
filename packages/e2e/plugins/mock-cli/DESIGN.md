@@ -188,9 +188,15 @@ Splitting is driven by the `in` markers, never by output type:
 ### `fixtures/app.ts`
 `launchApp({ recordingKey? })`. When `E2E_MODE` is set: pass `E2E_MODE`, `E2E_RECORDINGS_DIR`, and
 (if provided) `E2E_RECORDING_KEY` into the spawned daemon's env. In **mock** mode also build the
-plugin (esbuild → single CJS `index.js`) and symlink `packages/e2e/plugins/mock-cli` into
+plugin (esbuild → single CJS `index.js`) and **copy** `packages/e2e/plugins/mock-cli` into
 `<testDataDir>/plugins/mock-cli` — the isolated data dir, never the real `~/.mainframe` (the daemon
 now scans `getDataDir()/plugins`; see Production-code impact).
+
+> **Copy, not symlink.** The daemon's plugin loader skips symlinked entries —
+> `readdirSync(dir, { withFileTypes: true })` reports a symlinked directory as
+> `isDirectory() === false`, so `loadAll()` never discovers it and the adapter is never registered.
+> A real directory copy is required. (Supporting symlinked plugin dirs in the production loader is a
+> possible future enhancement, but carries symlink-escape considerations and is out of scope here.)
 
 ### `fixtures/chat.ts`
 `createTestChat` adapter id defaults to `mock-cli` when `E2E_MODE==='mock'`, else `claude`. The
