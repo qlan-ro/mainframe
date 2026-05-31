@@ -61,17 +61,20 @@ describe('GET /api/projects/:id/search/content', () => {
 
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        results: expect.arrayContaining([
-          expect.objectContaining({
-            file: 'notes.txt',
-            line: 2,
-            column: 1,
-            text: 'find me here',
-          }),
-        ]),
+        success: true,
+        data: expect.objectContaining({
+          results: expect.arrayContaining([
+            expect.objectContaining({
+              file: 'notes.txt',
+              line: 2,
+              column: 1,
+              text: 'find me here',
+            }),
+          ]),
+        }),
       }),
     );
-    const { results } = res.json.mock.calls[0][0];
+    const { results } = res.json.mock.calls[0][0].data;
     expect(results).toHaveLength(1);
   });
 
@@ -88,7 +91,7 @@ describe('GET /api/projects/:id/search/content', () => {
     handler({ params: { id: 'proj-1' }, query: { q: 'foo', path: 'src' } }, res, vi.fn());
     await flushPromises();
 
-    const { results } = res.json.mock.calls[0][0];
+    const { results } = res.json.mock.calls[0][0].data;
     const files = results.map((r: any) => r.file);
     expect(files).toContain('src/alpha.ts');
     expect(files).toContain('src/beta.ts');
@@ -104,7 +107,7 @@ describe('GET /api/projects/:id/search/content', () => {
     await flushPromises();
 
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: expect.any(String) }));
   });
 
   it('returns 400 for too-short query', async () => {
@@ -131,7 +134,7 @@ describe('GET /api/projects/:id/search/content', () => {
     handler({ params: { id: 'proj-1' }, query: { q: 'findme', path: '.', includeIgnored: 'true' } }, res, vi.fn());
     await flushPromises();
 
-    const { results } = res.json.mock.calls[0][0];
+    const { results } = res.json.mock.calls[0][0].data;
     const files = results.map((r: any) => r.file);
     expect(files).toContain('app.ts');
     expect(files).not.toContain('app.class');
@@ -148,7 +151,7 @@ describe('GET /api/projects/:id/search/content', () => {
     handler({ params: { id: 'proj-1' }, query: { q: 'hello', path: 'readme.txt' } }, res, vi.fn());
     await flushPromises();
 
-    const { results } = res.json.mock.calls[0][0];
+    const { results } = res.json.mock.calls[0][0].data;
     expect(results).toHaveLength(1);
     expect(results[0].column).toBe(1);
     expect(results[0].text).toBe('Hello World');
@@ -167,7 +170,7 @@ describe('GET /api/projects/:id/search/content', () => {
     handler({ params: { id: 'proj-1' }, query: { q: 'target', path: '.' } }, res, vi.fn());
     await flushPromises();
 
-    const { results } = res.json.mock.calls[0][0];
+    const { results } = res.json.mock.calls[0][0].data;
     expect(results).toHaveLength(1);
     expect(results[0].file).toContain('core.ts');
     expect(results[0].text).toContain('target');

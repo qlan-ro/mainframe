@@ -1,4 +1,4 @@
-import type { ControlRequest, SessionContext, SearchContentResult } from '@qlan-ro/mainframe-types';
+import type { ApiResponse, ControlRequest, SessionContext, SearchContentResult } from '@qlan-ro/mainframe-types';
 import { fetchJson, postJson, putJson, API_BASE } from './http';
 
 export async function getFileTree(
@@ -123,6 +123,7 @@ export async function searchContent(
   if (chatId) params.set('chatId', chatId);
   const res = await fetch(`${API_BASE}/api/projects/${projectId}/search/content?${params}`, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  return json.results;
+  const json = (await res.json()) as ApiResponse<{ results: SearchContentResult[] }>;
+  if (!json.success) throw new Error(json.error);
+  return json.data.results;
 }
