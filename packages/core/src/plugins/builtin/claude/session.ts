@@ -288,27 +288,30 @@ export class ClaudeSession implements AdapterSession {
     log.debug({ sessionId: this.id }, 'claude session killed');
   }
 
+  /**
+   * Build a control_request envelope with a fresh, unique request_id. Returns the
+   * newline-terminated JSON to write and the id, so callers awaiting a matching
+   * control_response can correlate by it.
+   */
+  private buildControlRequest(request: Record<string, unknown>): { json: string; requestId: string } {
+    const requestId = nanoid();
+    return {
+      json: JSON.stringify({ type: 'control_request', request_id: requestId, request }) + '\n',
+      requestId,
+    };
+  }
+
   async interrupt(): Promise<void> {
     const child = this.state.child;
     if (!child) return;
 
     // Interrupt the main turn first so the abort fires before subtask results
     // propagate back to the main agent.
-    const payload = {
-      type: 'control_request',
-      request_id: crypto.randomUUID(),
-      request: { subtype: 'interrupt' },
-    };
-    child.stdin?.write(JSON.stringify(payload) + '\n');
+    child.stdin?.write(this.buildControlRequest({ subtype: 'interrupt' }).json);
 
     // Then stop subtasks to clean them up.
     for (const [taskId] of this.state.activeTasks) {
-      const stopPayload = {
-        type: 'control_request',
-        request_id: crypto.randomUUID(),
-        request: { subtype: 'stop_task', task_id: taskId },
-      };
-      child.stdin?.write(JSON.stringify(stopPayload) + '\n');
+      child.stdin?.write(this.buildControlRequest({ subtype: 'stop_task', task_id: taskId }).json);
     }
     this.state.activeTasks.clear();
 
@@ -335,12 +338,7 @@ export class ClaudeSession implements AdapterSession {
   requestContextUsage(): void {
     const child = this.state.child;
     if (!child) return;
-    const payload = {
-      type: 'control_request',
-      request_id: crypto.randomUUID(),
-      request: { subtype: 'get_context_usage' },
-    };
-    child.stdin?.write(JSON.stringify(payload) + '\n');
+    child.stdin?.write(this.buildControlRequest({ subtype: 'get_context_usage' }).json);
   }
 
   async setPermissionMode(mode: ExecutionMode): Promise<void> {
@@ -360,23 +358,13 @@ export class ClaudeSession implements AdapterSession {
   }
 
   private writeCliPermissionMode(child: ChildProcess, cliMode: string): void {
-    const payload = {
-      type: 'control_request',
-      request_id: crypto.randomUUID(),
-      request: { subtype: 'set_permission_mode', mode: cliMode },
-    };
-    child.stdin?.write(JSON.stringify(payload) + '\n');
+    child.stdin?.write(this.buildControlRequest({ subtype: 'set_permission_mode', mode: cliMode }).json);
   }
 
   async setModel(model: string): Promise<void> {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
-    const payload = {
-      type: 'control_request',
-      request_id: crypto.randomUUID(),
-      request: { subtype: 'set_model', model },
-    };
-    child.stdin?.write(JSON.stringify(payload) + '\n');
+    child.stdin?.write(this.buildControlRequest({ subtype: 'set_model', model }).json);
   }
 
   async sendCommand(command: string, args = ''): Promise<void> {
@@ -481,17 +469,9 @@ export class ClaudeSession implements AdapterSession {
       log.warn({ sessionId: this.id, uuid }, 'cancelQueuedMessage: stdin unavailable');
       return false;
     }
-    const requestId = nanoid();
-    const payload = {
-      type: 'control_request',
-      request_id: requestId,
-      request: {
-        subtype: 'cancel_async_message',
-        message_uuid: uuid,
-      },
-    };
+    const { json, requestId } = this.buildControlRequest({ subtype: 'cancel_async_message', message_uuid: uuid });
     log.info({ sessionId: this.id, uuid, requestId }, 'sending cancel_async_message');
-    stdin.write(JSON.stringify(payload) + '\n');
+    stdin.write(json);
 
     // Wait for the CLI's control_response with the actual cancelled boolean
     return new Promise<boolean>((resolve) => {
@@ -513,14 +493,9 @@ export class ClaudeSession implements AdapterSession {
       log.warn({ sessionId: this.id, taskId }, 'stopBackgroundTask: stdin unavailable');
       return { ok: false, error: 'stdin unavailable' };
     }
-    const requestId = nanoid();
-    const payload = {
-      type: 'control_request',
-      request_id: requestId,
-      request: { subtype: 'stop_task', task_id: taskId },
-    };
+    const { json, requestId } = this.buildControlRequest({ subtype: 'stop_task', task_id: taskId });
     log.info({ sessionId: this.id, taskId, requestId }, 'sending stop_task');
-    stdin.write(JSON.stringify(payload) + '\n');
+    stdin.write(json);
 
     return new Promise<{ ok: boolean; error?: string }>((resolve) => {
       const timeout = setTimeout(() => {
