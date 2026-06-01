@@ -35,7 +35,7 @@ describe('FileWatcherService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     broadcast = vi.fn();
-    service = new FileWatcherService(broadcast);
+    service = new FileWatcherService(broadcast as unknown as (event: DaemonEvent) => void);
     vi.mocked(watch).mockClear();
     mockWatcher.close.mockClear();
     mockWatcher.on.mockClear();

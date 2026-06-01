@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
+import { describe, it, expect, afterEach, vi, type Mock } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { WebSocket } from 'ws';
 import { WebSocketManager } from '../server/websocket.js';
@@ -30,6 +30,7 @@ function createMockChatManager(chatOverride?: Partial<Chat>): MockChatManager {
         totalCost: 0,
         totalTokensInput: 0,
         totalTokensOutput: 0,
+        lastContextTokensInput: 0,
         ...chatOverride,
       }
     : null;
@@ -123,7 +124,7 @@ describe('chat.resume auto-start', () => {
 
   it('auto-starts Plan sessions with processState=working and no pending permission', async () => {
     const chats = createMockChatManager({
-      permissionMode: 'plan',
+      planMode: true,
       processState: 'working',
     });
     chats.hasPendingPermission.mockReturnValue(false);
@@ -155,7 +156,7 @@ describe('chat.resume auto-start', () => {
 
   it('does NOT auto-start non-YOLO sessions with pending permission', async () => {
     const chats = createMockChatManager({
-      permissionMode: 'plan',
+      planMode: true,
       processState: 'working',
     });
     chats.hasPendingPermission.mockReturnValue(true);

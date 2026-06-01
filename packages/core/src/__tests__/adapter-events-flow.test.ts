@@ -173,7 +173,7 @@ describe('adapter events flow', () => {
     const events = await setup(adapter);
 
     adapter.currentSession!.simulateToolResult([
-      { type: 'tool_result', toolUseId: 'tu-1', content: 'wrote file successfully' },
+      { type: 'tool_result', toolUseId: 'tu-1', content: 'wrote file successfully', isError: false },
     ]);
     await sleep(50);
 

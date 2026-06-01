@@ -42,7 +42,7 @@ describe('JsonRpcClient', () => {
       written.push(data);
       if (typeof cb === 'function') cb();
       return true;
-    }) as unknown as typeof proc.stdin.write;
+    }) as unknown as NonNullable<typeof proc.stdin>['write'];
 
     const client = createClient(proc);
     const promise = client.request<{ thread: { id: string } }>('thread/start', { cwd: '/tmp' });
@@ -68,7 +68,7 @@ describe('JsonRpcClient', () => {
       written.push(data);
       if (typeof cb === 'function') cb();
       return true;
-    }) as unknown as typeof proc.stdin.write;
+    }) as unknown as NonNullable<typeof proc.stdin>['write'];
 
     const client = createClient(proc);
     const promise = client.request('model/list');
@@ -125,7 +125,7 @@ describe('JsonRpcClient', () => {
       written.push(data);
       if (typeof cb === 'function') cb();
       return true;
-    }) as unknown as typeof proc.stdin.write;
+    }) as unknown as NonNullable<typeof proc.stdin>['write'];
 
     const client = createClient(proc);
     client.respond(99, { decision: 'accept' });
@@ -154,7 +154,7 @@ describe('JsonRpcClient', () => {
       written.push(data);
       if (typeof cb === 'function') cb();
       return true;
-    }) as unknown as typeof proc.stdin.write;
+    }) as unknown as NonNullable<typeof proc.stdin>['write'];
 
     const client = createClient(proc);
     const promise = client.request('thread/start');
