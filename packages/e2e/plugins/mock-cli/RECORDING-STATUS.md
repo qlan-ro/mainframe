@@ -91,20 +91,24 @@ Specs pass **solo** but a multi-spec `E2E_MODE=mock` run flakes badly **in this 
 Recommendation: run mock specs with `retries` (already 1) and, ideally, on a quiet/dedicated machine
 or CI runner. The 9222 fix should make suite runs reliable absent CPU starvation.
 
-## CI integration — deferred (intentionally, per the ask)
+## CI integration — enabled
 
-A draft workflow is at [`ci-e2e-mock.draft.yml`](./ci-e2e-mock.draft.yml). It now runs the **full**
-suite under `E2E_MODE=mock` (un-mockable specs auto-skip), so the original "only 6 specs" blocker is
-resolved. **Still not enabled**, for one remaining reason:
+The workflow is now live at [`.github/workflows/e2e-mock.yml`](../../../../.github/workflows/e2e-mock.yml).
+It runs the **full** suite under `E2E_MODE=mock` on every PR to `main` and on `main` itself
+(un-mockable specs auto-skip). Mock mode needs **no Claude/Codex API key** — safe on every PR.
 
-- **Headless Electron on Linux CI is unvalidated from here.** It needs `xvfb-run` +
-  `playwright install --with-deps chromium`, and Electron sometimes needs `--no-sandbox` in CI. I'm
-  on macOS and can't validate the Linux/xvfb path, so enabling it blind risks red PRs on every push.
+Linux/headless-Electron handling baked in (these were the only blockers when the draft was deferred):
 
-Everything else is ready: mock mode needs **no Claude API key** (safe on every PR), the 9222 fix +
-reap make launches non-colliding, and the auto-skip keeps the run green. **Recommended next step:**
-enable the draft on a branch, let one CI run shake out the xvfb/sandbox flags, then merge. (If CI
-proves flaky under the runner's CPU limits, scope it to the recorded specs first, then expand.)
+- **Display:** `xvfb-run` + `playwright install --with-deps chromium` pulls the OS libs Electron needs.
+- **Sandbox:** GitHub sets `CI=true`; the harness then adds `--no-sandbox` to every `electron.launch`
+  (`E2E_ELECTRON_EXTRA_ARGS` in `fixtures/app.ts`) so the setuid sandbox doesn't fail on the runner.
+- **Port baking:** the job builds via `build:app` (bakes the e2e daemon port 31416), never a plain
+  `pnpm build` (which would re-bake prod 31415 and trip `assertRendererBuiltForTestPort`).
+- **Launch collisions:** the 9222 fix + stray-Electron reap keep back-to-back launches isolated.
+
+I'm on macOS and can't exercise the Linux/xvfb path locally, so the first CI run is the real
+validation — if it red-flags on a runner-specific dep or flag, that's a quick follow-up tweak to
+this workflow (and a Playwright report is uploaded as a build artifact on failure to debug it).
 
 ## Runbook — recording another UI-flow spec
 

@@ -11,6 +11,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Path to the built Electron main entry point
 const APP_MAIN = path.resolve(__dirname, '../../../packages/desktop/out/main/index.js');
+
+// Electron's setuid sandbox can't initialize on CI runners (sandboxed/non-root or missing
+// chrome-sandbox perms) → `Process failed to launch`. Disable it under CI; harmless locally.
+export const E2E_ELECTRON_EXTRA_ARGS = process.env['CI'] ? ['--no-sandbox'] : [];
 const RENDERER_INDEX_HTML = path.resolve(__dirname, '../../../packages/desktop/out/renderer/index.html');
 const PROD_DAEMON_PORT = '31415';
 
@@ -201,7 +205,7 @@ export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFi
       // Isolate Electron's Chromium profile (localStorage/zustand-persist for zone layout,
       // tutorial state, etc.) per launch. Without this it lives in the shared default userData
       // dir and bleeds across runs — e.g. a minimized zone in one spec hides controls in the next.
-      args: [APP_MAIN, `--user-data-dir=${path.join(testDataDir, 'electron-profile')}`],
+      args: [APP_MAIN, ...E2E_ELECTRON_EXTRA_ARGS, `--user-data-dir=${path.join(testDataDir, 'electron-profile')}`],
       env: {
         ...process.env,
         NODE_ENV: 'development',

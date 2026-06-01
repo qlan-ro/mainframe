@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { launchApp, closeApp } from '../fixtures/app.js';
+import { launchApp, E2E_ELECTRON_EXTRA_ARGS } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
 import { chat } from '../helpers/wait.js';
@@ -28,8 +28,12 @@ test.describe('§22 App restart & state persistence', () => {
     const app2 = await electron.launch({
       // Reuse the SAME Chromium profile launchApp() created, so localStorage (active chat, layout)
       // persists across the restart — otherwise the relaunch gets a fresh default profile.
-      args: [APP_MAIN, `--user-data-dir=${path.default.join(testDataDir, 'electron-profile')}`],
-      env: { ...process.env, NODE_ENV: 'development', MAINFRAME_DATA_DIR: testDataDir },
+      args: [
+        APP_MAIN,
+        ...E2E_ELECTRON_EXTRA_ARGS,
+        `--user-data-dir=${path.default.join(testDataDir, 'electron-profile')}`,
+      ],
+      env: { ...process.env, NODE_ENV: 'development', MAINFRAME_DATA_DIR: testDataDir, MF_E2E: '1' },
     });
     const page2 = await app2.firstWindow();
     await page2.waitForLoadState('domcontentloaded');
