@@ -165,6 +165,12 @@ export class WebSocketManager {
       case 'subscribe': {
         client.subscriptions.add(event.chatId);
         this.sendQueuedSnapshot(client, event.chatId);
+        // Ack so clients (e.g. REST resume) can confirm the subscription is
+        // registered server-side before issuing a follow-up command. Without
+        // this, events emitted during resume could be missed (WS and HTTP are
+        // separate transports with no cross-transport ordering guarantee).
+        const ack: DaemonEvent = { type: 'subscribe:ack', chatId: event.chatId };
+        client.ws.send(JSON.stringify(ack));
         break;
       }
 
