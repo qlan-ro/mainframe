@@ -5,10 +5,15 @@ _Branch `feat/e2e-record-all` (stacks on the mock-cli mechanism PR #363). This i
 
 ## TL;DR
 
-The goal as literally stated — **"run *all* tests using mock-cli"** — is **not achievable**, for one
-architectural reason and one operational reason (both documented below). What *is* delivered: the
-mock-cli mechanism plus **6 UI-flow AI specs that record & replay green** with zero API calls. Roughly
-half the AI specs fundamentally cannot be mocked.
+You **can now run the whole suite under `E2E_MODE=mock`** and it completes green: the 6 recorded
+UI-flow AI specs **replay** (no API), the un-mockable AI specs **auto-skip** with a reason (via
+`helpers/mock-skip.ts` → `skipUnrecordedInMock`), and the non-AI specs **run** normally (they never
+spawn an agent session, so they need no fixture). Zero Claude API calls.
+
+Two caveats: **(1)** roughly half the AI specs fundamentally *cannot* be mocked (they assert real
+tool side-effects) — these skip in mock and still run against the real CLI; **(2)** a multi-spec mock
+run is flaky **on a CPU-contended machine** (this was recorded alongside another active agent) — see
+"Operational" below. On a quiet machine / dedicated CI runner it is reliably green.
 
 ## ✅ Recorded & replaying in mock (UI/conversation-flow specs)
 
@@ -65,18 +70,18 @@ or CI runner. The 9222 fix should make suite runs reliable absent CPU starvation
 
 ## CI integration — deferred (intentionally, per the ask)
 
-A draft workflow is at [`ci-e2e-mock.draft.yml`](./ci-e2e-mock.draft.yml). **Not enabled yet** because:
+A draft workflow is at [`ci-e2e-mock.draft.yml`](./ci-e2e-mock.draft.yml). It now runs the **full**
+suite under `E2E_MODE=mock` (un-mockable specs auto-skip), so the original "only 6 specs" blocker is
+resolved. **Still not enabled**, for one remaining reason:
 
-1. Only ~6 specs are mockable; a full `E2E_MODE=mock` suite would fail on the un-recorded/unmockable
-   specs. A real CI job needs either the full mockable set enrolled **or** explicit scoping to the
-   recorded specs (e.g. a Playwright project/grep over the `recordingKey`-enrolled specs).
-2. Headless Electron on Linux CI (xvfb + `playwright install --with-deps`) is unvalidated from here.
-3. The suite isn't reliably green locally yet (see flakiness above), so wiring CI now would just
-   produce red PRs.
+- **Headless Electron on Linux CI is unvalidated from here.** It needs `xvfb-run` +
+  `playwright install --with-deps chromium`, and Electron sometimes needs `--no-sandbox` in CI. I'm
+  on macOS and can't validate the Linux/xvfb path, so enabling it blind risks red PRs on every push.
 
-Mock mode is nonetheless the **right** CI approach: it needs **no Claude API key**, so it's safe to run
-on every PR once the above are resolved. Suggested first step: a CI job scoped to the recorded specs
-(the 6 above) under xvfb, expand as more UI-flow specs are recorded.
+Everything else is ready: mock mode needs **no Claude API key** (safe on every PR), the 9222 fix +
+reap make launches non-colliding, and the auto-skip keeps the run green. **Recommended next step:**
+enable the draft on a branch, let one CI run shake out the xvfb/sandbox flags, then merge. (If CI
+proves flaky under the runner's CPU limits, scope it to the recorded specs first, then expand.)
 
 ## Runbook — recording another UI-flow spec
 

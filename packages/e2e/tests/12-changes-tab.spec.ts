@@ -1,9 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { skipUnrecordedInMock } from '../helpers/mock-skip.js';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
 import { chat } from '../helpers/wait.js';
 import { openZone, setChangesMode } from '../helpers/zones.js';
+
+test.beforeEach(skipUnrecordedInMock);
 
 test.describe('§12–13 Changes tab & diff viewer', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
