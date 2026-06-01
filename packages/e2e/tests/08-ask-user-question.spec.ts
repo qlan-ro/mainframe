@@ -1,18 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { skipUnrecordedInMock } from '../helpers/mock-skip.js';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
 import { sendMessage, waitForAIIdle, waitForAskQuestionCard } from '../helpers/wait.js';
-
-test.beforeEach(skipUnrecordedInMock);
 
 test.describe('§8 AskUserQuestion', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'ask-question' });
     project = await createTestProject(fixture.page);
     // Yolo mode so Claude can call AskUserQuestion immediately (no plan/permission interrupts)
     await createTestChat(fixture.page, project.projectId, 'yolo');

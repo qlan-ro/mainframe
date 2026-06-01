@@ -1,15 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { skipUnrecordedInMock } from '../helpers/mock-skip.js';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
 import { chat } from '../helpers/wait.js';
 
-test.beforeEach(skipUnrecordedInMock);
-
 test.describe('§22 App restart & state persistence', () => {
   test('chat list and thread survive a full app restart', async () => {
-    const fixture = await launchApp();
+    const fixture = await launchApp({ recordingKey: 'app-restart' });
     const project = await createTestProject(fixture.page);
     await createTestChat(fixture.page, project.projectId, 'yolo');
     await chat(fixture.page, 'Reply only: PERSISTENCE_CHECK', 60_000);

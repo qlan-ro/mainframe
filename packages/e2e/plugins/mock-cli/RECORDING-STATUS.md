@@ -37,6 +37,9 @@ Each verified solo with `E2E_MODE=record` → `E2E_MODE=mock` → green:
 | `12-changes-tab` | `changes-tab` | **Changes tab session + uncommitted (git) + diff viewer** — now mockable via `fx` + `loadHistory` |
 | `32-chat-status-context` | `chat-status` | session-bar adapter label (mode-aware), Thinking state, context-usage % |
 | `07-plan-approval` | `plan-approval` | plan card → approve → permission → execute, plan revision (two chats) |
+| `08-ask-user-question` | `ask-question` | AskUserQuestion card (options, submit-gating) |
+| `21-multi-chat` | `multi-chat` | two sequential chats, no cross-contamination (two fixtures) |
+| `22-app-restart` | `app-restart` | thread + chat list survive an Electron restart (daemon stays up) |
 
 ## ✅ Side-effect specs — now mockable via the `fx` feature
 
@@ -61,11 +64,12 @@ replay path remapping (diff viewer). `10-context-tab` and `12-changes-tab` both 
 
 | Spec | Why |
 |------|-----|
-| `08-ask-user-question` | depends on the model *choosing* to ask (nondeterministic to record) |
-| `21-multi-chat` | two concurrent live sessions on one project — fixture ordering is fragile |
-| `22-app-restart` | restarts the daemon mid-test; replay across a resume is unsupported |
-| `36-codex-plan-approval` | uses the **codex** adapter; the record-wrapper only wraps `claude` |
-| `27`, `33` | already `test.describe.skip` upstream (unrelated to mock) |
+| `36-codex-plan-approval` | uses the **codex** adapter; the record-wrapper only wraps `claude`. Auto-skips in mock (deferred — no codex recorder yet). |
+| `27`, `33` | already `test.describe.skip` upstream, unrelated to mock (`27`: sendCommand unreliable in the adapter; `33`: TaskCreate not exposed in stream-json CLI mode). Don't run in any mode. |
+
+Everything else that drives the AI is recorded and replays in mock. The earlier "08/21/22 unmockable"
+was wrong — they just needed the delay-cap + marker-coalescing fixes (08: 1/1, 21: 1/1 with two
+fixtures, 22: 1/1 — the restart keeps the daemon up, so the thread is re-fetched from its store).
 
 (Live processes/network are handled by the launch subsystem and run for real in any mode — the
 sandbox specs already pass in mock. Truly nondeterministic model *choices* are recordable only by
