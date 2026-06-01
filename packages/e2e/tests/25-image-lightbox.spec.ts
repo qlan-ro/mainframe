@@ -20,7 +20,7 @@ test.describe('§25 Image lightbox', () => {
   let testImagePath: string;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'image-lightbox' });
     project = await createTestProject(fixture.page);
 
     // Create a test PNG file inside the project dir

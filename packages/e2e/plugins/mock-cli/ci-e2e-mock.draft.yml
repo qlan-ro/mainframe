@@ -1,0 +1,33 @@
+# DRAFT — not yet enabled. Proposed CI job to run the e2e suite in mock mode on every PR.
+# Move to .github/workflows/e2e-mock.yml once the prerequisites in RECORDING-STATUS.md are met
+# (all enrolled specs recorded + full `E2E_MODE=mock` suite locally green + headless-Electron
+# validated). Mock mode makes NO Claude API calls, so this needs no secrets — that's the point.
+name: e2e-mock
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e-mock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @qlan-ro/mainframe-types build
+      - run: pnpm --filter @qlan-ro/mainframe-core build
+      # Build the renderer for the e2e port (31416) + bundle the mock-cli plugin.
+      - run: pnpm --filter @qlan-ro/mainframe-e2e build:app
+      - run: pnpm --filter @qlan-ro/mainframe-e2e build:mock
+      - run: pnpm --filter @qlan-ro/mainframe-e2e exec playwright install --with-deps chromium
+      # Electron needs a display on Linux → xvfb. No ANTHROPIC/Claude secrets: mock mode replays fixtures.
+      - run: xvfb-run -a env E2E_MODE=mock pnpm --filter @qlan-ro/mainframe-e2e test
+        env:
+          E2E_MODE: mock

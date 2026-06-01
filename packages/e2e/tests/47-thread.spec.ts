@@ -10,7 +10,7 @@ test.describe('§47 Thread interactions', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'thread' });
     project = await createTestProject(fixture.page);
     await createTestChat(fixture.page, project.projectId, 'yolo');
   });

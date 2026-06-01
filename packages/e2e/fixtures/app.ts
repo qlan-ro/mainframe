@@ -207,6 +207,7 @@ export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFi
         NODE_ENV: 'development',
         MAINFRAME_DATA_DIR: testDataDir,
         DAEMON_PORT, // main-process helpers (idle-reporter) target the test daemon
+        MF_E2E: '1', // tells the app to skip the fixed 9222 DevTools port (collides across launches)
       },
     });
     const page = await app.firstWindow();
