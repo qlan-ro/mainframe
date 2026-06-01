@@ -14,6 +14,36 @@
 
 ---
 
+## Status — 2026-06-01
+
+> This section supersedes the original 2026-05-29 snapshot in the table below (kept as the historical plan). All actionable workstreams are **complete**; everything is consolidated into one revertable PR.
+
+**Single revertable PR:** **#371** `feat/tech-debt-all` → `main` (squash-merge → one-commit revert). Supersedes the granular stack PRs for *merging*; merge **one or the other, not both**.
+
+**Granular stack PRs** (for review history): #359 (batch 1) · #360 (batch 2) · #367 (batch 3) · #368 (batch 4) · #366 (WS4) · #369 (WS8). **Mobile** half of WS8: **mainframe-mobile#14** (separate repo / submodule — ship together with WS8).
+
+**Verification (2026-06-01, on `feat/tech-debt-all`):** `pnpm build` 0 type errors; tests green — types 3 · mobile 8 · core 1684 · desktop 760.
+
+| WS | Status | Where |
+|----|--------|-------|
+| WS1 Security · WS3a/3b types · WS7 DB cascade · WS9 logging · WS10 Zod · WS12 testid | ✅ done | batch 1 (#359) |
+| WS5 Git consolidation · WS14a/b message pipeline | ✅ done | batch 2 (#360) |
+| `createWorktree` chatId drop · scattered-progress `_TaskProgress` dedup | ✅ done | batch 3 (#367) |
+| WS6 events.ts decomposition · WS15 dedup · WS16 deepen-shallow · WS18 misc-core · WS19 emergent-norm | ✅ done (curated) | batch 4 (#368) |
+| **WS4** Response-envelope normalization (full, not just asyncHandler) | ✅ done | #366 |
+| **WS8** WS→REST transport (+ `subscribe:ack`, hard cutover) | ✅ done | #369 + mobile#14 |
+| **WS14c** First-class typed display content (drop sentinel string-matching) | ✅ done | in #371 (branch `refactor/ws14c-typed-display-content-v2`) |
+| WS11 UI-logic→core (85, over-captured) | ⏭ skip / re-triage | audit: mostly noise |
+| WS13 File-size decomposition | ⏭ skip | remaining big files are cohesive |
+| WS17 Layering leaks | ⏭ skip | partial value; not worth the coupling cost |
+| WS0 Justified | n/a | audited & defensible |
+
+**Residual manual check:** WS14c changed the rendered `task_progress` `DisplayContent` path — worth a visual confirmation of the task-progress card in the running Electron app (the core transform is unit-tested; rendering is not).
+
+**Reviews:** WS4 and WS8 each passed a Codex plan-review + code-review loop (APPROVED).
+
+---
+
 ## Workstream sequence & status
 
 | # | Workstream | Items | Focus | Status |
