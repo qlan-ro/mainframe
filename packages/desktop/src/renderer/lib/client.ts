@@ -1,5 +1,12 @@
 import type { ClientEvent, DaemonEvent, ControlResponse, ExecutionMode } from '@qlan-ro/mainframe-types';
 import { createLogger } from './logger';
+import {
+  interruptChatRest,
+  resumeChatRest,
+  editQueuedMessageRest,
+  cancelQueuedMessageRest,
+  updateChatConfig as updateChatConfigRest,
+} from './api/chats-api';
 
 const env = (import.meta as { env?: Record<string, string> }).env ?? {};
 const host: string = env['VITE_DAEMON_HOST'] ?? '127.0.0.1';
@@ -18,6 +25,7 @@ export class DaemonClient {
   private connectionListeners = new Set<() => void>();
   private clientId: string | null = null;
   readonly visitedChats = new Set<string>();
+  private subscribeAckWaiters = new Map<string, Array<() => void>>();
 
   /** Stable id assigned by the daemon when this WS connection was accepted. */
   getClientId(): string | null {
@@ -64,6 +72,9 @@ export class DaemonClient {
         if (data.type === 'connection.ready') {
           this.clientId = data.clientId;
           return;
+        }
+        if (data.type === 'subscribe:ack') {
+          this.resolveSubscribeAck(data.chatId);
         }
         this.eventHandlers.forEach((handler) => handler(data));
       } catch (error) {
@@ -141,25 +152,21 @@ export class DaemonClient {
     }
   }
 
-  // TODO: Migrate request-response actions (chat.create, chat.interrupt, etc.) to REST endpoints.
-  // Reserve WS for event-based streaming (subscribe, message.send).
-  createChat(
-    projectId: string,
-    adapterId: string,
-    model?: string,
-    permissionMode?: ExecutionMode,
-    attachWorktree?: { worktreePath: string; branchName: string },
-  ): void {
-    this.send({
-      type: 'chat.create',
-      projectId,
-      adapterId,
-      model,
-      permissionMode,
-      worktreePath: attachWorktree?.worktreePath,
-      branchName: attachWorktree?.branchName,
+  private resolveSubscribeAck(chatId: string): void {
+    const ws = this.subscribeAckWaiters.get(chatId);
+    if (ws) {
+      ws.forEach((r) => r());
+      this.subscribeAckWaiters.delete(chatId);
+    }
+  }
+
+  private waitForSubscribeAck(chatId: string, timeoutMs = 5000): Promise<void> {
+    return new Promise((resolve) => {
+      const arr = this.subscribeAckWaiters.get(chatId) ?? [];
+      arr.push(resolve);
+      this.subscribeAckWaiters.set(chatId, arr);
+      setTimeout(resolve, timeoutMs); // fail-open: never hang resume
     });
-    log.info('createChat', { projectId, adapterId, model, permissionMode, attachWorktree });
   }
 
   updateChatConfig(
@@ -169,24 +176,26 @@ export class DaemonClient {
     permissionMode?: ExecutionMode,
     planMode?: boolean,
   ): void {
-    this.send({ type: 'chat.updateConfig', chatId, adapterId, model, permissionMode, planMode });
-    log.info('updateChatConfig', { chatId, adapterId, model, permissionMode, planMode });
+    void updateChatConfigRest(chatId, { adapterId, model, permissionMode, planMode }).catch((e) =>
+      log.warn('updateChatConfig failed', { chatId, err: String(e) }),
+    );
   }
 
   resumeChat(chatId: string): void {
     this.visitedChats.add(chatId);
-    this.send({ type: 'chat.resume', chatId });
-    log.debug('resumeChat', { chatId });
-  }
-
-  endChat(chatId: string): void {
-    this.send({ type: 'chat.end', chatId });
-    log.info('endChat', { chatId });
+    void (async () => {
+      try {
+        this.subscribe(chatId);
+        await this.waitForSubscribeAck(chatId);
+        await resumeChatRest(chatId);
+      } catch (e) {
+        log.warn('resumeChat failed', { chatId, err: String(e) });
+      }
+    })();
   }
 
   interruptChat(chatId: string): void {
-    this.send({ type: 'chat.interrupt', chatId });
-    log.info('interruptChat', { chatId });
+    void interruptChatRest(chatId).catch((e) => log.warn('interruptChat failed', { chatId, err: String(e) }));
   }
 
   sendMessage(
@@ -210,13 +219,15 @@ export class DaemonClient {
   }
 
   editQueuedMessage(chatId: string, messageId: string, content: string): void {
-    this.send({ type: 'message.queue.edit', chatId, messageId, content });
-    log.info('editQueuedMessage', { chatId, messageId });
+    void editQueuedMessageRest(chatId, messageId, content).catch((e) =>
+      log.warn('editQueuedMessage failed', { chatId, messageId, err: String(e) }),
+    );
   }
 
   cancelQueuedMessage(chatId: string, messageId: string): void {
-    this.send({ type: 'message.queue.cancel', chatId, messageId });
-    log.info('cancelQueuedMessage', { chatId, messageId });
+    void cancelQueuedMessageRest(chatId, messageId).catch((e) =>
+      log.warn('cancelQueuedMessage failed', { chatId, messageId, err: String(e) }),
+    );
   }
 
   subscribe(chatId: string): void {

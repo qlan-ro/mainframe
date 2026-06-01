@@ -15,6 +15,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
 import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
+import { startChat } from '../../lib/chat-actions';
 import { pinChat } from '../../lib/api';
 import { ProjectGroup } from './ProjectGroup';
 import { FlatSessionRow } from './FlatSessionRow';
@@ -267,18 +268,18 @@ export function ChatsPanel(): React.ReactElement {
   const handleNewSessionClick = useCallback(() => {
     if (projects.length === 0) return;
     if (filterProjectId) {
-      daemonClient.createChat(filterProjectId, 'claude', getDefaultModelForAdapter('claude'));
+      void startChat(filterProjectId, 'claude', getDefaultModelForAdapter('claude'));
       return;
     }
     if (projects.length === 1) {
-      daemonClient.createChat(projects[0]!.id, 'claude', getDefaultModelForAdapter('claude'));
+      void startChat(projects[0]!.id, 'claude', getDefaultModelForAdapter('claude'));
       return;
     }
     setShowNewSessionPopover((prev) => !prev);
   }, [projects, filterProjectId]);
 
   const handleNewSessionInProject = useCallback((projectId: string) => {
-    daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+    void startChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
     setShowNewSessionPopover(false);
   }, []);
 

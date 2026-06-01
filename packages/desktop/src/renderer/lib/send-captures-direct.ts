@@ -4,6 +4,7 @@ import { useChatsStore } from '../store/chats.js';
 import { getActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { getDefaultModelForAdapter } from './adapters.js';
 import { formatCaptures, type CaptureLike } from './format-captures.js';
+import { startChat } from './chat-actions.js';
 
 export type { CaptureLike } from './format-captures.js';
 import { createLogger } from './logger.js';
@@ -38,30 +39,13 @@ export async function sendCapturesDirect(captures: ReadonlyArray<CaptureLike>, e
   const projectId = getActiveProjectId();
   if (!projectId) return;
 
-  await new Promise<void>((resolve) => {
-    const timeout = setTimeout(() => {
-      unsub();
-      log.warn('timed out waiting for chat.created');
-      resolve();
-    }, 5000);
-
-    const unsub = useChatsStore.subscribe((state, prev) => {
-      if (state.chats.length > prev.chats.length) {
-        const newChat = state.chats.find((c) => !prev.chats.some((p) => p.id === c.id));
-        if (newChat) {
-          clearTimeout(timeout);
-          unsub();
-          void uploadAndSend(newChat.id, captures)
-            .catch((err: unknown) => {
-              log.warn('uploadAndSend failed', { err });
-            })
-            .finally(resolve);
-        }
-      }
+  await startChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+  const newChatId = useChatsStore.getState().activeChatId;
+  if (newChatId) {
+    await uploadAndSend(newChatId, captures).catch((err: unknown) => {
+      log.warn('uploadAndSend failed', { err });
     });
-
-    daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
-  });
+  }
 }
 
 export interface PendingCaptureInput {

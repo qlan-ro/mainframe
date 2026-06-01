@@ -12,8 +12,8 @@ import { useAppInit } from './hooks/useAppInit';
 import { usePluginShortcuts } from './hooks/usePluginShortcuts';
 import { useSettingsStore, useChatsStore, useUIStore } from './store';
 import { getActiveProjectId } from './hooks/useActiveProjectId.js';
-import { daemonClient } from './lib/client';
 import { getDefaultModelForAdapter } from './lib/adapters';
+import { startChat } from './lib/chat-actions';
 import { PluginGlobalComponents } from './components/plugins/PluginGlobalComponents';
 import { FullviewModal } from './components/modals';
 
@@ -28,7 +28,7 @@ export default function App(): React.ReactElement {
         e.preventDefault();
         const projectId = getActiveProjectId();
         if (projectId) {
-          daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+          void startChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
         }
       }
     };
