@@ -231,8 +231,17 @@ export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFi
   }
 }
 
-export async function closeApp(fixture: AppFixture): Promise<void> {
-  await fixture.app.close();
+export async function closeApp(fixture: AppFixture | undefined): Promise<void> {
+  // A beforeAll that threw (e.g. port already busy) leaves fixture undefined; afterAll still runs.
+  if (!fixture) return;
+
+  // Closing Electron can throw/hang under xvfb. Never let that skip the daemon kill below —
+  // a surviving daemon holds port 31416 and makes every subsequent launchApp() fail.
+  try {
+    await fixture.app?.close();
+  } catch (err) {
+    console.warn('[e2e] app.close() during teardown failed; killing daemon anyway:', err);
+  }
 
   // Wait for the daemon to fully exit so the next launchApp() doesn't connect
   // to a stale process still holding the port.

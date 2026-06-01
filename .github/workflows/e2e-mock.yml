@@ -48,6 +48,13 @@ jobs:
       # Pull the OS libraries Electron needs on Linux (libnss3, libgbm, libgtk, xvfb deps, …).
       - run: pnpm --filter @qlan-ro/mainframe-e2e exec playwright install --with-deps chromium
 
+      # The harness and daemon run git operations (worktrees, status); the runner has no identity.
+      - name: Configure git identity for the runner
+        run: |
+          git config --global user.email "e2e@mainframe.test"
+          git config --global user.name "Mainframe E2E"
+          git config --global init.defaultBranch main
+
       # Electron needs a display on a headless runner → xvfb. CI=true (set by Actions) makes the
       # harness add --no-sandbox to electron.launch. No API secrets: mock mode replays fixtures.
       - run: xvfb-run -a env E2E_MODE=mock pnpm --filter @qlan-ro/mainframe-e2e test
