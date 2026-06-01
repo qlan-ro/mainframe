@@ -76,12 +76,12 @@ These passed locally but flaked on the Linux CI runner; both are test-robustness
   list (non-selectable, `user-select:none`) instead of the thread bubble. Scope to
   `[data-mf-chat-thread]` and select the paragraph via a DOM Range + `mouseup` (native triple-click
   paragraph-selection is flaky headless).
-- **`43` B6 (branch checkout)**: the test repo's seed files were left untracked, so Checkout hit
-  `confirmDirtyTree` → `window.confirm("uncommitted changes")`, and Electron's native confirm doesn't
-  reliably reach Playwright's dialog handler under headless xvfb → the checkout aborted and the
-  status bar never switched (only Checkout hits this path; rename/delete don't). Commit the seed in
-  `beforeAll` so the tree is clean and no prompt fires. The open → select → checkout is also wrapped
-  in `expect(...).toPass()` (gating on `toBeEnabled`) to ride out the post-create busy/reposition window.
+- **`43` B6 (branch checkout)**: at the CI viewport (1280×720) the first-run tutorial's step-3 card
+  overlaps the *center* of the submenu's Checkout item, so Playwright's center-click is eaten by the
+  overlay and nothing is checked out — Rename/Delete sit below the card, which is why only B6 failed.
+  Skip the tutorial in `beforeAll` (`tutorial-skip-btn`, same as §57). Defense-in-depth: also commit
+  the seed files so a dirty-tree `window.confirm` (unreliable under headless xvfb) never fires, and
+  wrap open → select → checkout in `expect(...).toPass()` gated on `toBeEnabled`.
 
 ## ❌ Still not mockable
 

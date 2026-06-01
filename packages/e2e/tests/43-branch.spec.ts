@@ -28,6 +28,11 @@ test.describe('§43 Branch popover', () => {
     git('git branch feat/gamma');
     // Activate the project so the status-bar branch button renders.
     await createTestChat(fixture.page, project.projectId, 'default');
+    // Fresh profile shows the first-run tutorial; at 1280×720 its step-3 card overlaps the *center*
+    // of the branch submenu's Checkout item (Rename/Delete sit below it, which is why only B6 failed
+    // headlessly — Playwright clicks the occluded center and the overlay eats it). Skip it.
+    const skip = fixture.page.locator('[data-testid="tutorial-skip-btn"]');
+    if (await skip.isVisible().catch(() => false)) await skip.click();
     // Auto-accept confirm() dialogs (delete / dirty-checkout confirmations).
     fixture.page.on('dialog', (d) => {
       void d.accept().catch(() => {});
