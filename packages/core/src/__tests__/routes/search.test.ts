@@ -56,7 +56,7 @@ describe('GET /api/projects/:id/search/content', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'find me', path: 'notes.txt' } }, res, vi.fn());
+    await handler({ params: { id: 'proj-1' }, query: { q: 'find me', path: 'notes.txt' } }, res, vi.fn());
     await flushPromises();
 
     expect(res.json).toHaveBeenCalledWith(
@@ -88,7 +88,7 @@ describe('GET /api/projects/:id/search/content', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'foo', path: 'src' } }, res, vi.fn());
+    await handler({ params: { id: 'proj-1' }, query: { q: 'foo', path: 'src' } }, res, vi.fn());
     await flushPromises();
 
     const { results } = res.json.mock.calls[0][0].data;
@@ -103,7 +103,7 @@ describe('GET /api/projects/:id/search/content', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'test', path: '../../etc' } }, res, vi.fn());
+    await handler({ params: { id: 'proj-1' }, query: { q: 'test', path: '../../etc' } }, res, vi.fn());
     await flushPromises();
 
     expect(res.status).toHaveBeenCalledWith(403);
@@ -116,7 +116,7 @@ describe('GET /api/projects/:id/search/content', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'a', path: '.' } }, res, vi.fn());
+    await handler({ params: { id: 'proj-1' }, query: { q: 'a', path: '.' } }, res, vi.fn());
     await flushPromises();
 
     expect(res.status).toHaveBeenCalledWith(400);
@@ -131,7 +131,11 @@ describe('GET /api/projects/:id/search/content', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'findme', path: '.', includeIgnored: 'true' } }, res, vi.fn());
+    await handler(
+      { params: { id: 'proj-1' }, query: { q: 'findme', path: '.', includeIgnored: 'true' } },
+      res,
+      vi.fn(),
+    );
     await flushPromises();
 
     const { results } = res.json.mock.calls[0][0].data;
@@ -148,7 +152,7 @@ describe('GET /api/projects/:id/search/content', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'hello', path: 'readme.txt' } }, res, vi.fn());
+    await handler({ params: { id: 'proj-1' }, query: { q: 'hello', path: 'readme.txt' } }, res, vi.fn());
     await flushPromises();
 
     const { results } = res.json.mock.calls[0][0].data;
@@ -167,7 +171,7 @@ describe('GET /api/projects/:id/search/content', () => {
     const handler = extractHandler(router, 'get', '/api/projects/:id/search/content');
     const res = mockRes();
 
-    handler({ params: { id: 'proj-1' }, query: { q: 'target', path: '.' } }, res, vi.fn());
+    await handler({ params: { id: 'proj-1' }, query: { q: 'target', path: '.' } }, res, vi.fn());
     await flushPromises();
 
     const { results } = res.json.mock.calls[0][0].data;
