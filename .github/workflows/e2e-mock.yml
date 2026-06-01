@@ -37,10 +37,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build order matters: types first, then build:app bakes the renderer for the e2e daemon
-      # port (31416, NOT prod 31415 — assertRendererBuiltForTestPort aborts otherwise) and builds
-      # the core daemon; build:mock bundles the mock-cli plugin to a single CJS file.
-      - run: pnpm --filter @qlan-ro/mainframe-types build
+      # build:app builds the full dependency chain (types → core → desktop) in topological order
+      # and bakes the renderer for the e2e daemon port (31416, NOT prod 31415 —
+      # assertRendererBuiltForTestPort aborts otherwise). build:mock bundles the mock-cli plugin.
       - run: pnpm --filter @qlan-ro/mainframe-e2e build:app
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
