@@ -2,7 +2,6 @@ import type { Chat, ChatMessage, QueuedMessageRef } from './chat.js';
 import type { AdapterProcess, ControlRequest } from './adapter.js';
 import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
-import type { ExecutionMode } from './settings.js';
 
 export type DaemonEvent =
   | { type: 'connection.ready'; clientId: string }
@@ -83,17 +82,6 @@ export type DaemonEvent =
 
 export type ClientEvent =
   | {
-      type: 'chat.create';
-      projectId: string;
-      adapterId: string;
-      model?: string;
-      permissionMode?: ExecutionMode;
-      worktreePath?: string;
-      branchName?: string;
-    }
-  | { type: 'chat.resume'; chatId: string }
-  | { type: 'chat.end'; chatId: string }
-  | {
       type: 'message.send';
       chatId: string;
       content: string;
@@ -103,18 +91,7 @@ export type ClientEvent =
       };
     }
   | { type: 'permission.respond'; chatId: string; response: import('./adapter.js').ControlResponse }
-  | {
-      type: 'chat.updateConfig';
-      chatId: string;
-      adapterId?: string;
-      model?: string;
-      permissionMode?: ExecutionMode;
-      planMode?: boolean;
-    }
-  | { type: 'chat.interrupt'; chatId: string }
   | { type: 'subscribe'; chatId: string }
   | { type: 'unsubscribe'; chatId: string }
-  | { type: 'message.queue.edit'; chatId: string; messageId: string; content: string }
-  | { type: 'message.queue.cancel'; chatId: string; messageId: string }
   | { type: 'subscribe:file'; path: string }
   | { type: 'unsubscribe:file'; path: string };

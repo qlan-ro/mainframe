@@ -118,7 +118,8 @@ describe('file-edit flow', () => {
     const port = await startServer(server);
 
     ws = await connectWs(port);
-    ws.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    ws.send(JSON.stringify({ type: 'subscribe', chatId: 'test-chat' }));
+    await chats.resumeChat('test-chat');
     await sleep(100);
 
     const contextUpdated: DaemonEvent[] = [];

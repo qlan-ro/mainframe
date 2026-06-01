@@ -156,15 +156,16 @@ describe('WS inbound flows', () => {
   });
 
   async function setup(adapter: MockAdapter) {
-    const { httpServer } = createStack(adapter, 'default');
+    const { httpServer, chats } = createStack(adapter, 'default');
     server = httpServer;
     const port = await startServer(server);
     ws = await connectWs(port);
-    ws.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    ws.send(JSON.stringify({ type: 'subscribe', chatId: 'test-chat' }));
+    await chats.resumeChat('test-chat');
     await sleep(100);
     const events: DaemonEvent[] = [];
     ws.on('message', (data) => events.push(JSON.parse(data.toString()) as DaemonEvent));
-    return events;
+    return Object.assign(events, { chats });
   }
 
   it('message.send causes adapter.sendMessage to be called', async () => {
@@ -185,33 +186,32 @@ describe('WS inbound flows', () => {
     expect(adapter.sendMessageSpy).toHaveBeenCalledWith(expect.stringContaining('Hello, world!'));
   }, 10_000);
 
-  it('chat.interrupt causes adapter.interrupt to be called', async () => {
+  it('POST /api/chats/:id/interrupt causes adapter.interrupt to be called', async () => {
     const adapter = new MockAdapter();
-    await setup(adapter);
+    const events = await setup(adapter);
 
-    ws!.send(JSON.stringify({ type: 'chat.interrupt', chatId: 'test-chat' }));
+    await events.chats.interruptChat('test-chat');
     await sleep(50);
 
     expect(adapter.interruptSpy).toHaveBeenCalledOnce();
   }, 10_000);
 
-  it('chat.end emits chat.ended and stops forwarding events for that chat', async () => {
+  it('unsubscribe stops forwarding chatId-scoped events for that chat', async () => {
     const adapter = new MockAdapter();
     const events = await setup(adapter);
 
-    ws!.send(JSON.stringify({ type: 'chat.end', chatId: 'test-chat' }));
+    ws!.send(JSON.stringify({ type: 'unsubscribe', chatId: 'test-chat' }));
     await sleep(50);
 
-    const endedEvent = events.find((e) => e.type === 'chat.ended');
-    expect(endedEvent).toBeDefined();
-
-    // After end, events for this chat should NOT reach the client (unsubscribed)
+    // After unsubscribe, chatId-scoped events (message.added etc.) should NOT
+    // reach the client. Emit a message — it will be scoped to the chatId.
     const countBefore = events.length;
-    adapter.currentSession!.simulateResult({ subtype: 'success' });
+    adapter.currentSession!.simulateMessage([{ type: 'text', text: 'ignored' }]);
     await sleep(50);
 
-    // No new events should arrive for this chat (subscription cleared)
-    expect(events.length).toBe(countBefore);
+    // No new message.added events should arrive (subscription cleared)
+    const newMessageAdded = events.slice(countBefore).filter((e) => e.type === 'message.added');
+    expect(newMessageAdded).toHaveLength(0);
   }, 10_000);
 
   it('EnterPlanMode in message flips planMode=true and emits chat.updated', async () => {
@@ -227,9 +227,9 @@ describe('WS inbound flows', () => {
     expect(chatUpdated).toBeDefined();
   }, 10_000);
 
-  it('chat.created carries originClientId of the creating connection only', async () => {
+  it('chat.created is broadcast to all connected WS clients when chat is created via REST', async () => {
     const adapter = new MockAdapter();
-    const { httpServer } = createStack(adapter);
+    const { httpServer, chats } = createStack(adapter);
     server = httpServer;
     const port = await startServer(server);
 
@@ -237,31 +237,22 @@ describe('WS inbound flows', () => {
     const { socket: b, events: eventsB } = await connectWsCollecting(port);
     await sleep(50);
 
-    const readyA = eventsA.find((e) => e.type === 'connection.ready');
-    const readyB = eventsB.find((e) => e.type === 'connection.ready');
-    expect(readyA?.type).toBe('connection.ready');
-    expect(readyB?.type).toBe('connection.ready');
-    const idA = (readyA as { type: 'connection.ready'; clientId: string }).clientId;
-    const idB = (readyB as { type: 'connection.ready'; clientId: string }).clientId;
-    expect(idA).toBeTypeOf('string');
-    expect(idB).toBeTypeOf('string');
-    expect(idA).not.toBe(idB);
-
-    a.send(JSON.stringify({ type: 'chat.create', projectId: 'proj-1', adapterId: 'claude' }));
+    // Create chat via ChatManager directly (as the REST endpoint would)
+    await chats.createChatWithDefaults('proj-1', 'claude');
     await sleep(100);
 
     const createdOnA = eventsA.find((e) => e.type === 'chat.created');
     const createdOnB = eventsB.find((e) => e.type === 'chat.created');
     expect(createdOnA).toBeDefined();
     expect(createdOnB).toBeDefined();
-    expect((createdOnA as { originClientId?: string }).originClientId).toBe(idA);
-    expect((createdOnB as { originClientId?: string }).originClientId).toBe(idA);
+    // originClientId is no longer stamped (origin attribution removed)
+    expect((createdOnA as any).originClientId).toBeUndefined();
 
     a.close();
     b.close();
   }, 10_000);
 
-  it('chat.resume emits message.queued.snapshot so composer rehydrates on chat re-entry', async () => {
+  it('subscribe emits message.queued.snapshot so composer rehydrates on chat re-entry', async () => {
     const adapter = new MockAdapter();
     const { httpServer, chats } = createStack(adapter);
     server = httpServer;
@@ -270,7 +261,7 @@ describe('WS inbound flows', () => {
     // Pre-seed a queued ref as if a prior session had sent one. This mirrors
     // the real bug: user sends a queued message in chat A, switches away
     // (so the renderer's composer keeps the entry in its local map), then
-    // returns. Without the fix, chat.resume re-subscribes but never sends
+    // returns. Without the fix, subscribe re-subscribes but never sends
     // a snapshot, so the composer keeps whatever stale state it had — even
     // after the CLI processed the message and the daemon pruned the ref.
     const ref = {
@@ -284,7 +275,7 @@ describe('WS inbound flows', () => {
 
     const { socket, events } = await connectWsCollecting(port);
     ws = socket;
-    socket.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    socket.send(JSON.stringify({ type: 'subscribe', chatId: 'test-chat' }));
     await sleep(150);
 
     const snapshot = events.find((e) => e.type === 'message.queued.snapshot');
@@ -293,7 +284,7 @@ describe('WS inbound flows', () => {
     expect((snapshot as { refs: Array<{ uuid: string }> }).refs.map((r) => r.uuid)).toEqual(['preseeded-uuid']);
   }, 10_000);
 
-  it('chat.resume snapshot is empty when daemon has no queued refs (clears stranded composer entries)', async () => {
+  it('subscribe snapshot is empty when daemon has no queued refs (clears stranded composer entries)', async () => {
     const adapter = new MockAdapter();
     const { httpServer } = createStack(adapter);
     server = httpServer;
@@ -305,7 +296,7 @@ describe('WS inbound flows', () => {
     // stale composer state down to nothing.
     const { socket, events } = await connectWsCollecting(port);
     ws = socket;
-    socket.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    socket.send(JSON.stringify({ type: 'subscribe', chatId: 'test-chat' }));
     await sleep(150);
 
     const snapshot = events.find((e) => e.type === 'message.queued.snapshot');

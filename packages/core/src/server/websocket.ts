@@ -1,7 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { realpath, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Server } from 'node:http';
 import type { ChatManager } from '../chat/index.js';
 import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
@@ -29,9 +28,6 @@ interface ClientConnection {
   /** Absolute file paths this client has subscribed to. */
   fileSubscriptions: Set<string>;
 }
-
-/** Identifies which client triggered the inbound message currently being handled. */
-const originContext = new AsyncLocalStorage<{ clientId: string }>();
 
 export class WebSocketManager {
   private wss: WebSocketServer;
@@ -111,9 +107,7 @@ export class WebSocketManager {
             this.sendError(ws, `Invalid message: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
             return;
           }
-          await originContext.run({ clientId: client.id }, () =>
-            this.handleClientEvent(client, parsed.data as ClientEvent),
-          );
+          await this.handleClientEvent(client, parsed.data as ClientEvent);
         } catch (err) {
           log.error({ err }, 'ws message handler error');
           const message = err instanceof SyntaxError ? 'Invalid JSON' : 'Internal error';
@@ -135,54 +129,6 @@ export class WebSocketManager {
 
   private async handleClientEvent(client: ClientConnection, event: ClientEvent): Promise<void> {
     switch (event.type) {
-      case 'chat.create': {
-        const chat = await this.chats.createChatWithDefaults(
-          event.projectId,
-          event.adapterId,
-          event.model,
-          event.permissionMode,
-          event.worktreePath,
-          event.branchName,
-        );
-        client.subscriptions.add(chat.id);
-        break;
-      }
-
-      case 'chat.resume': {
-        client.subscriptions.add(event.chatId);
-        await this.chats.resumeChat(event.chatId);
-        // Rehydrate queued-message state for this client. Without this, a
-        // user switching away from and back to a chat would see stale
-        // `queuedMessages` entries (the renderer fetches fresh messages
-        // via REST which drops the transient `metadata.queued` flag, but
-        // the composer banner is driven by a separate map that only
-        // updates from snapshot events).
-        this.sendQueuedSnapshot(client, event.chatId);
-        break;
-      }
-
-      case 'chat.updateConfig': {
-        await this.chats.updateChatConfig(
-          event.chatId,
-          event.adapterId,
-          event.model,
-          event.permissionMode,
-          event.planMode,
-        );
-        break;
-      }
-
-      case 'chat.interrupt': {
-        await this.chats.interruptChat(event.chatId);
-        break;
-      }
-
-      case 'chat.end': {
-        await this.chats.endChat(event.chatId);
-        client.subscriptions.delete(event.chatId);
-        break;
-      }
-
       case 'message.send': {
         await this.chats.sendMessage(event.chatId, event.content, event.attachmentIds, event.metadata);
         break;
@@ -203,16 +149,6 @@ export class WebSocketManager {
           { chatId: event.chatId, requestId: event.response.requestId },
           'permission.respond delivered to adapter',
         );
-        break;
-      }
-
-      case 'message.queue.edit': {
-        await this.chats.editQueuedMessage(event.chatId, event.messageId, event.content);
-        break;
-      }
-
-      case 'message.queue.cancel': {
-        await this.chats.cancelQueuedMessage(event.chatId, event.messageId);
         break;
       }
 
@@ -304,15 +240,7 @@ export class WebSocketManager {
       log.debug(extra, 'broadcast %s to %d client(s)', event.type, this.clients.size);
     }
 
-    // Stamp origin only on events whose client side-effects (selection, navigation)
-    // should fire on the originating client alone. Pure state-sync events broadcast
-    // unchanged so every client converges on the same store state.
-    const origin = originContext.getStore();
-    const stamped: DaemonEvent =
-      origin && event.type === 'chat.created' && event.originClientId === undefined
-        ? { ...event, originClientId: origin.clientId }
-        : event;
-    const payload = JSON.stringify(stamped);
+    const payload = JSON.stringify(event);
 
     for (const client of this.clients.values()) {
       if (!chatId || client.subscriptions.has(chatId)) {

@@ -29,6 +29,7 @@ import { authRoutes } from './routes/auth.js';
 import { tunnelRoutes } from './routes/tunnel.js';
 import { deviceRoutes } from './routes/device.js';
 import { backgroundTaskRoutes } from './routes/background-tasks.js';
+import { chatCommandRoutes } from './routes/chat-commands.js';
 import { PushService } from '../push/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
@@ -121,6 +122,7 @@ export function createHttpServer(deps: HttpServerDeps): { app: Express; pushServ
   app.use(tunnelRoutes(ctx));
   app.use(projectRoutes(ctx));
   app.use(chatRoutes(ctx));
+  app.use(chatCommandRoutes(ctx));
   app.use(fileRoutes(ctx));
   app.use(contentSearchRoutes(ctx));
   app.use(gitRoutes(ctx));
