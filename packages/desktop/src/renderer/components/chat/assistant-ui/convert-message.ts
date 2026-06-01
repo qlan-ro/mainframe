@@ -185,6 +185,28 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
             });
             break;
           }
+          case 'task_progress': {
+            // The pipeline now emits task_progress as a first-class DisplayContent.
+            // Re-encode it as the `_TaskProgress` tool-call part the assistant-ui
+            // tool registry (TaskProgressUI / render-tool-card) already renders, so
+            // the progress feed keeps showing without changing the renderer.
+            parts.push({
+              type: 'tool-call',
+              toolCallId: uniqueId(block.items[0]?.id ?? '', parts.length),
+              toolName: '_TaskProgress',
+              args: {
+                items: block.items.map((item) => ({
+                  toolCallId: item.id,
+                  toolName: item.name,
+                  args: item.input,
+                  result: item.result,
+                  isError: item.result?.isError,
+                })),
+              } as unknown as import('assistant-stream/utils').ReadonlyJSONObject,
+              result: 'accumulated',
+            });
+            break;
+          }
           case 'error':
             // Carry the message text directly so the renderer can display it without
             // a sentinel round-trip or cross-message scan. The renderer identifies error

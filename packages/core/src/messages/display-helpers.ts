@@ -214,102 +214,120 @@ function convertGroupedPartsToDisplay(
   const result: DisplayContent[] = [];
 
   for (const part of parts) {
-    if (part.type === 'passthrough') {
-      // Non-groupable content flows through directly; the original DisplayContent
-      // already carries parentToolUseId from the mapping step.
-      result.push(part.content);
-      continue;
-    }
+    switch (part.type) {
+      case 'passthrough': {
+        // Non-groupable content flows through directly; the original DisplayContent
+        // already carries parentToolUseId from the mapping step.
+        result.push(part.content);
+        break;
+      }
 
-    if (part.type === 'text') {
-      if (part.text) {
+      case 'text': {
+        if (part.text) {
+          result.push({
+            type: 'text',
+            text: part.text,
+            ...withParentId(part.parentToolUseId),
+          });
+        }
+        break;
+      }
+
+      case '_tool_group': {
         result.push({
-          type: 'text',
-          text: part.text,
+          type: 'tool_group',
+          calls: part.items.map((item) => ({
+            type: 'tool_call' as const,
+            id: item.toolCallId,
+            name: item.toolName,
+            input: item.args,
+            category: categorizeToolCall(item.toolName, categories),
+            ...(item.result != null && { result: item.result as ToolCallResult }),
+            ...withParentId(item.parentToolUseId),
+          })),
+        });
+        break;
+      }
+
+      case '_task_group': {
+        // Use the unique tool_use id, not `description`. Two subagents in the same
+        // turn can share a description string (role label, repeat prompt) and
+        // collapsing them onto one id collides assistant-ui's per-part React key
+        // (`toolCallId-<id>`), crashing the message renderer. The user-facing
+        // label still reads from `taskArgs.description` in the TaskGroup card.
+        const agentId = part.toolCallId;
+        result.push({
+          type: 'task_group',
+          agentId,
+          taskArgs: part.taskArgs ?? {},
+          calls: part.children.map((child) => {
+            if (child.type === 'passthrough') {
+              // The original DisplayContent already carries parentToolUseId;
+              // pass it through unchanged.
+              return child.content;
+            }
+            if (child.type === 'text') {
+              return { type: 'text' as const, text: child.text, ...withParentId(child.parentToolUseId) };
+            }
+            if (child.type === 'tool-call') {
+              return {
+                type: 'tool_call' as const,
+                id: child.toolCallId,
+                name: child.toolName,
+                input: child.args,
+                category: categorizeToolCall(child.toolName, categories),
+                ...(child.result != null && { result: child.result as ToolCallResult }),
+                ...withParentId(child.parentToolUseId),
+              };
+            }
+            // Recursively resolve any nested grouped entry (e.g. a _tool_group
+            // collapsed inside a subagent's explore burst).
+            const nested = convertGroupedPartsToDisplay([child], originalContent, categories);
+            return nested.length === 1 ? nested[0]! : { type: 'text' as const, text: '' };
+          }),
+          ...(part.result != null && { result: part.result as ToolCallResult }),
+        });
+        break;
+      }
+
+      case '_task_progress': {
+        result.push({
+          type: 'task_progress',
+          items: part.items.map((item) => ({
+            id: item.toolCallId,
+            name: item.toolName,
+            input: item.args,
+            category: 'progress' as const,
+            ...(item.result != null && { result: item.result as ToolCallResult }),
+          })),
+        });
+        break;
+      }
+
+      case 'tool-call': {
+        // Regular tool call — find original DisplayContent to preserve result and category
+        const orig = originalContent.find((c) => c.type === 'tool_call' && c.id === part.toolCallId) as
+          | (DisplayContent & { type: 'tool_call' })
+          | undefined;
+        result.push({
+          type: 'tool_call',
+          id: part.toolCallId,
+          name: part.toolName,
+          input: part.args,
+          category: orig?.category ?? categorizeToolCall(part.toolName, categories),
+          ...(orig?.result && { result: orig.result }),
           ...withParentId(part.parentToolUseId),
         });
+        break;
       }
-      continue;
-    }
 
-    if (part.toolName === '_ToolGroup') {
-      const items = part.args.items as Array<{
-        toolCallId: string;
-        toolName: string;
-        args: Record<string, unknown>;
-        result: unknown;
-        isError: boolean | undefined;
-        parentToolUseId?: string;
-      }>;
-      result.push({
-        type: 'tool_group',
-        calls: items.map((item) => ({
-          type: 'tool_call' as const,
-          id: item.toolCallId,
-          name: item.toolName,
-          input: item.args,
-          category: categorizeToolCall(item.toolName, categories),
-          ...(item.result != null && { result: item.result as ToolCallResult }),
-          ...withParentId(item.parentToolUseId),
-        })),
-      });
-    } else if (part.toolName === '_TaskGroup') {
-      const children = part.args.children as PartEntry[];
-      const taskArgs = part.args.taskArgs as Record<string, unknown>;
-      // Use the unique tool_use id, not `description`. Two subagents in the same
-      // turn can share a description string (role label, repeat prompt) and
-      // collapsing them onto one id collides assistant-ui's per-part React key
-      // (`toolCallId-<id>`), crashing the message renderer. The user-facing
-      // label still reads from `taskArgs.description` in the TaskGroup card.
-      const agentId = part.toolCallId;
-      result.push({
-        type: 'task_group',
-        agentId,
-        taskArgs: taskArgs ?? {},
-        calls: children.map((child) => {
-          if (child.type === 'passthrough') {
-            // The original DisplayContent already carries parentToolUseId;
-            // pass it through unchanged.
-            return child.content;
-          }
-          if (child.type === 'text') {
-            return { type: 'text' as const, text: child.text, ...withParentId(child.parentToolUseId) };
-          }
-          return {
-            type: 'tool_call' as const,
-            id: child.toolCallId,
-            name: child.toolName,
-            input: child.args,
-            category: categorizeToolCall(child.toolName, categories),
-            ...(child.result != null && { result: child.result as ToolCallResult }),
-            ...withParentId(child.parentToolUseId),
-          };
-        }),
-        ...(part.result != null && { result: part.result as ToolCallResult }),
-      });
-    } else if (part.toolName === '_TaskProgress') {
-      result.push({
-        type: 'tool_call',
-        id: part.toolCallId,
-        name: '_TaskProgress',
-        input: part.args,
-        category: 'progress',
-        ...(part.result != null && { result: part.result as ToolCallResult }),
-      });
-    } else {
-      // Regular tool call — find original DisplayContent to preserve result and category
-      const orig = originalContent.find((c) => c.type === 'tool_call' && c.id === part.toolCallId) as
-        | (DisplayContent & { type: 'tool_call' })
-        | undefined;
-      result.push({
-        type: 'tool_call',
-        id: part.toolCallId,
-        name: part.toolName,
-        input: part.args,
-        category: orig?.category ?? categorizeToolCall(part.toolName, categories),
-        ...(orig?.result && { result: orig.result }),
-        ...withParentId(part.parentToolUseId),
-      });
+      default: {
+        // Exhaustiveness check — TypeScript ensures every PartEntry variant is handled.
+        // Unreachable at runtime; the assignment fails to compile if a variant is added.
+        const _exhaustive: never = part;
+        void _exhaustive;
+        break;
+      }
     }
   }
 

@@ -46,6 +46,16 @@ export type DisplayContent =
       calls: DisplayContent[];
       result?: ToolCallResult;
     }
+  | {
+      type: 'task_progress';
+      items: Array<{
+        id: string;
+        name: string;
+        input: Record<string, unknown>;
+        category: 'progress';
+        result?: ToolCallResult;
+      }>;
+    }
   | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }
   | { type: 'error'; message: string }
   | { type: 'compaction'; parentToolUseId?: string };

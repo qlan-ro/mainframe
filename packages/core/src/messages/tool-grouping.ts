@@ -24,10 +24,39 @@ export interface TaskProgressItem {
   parentToolUseId?: string;
 }
 
+/** Consecutive explore tools collapsed into one expandable group card. */
+export interface ToolGroupEntry {
+  type: '_tool_group';
+  toolCallId: string;
+  items: ToolGroupItem[];
+  result: 'grouped';
+  parentToolUseId?: string;
+}
+
+/** A subagent (Task) tool plus every part tagged with its tool_use id. */
+export interface TaskGroupEntry {
+  type: '_task_group';
+  toolCallId: string;
+  taskArgs: Record<string, unknown>;
+  children: PartEntry[];
+  result?: unknown;
+  isError?: boolean;
+  parentToolUseId?: string;
+}
+
+/** All task-progress tools accumulated into a single progress feed entry. */
+export interface TaskProgressEntry {
+  type: '_task_progress';
+  toolCallId: string;
+  items: TaskProgressItem[];
+  result: 'accumulated';
+  parentToolUseId?: string;
+}
+
 /**
  * Returns a parentToolUseId only if every item in the group shares the same
  * non-empty value. Used to propagate the tag onto virtual wrappers
- * (`_ToolGroup`, `_TaskProgress`) so groupTaskChildren can match them.
+ * (`_tool_group`, `_task_progress`) so groupTaskChildren can match them.
  */
 function sharedParentToolUseId(items: ReadonlyArray<{ parentToolUseId?: string }>): string | undefined {
   const first = items[0]?.parentToolUseId;
@@ -47,7 +76,10 @@ export type PartEntry =
       parentToolUseId?: string;
     }
   | { type: 'text'; text: string; parentToolUseId?: string }
-  | { type: 'passthrough'; content: import('@qlan-ro/mainframe-types').DisplayContent; parentToolUseId?: string };
+  | { type: 'passthrough'; content: import('@qlan-ro/mainframe-types').DisplayContent; parentToolUseId?: string }
+  | ToolGroupEntry
+  | TaskGroupEntry
+  | TaskProgressEntry;
 
 /**
  * Post-processes parts to group consecutive explore tools, suppress hidden tools,
@@ -133,10 +165,9 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
         });
         const wrapperParent = sharedParentToolUseId(items);
         result.push({
-          type: 'tool-call',
+          type: '_tool_group',
           toolCallId: (group[0] as PartEntry & { type: 'tool-call' }).toolCallId,
-          toolName: '_ToolGroup',
-          args: { items },
+          items,
           result: 'grouped',
           ...(wrapperParent && { parentToolUseId: wrapperParent }),
         });
@@ -155,11 +186,10 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
   // Insert accumulated task progress at the position of the first task tool
   if (taskItems.length > 0) {
     const wrapperParent = sharedParentToolUseId(taskItems);
-    const entry: PartEntry = {
-      type: 'tool-call',
+    const entry: TaskProgressEntry = {
+      type: '_task_progress',
       toolCallId: taskItems[0]!.toolCallId,
-      toolName: '_TaskProgress',
-      args: { items: taskItems },
+      items: taskItems,
       result: 'accumulated',
       ...(wrapperParent && { parentToolUseId: wrapperParent }),
     };
@@ -196,10 +226,10 @@ export function groupTaskChildren(parts: PartEntry[], categories: ToolCategories
 
       if (children.length > 0) {
         result.push({
-          type: 'tool-call',
+          type: '_task_group',
           toolCallId: part.toolCallId,
-          toolName: '_TaskGroup',
-          args: { taskArgs: part.args, children },
+          taskArgs: part.args,
+          children,
           result: part.result,
           isError: part.isError,
         });

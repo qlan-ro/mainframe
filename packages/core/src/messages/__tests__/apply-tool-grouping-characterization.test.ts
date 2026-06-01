@@ -287,18 +287,16 @@ describe('applyToolGrouping — _TaskProgress accumulation and position', () => 
 
     const out = applyToolGrouping(input, CAT);
 
-    // CHARACTERIZATION: [text, _TaskProgress(tp1,tp2), text]
+    // CHARACTERIZATION: [text, task_progress(tp1,tp2), text]
     expect(out).toHaveLength(3);
     expect(out[0]).toEqual({ type: 'text', text: 'Before' });
-    expect(out[1]!.type).toBe('tool_call');
-    const prog = out[1] as DisplayContent & { type: 'tool_call' };
-    expect(prog.name).toBe('_TaskProgress');
-    expect(prog.category).toBe('progress');
-    // CHARACTERIZATION: both items appear in the accumulated list
-    const items = (prog.input as { items: Array<{ toolCallId: string; toolName: string }> }).items;
-    expect(items).toHaveLength(2);
-    expect(items[0]!.toolCallId).toBe('tp1');
-    expect(items[1]!.toolCallId).toBe('tp2');
+    expect(out[1]!.type).toBe('task_progress');
+    const prog = out[1] as DisplayContent & { type: 'task_progress' };
+    // CHARACTERIZATION: both items appear in the accumulated list, each category 'progress'
+    expect(prog.items).toHaveLength(2);
+    expect(prog.items[0]!.id).toBe('tp1');
+    expect(prog.items[0]!.category).toBe('progress');
+    expect(prog.items[1]!.id).toBe('tp2');
     expect(out[2]).toEqual({ type: 'text', text: 'After' });
   });
 
@@ -324,15 +322,13 @@ describe('applyToolGrouping — _TaskProgress accumulation and position', () => 
     expect(out).toHaveLength(4);
     expect(out[0]).toEqual({ type: 'text', text: 'Before' });
 
-    // _TaskProgress at slot 1 — inserted at taskInsertIndex (= 1, where tp1 was)
-    expect(out[1]!.type).toBe('tool_call');
-    const prog = out[1] as DisplayContent & { type: 'tool_call' };
-    expect(prog.name).toBe('_TaskProgress');
-    const items = (prog.input as { items: Array<{ toolCallId: string }> }).items;
+    // task_progress at slot 1 — inserted at taskInsertIndex (= 1, where tp1 was)
+    expect(out[1]!.type).toBe('task_progress');
+    const prog = out[1] as DisplayContent & { type: 'task_progress' };
     // both progress tools survive — tp2 is no longer dropped
-    expect(items).toHaveLength(2);
-    expect(items[0]!.toolCallId).toBe('tp1');
-    expect(items[1]!.toolCallId).toBe('tp2');
+    expect(prog.items).toHaveLength(2);
+    expect(prog.items[0]!.id).toBe('tp1');
+    expect(prog.items[1]!.id).toBe('tp2');
 
     // tc1 (Read) is still present as a solo explore (not wrapped in tool_group)
     expect(out[2]).toEqual({
@@ -363,9 +359,8 @@ describe('applyToolGrouping — _TaskProgress accumulation and position', () => 
     expect(out).toHaveLength(4);
     expect(out[0]).toEqual({ type: 'text', text: 'A' });
     expect(out[1]).toEqual({ type: 'text', text: 'B' });
-    // CHARACTERIZATION: _TaskProgress inserted at slot 2 (where first progress was)
-    expect(out[2]!.type).toBe('tool_call');
-    expect((out[2] as DisplayContent & { type: 'tool_call' }).name).toBe('_TaskProgress');
+    // CHARACTERIZATION: task_progress inserted at slot 2 (where first progress was)
+    expect(out[2]!.type).toBe('task_progress');
     expect(out[3]).toEqual({ type: 'text', text: 'C' });
   });
 });
@@ -374,14 +369,13 @@ describe('applyToolGrouping — _TaskProgress accumulation and position', () => 
 // 5. task_group NESTING — children order, explore grouping inside, thinking
 // ---------------------------------------------------------------------------
 describe('applyToolGrouping — task_group nesting', () => {
-  it('task_group children: explore pair grouped as _ToolGroup tool_call (not tool_group), thinking after stays in position', () => {
-    // CHARACTERIZATION: Inside task_group.calls, the inner explore groups are
-    // NOT converted to type:'tool_group'. They appear as type:'tool_call' with
-    // name:'_ToolGroup'. This is because the _TaskGroup branch in
-    // convertGroupedPartsToDisplay maps children through the raw else-branch
-    // (tool_call mapping) which doesn't special-case _ToolGroup.
+  it('task_group children: explore pair grouped as a nested tool_group, thinking after stays in position', () => {
+    // CHARACTERIZATION: Inside task_group.calls, the inner explore group is now a
+    // first-class tool_group DisplayContent. The _task_group branch in
+    // convertGroupedPartsToDisplay recursively resolves the nested _tool_group
+    // entry into a proper { type: 'tool_group', calls } block.
     //
-    // Order in task_group.calls: [_ToolGroup(Read,Grep), thinking, solo-LS]
+    // Order in task_group.calls: [tool_group(Read,Grep), thinking, solo-LS]
     const input: DisplayContent[] = [
       {
         type: 'tool_call',
@@ -426,17 +420,16 @@ describe('applyToolGrouping — task_group nesting', () => {
     expect(tg.taskArgs).toEqual({ description: 'do work' });
     expect(tg.calls).toHaveLength(3);
 
-    // CHARACTERIZATION: slot 0 — inner explore group rendered as tool_call with name='_ToolGroup'
-    const innerGroup = tg.calls[0] as DisplayContent & { type: 'tool_call' };
-    expect(innerGroup.type).toBe('tool_call');
-    expect(innerGroup.name).toBe('_ToolGroup');
-    // The _ToolGroup args.items lists Read and Grep
-    const items = (innerGroup.input as { items: Array<{ toolName: string; toolCallId: string }> }).items;
-    expect(items).toHaveLength(2);
-    expect(items[0]!.toolCallId).toBe('c1');
-    expect(items[0]!.toolName).toBe('Read');
-    expect(items[1]!.toolCallId).toBe('c2');
-    expect(items[1]!.toolName).toBe('Grep');
+    // CHARACTERIZATION: slot 0 — inner explore group rendered as a nested tool_group
+    const innerGroup = tg.calls[0] as DisplayContent & { type: 'tool_group' };
+    expect(innerGroup.type).toBe('tool_group');
+    // The tool_group.calls lists Read and Grep
+    const calls = innerGroup.calls as Array<DisplayContent & { type: 'tool_call' }>;
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.id).toBe('c1');
+    expect(calls[0]!.name).toBe('Read');
+    expect(calls[1]!.id).toBe('c2');
+    expect(calls[1]!.name).toBe('Grep');
 
     // CHARACTERIZATION: slot 1 — thinking in correct position (not hoisted)
     expect(tg.calls[1]).toEqual({ type: 'thinking', thinking: 'child thought', parentToolUseId: 'agent1' });
@@ -454,7 +447,7 @@ describe('applyToolGrouping — task_group nesting', () => {
 
   it('task_group children: thinking BEFORE explore pair stays at position [0]', () => {
     // CHARACTERIZATION: thinking at start of children, then explore group.
-    // Order: [thinking, _ToolGroup(Read,Grep)]
+    // Order: [thinking, tool_group(Read,Grep)]
     const input: DisplayContent[] = [
       {
         type: 'tool_call',
@@ -492,13 +485,12 @@ describe('applyToolGrouping — task_group nesting', () => {
     // CHARACTERIZATION: thinking is at index 0, NOT after the explore group
     expect(tg.calls[0]).toEqual({ type: 'thinking', thinking: 'before explore', parentToolUseId: 'agent1' });
 
-    // CHARACTERIZATION: _ToolGroup at index 1
-    const innerGrp = tg.calls[1] as DisplayContent & { type: 'tool_call' };
-    expect(innerGrp.type).toBe('tool_call');
-    expect(innerGrp.name).toBe('_ToolGroup');
-    const items = (innerGrp.input as { items: Array<{ toolCallId: string }> }).items;
-    expect(items[0]!.toolCallId).toBe('c1');
-    expect(items[1]!.toolCallId).toBe('c2');
+    // CHARACTERIZATION: nested tool_group at index 1
+    const innerGrp = tg.calls[1] as DisplayContent & { type: 'tool_group' };
+    expect(innerGrp.type).toBe('tool_group');
+    const calls = innerGrp.calls as Array<DisplayContent & { type: 'tool_call' }>;
+    expect(calls[0]!.id).toBe('c1');
+    expect(calls[1]!.id).toBe('c2');
   });
 
   it('subagent without children: stays as bare tool_call, no task_group wrapper', () => {
