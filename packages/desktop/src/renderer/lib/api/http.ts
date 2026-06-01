@@ -39,9 +39,19 @@ async function putJson<T>(url: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+async function patchJson<T>(url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) throw new Error(await extractErrorMessage(res));
+  return res.json();
+}
+
 async function deleteRequest(url: string): Promise<void> {
   const res = await fetch(url, { method: 'DELETE' });
   if (!res.ok) throw new Error(await extractErrorMessage(res));
 }
 
-export { API_BASE, fetchJson, postJson, putJson, deleteRequest };
+export { API_BASE, fetchJson, postJson, patchJson, putJson, deleteRequest };
