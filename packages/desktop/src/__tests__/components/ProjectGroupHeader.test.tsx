@@ -44,7 +44,10 @@ vi.mock('../../renderer/store/tags.js', () => ({
     selector({ registry: [], refreshRegistry: vi.fn(), applyToChat: vi.fn() }),
 }));
 vi.mock('../../renderer/lib/client.js', () => ({
-  daemonClient: { createChat: vi.fn(), resumeChat: mocks.resumeChat },
+  daemonClient: { resumeChat: mocks.resumeChat },
+}));
+vi.mock('../../renderer/lib/chat-actions.js', () => ({
+  startChat: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../../renderer/lib/adapters.js', () => ({
   getDefaultModelForAdapter: vi.fn(() => 'claude-sonnet-4-6'),
@@ -63,7 +66,7 @@ vi.mock('../../renderer/components/chat/assistant-ui/composer/composer-drafts.js
 
 import { ProjectGroup } from '../../renderer/components/panels/ProjectGroup.js';
 import { TooltipProvider } from '../../renderer/components/ui/tooltip.js';
-import { daemonClient } from '../../renderer/lib/client.js';
+import { startChat } from '../../renderer/lib/chat-actions.js';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
 
 const mockProject: Project = {
@@ -126,11 +129,11 @@ describe('ProjectGroup header layout', () => {
     expect(btn).toBeInTheDocument();
   });
 
-  it('calls daemonClient.createChat when the new-session button is clicked', async () => {
+  it('calls startChat when the new-session button is clicked', async () => {
     renderGroup();
     const btn = screen.getByRole('button', { name: /new session in my-app/i });
     await userEvent.click(btn);
-    expect(daemonClient.createChat).toHaveBeenCalledWith('proj-1', 'claude', 'claude-sonnet-4-6');
+    expect(startChat).toHaveBeenCalledWith('proj-1', 'claude', 'claude-sonnet-4-6');
   });
 
   it('new-session button click does not bubble to toggle-collapse', async () => {

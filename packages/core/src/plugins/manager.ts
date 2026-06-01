@@ -135,6 +135,33 @@ export class PluginManager {
   }
 
   /**
+   * Mount a sub-router for the plugin and build its PluginContext. Shared by the
+   * builtin and on-disk load paths, which differ only in how they obtain the
+   * manifest and activate function.
+   */
+  private buildPluginRuntime(
+    manifest: PluginManifest,
+    pluginDir: string,
+  ): { ctx: PluginContext; unloadCallbacks: (() => void)[] } {
+    const unloadCallbacks: (() => void)[] = [];
+    const pluginRouter = Router();
+    this.router.use(`/${manifest.id}`, pluginRouter);
+
+    const ctx = buildPluginContext({
+      manifest,
+      pluginDir,
+      router: pluginRouter,
+      logger: createChildLogger(`plugin:${manifest.id}`),
+      daemonBus: this.deps.daemonBus,
+      db: this.deps.db,
+      adapters: this.deps.adapters,
+      emitEvent: this.trackingEmitEvent(manifest.id, this.deps.emitEvent),
+      onUnloadCallbacks: unloadCallbacks,
+    });
+    return { ctx, unloadCallbacks };
+  }
+
+  /**
    * Load a builtin plugin directly from TypeScript (bypasses file-system manifest reading).
    * Builtins are always trusted and skip the consent flow.
    */
@@ -145,22 +172,7 @@ export class PluginManager {
   ): Promise<void> {
     if (this.loaded.has(manifest.id)) return;
 
-    const unloadCallbacks: (() => void)[] = [];
-    const pluginRouter = Router();
-    this.router.use(`/${manifest.id}`, pluginRouter);
-
-    const ctx = buildPluginContext({
-      manifest,
-      pluginDir: options?.pluginDir ?? '',
-      router: pluginRouter,
-      logger: createChildLogger(`plugin:${manifest.id}`),
-      daemonBus: this.deps.daemonBus,
-      db: this.deps.db,
-      adapters: this.deps.adapters,
-      emitEvent: this.trackingEmitEvent(manifest.id, this.deps.emitEvent),
-      onUnloadCallbacks: unloadCallbacks,
-    });
-
+    const { ctx, unloadCallbacks } = this.buildPluginRuntime(manifest, options?.pluginDir ?? '');
     await activate(ctx);
     this.loaded.set(manifest.id, { id: manifest.id, ctx, unloadCallbacks });
     log.info({ id: manifest.id, name: manifest.name }, 'Builtin plugin loaded');
@@ -195,22 +207,9 @@ export class PluginManager {
       return;
     }
 
-    const unloadCallbacks: (() => void)[] = [];
-    // Each plugin gets its own sub-router under the manager's parent router
-    const pluginRouter = Router();
-    this.router.use(`/${manifest.id}`, pluginRouter);
-
-    const ctx = buildPluginContext({
-      manifest,
-      pluginDir,
-      router: pluginRouter,
-      logger: createChildLogger(`plugin:${manifest.id}`),
-      daemonBus: this.deps.daemonBus,
-      db: this.deps.db,
-      adapters: this.deps.adapters,
-      emitEvent: this.trackingEmitEvent(manifest.id, this.deps.emitEvent),
-      onUnloadCallbacks: unloadCallbacks,
-    });
+    // ctx is built before the index.js check (mounts the router, provisions the
+    // plugin's storage) — preserved from the original ordering.
+    const { ctx, unloadCallbacks } = this.buildPluginRuntime(manifest, pluginDir);
 
     const entryPath = path.join(pluginDir, 'index.js');
     if (!existsSync(entryPath)) {

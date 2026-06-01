@@ -34,7 +34,12 @@ async function discoverWorkspaceFolders(
   const base = getDaemonHttpUrl();
   try {
     const res = await fetch(`${base}/api/projects/${projectId}/search/files?q=tsconfig.json&limit=20`);
-    const files: { path: string; type: string }[] = await res.json();
+    const envelope = (await res.json()) as {
+      success: boolean;
+      data?: { path: string; type: string }[];
+      error?: string;
+    };
+    const files: { path: string; type: string }[] = envelope.success && envelope.data ? envelope.data : [];
     const dirs = new Set<string>();
     for (const f of files) {
       if (f.type !== 'file' || !f.path.endsWith('tsconfig.json')) continue;
@@ -284,12 +289,14 @@ export class LspClientManager {
     const base = getDaemonHttpUrl();
     fetch(`${base}/api/projects/${projectId}/files?path=${encodeURIComponent(filePath)}`)
       .then((r) => r.json())
-      .then((data: { content: string }) => {
+      .then((envelope: { success: boolean; data?: { content: string } }) => {
+        const content = envelope.success && envelope.data ? envelope.data.content : undefined;
+        if (content === undefined) return;
         this.sendNotification(entry, 'textDocument/didOpen', {
-          textDocument: { uri, languageId: language, version: 1, text: data.content },
+          textDocument: { uri, languageId: language, version: 1, text: content },
         });
       })
-      .catch(() => {});
+      .catch((err) => console.warn('[lsp] preloadDocument didOpen failed', err));
   }
 
   disposeClient(projectId: string, language: string): void {

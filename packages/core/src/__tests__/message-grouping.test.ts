@@ -31,17 +31,16 @@ describe('groupTaskChildren', () => {
     const grouped = groupTaskChildren(parts, cats);
     expect(grouped).toHaveLength(1);
     const g = grouped[0]!;
-    expect(g.type).toBe('tool-call');
-    expect((g as { toolName: string }).toolName).toBe('_TaskGroup');
-    const args = (g as unknown as { args: { children: PartEntry[] } }).args;
-    expect(args.children).toHaveLength(3);
+    expect(g.type).toBe('_task_group');
+    if (g.type !== '_task_group') throw new Error('expected _task_group');
+    expect(g.children).toHaveLength(3);
     // First child is the dispatch prompt text
-    expect(args.children[0]!.type).toBe('text');
-    expect((args.children[0]! as { text: string }).text).toContain('Run echo hi');
+    expect(g.children[0]!.type).toBe('text');
+    expect((g.children[0]! as { text: string }).text).toContain('Run echo hi');
     // Second child is the thinking sentinel — preserved for downstream decode
-    expect((args.children[1]! as { text: string }).text).toBe('\0ng:0');
+    expect((g.children[1]! as { text: string }).text).toBe('\0ng:0');
     // Third child is the Bash tool_call
-    expect((args.children[2]! as { toolName?: string }).toolName).toBe('Bash');
+    expect((g.children[2]! as { toolName?: string }).toolName).toBe('Bash');
   });
 
   it('stops collecting when a part has no parentToolUseId or a different one', () => {
@@ -55,7 +54,7 @@ describe('groupTaskChildren', () => {
     ];
     const grouped = groupTaskChildren(parts, cats);
     expect(grouped).toHaveLength(3);
-    expect((grouped[0] as { toolName: string }).toolName).toBe('_TaskGroup');
+    expect(grouped[0]!.type).toBe('_task_group');
     expect(grouped[1]!.type).toBe('text');
     expect((grouped[1]! as { text: string }).text).toBe('parent thread text');
     expect((grouped[2] as { toolName: string }).toolName).toBe('Read');
@@ -70,8 +69,9 @@ describe('groupTaskChildren', () => {
     ];
     const grouped = groupTaskChildren(parts, cats);
     expect(grouped).toHaveLength(1);
-    const args = (grouped[0] as unknown as { args: { children: PartEntry[] } }).args;
-    expect(args.children).toHaveLength(2);
+    const g = grouped[0]!;
+    if (g.type !== '_task_group') throw new Error('expected _task_group');
+    expect(g.children).toHaveLength(2);
   });
 
   it('terminates on a second Agent tool_call (parallel subagents)', () => {
@@ -84,14 +84,14 @@ describe('groupTaskChildren', () => {
     ];
     const grouped = groupTaskChildren(parts, cats);
     expect(grouped).toHaveLength(2);
-    expect((grouped[0] as { toolName: string }).toolName).toBe('_TaskGroup');
-    expect((grouped[1] as { toolName: string }).toolName).toBe('_TaskGroup');
-    const firstArgs = (grouped[0] as unknown as { args: { children: PartEntry[] } }).args;
-    const secondArgs = (grouped[1] as unknown as { args: { children: PartEntry[] } }).args;
-    expect(firstArgs.children).toHaveLength(1);
-    expect((firstArgs.children[0] as { text: string }).text).toBe('first prompt');
-    expect(secondArgs.children).toHaveLength(1);
-    expect((secondArgs.children[0] as { text: string }).text).toBe('second prompt');
+    const g0 = grouped[0]!;
+    const g1 = grouped[1]!;
+    if (g0.type !== '_task_group') throw new Error('expected _task_group');
+    if (g1.type !== '_task_group') throw new Error('expected _task_group');
+    expect(g0.children).toHaveLength(1);
+    expect((g0.children[0] as { text: string }).text).toBe('first prompt');
+    expect(g1.children).toHaveLength(1);
+    expect((g1.children[0] as { text: string }).text).toBe('second prompt');
   });
 
   it('Agent with no matching children renders as a plain tool-call (not _TaskGroup)', () => {

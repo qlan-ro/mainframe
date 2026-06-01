@@ -1,4 +1,5 @@
 export * from './adapter.js';
+export * from './content.js';
 export * from './tags.js';
 export * from './device.js';
 export * from './chat.js';
@@ -14,6 +15,7 @@ export * from './lsp.js';
 export * from './git.js';
 export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';
+export * from './api.js';
 export type {
   PluginCapability,
   PluginManifest,

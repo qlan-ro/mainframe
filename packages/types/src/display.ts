@@ -1,4 +1,6 @@
 import type { DiffHunk } from './chat.js';
+import type { ControlRequest } from './adapter.js';
+import type { LeafContent } from './content.js';
 
 export interface AskUserQuestionAnswer {
   question: string;
@@ -26,9 +28,7 @@ export interface ToolCategories {
 }
 
 export type DisplayContent =
-  | { type: 'text'; text: string; parentToolUseId?: string }
-  | { type: 'thinking'; thinking: string; parentToolUseId?: string }
-  | { type: 'image'; mediaType: string; data: string; parentToolUseId?: string }
+  | LeafContent
   | {
       type: 'tool_call';
       id: string;
@@ -46,9 +46,18 @@ export type DisplayContent =
       calls: DisplayContent[];
       result?: ToolCallResult;
     }
-  | { type: 'permission_request'; request: unknown }
+  | {
+      type: 'task_progress';
+      items: Array<{
+        id: string;
+        name: string;
+        input: Record<string, unknown>;
+        category: 'progress';
+        result?: ToolCallResult;
+      }>;
+    }
+  | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }
   | { type: 'error'; message: string }
-  | { type: 'skill_loaded'; skillName: string; path: string; content: string; parentToolUseId?: string }
   | { type: 'compaction'; parentToolUseId?: string };
 
 export interface DisplayMessage {

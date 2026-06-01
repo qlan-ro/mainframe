@@ -97,6 +97,15 @@ const TodoUpdateSchema = z.object({
   dependencies: z.array(z.number()).optional(),
 });
 
+const AttachmentUploadSchema = z.object({
+  filename: z.string().min(1),
+  // Allow empty base64: a zero-byte file is valid and has data ''. sizeBytes
+  // carries the real length; rejecting '' would 400 a legitimate empty file.
+  data: z.string(),
+  mimeType: z.string().optional(),
+  sizeBytes: z.number().nonnegative().optional(),
+});
+
 const STATUS_LABELS: Record<string, string> = { open: 'Open', in_progress: 'In Progress', done: 'Done' };
 
 function buildInitialMessage(todo: Todo, depTodos: Todo[]): string {
@@ -320,17 +329,17 @@ function registerAttachmentRoutes(ctx: PluginContext): void {
       res.status(404).json({ error: 'Not found' });
       return;
     }
-    const body = req.body as Record<string, unknown>;
-    const { filename, mimeType, data, sizeBytes } = body;
-    if (typeof filename !== 'string' || typeof data !== 'string') {
-      res.status(400).json({ error: 'filename and data required' });
+    const parsed = AttachmentUploadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid input' });
       return;
     }
+    const { filename, mimeType, data, sizeBytes } = parsed.data;
     const meta = await ctx.attachments.save(req.params.id, {
       filename,
-      mimeType: typeof mimeType === 'string' ? mimeType : 'application/octet-stream',
+      mimeType: mimeType ?? 'application/octet-stream',
       data,
-      sizeBytes: typeof sizeBytes === 'number' ? sizeBytes : 0,
+      sizeBytes: sizeBytes ?? 0,
     });
     res.status(201).json({ attachment: meta });
   });

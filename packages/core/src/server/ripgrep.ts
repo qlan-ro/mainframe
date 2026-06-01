@@ -20,6 +20,7 @@ export function parseRipgrepOutput(output: string, basePath: string, maxResults 
     try {
       parsed = JSON.parse(line) as { type: string; data?: unknown };
     } catch {
+      /* expected: tolerate non-JSON ripgrep output lines */
       continue;
     }
 

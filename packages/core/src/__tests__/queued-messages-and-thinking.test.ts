@@ -106,7 +106,7 @@ function createStack(adapter: MockAdapter, permissionMode = 'default') {
   const chats = new ChatManager(db as any, registry, new BackgroundTaskTracker(), undefined, (event) =>
     wsRef.current?.broadcastEvent(event),
   );
-  const { app } = createHttpServer(db as any, chats, registry);
+  const { app } = createHttpServer({ db: db as any, chats, adapters: registry });
   const httpServer = createServer(app);
   wsRef.current = new WebSocketManager(httpServer, chats);
   return { httpServer, chats, db };
@@ -153,7 +153,8 @@ describe('queued messages and thinking indicator', () => {
     server = stack.httpServer;
     const port = await startServer(server);
     ws = await connectWs(port);
-    ws.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    ws.send(JSON.stringify({ type: 'subscribe', chatId: 'test-chat' }));
+    await stack.chats.resumeChat('test-chat');
     await sleep(100);
     const events: DaemonEvent[] = [];
     ws.on('message', (data) => events.push(JSON.parse(data.toString()) as DaemonEvent));

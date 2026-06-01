@@ -1,19 +1,10 @@
 import React from 'react';
 import { structuredPatch } from 'diff';
-import type { DiffHunk } from '@qlan-ro/mainframe-types';
+import type { DiffHunk, ToolCallResult } from '@qlan-ro/mainframe-types';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../../../ui/tooltip';
 import { useTabsStore } from '../../../../../store/tabs';
 export function stripErrorXml(text: string): string {
   return text.replace(/<\/?(?:tool_use_error|error)>/g, '').trim();
-}
-
-export interface ToolResult {
-  content: string;
-  structuredPatch: DiffHunk[];
-  originalFile?: string;
-  modifiedFile?: string;
-  truncated?: boolean;
-  fullBytes?: number;
 }
 
 export interface TruncatedResult {
@@ -22,7 +13,7 @@ export interface TruncatedResult {
   fullBytes: number;
 }
 
-export function isStructuredResult(result: unknown): result is ToolResult {
+export function isStructuredResult(result: unknown): result is ToolCallResult {
   return typeof result === 'object' && result !== null && 'structuredPatch' in result;
 }
 

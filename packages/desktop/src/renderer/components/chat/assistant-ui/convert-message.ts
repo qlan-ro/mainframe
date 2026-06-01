@@ -7,8 +7,8 @@ type ContentPart = Exclude<ThreadMessageLike['content'], string>[number];
 // Re-export for consumers that import from this module
 export type { ToolGroupItem, TaskProgressItem, PartEntry } from '@qlan-ro/mainframe-core/messages';
 
-// Sentinel placeholders — null-byte prefix prevents collision with user content
-export const ERROR_PLACEHOLDER = Object.freeze({ type: 'text' as const, text: '\0__MF_ERROR__' });
+// Sentinel placeholder for permission_request — rendered as null (no visible UI needed here).
+// A null-byte prefix prevents collision with user content.
 export const PERMISSION_PLACEHOLDER = Object.freeze({ type: 'text' as const, text: '\0__MF_PERMISSION__' });
 
 function mapDisplayContentToToolCall(block: DisplayContent & { type: 'tool_call' }): ContentPart {
@@ -166,6 +166,48 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
                   return { kind: 'skill_loaded' as const, skillName: c.skillName, path: c.path, content: c.content };
                 }
                 if (c.type === 'image') return { kind: 'image' as const, mediaType: c.mediaType, data: c.data };
+                // A subagent's explore burst / progress feed nests as a first-class
+                // tool_group / task_progress inside task_group.calls. Re-encode it the
+                // same way the top-level branches do so TaskGroupCard (which renders
+                // and summarizes '_ToolGroup' / '_TaskProgress' children) keeps showing
+                // them instead of silently dropping the subagent's work.
+                if (c.type === 'tool_group') {
+                  const groupCalls = c.calls.filter(
+                    (g): g is DisplayContent & { type: 'tool_call' } => g.type === 'tool_call',
+                  );
+                  return {
+                    kind: 'tool' as const,
+                    toolCallId: groupCalls[0]?.id ?? '',
+                    toolName: '_ToolGroup',
+                    args: {
+                      items: groupCalls.map((g) => ({
+                        toolCallId: g.id,
+                        toolName: g.name,
+                        args: g.input,
+                        result: g.result,
+                        isError: g.result?.isError,
+                      })),
+                    },
+                    result: 'grouped',
+                  };
+                }
+                if (c.type === 'task_progress') {
+                  return {
+                    kind: 'tool' as const,
+                    toolCallId: c.items[0]?.id ?? '',
+                    toolName: '_TaskProgress',
+                    args: {
+                      items: c.items.map((item) => ({
+                        toolCallId: item.id,
+                        toolName: item.name,
+                        args: item.input,
+                        result: item.result,
+                        isError: item.result?.isError,
+                      })),
+                    },
+                    result: 'accumulated',
+                  };
+                }
                 return null;
               })
               .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -185,8 +227,34 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
             });
             break;
           }
+          case 'task_progress': {
+            // The pipeline now emits task_progress as a first-class DisplayContent.
+            // Re-encode it as the `_TaskProgress` tool-call part the assistant-ui
+            // tool registry (TaskProgressUI / render-tool-card) already renders, so
+            // the progress feed keeps showing without changing the renderer.
+            parts.push({
+              type: 'tool-call',
+              toolCallId: uniqueId(block.items[0]?.id ?? '', parts.length),
+              toolName: '_TaskProgress',
+              args: {
+                items: block.items.map((item) => ({
+                  toolCallId: item.id,
+                  toolName: item.name,
+                  args: item.input,
+                  result: item.result,
+                  isError: item.result?.isError,
+                })),
+              } as unknown as import('assistant-stream/utils').ReadonlyJSONObject,
+              result: 'accumulated',
+            });
+            break;
+          }
           case 'error':
-            parts.push(ERROR_PLACEHOLDER);
+            // Carry the message text directly so the renderer can display it without
+            // a sentinel round-trip or cross-message scan. The renderer identifies error
+            // parts by looking up the original DisplayMessage (via getExternalStoreMessages)
+            // and matching the text to the error block's message field.
+            parts.push({ type: 'text', text: block.message });
             break;
           case 'permission_request':
             parts.push(PERMISSION_PLACEHOLDER);
@@ -202,13 +270,19 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
       };
     }
 
-    case 'error':
+    case 'error': {
+      const errorBlock = message.content.find((c): c is DisplayContent & { type: 'error' } => c.type === 'error');
+      // Fall back when the message is missing, empty, OR whitespace-only — an
+      // error bubble must always render visible text, and MainframeText drops
+      // blank-after-trim text parts before its error check.
+      const errorText = errorBlock?.message?.trim() ? errorBlock.message : 'An error occurred';
       return {
         role: 'assistant',
-        content: [ERROR_PLACEHOLDER],
+        content: [{ type: 'text', text: errorText }],
         id: message.id,
         createdAt: new Date(message.timestamp),
       };
+    }
 
     case 'permission':
       return {

@@ -120,7 +120,7 @@ function createServerStack(adapter: MockAdapter) {
   const chats = new ChatManager(db as any, registry, new BackgroundTaskTracker(), undefined, (event) =>
     wsRef.current?.broadcastEvent(event),
   );
-  const { app } = createHttpServer(db as any, chats, registry);
+  const { app } = createHttpServer({ db: db as any, chats, adapters: registry });
   const httpServer = createServer(app);
   wsRef.current = new WebSocketManager(httpServer, chats);
 
@@ -182,7 +182,8 @@ describe('message resilience across daemon restart', () => {
 
     // Connect WS client and subscribe
     ws1 = await connectWs(port);
-    ws1.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    ws1.send(JSON.stringify({ type: 'subscribe', chatId: 'test-chat' }));
+    await stack1.chats.resumeChat('test-chat');
     await sleep(100);
 
     // Collect messages received via WS
@@ -227,7 +228,8 @@ describe('message resilience across daemon restart', () => {
 
     // Reconnect WS client
     ws2 = await connectWs(port2);
-    ws2.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    ws2.send(JSON.stringify({ type: 'subscribe', chatId: 'test-chat' }));
+    await stack2.chats.resumeChat('test-chat');
     // Wait for loadChat → loadHistory to complete
     await sleep(200);
 

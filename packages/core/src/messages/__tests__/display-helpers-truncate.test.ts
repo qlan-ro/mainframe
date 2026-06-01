@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { toToolCallResult } from '../display-helpers.js';
 import { TRUNCATE_THRESHOLD_BYTES, truncateToolContent } from '../truncate-tool-content.js';
-import { extractPrFromToolResult } from '../../plugins/builtin/claude/events.js';
+import { extractPrFromToolResult } from '../../plugins/builtin/claude/pr-detection.js';
 
 describe('toToolCallResult truncation', () => {
   it('flags and shrinks oversized content', () => {

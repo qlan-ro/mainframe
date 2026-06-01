@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { daemonClient } from '../lib/client';
+import { startChat } from '../lib/chat-actions';
 import { getProjects, getAdapters, getProviderSettings, getAllChats, getPlugins } from '../lib/api';
 import { useProjectsStore } from '../store/projects';
 import { useChatsStore } from '../store/chats';
@@ -204,7 +205,7 @@ export function useProject(projectId: string | null) {
   const createChat = useCallback(
     (adapterId: string, model?: string) => {
       if (!projectId) return;
-      daemonClient.createChat(projectId, adapterId, model);
+      void startChat(projectId, adapterId, model);
     },
     [projectId],
   );

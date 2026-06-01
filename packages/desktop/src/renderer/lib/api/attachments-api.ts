@@ -1,3 +1,4 @@
+import type { ApiResponse } from '@qlan-ro/mainframe-types';
 import { fetchJson, API_BASE } from './http';
 import { createLogger } from '../logger';
 
@@ -14,7 +15,18 @@ export async function getAttachment(
   data: string;
   originalPath?: string;
 }> {
-  return fetchJson(`${API_BASE}/api/chats/${chatId}/attachments/${attachmentId}`);
+  const json = await fetchJson<
+    ApiResponse<{
+      name: string;
+      mediaType: string;
+      sizeBytes: number;
+      kind: 'image' | 'file';
+      data: string;
+      originalPath?: string;
+    }>
+  >(`${API_BASE}/api/chats/${chatId}/attachments/${attachmentId}`);
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function uploadAttachments(

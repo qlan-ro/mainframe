@@ -14,6 +14,7 @@ interface MockChatManager {
   clearPendingPermission: Mock<(chatId: string) => void>;
   hasPendingPermission: Mock<(chatId: string) => boolean>;
   resumeChat: Mock<(chatId: string) => Promise<void>>;
+  getQueuedForChat: Mock<(chatId: string) => unknown[]>;
   on: Mock<(event: string, listener: (...args: unknown[]) => void) => MockChatManager>;
   emit: Mock<(...args: unknown[]) => boolean>;
 }
@@ -42,6 +43,7 @@ function createMockChatManager(chatOverride?: Partial<Chat>): MockChatManager {
     startChat: vi.fn().mockResolvedValue(undefined),
     clearPendingPermission: vi.fn(),
     hasPendingPermission: vi.fn().mockReturnValue(false),
+    getQueuedForChat: vi.fn().mockReturnValue([]),
     resumeChat: vi.fn(async (chatId: string) => {
       await mock.loadChat(chatId);
       const c = mock.getChat(chatId);
@@ -84,38 +86,19 @@ function connectWs(port: number): Promise<WebSocket> {
   });
 }
 
-function sendAndWait(ws: WebSocket, event: Record<string, unknown>, delayMs = 50): Promise<void> {
-  return new Promise((resolve) => {
-    ws.send(JSON.stringify(event));
-    setTimeout(resolve, delayMs);
-  });
-}
-
 // ── Tests ───────────────────────────────────────────────────────────
+// chat.resume behavior is now tested directly on ChatManager.resumeChat()
+// (previously the WS handler delegated to it). These tests call resumeChat
+// directly to verify the auto-start logic in ChatLifecycleManager.
 
-describe('chat.resume auto-start', () => {
-  let server: Server;
-  let port: number;
-  let ws: WebSocket;
-
-  afterEach(async () => {
-    ws?.close();
-    await new Promise<void>((resolve) => {
-      if (server?.listening) server.close(() => resolve());
-      else resolve();
-    });
-  });
-
+describe('chat resume auto-start (direct ChatManager.resumeChat)', () => {
   it('auto-starts YOLO sessions with processState=working', async () => {
     const chats = createMockChatManager({
       permissionMode: 'yolo',
       processState: 'working',
     });
-    ({ server, port } = await startServer());
-    new WebSocketManager(server, chats as any);
-    ws = await connectWs(port);
 
-    await sendAndWait(ws, { type: 'chat.resume', chatId: 'chat-1' });
+    await chats.resumeChat('chat-1');
 
     expect(chats.loadChat).toHaveBeenCalledWith('chat-1');
     expect(chats.clearPendingPermission).toHaveBeenCalledWith('chat-1');
@@ -128,11 +111,8 @@ describe('chat.resume auto-start', () => {
       processState: 'working',
     });
     chats.hasPendingPermission.mockReturnValue(false);
-    ({ server, port } = await startServer());
-    new WebSocketManager(server, chats as any);
-    ws = await connectWs(port);
 
-    await sendAndWait(ws, { type: 'chat.resume', chatId: 'chat-1' });
+    await chats.resumeChat('chat-1');
 
     expect(chats.loadChat).toHaveBeenCalledWith('chat-1');
     expect(chats.startChat).toHaveBeenCalledWith('chat-1');
@@ -145,11 +125,8 @@ describe('chat.resume auto-start', () => {
       processState: 'working',
     });
     chats.hasPendingPermission.mockReturnValue(false);
-    ({ server, port } = await startServer());
-    new WebSocketManager(server, chats as any);
-    ws = await connectWs(port);
 
-    await sendAndWait(ws, { type: 'chat.resume', chatId: 'chat-1' });
+    await chats.resumeChat('chat-1');
 
     expect(chats.startChat).toHaveBeenCalledWith('chat-1');
   });
@@ -160,11 +137,8 @@ describe('chat.resume auto-start', () => {
       processState: 'working',
     });
     chats.hasPendingPermission.mockReturnValue(true);
-    ({ server, port } = await startServer());
-    new WebSocketManager(server, chats as any);
-    ws = await connectWs(port);
 
-    await sendAndWait(ws, { type: 'chat.resume', chatId: 'chat-1' });
+    await chats.resumeChat('chat-1');
 
     expect(chats.loadChat).toHaveBeenCalledWith('chat-1');
     expect(chats.startChat).not.toHaveBeenCalled();
@@ -175,11 +149,8 @@ describe('chat.resume auto-start', () => {
       permissionMode: 'yolo',
       processState: 'idle',
     });
-    ({ server, port } = await startServer());
-    new WebSocketManager(server, chats as any);
-    ws = await connectWs(port);
 
-    await sendAndWait(ws, { type: 'chat.resume', chatId: 'chat-1' });
+    await chats.resumeChat('chat-1');
 
     expect(chats.loadChat).toHaveBeenCalledWith('chat-1');
     expect(chats.startChat).not.toHaveBeenCalled();
@@ -190,11 +161,8 @@ describe('chat.resume auto-start', () => {
       permissionMode: 'yolo',
       processState: null,
     });
-    ({ server, port } = await startServer());
-    new WebSocketManager(server, chats as any);
-    ws = await connectWs(port);
 
-    await sendAndWait(ws, { type: 'chat.resume', chatId: 'chat-1' });
+    await chats.resumeChat('chat-1');
 
     expect(chats.loadChat).toHaveBeenCalledWith('chat-1');
     expect(chats.startChat).not.toHaveBeenCalled();
@@ -206,25 +174,45 @@ describe('chat.resume auto-start', () => {
       processState: 'working',
     });
     chats.hasPendingPermission.mockReturnValue(true);
-    ({ server, port } = await startServer());
-    new WebSocketManager(server, chats as any);
-    ws = await connectWs(port);
 
-    await sendAndWait(ws, { type: 'chat.resume', chatId: 'chat-1' });
+    await chats.resumeChat('chat-1');
 
     expect(chats.clearPendingPermission).toHaveBeenCalledWith('chat-1');
     expect(chats.startChat).toHaveBeenCalledWith('chat-1');
   });
+});
 
-  it('subscribes client to chatId on resume', async () => {
+// ── WS subscribe sends queued snapshot ─────────────────────────────
+// The WS `subscribe` event now handles the subscription + snapshot, while
+// `resumeChat` (REST) handles the auto-start logic. This test ensures the
+// WS `subscribe` handler sends a queued snapshot on subscription.
+
+describe('WS subscribe queued-snapshot', () => {
+  let server: Server | undefined;
+  let ws: WebSocket | undefined;
+
+  afterEach(async () => {
+    ws?.close();
+    await new Promise<void>((resolve) => {
+      if (server?.listening) server.close(() => resolve());
+      else resolve();
+    });
+  });
+
+  it('WS subscribe sends message.queued.snapshot for the chat', async () => {
     const chats = createMockChatManager({ processState: 'idle' });
-    ({ server, port } = await startServer());
+    const { server: srv, port } = await startServer();
+    server = srv;
     new WebSocketManager(server, chats as any);
     ws = await connectWs(port);
 
-    await sendAndWait(ws, { type: 'chat.resume', chatId: 'chat-1' });
+    const events: unknown[] = [];
+    ws.on('message', (data) => events.push(JSON.parse(data.toString())));
 
-    // loadChat should be called, proving the subscription path was reached
-    expect(chats.loadChat).toHaveBeenCalledWith('chat-1');
+    ws.send(JSON.stringify({ type: 'subscribe', chatId: 'chat-1' }));
+    await new Promise((r) => setTimeout(r, 50));
+
+    const snapshot = events.find((e: any) => e.type === 'message.queued.snapshot');
+    expect(snapshot).toBeDefined();
   });
 });

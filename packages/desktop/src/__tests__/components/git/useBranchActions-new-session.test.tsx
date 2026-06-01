@@ -24,8 +24,8 @@ vi.mock('../../../renderer/lib/toast', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
-vi.mock('../../../renderer/lib/client', () => ({
-  daemonClient: { createChat: vi.fn() },
+vi.mock('../../../renderer/lib/chat-actions', () => ({
+  startChat: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../../renderer/lib/adapters', () => ({
@@ -33,7 +33,7 @@ vi.mock('../../../renderer/lib/adapters', () => ({
 }));
 
 import { getProjectWorktrees } from '../../../renderer/lib/api';
-import { daemonClient } from '../../../renderer/lib/client';
+import { startChat } from '../../../renderer/lib/chat-actions';
 import { toast } from '../../../renderer/lib/toast';
 
 describe('useBranchActions.handleNewSession', () => {
@@ -57,7 +57,7 @@ describe('useBranchActions.handleNewSession', () => {
     });
 
     expect(success).toBe(true);
-    expect(daemonClient.createChat).toHaveBeenCalledWith('proj-1', 'claude', 'claude-sonnet-4-5', undefined, {
+    expect(startChat).toHaveBeenCalledWith('proj-1', 'claude', 'claude-sonnet-4-5', undefined, {
       worktreePath: '/projects/my-repo/.worktrees/feat-x',
       branchName: 'feat-x',
     });
@@ -74,7 +74,7 @@ describe('useBranchActions.handleNewSession', () => {
     });
 
     expect(success).toBe(true);
-    expect(daemonClient.createChat).not.toHaveBeenCalled();
+    expect(startChat).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('ghost'));
   });
 

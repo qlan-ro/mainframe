@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SessionSink } from '@qlan-ro/mainframe-types';
+import { handleStdout } from '../events.js';
 import {
-  handleStdout,
   parsePrUrl,
   parseAzurePrUrl,
   parseGitlabMrUrl,
@@ -9,8 +9,7 @@ import {
   PR_URL_REGEX,
   AZURE_PR_URL_REGEX,
   GITLAB_MR_URL_REGEX,
-  PR_CREATE_COMMANDS,
-} from '../events.js';
+} from '../pr-detection.js';
 import type { ClaudeSession } from '../session.js';
 
 function createMockSink(): SessionSink {

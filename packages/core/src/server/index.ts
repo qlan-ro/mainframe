@@ -1,19 +1,10 @@
 import { createServer } from 'node:http';
-import type { Express } from 'express';
-import { createHttpServer } from './http.js';
+import { createHttpServer, type HttpServerDeps } from './http.js';
 import { WebSocketManager } from './websocket.js';
-import type { DatabaseManager } from '../db/index.js';
-import type { ChatManager } from '../chat/index.js';
-import type { AdapterRegistry } from '../adapters/index.js';
-import type { AttachmentStore } from '../attachment/index.js';
-import type { PluginManager } from '../plugins/manager.js';
-import type { LaunchRegistry } from '../launch/index.js';
-import type { TunnelManager } from '../tunnel/tunnel-manager.js';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { createChildLogger } from '../logger.js';
 import { LspRegistry, LspManager, LspConnectionHandler } from '../lsp/index.js';
 import { FileWatcherService } from '../files/file-watcher.js';
-import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 
 const log = createChildLogger('server');
 
@@ -23,35 +14,15 @@ export interface ServerManager {
   broadcastEvent(event: DaemonEvent): void;
 }
 
-export function createServerManager(
-  db: DatabaseManager,
-  chats: ChatManager,
-  adapters: AdapterRegistry,
-  attachmentStore?: AttachmentStore,
-  pluginManager?: PluginManager,
-  launchRegistry?: LaunchRegistry,
-  getTunnelUrl?: () => string | null,
-  tunnelManager?: TunnelManager,
-  port?: number,
-  backgroundTasks?: BackgroundTaskTracker,
-): ServerManager {
+export type ServerManagerDeps = Omit<HttpServerDeps, 'lspManager'>;
+
+export function createServerManager(deps: ServerManagerDeps): ServerManager {
+  const { db, chats } = deps;
   const lspRegistry = new LspRegistry();
   const lspManager = new LspManager(lspRegistry);
   const lspHandler = new LspConnectionHandler(lspManager, db);
 
-  const { app, pushService } = createHttpServer(
-    db,
-    chats,
-    adapters,
-    attachmentStore,
-    pluginManager,
-    launchRegistry,
-    getTunnelUrl,
-    tunnelManager,
-    port,
-    lspManager,
-    backgroundTasks,
-  );
+  const { app, pushService } = createHttpServer({ ...deps, lspManager });
   chats.setPushService(pushService);
   const httpServer = createServer(app);
   let _wsManager: WebSocketManager | null = null;

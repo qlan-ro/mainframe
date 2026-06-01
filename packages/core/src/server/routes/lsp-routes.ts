@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { LspManager } from '../../lsp/lsp-manager.js';
 import type { LspLanguageStatus } from '@qlan-ro/mainframe-types';
 import { asyncHandler } from './async-handler.js';
+import { ok, fail } from './respond.js';
 
 const LspLanguagesQuerySchema = z.object({
   projectId: z.string().min(1),
@@ -16,7 +17,7 @@ export function lspRoutes(manager: LspManager): Router {
     asyncHandler(async (req: Request, res: Response) => {
       const parsed = LspLanguagesQuerySchema.safeParse(req.query);
       if (!parsed.success) {
-        res.status(400).json({ success: false, error: parsed.error.issues });
+        fail(res, 400, parsed.error.issues[0]?.message ?? 'Invalid input');
         return;
       }
 
@@ -35,7 +36,7 @@ export function lspRoutes(manager: LspManager): Router {
         }),
       );
 
-      res.json({ languages });
+      ok(res, { languages });
     }),
   );
 

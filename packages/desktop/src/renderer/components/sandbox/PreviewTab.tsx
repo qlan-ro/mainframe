@@ -22,8 +22,8 @@ import { useSandboxStore } from '../../store/sandbox';
 import { useChatsStore } from '../../store/chats';
 import { useActiveProjectId, getActiveProjectId } from '../../hooks/useActiveProjectId.js';
 import { useLaunchScopeKey } from '../../hooks/useLaunchScopeKey.js';
-import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
+import { startChat } from '../../lib/chat-actions';
 import { useLaunchConfig } from '../../hooks/useLaunchConfig';
 import { useZoneHeaderTabs } from '../zone/ZoneHeaderSlot.js';
 import { submitCapturesDirect } from '../../lib/send-captures-direct.js';
@@ -335,7 +335,7 @@ export function PreviewTab(): React.ReactElement {
 
       if (!useChatsStore.getState().activeChatId) {
         const projectId = getActiveProjectId();
-        if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+        if (projectId) void startChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
       }
     } catch (err) {
       console.warn('[sandbox] full screenshot failed', err);
@@ -386,7 +386,10 @@ export function PreviewTab(): React.ReactElement {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wv = webviewRef.current as any;
     if (inspecting) {
-      if (wv) wv.executeJavaScript(INSPECT_CANCEL_SCRIPT).catch(() => {});
+      if (wv)
+        wv.executeJavaScript(INSPECT_CANCEL_SCRIPT).catch((err: unknown) =>
+          console.warn('[preview] inspect-cancel script failed', err),
+        );
       setInspecting(false);
       return;
     }
@@ -414,7 +417,7 @@ export function PreviewTab(): React.ReactElement {
       // Auto-create a chat session if none is active so the composer appears
       if (!useChatsStore.getState().activeChatId) {
         const projectId = getActiveProjectId();
-        if (projectId) daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+        if (projectId) void startChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
       }
     } catch (err) {
       console.warn('[sandbox] inspect failed', err);
@@ -689,6 +692,7 @@ export function PreviewTab(): React.ReactElement {
                       anchorRect={c.rect}
                       containerRef={webviewWrapperRef}
                       index={idx + 1}
+                      captureId={c.id}
                       value={c.annotation}
                       autoFocus={autoFocusId === c.id}
                       onChange={(next) => updateAnnotation(c.id, next)}

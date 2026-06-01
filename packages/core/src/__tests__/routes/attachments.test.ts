@@ -186,7 +186,7 @@ describe('attachmentRoutes', () => {
       await handler({ params: { chatId: 'c1', attachmentId: 'att1' }, query: {} }, res, vi.fn());
 
       expect(ctx.attachmentStore!.get).toHaveBeenCalledWith('c1', 'att1');
-      expect(res.json).toHaveBeenCalledWith(attachment);
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: attachment });
     });
 
     it('returns 404 when attachment not found', async () => {

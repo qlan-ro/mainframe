@@ -8,6 +8,7 @@ import { createChildLogger } from '../../logger.js';
 import { getWorktrees, removeWorktree } from '../../workspace/index.js';
 import { GitDeleteWorktreeBody } from './schemas.js';
 import { killTasksForChat } from '../../background-tasks/kill.js';
+import { ok, okEmpty, fail } from './respond.js';
 
 const log = createChildLogger('routes:worktree');
 
@@ -109,16 +110,16 @@ export function worktreeRoutes(ctx: RouteContext): Router {
       const chatId = param(req, 'id');
       const parsed = EnableWorktreeBody.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
+        fail(res, 400, parsed.error.issues[0]?.message ?? 'Invalid input');
         return;
       }
       try {
         await ctx.chats.enableWorktree(chatId, parsed.data.baseBranch, parsed.data.branchName);
-        res.json({ success: true });
+        okEmpty(res);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to enable worktree';
         log.warn({ err, chatId }, 'enable-worktree failed');
-        res.status(400).json({ error: message });
+        fail(res, 400, message);
       }
     }),
   );
@@ -129,11 +130,11 @@ export function worktreeRoutes(ctx: RouteContext): Router {
       const chatId = param(req, 'id');
       try {
         await ctx.chats.disableWorktree(chatId);
-        res.json({ success: true });
+        okEmpty(res);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to disable worktree';
         log.warn({ err, chatId }, 'disable-worktree failed');
-        res.status(400).json({ error: message });
+        fail(res, 400, message);
       }
     }),
   );
@@ -144,17 +145,17 @@ export function worktreeRoutes(ctx: RouteContext): Router {
       const chatId = param(req, 'id');
       const parsed = ForkWorktreeBody.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
+        fail(res, 400, parsed.error.issues[0]?.message ?? 'Invalid input');
         return;
       }
       try {
         const result = await ctx.chats.forkToWorktree(chatId, parsed.data.baseBranch, parsed.data.branchName);
-        res.json({ success: true, chatId: result.chatId });
+        ok(res, { chatId: result.chatId });
       } catch (err) {
         const statusCode = (err as Error & { statusCode?: number }).statusCode ?? 500;
         const message = err instanceof Error ? err.message : 'Failed to fork to worktree';
         log.warn({ err, chatId }, 'fork-worktree failed');
-        res.status(statusCode).json({ error: message });
+        fail(res, statusCode, message);
       }
     }),
   );
@@ -164,12 +165,12 @@ export function worktreeRoutes(ctx: RouteContext): Router {
     asyncHandler(async (req, res) => {
       const projectPath = getProjectPath(ctx, param(req, 'id'));
       if (!projectPath) {
-        res.status(404).json({ error: 'Project not found' });
+        fail(res, 404, 'Project not found');
         return;
       }
       const worktrees = await getWorktrees(projectPath);
       const filtered = worktrees.filter((wt) => wt.path !== projectPath);
-      res.json({ worktrees: filtered });
+      ok(res, { worktrees: filtered });
     }),
   );
 
@@ -179,16 +180,16 @@ export function worktreeRoutes(ctx: RouteContext): Router {
       const chatId = param(req, 'id');
       const parsed = AttachWorktreeBody.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
+        fail(res, 400, parsed.error.issues[0]?.message ?? 'Invalid input');
         return;
       }
       try {
         await ctx.chats.attachWorktree(chatId, parsed.data.worktreePath, parsed.data.branchName);
-        res.json({ success: true });
+        okEmpty(res);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to attach worktree';
         log.warn({ err, chatId }, 'attach-worktree failed');
-        res.status(400).json({ error: message });
+        fail(res, 400, message);
       }
     }),
   );
@@ -199,22 +200,22 @@ export function worktreeRoutes(ctx: RouteContext): Router {
       const projectId = param(req, 'id');
       const projectPath = getProjectPath(ctx, projectId);
       if (!projectPath) {
-        res.status(404).json({ error: 'Project not found' });
+        fail(res, 404, 'Project not found');
         return;
       }
       const parsed = GitDeleteWorktreeBody.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
+        fail(res, 400, parsed.error.issues[0]?.message ?? 'Invalid input');
         return;
       }
       const { worktreePath, branchName } = parsed.data;
       try {
         await validateAndDeleteWorktree(ctx, projectId, projectPath, worktreePath, branchName);
-        res.json({ success: true });
+        okEmpty(res);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to delete worktree';
         log.warn({ err, projectId, worktreePath }, 'delete-worktree failed');
-        res.status(400).json({ error: message });
+        fail(res, 400, message);
       }
     }),
   );

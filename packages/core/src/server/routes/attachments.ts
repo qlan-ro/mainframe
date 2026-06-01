@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { validate, UploadAttachmentsBody } from './schemas.js';
+import { ok } from './respond.js';
 
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -57,7 +58,7 @@ export function attachmentRoutes(ctx: RouteContext): Router {
       res.status(404).json({ success: false, error: 'Attachment not found' });
       return;
     }
-    res.json(attachment);
+    ok(res, attachment);
   });
 
   return router;

@@ -5,6 +5,7 @@ import { getEffectivePath, param } from './types.js';
 import { asyncHandler } from './async-handler.js';
 import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
+import { ok, okEmpty, fail } from './respond.js';
 import {
   GitCheckoutBody,
   GitCreateBranchBody,
@@ -22,7 +23,7 @@ const logger = createChildLogger('routes:git-write');
 function resolveProject(ctx: RouteContext, req: Request, res: Response): string | null {
   const chatId = (req.query.chatId as string | undefined) ?? (req.body?.chatId as string | undefined);
   const projectPath = getEffectivePath(ctx, param(req, 'id'), chatId);
-  if (!projectPath) res.status(404).json({ error: 'Project not found' });
+  if (!projectPath) fail(res, 404, 'Project not found');
   return projectPath;
 }
 
@@ -37,15 +38,16 @@ function gitRoute<T>(
     if (!projectPath) return;
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: String(parsed.error) });
+      fail(res, 400, String(parsed.error));
       return;
     }
     try {
       const result = await handler(GitService.forProject(projectPath), parsed.data);
-      res.json(result ?? { ok: true });
-    } catch (err: any) {
+      if (result === undefined) okEmpty(res);
+      else ok(res, result);
+    } catch (err) {
       logger.warn({ err }, `${label} failed`);
-      res.status(500).json({ error: err.message });
+      fail(res, 500, err instanceof Error ? err.message : String(err));
     }
   });
 }
@@ -56,10 +58,11 @@ function gitRouteNoBody(ctx: RouteContext, handler: (svc: GitService) => Promise
     if (!projectPath) return;
     try {
       const result = await handler(GitService.forProject(projectPath));
-      res.json(result ?? { ok: true });
-    } catch (err: any) {
+      if (result === undefined) okEmpty(res);
+      else ok(res, result);
+    } catch (err) {
       logger.warn({ err }, `${label} failed`);
-      res.status(500).json({ error: err.message });
+      fail(res, 500, err instanceof Error ? err.message : String(err));
     }
   });
 }

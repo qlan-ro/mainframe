@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { EXECUTION_MODES } from '@qlan-ro/mainframe-types';
 
-const permissionModeSchema = z.enum(['default', 'acceptEdits', 'yolo']).optional();
+const permissionModeSchema = z.enum(EXECUTION_MODES).optional();
 
-const ChatCreate = z
+// Reusable REST/WS payload bodies (no discriminator).
+export const CreateChatBody = z
   .object({
-    type: z.literal('chat.create'),
     projectId: z.string().min(1),
     adapterId: z.string().min(1),
     model: z.string().optional(),
@@ -12,33 +13,18 @@ const ChatCreate = z
     worktreePath: z.string().min(1).optional(),
     branchName: z.string().min(1).optional(),
   })
-  .refine((msg) => (msg.worktreePath == null) === (msg.branchName == null), {
+  .refine((m) => (m.worktreePath == null) === (m.branchName == null), {
     message: 'worktreePath and branchName must be provided together',
   });
 
-const ChatResume = z.object({
-  type: z.literal('chat.resume'),
-  chatId: z.string().min(1),
-});
-
-const ChatEnd = z.object({
-  type: z.literal('chat.end'),
-  chatId: z.string().min(1),
-});
-
-const ChatInterrupt = z.object({
-  type: z.literal('chat.interrupt'),
-  chatId: z.string().min(1),
-});
-
-const ChatUpdateConfig = z.object({
-  type: z.literal('chat.updateConfig'),
-  chatId: z.string().min(1),
+export const UpdateChatConfigBody = z.object({
   adapterId: z.string().optional(),
   model: z.string().optional(),
   permissionMode: permissionModeSchema,
   planMode: z.boolean().optional(),
 });
+
+export const QueueEditBody = z.object({ content: z.string().min(1) });
 
 const MessageSend = z
   .object({
@@ -50,7 +36,9 @@ const MessageSend = z
       .object({
         command: z
           .object({
-            name: z.string().min(1),
+            // Interpolated into <mainframe-command name="..."> and <command-name>/...</command-name>
+            // written to the CLI stdin — constrain to the identifier charset to close the injection seam.
+            name: z.string().regex(/^[a-zA-Z0-9_-]+$/),
             source: z.string().min(1),
             args: z.string().optional(),
           })
@@ -73,7 +61,7 @@ const PermissionRespond = z.object({
     updatedInput: z.record(z.string(), z.unknown()).optional(),
     updatedPermissions: z.array(z.unknown()).optional(),
     message: z.string().optional(),
-    executionMode: z.enum(['default', 'acceptEdits', 'yolo']).optional(),
+    executionMode: z.enum(EXECUTION_MODES).optional(),
     clearContext: z.boolean().optional(),
   }),
 });
@@ -88,19 +76,6 @@ const Unsubscribe = z.object({
   chatId: z.string().min(1),
 });
 
-const MessageQueueEdit = z.object({
-  type: z.literal('message.queue.edit'),
-  chatId: z.string().min(1),
-  messageId: z.string().min(1),
-  content: z.string().min(1),
-});
-
-const MessageQueueCancel = z.object({
-  type: z.literal('message.queue.cancel'),
-  chatId: z.string().min(1),
-  messageId: z.string().min(1),
-});
-
 const SubscribeFile = z.object({
   type: z.literal('subscribe:file'),
   path: z.string().min(1),
@@ -112,17 +87,10 @@ const UnsubscribeFile = z.object({
 });
 
 export const ClientEventSchema = z.discriminatedUnion('type', [
-  ChatCreate,
-  ChatResume,
-  ChatEnd,
-  ChatInterrupt,
-  ChatUpdateConfig,
   MessageSend,
   PermissionRespond,
   Subscribe,
   Unsubscribe,
-  MessageQueueEdit,
-  MessageQueueCancel,
   SubscribeFile,
   UnsubscribeFile,
 ]);

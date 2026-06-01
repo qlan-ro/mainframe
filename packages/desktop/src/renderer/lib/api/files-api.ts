@@ -1,4 +1,4 @@
-import type { ControlRequest, SessionContext, SearchContentResult } from '@qlan-ro/mainframe-types';
+import type { ApiResponse, ControlRequest, SessionContext, SearchContentResult } from '@qlan-ro/mainframe-types';
 import { fetchJson, postJson, putJson, API_BASE } from './http';
 
 export async function getFileTree(
@@ -8,12 +8,18 @@ export async function getFileTree(
 ): Promise<{ name: string; type: 'file' | 'directory'; path: string }[]> {
   const params = new URLSearchParams({ path: dirPath });
   if (chatId) params.set('chatId', chatId);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/tree?${params}`);
+  const json = await fetchJson<ApiResponse<{ name: string; type: 'file' | 'directory'; path: string }[]>>(
+    `${API_BASE}/api/projects/${projectId}/tree?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getFilesList(projectId: string, chatId?: string): Promise<string[]> {
   const params = chatId ? `?chatId=${chatId}` : '';
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/files-list${params}`);
+  const json = await fetchJson<ApiResponse<string[]>>(`${API_BASE}/api/projects/${projectId}/files-list${params}`);
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function searchFiles(
@@ -24,7 +30,11 @@ export async function searchFiles(
 ): Promise<{ name: string; path: string; type: string }[]> {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
   if (chatId) params.set('chatId', chatId);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/search/files?${params}`);
+  const json = await fetchJson<ApiResponse<{ name: string; path: string; type: string }[]>>(
+    `${API_BASE}/api/projects/${projectId}/search/files?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getFileContent(
@@ -34,7 +44,11 @@ export async function getFileContent(
 ): Promise<{ path: string; content: string }> {
   const params = new URLSearchParams({ path: filePath });
   if (chatId) params.set('chatId', chatId);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/files?${params}`);
+  const json = await fetchJson<ApiResponse<{ path: string; content: string }>>(
+    `${API_BASE}/api/projects/${projectId}/files?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function saveFileContent(
@@ -43,7 +57,12 @@ export async function saveFileContent(
   content: string,
   chatId?: string,
 ): Promise<void> {
-  await putJson(`${API_BASE}/api/projects/${projectId}/files`, { path: filePath, content, chatId });
+  const json = await putJson<ApiResponse<{ path: string }>>(`${API_BASE}/api/projects/${projectId}/files`, {
+    path: filePath,
+    content,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
 }
 
 /**
@@ -52,7 +71,11 @@ export async function saveFileContent(
  */
 export async function getExternalFileContent(absolutePath: string): Promise<{ path: string; content: string }> {
   const params = new URLSearchParams({ path: absolutePath });
-  return fetchJson(`${API_BASE}/api/files/external?${params}`);
+  const json = await fetchJson<ApiResponse<{ path: string; content: string }>>(
+    `${API_BASE}/api/files/external?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getFileBinary(
@@ -62,7 +85,11 @@ export async function getFileBinary(
 ): Promise<{ path: string; content: string; encoding: 'base64' }> {
   const params = new URLSearchParams({ path: filePath, encoding: 'base64' });
   if (chatId) params.set('chatId', chatId);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/files?${params}`);
+  const json = await fetchJson<ApiResponse<{ path: string; content: string; encoding: 'base64' }>>(
+    `${API_BASE}/api/projects/${projectId}/files?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getPendingPermission(chatId: string): Promise<ControlRequest | null> {
@@ -73,7 +100,9 @@ export async function getPendingPermission(chatId: string): Promise<ControlReque
 }
 
 export async function getSessionFiles(chatId: string): Promise<{ files: string[] }> {
-  return fetchJson(`${API_BASE}/api/chats/${chatId}/session-files`);
+  const json = await fetchJson<ApiResponse<{ files: string[] }>>(`${API_BASE}/api/chats/${chatId}/session-files`);
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getSessionContext(chatId: string): Promise<SessionContext> {
@@ -82,7 +111,11 @@ export async function getSessionContext(chatId: string): Promise<SessionContext>
 }
 
 export async function getSessionFile(chatId: string, filePath: string): Promise<{ path: string; content: string }> {
-  return fetchJson(`${API_BASE}/api/chats/${chatId}/session-file?path=${encodeURIComponent(filePath)}`);
+  const json = await fetchJson<ApiResponse<{ path: string; content: string }>>(
+    `${API_BASE}/api/chats/${chatId}/session-file?path=${encodeURIComponent(filePath)}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function addMention(
@@ -107,7 +140,11 @@ export async function browseFilesystem(
   if (opts?.includeFiles) params.set('includeFiles', 'true');
   if (opts?.includeHidden) params.set('includeHidden', 'true');
   const qs = params.toString();
-  return fetchJson(`${API_BASE}/api/filesystem/browse${qs ? `?${qs}` : ''}`);
+  const json = await fetchJson<ApiResponse<{ path: string; entries: BrowseEntry[] }>>(
+    `${API_BASE}/api/filesystem/browse${qs ? `?${qs}` : ''}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function searchContent(
@@ -123,6 +160,7 @@ export async function searchContent(
   if (chatId) params.set('chatId', chatId);
   const res = await fetch(`${API_BASE}/api/projects/${projectId}/search/content?${params}`, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  return json.results;
+  const json = (await res.json()) as ApiResponse<{ results: SearchContentResult[] }>;
+  if (!json.success) throw new Error(json.error);
+  return json.data.results;
 }

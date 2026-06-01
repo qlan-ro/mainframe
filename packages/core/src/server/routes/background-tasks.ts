@@ -5,6 +5,7 @@ import { BackgroundTaskTracker } from '../../background-tasks/tracker.js';
 import { killBackgroundTask, type SessionLike } from '../../background-tasks/kill.js';
 import { makeSpoolValidator, type SpoolValidator } from '../../background-tasks/spool-validator.js';
 import { createChildLogger } from '../../logger.js';
+import { ok, okEmpty, fail } from './respond.js';
 
 const log = createChildLogger('routes:background-tasks');
 
@@ -44,10 +45,10 @@ function makeListHandler(tracker: BackgroundTaskTracker) {
   return (req: Request, res: Response): void => {
     const parsed = Params.safeParse(req.params);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
+      fail(res, 400, parsed.error.message);
       return;
     }
-    res.json({ tasks: tracker.list(parsed.data.chatId) });
+    ok(res, { tasks: tracker.list(parsed.data.chatId) });
   };
 }
 
@@ -70,16 +71,16 @@ function makeOutputHandler(tracker: BackgroundTaskTracker, validator: SpoolValid
     const p = Params.safeParse(req.params);
     const q = OutputQuery.safeParse(req.query);
     if (!p.success || !q.success || !p.data.taskId) {
-      res.status(400).json({ error: 'bad request' });
+      fail(res, 400, 'bad request');
       return;
     }
     const task = tracker.get(p.data.chatId, p.data.taskId);
     if (!task) {
-      res.status(404).json({ error: 'task not found' });
+      fail(res, 404, 'task not found');
       return;
     }
     if (task.outputPath === null) {
-      res.status(409).json({ reason: 'no_output' });
+      fail(res, 409, 'no_output');
       return;
     }
     const valid = await validator(task.outputPath, task.id);
@@ -88,7 +89,7 @@ function makeOutputHandler(tracker: BackgroundTaskTracker, validator: SpoolValid
         { chatId: p.data.chatId, taskId: p.data.taskId, outputPath: task.outputPath },
         'spool-root validation failed',
       );
-      res.status(409).json({ reason: 'invalid_path' });
+      fail(res, 409, 'invalid_path');
       return;
     }
     const maxBytes = Math.min(q.data.bytes ?? DEFAULT_READ_BYTES, MAX_READ_BYTES);
@@ -98,7 +99,7 @@ function makeOutputHandler(tracker: BackgroundTaskTracker, validator: SpoolValid
       res.send(buf.toString('utf-8'));
     } catch (err) {
       log.warn({ err, outputPath: task.outputPath }, 'failed to read spool file');
-      res.status(500).json({ error: 'read failed' });
+      fail(res, 500, 'read failed');
     }
   };
 }
@@ -111,18 +112,18 @@ function makeKillHandler(
   return async (req: Request, res: Response): Promise<void> => {
     const p = Params.safeParse(req.params);
     if (!p.success || !p.data.taskId) {
-      res.status(400).json({ error: 'bad request' });
+      fail(res, 400, 'bad request');
       return;
     }
     const task = tracker.get(p.data.chatId, p.data.taskId);
     if (!task) {
-      res.status(404).json({ error: 'task not found' });
+      fail(res, 404, 'task not found');
       return;
     }
     const session = sessionForChat(p.data.chatId); // may be null for recovered tasks
     const result = await killImpl({ chatId: p.data.chatId, taskId: p.data.taskId, session, tracker });
-    if (result.ok) res.status(204).end();
-    else res.status(502).json({ error: result.error });
+    if (result.ok) okEmpty(res);
+    else fail(res, 502, result.error);
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ClientEventSchema } from '../server/ws-schemas.js';
+import { ClientEventSchema, CreateChatBody } from '../server/ws-schemas.js';
 
 describe('MessageSend schema', () => {
   const base = {
@@ -45,20 +45,21 @@ describe('MessageSend schema', () => {
   });
 });
 
-describe('ChatCreate schema', () => {
+// chat.create has moved to REST (POST /api/chats). The body schema is now
+// CreateChatBody (exported from ws-schemas.ts) without the `type` discriminator.
+describe('CreateChatBody REST schema', () => {
   const base = {
-    type: 'chat.create' as const,
     projectId: 'proj-1',
     adapterId: 'claude',
   };
 
   it('accepts a payload without worktree fields', () => {
-    const result = ClientEventSchema.safeParse(base);
+    const result = CreateChatBody.safeParse(base);
     expect(result.success).toBe(true);
   });
 
   it('accepts a payload with both worktreePath and branchName', () => {
-    const result = ClientEventSchema.safeParse({
+    const result = CreateChatBody.safeParse({
       ...base,
       worktreePath: '/projects/my-repo/.worktrees/feat-x',
       branchName: 'feat-x',
@@ -67,7 +68,7 @@ describe('ChatCreate schema', () => {
   });
 
   it('rejects empty worktreePath', () => {
-    const result = ClientEventSchema.safeParse({
+    const result = CreateChatBody.safeParse({
       ...base,
       worktreePath: '',
       branchName: 'feat-x',
@@ -76,7 +77,7 @@ describe('ChatCreate schema', () => {
   });
 
   it('rejects empty branchName when provided', () => {
-    const result = ClientEventSchema.safeParse({
+    const result = CreateChatBody.safeParse({
       ...base,
       worktreePath: '/projects/my-repo/.worktrees/feat-x',
       branchName: '',
@@ -85,7 +86,7 @@ describe('ChatCreate schema', () => {
   });
 
   it('rejects worktreePath without branchName', () => {
-    const result = ClientEventSchema.safeParse({
+    const result = CreateChatBody.safeParse({
       ...base,
       worktreePath: '/projects/my-repo/.worktrees/feat-x',
     });
@@ -93,10 +94,15 @@ describe('ChatCreate schema', () => {
   });
 
   it('rejects branchName without worktreePath', () => {
-    const result = ClientEventSchema.safeParse({
+    const result = CreateChatBody.safeParse({
       ...base,
       branchName: 'feat-x',
     });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects chat.create type via ClientEventSchema (WS type removed)', () => {
+    const result = ClientEventSchema.safeParse({ type: 'chat.create', ...base });
     expect(result.success).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { DAEMON_PORT } from './app.js';
 
 /**
  * Creates a new chat for the given project, then waits for the renderer to open the chat tab.
@@ -20,29 +21,42 @@ export async function createTestChat(
   // 'plan' case is handled separately via the toggle below).
   const createMode = wantsPlanMode ? 'default' : (permissionMode as 'default' | 'acceptEdits' | 'yolo');
 
-  await page.evaluate(
-    ({ pid, adapter, mode }) => {
-      const client = (window as any).__daemonClient;
-      if (!client) throw new Error('__daemonClient not exposed on window');
-      client.createChat(pid, adapter, undefined, mode);
-    },
-    { pid: projectId, adapter: adapterId, mode: createMode },
-  );
+  // Create the chat via the daemon's REST API. The WS→REST transport refactor removed
+  // DaemonClient.createChat, so the old window.__daemonClient.createChat shortcut no longer exists.
+  const res = await fetch(`http://127.0.0.1:${DAEMON_PORT}/api/chats`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId, adapterId, permissionMode: createMode }),
+  });
+  if (!res.ok) {
+    throw new Error(`createTestChat: POST /api/chats failed (${res.status} ${await res.text()})`);
+  }
+  const created = (await res.json()) as { data?: { id?: string } };
+  const chatId = created.data?.id;
+  if (!chatId) {
+    throw new Error(`createTestChat: POST /api/chats returned no chat id (${JSON.stringify(created)})`);
+  }
 
-  // Wait for the new chat's composer — renderer opens the tab on chat.created.
-  const textbox = page.getByRole('textbox').first();
+  // The WS→REST refactor made the chat.created broadcast pure list-sync —
+  // navigation now lives in the REST caller (startChat). This raw-REST harness
+  // bypasses startChat, so we must navigate explicitly: the daemon broadcasts
+  // chat.created → the renderer adds the row → we click it. The row's onClick
+  // (handleSelect) does setActiveChat + openChatTab + resumeChat (subscribe),
+  // exactly what startChat does, so the new chat becomes active AND subscribed.
+  const row = page.locator(`[data-testid="chat-list-item"][data-chat-id="${chatId}"]`);
   try {
-    await textbox.waitFor({ timeout: 12_000 });
+    await row.waitFor({ timeout: 12_000 });
   } catch {
-    // The chat.created event (which opens the tab) is occasionally missed. Reload to force a full
-    // chat resync from the daemon — useAppInit restores the most-recent chat and shows the composer.
+    // chat.created occasionally missed — reload to force a full resync, then retry.
     await page.reload();
     await page
       .locator('[data-testid="connection-status"]')
       .getByText('Connected', { exact: true })
       .waitFor({ timeout: 15_000 });
-    await textbox.waitFor({ timeout: 15_000 });
+    await row.waitFor({ timeout: 15_000 });
   }
+  await row.click();
+  await page.getByRole('textbox').first().waitFor({ timeout: 12_000 });
 
   // Plan mode is a standalone composer toggle now — enable it for plan-mode chats.
   if (wantsPlanMode) {

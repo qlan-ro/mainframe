@@ -2,12 +2,25 @@ import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+/**
+ * True when `realTarget` is `realBase` itself or lies strictly beneath it.
+ * The separator guard is security-critical: a bare `startsWith(realBase)` would
+ * admit a sibling like `/proj-evil` for base `/proj`. A filesystem root already
+ * ends in the separator, so we must not append a second one (`'//'`).
+ */
+export function isWithinBase(realBase: string, realTarget: string): boolean {
+  if (realTarget === realBase) return true;
+  const prefix = realBase.endsWith(path.sep) ? realBase : realBase + path.sep;
+  return realTarget.startsWith(prefix);
+}
+
 export function resolveAndValidatePath(basePath: string, requestedPath: string): string | null {
   try {
     const realBase = realpathSync(basePath);
     const fullPath = realpathSync(path.resolve(basePath, requestedPath));
-    return fullPath.startsWith(realBase) ? fullPath : null;
+    return isWithinBase(realBase, fullPath) ? fullPath : null;
   } catch {
+    /* expected: path does not exist or resolves outside the allowed base */
     return null;
   }
 }
@@ -20,8 +33,19 @@ export function resolveClaudeConfigPath(basePath: string, requestedPath: string)
   try {
     const claudeDir = realpathSync(path.join(homedir(), '.claude'));
     const fullPath = realpathSync(path.resolve(basePath, requestedPath));
-    return fullPath.startsWith(claudeDir + path.sep) ? fullPath : null;
+    return isWithinBase(claudeDir, fullPath) ? fullPath : null;
   } catch {
+    /* expected: path does not exist or resolves outside the allowed base */
     return null;
   }
+}
+
+/**
+ * Resolve a requested path for reading: validated inside the project base, or —
+ * as a fallback — under ~/.claude/. Returns the validated absolute path or null.
+ * Centralizes the dual-resolution so every read route applies identical
+ * path-traversal checks.
+ */
+export function resolveReadablePath(basePath: string, requestedPath: string): string | null {
+  return resolveAndValidatePath(basePath, requestedPath) ?? resolveClaudeConfigPath(basePath, requestedPath);
 }

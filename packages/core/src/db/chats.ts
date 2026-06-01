@@ -48,6 +48,7 @@ function parseJsonColumn<T>(value: string | null | undefined, fallback: T): T {
   try {
     return JSON.parse(value);
   } catch {
+    /* expected: malformed stored JSON column, fall back */
     return fallback;
   }
 }

@@ -70,6 +70,7 @@ export function SkillEditorTab({ skillId, adapterId }: { skillId: string; adapte
           disabled={!dirty || saving || skill.scope === 'plugin'}
           onClick={handleSave}
           className="h-7 px-2 text-mf-small"
+          data-testid="skill-editor-save-button"
         >
           <Save size={14} className="mr-1" />
           {saving ? 'Saving...' : 'Save'}

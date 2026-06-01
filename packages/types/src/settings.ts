@@ -1,4 +1,6 @@
-export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'yolo';
+export const EXECUTION_MODES = ['default', 'acceptEdits', 'yolo'] as const;
+export type ExecutionMode = (typeof EXECUTION_MODES)[number];
+export type PermissionMode = ExecutionMode | 'plan';
 
 export interface ResolvedExecutable {
   path: string;
@@ -9,7 +11,7 @@ export interface ResolvedExecutable {
 
 export interface ProviderConfig {
   defaultModel?: string;
-  defaultMode?: 'default' | 'acceptEdits' | 'yolo';
+  defaultMode?: ExecutionMode;
   defaultPlanMode?: 'true' | 'false';
   executablePath?: string;
   systemPrompt?: string;

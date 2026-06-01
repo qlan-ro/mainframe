@@ -78,7 +78,7 @@ export class CodexAdapter implements Adapter {
 
   killAll(): void {
     for (const session of this.sessions) {
-      session.kill().catch(() => {});
+      session.kill().catch((err) => log.warn({ err }, 'failed to kill codex session during killAll'));
     }
     this.sessions.clear();
   }

@@ -275,6 +275,7 @@ export const FlatSessionRow = React.memo(function FlatSessionRow({
   return (
     <div
       data-testid="chat-list-item"
+      data-chat-id={chat.id}
       onClick={handleRowClick}
       onContextMenu={(e) => onContextMenu?.(e, chat.claudeSessionId, chat.id)}
       className={cn(

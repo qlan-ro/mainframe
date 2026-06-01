@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertMessage, ERROR_PLACEHOLDER, PERMISSION_PLACEHOLDER } from './convert-message';
+import { convertMessage, PERMISSION_PLACEHOLDER } from './convert-message';
 import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 
 /* ── helpers ─────────────────────────────────────────────────────── */
@@ -22,18 +22,12 @@ function display(
 /* ── sentinel placeholders ───────────────────────────────────────── */
 
 describe('sentinel placeholders', () => {
-  it('ERROR_PLACEHOLDER has null-byte prefix', () => {
-    expect(ERROR_PLACEHOLDER.text).toBe('\0__MF_ERROR__');
-    expect(ERROR_PLACEHOLDER.type).toBe('text');
-  });
-
   it('PERMISSION_PLACEHOLDER has null-byte prefix', () => {
     expect(PERMISSION_PLACEHOLDER.text).toBe('\0__MF_PERMISSION__');
     expect(PERMISSION_PLACEHOLDER.type).toBe('text');
   });
 
-  it('placeholders are frozen', () => {
-    expect(Object.isFrozen(ERROR_PLACEHOLDER)).toBe(true);
+  it('PERMISSION_PLACEHOLDER is frozen', () => {
     expect(Object.isFrozen(PERMISSION_PLACEHOLDER)).toBe(true);
   });
 });
@@ -207,15 +201,22 @@ describe('convertMessage', () => {
       });
     });
 
-    it('converts error blocks to ERROR_PLACEHOLDER', () => {
+    it('carries error block message text directly in the text part (no sentinel)', () => {
       const msg = display('assistant', [{ type: 'error', message: 'something went wrong' }]);
       const result = convertMessage(msg);
       expect(result.content).toHaveLength(1);
-      expect((result.content as unknown as Array<Record<string, unknown>>)[0]).toBe(ERROR_PLACEHOLDER);
+      const part = (result.content as unknown as Array<Record<string, unknown>>)[0]!;
+      expect(part.type).toBe('text');
+      expect(part.text).toBe('something went wrong');
     });
 
     it('converts permission_request blocks to PERMISSION_PLACEHOLDER', () => {
-      const msg = display('assistant', [{ type: 'permission_request', request: { tool: 'Bash' } as never }]);
+      const msg = display('assistant', [
+        {
+          type: 'permission_request',
+          request: { requestId: 'req-1', toolName: 'Bash', toolUseId: 'tu-1', input: {}, suggestions: [] },
+        },
+      ]);
       const result = convertMessage(msg);
       expect(result.content).toHaveLength(1);
       expect((result.content as unknown as Array<Record<string, unknown>>)[0]).toBe(PERMISSION_PLACEHOLDER);
@@ -267,6 +268,65 @@ describe('convertMessage', () => {
       expect(part.type).toBe('tool-call');
       expect(part.toolCallId).toBe('agent-1');
       expect(part.toolName).toBe('_TaskGroup');
+    });
+
+    it('re-encodes nested tool_group children inside a task_group as _ToolGroup tool children', () => {
+      // A subagent that runs >=2 consecutive explore tools produces a nested
+      // first-class tool_group inside task_group.calls (see core
+      // applyToolGrouping characterization). TaskGroupCard renders + summarizes
+      // children whose toolName is '_ToolGroup'; if convertMessage drops the
+      // nested tool_group, the subagent's file reads/greps vanish from the card.
+      const msg = display('assistant', [
+        {
+          type: 'task_group',
+          agentId: 'agent-1',
+          taskArgs: { description: 'do work' },
+          calls: [
+            {
+              type: 'tool_group',
+              calls: [
+                { type: 'tool_call', id: 'c1', name: 'Read', input: { file: '/a.ts' }, category: 'explore' },
+                { type: 'tool_call', id: 'c2', name: 'Grep', input: { pattern: 'x' }, category: 'explore' },
+              ],
+            },
+          ],
+        },
+      ]);
+      const result = convertMessage(msg);
+      const part = (result.content as unknown as Array<Record<string, unknown>>)[0]!;
+      const children = (part.args as Record<string, unknown>).children as Array<Record<string, unknown>>;
+      expect(children).toHaveLength(1);
+      expect(children[0]!.kind).toBe('tool');
+      expect(children[0]!.toolName).toBe('_ToolGroup');
+      const items = (children[0]!.args as Record<string, unknown>).items as Array<Record<string, unknown>>;
+      expect(items.map((i) => i.toolName)).toEqual(['Read', 'Grep']);
+    });
+
+    it('re-encodes nested task_progress children inside a task_group as _TaskProgress tool children', () => {
+      const msg = display('assistant', [
+        {
+          type: 'task_group',
+          agentId: 'agent-1',
+          taskArgs: { description: 'do work' },
+          calls: [
+            {
+              type: 'task_progress',
+              items: [
+                { id: 'p1', name: 'TodoWrite', input: {}, category: 'progress' },
+                { id: 'p2', name: 'TodoWrite', input: {}, category: 'progress' },
+              ],
+            },
+          ],
+        },
+      ]);
+      const result = convertMessage(msg);
+      const part = (result.content as unknown as Array<Record<string, unknown>>)[0]!;
+      const children = (part.args as Record<string, unknown>).children as Array<Record<string, unknown>>;
+      expect(children).toHaveLength(1);
+      expect(children[0]!.kind).toBe('tool');
+      expect(children[0]!.toolName).toBe('_TaskProgress');
+      const items = (children[0]!.args as Record<string, unknown>).items as Array<Record<string, unknown>>;
+      expect(items).toHaveLength(2);
     });
 
     it('de-duplicates colliding toolCallIds across task_group blocks (regression: #184)', () => {
@@ -345,25 +405,55 @@ describe('convertMessage', () => {
       const types = (result.content as unknown as Array<Record<string, unknown>>).map((p) => p.type);
       expect(types).toEqual(['reasoning', 'text', 'tool-call', 'text']);
 
-      // The last one should be the error placeholder
+      // The last part carries the actual error message text (no sentinel)
       const last = (result.content as unknown as Array<Record<string, unknown>>)[3]!;
-      expect(last).toBe(ERROR_PLACEHOLDER);
+      expect(last.type).toBe('text');
+      expect(last.text).toBe('oops');
     });
   });
 
   describe('error messages', () => {
-    it('converts error type messages to assistant role with ERROR_PLACEHOLDER', () => {
+    it('converts error type messages to assistant role carrying the error message text', () => {
       const msg = display('error', [{ type: 'error', message: 'crash' }]);
       const result = convertMessage(msg);
 
       expect(result.role).toBe('assistant');
-      expect(result.content).toEqual([ERROR_PLACEHOLDER]);
+      const parts = result.content as unknown as Array<Record<string, unknown>>;
+      expect(parts).toHaveLength(1);
+      expect(parts[0]!.type).toBe('text');
+      expect(parts[0]!.text).toBe('crash');
+    });
+
+    it('falls back to default message when error block is missing', () => {
+      // error type message with no error block in content
+      const msg = display('error', []);
+      const result = convertMessage(msg);
+
+      expect(result.role).toBe('assistant');
+      const parts = result.content as unknown as Array<Record<string, unknown>>;
+      expect(parts[0]!.text).toBe('An error occurred');
+    });
+
+    it('falls back to default message when the error block message is empty or whitespace-only', () => {
+      // An empty or whitespace-only error string must not collapse to a blank
+      // text part — MainframeText drops blank-after-trim text before its error
+      // check, which would hide the error bubble entirely.
+      for (const blank of ['', '   ', '\n\t']) {
+        const msg = display('error', [{ type: 'error', message: blank }]);
+        const parts = convertMessage(msg).content as unknown as Array<Record<string, unknown>>;
+        expect(parts[0]!.text).toBe('An error occurred');
+      }
     });
   });
 
   describe('permission messages', () => {
     it('converts permission type messages to assistant role with PERMISSION_PLACEHOLDER', () => {
-      const msg = display('permission', [{ type: 'permission_request', request: {} as never }]);
+      const msg = display('permission', [
+        {
+          type: 'permission_request',
+          request: { requestId: 'req-1', toolName: 'Bash', toolUseId: 'tu-1', input: {}, suggestions: [] },
+        },
+      ]);
       const result = convertMessage(msg);
 
       expect(result.role).toBe('assistant');

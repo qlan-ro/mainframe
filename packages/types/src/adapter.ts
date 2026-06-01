@@ -1,4 +1,4 @@
-import type { PermissionMode } from './settings.js';
+import type { ExecutionMode, PermissionMode } from './settings.js';
 
 export interface MessageMetadata {
   model?: string;
@@ -31,7 +31,7 @@ export interface SessionOptions {
 
 export interface SessionSpawnOptions {
   model?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'yolo';
+  permissionMode?: ExecutionMode;
   planMode?: boolean;
   executablePath?: string;
   systemPrompt?: string;
@@ -94,7 +94,7 @@ export interface ControlResponse {
   updatedInput?: Record<string, unknown>;
   updatedPermissions?: ControlUpdate[];
   message?: string;
-  executionMode?: 'default' | 'acceptEdits' | 'yolo';
+  executionMode?: ExecutionMode;
   clearContext?: boolean;
 }
 
@@ -175,7 +175,7 @@ export interface AdapterSession {
   respondToPermission(response: ControlResponse): Promise<void>;
   interrupt(): Promise<void>;
   setModel(model: string): Promise<void>;
-  setPermissionMode(mode: string): Promise<void>;
+  setPermissionMode(mode: ExecutionMode): Promise<void>;
   setPlanMode(on: boolean): Promise<void>;
   sendCommand(command: string, args?: string): Promise<void>;
   cancelQueuedMessage(uuid: string): Promise<boolean>;

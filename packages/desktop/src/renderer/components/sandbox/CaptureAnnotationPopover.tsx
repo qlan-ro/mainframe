@@ -9,6 +9,8 @@ interface Props {
   containerRef: React.RefObject<HTMLElement | null>;
   /** Index of this capture (1-based) — shown in the header to mirror the overlay marker. */
   index: number;
+  /** Stable domain ID for this capture — used to key data-testid attributes. */
+  captureId: string;
   /** Controlled annotation text. */
   value: string;
   onChange: (next: string) => void;
@@ -47,6 +49,7 @@ export function CaptureAnnotationPopover({
   anchorRect,
   containerRef,
   index,
+  captureId,
   value,
   onChange,
   onRemove,
@@ -75,7 +78,7 @@ export function CaptureAnnotationPopover({
         </span>
         <button
           type="button"
-          data-testid={`sandbox-button-remove-capture-${index}`}
+          data-testid={`sandbox-button-remove-capture-${captureId}`}
           onClick={onRemove}
           className="p-0.5 rounded text-mf-text-secondary hover:text-mf-text-primary"
           aria-label={`Remove capture ${index}`}
@@ -85,7 +88,7 @@ export function CaptureAnnotationPopover({
       </div>
       <textarea
         ref={textareaRef}
-        data-testid={`sandbox-textarea-annotation-${index}`}
+        data-testid={`sandbox-textarea-capture-annotation-${captureId}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Annotation (optional)…"

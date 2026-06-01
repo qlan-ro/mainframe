@@ -29,6 +29,7 @@ import { authRoutes } from './routes/auth.js';
 import { tunnelRoutes } from './routes/tunnel.js';
 import { deviceRoutes } from './routes/device.js';
 import { backgroundTaskRoutes } from './routes/background-tasks.js';
+import { chatCommandRoutes } from './routes/chat-commands.js';
 import { PushService } from '../push/index.js';
 import type { PluginManager } from '../plugins/manager.js';
 import type { TunnelManager } from '../tunnel/tunnel-manager.js';
@@ -37,19 +38,34 @@ import type { BackgroundTaskTracker } from '../background-tasks/tracker.js';
 
 const log = createChildLogger('http');
 
-export function createHttpServer(
-  db: DatabaseManager,
-  chats: ChatManager,
-  adapters: AdapterRegistry,
-  attachmentStore?: AttachmentStore,
-  pluginManager?: PluginManager,
-  launchRegistry?: LaunchRegistry,
-  getTunnelUrl?: () => string | null,
-  tunnelManager?: TunnelManager,
-  port?: number,
-  lspManager?: LspManager,
-  backgroundTasks?: BackgroundTaskTracker,
-): { app: Express; pushService: PushService } {
+export interface HttpServerDeps {
+  db: DatabaseManager;
+  chats: ChatManager;
+  adapters: AdapterRegistry;
+  attachmentStore?: AttachmentStore;
+  pluginManager?: PluginManager;
+  launchRegistry?: LaunchRegistry;
+  getTunnelUrl?: () => string | null;
+  tunnelManager?: TunnelManager;
+  port?: number;
+  lspManager?: LspManager;
+  backgroundTasks?: BackgroundTaskTracker;
+}
+
+export function createHttpServer(deps: HttpServerDeps): { app: Express; pushService: PushService } {
+  const {
+    db,
+    chats,
+    adapters,
+    attachmentStore,
+    pluginManager,
+    launchRegistry,
+    getTunnelUrl,
+    tunnelManager,
+    port,
+    lspManager,
+    backgroundTasks,
+  } = deps;
   const app = express();
   app.set('trust proxy', 'loopback');
   const pushService = new PushService();
@@ -106,6 +122,7 @@ export function createHttpServer(
   app.use(tunnelRoutes(ctx));
   app.use(projectRoutes(ctx));
   app.use(chatRoutes(ctx));
+  app.use(chatCommandRoutes(ctx));
   app.use(fileRoutes(ctx));
   app.use(contentSearchRoutes(ctx));
   app.use(gitRoutes(ctx));

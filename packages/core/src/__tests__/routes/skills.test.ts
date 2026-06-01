@@ -85,7 +85,7 @@ describe('skillRoutes', () => {
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        error: 'projectPath is required',
+        error: expect.any(String),
       });
     });
   });
