@@ -8,6 +8,7 @@ import { asyncHandler } from './async-handler.js';
 import { GitService } from '../../git/git-service.js';
 import { createChildLogger } from '../../logger.js';
 import { isNotGitRepo, parseDiffNameStatus, parseStatusBuckets } from '../../git/git-parse.js';
+import { ok, okEmpty, fail } from './respond.js';
 
 const logger = createChildLogger('routes:git-chat');
 
@@ -36,29 +37,32 @@ function chatRoute<T extends { chatId: string; files?: string[] }>(
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
-      res.status(400).json({ error: firstIssue?.message ?? String(parsed.error) });
+      fail(res, 400, firstIssue?.message ?? String(parsed.error));
       return;
     }
     const data = parsed.data;
     const workDir = ctx.chats.getEffectivePath(data.chatId);
     if (!workDir) {
-      res.status(404).json({ error: 'Chat not found' });
+      fail(res, 404, 'Chat not found');
       return;
     }
     if (opts?.validatePaths && data.files) {
       for (const file of data.files) {
         if (!resolveAndValidatePath(workDir, file)) {
-          res.status(400).json({ error: `Path outside project: ${file}` });
+          fail(res, 400, `Path outside project: ${file}`);
           return;
         }
       }
     }
     try {
       const result = await handler(GitService.forProject(workDir), workDir, data, res);
-      if (!res.headersSent) res.json(result ?? { success: true });
+      if (!res.headersSent) {
+        if (result === undefined) okEmpty(res);
+        else ok(res, result);
+      }
     } catch (err) {
       if (!isNotGitRepo(err)) logger.error({ err, workDir, chatId: data.chatId }, `${label} failed`);
-      res.status(400).json({ error: (err as Error).message ?? 'Unknown error' });
+      fail(res, 400, (err as Error).message ?? 'Unknown error');
     }
   });
 }
@@ -75,13 +79,13 @@ function chatRoute<T extends { chatId: string; files?: string[] }>(
 async function handleDiffSinceMain(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = DiffSinceMainBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: String(parsed.error) });
+    fail(res, 400, String(parsed.error));
     return;
   }
   const { chatId, files } = parsed.data;
   const basePath = getEffectivePath(ctx, param(req, 'id'), chatId);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -89,7 +93,7 @@ async function handleDiffSinceMain(ctx: RouteContext, req: Request, res: Respons
     const svc = GitService.forProject(basePath);
     const baseInfo = await svc.detectBaseBranch();
     if (!baseInfo) {
-      res.json({ diffs: {}, baseBranch: null, mergeBase: null });
+      ok(res, { diffs: {}, baseBranch: null, mergeBase: null });
       return;
     }
     const { baseBranch, mergeBase } = baseInfo;
@@ -124,10 +128,10 @@ async function handleDiffSinceMain(ctx: RouteContext, req: Request, res: Respons
       }),
     );
 
-    res.json({ diffs, baseBranch, mergeBase });
+    ok(res, { diffs, baseBranch, mergeBase });
   } catch (err) {
     logger.error({ err, basePath, chatId }, 'Failed to get diff since main');
-    res.status(400).json({ error: (err as Error).message ?? 'Unknown error' });
+    fail(res, 400, (err as Error).message ?? 'Unknown error');
   }
 }
 
@@ -149,7 +153,7 @@ export function gitChatRoutes(ctx: RouteContext): Router {
       'stage',
       async (svc, _wd, { files }) => {
         if (files.length > 0) await svc.stage(files);
-        return { success: true };
+        return;
       },
       { validatePaths: true },
     ),
@@ -163,7 +167,7 @@ export function gitChatRoutes(ctx: RouteContext): Router {
       'unstage',
       async (svc, _wd, { files }) => {
         if (files.length > 0) await svc.unstage(files);
-        return { success: true };
+        return;
       },
       { validatePaths: true },
     ),
@@ -188,10 +192,10 @@ export function gitChatRoutes(ctx: RouteContext): Router {
     chatRoute(ctx, PushBody, 'push', async (svc, _wd, _data, res) => {
       const result = await svc.push();
       if (result.status === 'rejected') {
-        res.status(400).json({ error: result.message ?? 'Push rejected' });
+        fail(res, 400, result.message ?? 'Push rejected');
         return;
       }
-      return { success: true };
+      return;
     }),
   );
 

@@ -127,11 +127,14 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
 
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        baseBranch: 'main',
-        mergeBase: 'abc123',
-        diffs: {
-          'src/foo.ts': { main: 'original content', worktree: 'modified content' },
-        },
+        success: true,
+        data: expect.objectContaining({
+          baseBranch: 'main',
+          mergeBase: 'abc123',
+          diffs: {
+            'src/foo.ts': { main: 'original content', worktree: 'modified content' },
+          },
+        }),
       }),
     );
   });
@@ -152,7 +155,10 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
 
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        diffs: { 'src/new.ts': { main: '', worktree: 'new file content' } },
+        success: true,
+        data: expect.objectContaining({
+          diffs: { 'src/new.ts': { main: '', worktree: 'new file content' } },
+        }),
       }),
     );
     expect(mockSvc.show).not.toHaveBeenCalled();
@@ -173,7 +179,10 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
 
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        diffs: { 'src/gone.ts': { main: 'old content', worktree: '' } },
+        success: true,
+        data: expect.objectContaining({
+          diffs: { 'src/gone.ts': { main: 'old content', worktree: '' } },
+        }),
       }),
     );
   });
@@ -191,7 +200,10 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
     await waitForResponse(res);
 
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ diffs: expect.any(Object), baseBranch: 'main', mergeBase: 'abc123' }),
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ diffs: expect.any(Object), baseBranch: 'main', mergeBase: 'abc123' }),
+      }),
     );
   });
 
@@ -222,7 +234,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
     await waitForResponse(res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Project not found' });
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Project not found' });
   });
 
   it('returns empty diffs when no merge base is found', async () => {
@@ -236,7 +248,7 @@ describe('POST /api/projects/:id/git/diff-since-main', () => {
     handler({ params: { id: 'proj-1' }, query: {}, body: {} }, res, vi.fn());
     await waitForResponse(res);
 
-    expect(res.json).toHaveBeenCalledWith({ diffs: {}, baseBranch: null, mergeBase: null });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { diffs: {}, baseBranch: null, mergeBase: null } });
   });
 
   it('returns 400 when git diff fails', async () => {
@@ -296,7 +308,7 @@ describe('POST /api/git/stage', () => {
     await waitForResponse(res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Chat not found' });
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Chat not found' });
   });
 
   it('returns 400 for git error', async () => {
@@ -344,7 +356,7 @@ describe('POST /api/git/commit', () => {
     );
     await waitForResponse(res);
 
-    expect(res.json).toHaveBeenCalledWith({ hash: 'abc1234' });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { hash: 'abc1234' } });
     expect(mockSvc.stage).toHaveBeenCalledWith(['src/button.tsx']);
     expect(mockSvc.commit).toHaveBeenCalledWith('feat: add button');
   });
@@ -381,7 +393,7 @@ describe('POST /api/git/commit', () => {
     await waitForResponse(res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Chat not found' });
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Chat not found' });
   });
 
   it('skips staging when files array is empty', async () => {
@@ -396,7 +408,7 @@ describe('POST /api/git/commit', () => {
     await waitForResponse(res);
 
     expect(mockSvc.stage).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ hash: 'def5678' });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { hash: 'def5678' } });
   });
 
   it('returns 400 when git commit fails', async () => {
@@ -448,7 +460,7 @@ describe('POST /api/git/push', () => {
     await waitForResponse(res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Chat not found' });
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Chat not found' });
   });
 
   it('returns 400 on push rejection (non-fast-forward)', async () => {
@@ -509,9 +521,12 @@ describe('POST /api/git/status', () => {
     expect(res.status).not.toHaveBeenCalledWith(expect.any(Number));
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        staged: expect.any(Array),
-        unstaged: expect.any(Array),
-        untracked: expect.any(Array),
+        success: true,
+        data: expect.objectContaining({
+          staged: expect.any(Array),
+          unstaged: expect.any(Array),
+          untracked: expect.any(Array),
+        }),
       }),
     );
   });
@@ -531,9 +546,12 @@ describe('POST /api/git/status', () => {
     await waitForResponse(res);
 
     expect(res.json).toHaveBeenCalledWith({
-      staged: ['src/staged.ts'],
-      unstaged: ['src/unstaged.ts'],
-      untracked: ['src/new.ts'],
+      success: true,
+      data: {
+        staged: ['src/staged.ts'],
+        unstaged: ['src/unstaged.ts'],
+        untracked: ['src/new.ts'],
+      },
     });
   });
 
@@ -549,7 +567,7 @@ describe('POST /api/git/status', () => {
     await waitForResponse(res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Chat not found' });
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Chat not found' });
   });
 
   it('returns 400 when chatId is missing', async () => {
