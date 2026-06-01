@@ -76,9 +76,10 @@ These passed locally but flaked on the Linux CI runner; both are test-robustness
   list (non-selectable, `user-select:none`) instead of the thread bubble. Scope to
   `[data-mf-chat-thread]` and select the paragraph via a DOM Range + `mouseup` (native triple-click
   paragraph-selection is flaky headless).
-- **`43` B6 (branch checkout)**: selecting a row switches the popover to its submenu view and
-  repositions it, so the checkout item resolves but never settles for the actionability check. Wait
-  for `branch-submenu-dialog`, then `click({ force: true })` past the stability gate.
+- **`43` B6 (branch checkout)**: the prior branch-create leaves the list reloading, so the submenu
+  repositions and the Checkout item briefly renders disabled (`busy`); a single click then races the
+  stability gate or no-ops on the disabled button. Retry the whole open → select → checkout via
+  `expect(...).toPass()`, gating on `toBeEnabled` to wait out `busy`.
 
 ## ❌ Still not mockable
 

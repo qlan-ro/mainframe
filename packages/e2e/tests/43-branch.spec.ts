@@ -74,19 +74,21 @@ test.describe('§43 Branch popover', () => {
   });
 
   test('B6: checkout a branch updates the status bar', async () => {
-    await openBranchPopover();
-    await fixture.page.locator('[data-testid="branch-row-select-feat/alpha"]').click();
-    // Selecting a row switches the popover to its submenu view, which resizes/repositions it. On a
-    // loaded headless runner that reposition keeps the checkout item "unstable" for Playwright's
-    // actionability check (it resolves the element but never settles). Wait for the submenu dialog,
-    // then force the click past the stability gate (we've already asserted it's visible).
-    await expect(fixture.page.locator('[data-testid="branch-submenu-dialog"]')).toBeVisible({ timeout: 5_000 });
-    const checkout = fixture.page.locator('[data-testid="branch-submenu-item-checkout"]');
-    await expect(checkout).toBeVisible({ timeout: 5_000 });
-    await checkout.click({ force: true });
-    await expect(fixture.page.locator('[data-testid="status-bar-branch"]')).toContainText('feat/alpha', {
-      timeout: 10_000,
-    });
+    const { page } = fixture;
+    const statusBar = page.locator('[data-testid="status-bar-branch"]');
+    const checkout = page.locator('[data-testid="branch-submenu-item-checkout"]');
+    // On a loaded headless runner the prior branch-create leaves the list reloading, so the submenu
+    // briefly repositions and the Checkout item renders disabled (`busy`). A single click then either
+    // races the stability gate or no-ops on the disabled button (nothing gets checked out). Retry the
+    // whole open → select → checkout until the branch actually switches; toBeEnabled waits out `busy`.
+    await expect(async () => {
+      await openBranchPopover();
+      await page.locator('[data-testid="branch-row-select-feat/alpha"]').click();
+      await expect(page.locator('[data-testid="branch-submenu-dialog"]')).toBeVisible({ timeout: 3_000 });
+      await expect(checkout).toBeEnabled({ timeout: 3_000 });
+      await checkout.click();
+      await expect(statusBar).toContainText('feat/alpha', { timeout: 5_000 });
+    }).toPass({ timeout: 30_000 });
   });
 
   test('B12: rename a branch', async () => {
