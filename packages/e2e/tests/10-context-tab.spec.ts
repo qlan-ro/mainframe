@@ -10,7 +10,7 @@ test.describe('§10–11 Context & Files tabs', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'context-tab' });
     project = await createTestProject(fixture.page);
     // Use acceptEdits so Claude edits files directly without entering plan mode
     await createTestChat(fixture.page, project.projectId, 'acceptEdits');

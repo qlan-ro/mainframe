@@ -9,7 +9,7 @@ test.describe('§7 Plan approval', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'plan-approval' });
     // Custom CLAUDE.md: allow plan mode but skip clarifying questions.
     project = await createTestProject(fixture.page, {
       claudeMd:

@@ -9,7 +9,7 @@ test.describe('§8 AskUserQuestion', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'ask-question' });
     project = await createTestProject(fixture.page);
     // Yolo mode so Claude can call AskUserQuestion immediately (no plan/permission interrupts)
     await createTestChat(fixture.page, project.projectId, 'yolo');

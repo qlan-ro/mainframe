@@ -13,12 +13,15 @@
  *   6. Assert toggle returns to inactive state.
  */
 import { test, expect } from '@playwright/test';
+import { skipUnrecordedInMock } from '../helpers/mock-skip.js';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
 import { sendMessage, waitForAIIdle, waitForPlanCard } from '../helpers/wait.js';
 
 const RUN_CODEX_E2E = process.env['E2E_CODEX'] === '1';
+
+test.beforeEach(skipUnrecordedInMock);
 
 test.describe('§36 Codex plan approval', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;

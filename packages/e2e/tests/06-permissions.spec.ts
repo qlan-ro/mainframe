@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipUnrecordedInMock } from '../helpers/mock-skip.js';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
@@ -9,7 +10,8 @@ test.describe('§6 Permission system — Interactive', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    // recordingKey enrolls this describe for mock-cli record/replay (E2E_MODE=record|mock).
+    fixture = await launchApp({ recordingKey: 'permissions-interactive' });
     project = await createTestProject(fixture.page);
     await createTestChat(fixture.page, project.projectId, 'default');
   });
@@ -53,6 +55,7 @@ test.describe('§6 Permission system — Interactive', () => {
 });
 
 test.describe('§6 Permission system — Auto-Edits', () => {
+  test.beforeEach(skipUnrecordedInMock);
   let fixture: Awaited<ReturnType<typeof launchApp>>;
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
@@ -74,6 +77,7 @@ test.describe('§6 Permission system — Auto-Edits', () => {
 });
 
 test.describe('§6 Permission system — Yolo', () => {
+  test.beforeEach(skipUnrecordedInMock);
   let fixture: Awaited<ReturnType<typeof launchApp>>;
   let project: Awaited<ReturnType<typeof createTestProject>>;
 

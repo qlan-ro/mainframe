@@ -15,12 +15,24 @@ test.describe('§43 Branch popover', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
+    // createTestProject leaves the seed files (CLAUDE.md/index.ts/utils.ts) untracked. Commit them so
+    // the working tree is clean: a dirty tree makes Checkout call window.confirm("uncommitted
+    // changes"), and Electron's native confirm doesn't reliably reach Playwright's dialog handler
+    // under headless xvfb — the checkout then aborts and the status bar never switches (only B6 hits
+    // this path; rename/delete don't). A clean tree skips the prompt entirely.
+    git('git add -A');
+    git('git -c user.email=e2e@mainframe.test -c user.name="Mainframe E2E" commit -m "seed working tree"');
     // Seed extra local branches on the test repo (createTestProject made the repo + initial commit).
     git('git branch feat/alpha');
     git('git branch feat/beta');
     git('git branch feat/gamma');
     // Activate the project so the status-bar branch button renders.
     await createTestChat(fixture.page, project.projectId, 'default');
+    // Fresh profile shows the first-run tutorial; at 1280×720 its step-3 card overlaps the *center*
+    // of the branch submenu's Checkout item (Rename/Delete sit below it, which is why only B6 failed
+    // headlessly — Playwright clicks the occluded center and the overlay eats it). Skip it.
+    const skip = fixture.page.locator('[data-testid="tutorial-skip-btn"]');
+    if (await skip.isVisible().catch(() => false)) await skip.click();
     // Auto-accept confirm() dialogs (delete / dirty-checkout confirmations).
     fixture.page.on('dialog', (d) => {
       void d.accept().catch(() => {});
@@ -74,12 +86,21 @@ test.describe('§43 Branch popover', () => {
   });
 
   test('B6: checkout a branch updates the status bar', async () => {
-    await openBranchPopover();
-    await fixture.page.locator('[data-testid="branch-row-select-feat/alpha"]').click();
-    await fixture.page.locator('[data-testid="branch-submenu-item-checkout"]').click();
-    await expect(fixture.page.locator('[data-testid="status-bar-branch"]')).toContainText('feat/alpha', {
-      timeout: 10_000,
-    });
+    const { page } = fixture;
+    const statusBar = page.locator('[data-testid="status-bar-branch"]');
+    const checkout = page.locator('[data-testid="branch-submenu-item-checkout"]');
+    // On a loaded headless runner the prior branch-create leaves the list reloading, so the submenu
+    // briefly repositions and the Checkout item renders disabled (`busy`). A single click then either
+    // races the stability gate or no-ops on the disabled button (nothing gets checked out). Retry the
+    // whole open → select → checkout until the branch actually switches; toBeEnabled waits out `busy`.
+    await expect(async () => {
+      await openBranchPopover();
+      await page.locator('[data-testid="branch-row-select-feat/alpha"]').click();
+      await expect(page.locator('[data-testid="branch-submenu-dialog"]')).toBeVisible({ timeout: 3_000 });
+      await expect(checkout).toBeEnabled({ timeout: 3_000 });
+      await checkout.click();
+      await expect(statusBar).toContainText('feat/alpha', { timeout: 5_000 });
+    }).toPass({ timeout: 30_000 });
   });
 
   test('B12: rename a branch', async () => {

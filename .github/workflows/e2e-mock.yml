@@ -1,0 +1,68 @@
+# Runs the full Playwright/Electron e2e suite in MOCK mode (E2E_MODE=mock): AI-coupled specs
+# replay recorded NDJSON fixtures via the mock-cli plugin, un-mockable specs auto-skip, and
+# non-AI specs run for real. Mock mode makes NO Claude/Codex API calls, so this needs no secrets.
+name: e2e-mock
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch: # manual trigger (e.g. first validation once this lands on main)
+
+# One run per ref; cancel superseded runs so PR pushes don't pile up Electron jobs.
+concurrency:
+  group: e2e-mock-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-mock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      # node-pty has no Linux prebuild and compiles via node-gyp (mirrors ci.yml).
+      - run: npm install -g node-gyp
+
+      - run: pnpm install --frozen-lockfile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # build:app builds the full dependency chain (types → core → desktop) in topological order
+      # and bakes the renderer for the e2e daemon port (31416, NOT prod 31415 —
+      # assertRendererBuiltForTestPort aborts otherwise). build:mock bundles the mock-cli plugin.
+      - run: pnpm --filter @qlan-ro/mainframe-e2e build:app
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+      - run: pnpm --filter @qlan-ro/mainframe-e2e build:mock
+
+      # Pull the OS libraries Electron needs on Linux (libnss3, libgbm, libgtk, xvfb deps, …).
+      - run: pnpm --filter @qlan-ro/mainframe-e2e exec playwright install --with-deps chromium
+
+      # The harness and daemon run git operations (worktrees, status); the runner has no identity.
+      - name: Configure git identity for the runner
+        run: |
+          git config --global user.email "e2e@mainframe.test"
+          git config --global user.name "Mainframe E2E"
+          git config --global init.defaultBranch main
+
+      # Electron needs a display on a headless runner → xvfb. CI=true (set by Actions) makes the
+      # harness add --no-sandbox to electron.launch. No API secrets: mock mode replays fixtures.
+      - run: xvfb-run -a env E2E_MODE=mock pnpm --filter @qlan-ro/mainframe-e2e test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: packages/e2e/playwright-report/
+          retention-days: 7

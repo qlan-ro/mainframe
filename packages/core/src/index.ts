@@ -24,6 +24,7 @@ import { activate as activateCodex } from './plugins/builtin/codex/index.js';
 import todosManifest from './plugins/builtin/todos/manifest.json' with { type: 'json' };
 import { activate as activateTodos } from './plugins/builtin/todos/index.js';
 import { logger } from './logger.js';
+import { wrapClaudeForRecording } from './testing/record-wrapper.js';
 import type { DaemonEvent, PluginManifest } from '@qlan-ro/mainframe-types';
 import { backfillWorktreeRelationships } from './workspace/worktree.js';
 
@@ -96,7 +97,7 @@ async function main(): Promise<void> {
   const emitEvent = (event: DaemonEvent) => broadcastEvent(event);
 
   const pluginManager = new PluginManager({
-    pluginsDirs: [join(homedir(), '.mainframe', 'plugins')],
+    pluginsDirs: [join(getDataDir(), 'plugins')],
     daemonBus,
     db,
     adapters,
@@ -113,6 +114,10 @@ async function main(): Promise<void> {
 
   // Load user-installed plugins from ~/.mainframe/plugins/
   await pluginManager.loadAll();
+
+  if (process.env['E2E_MODE'] === 'record') {
+    wrapClaudeForRecording(adapters);
+  }
 
   let daemonTunnelUrl: string | null = null;
 

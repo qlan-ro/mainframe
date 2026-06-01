@@ -4,11 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:app": "VITE_DAEMON_HTTP_PORT=${MF_E2E_DAEMON_PORT:-31416} VITE_DAEMON_WS_PORT=${MF_E2E_DAEMON_PORT:-31416} pnpm --filter @qlan-ro/mainframe-desktop build && pnpm --filter @qlan-ro/mainframe-core build",
+    "build:app": "pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build && VITE_DAEMON_HTTP_PORT=${MF_E2E_DAEMON_PORT:-31416} VITE_DAEMON_WS_PORT=${MF_E2E_DAEMON_PORT:-31416} pnpm --filter @qlan-ro/mainframe-desktop build",
     "test": "playwright test",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",
-    "test:file": "playwright test"
+    "test:file": "playwright test",
+    "build:mock": "esbuild plugins/mock-cli/src/index.ts --bundle --platform=node --format=cjs --outfile=plugins/mock-cli/index.js",
+    "test:record": "E2E_MODE=record playwright test",
+    "test:mock": "E2E_MODE=mock playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

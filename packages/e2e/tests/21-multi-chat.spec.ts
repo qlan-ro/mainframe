@@ -9,7 +9,7 @@ test.describe('§21 Multiple simultaneous chats', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'multi-chat' });
     project = await createTestProject(fixture.page);
   });
   test.afterAll(async () => {

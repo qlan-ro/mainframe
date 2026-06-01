@@ -1,0 +1,11 @@
+{
+  "id": "mock-cli",
+  "name": "Mock CLI Adapter",
+  "version": "0.1.0",
+  "description": "Replays recorded CLI sessions for E2E testing",
+  "capabilities": ["adapters"],
+  "adapter": {
+    "binaryName": "mock-cli",
+    "displayName": "Mock CLI"
+  }
+}
