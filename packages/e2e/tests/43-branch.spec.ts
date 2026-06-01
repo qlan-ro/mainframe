@@ -15,6 +15,13 @@ test.describe('§43 Branch popover', () => {
   test.beforeAll(async () => {
     fixture = await launchApp();
     project = await createTestProject(fixture.page);
+    // createTestProject leaves the seed files (CLAUDE.md/index.ts/utils.ts) untracked. Commit them so
+    // the working tree is clean: a dirty tree makes Checkout call window.confirm("uncommitted
+    // changes"), and Electron's native confirm doesn't reliably reach Playwright's dialog handler
+    // under headless xvfb — the checkout then aborts and the status bar never switches (only B6 hits
+    // this path; rename/delete don't). A clean tree skips the prompt entirely.
+    git('git add -A');
+    git('git -c user.email=e2e@mainframe.test -c user.name="Mainframe E2E" commit -m "seed working tree"');
     // Seed extra local branches on the test repo (createTestProject made the repo + initial commit).
     git('git branch feat/alpha');
     git('git branch feat/beta');

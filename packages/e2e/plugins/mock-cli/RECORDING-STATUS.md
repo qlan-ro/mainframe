@@ -76,10 +76,12 @@ These passed locally but flaked on the Linux CI runner; both are test-robustness
   list (non-selectable, `user-select:none`) instead of the thread bubble. Scope to
   `[data-mf-chat-thread]` and select the paragraph via a DOM Range + `mouseup` (native triple-click
   paragraph-selection is flaky headless).
-- **`43` B6 (branch checkout)**: the prior branch-create leaves the list reloading, so the submenu
-  repositions and the Checkout item briefly renders disabled (`busy`); a single click then races the
-  stability gate or no-ops on the disabled button. Retry the whole open → select → checkout via
-  `expect(...).toPass()`, gating on `toBeEnabled` to wait out `busy`.
+- **`43` B6 (branch checkout)**: the test repo's seed files were left untracked, so Checkout hit
+  `confirmDirtyTree` → `window.confirm("uncommitted changes")`, and Electron's native confirm doesn't
+  reliably reach Playwright's dialog handler under headless xvfb → the checkout aborted and the
+  status bar never switched (only Checkout hits this path; rename/delete don't). Commit the seed in
+  `beforeAll` so the tree is clean and no prompt fires. The open → select → checkout is also wrapped
+  in `expect(...).toPass()` (gating on `toBeEnabled`) to ride out the post-create busy/reposition window.
 
 ## ❌ Still not mockable
 
