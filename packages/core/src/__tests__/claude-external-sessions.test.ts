@@ -77,7 +77,7 @@ describe('listExternalSessions', () => {
         if (s.endsWith(path.join('.claude', 'projects'))) return ['-test-project'] as unknown as never;
         return [] as unknown as never;
       });
-      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
+      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as string);
 
       const result = await listExternalSessions('/test/project', []);
       expect(result).toHaveLength(1);
@@ -107,7 +107,7 @@ describe('listExternalSessions', () => {
         if (s.endsWith(path.join('.claude', 'projects'))) return ['-test-project'] as unknown as never;
         return [] as unknown as never;
       });
-      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
+      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as string);
 
       const result = await listExternalSessions('/test/project', ['exclude-me']);
       expect(result).toHaveLength(1);
@@ -139,7 +139,7 @@ describe('listExternalSessions', () => {
         if (s.endsWith(path.join('.claude', 'projects'))) return ['-test-project'] as unknown as never;
         return [] as unknown as never;
       });
-      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
+      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as string);
 
       const result = await listExternalSessions('/test/project', []);
       expect(result).toHaveLength(1);
@@ -171,7 +171,7 @@ describe('listExternalSessions', () => {
         if (s.endsWith(path.join('.claude', 'projects'))) return ['-test-project'] as unknown as never;
         return [] as unknown as never;
       });
-      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
+      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as string);
 
       const result = await listExternalSessions('/test/project', []);
       expect(result[0]!.sessionId).toBe('newer');
@@ -196,7 +196,7 @@ describe('listExternalSessions', () => {
         if (s.endsWith(path.join('.claude', 'projects'))) return ['-test-project'] as unknown as never;
         return [] as unknown as never;
       });
-      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
+      mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as string);
 
       const result = await listExternalSessions('/test/project', []);
       expect(result).toHaveLength(1);
@@ -252,8 +252,8 @@ describe('listExternalSessions', () => {
         return [] as unknown as never;
       });
       mockReadFile
-        .mockResolvedValueOnce(JSON.stringify(indexMain) as unknown as ArrayBuffer)
-        .mockResolvedValueOnce(JSON.stringify(indexWorktree) as unknown as ArrayBuffer);
+        .mockResolvedValueOnce(JSON.stringify(indexMain) as unknown as string)
+        .mockResolvedValueOnce(JSON.stringify(indexWorktree) as unknown as string);
 
       const result = await listExternalSessions('/test/project', []);
       const ids = result.map((s) => s.sessionId).sort();
@@ -458,7 +458,7 @@ describe('listExternalSessions', () => {
       if (s.endsWith(path.join('.claude', 'projects'))) return ['-test-project'] as unknown as never;
       return [] as unknown as never;
     });
-    mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as ArrayBuffer);
+    mockReadFile.mockResolvedValue(JSON.stringify(index) as unknown as string);
     mockStat.mockResolvedValue({ mtime: new Date('2025-12-31T00:00:00Z') } as never);
 
     const result = await listExternalSessions('/test/project', []);

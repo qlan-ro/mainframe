@@ -11,6 +11,7 @@ function createMockAdapter(sessions: ExternalSession[] = []): Adapter {
   return {
     id: 'claude',
     name: 'Claude',
+    capabilities: { planMode: false },
     isInstalled: async () => true,
     getVersion: async () => '1.0',
     listModels: async () => [],
@@ -96,6 +97,7 @@ describe('ExternalSessionService', () => {
       const adapterWithoutList: Adapter = {
         id: 'other',
         name: 'Other',
+        capabilities: { planMode: false },
         isInstalled: async () => true,
         getVersion: async () => '1.0',
         listModels: async () => [],

@@ -76,6 +76,8 @@ describe('Queued message cleanup — onQueuedProcessed via isReplay', () => {
   function makeSessionState(): ClaudeSessionState {
     return {
       chatId,
+      mainframeChatId: chatId,
+      realProjectPath: '/tmp',
       buffer: '',
       child: null,
       status: 'ready',
@@ -83,7 +85,14 @@ describe('Queued message cleanup — onQueuedProcessed via isReplay', () => {
       activeTasks: new Map(),
       interruptTimer: null,
       pendingCancelCallbacks: new Map(),
+      pendingStopTaskCallbacks: new Map(),
       pendingPrCreates: new Set(),
+      pendingPrMutations: new Map(),
+      toolUseRegistry: new Map(),
+      skillPathCache: new Map(),
+      taskV2Events: [],
+      lastActivityAt: 0,
+      taskEvents: null as unknown as ClaudeSessionState['taskEvents'],
     };
   }
 

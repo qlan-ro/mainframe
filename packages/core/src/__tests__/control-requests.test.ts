@@ -148,6 +148,7 @@ function createMockDb(chat?: Partial<Chat>) {
     totalCost: 0,
     totalTokensInput: 0,
     totalTokensOutput: 0,
+    lastContextTokensInput: 0,
     processState: 'idle',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -242,7 +243,7 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
   let registry: AdapterRegistry;
   let claude: ClaudeAdapter;
   let db: ReturnType<typeof createMockDb>;
-  let killSpy: ReturnType<typeof vi.fn>;
+  let killSpy: ReturnType<typeof vi.fn<() => void>>;
   let spawnCount: number;
   let currentMockSession: MockClaudeSession | null;
   let capturedEvents: any[];
@@ -256,7 +257,7 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
     registry.register(new ClaudeAdapter());
     claude = registry.get('claude') as ClaudeAdapter;
 
-    killSpy = vi.fn();
+    killSpy = vi.fn<() => void>();
     spawnCount = 0;
     currentMockSession = null;
     capturedEvents = [];
@@ -326,12 +327,12 @@ describe('ChatManager.updateChatConfig — in-flight control requests', () => {
   });
 
   it('emits chat.updated event on in-flight config change', async () => {
-    await manager.updateChatConfig(chatId, undefined, 'claude-sonnet-4-5-20250929', 'plan');
+    await manager.updateChatConfig(chatId, undefined, 'claude-sonnet-4-5-20250929', undefined, true);
 
     const chatUpdated = capturedEvents.find((e) => e.type === 'chat.updated');
     expect(chatUpdated).toBeTruthy();
     expect(chatUpdated.chat.model).toBe('claude-sonnet-4-5-20250929');
-    expect(chatUpdated.chat.permissionMode).toBe('plan');
+    expect(chatUpdated.chat.planMode).toBe(true);
   });
 
   it('no-op when nothing changed', async () => {
