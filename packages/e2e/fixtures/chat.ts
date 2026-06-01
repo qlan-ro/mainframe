@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { DAEMON_PORT } from './app.js';
 
 /**
  * Creates a new chat for the given project, then waits for the renderer to open the chat tab.
@@ -20,14 +21,16 @@ export async function createTestChat(
   // 'plan' case is handled separately via the toggle below).
   const createMode = wantsPlanMode ? 'default' : (permissionMode as 'default' | 'acceptEdits' | 'yolo');
 
-  await page.evaluate(
-    ({ pid, adapter, mode }) => {
-      const client = (window as any).__daemonClient;
-      if (!client) throw new Error('__daemonClient not exposed on window');
-      client.createChat(pid, adapter, undefined, mode);
-    },
-    { pid: projectId, adapter: adapterId, mode: createMode },
-  );
+  // Create the chat via the daemon's REST API. The WS→REST transport refactor removed
+  // DaemonClient.createChat, so the old window.__daemonClient.createChat shortcut no longer exists.
+  const res = await fetch(`http://127.0.0.1:${DAEMON_PORT}/api/chats`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId, adapterId, permissionMode: createMode }),
+  });
+  if (!res.ok) {
+    throw new Error(`createTestChat: POST /api/chats failed (${res.status} ${await res.text()})`);
+  }
 
   // Wait for the new chat's composer — renderer opens the tab on chat.created.
   const textbox = page.getByRole('textbox').first();
