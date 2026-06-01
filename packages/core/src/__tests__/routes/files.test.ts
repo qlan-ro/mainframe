@@ -636,7 +636,7 @@ describe('PUT /api/projects/:id/files', () => {
       vi.fn(),
     );
 
-    expect(res.json).toHaveBeenCalledWith({ path: 'hello.txt', success: true });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { path: 'hello.txt' } });
   });
 
   it('returns 400 when path is missing', async () => {

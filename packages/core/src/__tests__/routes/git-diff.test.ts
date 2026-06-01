@@ -92,7 +92,10 @@ describe('GET /api/projects/:id/git/diff', () => {
     handler({ params: { id: 'proj-1' }, query: { source: 'git', file: 'src/foo.ts' } }, res, vi.fn());
     await waitForResponse(res);
 
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ diff: 'diff output', source: 'git' }));
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({ diff: 'diff output', source: 'git' }),
+    });
   });
 
   it('returns 400 when source is not "git"', async () => {
