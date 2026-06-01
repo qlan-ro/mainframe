@@ -14,6 +14,8 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import {
   drainOutputs,
+  drainOptionalInterrupts,
+  peekInput,
   consumeInput,
   isExhausted,
   messagesFromEvents,
@@ -72,6 +74,16 @@ export class ReplaySession implements AdapterSession {
    * delay is based off the marker, so recorded think-time between turns is not replayed.
    */
   private advance(expected: string): void {
+    // `interrupt` is fire-and-forget and recorded non-deterministically (the app issues it on its
+    // own, e.g. while the composer is edited between turns). Tolerate the record/replay mismatch:
+    if (expected === 'interrupt') {
+      // The app issued an interrupt the fixture didn't capture here — no-op rather than desync.
+      if (!peekInput(this.state, 'interrupt')) return;
+    } else {
+      // Seeking another method: skip stray recorded interrupts, emitting any outputs they bracketed.
+      this.emit(drainOptionalInterrupts(this.state));
+    }
+
     const marker = isExhausted(this.state) ? null : consumeInput(this.state);
     if (!marker || marker.method !== expected) {
       // Distinguish exhaustion from a mid-turn desync (cursor sitting on an `out` event).

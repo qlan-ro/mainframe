@@ -40,6 +40,7 @@ Each verified solo with `E2E_MODE=record` → `E2E_MODE=mock` → green:
 | `08-ask-user-question` | `ask-question` | AskUserQuestion card (options, submit-gating) |
 | `21-multi-chat` | `multi-chat` | two sequential chats, no cross-contamination (two fixtures) |
 | `22-app-restart` | `app-restart` | thread + chat list survive an Electron restart (daemon stays up) |
+| `53-editor-review` | `editor-review` | F8 inline editor comment sent to the chat as a message |
 
 ## ✅ Side-effect specs — now mockable via the `fx` feature
 
@@ -59,6 +60,25 @@ replay path remapping (diff viewer). `10-context-tab` and `12-changes-tab` both 
   consumes consecutive same-method `in` markers on a single action. This fixed `07`'s approve→
   permission hang. Distinct responses always have `out` events between markers, so it never merges
   genuinely separate interactions (06's deny/allow flow is regression-clean).
+- **`interrupt` tolerance** (`drainOptionalInterrupts` / `peekInput`): `interrupt` is a fire-and-forget
+  control signal the *app* issues on its own (e.g. while the composer is edited between turns), so it
+  is recorded non-deterministically and may not recur at the same cursor in replay. When seeking
+  another method the engine now skips stray recorded `interrupt` markers (emitting any outputs they
+  bracketed); when the app issues an interrupt the fixture didn't capture, it's a no-op. This fixed
+  `31`'s second (`@mention`) turn, which sat behind three app-issued interrupts. Unit-tested in
+  `replay-core.test.ts`.
+
+## ✅ Two headless-only test-harness fixes (CI under xvfb)
+
+These passed locally but flaked on the Linux CI runner; both are test-robustness fixes, not mock issues:
+
+- **`47` TH2 (quote)**: `getByText('…').first()` matched the message's *preview* span in the session
+  list (non-selectable, `user-select:none`) instead of the thread bubble. Scope to
+  `[data-mf-chat-thread]` and select the paragraph via a DOM Range + `mouseup` (native triple-click
+  paragraph-selection is flaky headless).
+- **`43` B6 (branch checkout)**: selecting a row switches the popover to its submenu view and
+  repositions it, so the checkout item resolves but never settles for the actionability check. Wait
+  for `branch-submenu-dialog`, then `click({ force: true })` past the stability gate.
 
 ## ❌ Still not mockable
 

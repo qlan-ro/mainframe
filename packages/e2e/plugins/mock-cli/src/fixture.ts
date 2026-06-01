@@ -59,6 +59,35 @@ export function drainOutputs(state: ReplayState): RecordedEvent[] {
   return out;
 }
 
+/**
+ * Skip leading `interrupt` in-markers and return the output run that followed each (the caller
+ * emits them). `interrupt` is a fire-and-forget control signal the desktop app issues on its own
+ * (e.g. while the composer is edited), so it is recorded non-deterministically and may not recur at
+ * the same cursor position in replay. When seeking any other method, tolerate stray interrupts by
+ * consuming them here rather than erroring on the method mismatch.
+ */
+export function drainOptionalInterrupts(state: ReplayState): RecordedEvent[] {
+  const drained: RecordedEvent[] = [];
+  let ev = state.events[state.cursor];
+  while (ev && ev.dir === 'in' && ev.method === 'interrupt') {
+    state.cursor++; // consume the interrupt marker
+    while (state.cursor < state.events.length) {
+      const out = state.events[state.cursor];
+      if (!out || out.dir === 'in') break;
+      drained.push(out);
+      state.cursor++;
+    }
+    ev = state.events[state.cursor];
+  }
+  return drained;
+}
+
+/** True when the cursor sits on an `in` marker for `method` (without consuming it). */
+export function peekInput(state: ReplayState, method: string): boolean {
+  const ev = state.events[state.cursor];
+  return !!ev && ev.dir === 'in' && ev.method === method;
+}
+
 /** Reconstruct assistant messages from `out` onMessage events — used by ReplaySession.loadHistory. */
 export function messagesFromEvents(events: RecordedEvent[]): { role: string; content: unknown[] }[] {
   const messages: { role: string; content: unknown[] }[] = [];

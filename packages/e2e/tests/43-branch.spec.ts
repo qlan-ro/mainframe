@@ -76,7 +76,14 @@ test.describe('§43 Branch popover', () => {
   test('B6: checkout a branch updates the status bar', async () => {
     await openBranchPopover();
     await fixture.page.locator('[data-testid="branch-row-select-feat/alpha"]').click();
-    await fixture.page.locator('[data-testid="branch-submenu-item-checkout"]').click();
+    // Selecting a row switches the popover to its submenu view, which resizes/repositions it. On a
+    // loaded headless runner that reposition keeps the checkout item "unstable" for Playwright's
+    // actionability check (it resolves the element but never settles). Wait for the submenu dialog,
+    // then force the click past the stability gate (we've already asserted it's visible).
+    await expect(fixture.page.locator('[data-testid="branch-submenu-dialog"]')).toBeVisible({ timeout: 5_000 });
+    const checkout = fixture.page.locator('[data-testid="branch-submenu-item-checkout"]');
+    await expect(checkout).toBeVisible({ timeout: 5_000 });
+    await checkout.click({ force: true });
     await expect(fixture.page.locator('[data-testid="status-bar-branch"]')).toContainText('feat/alpha', {
       timeout: 10_000,
     });
