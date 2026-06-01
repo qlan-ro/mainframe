@@ -7,6 +7,7 @@ import type {
   RebaseResult,
   DeleteBranchResult,
   UpdateAllResult,
+  ApiResponse,
 } from '@qlan-ro/mainframe-types';
 import { fetchJson, postJson, API_BASE } from './http';
 
@@ -25,11 +26,19 @@ export async function getGitStatus(
 
 export async function getGitBranches(projectId: string, chatId?: string): Promise<BranchListResult> {
   const params = chatId ? `?chatId=${chatId}` : '';
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/git/branches${params}`);
+  const json = await fetchJson<ApiResponse<BranchListResult>>(
+    `${API_BASE}/api/projects/${projectId}/git/branches${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function gitCheckout(projectId: string, branch: string, chatId?: string): Promise<void> {
-  await postJson(`${API_BASE}/api/projects/${projectId}/git/checkout`, { branch, chatId });
+  const json = await postJson<ApiResponse<unknown>>(`${API_BASE}/api/projects/${projectId}/git/checkout`, {
+    branch,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
 }
 
 export async function gitCreateBranch(
@@ -38,11 +47,21 @@ export async function gitCreateBranch(
   startPoint?: string,
   chatId?: string,
 ): Promise<void> {
-  await postJson(`${API_BASE}/api/projects/${projectId}/git/branch`, { name, startPoint, chatId });
+  const json = await postJson<ApiResponse<unknown>>(`${API_BASE}/api/projects/${projectId}/git/branch`, {
+    name,
+    startPoint,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
 }
 
 export async function gitFetch(projectId: string, remote?: string, chatId?: string): Promise<FetchResult> {
-  return postJson(`${API_BASE}/api/projects/${projectId}/git/fetch`, { remote, chatId });
+  const json = await postJson<ApiResponse<FetchResult>>(`${API_BASE}/api/projects/${projectId}/git/fetch`, {
+    remote,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function gitPull(
@@ -52,7 +71,14 @@ export async function gitPull(
   localBranch?: string,
   chatId?: string,
 ): Promise<PullResult> {
-  return postJson(`${API_BASE}/api/projects/${projectId}/git/pull`, { remote, branch, localBranch, chatId });
+  const json = await postJson<ApiResponse<PullResult>>(`${API_BASE}/api/projects/${projectId}/git/pull`, {
+    remote,
+    branch,
+    localBranch,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function gitPush(
@@ -61,19 +87,39 @@ export async function gitPush(
   remote?: string,
   chatId?: string,
 ): Promise<PushResult> {
-  return postJson(`${API_BASE}/api/projects/${projectId}/git/push`, { branch, remote, chatId });
+  const json = await postJson<ApiResponse<PushResult>>(`${API_BASE}/api/projects/${projectId}/git/push`, {
+    branch,
+    remote,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function gitMerge(projectId: string, branch: string, chatId?: string): Promise<MergeResult> {
-  return postJson(`${API_BASE}/api/projects/${projectId}/git/merge`, { branch, chatId });
+  const json = await postJson<ApiResponse<MergeResult>>(`${API_BASE}/api/projects/${projectId}/git/merge`, {
+    branch,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function gitRebase(projectId: string, branch: string, chatId?: string): Promise<RebaseResult> {
-  return postJson(`${API_BASE}/api/projects/${projectId}/git/rebase`, { branch, chatId });
+  const json = await postJson<ApiResponse<RebaseResult>>(`${API_BASE}/api/projects/${projectId}/git/rebase`, {
+    branch,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function gitAbort(projectId: string, chatId?: string): Promise<{ aborted: boolean }> {
-  return postJson(`${API_BASE}/api/projects/${projectId}/git/abort`, { chatId });
+  const json = await postJson<ApiResponse<{ aborted: boolean }>>(`${API_BASE}/api/projects/${projectId}/git/abort`, {
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function gitRenameBranch(
@@ -82,7 +128,12 @@ export async function gitRenameBranch(
   newName: string,
   chatId?: string,
 ): Promise<void> {
-  await postJson(`${API_BASE}/api/projects/${projectId}/git/rename-branch`, { oldName, newName, chatId });
+  const json = await postJson<ApiResponse<unknown>>(`${API_BASE}/api/projects/${projectId}/git/rename-branch`, {
+    oldName,
+    newName,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
 }
 
 export async function gitDeleteBranch(
@@ -92,11 +143,20 @@ export async function gitDeleteBranch(
   remote?: boolean,
   chatId?: string,
 ): Promise<DeleteBranchResult> {
-  return postJson(`${API_BASE}/api/projects/${projectId}/git/delete-branch`, { name, force, remote, chatId });
+  const json = await postJson<ApiResponse<DeleteBranchResult>>(
+    `${API_BASE}/api/projects/${projectId}/git/delete-branch`,
+    { name, force, remote, chatId },
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function gitUpdateAll(projectId: string, chatId?: string): Promise<UpdateAllResult> {
-  return postJson(`${API_BASE}/api/projects/${projectId}/git/update-all`, { chatId });
+  const json = await postJson<ApiResponse<UpdateAllResult>>(`${API_BASE}/api/projects/${projectId}/git/update-all`, {
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getDiff(

@@ -87,7 +87,7 @@ describe('GET /api/projects/:id/git/branches', () => {
     await waitForResponse(res);
 
     expect(mockSvc.branches).toHaveBeenCalledOnce();
-    expect(res.json).toHaveBeenCalledWith(branchResult);
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: branchResult });
   });
 
   it('returns 404 when project not found', async () => {
@@ -101,7 +101,7 @@ describe('GET /api/projects/:id/git/branches', () => {
     await waitForResponse(res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Project not found' });
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Project not found' });
   });
 });
 
@@ -118,7 +118,7 @@ describe('POST /api/projects/:id/git/checkout', () => {
     await waitForResponse(res);
 
     expect(mockSvc.checkout).toHaveBeenCalledWith('feature/foo');
-    expect(res.json).toHaveBeenCalledWith({ ok: true });
+    expect(res.json).toHaveBeenCalledWith({ success: true });
   });
 
   it('returns 400 when branch is missing', async () => {
@@ -149,7 +149,7 @@ describe('POST /api/projects/:id/git/merge', () => {
     await waitForResponse(res);
 
     expect(mockSvc.merge).toHaveBeenCalledWith('feature/foo');
-    expect(res.json).toHaveBeenCalledWith(mergeResult);
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: mergeResult });
   });
 
   it('returns conflict result', async () => {
@@ -164,7 +164,7 @@ describe('POST /api/projects/:id/git/merge', () => {
     handler({ params: { id: 'proj-1' }, query: {}, body: { branch: 'feature/conflicting' } }, res, vi.fn());
     await waitForResponse(res);
 
-    expect(res.json).toHaveBeenCalledWith(conflictResult);
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: conflictResult });
   });
 });
 
@@ -182,7 +182,7 @@ describe('POST /api/projects/:id/git/delete-branch', () => {
     await waitForResponse(res);
 
     expect(mockSvc.deleteBranch).toHaveBeenCalledWith('feature/unmerged', undefined, undefined);
-    expect(res.json).toHaveBeenCalledWith(notMergedResult);
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: notMergedResult });
   });
 
   it('calls deleteBranch with force=true when specified', async () => {
@@ -197,7 +197,7 @@ describe('POST /api/projects/:id/git/delete-branch', () => {
     await waitForResponse(res);
 
     expect(mockSvc.deleteBranch).toHaveBeenCalledWith('feature/old', true, undefined);
-    expect(res.json).toHaveBeenCalledWith({ status: 'success' });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { status: 'success' } });
   });
 
   it('passes remote=true for remote branch deletion', async () => {
@@ -212,6 +212,6 @@ describe('POST /api/projects/:id/git/delete-branch', () => {
     await waitForResponse(res);
 
     expect(mockSvc.deleteBranch).toHaveBeenCalledWith('origin/feature/old', undefined, true);
-    expect(res.json).toHaveBeenCalledWith({ status: 'success' });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { status: 'success' } });
   });
 });
