@@ -7,7 +7,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feat/e2e-record-all] # TEMP: feat/e2e-record-all — pre-merge validation, revert before merge
+    branches: [main]
   workflow_dispatch: # manual trigger (e.g. first validation once this lands on main)
 
 # One run per ref; cancel superseded runs so PR pushes don't pile up Electron jobs.
