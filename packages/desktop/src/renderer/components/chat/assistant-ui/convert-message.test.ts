@@ -270,6 +270,65 @@ describe('convertMessage', () => {
       expect(part.toolName).toBe('_TaskGroup');
     });
 
+    it('re-encodes nested tool_group children inside a task_group as _ToolGroup tool children', () => {
+      // A subagent that runs >=2 consecutive explore tools produces a nested
+      // first-class tool_group inside task_group.calls (see core
+      // applyToolGrouping characterization). TaskGroupCard renders + summarizes
+      // children whose toolName is '_ToolGroup'; if convertMessage drops the
+      // nested tool_group, the subagent's file reads/greps vanish from the card.
+      const msg = display('assistant', [
+        {
+          type: 'task_group',
+          agentId: 'agent-1',
+          taskArgs: { description: 'do work' },
+          calls: [
+            {
+              type: 'tool_group',
+              calls: [
+                { type: 'tool_call', id: 'c1', name: 'Read', input: { file: '/a.ts' }, category: 'explore' },
+                { type: 'tool_call', id: 'c2', name: 'Grep', input: { pattern: 'x' }, category: 'explore' },
+              ],
+            },
+          ],
+        },
+      ]);
+      const result = convertMessage(msg);
+      const part = (result.content as unknown as Array<Record<string, unknown>>)[0]!;
+      const children = (part.args as Record<string, unknown>).children as Array<Record<string, unknown>>;
+      expect(children).toHaveLength(1);
+      expect(children[0]!.kind).toBe('tool');
+      expect(children[0]!.toolName).toBe('_ToolGroup');
+      const items = (children[0]!.args as Record<string, unknown>).items as Array<Record<string, unknown>>;
+      expect(items.map((i) => i.toolName)).toEqual(['Read', 'Grep']);
+    });
+
+    it('re-encodes nested task_progress children inside a task_group as _TaskProgress tool children', () => {
+      const msg = display('assistant', [
+        {
+          type: 'task_group',
+          agentId: 'agent-1',
+          taskArgs: { description: 'do work' },
+          calls: [
+            {
+              type: 'task_progress',
+              items: [
+                { id: 'p1', name: 'TodoWrite', input: {}, category: 'progress' },
+                { id: 'p2', name: 'TodoWrite', input: {}, category: 'progress' },
+              ],
+            },
+          ],
+        },
+      ]);
+      const result = convertMessage(msg);
+      const part = (result.content as unknown as Array<Record<string, unknown>>)[0]!;
+      const children = (part.args as Record<string, unknown>).children as Array<Record<string, unknown>>;
+      expect(children).toHaveLength(1);
+      expect(children[0]!.kind).toBe('tool');
+      expect(children[0]!.toolName).toBe('_TaskProgress');
+      const items = (children[0]!.args as Record<string, unknown>).items as Array<Record<string, unknown>>;
+      expect(items).toHaveLength(2);
+    });
+
     it('de-duplicates colliding toolCallIds across task_group blocks (regression: #184)', () => {
       // Two CollabAgent spawns in one turn whose role/description collapsed to the same
       // agentId crashed assistant-ui with "Duplicate key toolCallId-default in tapResources".

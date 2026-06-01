@@ -166,6 +166,48 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
                   return { kind: 'skill_loaded' as const, skillName: c.skillName, path: c.path, content: c.content };
                 }
                 if (c.type === 'image') return { kind: 'image' as const, mediaType: c.mediaType, data: c.data };
+                // A subagent's explore burst / progress feed nests as a first-class
+                // tool_group / task_progress inside task_group.calls. Re-encode it the
+                // same way the top-level branches do so TaskGroupCard (which renders
+                // and summarizes '_ToolGroup' / '_TaskProgress' children) keeps showing
+                // them instead of silently dropping the subagent's work.
+                if (c.type === 'tool_group') {
+                  const groupCalls = c.calls.filter(
+                    (g): g is DisplayContent & { type: 'tool_call' } => g.type === 'tool_call',
+                  );
+                  return {
+                    kind: 'tool' as const,
+                    toolCallId: groupCalls[0]?.id ?? '',
+                    toolName: '_ToolGroup',
+                    args: {
+                      items: groupCalls.map((g) => ({
+                        toolCallId: g.id,
+                        toolName: g.name,
+                        args: g.input,
+                        result: g.result,
+                        isError: g.result?.isError,
+                      })),
+                    },
+                    result: 'grouped',
+                  };
+                }
+                if (c.type === 'task_progress') {
+                  return {
+                    kind: 'tool' as const,
+                    toolCallId: c.items[0]?.id ?? '',
+                    toolName: '_TaskProgress',
+                    args: {
+                      items: c.items.map((item) => ({
+                        toolCallId: item.id,
+                        toolName: item.name,
+                        args: item.input,
+                        result: item.result,
+                        isError: item.result?.isError,
+                      })),
+                    },
+                    result: 'accumulated',
+                  };
+                }
                 return null;
               })
               .filter((x): x is NonNullable<typeof x> => x !== null);
