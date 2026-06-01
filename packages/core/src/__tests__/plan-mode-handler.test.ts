@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PlanModeHandler, type PlanModeContext } from '../chat/plan-mode-handler.js';
-import type { Chat, ControlResponse } from '@qlan-ro/mainframe-types';
+import type { Chat, ControlResponse, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { ActiveChat } from '../chat/types.js';
 import type { AdapterRegistry } from '../adapters/index.js';
 import type { PlanModeActionHandler } from '../chat/plan-mode-actions.js';
@@ -92,7 +92,7 @@ function makeContext(
     } as any,
     adapters: makeAdapters(actionHandler),
     getActiveChat: vi.fn().mockReturnValue(activeChat),
-    emitEvent: vi.fn(),
+    emitEvent: vi.fn<(event: DaemonEvent) => void>(),
     clearDisplayCache: vi.fn(),
     startChat: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),

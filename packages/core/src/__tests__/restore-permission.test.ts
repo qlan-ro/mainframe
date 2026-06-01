@@ -6,7 +6,6 @@ import { MockBaseAdapter } from './helpers/mock-adapter.js';
 import { MockBaseSession } from './helpers/mock-session.js';
 import { ClaudePlanModeHandler } from '../plugins/builtin/claude/plan-mode-handler.js';
 import type {
-  Chat,
   ChatMessage,
   ControlResponse,
   AdapterSession,
@@ -305,14 +304,14 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
     registry.register(adapter);
   });
 
-  function setupWithPendingPermission(permissionMode: Chat['permissionMode']) {
+  function setupWithPendingPermission() {
     const testChat = {
       id: chatId,
       adapterId: 'mock',
       projectId: 'proj-1',
       claudeSessionId: 'session-1',
       status: 'active',
-      permissionMode,
+      planMode: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       totalCost: 0,
@@ -331,7 +330,7 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
   }
 
   it('escalates permission mode before spawning CLI when approving ExitPlanMode', async () => {
-    setupWithPendingPermission('plan');
+    setupWithPendingPermission();
 
     // Load chat so activeChats is populated
     await manager.loadChat(chatId);
@@ -360,7 +359,7 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
   });
 
   it('escalates to default when no executionMode specified', async () => {
-    setupWithPendingPermission('plan');
+    setupWithPendingPermission();
     await manager.loadChat(chatId);
 
     await manager.respondToPermission(chatId, {
@@ -376,7 +375,7 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
   });
 
   it('does NOT escalate when denying ExitPlanMode', async () => {
-    setupWithPendingPermission('plan');
+    setupWithPendingPermission();
     await manager.loadChat(chatId);
 
     await manager.respondToPermission(chatId, {
@@ -386,9 +385,9 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
       behavior: 'deny',
     });
 
-    // Mode should stay as 'plan'
+    // Mode should stay in plan mode (denying ExitPlanMode does not escalate)
     expect(adapter.lastSpawnOptions).not.toBeNull();
-    expect(adapter.lastSpawnOptions!.permissionMode).toBe('plan');
+    expect(adapter.lastSpawnOptions!.planMode).toBe(true);
   });
 
   it('does NOT escalate for non-ExitPlanMode approvals', async () => {
@@ -430,7 +429,7 @@ describe('respondToPermission with no process (daemon restart scenario)', () => 
   });
 
   it('clears pending permission after responding', async () => {
-    setupWithPendingPermission('plan');
+    setupWithPendingPermission();
     await manager.loadChat(chatId);
 
     expect(manager.hasPendingPermission(chatId)).toBe(true);

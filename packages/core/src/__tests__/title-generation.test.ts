@@ -70,8 +70,8 @@ function createMockDb(settingsGetFn?: (...args: unknown[]) => unknown) {
 
 function titleUpdates(db: ReturnType<typeof createMockDb>): string[] {
   return db.chats.update.mock.calls
-    .filter(([_id, data]: [string, Record<string, unknown>]) => 'title' in data)
-    .map(([_id, data]: [string, { title: string }]) => data.title);
+    .filter((call) => 'title' in (call[1] as Record<string, unknown>))
+    .map((call) => (call[1] as { title: string }).title);
 }
 
 function makeEventCollector(): { events: DaemonEvent[]; onEvent: (e: DaemonEvent) => void } {

@@ -66,7 +66,7 @@ describe('CodexSession', () => {
   });
 
   it('spawns codex app-server with correct args', async () => {
-    const session = new CodexSession({ projectPath: '/tmp/project' });
+    const session = new CodexSession({ projectPath: '/tmp/project', mainframeChatId: 'test-chat' });
     const sink = createSink();
 
     // Spawn will start the handshake which will hang, so we simulate the response
@@ -92,17 +92,17 @@ describe('CodexSession', () => {
   });
 
   it('sets adapterId to codex', () => {
-    const session = new CodexSession({ projectPath: '/tmp' });
+    const session = new CodexSession({ projectPath: '/tmp', mainframeChatId: 'test-chat' });
     expect(session.adapterId).toBe('codex');
   });
 
   it('isSpawned returns false before spawn', () => {
-    const session = new CodexSession({ projectPath: '/tmp' });
+    const session = new CodexSession({ projectPath: '/tmp', mainframeChatId: 'test-chat' });
     expect(session.isSpawned).toBe(false);
   });
 
   it('maps yolo permission mode to never approval + danger-full-access sandbox', async () => {
-    const session = new CodexSession({ projectPath: '/tmp/project' });
+    const session = new CodexSession({ projectPath: '/tmp/project', mainframeChatId: 'test-chat' });
     const sink = createSink();
 
     const spawnPromise = session.spawn({ permissionMode: 'yolo' }, sink);
@@ -146,7 +146,7 @@ describe('CodexSession', () => {
   });
 
   it('kill calls close on client', async () => {
-    const session = new CodexSession({ projectPath: '/tmp' });
+    const session = new CodexSession({ projectPath: '/tmp', mainframeChatId: 'test-chat' });
     const sink = createSink();
 
     const spawnPromise = session.spawn({}, sink);
