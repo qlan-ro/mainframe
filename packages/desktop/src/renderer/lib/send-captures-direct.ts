@@ -39,10 +39,9 @@ export async function sendCapturesDirect(captures: ReadonlyArray<CaptureLike>, e
   const projectId = getActiveProjectId();
   if (!projectId) return;
 
-  await startChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
-  const newChatId = useChatsStore.getState().activeChatId;
-  if (newChatId) {
-    await uploadAndSend(newChatId, captures).catch((err: unknown) => {
+  const chat = await startChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
+  if (chat) {
+    await uploadAndSend(chat.id, captures).catch((err: unknown) => {
       log.warn('uploadAndSend failed', { err });
     });
   }

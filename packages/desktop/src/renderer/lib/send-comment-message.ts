@@ -23,10 +23,9 @@ export function sendCommentMessage(formatted: string, explicitChatId?: string): 
   const projectId = getActiveProjectId();
   if (!projectId) return;
 
-  void startChat(projectId, 'claude', getDefaultModelForAdapter('claude')).then(() => {
-    const newChatId = useChatsStore.getState().activeChatId;
-    if (newChatId) ensureResumedAndSend(newChatId, formatted);
-    else log.warn('no activeChatId after startChat');
+  void startChat(projectId, 'claude', getDefaultModelForAdapter('claude')).then((chat) => {
+    if (chat) ensureResumedAndSend(chat.id, formatted);
+    else log.warn('startChat failed; comment not sent');
   });
 }
 

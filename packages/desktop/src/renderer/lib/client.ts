@@ -153,19 +153,35 @@ export class DaemonClient {
   }
 
   private resolveSubscribeAck(chatId: string): void {
-    const ws = this.subscribeAckWaiters.get(chatId);
-    if (ws) {
-      ws.forEach((r) => r());
+    const arr = this.subscribeAckWaiters.get(chatId);
+    if (arr) {
       this.subscribeAckWaiters.delete(chatId);
+      arr.forEach((r) => r());
     }
   }
 
   private waitForSubscribeAck(chatId: string, timeoutMs = 5000): Promise<void> {
     return new Promise((resolve) => {
       const arr = this.subscribeAckWaiters.get(chatId) ?? [];
-      arr.push(resolve);
+      let settled = false;
+      const settle = (): void => {
+        if (settled) return;
+        settled = true;
+        // Remove this waiter so a timed-out resolver never leaks in the map.
+        const cur = this.subscribeAckWaiters.get(chatId);
+        if (cur) {
+          const i = cur.indexOf(settle);
+          if (i >= 0) cur.splice(i, 1);
+          if (cur.length === 0) this.subscribeAckWaiters.delete(chatId);
+        }
+        resolve();
+      };
+      arr.push(settle);
       this.subscribeAckWaiters.set(chatId, arr);
-      setTimeout(resolve, timeoutMs); // fail-open: never hang resume
+      // Fail-open: never hang resume. A missed ack only happens on a broken
+      // socket, where the reconnect handler re-subscribes visitedChats and the
+      // renderer re-fetches messages via REST — so no state is permanently lost.
+      setTimeout(settle, timeoutMs);
     });
   }
 

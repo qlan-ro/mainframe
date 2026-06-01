@@ -129,9 +129,8 @@ export function LaunchPopover({ onClose }: Props): React.ReactElement {
           if (chatId) {
             daemonClient.sendMessage(chatId, '/launch-config');
           } else {
-            void startChat(activeProject.id, 'claude', getDefaultModelForAdapter('claude')).then(() => {
-              const activeChatId = useChatsStore.getState().activeChatId;
-              if (activeChatId) daemonClient.sendMessage(activeChatId, '/launch-config');
+            void startChat(activeProject.id, 'claude', getDefaultModelForAdapter('claude')).then((chat) => {
+              if (chat) daemonClient.sendMessage(chat.id, '/launch-config');
             });
           }
           onClose();
