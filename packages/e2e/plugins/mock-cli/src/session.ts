@@ -89,8 +89,22 @@ export class ReplaySession implements AdapterSession {
       return;
     }
     this.lastDelay = marker.delayMs;
+    // Coalesce consecutive same-method in-markers: one UI action can drive multiple session calls in
+    // the recording with no outputs between them (e.g. plan approval → respondToPermission twice).
+    // The test issues one action, so consume the duplicates here. Distinct responses always have
+    // `out` events between their markers, so this never merges genuinely separate interactions.
+    let next = this.state.events[this.state.cursor];
+    while (next && next.dir === 'in' && next.method === expected) {
+      consumeInput(this.state);
+      next = this.state.events[this.state.cursor];
+    }
     this.emit(drainOutputs(this.state));
   }
+
+  // Cap per-event replay delay: keep a brief gap so intermediate states (e.g. "Thinking") still
+  // render, but never replay the AI's real multi-second latency — that would blow past Playwright's
+  // per-test timeout on multi-turn specs (e.g. plan approval).
+  private static readonly MAX_DELAY_MS = 120;
 
   private emit(batch: RecordedEvent[]): void {
     if (batch.length === 0) return;
@@ -102,7 +116,7 @@ export class ReplaySession implements AdapterSession {
         continue;
       }
       if (!sink) continue;
-      const offset = Math.max(0, ev.delayMs - base);
+      const offset = Math.min(Math.max(0, ev.delayMs - base), ReplaySession.MAX_DELAY_MS);
       const fire = () => sink[ev.method]?.(...ev.args);
       if (offset > 0) setTimeout(fire, offset);
       else fire();

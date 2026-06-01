@@ -35,6 +35,8 @@ Each verified solo with `E2E_MODE=record` → `E2E_MODE=mock` → green:
 | `47-thread` | `thread` | long-message read-more, tool-result cards |
 | `10-context-tab` | `context-tab` | **Changes tab (session) + files tab + review modal** — now mockable via the `fx` feature |
 | `12-changes-tab` | `changes-tab` | **Changes tab session + uncommitted (git) + diff viewer** — now mockable via `fx` + `loadHistory` |
+| `32-chat-status-context` | `chat-status` | session-bar adapter label (mode-aware), Thinking state, context-usage % |
+| `07-plan-approval` | `plan-approval` | plan card → approve → permission → execute, plan revision (two chats) |
 
 ## ✅ Side-effect specs — now mockable via the `fx` feature
 
@@ -44,25 +46,31 @@ the project dir. Combined with `ReplaySession.loadHistory()` (session-mode file 
 replay path remapping (diff viewer). `10-context-tab` and `12-changes-tab` both pass 4/4 in mock
 (solo). This removes the "can't mock side-effects" limit for git/file assertions.
 
+## ✅ Two replay fixes that unblocked the harder specs
+
+- **Delay cap** (`ReplaySession.MAX_DELAY_MS`): replay never reproduces the AI's real multi-second
+  latency (which blew past Playwright's 30 s per-test timeout on multi-turn specs); a brief gap is
+  kept so intermediate states like "Thinking" still render. Cut 32 from 31 s → 6 s.
+- **Marker coalescing** (`advance`): one UI action can drive *multiple* session calls in the
+  recording (e.g. plan approval → `respondToPermission` twice with no outputs between). The replay
+  consumes consecutive same-method `in` markers on a single action. This fixed `07`'s approve→
+  permission hang. Distinct responses always have `out` events between markers, so it never merges
+  genuinely separate interactions (06's deny/allow flow is regression-clean).
+
 ## ❌ Still not mockable
 
 | Spec | Why |
 |------|-----|
-| `32-chat-status-context` | asserts the adapter label is **"Claude Code"** — in mock it's "Mock CLI" (test-design, not side-effect; relax the assertion or expose a mocked display name) |
-| `07-plan-approval` | plan-mode flow is multi-turn + nondeterministic; recordable only by pinning the prompt/model |
+| `08-ask-user-question` | depends on the model *choosing* to ask (nondeterministic to record) |
+| `21-multi-chat` | two concurrent live sessions on one project — fixture ordering is fragile |
+| `22-app-restart` | restarts the daemon mid-test; replay across a resume is unsupported |
+| `36-codex-plan-approval` | uses the **codex** adapter; the record-wrapper only wraps `claude` |
+| `27`, `33` | already `test.describe.skip` upstream (unrelated to mock) |
 
 (Live processes/network are handled by the launch subsystem and run for real in any mode — the
 sandbox specs already pass in mock. Truly nondeterministic model *choices* are recordable only by
-pinning the prompt/model at record time.)
-
-## ⏭️ Not attempted (complex / likely unmockable)
-
-- `08-ask-user-question` — depends on the model *choosing* to ask (nondeterministic to record).
-- `21-multi-chat` — two sessions on one project (per-key index `.0`/`.1`; replay order fragile).
-- `22-app-restart` — restarts the daemon mid-test; replay across a resume is unsupported.
-- `27-custom-commands` — 4 separate `launchApp()` per file (4 sessions to key).
-- `33-task-progress` — subagents (Task tool); Haiku rarely spawns them.
-- `36-codex-plan-approval` — uses the **codex** adapter; the record-wrapper only wraps `claude`.
+pinning the prompt/model at record time. `21`/`22`/`36` are addressable with more work — multi-session
+ordering, resume support, and wrapping the codex adapter respectively.)
 
 ## ⚠️ Operational: suite-run flakiness
 

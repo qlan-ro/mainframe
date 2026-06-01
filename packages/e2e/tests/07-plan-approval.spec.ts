@@ -1,18 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { skipUnrecordedInMock } from '../helpers/mock-skip.js';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
 import { sendMessage, waitForAIIdle, waitForPermissionCard, waitForPlanCard } from '../helpers/wait.js';
-
-test.beforeEach(skipUnrecordedInMock);
 
 test.describe('§7 Plan approval', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'plan-approval' });
     // Custom CLAUDE.md: allow plan mode but skip clarifying questions.
     project = await createTestProject(fixture.page, {
       claudeMd:
