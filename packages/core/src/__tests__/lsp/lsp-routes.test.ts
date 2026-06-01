@@ -28,12 +28,13 @@ describe('GET /api/lsp/languages', () => {
       .query({ projectId: '550e8400-e29b-41d4-a716-446655440000' });
 
     expect(res.status).toBe(200);
-    expect(res.body.languages).toHaveLength(3);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.languages).toHaveLength(3);
 
-    const ts = res.body.languages.find((l: any) => l.id === 'typescript');
+    const ts = res.body.data.languages.find((l: any) => l.id === 'typescript');
     expect(ts).toEqual({ id: 'typescript', installed: true, active: false });
 
-    const java = res.body.languages.find((l: any) => l.id === 'java');
+    const java = res.body.data.languages.find((l: any) => l.id === 'java');
     expect(java).toEqual({ id: 'java', installed: false, active: false });
   });
 

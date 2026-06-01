@@ -3,6 +3,7 @@ import { useChatsStore } from '../store/chats';
 import { getActiveProjectId } from '../hooks/useActiveProjectId.js';
 import { getDefaultModelForAdapter } from './adapters';
 import { createLogger } from './logger';
+import { startChat } from './chat-actions';
 
 const log = createLogger('renderer:chat');
 
@@ -22,23 +23,10 @@ export function sendCommentMessage(formatted: string, explicitChatId?: string): 
   const projectId = getActiveProjectId();
   if (!projectId) return;
 
-  const timeout = setTimeout(() => {
-    unsub();
-    log.warn('timed out waiting for chat.created');
-  }, 5000);
-
-  const unsub = useChatsStore.subscribe((state, prev) => {
-    if (state.chats.length > prev.chats.length) {
-      const newChat = state.chats.find((c) => !prev.chats.some((p) => p.id === c.id));
-      if (newChat) {
-        clearTimeout(timeout);
-        unsub();
-        ensureResumedAndSend(newChat.id, formatted);
-      }
-    }
+  void startChat(projectId, 'claude', getDefaultModelForAdapter('claude')).then((chat) => {
+    if (chat) ensureResumedAndSend(chat.id, formatted);
+    else log.warn('startChat failed; comment not sent');
   });
-
-  daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'));
 }
 
 function ensureResumedAndSend(chatId: string, content: string): void {

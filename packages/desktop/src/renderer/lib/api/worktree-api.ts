@@ -1,3 +1,4 @@
+import type { ApiResponse } from '@qlan-ro/mainframe-types';
 import { API_BASE, fetchJson, postJson } from './http';
 
 export async function enableWorktree(chatId: string, baseBranch: string, branchName: string): Promise<void> {
@@ -13,13 +14,22 @@ export async function forkToWorktree(
   baseBranch: string,
   branchName: string,
 ): Promise<{ chatId: string }> {
-  return postJson<{ chatId: string }>(`${API_BASE}/api/chats/${chatId}/fork-worktree`, { baseBranch, branchName });
+  const json = await postJson<ApiResponse<{ chatId: string }>>(`${API_BASE}/api/chats/${chatId}/fork-worktree`, {
+    baseBranch,
+    branchName,
+  });
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getWorktrees(
   projectId: string,
 ): Promise<{ worktrees: { path: string; branch: string | null }[] }> {
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/git/worktrees`);
+  const json = await fetchJson<ApiResponse<{ worktrees: { path: string; branch: string | null }[] }>>(
+    `${API_BASE}/api/projects/${projectId}/git/worktrees`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function attachWorktree(chatId: string, worktreePath: string, branchName: string): Promise<void> {

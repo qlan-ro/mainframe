@@ -4,6 +4,7 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
+import { ok } from './respond.js';
 import { createChildLogger } from '../../logger.js';
 import { extractSessionFilePaths } from '../../messages/session-files.js';
 import { readToolResultFromJsonl } from '../../messages/read-tool-result-from-jsonl.js';
@@ -109,13 +110,13 @@ export function chatRoutes(ctx: RouteContext): Router {
 
   router.patch('/api/chats/:id/title', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
-    const { title } = req.body as { title?: string };
-    if (!title || typeof title !== 'string' || !title.trim()) {
+    const parsed = titleSchema.safeParse(req.body);
+    if (!parsed.success) {
       res.status(400).json({ success: false, error: 'Title is required' });
       return;
     }
     try {
-      ctx.chats.renameChat(chatId, title.trim());
+      ctx.chats.renameChat(chatId, parsed.data.title);
       const chat = ctx.chats.getChat(chatId);
       if (!chat) {
         res.status(404).json({ success: false, error: 'Chat not found' });
@@ -128,6 +129,7 @@ export function chatRoutes(ctx: RouteContext): Router {
     }
   });
 
+  const titleSchema = z.object({ title: z.string().trim().min(1) });
   const pinSchema = z.object({ pinned: z.boolean() });
   const effortSchema = z.object({ effort: z.enum(['low', 'medium', 'high']).nullable() });
 
@@ -201,7 +203,7 @@ export function chatRoutes(ctx: RouteContext): Router {
       // in-memory cache during an active session.
       const messages = await ctx.chats.getMessagesFromDisk(chatId);
       const files = extractSessionFilePaths(messages);
-      res.json({ files });
+      ok(res, { files });
     }),
   );
 

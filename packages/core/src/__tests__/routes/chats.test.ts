@@ -18,6 +18,7 @@ function createMockContext(): RouteContext {
       listFiltered: vi.fn(),
       archiveChat: vi.fn(),
       unarchiveChat: vi.fn(),
+      renameChat: vi.fn(),
       getMessages: vi.fn(),
       getMessagesFromDisk: vi.fn(),
       getDisplayMessages: vi.fn(),
@@ -286,6 +287,52 @@ describe('chatRoutes', () => {
     });
   });
 
+  describe('PATCH /api/chats/:id/title', () => {
+    it('renames chat and returns updated chat', () => {
+      const updatedChat = { id: 'c1', projectId: 'p1', title: 'New Title' };
+      (ctx.chats.renameChat as any) = vi.fn();
+      (ctx.chats.getChat as any).mockReturnValue(updatedChat);
+
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'patch', '/api/chats/:id/title');
+      const res = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: { title: 'New Title' } }, res, vi.fn());
+
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: updatedChat });
+    });
+
+    it('returns 400 when title is missing', () => {
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'patch', '/api/chats/:id/title');
+      const res = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: {} }, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('returns 400 when title is empty string', () => {
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'patch', '/api/chats/:id/title');
+      const res = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: { title: '   ' } }, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('returns 400 when title is not a string', () => {
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'patch', '/api/chats/:id/title');
+      const res = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: { title: 42 } }, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
   describe('GET /api/chats/:id/session-files', () => {
     it('returns session file paths from message history', async () => {
       const messages = [
@@ -307,7 +354,7 @@ describe('chatRoutes', () => {
       await flushPromises();
 
       expect(ctx.chats.getMessagesFromDisk).toHaveBeenCalledWith('c1');
-      expect(res.json).toHaveBeenCalledWith({ files: ['src/index.ts'] });
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: { files: ['src/index.ts'] } });
     });
   });
 });

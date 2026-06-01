@@ -5,7 +5,7 @@ import type { LaunchProcessStatus } from './launch.js';
 
 export type DaemonEvent =
   | { type: 'connection.ready'; clientId: string }
-  | { type: 'chat.created'; chat: Chat; source?: 'import'; originClientId?: string }
+  | { type: 'chat.created'; chat: Chat; source?: 'import' }
   | { type: 'chat.updated'; chat: Chat; reason?: 'completed' | 'error' | 'interrupted' }
   | { type: 'chat.ended'; chatId: string }
   | { type: 'process.started'; chatId: string; process: AdapterProcess }
@@ -76,22 +76,12 @@ export type DaemonEvent =
     }
   | { type: 'file:changed'; path: string }
   | { type: 'subscribe:file:ack'; requestedPath: string; resolvedPath: string }
+  | { type: 'subscribe:ack'; chatId: string }
   | { type: 'background_task.started'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.updated'; chatId: string; task: import('./background-task.js').BackgroundTask }
   | { type: 'background_task.ended'; chatId: string; task: import('./background-task.js').BackgroundTask };
 
 export type ClientEvent =
-  | {
-      type: 'chat.create';
-      projectId: string;
-      adapterId: string;
-      model?: string;
-      permissionMode?: 'default' | 'acceptEdits' | 'yolo';
-      worktreePath?: string;
-      branchName?: string;
-    }
-  | { type: 'chat.resume'; chatId: string }
-  | { type: 'chat.end'; chatId: string }
   | {
       type: 'message.send';
       chatId: string;
@@ -102,18 +92,7 @@ export type ClientEvent =
       };
     }
   | { type: 'permission.respond'; chatId: string; response: import('./adapter.js').ControlResponse }
-  | {
-      type: 'chat.updateConfig';
-      chatId: string;
-      adapterId?: string;
-      model?: string;
-      permissionMode?: 'default' | 'acceptEdits' | 'yolo';
-      planMode?: boolean;
-    }
-  | { type: 'chat.interrupt'; chatId: string }
   | { type: 'subscribe'; chatId: string }
   | { type: 'unsubscribe'; chatId: string }
-  | { type: 'message.queue.edit'; chatId: string; messageId: string; content: string }
-  | { type: 'message.queue.cancel'; chatId: string; messageId: string }
   | { type: 'subscribe:file'; path: string }
   | { type: 'unsubscribe:file'; path: string };

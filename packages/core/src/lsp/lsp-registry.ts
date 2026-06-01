@@ -86,7 +86,10 @@ export class LspRegistry {
     }
 
     try {
-      await execFileAsync('/bin/sh', ['-c', `command -v ${config.command}`]);
+      // Shell is needed for the `command -v` builtin, but the command must be a
+      // positional arg ($1) — never interpolated into the script — so it can't be
+      // parsed as shell syntax.
+      await execFileAsync('/bin/sh', ['-c', 'command -v "$1"', 'sh', config.command]);
       return { command: config.command, args: config.args };
     } catch (err) {
       log.debug({ languageId, cmd: config.command, err }, 'External LSP server not found on PATH');

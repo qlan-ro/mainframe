@@ -1,5 +1,12 @@
-import type { ClientEvent, DaemonEvent, ControlResponse } from '@qlan-ro/mainframe-types';
+import type { ClientEvent, DaemonEvent, ControlResponse, ExecutionMode } from '@qlan-ro/mainframe-types';
 import { createLogger } from './logger';
+import {
+  interruptChatRest,
+  resumeChatRest,
+  editQueuedMessageRest,
+  cancelQueuedMessageRest,
+  updateChatConfig as updateChatConfigRest,
+} from './api/chats-api';
 
 const env = (import.meta as { env?: Record<string, string> }).env ?? {};
 const host: string = env['VITE_DAEMON_HOST'] ?? '127.0.0.1';
@@ -18,6 +25,7 @@ export class DaemonClient {
   private connectionListeners = new Set<() => void>();
   private clientId: string | null = null;
   readonly visitedChats = new Set<string>();
+  private subscribeAckWaiters = new Map<string, Array<() => void>>();
 
   /** Stable id assigned by the daemon when this WS connection was accepted. */
   getClientId(): string | null {
@@ -64,6 +72,9 @@ export class DaemonClient {
         if (data.type === 'connection.ready') {
           this.clientId = data.clientId;
           return;
+        }
+        if (data.type === 'subscribe:ack') {
+          this.resolveSubscribeAck(data.chatId);
         }
         this.eventHandlers.forEach((handler) => handler(data));
       } catch (error) {
@@ -141,52 +152,66 @@ export class DaemonClient {
     }
   }
 
-  // TODO: Migrate request-response actions (chat.create, chat.interrupt, etc.) to REST endpoints.
-  // Reserve WS for event-based streaming (subscribe, message.send).
-  createChat(
-    projectId: string,
-    adapterId: string,
-    model?: string,
-    permissionMode?: 'default' | 'acceptEdits' | 'yolo',
-    attachWorktree?: { worktreePath: string; branchName: string },
-  ): void {
-    this.send({
-      type: 'chat.create',
-      projectId,
-      adapterId,
-      model,
-      permissionMode,
-      worktreePath: attachWorktree?.worktreePath,
-      branchName: attachWorktree?.branchName,
+  private resolveSubscribeAck(chatId: string): void {
+    const arr = this.subscribeAckWaiters.get(chatId);
+    if (arr) {
+      this.subscribeAckWaiters.delete(chatId);
+      arr.forEach((r) => r());
+    }
+  }
+
+  private waitForSubscribeAck(chatId: string, timeoutMs = 5000): Promise<void> {
+    return new Promise((resolve) => {
+      const arr = this.subscribeAckWaiters.get(chatId) ?? [];
+      let settled = false;
+      const settle = (): void => {
+        if (settled) return;
+        settled = true;
+        // Remove this waiter so a timed-out resolver never leaks in the map.
+        const cur = this.subscribeAckWaiters.get(chatId);
+        if (cur) {
+          const i = cur.indexOf(settle);
+          if (i >= 0) cur.splice(i, 1);
+          if (cur.length === 0) this.subscribeAckWaiters.delete(chatId);
+        }
+        resolve();
+      };
+      arr.push(settle);
+      this.subscribeAckWaiters.set(chatId, arr);
+      // Fail-open: never hang resume. A missed ack only happens on a broken
+      // socket, where the reconnect handler re-subscribes visitedChats and the
+      // renderer re-fetches messages via REST — so no state is permanently lost.
+      setTimeout(settle, timeoutMs);
     });
-    log.info('createChat', { projectId, adapterId, model, permissionMode, attachWorktree });
   }
 
   updateChatConfig(
     chatId: string,
     adapterId?: string,
     model?: string,
-    permissionMode?: 'default' | 'acceptEdits' | 'yolo',
+    permissionMode?: ExecutionMode,
     planMode?: boolean,
   ): void {
-    this.send({ type: 'chat.updateConfig', chatId, adapterId, model, permissionMode, planMode });
-    log.info('updateChatConfig', { chatId, adapterId, model, permissionMode, planMode });
+    void updateChatConfigRest(chatId, { adapterId, model, permissionMode, planMode }).catch((e) =>
+      log.warn('updateChatConfig failed', { chatId, err: String(e) }),
+    );
   }
 
   resumeChat(chatId: string): void {
     this.visitedChats.add(chatId);
-    this.send({ type: 'chat.resume', chatId });
-    log.debug('resumeChat', { chatId });
-  }
-
-  endChat(chatId: string): void {
-    this.send({ type: 'chat.end', chatId });
-    log.info('endChat', { chatId });
+    void (async () => {
+      try {
+        this.subscribe(chatId);
+        await this.waitForSubscribeAck(chatId);
+        await resumeChatRest(chatId);
+      } catch (e) {
+        log.warn('resumeChat failed', { chatId, err: String(e) });
+      }
+    })();
   }
 
   interruptChat(chatId: string): void {
-    this.send({ type: 'chat.interrupt', chatId });
-    log.info('interruptChat', { chatId });
+    void interruptChatRest(chatId).catch((e) => log.warn('interruptChat failed', { chatId, err: String(e) }));
   }
 
   sendMessage(
@@ -210,13 +235,15 @@ export class DaemonClient {
   }
 
   editQueuedMessage(chatId: string, messageId: string, content: string): void {
-    this.send({ type: 'message.queue.edit', chatId, messageId, content });
-    log.info('editQueuedMessage', { chatId, messageId });
+    void editQueuedMessageRest(chatId, messageId, content).catch((e) =>
+      log.warn('editQueuedMessage failed', { chatId, messageId, err: String(e) }),
+    );
   }
 
   cancelQueuedMessage(chatId: string, messageId: string): void {
-    this.send({ type: 'message.queue.cancel', chatId, messageId });
-    log.info('cancelQueuedMessage', { chatId, messageId });
+    void cancelQueuedMessageRest(chatId, messageId).catch((e) =>
+      log.warn('cancelQueuedMessage failed', { chatId, messageId, err: String(e) }),
+    );
   }
 
   subscribe(chatId: string): void {

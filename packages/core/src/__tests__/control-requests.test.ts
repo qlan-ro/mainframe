@@ -10,6 +10,7 @@ import type {
   Chat,
   AdapterProcess,
   AdapterSession,
+  ExecutionMode,
   SessionOptions,
   SessionSpawnOptions,
   ChatMessage,
@@ -84,8 +85,8 @@ describe('ClaudeAdapter control requests', () => {
     expect(payload.request.mode).toBe('bypassPermissions');
   });
 
-  it('setPermissionMode passes through all other modes unchanged', async () => {
-    const modes = ['default', 'plan', 'acceptEdits'];
+  it('setPermissionMode passes through default and acceptEdits unchanged', async () => {
+    const modes = ['default', 'acceptEdits'] as const;
 
     for (const mode of modes) {
       const { session, written } = injectMockChild(adapter, chatId);
@@ -95,6 +96,16 @@ describe('ClaudeAdapter control requests', () => {
       const payload = JSON.parse(written[0]!.trim());
       expect(payload.request.mode).toBe(mode);
     }
+  });
+
+  it('setPlanMode(true) sends plan mode to CLI', async () => {
+    const { session, written } = injectMockChild(adapter, chatId);
+
+    await session.setPlanMode(true);
+
+    expect(written).toHaveLength(1);
+    const payload = JSON.parse(written[0]!.trim());
+    expect(payload.request.mode).toBe('plan');
   });
 
   it('setModel sends correct control_request payload', async () => {
@@ -202,9 +213,13 @@ class MockClaudeSession extends MockBaseSession {
     this.callbacks.onKill();
   }
 
-  override async setPermissionMode(mode: string): Promise<void> {
+  override async setPermissionMode(mode: ExecutionMode): Promise<void> {
     if (!this.isSpawned) throw new Error(`Session ${this.id} not spawned`);
     const cliMode = mode === 'yolo' ? 'bypassPermissions' : mode;
+    this.writeMode(cliMode);
+  }
+
+  private writeMode(cliMode: string): void {
     const payload = {
       type: 'control_request',
       request_id: crypto.randomUUID(),
@@ -227,9 +242,8 @@ class MockClaudeSession extends MockBaseSession {
 
   override async setPlanMode(on: boolean): Promise<void> {
     this.setPlanModeCalls.push(on);
-    // Mirror Claude's behavior: setPlanMode(on) delegates to setPermissionMode
-    // with 'plan' when on, or the stored base mode when off.
-    await this.setPermissionMode(on ? 'plan' : 'default');
+    // Mirror Claude's behavior: plan mode is handled separately from ExecutionMode.
+    this.writeMode(on ? 'plan' : 'default');
   }
 
   override async sendMessage(): Promise<void> {}

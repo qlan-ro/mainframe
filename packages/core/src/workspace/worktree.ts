@@ -1,15 +1,10 @@
-import { execFile, execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import type { ProjectsRepository } from '../db/projects.js';
 import { createChildLogger } from '../logger.js';
 import { execGit } from '../server/routes/exec-git.js';
 
 const log = createChildLogger('worktree-backfill');
-
-const execFileAsync = promisify(execFile);
 
 export interface WorktreeEntry {
   path: string;
@@ -42,11 +37,10 @@ export function parseWorktreeList(output: string): WorktreeEntry[] {
 
 export async function getWorktrees(projectPath: string): Promise<WorktreeEntry[]> {
   try {
-    const { stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain'], {
-      cwd: projectPath,
-    });
+    const stdout = await execGit(['worktree', 'list', '--porcelain'], projectPath);
     return parseWorktreeList(stdout);
   } catch {
+    /* best-effort: not a git repo / no worktrees */
     return [];
   }
 }
@@ -56,32 +50,31 @@ export interface WorktreeInfo {
   branchName: string;
 }
 
-export function isGitRepo(projectPath: string): boolean {
+export async function isGitRepo(projectPath: string): Promise<boolean> {
   try {
-    execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: projectPath, encoding: 'utf-8', stdio: 'pipe' });
+    await execGit(['rev-parse', '--is-inside-work-tree'], projectPath);
     return true;
   } catch {
+    /* best-effort: not a git repo */
     return false;
   }
 }
 
-export function createWorktree(
+export async function createWorktree(
   projectPath: string,
-  chatId: string,
   dirName: string,
   baseBranch: string,
   branchName: string,
-): WorktreeInfo {
+): Promise<WorktreeInfo> {
   const sanitizedBranch = branchName.replace(/\//g, '-');
   const worktreeDir = path.join(projectPath, dirName);
   const worktreePath = path.join(worktreeDir, sanitizedBranch);
 
-  mkdirSync(worktreeDir, { recursive: true });
-  execFileSync('git', ['worktree', 'add', '-b', branchName, worktreePath, baseBranch], {
-    cwd: projectPath,
-    encoding: 'utf-8',
-    stdio: 'pipe',
-  });
+  await mkdir(worktreeDir, { recursive: true });
+  // No timeout: `worktree add` can clone/checkout a large tree and run hooks,
+  // which legitimately exceeds the default 30s cap (the previous sync impl had
+  // no timeout either).
+  await execGit(['worktree', 'add', '-b', branchName, worktreePath, baseBranch], projectPath, { timeout: 0 });
   return { worktreePath, branchName };
 }
 

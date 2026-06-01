@@ -35,8 +35,9 @@ describe('background-tasks routes', () => {
     );
     const res = await request(makeApp({ tracker })).get('/api/chats/c1/background-tasks');
     expect(res.status).toBe(200);
-    expect(res.body.tasks).toHaveLength(1);
-    expect(res.body.tasks[0].id).toBe('t1');
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.tasks).toHaveLength(1);
+    expect(res.body.data.tasks[0].id).toBe('t1');
   });
 
   it('GET /output → 409 no_output when outputPath is null (adopted task without path)', async () => {
@@ -58,7 +59,7 @@ describe('background-tasks routes', () => {
     });
     const res = await request(makeApp({ tracker })).get('/api/chats/c1/background-tasks/t1/output');
     expect(res.status).toBe(409);
-    expect(res.body).toEqual({ reason: 'no_output' });
+    expect(res.body).toEqual({ success: false, error: 'no_output' });
   });
 
   it('GET /output → 404 when task missing', async () => {
@@ -75,7 +76,7 @@ describe('background-tasks routes', () => {
       '/api/chats/c1/background-tasks/t1/output',
     );
     expect(res.status).toBe(409);
-    expect(res.body).toEqual({ reason: 'invalid_path' });
+    expect(res.body).toEqual({ success: false, error: 'invalid_path' });
   });
 
   it('GET /output → 200 + bounded tail when validator accepts', async () => {
@@ -100,7 +101,7 @@ describe('background-tasks routes', () => {
     expect(res.status).toBe(404);
   });
 
-  it('POST /kill → 204 on success', async () => {
+  it('POST /kill → 200 on success', async () => {
     const tracker = new BackgroundTaskTracker();
     tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
     const session = { stopBackgroundTask: vi.fn().mockResolvedValue({ ok: true }) };
@@ -108,7 +109,8 @@ describe('background-tasks routes', () => {
     const res = await request(makeApp({ tracker, sessionForChat: () => session, killImpl })).post(
       '/api/chats/c1/background-tasks/t1/kill',
     );
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
   });
 
   it('POST /kill → 502 + error body when kill fails', async () => {
@@ -121,6 +123,41 @@ describe('background-tasks routes', () => {
     );
     expect(res.status).toBe(502);
     expect(res.body.error).toBe('timeout');
+  });
+
+  // A rejected promise inside a bare async handler escapes Express's error path
+  // (hung request / unlogged crash) unless the handler is wrapped in asyncHandler.
+  function makeAppWithErrorTrap(opts: Parameters<typeof makeApp>[0]) {
+    const app = makeApp(opts);
+    app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(500).json({ error: String(err) });
+    });
+    return app;
+  }
+
+  it('GET /output → 500 (via error middleware) when the validator rejects, not a hung request', async () => {
+    const tracker = new BackgroundTaskTracker();
+    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
+    tracker.end('c1', 't1', { status: 'completed', outputPath: '/etc/passwd', summary: '', usage: null });
+    const res = await request(
+      makeAppWithErrorTrap({
+        tracker,
+        validator: async () => {
+          throw new Error('validator boom');
+        },
+      }),
+    ).get('/api/chats/c1/background-tasks/t1/output');
+    expect(res.status).toBe(500);
+  });
+
+  it('POST /kill → 500 (via error middleware) when killImpl rejects, not a hung request', async () => {
+    const tracker = new BackgroundTaskTracker();
+    tracker.start('c1', { id: 't1', toolName: 'Bash', toolUseId: 'tu', command: 'x', description: '' }, DUMMY_PATH);
+    const killImpl = vi.fn().mockRejectedValue(new Error('kill boom'));
+    const res = await request(
+      makeAppWithErrorTrap({ tracker, sessionForChat: () => ({ stopBackgroundTask: vi.fn() }), killImpl }),
+    ).post('/api/chats/c1/background-tasks/t1/kill');
+    expect(res.status).toBe(500);
   });
 
   it('kill route falls back to OS path when no session is active', async () => {
@@ -151,7 +188,8 @@ describe('background-tasks routes', () => {
         }),
       );
     const res = await request(app).post('/api/chats/chat-a/background-tasks/rec-1/kill');
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
     expect(killImpl).toHaveBeenCalledWith(expect.objectContaining({ session: null }));
   });
 });

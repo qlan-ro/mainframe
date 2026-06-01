@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { nanoid } from 'nanoid';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
-import { resolveAndValidatePath, resolveClaudeConfigPath } from './path-utils.js';
+import { resolveReadablePath } from './path-utils.js';
 import { validate, AddMentionBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';
+import { ok, fail } from './respond.js';
 import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:context');
@@ -53,18 +54,17 @@ export function contextRoutes(ctx: RouteContext): Router {
 
       try {
         const sessionBase = chat.worktreePath ?? project.path;
-        const fullPath =
-          resolveAndValidatePath(sessionBase, filePath) ?? resolveClaudeConfigPath(sessionBase, filePath);
+        const fullPath = resolveReadablePath(sessionBase, filePath);
         if (!fullPath) {
           res.status(403).json({ success: false, error: 'Path outside project' });
           return;
         }
 
         const content = await readFile(fullPath, 'utf-8');
-        res.json({ path: filePath, content });
+        ok(res, { path: filePath, content });
       } catch (err) {
         logger.warn({ err, path: filePath }, 'Failed to read session file');
-        res.status(404).json({ success: false, error: 'File not found' });
+        fail(res, 404, 'File not found');
       }
     }),
   );

@@ -11,7 +11,6 @@ function createMockContext(): RouteContext {
         getByPath: vi.fn(),
         create: vi.fn(),
         remove: vi.fn(),
-        removeWithChats: vi.fn(),
         updateLastOpened: vi.fn(),
       },
       chats: { list: vi.fn() },
@@ -147,7 +146,9 @@ describe('projectRoutes', () => {
       await handler({ params: { id: 'p1' }, query: {} }, res, vi.fn());
 
       expect((ctx.chats as any).removeProject).toHaveBeenCalledWith('p1');
-      expect(ctx.db.projects.removeWithChats).not.toHaveBeenCalled();
+      // The route delegates to chats.removeProject (which owns the cascade); it must
+      // not reach past it to the raw repository delete.
+      expect(ctx.db.projects.remove).not.toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith({ success: true });
     });
 

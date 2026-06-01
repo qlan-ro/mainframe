@@ -12,33 +12,25 @@ import type { PlanModeActionHandler, PlanActionContext } from '../../../chat/pla
  */
 export class CodexPlanModeHandler implements PlanModeActionHandler {
   async onApprove(response: ControlResponse, ctx: PlanActionContext): Promise<void> {
-    const exec = (response.executionMode ?? 'default') as 'default' | 'acceptEdits' | 'yolo';
+    const exec = response.executionMode ?? 'default';
     ctx.chat.planMode = false;
     ctx.chat.permissionMode = exec;
     ctx.db.chats.update(ctx.chatId, { planMode: false, permissionMode: exec });
     ctx.emitEvent({ type: 'chat.updated', chat: ctx.chat });
 
-    const session = ctx.active.session as unknown as {
-      isSpawned: boolean;
-      setPlanMode?(on: boolean): void;
-      respondToPermission(r: ControlResponse): Promise<void>;
-    } | null;
+    const session = ctx.active.session;
     if (session?.isSpawned) {
-      session.setPlanMode?.(false);
+      void session.setPlanMode(false);
       await session.respondToPermission(response);
     }
   }
 
   async onApproveAndClearContext(response: ControlResponse, ctx: PlanActionContext): Promise<void> {
-    const exec = (response.executionMode ?? 'default') as 'default' | 'acceptEdits' | 'yolo';
+    const exec = response.executionMode ?? 'default';
     const planRaw = response.updatedInput?.plan;
     const plan = typeof planRaw === 'string' ? planRaw : undefined;
 
-    const session = ctx.active.session as unknown as {
-      isSpawned: boolean;
-      respondToPermission(r: ControlResponse): Promise<void>;
-      kill(): Promise<void>;
-    } | null;
+    const session = ctx.active.session;
 
     if (session?.isSpawned) {
       // Close the requestUserInput by denying first so Codex unblocks the turn.
@@ -73,10 +65,7 @@ export class CodexPlanModeHandler implements PlanModeActionHandler {
   }
 
   async onReject(response: ControlResponse, ctx: PlanActionContext): Promise<void> {
-    const session = ctx.active.session as unknown as {
-      isSpawned: boolean;
-      respondToPermission(r: ControlResponse): Promise<void>;
-    } | null;
+    const session = ctx.active.session;
     if (session?.isSpawned) {
       await session.respondToPermission(response);
     }
@@ -87,10 +76,7 @@ export class CodexPlanModeHandler implements PlanModeActionHandler {
     // Forward unchanged — the approval-handler's resolve() translates the
     // free-form answer for Codex (falling back to the deny option if Codex
     // rejects free-form for this requestUserInput).
-    const session = ctx.active.session as unknown as {
-      isSpawned: boolean;
-      respondToPermission(r: ControlResponse): Promise<void>;
-    } | null;
+    const session = ctx.active.session;
     if (session?.isSpawned) {
       await session.respondToPermission(response);
     }

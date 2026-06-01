@@ -174,11 +174,6 @@ export function convertUserContent(content: MessageContent[]): {
 
 /** Apply tool grouping (explore groups, task groups, progress accumulation). */
 export function applyToolGrouping(content: DisplayContent[], categories: ToolCategories): DisplayContent[] {
-  // The grouping functions only understand text and tool-call PartEntry values.
-  // Non-groupable content (thinking, image, etc.) is encoded as sentinel text
-  // entries (`\0ng:N`) so they pass through grouping untouched, then decoded back.
-  const nonGroupable: DisplayContent[] = [];
-
   const parts: PartEntry[] = content.map((c) => {
     if (c.type === 'tool_call') {
       return {
@@ -193,13 +188,13 @@ export function applyToolGrouping(content: DisplayContent[], categories: ToolCat
       };
     }
     if (c.type === 'text') return { type: 'text' as const, text: c.text, ...withParentId(c.parentToolUseId) };
-    // Encode non-groupable content as sentinel text so it survives grouping in-place.
-    // Carry parentToolUseId so groupTaskChildren can include sentinels belonging to a subagent.
-    const idx = nonGroupable.length;
-    nonGroupable.push(c);
+    // Non-groupable content (thinking, image, etc.) is carried as a first-class
+    // passthrough entry so it flows through grouping in-place without encoding.
+    // parentToolUseId is preserved so groupTaskChildren can include passthrough
+    // entries belonging to a subagent's children.
     return {
-      type: 'text' as const,
-      text: `\0ng:${idx}`,
+      type: 'passthrough' as const,
+      content: c,
       ...withParentId('parentToolUseId' in c ? c.parentToolUseId : undefined),
     };
   });
@@ -207,118 +202,132 @@ export function applyToolGrouping(content: DisplayContent[], categories: ToolCat
   let grouped = groupToolCallParts(parts, categories);
   grouped = groupTaskChildren(grouped, categories);
 
-  return convertGroupedPartsToDisplay(grouped, content, categories, nonGroupable);
+  return convertGroupedPartsToDisplay(grouped, content, categories);
 }
-
-const NG_SENTINEL_RE = /^\0ng:(\d+)$/;
 
 /** Convert PartEntry[] back to DisplayContent[], handling virtual group entries. */
 function convertGroupedPartsToDisplay(
   parts: PartEntry[],
   originalContent: DisplayContent[],
   categories: ToolCategories,
-  nonGroupable: DisplayContent[] = [],
 ): DisplayContent[] {
   const result: DisplayContent[] = [];
 
   for (const part of parts) {
-    if (part.type === 'text') {
-      // Decode sentinel markers back to original non-groupable content
-      const match = NG_SENTINEL_RE.exec(part.text);
-      if (match) {
-        const item = nonGroupable[Number(match[1])];
-        if (item) result.push(item);
-      } else if (part.text) {
+    switch (part.type) {
+      case 'passthrough': {
+        // Non-groupable content flows through directly; the original DisplayContent
+        // already carries parentToolUseId from the mapping step.
+        result.push(part.content);
+        break;
+      }
+
+      case 'text': {
+        if (part.text) {
+          result.push({
+            type: 'text',
+            text: part.text,
+            ...withParentId(part.parentToolUseId),
+          });
+        }
+        break;
+      }
+
+      case '_tool_group': {
         result.push({
-          type: 'text',
-          text: part.text,
+          type: 'tool_group',
+          calls: part.items.map((item) => ({
+            type: 'tool_call' as const,
+            id: item.toolCallId,
+            name: item.toolName,
+            input: item.args,
+            category: categorizeToolCall(item.toolName, categories),
+            ...(item.result != null && { result: item.result as ToolCallResult }),
+            ...withParentId(item.parentToolUseId),
+          })),
+        });
+        break;
+      }
+
+      case '_task_group': {
+        // Use the unique tool_use id, not `description`. Two subagents in the same
+        // turn can share a description string (role label, repeat prompt) and
+        // collapsing them onto one id collides assistant-ui's per-part React key
+        // (`toolCallId-<id>`), crashing the message renderer. The user-facing
+        // label still reads from `taskArgs.description` in the TaskGroup card.
+        const agentId = part.toolCallId;
+        result.push({
+          type: 'task_group',
+          agentId,
+          taskArgs: part.taskArgs ?? {},
+          calls: part.children.map((child) => {
+            if (child.type === 'passthrough') {
+              // The original DisplayContent already carries parentToolUseId;
+              // pass it through unchanged.
+              return child.content;
+            }
+            if (child.type === 'text') {
+              return { type: 'text' as const, text: child.text, ...withParentId(child.parentToolUseId) };
+            }
+            if (child.type === 'tool-call') {
+              return {
+                type: 'tool_call' as const,
+                id: child.toolCallId,
+                name: child.toolName,
+                input: child.args,
+                category: categorizeToolCall(child.toolName, categories),
+                ...(child.result != null && { result: child.result as ToolCallResult }),
+                ...withParentId(child.parentToolUseId),
+              };
+            }
+            // Recursively resolve any nested grouped entry (e.g. a _tool_group
+            // collapsed inside a subagent's explore burst).
+            const nested = convertGroupedPartsToDisplay([child], originalContent, categories);
+            return nested.length === 1 ? nested[0]! : { type: 'text' as const, text: '' };
+          }),
+          ...(part.result != null && { result: part.result as ToolCallResult }),
+        });
+        break;
+      }
+
+      case '_task_progress': {
+        result.push({
+          type: 'task_progress',
+          items: part.items.map((item) => ({
+            id: item.toolCallId,
+            name: item.toolName,
+            input: item.args,
+            category: 'progress' as const,
+            ...(item.result != null && { result: item.result as ToolCallResult }),
+          })),
+        });
+        break;
+      }
+
+      case 'tool-call': {
+        // Regular tool call — find original DisplayContent to preserve result and category
+        const orig = originalContent.find((c) => c.type === 'tool_call' && c.id === part.toolCallId) as
+          | (DisplayContent & { type: 'tool_call' })
+          | undefined;
+        result.push({
+          type: 'tool_call',
+          id: part.toolCallId,
+          name: part.toolName,
+          input: part.args,
+          category: orig?.category ?? categorizeToolCall(part.toolName, categories),
+          ...(orig?.result && { result: orig.result }),
           ...withParentId(part.parentToolUseId),
         });
+        break;
       }
-      continue;
-    }
 
-    if (part.toolName === '_ToolGroup') {
-      const items = part.args.items as Array<{
-        toolCallId: string;
-        toolName: string;
-        args: Record<string, unknown>;
-        result: unknown;
-        isError: boolean | undefined;
-        parentToolUseId?: string;
-      }>;
-      result.push({
-        type: 'tool_group',
-        calls: items.map((item) => ({
-          type: 'tool_call' as const,
-          id: item.toolCallId,
-          name: item.toolName,
-          input: item.args,
-          category: categorizeToolCall(item.toolName, categories),
-          ...(item.result != null && { result: item.result as ToolCallResult }),
-          ...withParentId(item.parentToolUseId),
-        })),
-      });
-    } else if (part.toolName === '_TaskGroup') {
-      const children = part.args.children as PartEntry[];
-      const taskArgs = part.args.taskArgs as Record<string, unknown>;
-      // Use the unique tool_use id, not `description`. Two subagents in the same
-      // turn can share a description string (role label, repeat prompt) and
-      // collapsing them onto one id collides assistant-ui's per-part React key
-      // (`toolCallId-<id>`), crashing the message renderer. The user-facing
-      // label still reads from `taskArgs.description` in the TaskGroup card.
-      const agentId = part.toolCallId;
-      result.push({
-        type: 'task_group',
-        agentId,
-        taskArgs: taskArgs ?? {},
-        calls: children.map((child) => {
-          if (child.type === 'text') {
-            const m = NG_SENTINEL_RE.exec(child.text);
-            if (m) {
-              const original = nonGroupable[Number(m[1])];
-              // The original DisplayContent already carries parentToolUseId from
-              // applyToolGrouping's encoding step; pass it through unchanged.
-              if (original) return original;
-              return { type: 'text' as const, text: '', ...withParentId(child.parentToolUseId) };
-            }
-            return { type: 'text' as const, text: child.text, ...withParentId(child.parentToolUseId) };
-          }
-          return {
-            type: 'tool_call' as const,
-            id: child.toolCallId,
-            name: child.toolName,
-            input: child.args,
-            category: categorizeToolCall(child.toolName, categories),
-            ...(child.result != null && { result: child.result as ToolCallResult }),
-            ...withParentId(child.parentToolUseId),
-          };
-        }),
-        ...(part.result != null && { result: part.result as ToolCallResult }),
-      });
-    } else if (part.toolName === '_TaskProgress') {
-      result.push({
-        type: 'tool_call',
-        id: part.toolCallId,
-        name: '_TaskProgress',
-        input: part.args,
-        category: 'progress',
-        ...(part.result != null && { result: part.result as ToolCallResult }),
-      });
-    } else {
-      // Regular tool call — find original DisplayContent to preserve result and category
-      const orig = originalContent.find((c) => c.type === 'tool_call' && c.id === part.toolCallId) as
-        | (DisplayContent & { type: 'tool_call' })
-        | undefined;
-      result.push({
-        type: 'tool_call',
-        id: part.toolCallId,
-        name: part.toolName,
-        input: part.args,
-        category: orig?.category ?? categorizeToolCall(part.toolName, categories),
-        ...(orig?.result && { result: orig.result }),
-        ...withParentId(part.parentToolUseId),
-      });
+      default: {
+        // Exhaustiveness check — TypeScript ensures every PartEntry variant is handled.
+        // Unreachable at runtime; the assignment fails to compile if a variant is added.
+        const _exhaustive: never = part;
+        void _exhaustive;
+        break;
+      }
     }
   }
 

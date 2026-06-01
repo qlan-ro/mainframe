@@ -118,7 +118,7 @@ describe('worktreeRoutes', () => {
       );
 
       expect(ctx.chats.forkToWorktree).toHaveBeenCalledWith('chat-1', 'main', 'session/abc123');
-      expect(res.json).toHaveBeenCalledWith({ success: true, chatId: 'new-chat-42' });
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: { chatId: 'new-chat-42' } });
     });
 
     it('returns 409 when repo is dirty', async () => {
@@ -136,7 +136,7 @@ describe('worktreeRoutes', () => {
       );
 
       expect(res.status).toHaveBeenCalledWith(409);
-      expect(res.json).toHaveBeenCalledWith({ error: 'Working tree has uncommitted changes' });
+      expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Working tree has uncommitted changes' });
     });
   });
 });

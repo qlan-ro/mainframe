@@ -144,6 +144,22 @@ describe('todos plugin routes', () => {
     expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'chat.created' }));
   });
 
+  it('POST /todos/:id/attachments returns 400 when filename is missing', async () => {
+    const { app } = makeApp();
+    const create = await request(app).post('/todos').send({ projectId: 'proj-1', title: 'Attachment todo' });
+    const id = create.body.todo.id as string;
+    const res = await request(app).post(`/todos/${id}/attachments`).send({ data: 'base64data' });
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /todos/:id/attachments returns 400 when data is missing', async () => {
+    const { app } = makeApp();
+    const create = await request(app).post('/todos').send({ projectId: 'proj-1', title: 'Attachment todo' });
+    const id = create.body.todo.id as string;
+    const res = await request(app).post(`/todos/${id}/attachments`).send({ filename: 'file.txt' });
+    expect(res.status).toBe(400);
+  });
+
   it('POST /todos/:id/start-session reads provider defaults for model and permissionMode', async () => {
     const settingsOverride = (namespace: string, key: string): string | null => {
       if (namespace === 'provider' && key === 'claude.defaultModel') return 'opus';

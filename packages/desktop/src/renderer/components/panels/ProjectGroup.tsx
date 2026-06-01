@@ -1,8 +1,8 @@
 import React, { useCallback } from 'react';
 import { Plus, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import type { Project, Chat } from '@qlan-ro/mainframe-types';
-import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
+import { startChat } from '../../lib/chat-actions';
 import { deleteProjectWithCleanup } from '../../lib/delete-project';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { TruncatedLabel } from '../ui/truncated-label';
@@ -40,7 +40,7 @@ export const ProjectGroup = React.memo(function ProjectGroup({
   const handleNewSession = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      daemonClient.createChat(project.id, 'claude', getDefaultModelForAdapter('claude'));
+      void startChat(project.id, 'claude', getDefaultModelForAdapter('claude'));
     },
     [project.id],
   );

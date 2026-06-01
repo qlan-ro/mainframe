@@ -26,6 +26,7 @@ import { capturesToRows } from '../../../../lib/format-captures.js';
 import { SandboxCaptureContext } from '../parts/SandboxCaptureContext.js';
 import { getDraft, saveDraft, deleteDraft } from './composer-drafts.js';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip';
+import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 
 const PERMISSION_MODES = [
   { id: 'default', label: 'Interactive' },
@@ -267,7 +268,7 @@ export function ComposerCard() {
   const handleModeChange = useCallback(
     (mode: string) => {
       if (!chatId) return;
-      const typedMode = mode as 'default' | 'acceptEdits' | 'yolo';
+      const typedMode = mode as ExecutionMode;
       daemonClient.updateChatConfig(chatId, undefined, undefined, typedMode);
     },
     [chatId],

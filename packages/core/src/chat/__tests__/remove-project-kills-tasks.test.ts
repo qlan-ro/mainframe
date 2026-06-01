@@ -24,7 +24,7 @@ describe('ChatManager.removeProject', () => {
     ];
     const db: any = {
       chats: { list: () => chats },
-      projects: { removeWithChats: vi.fn() },
+      projects: { remove: vi.fn() },
     };
     const adapters: any = {};
     const tracker = new BackgroundTaskTracker();

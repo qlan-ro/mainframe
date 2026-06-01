@@ -26,6 +26,7 @@ async function loadProjectEnv(projectPath: string): Promise<Record<string, strin
     const content = await readFile(join(projectPath, '.env'), 'utf-8');
     return { ...base, ...parseDotenv(content) };
   } catch {
+    /* expected: launch.json/.env may not exist */
     return base;
   }
 }
@@ -74,8 +75,15 @@ export function launchRoutes(ctx: RouteContext): Router {
         res.status(404).json({ success: false, error: 'Project not found' });
         return;
       }
+      let raw: string;
       try {
-        const raw = await readFile(join(resolved.path, '.mainframe', 'launch.json'), 'utf-8');
+        raw = await readFile(join(resolved.path, '.mainframe', 'launch.json'), 'utf-8');
+      } catch {
+        /* expected: launch.json/.env may not exist */
+        res.json({ success: true, data: [] });
+        return;
+      }
+      try {
         const env = await loadProjectEnv(resolved.path);
         const result = parseLaunchConfig(JSON.parse(raw), env);
         if (!result.success) {
@@ -83,7 +91,8 @@ export function launchRoutes(ctx: RouteContext): Router {
           return;
         }
         res.json({ success: true, data: result.data.configurations });
-      } catch {
+      } catch (err) {
+        logger.warn({ err }, 'invalid launch.json');
         res.json({ success: true, data: [] });
       }
     }),
@@ -104,6 +113,7 @@ export function launchRoutes(ctx: RouteContext): Router {
       try {
         raw = await readFile(join(resolved.path, '.mainframe', 'launch.json'), 'utf-8');
       } catch {
+        /* expected: launch.json/.env may not exist */
         res.status(404).json({ success: false, error: 'No launch.json found for project' });
         return;
       }
@@ -111,7 +121,8 @@ export function launchRoutes(ctx: RouteContext): Router {
       try {
         const env = await loadProjectEnv(resolved.path);
         parsed = parseLaunchConfig(JSON.parse(raw), env);
-      } catch {
+      } catch (err) {
+        logger.warn({ err }, 'invalid launch.json');
         res.status(400).json({ success: false, error: 'Invalid launch.json' });
         return;
       }

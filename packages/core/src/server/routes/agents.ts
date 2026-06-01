@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
-import { validate, CreateAgentBody, UpdateAgentBody } from './schemas.js';
+import { validate, CreateAgentBody, UpdateAgentBody, ProjectPathQuery } from './schemas.js';
 import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:agents');
@@ -18,13 +18,13 @@ export function agentRoutes(ctx: RouteContext): Router {
         res.status(404).json({ success: false, error: 'Adapter not found or does not support agents' });
         return;
       }
-      const projectPath = req.query.projectPath as string;
-      if (!projectPath) {
-        res.status(400).json({ success: false, error: 'projectPath is required' });
+      const qParsed = validate(ProjectPathQuery, req.query);
+      if (!qParsed.success) {
+        res.status(400).json({ success: false, error: qParsed.error });
         return;
       }
 
-      const agents = await adapter.listAgents(projectPath);
+      const agents = await adapter.listAgents(qParsed.data.projectPath);
       res.json({ success: true, data: agents });
     }),
   );
@@ -92,14 +92,14 @@ export function agentRoutes(ctx: RouteContext): Router {
         res.status(404).json({ success: false, error: 'Adapter not found or does not support agents' });
         return;
       }
-      const projectPath = (req.query.projectPath || req.body?.projectPath) as string;
-      if (!projectPath) {
-        res.status(400).json({ success: false, error: 'projectPath is required' });
+      const dParsed = validate(ProjectPathQuery, { projectPath: req.query.projectPath ?? req.body?.projectPath });
+      if (!dParsed.success) {
+        res.status(400).json({ success: false, error: dParsed.error });
         return;
       }
 
       try {
-        await adapter.deleteAgent(decodeURIComponent(param(req, 'id')), projectPath);
+        await adapter.deleteAgent(decodeURIComponent(param(req, 'id')), dParsed.data.projectPath);
         res.json({ success: true });
       } catch (err) {
         logger.warn({ err, agentId: param(req, 'id') }, 'Failed to delete agent');

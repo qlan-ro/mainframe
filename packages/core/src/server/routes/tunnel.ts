@@ -1,6 +1,17 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import type { RouteContext } from './types.js';
+import { validate } from './schemas.js';
 import { getConfig, saveConfig } from '../../config.js';
+
+const TunnelStartBody = z.object({
+  token: z.string().min(1).optional(),
+  url: z.url().optional(),
+});
+
+const TunnelStopBody = z.object({
+  clearConfig: z.boolean().optional(),
+});
 
 export function tunnelRoutes(ctx: RouteContext): Router {
   const router = Router();
@@ -28,8 +39,14 @@ export function tunnelRoutes(ctx: RouteContext): Router {
       return;
     }
 
-    const bodyToken = typeof req.body?.token === 'string' ? req.body.token : undefined;
-    const bodyUrl = typeof req.body?.url === 'string' ? req.body.url : undefined;
+    const parsedStart = validate(TunnelStartBody, req.body ?? {});
+    if (!parsedStart.success) {
+      res.status(400).json({ success: false, error: parsedStart.error });
+      return;
+    }
+
+    const bodyToken = parsedStart.data.token;
+    const bodyUrl = parsedStart.data.url;
 
     // Fall back to the persisted config when the renderer doesn't pass a token —
     // this happens when the user clicks "Start" on an already-configured named
@@ -68,10 +85,16 @@ export function tunnelRoutes(ctx: RouteContext): Router {
       return;
     }
 
+    const parsedStop = validate(TunnelStopBody, req.body ?? {});
+    if (!parsedStop.success) {
+      res.status(400).json({ success: false, error: parsedStop.error });
+      return;
+    }
+
     ctx.tunnelManager.stop('daemon');
     ctx.setTunnelUrl?.(null);
 
-    const clearConfig = req.body?.clearConfig === true;
+    const clearConfig = parsedStop.data.clearConfig === true;
     if (clearConfig) {
       saveConfig({ tunnel: false, tunnelToken: undefined, tunnelUrl: undefined });
     } else {

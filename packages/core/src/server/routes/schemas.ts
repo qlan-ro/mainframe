@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EXECUTION_MODES } from '@qlan-ro/mainframe-types';
 
 // --- HTTP Route Schemas ---
 
@@ -31,7 +32,7 @@ export const AddMentionBody = z.object({
 // Settings — provider update
 export const UpdateProviderSettingsBody = z.object({
   defaultModel: z.string().optional(),
-  defaultMode: z.string().optional(),
+  defaultMode: z.enum(EXECUTION_MODES).optional(),
   defaultPlanMode: z.enum(['true', 'false']).optional(),
   executablePath: z.string().optional(),
   systemPrompt: z.string().optional(),
@@ -153,6 +154,11 @@ export const GitDeleteBranchBody = z.object({
 export const GitDeleteWorktreeBody = z.object({
   worktreePath: z.string().min(1),
   branchName: z.string().optional(),
+});
+
+// Shared query params
+export const ProjectPathQuery = z.object({
+  projectPath: z.string().min(1),
 });
 
 // --- Validation helper ---

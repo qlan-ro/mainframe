@@ -13,7 +13,7 @@ const execFileAsync = promisify(execFileCb);
 import { createChildLogger } from '../logger.js';
 import { generateTitle } from './title-generator.js';
 import { extractMentionsFromText } from './context-tracker.js';
-import { extractPrFromToolResult, PR_CREATE_COMMANDS } from '../plugins/builtin/claude/events.js';
+import { extractPrFromToolResult, PR_CREATE_COMMANDS } from '../plugins/builtin/claude/pr-detection.js';
 import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';

@@ -24,10 +24,39 @@ export interface TaskProgressItem {
   parentToolUseId?: string;
 }
 
+/** Consecutive explore tools collapsed into one expandable group card. */
+export interface ToolGroupEntry {
+  type: '_tool_group';
+  toolCallId: string;
+  items: ToolGroupItem[];
+  result: 'grouped';
+  parentToolUseId?: string;
+}
+
+/** A subagent (Task) tool plus every part tagged with its tool_use id. */
+export interface TaskGroupEntry {
+  type: '_task_group';
+  toolCallId: string;
+  taskArgs: Record<string, unknown>;
+  children: PartEntry[];
+  result?: unknown;
+  isError?: boolean;
+  parentToolUseId?: string;
+}
+
+/** All task-progress tools accumulated into a single progress feed entry. */
+export interface TaskProgressEntry {
+  type: '_task_progress';
+  toolCallId: string;
+  items: TaskProgressItem[];
+  result: 'accumulated';
+  parentToolUseId?: string;
+}
+
 /**
  * Returns a parentToolUseId only if every item in the group shares the same
  * non-empty value. Used to propagate the tag onto virtual wrappers
- * (`_ToolGroup`, `_TaskProgress`) so groupTaskChildren can match them.
+ * (`_tool_group`, `_task_progress`) so groupTaskChildren can match them.
  */
 function sharedParentToolUseId(items: ReadonlyArray<{ parentToolUseId?: string }>): string | undefined {
   const first = items[0]?.parentToolUseId;
@@ -46,7 +75,11 @@ export type PartEntry =
       category?: string;
       parentToolUseId?: string;
     }
-  | { type: 'text'; text: string; parentToolUseId?: string };
+  | { type: 'text'; text: string; parentToolUseId?: string }
+  | { type: 'passthrough'; content: import('@qlan-ro/mainframe-types').DisplayContent; parentToolUseId?: string }
+  | ToolGroupEntry
+  | TaskGroupEntry
+  | TaskProgressEntry;
 
 /**
  * Post-processes parts to group consecutive explore tools, suppress hidden tools,
@@ -59,6 +92,21 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
   let taskInsertIndex = -1;
   let i = 0;
 
+  // Accumulate a progress tool into the single _TaskProgress entry, anchoring
+  // its insert position at the first one seen. Shared by the main loop and the
+  // explore look-ahead so the item schema lives in one place.
+  const collectTaskItem = (p: Extract<PartEntry, { type: 'tool-call' }>): void => {
+    if (taskInsertIndex === -1) taskInsertIndex = result.length;
+    taskItems.push({
+      toolCallId: p.toolCallId,
+      toolName: p.toolName,
+      args: p.args,
+      result: p.result,
+      isError: p.isError,
+      ...(p.parentToolUseId && { parentToolUseId: p.parentToolUseId }),
+    });
+  };
+
   while (i < parts.length) {
     const part = parts[i]!;
 
@@ -68,23 +116,18 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
       continue;
     }
 
-    // Skip hidden tools
-    if (isHiddenToolPart(part.toolName, part.category, categories)) {
+    // Collect task progress tools for accumulated display. Checked BEFORE the
+    // hidden suppression: adapters mark the V2 task tools as both `hidden` (so
+    // they never render as raw tool cards) and `progress` (so they surface as a
+    // single _TaskProgress entry). Progress must win, or they'd be dropped.
+    if (isTaskProgressTool(part.toolName, categories)) {
+      collectTaskItem(part);
       i++;
       continue;
     }
 
-    // Collect task progress tools for accumulated display
-    if (isTaskProgressTool(part.toolName, categories)) {
-      if (taskInsertIndex === -1) taskInsertIndex = result.length;
-      taskItems.push({
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
-        args: part.args,
-        result: part.result,
-        isError: part.isError,
-        ...(part.parentToolUseId && { parentToolUseId: part.parentToolUseId }),
-      });
+    // Skip hidden tools
+    if (isHiddenToolPart(part.toolName, part.category, categories)) {
       i++;
       continue;
     }
@@ -98,13 +141,13 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
         if (next.type !== 'tool-call') break;
         if (isExploreTool(next.toolName, categories)) {
           group.push(next);
-        } else if (
-          !isHiddenToolPart(next.toolName, next.category, categories) &&
-          !isTaskProgressTool(next.toolName, categories)
-        ) {
+        } else if (isTaskProgressTool(next.toolName, categories)) {
+          // A progress tool inside the run is accumulated, not dropped.
+          collectTaskItem(next);
+        } else if (!isHiddenToolPart(next.toolName, next.category, categories)) {
           break;
         }
-        // hidden and task tools within the run are skipped/collected separately
+        // hidden tools within the run are skipped
         j++;
       }
 
@@ -122,10 +165,9 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
         });
         const wrapperParent = sharedParentToolUseId(items);
         result.push({
-          type: 'tool-call',
+          type: '_tool_group',
           toolCallId: (group[0] as PartEntry & { type: 'tool-call' }).toolCallId,
-          toolName: '_ToolGroup',
-          args: { items },
+          items,
           result: 'grouped',
           ...(wrapperParent && { parentToolUseId: wrapperParent }),
         });
@@ -144,11 +186,10 @@ export function groupToolCallParts(parts: PartEntry[], categories: ToolCategorie
   // Insert accumulated task progress at the position of the first task tool
   if (taskItems.length > 0) {
     const wrapperParent = sharedParentToolUseId(taskItems);
-    const entry: PartEntry = {
-      type: 'tool-call',
+    const entry: TaskProgressEntry = {
+      type: '_task_progress',
       toolCallId: taskItems[0]!.toolCallId,
-      toolName: '_TaskProgress',
-      args: { items: taskItems },
+      items: taskItems,
       result: 'accumulated',
       ...(wrapperParent && { parentToolUseId: wrapperParent }),
     };
@@ -185,10 +226,10 @@ export function groupTaskChildren(parts: PartEntry[], categories: ToolCategories
 
       if (children.length > 0) {
         result.push({
-          type: 'tool-call',
+          type: '_task_group',
           toolCallId: part.toolCallId,
-          toolName: '_TaskGroup',
-          args: { taskArgs: part.args, children },
+          taskArgs: part.args,
+          children,
           result: part.result,
           isError: part.isError,
         });

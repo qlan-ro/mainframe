@@ -4,8 +4,10 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { RouteContext } from './types.js';
 import { getEffectivePath, param } from './types.js';
+import { ok, fail } from './respond.js';
 import type { SearchContentResult } from '@qlan-ro/mainframe-types';
 import { asyncHandler } from './async-handler.js';
+import { isWithinBase } from './path-utils.js';
 import { validate } from './schemas.js';
 import { listProjectFiles, hasBinaryExtension } from '../fs-utils.js';
 import { searchWithRipgrep, isRipgrepAvailable } from '../ripgrep.js';
@@ -25,12 +27,11 @@ const ContentSearchQuery = z.object({
   includeIgnored: z.string().optional(),
 });
 
-async function isWithinBase(basePath: string, targetPath: string): Promise<string | null> {
+async function resolveWithinBase(basePath: string, targetPath: string): Promise<string | null> {
   try {
     const realBase = await realpath(basePath);
     const realTarget = await realpath(path.resolve(basePath, targetPath));
-    if (realTarget.startsWith(realBase + path.sep) || realTarget === realBase) return realTarget;
-    return null;
+    return isWithinBase(realBase, realTarget) ? realTarget : null;
   } catch {
     /* expected — path does not exist or symlink outside base */
     return null;
@@ -87,7 +88,7 @@ async function searchFile(
 async function handleContentSearch(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = validate(ContentSearchQuery, req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error });
+    fail(res, 400, parsed.error);
     return;
   }
 
@@ -96,7 +97,7 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
 
   const rawBasePath = getEffectivePath(ctx, param(req, 'id'), chatId);
   if (!rawBasePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -106,13 +107,13 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
     basePath = await realpath(rawBasePath);
   } catch (err) {
     logger.warn({ err, rawBasePath }, 'Project base path not resolvable');
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
-  const resolvedScope = await isWithinBase(basePath, scopePath);
+  const resolvedScope = await resolveWithinBase(basePath, scopePath);
   if (!resolvedScope) {
-    res.status(403).json({ error: 'Path outside project' });
+    fail(res, 403, 'Path outside project');
     return;
   }
 
@@ -121,7 +122,7 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
     scopeStat = await stat(resolvedScope);
   } catch (err) {
     logger.warn({ err, resolvedScope }, 'Scope path not found during content search');
-    res.status(404).json({ error: 'Path not found' });
+    fail(res, 404, 'Path not found');
     return;
   }
 
@@ -160,7 +161,7 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
         allFiles = await listProjectFiles(basePath, { includeIgnored: includeIgnoredFlag });
       } catch (err) {
         logger.warn({ err, basePath }, 'Failed to list project files for content search');
-        res.status(500).json({ error: 'Failed to list project files' });
+        fail(res, 500, 'Failed to list project files');
         return;
       }
 
@@ -182,6 +183,7 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
         try {
           fileStat = await stat(absFile);
         } catch {
+          /* expected: file vanished between listing and stat */
           continue;
         }
 
@@ -196,7 +198,7 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
     }
   }
 
-  res.json({ results });
+  ok(res, { results });
 }
 
 export function contentSearchRoutes(ctx: RouteContext): Router {

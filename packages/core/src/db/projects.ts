@@ -54,14 +54,11 @@ export class ProjectsRepository {
   }
 
   remove(id: string): void {
-    const stmt = this.db.prepare(`DELETE FROM projects WHERE id = ?`);
-    stmt.run(id);
-  }
-
-  removeWithChats(id: string): void {
+    const detachChildren = this.db.prepare(`UPDATE projects SET parent_project_id = NULL WHERE parent_project_id = ?`);
     const deleteChats = this.db.prepare(`DELETE FROM chats WHERE project_id = ?`);
     const deleteProject = this.db.prepare(`DELETE FROM projects WHERE id = ?`);
     const tx = this.db.transaction(() => {
+      detachChildren.run(id);
       deleteChats.run(id);
       deleteProject.run(id);
     });

@@ -430,6 +430,7 @@ export class ChatManager {
 
   async archiveChat(chatId: string, deleteWorktree = true): Promise<void> {
     await this.lifecycle.archiveChat(chatId, deleteWorktree);
+    this.tracker.removeChat(chatId);
     this.eventHandler.clearDisplayCache(chatId);
   }
 
@@ -443,6 +444,7 @@ export class ChatManager {
 
   async endChat(chatId: string): Promise<void> {
     await this.lifecycle.endChat(chatId);
+    this.tracker.removeChat(chatId);
     this.eventHandler.clearDisplayCache(chatId);
   }
 
@@ -471,9 +473,10 @@ export class ChatManager {
       this.activeChats.delete(chat.id);
       this.messages.delete(chat.id);
       this.permissions.clear(chat.id);
+      this.tracker.removeChat(chat.id);
       this.eventHandler.clearDisplayCache(chat.id);
     }
-    this.db.projects.removeWithChats(projectId);
+    this.db.projects.remove(projectId);
   }
 
   listChats(projectId: string): Chat[] {

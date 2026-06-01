@@ -191,8 +191,11 @@ export const useChatsStore = create<ChatsState>((set) => ({
   },
   addChat: (chat) =>
     set((state) => {
-      const sorted = sortChats([chat, ...state.chats]);
-      return { chats: sorted };
+      // Upsert by id: the REST caller adds the chat from its own 200, and the
+      // chat.created broadcast arrives afterwards — without dedup the sidebar
+      // would show the same chat twice.
+      const without = state.chats.filter((c) => c.id !== chat.id);
+      return { chats: sortChats([chat, ...without]) };
     }),
   updateChat: (chat) =>
     set((state) => {

@@ -4,7 +4,7 @@ import { extractLatestPlanFileFromMessages } from '../../../chat/context-tracker
 
 export class ClaudePlanModeHandler implements PlanModeActionHandler {
   async onApprove(response: ControlResponse, ctx: PlanActionContext): Promise<void> {
-    const exec = (response.executionMode ?? 'default') as 'default' | 'acceptEdits' | 'yolo';
+    const exec = response.executionMode ?? 'default';
     ctx.chat.planMode = false;
     ctx.chat.permissionMode = exec;
     ctx.db.chats.update(ctx.chatId, { planMode: false, permissionMode: exec });
@@ -17,7 +17,7 @@ export class ClaudePlanModeHandler implements PlanModeActionHandler {
   }
 
   async onApproveAndClearContext(response: ControlResponse, ctx: PlanActionContext): Promise<void> {
-    const exec = (response.executionMode ?? 'default') as 'default' | 'acceptEdits' | 'yolo';
+    const exec = response.executionMode ?? 'default';
     const planRaw = response.updatedInput?.plan;
     const plan = typeof planRaw === 'string' ? planRaw : undefined;
 

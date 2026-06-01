@@ -20,7 +20,6 @@ function makeDb(chats: { id: string }[] = []) {
       getByPath: vi.fn(),
       create: vi.fn(),
       remove: vi.fn(),
-      removeWithChats: vi.fn(),
       updateLastOpened: vi.fn(),
     },
     settings: { get: vi.fn(), getByCategory: vi.fn(), set: vi.fn(), delete: vi.fn() },
@@ -33,13 +32,13 @@ function makeAdapters(): AdapterRegistry {
 }
 
 describe('ChatManager.removeProject', () => {
-  it('calls removeWithChats when no chats are active', async () => {
+  it('calls remove when no chats are active', async () => {
     const db = makeDb([]);
     const manager = new ChatManager(db, makeAdapters(), new BackgroundTaskTracker());
 
     await manager.removeProject('proj-1');
 
-    expect(db.projects.removeWithChats).toHaveBeenCalledWith('proj-1');
+    expect(db.projects.remove).toHaveBeenCalledWith('proj-1');
   });
 
   it('kills active process before deleting', async () => {
@@ -65,6 +64,6 @@ describe('ChatManager.removeProject', () => {
 
     expect(killSpy).toHaveBeenCalled();
     expect((manager as any).activeChats.has('chat-1')).toBe(false);
-    expect(db.projects.removeWithChats).toHaveBeenCalledWith('proj-1');
+    expect(db.projects.remove).toHaveBeenCalledWith('proj-1');
   });
 });

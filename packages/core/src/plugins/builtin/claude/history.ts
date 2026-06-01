@@ -273,16 +273,18 @@ export function convertHistoryEntry(entry: Record<string, unknown>, chatId: stri
   return null;
 }
 
-function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: Map<string, MessageContent[]>): void {
-  const parentId = entry.parentToolUseID as string | undefined;
-  if (!parentId) return;
-  const data = entry.data as Record<string, unknown>;
-  const msg = data.message as Record<string, unknown> | undefined;
-  const inner = msg?.message as Record<string, unknown> | undefined;
-  if (!inner || inner.role !== 'assistant') return;
-  const content = inner.content as Array<Record<string, unknown>> | undefined;
-  if (!Array.isArray(content)) return;
-
+/**
+ * Flatten a subagent assistant message's content (tool_use / text / thinking)
+ * onto the accumulated child-block list keyed by parentId. Shared by the two
+ * collection paths (live `data.message` progress entries and subagent JSONL
+ * assistant entries), which derive parentId/content differently but append the
+ * blocks identically.
+ */
+function appendAssistantBlocks(
+  parentId: string,
+  content: Array<Record<string, unknown>>,
+  agentTools: Map<string, MessageContent[]>,
+): void {
   const existing = agentTools.get(parentId) ?? [];
   for (const block of content) {
     if (block.type === 'tool_use') {
@@ -302,6 +304,19 @@ function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: M
     }
   }
   if (existing.length > 0) agentTools.set(parentId, existing);
+}
+
+function collectAgentProgressTools(entry: Record<string, unknown>, agentTools: Map<string, MessageContent[]>): void {
+  const parentId = entry.parentToolUseID as string | undefined;
+  if (!parentId) return;
+  const data = entry.data as Record<string, unknown>;
+  const msg = data.message as Record<string, unknown> | undefined;
+  const inner = msg?.message as Record<string, unknown> | undefined;
+  if (!inner || inner.role !== 'assistant') return;
+  const content = inner.content as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(content)) return;
+
+  appendAssistantBlocks(parentId, content, agentTools);
 }
 
 /** Extract tool_result blocks from subagent JSONL user entries. */
@@ -362,25 +377,7 @@ function collectSubagentAssistantBlocks(
   const content = message?.content as Array<Record<string, unknown>> | undefined;
   if (!Array.isArray(content)) return;
 
-  const existing = agentTools.get(parentId) ?? [];
-  for (const block of content) {
-    if (block.type === 'tool_use') {
-      existing.push({
-        type: 'tool_use',
-        id: (block.id as string) || nanoid(),
-        name: block.name as string,
-        input: (block.input as Record<string, unknown>) ?? {},
-        parentToolUseId: parentId,
-      });
-    } else if (block.type === 'text') {
-      const text = (block.text as string) || '';
-      if (text.trim()) existing.push({ type: 'text', text, parentToolUseId: parentId });
-    } else if (block.type === 'thinking') {
-      const t = (block.thinking as string) || '';
-      if (t.trim()) existing.push({ type: 'thinking', thinking: t, parentToolUseId: parentId });
-    }
-  }
-  if (existing.length > 0) agentTools.set(parentId, existing);
+  appendAssistantBlocks(parentId, content, agentTools);
 }
 
 /** Inject subagent tool_result blocks after their matching tool_use in assistant messages. */

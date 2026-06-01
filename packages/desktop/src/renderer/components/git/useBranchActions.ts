@@ -19,8 +19,8 @@ import {
   getProjectWorktrees,
   deleteWorktree,
 } from '../../lib/api';
-import { daemonClient } from '../../lib/client';
 import { getDefaultModelForAdapter } from '../../lib/adapters';
+import { startChat } from '../../lib/chat-actions';
 
 interface BranchData {
   current: string;
@@ -314,7 +314,7 @@ export function useBranchActions(
           toast.error(`Could not resolve path for worktree '${worktreeDirName}'`);
           return;
         }
-        daemonClient.createChat(projectId, 'claude', getDefaultModelForAdapter('claude'), undefined, {
+        void startChat(projectId, 'claude', getDefaultModelForAdapter('claude'), undefined, {
           worktreePath: match.path,
           branchName: branchName ?? worktreeDirName,
         });

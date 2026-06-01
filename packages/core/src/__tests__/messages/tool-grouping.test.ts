@@ -10,14 +10,19 @@ import type { ToolCategories } from '../../messages/tool-categorization.js';
 
 /* ── fixtures ────────────────────────────────────────────────────── */
 
+// Mirrors ClaudeAdapter.getToolCategories(): the V2 task tools are BOTH hidden
+// (never rendered as raw tool cards) AND progress (surfaced as _TaskProgress).
+// Progress therefore takes precedence over hidden in grouping.
 const CLAUDE_CATEGORIES: ToolCategories = {
   explore: new Set(['Read', 'Glob', 'Grep']),
   hidden: new Set([
+    'TodoWrite',
+    'TaskCreate',
+    'TaskUpdate',
     'TaskList',
     'TaskGet',
     'TaskOutput',
     'TaskStop',
-    'TodoWrite',
     'Skill',
     'EnterPlanMode',
     'AskUserQuestion',
@@ -92,13 +97,12 @@ describe('groupToolCallParts', () => {
 
     expect(result).toHaveLength(1);
     const group = result[0]!;
-    expect(group.type).toBe('tool-call');
-    if (group.type !== 'tool-call') throw new Error('not tool-call');
-    expect(group.toolName).toBe('_ToolGroup');
+    expect(group.type).toBe('_tool_group');
+    if (group.type !== '_tool_group') throw new Error('not _tool_group');
     expect(group.toolCallId).toBe('r1');
     expect(group.result).toBe('grouped');
 
-    const items = group.args.items as ToolGroupItem[];
+    const items = group.items as ToolGroupItem[];
     expect(items).toHaveLength(3);
     expect(items[0]!.toolName).toBe('Read');
     expect(items[1]!.toolName).toBe('Grep');
@@ -141,12 +145,11 @@ describe('groupToolCallParts', () => {
 
     expect(result).toHaveLength(1);
     const entry = result[0]!;
-    if (entry.type !== 'tool-call') throw new Error('expected tool-call');
-    expect(entry.toolName).toBe('_TaskProgress');
+    if (entry.type !== '_task_progress') throw new Error('expected _task_progress');
     expect(entry.toolCallId).toBe('tc1');
     expect(entry.result).toBe('accumulated');
 
-    const items = entry.args.items as TaskProgressItem[];
+    const items = entry.items as TaskProgressItem[];
     expect(items).toHaveLength(2);
     expect(items[0]!.toolName).toBe('TaskCreate');
     expect(items[1]!.toolName).toBe('TaskUpdate');
@@ -159,7 +162,7 @@ describe('groupToolCallParts', () => {
     // Bash at index 0, _TaskProgress at index 1, Edit at index 2
     expect(result).toHaveLength(3);
     expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('Bash');
-    expect((result[1] as PartEntry & { type: 'tool-call' }).toolName).toBe('_TaskProgress');
+    expect(result[1]!.type).toBe('_task_progress');
     expect((result[2] as PartEntry & { type: 'tool-call' }).toolName).toBe('Edit');
   });
 
@@ -170,9 +173,8 @@ describe('groupToolCallParts', () => {
 
     expect(result).toHaveLength(1);
     const group = result[0]!;
-    if (group.type !== 'tool-call') throw new Error('expected tool-call');
-    expect(group.toolName).toBe('_ToolGroup');
-    const items = group.args.items as ToolGroupItem[];
+    if (group.type !== '_tool_group') throw new Error('expected _tool_group');
+    const items = group.items as ToolGroupItem[];
     expect(items).toHaveLength(2);
     expect(items[0]!.toolName).toBe('Read');
     expect(items[1]!.toolName).toBe('Grep');
@@ -186,12 +188,12 @@ describe('groupToolCallParts', () => {
     const parts = [tc('Read', 'r1'), tc('TaskCreate', 'tc1'), tc('Glob', 'gl1')];
     const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
-    // Read+Glob are grouped; TaskCreate is consumed by the inner explore loop
-    const toolGroup = result.find(
-      (p) => p.type === 'tool-call' && (p as PartEntry & { type: 'tool-call' }).toolName === '_ToolGroup',
-    );
+    // Read+Glob are grouped; TaskCreate is accumulated by the explore look-ahead
+    // into a _task_progress entry (not dropped).
+    const toolGroup = result.find((p) => p.type === '_tool_group');
     expect(toolGroup).toBeDefined();
-    const items = (toolGroup as PartEntry & { type: 'tool-call' }).args.items as ToolGroupItem[];
+    if (toolGroup?.type !== '_tool_group') throw new Error('expected _tool_group');
+    const items = toolGroup.items as ToolGroupItem[];
     expect(items).toHaveLength(2);
     expect(items[0]!.toolName).toBe('Read');
     expect(items[1]!.toolName).toBe('Glob');
@@ -230,23 +232,31 @@ describe('groupToolCallParts', () => {
     ];
     const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
-    const names = result.map((p) =>
-      p.type === 'text' ? `text:${p.text}` : `tool:${(p as PartEntry & { type: 'tool-call' }).toolName}`,
-    );
+    const names = result.map((p) => {
+      if (p.type === 'text') return `text:${p.text}`;
+      if (p.type === '_tool_group') return 'tool:_ToolGroup';
+      if (p.type === '_task_progress') return 'tool:_TaskProgress';
+      if (p.type === 'tool-call') return `tool:${p.toolName}`;
+      return `tool:unknown`;
+    });
     // The inner explore-grouping loop scans past TodoWrite (hidden) and TaskCreate
-    // (task progress) without breaking the explore run, but also without adding
-    // TaskCreate to the outer taskItems collector. So TaskCreate is consumed and
-    // no _TaskProgress entry appears.
-    expect(names).toEqual(['text:starting', 'tool:_ToolGroup', 'tool:Bash', 'text:done']);
+    // (task progress) without breaking the explore run. TodoWrite is suppressed,
+    // but TaskCreate is accumulated into the taskItems collector, so a single
+    // _TaskProgress entry appears at the position where the task tool was seen.
+    expect(names).toEqual(['text:starting', 'tool:_TaskProgress', 'tool:_ToolGroup', 'tool:Bash', 'text:done']);
   });
 
   it('produces _TaskProgress when task tools are NOT inside an explore run', () => {
     const parts = [tc('TaskCreate', 'tc1'), tc('Bash', 'b1'), tc('TaskUpdate', 'tu1')];
     const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
 
-    const names = result.map((p) =>
-      p.type === 'text' ? `text:${p.text}` : `tool:${(p as PartEntry & { type: 'tool-call' }).toolName}`,
-    );
+    const names = result.map((p) => {
+      if (p.type === 'text') return `text:${p.text}`;
+      if (p.type === '_tool_group') return 'tool:_ToolGroup';
+      if (p.type === '_task_progress') return 'tool:_TaskProgress';
+      if (p.type === 'tool-call') return `tool:${p.toolName}`;
+      return `tool:unknown`;
+    });
     // _TaskProgress is inserted at position 0 (first task tool position), Bash at position 1
     expect(names).toEqual(['tool:_TaskProgress', 'tool:Bash']);
   });
@@ -257,7 +267,9 @@ describe('groupToolCallParts', () => {
       { type: 'tool-call' as const, toolCallId: 'g1', toolName: 'Grep', args: { pattern: 'foo' }, result: 'match' },
     ];
     const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
-    const items = (result[0] as PartEntry & { type: 'tool-call' }).args.items as ToolGroupItem[];
+    const group = result[0]!;
+    if (group.type !== '_tool_group') throw new Error('expected _tool_group');
+    const items = group.items as ToolGroupItem[];
     expect(items[0]!.args).toEqual({ file: '/a.ts' });
     expect(items[0]!.result).toBe('content A');
     expect(items[1]!.args).toEqual({ pattern: 'foo' });
@@ -270,7 +282,9 @@ describe('groupToolCallParts', () => {
       { type: 'tool-call' as const, toolCallId: 'g1', toolName: 'Glob', args: {}, result: 'ok', isError: false },
     ];
     const result = groupToolCallParts(parts, CLAUDE_CATEGORIES);
-    const items = (result[0] as PartEntry & { type: 'tool-call' }).args.items as ToolGroupItem[];
+    const group = result[0]!;
+    if (group.type !== '_tool_group') throw new Error('expected _tool_group');
+    const items = group.items as ToolGroupItem[];
     expect(items[0]!.isError).toBe(true);
     expect(items[1]!.isError).toBe(false);
   });
@@ -314,11 +328,10 @@ describe('groupTaskChildren', () => {
 
     expect(result).toHaveLength(1);
     const group = result[0]!;
-    if (group.type !== 'tool-call') throw new Error('expected tool-call');
-    expect(group.toolName).toBe('_TaskGroup');
+    if (group.type !== '_task_group') throw new Error('expected _task_group');
     expect(group.toolCallId).toBe('t1');
 
-    const children = group.args.children as PartEntry[];
+    const children = group.children as PartEntry[];
     expect(children).toHaveLength(2);
     expect(children[0]!).toEqual(tcTagged('Bash', 'b1', 't1', 'output'));
     expect(children[1]!).toEqual(tcTagged('Read', 'r1', 't1', 'file'));
@@ -330,8 +343,9 @@ describe('groupTaskChildren', () => {
       tcTagged('Bash', 'b1', 't1'),
     ];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
-    const group = result[0] as PartEntry & { type: 'tool-call' };
-    expect(group.args.taskArgs).toEqual({ description: 'do stuff' });
+    const group = result[0]!;
+    if (group.type !== '_task_group') throw new Error('expected _task_group');
+    expect(group.taskArgs).toEqual({ description: 'do stuff' });
   });
 
   it('stops grouping at an untagged entry', () => {
@@ -341,11 +355,12 @@ describe('groupTaskChildren', () => {
 
     // _TaskGroup(Task+Bash), text, Edit
     expect(result).toHaveLength(3);
-    expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('_TaskGroup');
+    const group = result[0]!;
+    if (group.type !== '_task_group') throw new Error('expected _task_group');
     expect(result[1]).toEqual(text('middle'));
     expect((result[2] as PartEntry & { type: 'tool-call' }).toolName).toBe('Edit');
 
-    const children = (result[0] as PartEntry & { type: 'tool-call' }).args.children as PartEntry[];
+    const children = group.children as PartEntry[];
     expect(children).toHaveLength(1);
     expect(children[0]!).toEqual(tcTagged('Bash', 'b1', 't1'));
   });
@@ -355,16 +370,18 @@ describe('groupTaskChildren', () => {
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(2);
-    expect((result[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('_TaskGroup');
-    expect((result[0] as PartEntry & { type: 'tool-call' }).toolCallId).toBe('t1');
-    expect((result[1] as PartEntry & { type: 'tool-call' }).toolName).toBe('_TaskGroup');
-    expect((result[1] as PartEntry & { type: 'tool-call' }).toolCallId).toBe('t2');
+    const group1 = result[0]!;
+    const group2 = result[1]!;
+    if (group1.type !== '_task_group') throw new Error('expected _task_group');
+    if (group2.type !== '_task_group') throw new Error('expected _task_group');
+    expect(group1.toolCallId).toBe('t1');
+    expect(group2.toolCallId).toBe('t2');
 
-    const children1 = (result[0] as PartEntry & { type: 'tool-call' }).args.children as PartEntry[];
+    const children1 = group1.children as PartEntry[];
     expect(children1).toHaveLength(1);
     expect(children1[0]!).toEqual(tcTagged('Bash', 'b1', 't1'));
 
-    const children2 = (result[1] as PartEntry & { type: 'tool-call' }).args.children as PartEntry[];
+    const children2 = group2.children as PartEntry[];
     expect(children2).toHaveLength(1);
     expect(children2[0]!).toEqual(tcTagged('Read', 'r1', 't2'));
   });
@@ -393,7 +410,8 @@ describe('groupTaskChildren', () => {
       tcTagged('Bash', 'b1', 't1'),
     ];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
-    const group = result[0] as PartEntry & { type: 'tool-call' };
+    const group = result[0]!;
+    if (group.type !== '_task_group') throw new Error('expected _task_group');
     expect(group.result).toBe('task done');
     expect(group.isError).toBe(false);
   });
@@ -412,17 +430,19 @@ describe('groupTaskChildren', () => {
     ];
     const grouped = groupToolCallParts(exploreItems, CLAUDE_CATEGORIES);
     expect(grouped).toHaveLength(1);
-    expect((grouped[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('_ToolGroup');
+    const groupedEntry = grouped[0]!;
+    if (groupedEntry.type !== '_tool_group') throw new Error('expected _tool_group');
 
     const parts = [tc('Task', taskId), ...grouped];
     const result = groupTaskChildren(parts, CLAUDE_CATEGORIES);
 
     expect(result).toHaveLength(1);
-    const group = result[0] as PartEntry & { type: 'tool-call' };
-    expect(group.toolName).toBe('_TaskGroup');
+    const group = result[0]!;
+    if (group.type !== '_task_group') throw new Error('expected _task_group');
 
-    const children = group.args.children as PartEntry[];
+    const children = group.children as PartEntry[];
     expect(children).toHaveLength(1);
-    expect((children[0] as PartEntry & { type: 'tool-call' }).toolName).toBe('_ToolGroup');
+    const child = children[0]!;
+    if (child.type !== '_tool_group') throw new Error('expected _tool_group');
   });
 });

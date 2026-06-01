@@ -1,4 +1,4 @@
-export { API_BASE, fetchJson, postJson, putJson, deleteRequest } from './http';
+export { API_BASE, fetchJson, postJson, patchJson, putJson, deleteRequest } from './http';
 
 export {
   getProjects,
@@ -102,3 +102,13 @@ export {
 export { listTags, createTag, updateTag, deleteTag, getChatTags, setChatTags } from './tags-api';
 
 export * from './background-tasks-api.js';
+
+export {
+  getChat,
+  createChat,
+  updateChatConfig,
+  interruptChatRest,
+  resumeChatRest,
+  editQueuedMessageRest,
+  cancelQueuedMessageRest,
+} from './chats-api';

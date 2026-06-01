@@ -112,13 +112,14 @@ describe('file-edit flow', () => {
     const chats = new ChatManager(db as any, registry, new BackgroundTaskTracker(), undefined, (event) =>
       wsRef.current?.broadcastEvent(event),
     );
-    const { app } = createHttpServer(db as any, chats, registry);
+    const { app } = createHttpServer({ db: db as any, chats, adapters: registry });
     server = createServer(app);
     wsRef.current = new WebSocketManager(server, chats);
     const port = await startServer(server);
 
     ws = await connectWs(port);
-    ws.send(JSON.stringify({ type: 'chat.resume', chatId: 'test-chat' }));
+    ws.send(JSON.stringify({ type: 'subscribe', chatId: 'test-chat' }));
+    await chats.resumeChat('test-chat');
     await sleep(100);
 
     const contextUpdated: DaemonEvent[] = [];

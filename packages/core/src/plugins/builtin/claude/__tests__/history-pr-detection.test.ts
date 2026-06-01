@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractPrFromToolResult } from '../events.js';
+import { extractPrFromToolResult } from '../pr-detection.js';
 
 describe('History PR Detection', () => {
   it('detects GitHub PR URL from tool result content', () => {

@@ -21,7 +21,6 @@ function makeDb(chat: Record<string, unknown> | null): DatabaseManager {
       getByPath: vi.fn(),
       create: vi.fn(),
       remove: vi.fn(),
-      removeWithChats: vi.fn(),
       updateLastOpened: vi.fn(),
     },
     settings: { get: vi.fn(), getByCategory: vi.fn(), set: vi.fn(), delete: vi.fn() },
