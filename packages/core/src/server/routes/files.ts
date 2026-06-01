@@ -12,6 +12,7 @@ import { createChildLogger } from '../../logger.js';
 import { BrowseFilesystemQuery, validate } from './schemas.js';
 import { IGNORED_DIRS, hasBinaryExtension } from '../fs-utils.js';
 import { listFilesWithRipgrep } from '../ripgrep.js';
+import { ok, fail } from './respond.js';
 
 const logger = createChildLogger('routes:files');
 
@@ -21,7 +22,7 @@ const TREE_HIDDEN_NAMES = new Set(['.git']);
 async function handleTree(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -29,7 +30,7 @@ async function handleTree(ctx: RouteContext, req: Request, res: Response): Promi
   try {
     const fullPath = resolveAndValidatePath(basePath, dirPath);
     if (!fullPath) {
-      res.status(403).json({ error: 'Path outside project' });
+      fail(res, 403, 'Path outside project');
       return;
     }
 
@@ -64,10 +65,10 @@ async function handleTree(ctx: RouteContext, req: Request, res: Response): Promi
         if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
         return a.name.localeCompare(b.name);
       });
-    res.json(entries);
+    ok(res, entries);
   } catch (err) {
     logger.warn({ err, path: dirPath }, 'Failed to read directory tree');
-    res.status(404).json({ error: 'Directory not found' });
+    fail(res, 404, 'Directory not found');
   }
 }
 
@@ -75,13 +76,13 @@ async function handleTree(ctx: RouteContext, req: Request, res: Response): Promi
 async function handleSearchFiles(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
   const q = ((req.query.q as string) || '').toLowerCase();
   if (q.length < 1) {
-    res.json([]);
+    ok(res, []);
     return;
   }
 
@@ -89,7 +90,7 @@ async function handleSearchFiles(ctx: RouteContext, req: Request, res: Response)
     await realpath(basePath);
   } catch (err) {
     logger.warn({ err, basePath }, 'Project path not found for file search');
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -155,14 +156,17 @@ async function handleSearchFiles(ctx: RouteContext, req: Request, res: Response)
   }
 
   const combined = [...substringHits, ...fuzzyHits].slice(0, limit);
-  res.json(combined.map(({ exact: _, ...r }) => r));
+  ok(
+    res,
+    combined.map(({ exact: _, ...r }) => r),
+  );
 }
 
 /** GET /api/projects/:id/files-list?limit=5000&chatId=X */
 async function handleFilesList(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -172,7 +176,7 @@ async function handleFilesList(ctx: RouteContext, req: Request, res: Response): 
     await realpath(basePath);
   } catch (err) {
     logger.warn({ err, basePath }, 'Project path not found for file listing');
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -199,20 +203,20 @@ async function handleFilesList(ctx: RouteContext, req: Request, res: Response): 
     }
   };
   await walk(basePath);
-  res.json(files);
+  ok(res, files);
 }
 
 /** GET /api/projects/:id/files?path=relative/path&chatId=X */
 async function handleFileContent(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
   const filePath = req.query.path as string;
   if (!filePath) {
-    res.status(400).json({ error: 'path query required' });
+    fail(res, 400, 'path query required');
     return;
   }
 
@@ -221,27 +225,27 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
   try {
     const fullPath = resolveReadablePath(basePath, filePath);
     if (!fullPath) {
-      res.status(403).json({ error: 'Path outside project' });
+      fail(res, 403, 'Path outside project');
       return;
     }
 
     const stats = await stat(fullPath);
     const maxSize = encoding === 'base64' ? 10 * 1024 * 1024 : 2 * 1024 * 1024;
     if (stats.size > maxSize) {
-      res.status(413).json({ error: `File too large (max ${maxSize / 1024 / 1024}MB)` });
+      fail(res, 413, `File too large (max ${maxSize / 1024 / 1024}MB)`);
       return;
     }
 
     if (encoding === 'base64') {
       const buffer = await readFile(fullPath);
-      res.json({ path: filePath, content: buffer.toString('base64'), encoding: 'base64' });
+      ok(res, { path: filePath, content: buffer.toString('base64'), encoding: 'base64' });
     } else {
       const content = await readFile(fullPath, 'utf-8');
-      res.json({ path: filePath, content });
+      ok(res, { path: filePath, content });
     }
   } catch (err) {
     logger.warn({ err, path: filePath }, 'Failed to read file content');
-    res.status(404).json({ error: 'File not found' });
+    fail(res, 404, 'File not found');
   }
 }
 
@@ -249,13 +253,13 @@ async function handleFileContent(ctx: RouteContext, req: Request, res: Response)
 async function handleWriteFile(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = validate(WriteFileBody, req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error });
+    fail(res, 400, parsed.error);
     return;
   }
 
   const basePath = getEffectivePath(ctx, param(req, 'id'), parsed.data.chatId);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -265,15 +269,15 @@ async function handleWriteFile(ctx: RouteContext, req: Request, res: Response): 
   try {
     const fullPath = resolveAndValidatePath(basePath, filePath);
     if (!fullPath) {
-      res.status(403).json({ error: 'Path outside project' });
+      fail(res, 403, 'Path outside project');
       return;
     }
 
     await writeFile(fullPath, content, 'utf-8');
-    res.json({ path: filePath, success: true });
+    ok(res, { path: filePath });
   } catch (err) {
     logger.warn({ err, path: filePath }, 'Failed to write file');
-    res.status(500).json({ error: 'Failed to write file' });
+    fail(res, 500, 'Failed to write file');
   }
 }
 
@@ -311,7 +315,7 @@ function isBlockedExternalPath(resolved: string): boolean {
 async function handleExternalFileContent(_ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = validate(ExternalFileQuery, req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error });
+    fail(res, 400, parsed.error);
     return;
   }
 
@@ -320,7 +324,7 @@ async function handleExternalFileContent(_ctx: RouteContext, req: Request, res: 
   // Check blocklist against the raw requested path first (before realpath) so that
   // attempts to access sensitive paths are rejected even when the file doesn't exist.
   if (isBlockedExternalPath(requestedPath)) {
-    res.status(403).json({ error: 'Access to this path is not allowed' });
+    fail(res, 403, 'Access to this path is not allowed');
     return;
   }
 
@@ -328,13 +332,13 @@ async function handleExternalFileContent(_ctx: RouteContext, req: Request, res: 
   try {
     resolved = await realpath(requestedPath);
   } catch {
-    res.status(404).json({ error: 'File not found' });
+    fail(res, 404, 'File not found');
     return;
   }
 
   // Check again after realpath in case a symlink resolves to a blocked path.
   if (isBlockedExternalPath(resolved)) {
-    res.status(403).json({ error: 'Access to this path is not allowed' });
+    fail(res, 403, 'Access to this path is not allowed');
     return;
   }
 
@@ -343,27 +347,27 @@ async function handleExternalFileContent(_ctx: RouteContext, req: Request, res: 
     fileStat = await stat(resolved);
   } catch (err) {
     logger.warn({ err, path: resolved }, 'Failed to stat external file');
-    res.status(404).json({ error: 'File not found' });
+    fail(res, 404, 'File not found');
     return;
   }
 
   if (!fileStat.isFile()) {
-    res.status(400).json({ error: 'Path is not a file' });
+    fail(res, 400, 'Path is not a file');
     return;
   }
 
   const MAX_SIZE = 2 * 1024 * 1024;
   if (fileStat.size > MAX_SIZE) {
-    res.status(413).json({ error: 'File too large (max 2MB)' });
+    fail(res, 413, 'File too large (max 2MB)');
     return;
   }
 
   try {
     const content = await readFile(resolved, 'utf-8');
-    res.json({ path: resolved, content });
+    ok(res, { path: resolved, content });
   } catch (err) {
     logger.warn({ err, path: resolved }, 'Failed to read external file');
-    res.status(500).json({ error: 'Failed to read file' });
+    fail(res, 500, 'Failed to read file');
   }
 }
 
@@ -371,7 +375,7 @@ async function handleExternalFileContent(_ctx: RouteContext, req: Request, res: 
 async function handleBrowseFilesystem(_ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = validate(BrowseFilesystemQuery, req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error });
+    fail(res, 400, parsed.error);
     return;
   }
 
@@ -390,7 +394,7 @@ async function handleBrowseFilesystem(_ctx: RouteContext, req: Request, res: Res
   try {
     real = await realpath(normalized);
   } catch {
-    res.status(404).json({ error: 'Directory not found' });
+    fail(res, 404, 'Directory not found');
     return;
   }
 
@@ -430,10 +434,10 @@ async function handleBrowseFilesystem(_ctx: RouteContext, req: Request, res: Res
       return a.name.localeCompare(b.name);
     });
 
-    res.json({ path: real, entries: resolved });
+    ok(res, { path: real, entries: resolved });
   } catch (err) {
     logger.warn({ err, path: requestedPath }, 'Failed to browse directory');
-    res.status(404).json({ error: 'Directory not found' });
+    fail(res, 404, 'Directory not found');
   }
 }
 

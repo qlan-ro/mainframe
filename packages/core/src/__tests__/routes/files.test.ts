@@ -64,10 +64,13 @@ describe('GET /api/projects/:id/tree', () => {
     await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
     expect(res.json).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'src', type: 'directory' }),
-        expect.objectContaining({ name: 'README.md', type: 'file' }),
-      ]),
+      expect.objectContaining({
+        success: true,
+        data: expect.arrayContaining([
+          expect.objectContaining({ name: 'src', type: 'directory' }),
+          expect.objectContaining({ name: 'README.md', type: 'file' }),
+        ]),
+      }),
     );
   });
 
@@ -94,7 +97,7 @@ describe('GET /api/projects/:id/tree', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
-    const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+    const entries = (res.json.mock.calls[0][0] as { success: true; data: Array<{ name: string; type: string }> }).data;
     const link = entries.find((e) => e.name === 'link-to-dir');
     expect(link).toBeDefined();
     expect(link?.type).toBe('directory');
@@ -111,7 +114,7 @@ describe('GET /api/projects/:id/tree', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
-    const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+    const entries = (res.json.mock.calls[0][0] as { success: true; data: Array<{ name: string; type: string }> }).data;
     const link = entries.find((e) => e.name === 'link-to-file');
     expect(link).toBeDefined();
     expect(link?.type).toBe('file');
@@ -128,7 +131,7 @@ describe('GET /api/projects/:id/tree', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
-    const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+    const entries = (res.json.mock.calls[0][0] as { success: true; data: Array<{ name: string; type: string }> }).data;
     expect(entries.find((e) => e.name === 'broken-link')).toBeUndefined();
     expect(entries.find((e) => e.name === 'visible.txt')).toBeDefined();
   });
@@ -145,7 +148,8 @@ describe('GET /api/projects/:id/tree', () => {
 
       await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
-      const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+      const entries = (res.json.mock.calls[0][0] as { success: true; data: Array<{ name: string; type: string }> })
+        .data;
       const link = entries.find((e) => e.name === 'outside-dir-link');
       expect(link).toBeDefined();
       expect(link?.type).toBe('directory');
@@ -166,7 +170,7 @@ describe('GET /api/projects/:id/tree', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { path: '.' } }, res, vi.fn());
 
-    const entries = res.json.mock.calls[0][0] as Array<{ name: string }>;
+    const entries = (res.json.mock.calls[0][0] as { success: true; data: Array<{ name: string }> }).data;
     expect(entries.find((e) => e.name === '.claude')).toBeDefined();
     expect(entries.find((e) => e.name === '.env')).toBeDefined();
     expect(entries.find((e) => e.name === 'src')).toBeDefined();
@@ -184,7 +188,7 @@ describe('GET /api/projects/:id/tree', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { path: '.claude' } }, res, vi.fn());
 
-    const entries = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+    const entries = (res.json.mock.calls[0][0] as { success: true; data: Array<{ name: string; type: string }> }).data;
     const wt = entries.find((e) => e.name === 'worktrees');
     expect(wt).toBeDefined();
     expect(wt?.type).toBe('directory');
@@ -200,7 +204,7 @@ describe('GET /api/projects/:id/search/files', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { q: '' } }, res, vi.fn());
 
-    expect(res.json).toHaveBeenCalledWith([]);
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: [] });
   });
 
   it('finds files by name', async () => {
@@ -214,7 +218,7 @@ describe('GET /api/projects/:id/search/files', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { q: 'main' } }, res, vi.fn());
 
-    const results = res.json.mock.calls[0][0] as Array<{ name: string }>;
+    const results = (res.json.mock.calls[0][0] as { success: true; data: Array<{ name: string }> }).data;
     expect(results.some((r) => r.name === 'main.ts')).toBe(true);
   });
 
@@ -235,7 +239,7 @@ describe('GET /api/projects/:id/search/files', () => {
     // query 'app' matches app.ts; query 'env' matches .env.local
     await handler({ params: { id: 'proj-1' }, query: { q: 'env' } }, res, vi.fn());
 
-    const results = res.json.mock.calls[0][0];
+    const results = (res.json.mock.calls[0][0] as { success: true; data: any[] }).data;
     const names = results.map((r: any) => r.name);
     // gitignored config file should now surface
     expect(names).toContain('.env.local');
@@ -259,7 +263,7 @@ describe('GET /api/projects/:id/search/files', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { q: 'icon' } }, res, vi.fn());
 
-    const results = res.json.mock.calls[0][0];
+    const results = (res.json.mock.calls[0][0] as { success: true; data: any[] }).data;
     const names = results.map((r: any) => r.name);
 
     // Editable source file should surface
@@ -283,7 +287,7 @@ describe('GET /api/projects/:id/search/files', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { q: 'legacy_lumen' } }, res, vi.fn());
 
-    const results = res.json.mock.calls[0][0];
+    const results = (res.json.mock.calls[0][0] as { success: true; data: any[] }).data;
     const names = results.map((r: any) => r.name);
     expect(names).toContain('legacy_lumen.log');
   });
@@ -299,7 +303,7 @@ describe('GET /api/projects/:id/search/files', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { q: 'button' } }, res, vi.fn());
 
-    const results = res.json.mock.calls[0][0] as Array<{ name: string; type: string }>;
+    const results = (res.json.mock.calls[0][0] as { success: true; data: Array<{ name: string; type: string }> }).data;
     // Every result must be a file — no directories
     for (const r of results) {
       expect(r.type).toBe('file');
@@ -334,11 +338,14 @@ describe('GET /api/filesystem/browse', () => {
     await handler({ query: { path: projectDir } } as any, res, vi.fn());
 
     expect(res.json).toHaveBeenCalledWith({
-      path: realProjectDir,
-      entries: [
-        { name: 'alpha', path: expect.stringContaining('alpha'), type: 'directory' },
-        { name: 'beta', path: expect.stringContaining('beta'), type: 'directory' },
-      ],
+      success: true,
+      data: {
+        path: realProjectDir,
+        entries: [
+          { name: 'alpha', path: expect.stringContaining('alpha'), type: 'directory' },
+          { name: 'beta', path: expect.stringContaining('beta'), type: 'directory' },
+        ],
+      },
     });
   });
 
@@ -356,7 +363,7 @@ describe('GET /api/filesystem/browse', () => {
 
     await handler({ query: { path: projectDir } } as any, res, vi.fn());
 
-    const result = res.json.mock.calls[0][0];
+    const result = (res.json.mock.calls[0][0] as { success: true; data: { entries: { name: string }[] } }).data;
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0].name).toBe('visible');
   });
@@ -391,7 +398,7 @@ describe('GET /api/filesystem/browse', () => {
       await handler({ query: { path: outsideDir } } as any, res, vi.fn());
 
       expect(res.status).not.toHaveBeenCalledWith(403);
-      const result = res.json.mock.calls[0][0];
+      const result = (res.json.mock.calls[0][0] as { success: true; data: { entries: { name: string }[] } }).data;
       expect(result.entries.some((e: { name: string }) => e.name === 'subdir')).toBe(true);
     } finally {
       await rm(outsideDir, { recursive: true, force: true });
@@ -410,7 +417,7 @@ describe('GET /api/filesystem/browse', () => {
     await handler({ query: { path: '~/sub' } } as any, res, vi.fn());
 
     expect(res.status).not.toHaveBeenCalledWith(404);
-    const result = res.json.mock.calls[0][0];
+    const result = (res.json.mock.calls[0][0] as { success: true; data: { path: string } }).data;
     expect(result.path).toContain('sub');
   });
 
@@ -428,7 +435,8 @@ describe('GET /api/filesystem/browse', () => {
     const resDirs = mockRes();
     await handler({ query: { path: projectDir } } as any, resDirs, vi.fn());
 
-    const defaultResult = resDirs.json.mock.calls[0][0];
+    type BrowseResult = { success: true; data: { entries: { name: string }[] } };
+    const defaultResult = (resDirs.json.mock.calls[0][0] as BrowseResult).data;
     expect(defaultResult.entries.some((e: { name: string }) => e.name === 'myfile.txt')).toBe(false);
     expect(defaultResult.entries.some((e: { name: string }) => e.name === 'mydir')).toBe(true);
 
@@ -436,7 +444,7 @@ describe('GET /api/filesystem/browse', () => {
     const resBoth = mockRes();
     await handler({ query: { path: projectDir, includeFiles: 'true' } } as any, resBoth, vi.fn());
 
-    const filesResult = resBoth.json.mock.calls[0][0];
+    const filesResult = (resBoth.json.mock.calls[0][0] as BrowseResult).data;
     expect(filesResult.entries.some((e: { name: string }) => e.name === 'myfile.txt')).toBe(true);
     expect(filesResult.entries.some((e: { name: string }) => e.name === 'mydir')).toBe(true);
   });
@@ -455,7 +463,8 @@ describe('GET /api/filesystem/browse', () => {
     const resDefault = mockRes();
     await handler({ query: { path: projectDir } } as any, resDefault, vi.fn());
 
-    const defaultResult = resDefault.json.mock.calls[0][0];
+    type BrowseResult = { success: true; data: { entries: { name: string }[] } };
+    const defaultResult = (resDefault.json.mock.calls[0][0] as BrowseResult).data;
     expect(defaultResult.entries.some((e: { name: string }) => e.name === '.hidden')).toBe(false);
     expect(defaultResult.entries.some((e: { name: string }) => e.name === 'visible.txt')).toBe(false);
 
@@ -463,7 +472,7 @@ describe('GET /api/filesystem/browse', () => {
     const resFiles = mockRes();
     await handler({ query: { path: projectDir, includeFiles: 'true' } } as any, resFiles, vi.fn());
 
-    const filesResult = resFiles.json.mock.calls[0][0];
+    const filesResult = (resFiles.json.mock.calls[0][0] as BrowseResult).data;
     expect(filesResult.entries.some((e: { name: string }) => e.name === 'visible.txt')).toBe(true);
     expect(filesResult.entries.some((e: { name: string }) => e.name === '.hidden')).toBe(false);
 
@@ -475,7 +484,7 @@ describe('GET /api/filesystem/browse', () => {
       vi.fn(),
     );
 
-    const bothResult = resBoth.json.mock.calls[0][0];
+    const bothResult = (resBoth.json.mock.calls[0][0] as BrowseResult).data;
     expect(bothResult.entries.some((e: { name: string }) => e.name === 'visible.txt')).toBe(true);
     expect(bothResult.entries.some((e: { name: string }) => e.name === '.hidden')).toBe(true);
   });
@@ -493,7 +502,7 @@ describe('GET /api/filesystem/browse', () => {
 
     await handler({ query: { path: projectDir, includeHidden: 'true' } } as any, res, vi.fn());
 
-    const result = res.json.mock.calls[0][0];
+    const result = (res.json.mock.calls[0][0] as { success: true; data: { entries: { name: string }[] } }).data;
     expect(result.entries.some((e: { name: string }) => e.name === 'node_modules')).toBe(false);
     expect(result.entries.some((e: { name: string }) => e.name === 'src')).toBe(true);
   });
@@ -511,7 +520,8 @@ describe('GET /api/filesystem/browse', () => {
 
     await handler({ query: { path: projectDir, includeFiles: 'true' } } as any, res, vi.fn());
 
-    const result = res.json.mock.calls[0][0];
+    const result = (res.json.mock.calls[0][0] as { success: true; data: { entries: { name: string; type: string }[] } })
+      .data;
     const dirEntry = result.entries.find((e: { name: string }) => e.name === 'adir');
     const fileEntry = result.entries.find((e: { name: string }) => e.name === 'afile.ts');
     expect(dirEntry?.type).toBe('directory');
@@ -530,7 +540,9 @@ describe('GET /api/projects/:id/files', () => {
 
     await handler({ params: { id: 'proj-1' }, query: { path: 'hello.txt' } }, res, vi.fn());
 
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ content: 'world' }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: expect.objectContaining({ content: 'world' }) }),
+    );
   });
 
   it('rejects path traversal with 403', async () => {
@@ -557,7 +569,9 @@ describe('GET /api/files/external', () => {
 
     await handler({ query: { path: extFile } } as any, res, vi.fn());
 
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ content: '# External' }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: expect.objectContaining({ content: '# External' }) }),
+    );
   });
 
   it('returns 404 for a non-existent file', async () => {

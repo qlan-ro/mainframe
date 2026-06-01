@@ -8,12 +8,18 @@ export async function getFileTree(
 ): Promise<{ name: string; type: 'file' | 'directory'; path: string }[]> {
   const params = new URLSearchParams({ path: dirPath });
   if (chatId) params.set('chatId', chatId);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/tree?${params}`);
+  const json = await fetchJson<ApiResponse<{ name: string; type: 'file' | 'directory'; path: string }[]>>(
+    `${API_BASE}/api/projects/${projectId}/tree?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getFilesList(projectId: string, chatId?: string): Promise<string[]> {
   const params = chatId ? `?chatId=${chatId}` : '';
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/files-list${params}`);
+  const json = await fetchJson<ApiResponse<string[]>>(`${API_BASE}/api/projects/${projectId}/files-list${params}`);
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function searchFiles(
@@ -24,7 +30,11 @@ export async function searchFiles(
 ): Promise<{ name: string; path: string; type: string }[]> {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
   if (chatId) params.set('chatId', chatId);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/search/files?${params}`);
+  const json = await fetchJson<ApiResponse<{ name: string; path: string; type: string }[]>>(
+    `${API_BASE}/api/projects/${projectId}/search/files?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getFileContent(
@@ -34,7 +44,11 @@ export async function getFileContent(
 ): Promise<{ path: string; content: string }> {
   const params = new URLSearchParams({ path: filePath });
   if (chatId) params.set('chatId', chatId);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/files?${params}`);
+  const json = await fetchJson<ApiResponse<{ path: string; content: string }>>(
+    `${API_BASE}/api/projects/${projectId}/files?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function saveFileContent(
@@ -43,7 +57,12 @@ export async function saveFileContent(
   content: string,
   chatId?: string,
 ): Promise<void> {
-  await putJson(`${API_BASE}/api/projects/${projectId}/files`, { path: filePath, content, chatId });
+  const json = await putJson<ApiResponse<{ path: string }>>(`${API_BASE}/api/projects/${projectId}/files`, {
+    path: filePath,
+    content,
+    chatId,
+  });
+  if (!json.success) throw new Error(json.error);
 }
 
 /**
@@ -52,7 +71,11 @@ export async function saveFileContent(
  */
 export async function getExternalFileContent(absolutePath: string): Promise<{ path: string; content: string }> {
   const params = new URLSearchParams({ path: absolutePath });
-  return fetchJson(`${API_BASE}/api/files/external?${params}`);
+  const json = await fetchJson<ApiResponse<{ path: string; content: string }>>(
+    `${API_BASE}/api/files/external?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getFileBinary(
@@ -62,7 +85,11 @@ export async function getFileBinary(
 ): Promise<{ path: string; content: string; encoding: 'base64' }> {
   const params = new URLSearchParams({ path: filePath, encoding: 'base64' });
   if (chatId) params.set('chatId', chatId);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/files?${params}`);
+  const json = await fetchJson<ApiResponse<{ path: string; content: string; encoding: 'base64' }>>(
+    `${API_BASE}/api/projects/${projectId}/files?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getPendingPermission(chatId: string): Promise<ControlRequest | null> {
@@ -111,7 +138,11 @@ export async function browseFilesystem(
   if (opts?.includeFiles) params.set('includeFiles', 'true');
   if (opts?.includeHidden) params.set('includeHidden', 'true');
   const qs = params.toString();
-  return fetchJson(`${API_BASE}/api/filesystem/browse${qs ? `?${qs}` : ''}`);
+  const json = await fetchJson<ApiResponse<{ path: string; entries: BrowseEntry[] }>>(
+    `${API_BASE}/api/filesystem/browse${qs ? `?${qs}` : ''}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function searchContent(
