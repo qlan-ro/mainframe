@@ -15,6 +15,24 @@ import { useSkillsStore } from '../../store/skills';
 import { useSandboxStore } from '../../store/sandbox';
 import { useTodosFilterStore } from '../../store/todos-filters';
 import { daemonClient } from '../../lib/client';
+import { getChat } from '../../lib/api/chats-api';
+import { useChatsStore } from '../../store/chats';
+import { useTabsStore } from '../../store/tabs';
+
+/**
+ * Open the chat a Todos plugin route just created. WS8 made chat.created pure
+ * list-sync (no auto-nav), so the plugin-create caller must navigate itself:
+ * fetch the chat, upsert it, select + open its tab, and subscribe for streams.
+ */
+async function openSession(chatId: string, initialMessage: string): Promise<void> {
+  useSkillsStore.getState().setPendingInvocation(initialMessage);
+  usePluginLayoutStore.getState().activateFullview('todos');
+  const chat = await getChat(chatId);
+  useChatsStore.getState().addChat(chat);
+  useChatsStore.getState().setActiveChat(chatId);
+  useTabsStore.getState().openChatTab(chatId, chat.title);
+  daemonClient.subscribe(chatId);
+}
 
 const COLUMNS: { status: TodoStatus; label: string }[] = [
   { status: 'open', label: 'Open' },
@@ -116,9 +134,7 @@ export function TodosPanel(): React.ReactElement {
         setTodos((prev) => [...prev, todo]);
         setModalOpen(false);
         const { chatId, initialMessage } = await todosApi.startSession(todo.id, activeProjectId);
-        useSkillsStore.getState().setPendingInvocation(initialMessage);
-        usePluginLayoutStore.getState().activateFullview('todos');
-        daemonClient.subscribe(chatId);
+        await openSession(chatId, initialMessage);
       } catch (err) {
         log.warn('create-and-start failed', { err: String(err) });
       }
@@ -204,9 +220,7 @@ export function TodosPanel(): React.ReactElement {
         }
 
         const { chatId, initialMessage } = await todosApi.startSession(todo.id, activeProjectId);
-        useSkillsStore.getState().setPendingInvocation(initialMessage);
-        usePluginLayoutStore.getState().activateFullview('todos');
-        daemonClient.subscribe(chatId);
+        await openSession(chatId, initialMessage);
       } catch (err) {
         log.warn('start-session failed', { err: String(err) });
       }
