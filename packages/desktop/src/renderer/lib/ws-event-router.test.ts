@@ -104,54 +104,22 @@ beforeEach(() => {
   getClientId.mockReset();
 });
 
-describe('routeEvent — chat.created auto-select gate', () => {
-  it('auto-selects when originClientId matches our own clientId', () => {
-    getClientId.mockReturnValue('client-self');
-    const event: DaemonEvent = { type: 'chat.created', chat: baseChat, originClientId: 'client-self' };
-    routeEvent(event);
-    expect(addChat).toHaveBeenCalledWith(baseChat);
-    expect(setActiveChat).toHaveBeenCalledWith(baseChat.id);
-    expect(openChatTab).toHaveBeenCalledWith(baseChat.id, baseChat.title);
-  });
-
-  it('does NOT auto-select when originClientId belongs to another client', () => {
-    getClientId.mockReturnValue('client-self');
-    const event: DaemonEvent = { type: 'chat.created', chat: baseChat, originClientId: 'client-other' };
-    routeEvent(event);
-    expect(addChat).toHaveBeenCalledWith(baseChat);
-    expect(setActiveChat).not.toHaveBeenCalled();
-    expect(openChatTab).not.toHaveBeenCalled();
-  });
-
-  it('auto-selects when originClientId is undefined (legacy / plugin HTTP path)', () => {
-    // Plugin-driven HTTP routes (e.g. POST /todos/:id/start-session) emit
-    // chat.created outside the WS AsyncLocalStorage scope, so origin is
-    // undefined. We treat that as "this client" so the user clicking
-    // "Start session" still gets navigation.
-    getClientId.mockReturnValue('client-self');
+describe('routeEvent — chat.created is pure list-sync (WS8)', () => {
+  // Post-WS8, navigation is driven by the REST caller (startChat / Todos
+  // start-session), not by this broadcast. chat.created only upserts the chat
+  // into the list — it never navigates, regardless of source.
+  it('upserts the chat and does NOT navigate', () => {
     const event: DaemonEvent = { type: 'chat.created', chat: baseChat };
     routeEvent(event);
-    expect(setActiveChat).toHaveBeenCalledWith(baseChat.id);
-    expect(openChatTab).toHaveBeenCalledWith(baseChat.id, baseChat.title);
-  });
-
-  it('does NOT auto-select for imports even when origin matches', () => {
-    getClientId.mockReturnValue('client-self');
-    const event: DaemonEvent = {
-      type: 'chat.created',
-      chat: baseChat,
-      source: 'import',
-      originClientId: 'client-self',
-    };
-    routeEvent(event);
+    expect(addChat).toHaveBeenCalledWith(baseChat);
     expect(setActiveChat).not.toHaveBeenCalled();
     expect(openChatTab).not.toHaveBeenCalled();
   });
 
-  it('does NOT auto-select for imports even when origin is undefined', () => {
-    getClientId.mockReturnValue('client-self');
+  it('does NOT navigate for imports either', () => {
     const event: DaemonEvent = { type: 'chat.created', chat: baseChat, source: 'import' };
     routeEvent(event);
+    expect(addChat).toHaveBeenCalledWith(baseChat);
     expect(setActiveChat).not.toHaveBeenCalled();
     expect(openChatTab).not.toHaveBeenCalled();
   });

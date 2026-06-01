@@ -5,7 +5,7 @@ import type { LaunchProcessStatus } from './launch.js';
 
 export type DaemonEvent =
   | { type: 'connection.ready'; clientId: string }
-  | { type: 'chat.created'; chat: Chat; source?: 'import'; originClientId?: string }
+  | { type: 'chat.created'; chat: Chat; source?: 'import' }
   | { type: 'chat.updated'; chat: Chat; reason?: 'completed' | 'error' | 'interrupted' }
   | { type: 'chat.ended'; chatId: string }
   | { type: 'process.started'; chatId: string; process: AdapterProcess }

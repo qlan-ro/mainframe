@@ -164,6 +164,17 @@ describe('useChatsStore', () => {
       const ids = useChatsStore.getState().chats.map((c: Chat) => c.id);
       expect(ids).toEqual(['b', 'a']);
     });
+
+    it('upserts by id — re-adding the same chat does not duplicate (WS8)', () => {
+      // The REST caller adds the chat from its 200, then the chat.created
+      // broadcast re-adds the same id. addChat must dedup.
+      const chat = makeChat({ id: 'a', title: 'First' });
+      useChatsStore.getState().addChat(chat);
+      useChatsStore.getState().addChat({ ...chat, title: 'Updated' });
+      const all = useChatsStore.getState().chats.filter((c: Chat) => c.id === 'a');
+      expect(all).toHaveLength(1);
+      expect(all[0]!.title).toBe('Updated');
+    });
   });
 
   describe('updateChat', () => {

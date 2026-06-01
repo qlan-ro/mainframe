@@ -8,7 +8,6 @@ import { useAdaptersStore } from '../store/adapters';
 import { createLogger } from './logger';
 import { buildLaunchScope } from './launch-scope.js';
 import { notify } from './notify';
-import { daemonClient } from './client';
 
 const log = createLogger('renderer:ws');
 
@@ -18,33 +17,20 @@ export function routeEvent(event: DaemonEvent): void {
 
   switch (event.type) {
     case 'chat.created': {
-      log.info('event:chat.created', {
-        chatId: event.chat.id,
-        title: event.chat.title,
-        source: event.source,
-        originClientId: event.originClientId,
-      });
+      // Post-WS8 this is pure list-sync. Navigation is driven by whoever
+      // initiated the create (the REST caller — see startChat / Todos
+      // start-session), not by this broadcast. addChat is an upsert, so a
+      // client that already added the chat from its own REST 200 won't get a
+      // duplicate when the broadcast arrives.
+      log.info('event:chat.created', { chatId: event.chat.id, title: event.chat.title, source: event.source });
       chats.addChat(event.chat);
-      // Auto-select + open tab when this client either (a) originated the
-      // creation over WS (originClientId matches our id), or (b) the event
-      // carries no origin attribution at all — that path covers plugin HTTP
-      // routes (e.g. POST /todos/:id/start-session) that emit chat.created
-      // outside the WS AsyncLocalStorage context. Skipping those would leave
-      // the user clicking "Start session" with no visible navigation.
-      // Other-client originated creates (mobile, secondary desktops) still
-      // get filtered by the strict mismatch case below — and imports always
-      // skip the auto-select via the source check.
-      const ownClientId = daemonClient.getClientId();
-      const hasOrigin = event.originClientId !== undefined;
-      const isOwnOrigin = hasOrigin ? event.originClientId === ownClientId : true;
-      if (event.source !== 'import' && isOwnOrigin) {
-        chats.setActiveChat(event.chat.id);
-        tabs.openChatTab(event.chat.id, event.chat.title);
-      }
       break;
     }
     case 'connection.ready':
       // Handled in DaemonClient before dispatch — no-op here for exhaustiveness.
+      break;
+    case 'subscribe:ack':
+      // Consumed by DaemonClient (resolves the resume ack waiter) — no UI action.
       break;
     case 'chat.updated': {
       log.debug('event:chat.updated', { chatId: event.chat.id });
