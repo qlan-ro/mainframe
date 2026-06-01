@@ -82,7 +82,11 @@ export async function getSessionContext(chatId: string): Promise<SessionContext>
 }
 
 export async function getSessionFile(chatId: string, filePath: string): Promise<{ path: string; content: string }> {
-  return fetchJson(`${API_BASE}/api/chats/${chatId}/session-file?path=${encodeURIComponent(filePath)}`);
+  const json = await fetchJson<ApiResponse<{ path: string; content: string }>>(
+    `${API_BASE}/api/chats/${chatId}/session-file?path=${encodeURIComponent(filePath)}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function addMention(

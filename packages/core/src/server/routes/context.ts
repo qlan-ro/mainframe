@@ -6,6 +6,7 @@ import { param } from './types.js';
 import { resolveReadablePath } from './path-utils.js';
 import { validate, AddMentionBody } from './schemas.js';
 import { asyncHandler } from './async-handler.js';
+import { ok, fail } from './respond.js';
 import { createChildLogger } from '../../logger.js';
 
 const logger = createChildLogger('routes:context');
@@ -60,10 +61,10 @@ export function contextRoutes(ctx: RouteContext): Router {
         }
 
         const content = await readFile(fullPath, 'utf-8');
-        res.json({ path: filePath, content });
+        ok(res, { path: filePath, content });
       } catch (err) {
         logger.warn({ err, path: filePath }, 'Failed to read session file');
-        res.status(404).json({ success: false, error: 'File not found' });
+        fail(res, 404, 'File not found');
       }
     }),
   );
