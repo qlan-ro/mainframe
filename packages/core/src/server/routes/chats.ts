@@ -4,6 +4,7 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
+import { ok } from './respond.js';
 import { createChildLogger } from '../../logger.js';
 import { extractSessionFilePaths } from '../../messages/session-files.js';
 import { readToolResultFromJsonl } from '../../messages/read-tool-result-from-jsonl.js';
@@ -202,7 +203,7 @@ export function chatRoutes(ctx: RouteContext): Router {
       // in-memory cache during an active session.
       const messages = await ctx.chats.getMessagesFromDisk(chatId);
       const files = extractSessionFilePaths(messages);
-      res.json({ files });
+      ok(res, { files });
     }),
   );
 

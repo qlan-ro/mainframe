@@ -100,7 +100,9 @@ export async function getPendingPermission(chatId: string): Promise<ControlReque
 }
 
 export async function getSessionFiles(chatId: string): Promise<{ files: string[] }> {
-  return fetchJson(`${API_BASE}/api/chats/${chatId}/session-files`);
+  const json = await fetchJson<ApiResponse<{ files: string[] }>>(`${API_BASE}/api/chats/${chatId}/session-files`);
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getSessionContext(chatId: string): Promise<SessionContext> {

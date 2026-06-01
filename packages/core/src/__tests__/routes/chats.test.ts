@@ -354,7 +354,7 @@ describe('chatRoutes', () => {
       await flushPromises();
 
       expect(ctx.chats.getMessagesFromDisk).toHaveBeenCalledWith('c1');
-      expect(res.json).toHaveBeenCalledWith({ files: ['src/index.ts'] });
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: { files: ['src/index.ts'] } });
     });
   });
 });
