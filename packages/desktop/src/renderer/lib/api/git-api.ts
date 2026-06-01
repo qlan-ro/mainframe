@@ -13,7 +13,11 @@ import { fetchJson, postJson, API_BASE } from './http';
 
 export async function getGitBranch(projectId: string, chatId?: string): Promise<{ branch: string | null }> {
   const params = chatId ? `?chatId=${chatId}` : '';
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/git/branch${params}`);
+  const json = await fetchJson<ApiResponse<{ branch: string | null }>>(
+    `${API_BASE}/api/projects/${projectId}/git/branch${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getGitStatus(
@@ -21,7 +25,11 @@ export async function getGitStatus(
   chatId?: string,
 ): Promise<{ files: { status: string; path: string }[] }> {
   const params = chatId ? `?chatId=${chatId}` : '';
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/git/status${params}`);
+  const json = await fetchJson<ApiResponse<{ files: { status: string; path: string }[] }>>(
+    `${API_BASE}/api/projects/${projectId}/git/status${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export async function getGitBranches(projectId: string, chatId?: string): Promise<BranchListResult> {
@@ -171,7 +179,11 @@ export async function getDiff(
   if (chatId) params.set('chatId', chatId);
   if (oldPath) params.set('oldPath', oldPath);
   if (base) params.set('base', base);
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/git/diff?${params}`);
+  const json = await fetchJson<ApiResponse<{ original: string; modified: string; diff?: string; source: string }>>(
+    `${API_BASE}/api/projects/${projectId}/git/diff?${params}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }
 
 export interface BranchDiffResponse {
@@ -185,5 +197,9 @@ export async function getBranchDiffs(projectId: string, chatId?: string): Promis
   const params = new URLSearchParams();
   if (chatId) params.set('chatId', chatId);
   const qs = params.toString();
-  return fetchJson(`${API_BASE}/api/projects/${projectId}/git/branch-diffs${qs ? `?${qs}` : ''}`);
+  const json = await fetchJson<ApiResponse<BranchDiffResponse>>(
+    `${API_BASE}/api/projects/${projectId}/git/branch-diffs${qs ? `?${qs}` : ''}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data;
 }

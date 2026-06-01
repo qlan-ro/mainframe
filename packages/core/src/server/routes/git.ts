@@ -11,6 +11,7 @@ import { createChildLogger } from '../../logger.js';
 import { gitWriteRoutes } from './git-write.js';
 import { gitChatRoutes } from './git-chat.js';
 import { isNotGitRepo, parseDiffNameStatus, parseStatusLines } from '../../git/git-parse.js';
+import { ok, fail } from './respond.js';
 
 const GitDiffQuery = z.object({
   chatId: z.string().optional(),
@@ -28,7 +29,7 @@ const logger = createChildLogger('routes:git');
 async function handleGitStatus(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -36,12 +37,12 @@ async function handleGitStatus(ctx: RouteContext, req: Request, res: Response): 
     const svc = GitService.forProject(basePath);
     const status = await svc.statusRaw();
     const files = parseStatusLines(status);
-    res.json({ files });
+    ok(res, { files });
   } catch (err) {
     if (!isNotGitRepo(err)) {
       logger.warn({ err, basePath }, 'Failed to get git status');
     }
-    res.json({ files: [], error: 'Not a git repository' });
+    ok(res, { files: [], error: 'Not a git repository' });
   }
 }
 
@@ -49,19 +50,19 @@ async function handleGitStatus(ctx: RouteContext, req: Request, res: Response): 
 async function handleGitBranch(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
   try {
     const svc = GitService.forProject(basePath);
     const branch = await svc.currentBranch();
-    res.json({ branch });
+    ok(res, { branch });
   } catch (err) {
     if (!isNotGitRepo(err)) {
       logger.warn({ err, basePath }, 'Failed to get git branch');
     }
-    res.json({ branch: null });
+    ok(res, { branch: null });
   }
 }
 
@@ -69,7 +70,7 @@ async function handleGitBranch(ctx: RouteContext, req: Request, res: Response): 
 async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const basePath = getEffectivePath(ctx, param(req, 'id'), req.query.chatId as string | undefined);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -79,7 +80,7 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
     const baseInfo = await svc.detectBaseBranch();
 
     if (!baseInfo || branch === baseInfo.baseBranch) {
-      res.json({ branch, baseBranch: null, mergeBase: null, files: [] });
+      ok(res, { branch, baseBranch: null, mergeBase: null, files: [] });
       return;
     }
 
@@ -87,12 +88,12 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
     const committedOutput = await svc.diff(['--name-status', `${mergeBase}..HEAD`]);
     const files = parseDiffNameStatus(committedOutput);
 
-    res.json({ branch, baseBranch, mergeBase, files });
+    ok(res, { branch, baseBranch, mergeBase, files });
   } catch (err) {
     if (!isNotGitRepo(err)) {
       logger.warn({ err, basePath }, 'Failed to compute branch diffs');
     }
-    res.json({ branch: null, baseBranch: null, mergeBase: null, files: [] });
+    ok(res, { branch: null, baseBranch: null, mergeBase: null, files: [] });
   }
 }
 
@@ -100,14 +101,14 @@ async function handleBranchDiffs(ctx: RouteContext, req: Request, res: Response)
 async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promise<void> {
   const parsed = validate(GitDiffQuery, req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error });
+    fail(res, 400, parsed.error);
     return;
   }
 
   const { chatId, file, oldPath, base } = parsed.data;
   const basePath = getEffectivePath(ctx, param(req, 'id'), chatId);
   if (!basePath) {
-    res.status(404).json({ error: 'Project not found' });
+    fail(res, 404, 'Project not found');
     return;
   }
 
@@ -129,7 +130,7 @@ async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promi
     if (file) {
       const resolvedFile = resolveAndValidatePath(basePath, file);
       if (!resolvedFile) {
-        res.status(403).json({ error: 'Path outside project' });
+        fail(res, 403, 'Path outside project');
         return;
       }
       try {
@@ -138,12 +139,12 @@ async function handleDiff(ctx: RouteContext, req: Request, res: Response): Promi
         /* deleted file */
       }
     }
-    res.json({ diff, original, modified, source: 'git' });
+    ok(res, { diff, original, modified, source: 'git' });
   } catch (err) {
     if (!isNotGitRepo(err)) {
       logger.warn({ err, basePath, file }, 'Failed to compute git diff');
     }
-    res.json({ diff: '', original: '', modified: '', source: 'git' });
+    ok(res, { diff: '', original: '', modified: '', source: 'git' });
   }
 }
 
