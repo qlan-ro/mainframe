@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:app": "VITE_DAEMON_HTTP_PORT=${MF_E2E_DAEMON_PORT:-31416} VITE_DAEMON_WS_PORT=${MF_E2E_DAEMON_PORT:-31416} pnpm --filter @qlan-ro/mainframe-desktop build && pnpm --filter @qlan-ro/mainframe-core build",
+    "build:app": "pnpm --filter @qlan-ro/mainframe-types build && pnpm --filter @qlan-ro/mainframe-core build && VITE_DAEMON_HTTP_PORT=${MF_E2E_DAEMON_PORT:-31416} VITE_DAEMON_WS_PORT=${MF_E2E_DAEMON_PORT:-31416} pnpm --filter @qlan-ro/mainframe-desktop build",
     "test": "playwright test",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",

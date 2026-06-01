@@ -10,7 +10,7 @@ test.describe('§47 Thread interactions', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'thread' });
     project = await createTestProject(fixture.page);
     await createTestChat(fixture.page, project.projectId, 'yolo');
   });
@@ -53,8 +53,24 @@ test.describe('§47 Thread interactions', () => {
 
   test('TH2: quoting a message inserts it into the composer', async () => {
     const { page } = fixture;
-    // Select some message text (triple-click selects the paragraph), then click Quote.
-    await page.getByText('deliberately long sentence', { exact: false }).first().click({ clickCount: 3 });
+    // Scope to the thread: the session list also renders the message text in a (non-selectable,
+    // truncated) preview span, and a bare getByText().first() matched THAT instead of the bubble.
+    const para = page
+      .locator('[data-mf-chat-thread]')
+      .getByText('deliberately long sentence', { exact: false })
+      .first();
+    await para.scrollIntoViewIfNeeded();
+    // Select the paragraph's contents via a DOM Range and fire mouseup — the browser's native
+    // triple-click "select paragraph" gesture is flaky headless (often collapses), and
+    // QuoteOnSelectionButton only shows on a non-collapsed selection finalized at mouseup.
+    await para.evaluate((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    });
     const quote = page.locator('[data-testid="thread-quote"]');
     await expect(quote).toBeVisible({ timeout: 5_000 });
     await quote.click();

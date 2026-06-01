@@ -16,7 +16,7 @@ test.describe('§30 Composer attachments', () => {
   let testImagePath: string;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'composer-attachments' });
     project = await createTestProject(fixture.page);
     testImagePath = path.join(project.projectPath, 'test-image.png');
     writeFileSync(testImagePath, Buffer.from(TINY_PNG_BASE64, 'base64'));

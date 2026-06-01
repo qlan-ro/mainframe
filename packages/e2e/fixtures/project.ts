@@ -45,11 +45,13 @@ export async function createTestProject(page: Page, options?: { claudeMd?: strin
   mkdirSync(tmpBase, { recursive: true });
   const projectPath = realpathSync(mkdtempSync(path.join(tmpBase, 'mf-e2e-')));
 
-  // Init git repo with an initial commit so git status works
-  execSync('git init && git commit --allow-empty -m "init"', {
-    cwd: projectPath,
-    stdio: 'pipe',
-  });
+  // Init git repo with an initial commit so git status works. Set identity inline (-c) rather than
+  // relying on global git config — CI runners (and fresh dev boxes) have none, and the empty-ident
+  // commit otherwise fails with "fatal: empty ident name not allowed". -b main avoids the master/main hint.
+  execSync(
+    'git init -b main && git -c user.email=e2e@mainframe.test -c user.name="Mainframe E2E" commit --allow-empty -m "init"',
+    { cwd: projectPath, stdio: 'pipe' },
+  );
 
   // Seed files the AI can work with
   writeFileSync(path.join(projectPath, 'CLAUDE.md'), options?.claudeMd ?? DEFAULT_CLAUDE_MD);

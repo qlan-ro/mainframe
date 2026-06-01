@@ -9,7 +9,7 @@ test.describe('§32 Chat status & context usage', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'chat-status' });
     project = await createTestProject(fixture.page);
     await createTestChat(fixture.page, project.projectId, 'acceptEdits');
   });
@@ -23,7 +23,9 @@ test.describe('§32 Chat status & context usage', () => {
 
     const adapterLabel = page.locator('[data-testid="session-bar-adapter"]');
     await expect(adapterLabel).toBeVisible({ timeout: 5_000 });
-    await expect(adapterLabel).toHaveText('Claude Code');
+    // The label reflects the active adapter — 'Mock CLI' under replay, 'Claude Code' otherwise.
+    const expectedAdapter = process.env['E2E_MODE'] === 'mock' ? 'Mock CLI' : 'Claude Code';
+    await expect(adapterLabel).toHaveText(expectedAdapter);
   });
 
   test('status shows "Thinking" while AI is working', async () => {

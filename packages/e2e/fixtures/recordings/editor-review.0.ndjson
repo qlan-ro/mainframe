@@ -1,0 +1,3 @@
+{"dir":"in","method":"sendMessage","args":["File: `index.ts`\n\nAt line 1:\n```\nexport const greeting = \"hello\";\n```\nPlease refactor this line","undefined","undefined"],"delayMs":6}
+{"dir":"out","method":"onError","args":[{"name":"Error","message":"Error: Can't access working directory /Users/doruchiulan/tmp/mf-e2e-IZstss: Path \"/Users/doruchiulan/tmp/mf-e2e-IZstss\" does not exist"}],"delayMs":357}
+{"dir":"out","method":"onExit","args":[1],"delayMs":363}

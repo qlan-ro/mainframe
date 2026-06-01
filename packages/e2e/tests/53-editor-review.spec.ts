@@ -13,7 +13,7 @@ test.describe('§53 Editor — comments & save', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'editor-review' });
     project = await createTestProject(fixture.page);
     await createTestChat(fixture.page, project.projectId, 'yolo');
     await openZone(fixture.page, 'zone-rail-button-files', 'files-root-toggle');

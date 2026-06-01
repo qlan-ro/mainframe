@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipUnrecordedInMock } from '../helpers/mock-skip.js';
 import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
@@ -54,6 +55,7 @@ test.describe('§6 Permission system — Interactive', () => {
 });
 
 test.describe('§6 Permission system — Auto-Edits', () => {
+  test.beforeEach(skipUnrecordedInMock);
   let fixture: Awaited<ReturnType<typeof launchApp>>;
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
@@ -75,6 +77,7 @@ test.describe('§6 Permission system — Auto-Edits', () => {
 });
 
 test.describe('§6 Permission system — Yolo', () => {
+  test.beforeEach(skipUnrecordedInMock);
   let fixture: Awaited<ReturnType<typeof launchApp>>;
   let project: Awaited<ReturnType<typeof createTestProject>>;
 

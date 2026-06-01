@@ -15,8 +15,10 @@ import { setupWebviewSandbox } from './sandbox.js';
 const APP_AUTHOR = 'Mainframe Contributors';
 
 // Enable Chrome DevTools Protocol on port 9222 for development tooling (e.g. MCP server).
-// Only active in development mode — never exposed in production builds.
-if (process.env.NODE_ENV === 'development') {
+// Only active in development mode — never exposed in production builds. Skipped under e2e
+// (MF_E2E=1): the fixed 9222 collides when the harness launches Electron instances in quick
+// succession (each waits on, then fails to bind, the busy port), making suite runs flaky.
+if (process.env.NODE_ENV === 'development' && process.env.MF_E2E !== '1') {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
 

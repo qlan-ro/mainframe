@@ -259,3 +259,47 @@ The `packages/core/src/testing/` module is only imported from the record block.
 1. Land infra + the one recorded proof (this milestone).
 2. Tag AI-coupled specs and record their fixtures incrementally (follow-up).
 3. CI job runs the suite in `mock` mode; `record` stays a local manual step.
+
+---
+
+# Addendum: reproducing workspace side-effects (the `fx` feature)
+
+The first cut replays the agent's *event stream* only, so specs asserting **real outcomes** fail in
+mock. Two distinct Changes-tab data sources drive this, each needing its own fix:
+
+## 1. Uncommitted / branch mode = real `git` → `fx` events (record + replay file writes)
+
+`git-chat.ts` runs real `git status`/`git diff` on the project. To make these pass, the mock must
+reproduce the file changes on disk.
+
+- **Record** (`record-wrapper.ts`): the per-session recorder closes over `options.projectPath`.
+  After it writes an `onToolResult`/`onResult` `out` event (the tool has executed, so the working
+  tree is current), it runs `git -C <proj> status --porcelain -uall`, reads each changed file's
+  content, notes deletions, and appends an `fx` event with paths **relativized to the project root**.
+  Captures the delta since the previous `fx` to keep fixtures small.
+- **Format**: `{ dir: 'fx', files: [{ path, content }], deleted: string[], delayMs }` — a third `dir`
+  alongside `in`/`out`.
+- **Replay** (`session.ts`/`fixture.ts`): the drain handles `fx` by **applying to disk**
+  (`writeFile(join(projectPath, path))`, `rm` deletions) instead of emitting to the sink. The test's
+  later `git status` (on the identically-seeded replay project) then shows the same changes.
+
+## 2. Session mode = `getMessagesFromDisk` → `adapter.loadHistory()`
+
+`extractSessionFilePaths(getMessagesFromDisk(chatId))` builds the session-file list from the CLI's
+on-disk transcript via `adapter.createSession(...).loadHistory()`. In mock there's no transcript.
+
+- **`ReplaySession.loadHistory()`** returns `ChatMessage[]` reconstructed from the fixture's
+  `onMessage` events (the assistant content blocks, incl. `Write`/`Edit` `tool_use`). That's all
+  `extractSessionFilePaths` needs.
+- **Indexing hazard**: `getMessagesFromDisk` calls `createSession` *again* for the same chat (passing
+  `chatId = recorded sessionId`). A naive per-key index would consume the *next* fixture. Fix: the
+  `MockCliAdapter` caches each live session's parsed events keyed by the **recorded `sessionId`**
+  (parsed from the fixture's `onInit`). A `createSession` whose `options.chatId` matches a cached
+  sessionId is a **passive/history** load — it reuses the cached events and does **not** advance the
+  per-key index.
+
+## Still out of scope (unchanged)
+
+Live processes/network are handled by the launch subsystem, not the AI adapter, and run for real in
+any mode (the sandbox specs already pass in mock). Truly nondeterministic model *choices* are
+recordable only by pinning the prompt/model at record time.

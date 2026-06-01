@@ -1,11 +1,27 @@
 // packages/core/src/testing/recording-format.ts
+
+/** A file the agent created/modified, captured for replay (path is relative to the project root). */
+export interface RecordedFile {
+  path: string;
+  content: string;
+}
+
 export interface RecordedEvent {
-  /** 'in' = daemon called the session (sendMessage/respondToPermission/interrupt); 'out' = session called the sink. */
-  dir: 'in' | 'out';
+  /**
+   * 'in'  = daemon called the session (sendMessage/respondToPermission/interrupt);
+   * 'out' = session called the sink;
+   * 'fx'  = a workspace file-effect snapshot (replay writes/deletes files so real `git`-based
+   *         assertions — e.g. the Changes tab "uncommitted" mode — see the agent's edits).
+   */
+  dir: 'in' | 'out' | 'fx';
   method: string;
   args: unknown[];
   /** Milliseconds since session start when this call happened. */
   delayMs: number;
+  /** fx only: files to write on replay (project-relative paths). */
+  files?: RecordedFile[];
+  /** fx only: project-relative paths to delete on replay. */
+  deleted?: string[];
 }
 
 function safeValue(v: unknown): unknown {

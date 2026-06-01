@@ -11,6 +11,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Path to the built Electron main entry point
 const APP_MAIN = path.resolve(__dirname, '../../../packages/desktop/out/main/index.js');
+
+// Electron's setuid sandbox can't initialize on CI runners (sandboxed/non-root or missing
+// chrome-sandbox perms) → `Process failed to launch`. Disable it under CI; harmless locally.
+export const E2E_ELECTRON_EXTRA_ARGS = process.env['CI'] ? ['--no-sandbox'] : [];
 const RENDERER_INDEX_HTML = path.resolve(__dirname, '../../../packages/desktop/out/renderer/index.html');
 const PROD_DAEMON_PORT = '31415';
 
@@ -201,12 +205,13 @@ export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFi
       // Isolate Electron's Chromium profile (localStorage/zustand-persist for zone layout,
       // tutorial state, etc.) per launch. Without this it lives in the shared default userData
       // dir and bleeds across runs — e.g. a minimized zone in one spec hides controls in the next.
-      args: [APP_MAIN, `--user-data-dir=${path.join(testDataDir, 'electron-profile')}`],
+      args: [APP_MAIN, ...E2E_ELECTRON_EXTRA_ARGS, `--user-data-dir=${path.join(testDataDir, 'electron-profile')}`],
       env: {
         ...process.env,
         NODE_ENV: 'development',
         MAINFRAME_DATA_DIR: testDataDir,
         DAEMON_PORT, // main-process helpers (idle-reporter) target the test daemon
+        MF_E2E: '1', // tells the app to skip the fixed 9222 DevTools port (collides across launches)
       },
     });
     const page = await app.firstWindow();
@@ -226,8 +231,17 @@ export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFi
   }
 }
 
-export async function closeApp(fixture: AppFixture): Promise<void> {
-  await fixture.app.close();
+export async function closeApp(fixture: AppFixture | undefined): Promise<void> {
+  // A beforeAll that threw (e.g. port already busy) leaves fixture undefined; afterAll still runs.
+  if (!fixture) return;
+
+  // Closing Electron can throw/hang under xvfb. Never let that skip the daemon kill below —
+  // a surviving daemon holds port 31416 and makes every subsequent launchApp() fail.
+  try {
+    await fixture.app?.close();
+  } catch (err) {
+    console.warn('[e2e] app.close() during teardown failed; killing daemon anyway:', err);
+  }
 
   // Wait for the daemon to fully exit so the next launchApp() doesn't connect
   // to a stale process still holding the port.

@@ -9,7 +9,7 @@ test.describe('§31 Composer context picker', () => {
   let project: Awaited<ReturnType<typeof createTestProject>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    fixture = await launchApp({ recordingKey: 'context-picker' });
     project = await createTestProject(fixture.page);
     await createTestChat(fixture.page, project.projectId, 'acceptEdits');
     // Boot CLI so it registers commands/skills
