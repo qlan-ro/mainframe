@@ -138,7 +138,7 @@ async function waitForDaemon(maxMs = 10_000): Promise<void> {
   throw new Error(`Daemon did not become ready within ${maxMs}ms`);
 }
 
-export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFixture> {
+export async function launchApp(opts?: { recordingKey?: string; skipTutorial?: boolean }): Promise<AppFixture> {
   // Kill any orphaned e2e Electron from a previously-failed run (they hold the shared 9222 debug
   // port and would hang this launch). Serial suite, so this only ever targets zombies.
   reapStrayE2eElectrons();
@@ -222,6 +222,22 @@ export async function launchApp(opts?: { recordingKey?: string }): Promise<AppFi
       .locator('[data-testid="connection-status"]')
       .getByText('Connected', { exact: true })
       .waitFor({ timeout: 15_000 });
+
+    // Suppress the onboarding tutorial for every spec except the one that tests it. With a fresh
+    // Chromium profile the tutorial defaults to step 1 and — once a project + chat exist — sticks
+    // on step 3 ("Chat with your agent"), anchored over the composer. That overlay can sit on top
+    // of UI that opens above the composer (e.g. the worktree popover tabs) and intercept clicks.
+    // Mark the persisted store complete + reload so TutorialOverlay never renders.
+    if (opts?.skipTutorial !== false) {
+      await page.evaluate(() =>
+        localStorage.setItem('mf:tutorial', JSON.stringify({ state: { completed: true, step: 4 }, version: 0 })),
+      );
+      await page.reload();
+      await page
+        .locator('[data-testid="connection-status"]')
+        .getByText('Connected', { exact: true })
+        .waitFor({ timeout: 15_000 });
+    }
 
     return { app, page, testDataDir, daemon };
   } catch (err) {

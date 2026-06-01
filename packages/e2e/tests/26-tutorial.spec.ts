@@ -7,7 +7,8 @@ test.describe('§26 Tutorial overlay', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
 
   test.beforeAll(async () => {
-    fixture = await launchApp();
+    // This spec exercises the tutorial itself — opt out of launchApp's default suppression.
+    fixture = await launchApp({ skipTutorial: false });
     // Fresh Chromium profile already means empty localStorage, but clear + reload defensively so
     // the tutorial starts at step 1 regardless of any default persisted state.
     await fixture.page.evaluate(() => localStorage.clear());
