@@ -178,7 +178,16 @@ async function handleContentSearch(ctx: RouteContext, req: Request, res: Respons
         if (results.length >= MAX_RESULTS) break;
         if (scanned >= MAX_FILES_SCANNED) break;
 
-        const absFile = path.join(basePath, relFile);
+        // Re-resolve each enumerated file through realpath + containment.
+        // `git ls-files` can return an in-repo symlink that escapes the
+        // project; stat()/readFile() would otherwise follow it and surface
+        // out-of-project content. resolveWithinBase returns null for anything
+        // that resolves outside the base (or no longer exists).
+        const absFile = await resolveWithinBase(basePath, relFile);
+        if (!absFile) {
+          scanned++;
+          continue;
+        }
         let fileStat: Awaited<ReturnType<typeof stat>>;
         try {
           fileStat = await stat(absFile);

@@ -1,5 +1,5 @@
 import { postJson, API_BASE } from './http';
-import type { ApiResponse } from '@qlan-ro/mainframe-types';
+import type { ApiResponse, ApiResponseEmpty } from '@qlan-ro/mainframe-types';
 
 export interface GitDiffResponse {
   diffs: Record<string, { main: string; worktree: string }>;
@@ -30,12 +30,12 @@ export const gitApi = {
   },
 
   async stageFiles(chatId: string, files: string[]): Promise<void> {
-    const json = await postJson<ApiResponse<never>>(`${API_BASE}/api/git/stage`, { chatId, files });
+    const json = await postJson<ApiResponseEmpty>(`${API_BASE}/api/git/stage`, { chatId, files });
     if (!json.success) throw new Error(json.error);
   },
 
   async unstageFiles(chatId: string, files: string[]): Promise<void> {
-    const json = await postJson<ApiResponse<never>>(`${API_BASE}/api/git/unstage`, { chatId, files });
+    const json = await postJson<ApiResponseEmpty>(`${API_BASE}/api/git/unstage`, { chatId, files });
     if (!json.success) throw new Error(json.error);
   },
 
@@ -50,7 +50,7 @@ export const gitApi = {
   },
 
   async push(chatId: string): Promise<void> {
-    const json = await postJson<ApiResponse<never>>(`${API_BASE}/api/git/push`, { chatId });
+    const json = await postJson<ApiResponseEmpty>(`${API_BASE}/api/git/push`, { chatId });
     if (!json.success) throw new Error(json.error);
   },
 };

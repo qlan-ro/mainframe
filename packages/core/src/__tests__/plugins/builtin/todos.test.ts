@@ -160,6 +160,20 @@ describe('todos plugin routes', () => {
     expect(res.status).toBe(400);
   });
 
+  it('POST /todos/:id/attachments accepts a zero-byte file (empty base64 data)', async () => {
+    // A real empty file produces empty base64 (''). The upload schema must not
+    // reject it: the desktop only guards oversize, so an empty file reaches the
+    // route and previously (pre-WS10) persisted fine. sizeBytes carries length.
+    const { app } = makeApp();
+    const create = await request(app).post('/todos').send({ projectId: 'proj-1', title: 'Attachment todo' });
+    const id = create.body.todo.id as string;
+    const res = await request(app)
+      .post(`/todos/${id}/attachments`)
+      .send({ filename: 'empty.txt', data: '', sizeBytes: 0 });
+    expect(res.status).toBe(201);
+    expect(res.body.attachment.name ?? res.body.attachment.filename).toBeDefined();
+  });
+
   it('POST /todos/:id/start-session reads provider defaults for model and permissionMode', async () => {
     const settingsOverride = (namespace: string, key: string): string | null => {
       if (namespace === 'provider' && key === 'claude.defaultModel') return 'opus';

@@ -50,16 +50,6 @@ export interface WorktreeInfo {
   branchName: string;
 }
 
-export async function isGitRepo(projectPath: string): Promise<boolean> {
-  try {
-    await execGit(['rev-parse', '--is-inside-work-tree'], projectPath);
-    return true;
-  } catch {
-    /* best-effort: not a git repo */
-    return false;
-  }
-}
-
 export async function createWorktree(
   projectPath: string,
   dirName: string,

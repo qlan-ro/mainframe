@@ -99,7 +99,9 @@ const TodoUpdateSchema = z.object({
 
 const AttachmentUploadSchema = z.object({
   filename: z.string().min(1),
-  data: z.string().min(1),
+  // Allow empty base64: a zero-byte file is valid and has data ''. sizeBytes
+  // carries the real length; rejecting '' would 400 a legitimate empty file.
+  data: z.string(),
   mimeType: z.string().optional(),
   sizeBytes: z.number().nonnegative().optional(),
 });
