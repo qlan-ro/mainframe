@@ -1,6 +1,6 @@
 // packages/e2e/plugins/mock-cli/src/session.ts
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import type {
   AdapterProcess,
   AdapterSession,
@@ -13,20 +13,13 @@ import type {
   SkillFileEntry,
 } from '@qlan-ro/mainframe-types';
 import {
-  createReplayState,
   drainOutputs,
   consumeInput,
   isExhausted,
+  messagesFromEvents,
   type ReplayState,
   type RecordedEvent,
 } from './fixture';
-
-function sanitizeKey(key: string): string {
-  return key
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-}
 
 export class ReplaySession implements AdapterSession {
   readonly id: string;
@@ -37,14 +30,11 @@ export class ReplaySession implements AdapterSession {
   private readonly state: ReplayState;
   private lastDelay = 0;
 
-  constructor(options: SessionOptions, dir: string, key: string, index: number) {
+  /** `events` are pre-parsed by MockCliAdapter (which also caches them by recorded sessionId). */
+  constructor(options: SessionOptions, events: RecordedEvent[]) {
     this.id = options.mainframeChatId;
     this.projectPath = options.projectPath;
-    const file = join(dir, `${sanitizeKey(key)}.${index}.ndjson`);
-    if (!existsSync(file)) {
-      throw new Error(`mock-cli: fixture not found: ${file} — record it with E2E_MODE=record`);
-    }
-    this.state = createReplayState(readFileSync(file, 'utf-8'));
+    this.state = { events, cursor: 0 };
   }
 
   get isSpawned(): boolean {
@@ -103,10 +93,15 @@ export class ReplaySession implements AdapterSession {
   }
 
   private emit(batch: RecordedEvent[]): void {
-    if (!this.sink || batch.length === 0) return;
-    const sink = this.sink as unknown as Record<string, (...args: unknown[]) => void>;
+    if (batch.length === 0) return;
+    const sink = this.sink as unknown as Record<string, (...args: unknown[]) => void> | undefined;
     const base = this.lastDelay;
     for (const ev of batch) {
+      if (ev.dir === 'fx') {
+        this.applyFx(ev); // apply file effects synchronously so real git assertions see them
+        continue;
+      }
+      if (!sink) continue;
       const offset = Math.max(0, ev.delayMs - base);
       const fire = () => sink[ev.method]?.(...ev.args);
       if (offset > 0) setTimeout(fire, offset);
@@ -114,6 +109,18 @@ export class ReplaySession implements AdapterSession {
     }
     const last = batch[batch.length - 1];
     if (last) this.lastDelay = last.delayMs;
+  }
+
+  /** Reproduce recorded workspace file changes on disk (so real `git`-based assertions pass). */
+  private applyFx(ev: RecordedEvent): void {
+    for (const f of ev.files ?? []) {
+      const abs = join(this.projectPath, f.path);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, f.content);
+    }
+    for (const rel of ev.deleted ?? []) {
+      rmSync(join(this.projectPath, rel), { force: true });
+    }
   }
 
   // ── Interface no-ops (irrelevant to replay) ───────────────────────────────
@@ -142,8 +149,23 @@ export class ReplaySession implements AdapterSession {
   getContextFiles(): { global: ContextFile[]; project: ContextFile[] } {
     return { global: [], project: [] };
   }
+  /** Reconstruct messages from the recorded events so getMessagesFromDisk → extractSessionFilePaths
+   *  (the "session" Changes mode) sees the agent's Write/Edit tool_use blocks. Tool-use file paths
+   *  are recorded as record-time absolute paths; remap them onto this run's project dir (test
+   *  projects are always `…/mf-e2e-<id>/…`) so the file list + diff-viewer resolve correctly. */
   async loadHistory(): Promise<ChatMessage[]> {
-    return [];
+    const root = this.projectPath.replace(/\/$/, '');
+    const remap = (p: string): string => p.replace(/^.*\/mf-e2e-[^/]+\//, root + '/');
+    return messagesFromEvents(this.state.events).map((m) => ({
+      role: m.role,
+      content: (m.content as Array<Record<string, unknown>>).map((b) => {
+        const input = b?.['input'] as Record<string, unknown> | undefined;
+        if (b?.['type'] === 'tool_use' && typeof input?.['file_path'] === 'string') {
+          return { ...b, input: { ...input, file_path: remap(input['file_path'] as string) } };
+        }
+        return b;
+      }),
+    })) as unknown as ChatMessage[];
   }
   async extractPlanFiles(): Promise<string[]> {
     return [];

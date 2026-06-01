@@ -24,14 +24,28 @@ export function consumeInput(state: ReplayState): RecordedEvent | null {
   return null;
 }
 
-/** Drain the run of consecutive `out` events from the cursor (stops at the next `in` marker or end). */
+/**
+ * Drain the run of emittable events (`out` replayed to the sink + `fx` applied to disk) from the
+ * cursor, stopping at the next `in` marker or end. The caller dispatches by `dir`.
+ */
 export function drainOutputs(state: ReplayState): RecordedEvent[] {
   const out: RecordedEvent[] = [];
   while (state.cursor < state.events.length) {
     const ev = state.events[state.cursor];
-    if (!ev || ev.dir !== 'out') break;
+    if (!ev || ev.dir === 'in') break;
     out.push(ev);
     state.cursor++;
   }
   return out;
+}
+
+/** Reconstruct messages from `out` onMessage/onToolResult events (for ReplaySession.loadHistory). */
+export function messagesFromEvents(events: RecordedEvent[]): { role: string; content: unknown[] }[] {
+  const messages: { role: string; content: unknown[] }[] = [];
+  for (const ev of events) {
+    if (ev.dir !== 'out') continue;
+    if (ev.method === 'onMessage') messages.push({ role: 'assistant', content: (ev.args[0] as unknown[]) ?? [] });
+    else if (ev.method === 'onToolResult') messages.push({ role: 'user', content: (ev.args[0] as unknown[]) ?? [] });
+  }
+  return messages;
 }

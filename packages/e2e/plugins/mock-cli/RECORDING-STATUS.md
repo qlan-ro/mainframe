@@ -10,10 +10,16 @@ UI-flow AI specs **replay** (no API), the un-mockable AI specs **auto-skip** wit
 `helpers/mock-skip.ts` → `skipUnrecordedInMock`), and the non-AI specs **run** normally (they never
 spawn an agent session, so they need no fixture). Zero Claude API calls.
 
-Two caveats: **(1)** roughly half the AI specs fundamentally *cannot* be mocked (they assert real
-tool side-effects) — these skip in mock and still run against the real CLI; **(2)** a multi-spec mock
-run is flaky **on a CPU-contended machine** (this was recorded alongside another active agent) — see
-"Operational" below. On a quiet machine / dedicated CI runner it is reliably green.
+Two caveats: **(1)** some AI specs assert **real tool side-effects** (file/git changes) which the
+first cut of mock-cli didn't reproduce — these auto-skip today, but are being made mockable by the
+**workspace-effects (`fx`) feature** (record/replay file changes; see DESIGN.md). **(2)** a multi-spec
+mock run is flaky **on a CPU-contended machine** (this was recorded alongside another active agent) —
+see "Operational". On a quiet machine / dedicated CI runner it is reliably green.
+
+> **Note on the sandbox specs:** `28-sandbox-launch` and `49-sandbox-interactions` are **not**
+> AI-coupled — they drive the launch/process subsystem (`LaunchRegistry`), which spawns a real local
+> dev-server independent of any Claude/Codex adapter. They already pass under `E2E_MODE=mock` (14
+> passed / 3 skipped) as ordinary non-AI specs; mock-cli neither helps nor hinders them.
 
 ## ✅ Recorded & replaying in mock (UI/conversation-flow specs)
 
@@ -27,22 +33,27 @@ Each verified solo with `E2E_MODE=record` → `E2E_MODE=mock` → green:
 | `30-composer-attachments` | `composer-attachments` | attaching an image → thumbnail |
 | `31-composer-context-picker` | `context-picker` | `/` opens the command picker |
 | `47-thread` | `thread` | long-message read-more, tool-result cards |
+| `10-context-tab` | `context-tab` | **Changes tab (session) + files tab + review modal** — now mockable via the `fx` feature |
+| `12-changes-tab` | `changes-tab` | **Changes tab session + uncommitted (git) + diff viewer** — now mockable via `fx` + `loadHistory` |
 
-## ❌ Cannot be mocked — architectural limit (the key finding)
+## ✅ Side-effect specs — now mockable via the `fx` feature
 
-**Mock-cli replays the agent's recorded *messages/UI events*, not its real *tool side-effects*.** The
-`ReplaySession` emits the recorded `onMessage`/`onToolResult`/… sink calls, but no file is actually
-written, no git state changes, no process runs. So any spec that asserts on a **real-world outcome**
-fails in mock even though the conversation replays correctly:
+The `fx` feature (see DESIGN.md addendum) makes specs that assert **real file/git outcomes**
+mockable: record snapshots the working-tree changes after each tool result; replay writes them to
+the project dir. Combined with `ReplaySession.loadHistory()` (session-mode file list) and record→
+replay path remapping (diff viewer). `10-context-tab` and `12-changes-tab` both pass 4/4 in mock
+(solo). This removes the "can't mock side-effects" limit for git/file assertions.
 
-| Spec | Why it can't be mocked |
-|------|------------------------|
-| `10-context-tab` | asserts the **Changes tab** shows AI-edited files — needs real file edits on disk |
-| `12-changes-tab` | asserts real git working-tree changes from AI edits |
-| `07-plan-approval` | plan execution makes real edits; also multi-session |
-| `32-chat-status-context` | asserts the adapter label is **"Claude Code"** — in mock it's "Mock CLI" (inherent) |
+## ❌ Still not mockable
 
-These must keep running against the real CLI (or be split so only their UI-flow assertions run in mock).
+| Spec | Why |
+|------|-----|
+| `32-chat-status-context` | asserts the adapter label is **"Claude Code"** — in mock it's "Mock CLI" (test-design, not side-effect; relax the assertion or expose a mocked display name) |
+| `07-plan-approval` | plan-mode flow is multi-turn + nondeterministic; recordable only by pinning the prompt/model |
+
+(Live processes/network are handled by the launch subsystem and run for real in any mode — the
+sandbox specs already pass in mock. Truly nondeterministic model *choices* are recordable only by
+pinning the prompt/model at record time.)
 
 ## ⏭️ Not attempted (complex / likely unmockable)
 

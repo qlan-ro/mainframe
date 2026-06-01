@@ -15,6 +15,7 @@ import type {
 import type { AdapterRegistry } from '../adapters/index.js';
 import { createRecordingSink } from './recording-sink.js';
 import { fixtureFileName, safeArgs, type RecordedEvent } from './recording-format.js';
+import { captureProjectFx } from './capture-fx.js';
 import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('e2e:record');
@@ -49,22 +50,45 @@ export function wrapClaudeForRecording(adapters: AdapterRegistry): void {
 
   const key = process.env['E2E_RECORDING_KEY'] ?? 'session';
   const indexByKey = new Map<string, number>();
+  // Recorded sessionIds (from onInit). getMessagesFromDisk re-creates a session by sessionId for a
+  // history read — pass those through unrecorded so they don't spawn junk fixtures.
+  const recordedSessionIds = new Set<string>();
 
   const wrapped = new Proxy(real, {
     get(target, prop, receiver) {
       if (prop === 'createSession') {
         return (options: SessionOptions): AdapterSession => {
+          if (options.chatId && recordedSessionIds.has(options.chatId)) {
+            return target.createSession(options); // passive history read — don't record
+          }
           const index = indexByKey.get(key) ?? 0;
           indexByKey.set(key, index + 1);
           const file = join(dir, fixtureFileName(key, index));
           writeFileSync(file, ''); // truncate any fixture from a previous record run
           const start = Date.now();
           const elapsed = () => Date.now() - start;
-          const write = (e: RecordedEvent) => appendFileSync(file, JSON.stringify(e) + '\n');
+          const append = (e: RecordedEvent) => appendFileSync(file, JSON.stringify(e) + '\n');
+          // After a tool result, snapshot the working tree so replay can reproduce file changes for
+          // real git-based assertions (Changes tab "uncommitted"). Dedup consecutive identical sets.
+          let lastFxJson = '';
+          const write = (e: RecordedEvent) => {
+            append(e);
+            if (e.dir === 'out' && e.method === 'onInit' && typeof e.args[0] === 'string') {
+              recordedSessionIds.add(e.args[0]);
+            }
+            if (e.dir === 'out' && (e.method === 'onToolResult' || e.method === 'onResult')) {
+              const fx = captureProjectFx(options.projectPath);
+              if (fx.files.length === 0 && fx.deleted.length === 0) return;
+              const json = JSON.stringify(fx);
+              if (json === lastFxJson) return;
+              lastFxJson = json;
+              append({ dir: 'fx', method: 'fx', args: [], delayMs: elapsed(), files: fx.files, deleted: fx.deleted });
+            }
+          };
           const recorder: Recorder = {
             write,
             elapsed,
-            writeIn: (method, args) => write({ dir: 'in', method, args: safeArgs(args), delayMs: elapsed() }),
+            writeIn: (method, args) => append({ dir: 'in', method, args: safeArgs(args), delayMs: elapsed() }),
           };
           return wrapSession(target.createSession(options), recorder);
         };
