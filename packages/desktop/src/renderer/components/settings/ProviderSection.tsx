@@ -11,6 +11,8 @@ import type { ProviderConfig } from '@qlan-ro/mainframe-types';
 import { ModelDropdown } from './ModelDropdown';
 import { MODE_OPTIONS } from './constants';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
+import { ProviderTuningDefaults } from './ProviderTuningDefaults';
+import { CodexTuningDefaults } from './CodexTuningDefaults';
 
 const EMPTY_CONFIG: ProviderConfig = {};
 
@@ -132,6 +134,21 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
         options={models}
         onChange={(v) => update({ defaultModel: v })}
       />
+
+      {/* Per-model tuning defaults — gated by the selected default model's capabilities. */}
+      {(() => {
+        const defaultModel =
+          adapter?.models.find((m) => m.id === (config.defaultModel ?? '')) ?? adapter?.models.find((m) => m.isDefault) ?? adapter?.models[0];
+        if (!defaultModel) return null;
+        return (
+          <>
+            <ProviderTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
+            {adapterId === 'codex' && (
+              <CodexTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
+            )}
+          </>
+        );
+      })()}
 
       {/* Default Mode */}
       <div className="space-y-1.5">
