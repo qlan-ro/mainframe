@@ -15,6 +15,7 @@ import { focusComposerInput } from '../../../../lib/focus';
 import { ContextPickerMenu } from '../../ContextPickerMenu';
 import { ComposerDropdown } from './ComposerDropdown';
 import { EffortPicker } from './EffortPicker';
+import { FeaturesPopover } from './FeaturesPopover';
 import { ComposerHighlight } from './ComposerHighlight';
 import { ImageAttachmentPreview } from './ImageAttachmentPreview';
 import { CaptureThumb } from './CaptureThumb';
@@ -435,6 +436,7 @@ export function ComposerCard() {
             <PlanModeToggle active={chat?.planMode === true} onToggle={handlePlanToggle} />
           )}
           {chat && <EffortPicker chat={chat} adapters={adapters} modelId={currentModel} disabled={!!chat.isRunning} />}
+          {chat && <FeaturesPopover chat={chat} adapters={adapters} modelId={currentModel} disabled={!!chat.isRunning} />}
           {isGitProject && (
             <div className="relative">
               <Tooltip>
