@@ -4,6 +4,7 @@ import type { AdapterInfo, Chat, ChatEffort } from '@qlan-ro/mainframe-types';
 import { ComposerDropdown } from './ComposerDropdown';
 import { setChatTuning } from '../../../../lib/api';
 import { useChatsStore } from '../../../../store/chats';
+import { useSettingsStore } from '../../../../store/settings';
 import { createLogger } from '../../../../lib/logger';
 import { effortOptions, displayEffort } from '../../../../lib/model-tuning';
 
@@ -29,6 +30,7 @@ export type EffortPickerProps = {
 export function EffortPicker({ chat, adapters, modelId, disabled = false }: EffortPickerProps) {
   // Hooks must be called unconditionally — resolve data needed for both branches first.
   const updateChat = useChatsStore((s) => s.updateChat);
+  const provider = useSettingsStore((s) => s.providers[chat.adapterId]);
 
   const handleChange = useCallback(
     (id: string) => {
@@ -45,7 +47,7 @@ export function EffortPicker({ chat, adapters, modelId, disabled = false }: Effo
 
   const model = adapters.find((a) => a.id === chat.adapterId)?.models.find((m) => m.id === modelId)!;
   const options = effortOptions(model);
-  const { value: current, locked } = displayEffort(chat, model);
+  const { value: current, locked } = displayEffort(chat, model, provider);
 
   return (
     <ComposerDropdown

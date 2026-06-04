@@ -17,7 +17,10 @@ export async function resolveTuningForChat(deps: ResolveDeps, chatId: string): P
   const adapter = deps.adapters.get(chat.adapterId);
   const models = adapter ? await adapter.listModels() : [];
   const modelId = chat.model ?? '';
-  const model: AdapterModel = models.find((m) => m.id === modelId) ?? { id: modelId, label: modelId };
+  // Exact match → the adapter's default model (covers 'default'/alias/inherited model
+  // ids that aren't literal catalog keys) → a capability-less stub as last resort.
+  const model: AdapterModel =
+    models.find((m) => m.id === modelId) ?? models.find((m) => m.isDefault) ?? { id: modelId, label: modelId };
   const provider = getProviderConfig(deps.db, chat.adapterId);
   return resolveTuning(
     { effort: chat.effort, fast: chat.fast, ultracode: chat.ultracode, adaptiveThinking: chat.adaptiveThinking },

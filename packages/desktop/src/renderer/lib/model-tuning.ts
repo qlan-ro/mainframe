@@ -28,16 +28,39 @@ export function visibleFeatures(model: AdapterModel) {
   }));
 }
 
+/** Provider-default slice the composer reads to display the EFFECTIVE (inherited) value. */
+export interface TuningDefaults {
+  defaultEffort?: EffortLevel;
+  defaultFast?: 'true' | 'false';
+  defaultUltracode?: 'true' | 'false';
+  defaultAdaptiveThinking?: 'true' | 'false';
+}
+
+type ChatTuningFields = {
+  effort?: EffortLevel | null;
+  fast?: boolean | null;
+  ultracode?: boolean | null;
+  adaptiveThinking?: boolean | null;
+};
+
+/** Effective value of a boolean feature for DISPLAY: chat override → provider default → off. */
+export function effectiveFeature(chat: ChatTuningFields, provider: TuningDefaults | undefined, key: FeatureKey): boolean {
+  const own = chat[key];
+  if (own != null) return own;
+  const f = TUNABLE_FEATURES.find((t) => t.key === key)!;
+  return provider?.[f.providerDefault as keyof TuningDefaults] === 'true';
+}
+
 /**
  * Display-only effort for the chip. Mirrors the resolver's ultracode→xhigh coercion
- * for presentation WITHOUT persisting it (stored effort stays inherited). When
- * ultracode is on, the chip shows xhigh and is locked; otherwise the chat's effort
- * or the model default.
+ * and the inherit precedence (chat → provider default → model default) for presentation
+ * WITHOUT persisting it. When ultracode is effectively on, the chip shows xhigh + locks.
  */
 export function displayEffort(
-  chat: { effort?: EffortLevel | null; ultracode?: boolean | null },
+  chat: ChatTuningFields,
   model: AdapterModel,
+  provider?: TuningDefaults,
 ): { value: EffortLevel; locked: boolean } {
-  if (chat.ultracode) return { value: 'xhigh', locked: true };
-  return { value: chat.effort ?? model.defaultEffort ?? 'medium', locked: false };
+  if (effectiveFeature(chat, provider, 'ultracode')) return { value: 'xhigh', locked: true };
+  return { value: chat.effort ?? provider?.defaultEffort ?? model.defaultEffort ?? 'medium', locked: false };
 }

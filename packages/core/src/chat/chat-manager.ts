@@ -117,6 +117,7 @@ export class ChatManager {
       startChat: (chatId) => this.lifecycle.startChat(chatId),
       stopChat: (chatId) => this.lifecycle.stopChat(chatId),
       emitEvent: (event) => this.emitEvent(event),
+      applyTuning: (chatId) => this.applyTuning(chatId),
     });
     this.externalSessions = new ExternalSessionService(this.db, this.adapters, (e) => this.emitEvent(e));
     this.idleScanner = new IdleSessionScanner(this.activeChats);

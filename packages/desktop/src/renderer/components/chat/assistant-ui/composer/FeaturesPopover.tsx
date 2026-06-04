@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import type { AdapterInfo, Chat, SessionTuning } from '@qlan-ro/mainframe-types';
+import type { FeatureKey } from '@qlan-ro/mainframe-types';
 import { Toggle } from '../../../ui/toggle';
-import { visibleFeatures } from '../../../../lib/model-tuning';
+import { visibleFeatures, effectiveFeature } from '../../../../lib/model-tuning';
 import { setChatTuning } from '../../../../lib/api';
 import { useChatsStore } from '../../../../store/chats';
+import { useSettingsStore } from '../../../../store/settings';
 import { createLogger } from '../../../../lib/logger';
 
 const log = createLogger('renderer:features-popover');
@@ -22,6 +24,7 @@ export function FeaturesPopover({
 }) {
   // Hooks must be unconditional — call all before any early return.
   const updateChat = useChatsStore((s) => s.updateChat);
+  const provider = useSettingsStore((s) => s.providers[chat.adapterId]);
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -81,7 +84,7 @@ export function FeaturesPopover({
                 </div>
                 <Toggle
                   data-testid={`composer-feature-${f.key}`}
-                  checked={Boolean(chat[f.key as keyof Chat] ?? false)}
+                  checked={effectiveFeature(chat, provider, f.key as FeatureKey)}
                   disabled={disabled}
                   onChange={(v) => setFeature(f.key as keyof SessionTuning, v)}
                 />

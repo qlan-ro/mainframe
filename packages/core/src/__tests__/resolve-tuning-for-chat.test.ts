@@ -31,4 +31,12 @@ describe('resolveTuningForChat', () => {
   it('returns null when the chat is missing', async () => {
     expect(await resolveTuningForChat(deps(undefined, null), 'missing')).toBeNull();
   });
+
+  it('falls back to the adapter default model caps when chat.model is not in the list', async () => {
+    // chat.model = 'default' (an alias not present as a catalog id); the adapter's
+    // isDefault model carries the real caps → effort is NOT lost to a capless stub.
+    const defaultModel: AdapterModel = { id: 'opus', label: 'Opus', supportedEfforts: ['low', 'high'], isDefault: true };
+    const r = await resolveTuningForChat(deps({ adapterId: 'claude', model: 'default', effort: 'high' }, defaultModel), 'c3');
+    expect(r?.effort).toBe('high'); // would be null (no effort control) if it used a {id,label} stub
+  });
 });
