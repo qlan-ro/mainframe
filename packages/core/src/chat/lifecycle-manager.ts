@@ -475,7 +475,6 @@ export class ChatLifecycleManager {
         planMode: chat.planMode ?? false,
         executablePath,
         systemPrompt,
-        effort: chat.effort,
       },
       sink,
     );
