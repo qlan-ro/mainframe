@@ -34,6 +34,7 @@ import { killTasksForChat } from '../background-tasks/kill.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
 import { prepareMessagesForClient } from '../messages/display-pipeline.js';
+import { resolveTuningForChat } from './resolve-tuning-for-chat.js';
 
 const logger = createChildLogger('chat:manager');
 
@@ -535,12 +536,18 @@ export class ChatManager {
 
   /**
    * Live-applies resolved tuning to the running session for this chat, if any.
-   * Phase H will fill this in; the stub keeps callers in /tuning and /effort
-   * type-safe without a no-op optional-chain dance.
+   * If no session is active, tuning is picked up at next spawn.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async applyTuning(_chatId: string): Promise<void> {
-    // no-op until Phase H wires in resolveTuningForChat + session.applyTuning
+  async applyTuning(chatId: string): Promise<void> {
+    const session = this.activeChats.get(chatId)?.session;
+    if (!session?.applyTuning) return; // no live session → applied at next spawn
+    const resolved = await resolveTuningForChat({ db: this.db, adapters: this.adapters }, chatId);
+    if (!resolved) return;
+    try {
+      await session.applyTuning(resolved);
+    } catch (err) {
+      logger.warn({ err, chatId }, 'live applyTuning failed');
+    }
   }
 
   getEffectivePath(chatId: string): string | null {
