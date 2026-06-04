@@ -1,3 +1,5 @@
+import type { EffortLevel } from './adapter.js';
+
 export const EXECUTION_MODES = ['default', 'acceptEdits', 'yolo'] as const;
 export type ExecutionMode = (typeof EXECUTION_MODES)[number];
 export type PermissionMode = ExecutionMode | 'plan';
@@ -16,6 +18,13 @@ export interface ProviderConfig {
   executablePath?: string;
   systemPrompt?: string;
   resolvedExecutable?: ResolvedExecutable;
+  defaultEffort?: EffortLevel;
+  defaultFast?: 'true' | 'false';
+  defaultUltracode?: 'true' | 'false';
+  defaultAdaptiveThinking?: 'true' | 'false';
+  personality?: 'none' | 'friendly' | 'pragmatic';
+  reasoningSummary?: 'auto' | 'concise' | 'detailed' | 'none';
+  verbosity?: 'low' | 'medium' | 'high';
 }
 
 export interface NotificationConfig {

@@ -35,8 +35,7 @@ export interface SessionSpawnOptions {
   planMode?: boolean;
   executablePath?: string;
   systemPrompt?: string;
-  /** Reasoning effort passed as --effort to the CLI. Only honored by adapters whose selected model supports it. */
-  effort?: import('./chat.js').ChatEffort;
+  tuning?: import('./chat.js').ResolvedTuning;
 }
 
 export interface AdapterProcess {
@@ -187,6 +186,9 @@ export interface AdapterSession {
 
   /** Stop a running background task by id. Adapters that don't support bg tasks may resolve `{ok: false, error: 'unsupported'}`. */
   stopBackgroundTask(taskId: string): Promise<{ ok: boolean; error?: string }>;
+
+  /** Apply a fully-resolved tuning to a live session. */
+  applyTuning?(tuning: import('./chat.js').ResolvedTuning): Promise<void>;
 }
 
 export interface AdapterInfo {
@@ -201,17 +203,48 @@ export interface AdapterInfo {
   };
 }
 
+/**
+ * Full union across both CLIs. Codex ReasoningEffort = none/minimal/low/medium/high/xhigh;
+ * Claude adds 'max'. The per-model `supportedEfforts` array is the runtime gate.
+ */
+export type EffortLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface AdapterModel {
   id: string;
   label: string;
   description?: string;
   contextWindow?: number;
-  supportsEffort?: boolean;
-  supportsFastMode?: boolean;
-  supportsAutoMode?: boolean;
-  /** Marks the provider default. When the user hasn't picked a specific model, this one is used. */
   isDefault?: boolean;
+  /** Dynamic, per-model. Empty/absent → model has no effort control. */
+  supportedEfforts?: EffortLevel[];
+  defaultEffort?: EffortLevel;
+  supportsFast?: boolean;
+  supportsUltracode?: boolean;
+  supportsAdaptiveThinking?: boolean;
+  supportsPersonality?: boolean;
 }
+
+/**
+ * Single source of truth for the boolean tuning features. Resolver clamp, Claude
+ * flag-settings mapping, and renderer gating all iterate this — no per-feature branches.
+ */
+export const TUNABLE_FEATURES = [
+  { key: 'fast', capability: 'supportsFast', claudeSetting: 'fastMode', providerDefault: 'defaultFast' },
+  {
+    key: 'ultracode',
+    capability: 'supportsUltracode',
+    claudeSetting: 'ultracode',
+    providerDefault: 'defaultUltracode',
+  },
+  {
+    key: 'adaptiveThinking',
+    capability: 'supportsAdaptiveThinking',
+    claudeSetting: 'alwaysThinkingEnabled',
+    providerDefault: 'defaultAdaptiveThinking',
+  },
+] as const;
+
+export type FeatureKey = (typeof TUNABLE_FEATURES)[number]['key'];
 
 export interface ExternalSession {
   sessionId: string; // CLI's native session UUID
