@@ -115,14 +115,11 @@ Notes:
   concrete copy** — see the inheritance rule in Section 5. Effective values are
   resolved at render/spawn, so later changes to a provider default still propagate
   to chats that never overrode it.
-- **Ultracode coercion is a resolver invariant, not just a UI nicety.** Because the
-  Claude CLI resolves an explicit `--effort` *before* `settings.ultracode`, the data
+- **Ultracode coercion is a resolver invariant, not just a UI nicety.** The data
   model alone allows the contradictory `effort:low + ultracode:true`. `resolveTuning`
   (Section 3) collapses this: when `ultracode` resolves truthy, `effort` is coerced
-  to `'xhigh'`. This is precisely what makes it **safe to pass `--effort` at
-  spawn/resume** (Section 3): the value handed to `--effort` is already coerced, so
-  it can never contradict ultracode and the CLI's `--effort`-before-`ultracode`
-  precedence never produces a wrong result.
+  to `'xhigh'`. This keeps spawn and live-apply in agreement regardless of how the
+  values were persisted.
 
 ## Probe / normalize layer (Section 2)
 
@@ -196,30 +193,27 @@ moved to a model that supports neither).
 toggle, **and on model switch** — `setModel` re-resolves against the new model and
 calls `applyTuning(resolved)` so stale/invalid values are never sent.
 
-**Claude — `--effort` at spawn/resume + `apply_flag_settings` for the rest**
+**Claude — all tuning via `apply_flag_settings` (NOT the `--effort` spawn flag)**
 
-Effort is deterministic from the first turn, so it rides the CLI flag:
+> **Why not `--effort`?** Verified against the v2.1.156 binary: `--effort` installs a
+> persistent `{kind:"effort"}` **permission layer**, and the per-turn resolver
+> `kz()` applies the last effort layer *over* the app-state `effortValue`.
+> `apply_flag_settings{effortLevel}` only mutates `effortValue`, so once a `--effort`
+> layer exists, every later effort change (and `ultracode→xhigh`, which also writes
+> `effortValue`) is **silently masked**. There is no `set_effort` control request; the
+> CLI's own mid-session mechanism is the `/effort` slash command (pushes a new layer).
+> Passing **no** `--effort` means no layer, so `effortValue` is the sole source of
+> truth — mutable cleanly at startup and mid-session. (See
+> `claude-protocol-debugger/cli-binary-internals.md`.)
 
-- **Spawn & resume args:** `--model <model>` and `--effort <resolved.effort>`. The
-  effort value comes from `resolveTuning` (already clamped + ultracode-coerced), so
-  it can never contradict ultracode — the CLI's `--effort`-before-`ultracode`
-  precedence is therefore harmless. `--effort` is included on `--resume` too.
-- **Startup `apply_flag_settings`:** the flags with **no** CLI equivalent
-  (`fastMode`, `ultracode`, `alwaysThinkingEnabled`) are written to stdin
-  proactively **immediately after spawn**, before the first user message. The CLI
-  buffers stdin and `system:init` only fires after the first API call, so this is the
-  same proactive-stdin pattern already used for the resume-permission path — it
-  guarantees provider-default `fast`/`ultracode`/thinking are in effect on the first
-  send, not one turn late.
-- **Mid-session changes:** `applyTuning` sends one `apply_flag_settings` envelope for
-  whatever changed — **including `effortLevel`** for live effort flips (the flag is
-  only consulted at spawn; runtime effort changes must go through the control
-  request).
+Only `--model` stays a spawn arg. All four knobs (`effortLevel`, `fastMode`,
+`ultracode`, `alwaysThinkingEnabled`) flow through one envelope — written once at
+startup and again on every change:
 
 ```ts
 async applyTuning(t: SessionTuning): Promise<void> {
   const settings: Record<string, unknown> = {};
-  if (t.effort !== undefined)           settings.effortLevel = t.effort;        // null clears; live effort change
+  if (t.effort !== undefined)           settings.effortLevel = t.effort;        // null clears
   if (t.fast !== undefined)             settings.fastMode = t.fast;
   if (t.ultracode !== undefined)        settings.ultracode = t.ultracode;
   if (t.adaptiveThinking !== undefined) settings.alwaysThinkingEnabled = t.adaptiveThinking;
@@ -228,9 +222,15 @@ async applyTuning(t: SessionTuning): Promise<void> {
 ```
 
 Envelope verified against the v2.1.156 binary: the handler reads `request.settings`,
-folds `model`/`effortLevel`/`ultracode` into app state, merges the rest. Mirrors the
-existing `setModel`/`setPermissionMode` pattern. (The startup write reuses this same
-method with the effort key omitted, since `--effort` already covered it.)
+folds `model`/`effortLevel`/`ultracode` into app state (`effortValue`), merges the
+rest. Mirrors the existing `setModel`/`setPermissionMode` pattern.
+
+**Startup timing:** `ClaudeSession.spawn()` writes the resolved-tuning
+`apply_flag_settings` to stdin **immediately after spawn** (and after `--resume`),
+before the first user message. The CLI buffers stdin and `system:init` only fires
+after the first API call, so this is the same proactive-stdin pattern already used by
+the resume-permission path — provider-default effort/fast/ultracode/thinking are in
+effect on the first send, not one turn late.
 
 **Codex — `turn/start` overrides** (replaces hardcoded `reasoning_effort: null`)
 
@@ -420,11 +420,11 @@ builds it via `resolveTuning(chat, providerConfig, model)` at spawn (resolving t
   filtered**, `[]` on probe failure.
 
 **Apply layer (core)** — highest-value (new behavior)
-- Claude spawn/resume args include `--effort <resolved>` (clamped/coerced) + `--model`;
-  startup `apply_flag_settings` (fast/ultracode/thinking, **effort key omitted**)
-  written proactively before first message; mid-session `applyTuning` → exact
-  `apply_flag_settings` envelope **including `effortLevel`** for live effort flips;
-  `null` clears.
+- Claude: only `--model` is a spawn arg (**no `--effort`** — it would install a
+  masking effort permission layer); startup `apply_flag_settings` (effort + fast +
+  ultracode + thinking) written proactively to stdin before the first message;
+  mid-session `applyTuning` → exact `apply_flag_settings` envelope including
+  `effortLevel`; `null` clears. A regression test asserts no `--effort` in spawn args.
 - Codex turn/start → resolved effort lands in `collaborationMode.settings.reasoning_effort`
   (no longer `null`); `serviceTier:'fast'|'flex'` + personality/summary/verbosity on
   top-level params.
