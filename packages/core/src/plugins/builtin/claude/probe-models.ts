@@ -11,9 +11,9 @@ interface CliModelInfo {
   value: string;
   displayName: string;
   description?: string;
-  supportsEffort?: boolean;
+  supportedEffortLevels?: import('@qlan-ro/mainframe-types').EffortLevel[];
+  supportsAdaptiveThinking?: boolean;
   supportsFastMode?: boolean;
-  supportsAutoMode?: boolean;
 }
 
 // CLI descriptions look like "Opus 4.7 with 1M context · Most capable for complex work".
@@ -24,7 +24,7 @@ function extractIdentity(description: string | undefined): string | null {
   return firstChunk || null;
 }
 
-function mapModelInfo(info: CliModelInfo): AdapterModel {
+export function mapModelInfo(info: CliModelInfo): AdapterModel {
   const identity = extractIdentity(info.description);
   let label = info.displayName;
   if (info.value === 'default') {
@@ -36,9 +36,12 @@ function mapModelInfo(info: CliModelInfo): AdapterModel {
   }
   const model: AdapterModel = { id: info.value, label };
   if (info.description) model.description = info.description;
-  if (info.supportsEffort) model.supportsEffort = true;
-  if (info.supportsFastMode) model.supportsFastMode = true;
-  if (info.supportsAutoMode) model.supportsAutoMode = true;
+  if (info.supportedEffortLevels?.length) {
+    model.supportedEfforts = info.supportedEffortLevels;
+    if (info.supportedEffortLevels.includes('xhigh')) model.supportsUltracode = true;
+  }
+  if (info.supportsFastMode) model.supportsFast = true;
+  if (info.supportsAdaptiveThinking) model.supportsAdaptiveThinking = true;
   // The CLI exposes the tier-resolved default under value: "default" (e.g. Opus 4.7 on Max).
   if (info.value === 'default') model.isDefault = true;
   return model;
