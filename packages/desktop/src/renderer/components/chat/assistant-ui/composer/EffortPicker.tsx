@@ -2,63 +2,58 @@ import { useCallback } from 'react';
 import { Gauge } from 'lucide-react';
 import type { AdapterInfo, Chat, ChatEffort } from '@qlan-ro/mainframe-types';
 import { ComposerDropdown } from './ComposerDropdown';
-import { setChatEffort } from '../../../../lib/api';
+import { setChatTuning } from '../../../../lib/api';
 import { useChatsStore } from '../../../../store/chats';
 import { createLogger } from '../../../../lib/logger';
+import { effortOptions, displayEffort } from '../../../../lib/model-tuning';
 
 const log = createLogger('renderer:effort-picker');
 
-export const EFFORT_OPTIONS: { id: ChatEffort; label: string; description: string }[] = [
-  { id: 'low', label: 'Low', description: 'Quick, straightforward implementation' },
-  { id: 'medium', label: 'Medium', description: 'Balanced speed and depth' },
-  { id: 'high', label: 'High', description: 'Thorough reasoning and testing' },
-];
-
 /**
- * Returns true when the picker should render: adapter is Claude AND the selected
- * model exposes supportsEffort. Hidden for Codex, Gemini, OpenCode, and for
- * Claude models without the capability (Haiku 3.5/4.5, older Sonnets).
+ * Returns true when the effort picker should render: the selected model exposes
+ * at least one supported effort level. Hidden for models with no effort control
+ * (e.g. Haiku) and for adapters whose models omit supportedEfforts entirely.
  */
 export function shouldShowEffortPicker(adapterId: string, modelId: string, adapters: AdapterInfo[]): boolean {
-  if (adapterId !== 'claude') return false;
-  const adapter = adapters.find((a) => a.id === adapterId);
-  if (!adapter) return false;
-  const model = adapter.models.find((m) => m.id === modelId);
-  return Boolean(model?.supportsEffort);
+  const model = adapters.find((a) => a.id === adapterId)?.models.find((m) => m.id === modelId);
+  return (model?.supportedEfforts?.length ?? 0) > 0;
 }
 
-export function EffortPicker({
-  chat,
-  adapters,
-  modelId,
-  disabled = false,
-}: {
+export type EffortPickerProps = {
   chat: Chat;
   adapters: AdapterInfo[];
   modelId: string;
   disabled?: boolean;
-}) {
-  if (!shouldShowEffortPicker(chat.adapterId, modelId, adapters)) return null;
+};
 
-  const current = chat.effort ?? 'medium';
+export function EffortPicker({ chat, adapters, modelId, disabled = false }: EffortPickerProps) {
+  // Hooks must be called unconditionally — resolve data needed for both branches first.
   const updateChat = useChatsStore((s) => s.updateChat);
 
   const handleChange = useCallback(
     (id: string) => {
       const next = id as ChatEffort;
       updateChat({ ...chat, effort: next });
-      setChatEffort(chat.id, next).catch((err) => log.warn('setChatEffort failed', { err: String(err) }));
+      setChatTuning(chat.id, { effort: next }).catch((err) =>
+        log.warn('setChatTuning failed', { err: String(err) }),
+      );
     },
     [chat, updateChat],
   );
 
+  if (!shouldShowEffortPicker(chat.adapterId, modelId, adapters)) return null;
+
+  const model = adapters.find((a) => a.id === chat.adapterId)?.models.find((m) => m.id === modelId)!;
+  const options = effortOptions(model);
+  const { value: current, locked } = displayEffort(chat, model);
+
   return (
     <ComposerDropdown
       data-testid="composer-effort-select"
-      items={EFFORT_OPTIONS}
+      items={options}
       value={current}
       onChange={handleChange}
-      disabled={disabled}
+      disabled={disabled || locked}
       icon={<Gauge size={14} />}
     />
   );
