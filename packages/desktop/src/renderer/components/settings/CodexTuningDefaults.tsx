@@ -39,13 +39,15 @@ export function CodexTuningDefaults({
   onChange,
 }: {
   adapterId: string;
-  model: AdapterModel;
+  /** May be undefined when the adapter's model list hasn't loaded — reasoning-summary
+   *  (model-agnostic) still renders; personality is gated on the model's capability. */
+  model?: AdapterModel;
   config: ProviderConfig;
   onChange: (partial: Partial<ProviderConfig>) => void;
 }) {
   return (
     <div className="space-y-3">
-      {model.supportsPersonality && (
+      {model?.supportsPersonality && (
         <label className="block space-y-1.5">
           <span className="text-mf-small text-mf-text-secondary">Personality</span>
           <SelectField

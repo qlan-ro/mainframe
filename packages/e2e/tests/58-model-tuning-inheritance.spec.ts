@@ -1,138 +1,19 @@
 /**
- * §58 Model-tuning inheritance — verify that provider defaults, chat-level overrides,
- * and the null-inheritance contract behave correctly.
+ * §58 Model-tuning inheritance — verify provider defaults, chat-level overrides,
+ * and the null-inheritance contract end-to-end through the real app + daemon.
  *
- * Design: inherit-by-null. A new chat stores effort/features as null (not set), which
- * means the resolver uses the provider default at spawn time. This spec validates:
- *   1. Provider default can be set via the settings API.
- *   2. A new chat starts with null effort (inheriting from provider).
- *   3. Setting a per-chat override (via the composer or tuning API) stores only the
- *      chat-level value; the provider default is unchanged.
- *   4. UI display: the effort chip reads chat.effort ?? model.defaultEffort ?? 'medium'.
+ * Design: inherit-by-null. A new chat stores effort/features as null (not set), so the
+ * resolver uses the provider default at spawn time. The provider→chat→endpoint contract
+ * is covered by core unit tests (resolve-tuning, routes); these specs validate the UI
+ * surface: a provider default is set via settings, a chat reflects/overrides it, and a
+ * per-chat override does not mutate the provider default.
  */
 
 import { test, expect } from '@playwright/test';
-import { launchApp, closeApp, DAEMON_PORT } from '../fixtures/app.js';
+import { launchApp, closeApp } from '../fixtures/app.js';
 import { createTestProject, cleanupProject } from '../fixtures/project.js';
 import { createTestChat } from '../fixtures/chat.js';
 
-const BASE = `http://127.0.0.1:${DAEMON_PORT}`;
-
-// ---------------------------------------------------------------------------
-// REST-level inheritance tests — no Electron needed, just the daemon API.
-// ---------------------------------------------------------------------------
-test.describe('§58 Model-tuning inheritance — REST level', () => {
-  const ADAPTER = 'claude';
-
-  test.beforeAll(async () => {
-    // Reset the provider config to a clean slate before the suite.
-    await fetch(`${BASE}/api/settings/providers/${ADAPTER}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ defaultEffort: null, defaultFast: null }),
-    });
-  });
-
-  test('IT1: provider default effort is stored and retrievable', async () => {
-    const res = await fetch(`${BASE}/api/settings/providers/${ADAPTER}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ defaultEffort: 'high' }),
-    });
-    expect(res.ok).toBe(true);
-
-    const get = await fetch(`${BASE}/api/settings/providers/${ADAPTER}`);
-    expect(get.ok).toBe(true);
-    const body = (await get.json()) as { data?: { defaultEffort?: string } };
-    expect(body.data?.defaultEffort).toBe('high');
-  });
-
-  test('IT2: new chat starts with null effort (inherits from provider)', async () => {
-    // Create a project via API (no UI needed for REST tests).
-    const projRes = await fetch(`${BASE}/api/projects`);
-    const { data: projects } = (await projRes.json()) as { data: { id: string }[] };
-    if (!projects[0]) {
-      // No projects registered yet; this is a REST-only spec, skip.
-      test.skip(true, 'no project registered in the test daemon');
-      return;
-    }
-    const projectId = projects[0].id;
-
-    const chatRes = await fetch(`${BASE}/api/chats`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, adapterId: ADAPTER }),
-    });
-    expect(chatRes.ok).toBe(true);
-    const { data: chat } = (await chatRes.json()) as { data: { id: string; effort?: string | null } };
-    expect(chat.id).toBeTruthy();
-
-    // The freshly-created chat must have effort === null (inheriting from provider).
-    const getChat = await fetch(`${BASE}/api/chats/${chat.id}`);
-    const { data: chatData } = (await getChat.json()) as { data: { effort?: string | null } };
-    expect(chatData.effort ?? null).toBeNull();
-
-    // Archive the created chat so it doesn't pollute other tests.
-    await fetch(`${BASE}/api/chats/${chat.id}/archive`, { method: 'PATCH' });
-  });
-
-  test('IT3: per-chat override does not mutate the provider default', async () => {
-    // Establish provider default.
-    await fetch(`${BASE}/api/settings/providers/${ADAPTER}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ defaultEffort: 'high' }),
-    });
-
-    // Create a chat.
-    const projRes = await fetch(`${BASE}/api/projects`);
-    const { data: projects } = (await projRes.json()) as { data: { id: string }[] };
-    if (!projects[0]) {
-      test.skip(true, 'no project registered in the test daemon');
-      return;
-    }
-    const chatRes = await fetch(`${BASE}/api/chats`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: projects[0].id, adapterId: ADAPTER }),
-    });
-    const { data: chat } = (await chatRes.json()) as { data: { id: string } };
-
-    // Apply a per-chat override (low, different from provider's high).
-    const tuningRes = await fetch(`${BASE}/api/chats/${chat.id}/tuning`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ effort: 'low' }),
-    });
-    expect(tuningRes.ok).toBe(true);
-
-    // The chat-level effort is now 'low'.
-    const chatGet = await fetch(`${BASE}/api/chats/${chat.id}`);
-    const { data: chatData } = (await chatGet.json()) as { data: { effort?: string | null } };
-    expect(chatData.effort).toBe('low');
-
-    // The provider default must be unchanged (still 'high').
-    const provGet = await fetch(`${BASE}/api/settings/providers/${ADAPTER}`);
-    const { data: provData } = (await provGet.json()) as { data?: { defaultEffort?: string } };
-    expect(provData?.defaultEffort).toBe('high');
-
-    // Archive the created chat so it doesn't pollute other tests.
-    await fetch(`${BASE}/api/chats/${chat.id}/archive`, { method: 'PATCH' });
-  });
-
-  test.afterAll(async () => {
-    // Clean up the provider default we set during this suite.
-    await fetch(`${BASE}/api/settings/providers/${ADAPTER}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ defaultEffort: null, defaultFast: null }),
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// UI-level inheritance tests — requires Electron + mock-cli (E2E_MODE=mock).
-// ---------------------------------------------------------------------------
 test.describe('§58 Model-tuning inheritance — UI level', () => {
   let fixture: Awaited<ReturnType<typeof launchApp>>;
   let project: Awaited<ReturnType<typeof createTestProject>>;
@@ -197,13 +78,11 @@ test.describe('§58 Model-tuning inheritance — UI level', () => {
     await expect(composerModelOption).toBeVisible({ timeout: 5_000 });
     await composerModelOption.click();
 
-    // The effort chip shows effort for the chat. A fresh chat has effort=null,
-    // so displayEffort() shows model.defaultEffort ?? 'medium'. In mock mode
-    // the opus model's defaultEffort is 'medium'. Provider defaults propagate at
-    // spawn time (server-side), not in the chip directly. The chip just needs to
-    // be visible (confirming effort controls render for a capable model).
+    // The effort chip now shows the EFFECTIVE value (chat override → provider default →
+    // model default). A fresh chat inherits the provider default 'high' set above.
     const effortChip = page.locator('[data-testid="composer-effort-select"]');
     await expect(effortChip).toBeVisible({ timeout: 5_000 });
+    await expect(effortChip).toContainText(/high/i);
 
     // Explicitly set the per-chat effort to 'low' via the composer.
     await effortChip.click();

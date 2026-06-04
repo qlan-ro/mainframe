@@ -139,10 +139,14 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
       {(() => {
         const defaultModel =
           adapter?.models.find((m) => m.id === (config.defaultModel ?? '')) ?? adapter?.models.find((m) => m.isDefault) ?? adapter?.models[0];
-        if (!defaultModel) return null;
         return (
           <>
-            <ProviderTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
+            {/* Effort/feature defaults need model caps; only shown when a model is known. */}
+            {defaultModel && (
+              <ProviderTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
+            )}
+            {/* Codex reasoning-summary is model-agnostic, so the block renders even when
+                the adapter's model list hasn't loaded (e.g. codex CLI absent). */}
             {adapterId === 'codex' && (
               <CodexTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
             )}

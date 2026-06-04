@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { launchApp, closeApp, DAEMON_PORT } from '../fixtures/app.js';
+import { launchApp, closeApp } from '../fixtures/app.js';
 
 // New coverage from scenarios/settings-remote-chrome.md (SE1–SE3). No AI.
 // (The settings modal root has no testid — settings-modal-close is the stable anchor.)
@@ -149,35 +149,5 @@ test.describe('§41 Settings modal', () => {
     await expect(page.locator('[data-testid="providers-codex-verbosity"]')).toHaveCount(0);
 
     await page.locator('[data-testid="settings-modal-close"]').click();
-  });
-});
-
-// Provider settings persistence via REST — no Electron/UI needed.
-test.describe('§41 Provider settings REST persistence', () => {
-  test('SE-TUNING-REST: PUT /api/settings/providers/claude round-trips defaultEffort', async () => {
-    // Verify that the REST endpoint that the UI calls persists tuning settings.
-    const base = `http://127.0.0.1:${DAEMON_PORT}`;
-
-    // Set defaultEffort to 'low' via the provider settings endpoint.
-    const putRes = await fetch(`${base}/api/settings/providers/claude`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ defaultEffort: 'low', defaultFast: 'true' }),
-    });
-    expect(putRes.ok).toBe(true);
-
-    // Read it back.
-    const getRes = await fetch(`${base}/api/settings/providers/claude`);
-    expect(getRes.ok).toBe(true);
-    const body = (await getRes.json()) as { data?: { defaultEffort?: string; defaultFast?: string } };
-    expect(body.data?.defaultEffort).toBe('low');
-    expect(body.data?.defaultFast).toBe('true');
-
-    // Clean up — remove the defaults.
-    await fetch(`${base}/api/settings/providers/claude`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ defaultEffort: undefined, defaultFast: undefined }),
-    });
   });
 });
