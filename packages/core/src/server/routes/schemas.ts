@@ -36,6 +36,13 @@ export const UpdateProviderSettingsBody = z.object({
   defaultPlanMode: z.enum(['true', 'false']).optional(),
   executablePath: z.string().optional(),
   systemPrompt: z.string().optional(),
+  defaultEffort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+  defaultFast: z.enum(['true', 'false']).optional(),
+  defaultUltracode: z.enum(['true', 'false']).optional(),
+  defaultAdaptiveThinking: z.enum(['true', 'false']).optional(),
+  personality: z.enum(['none', 'friendly', 'pragmatic']).optional(),
+  reasoningSummary: z.enum(['auto', 'concise', 'detailed', 'none']).optional(),
+  verbosity: z.enum(['low', 'medium', 'high']).optional(),
 });
 
 // Settings — general update.

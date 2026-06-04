@@ -533,6 +533,16 @@ export class ChatManager {
     Object.assign(active.chat, partial);
   }
 
+  /**
+   * Live-applies resolved tuning to the running session for this chat, if any.
+   * Phase H will fill this in; the stub keeps callers in /tuning and /effort
+   * type-safe without a no-op optional-chain dance.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async applyTuning(_chatId: string): Promise<void> {
+    // no-op until Phase H wires in resolveTuningForChat + session.applyTuning
+  }
+
   getEffectivePath(chatId: string): string | null {
     const chat = this.getChat(chatId);
     if (!chat) return null;
