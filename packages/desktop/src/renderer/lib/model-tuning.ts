@@ -61,6 +61,19 @@ export function displayEffort(
   model: AdapterModel,
   provider?: TuningDefaults,
 ): { value: EffortLevel; locked: boolean } {
-  if (effectiveFeature(chat, provider, 'ultracode')) return { value: 'xhigh', locked: true };
-  return { value: chat.effort ?? provider?.defaultEffort ?? model.defaultEffort ?? 'medium', locked: false };
+  // Lock to xhigh only when ultracode is BOTH effectively on AND supported by the
+  // current model — mirrors the resolver, which forces unsupported ultracode false.
+  if (effectiveFeature(chat, provider, 'ultracode') && model.supportsUltracode) {
+    return { value: 'xhigh', locked: true };
+  }
+  const requested = chat.effort ?? provider?.defaultEffort ?? model.defaultEffort ?? 'medium';
+  const supported = model.supportedEfforts ?? [];
+  // Never display an effort the model doesn't support (the resolver would clamp it).
+  const value =
+    supported.length === 0 || supported.includes(requested)
+      ? requested
+      : model.defaultEffort && supported.includes(model.defaultEffort)
+        ? model.defaultEffort
+        : (supported[0] ?? requested);
+  return { value, locked: false };
 }

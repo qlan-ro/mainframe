@@ -36,7 +36,12 @@ const claudeAdapter: AdapterInfo = {
   description: '',
   installed: true,
   models: [
-    { id: 'claude-opus-4-6', label: 'Opus 4.6', supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+    {
+      id: 'claude-opus-4-6',
+      label: 'Opus 4.6',
+      supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      supportsUltracode: true,
+    },
     { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
   ],
 };

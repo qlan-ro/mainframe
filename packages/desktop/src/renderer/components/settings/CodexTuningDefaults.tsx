@@ -22,6 +22,7 @@ function SelectField({
       className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-mf-input focus:outline-none focus:border-mf-accent"
       onChange={(e) => onChange(e.target.value)}
     >
+      <option value="">Inherit</option>
       {options.map((o) => (
         <option key={o} value={o}>
           {o}
@@ -51,7 +52,7 @@ export function CodexTuningDefaults({
             testId={`providers-${adapterId}-personality`}
             value={config.personality}
             options={PERSONALITY_OPTIONS}
-            onChange={(v) => onChange({ personality: (v || undefined) as ProviderConfig['personality'] })}
+            onChange={(v) => onChange({ personality: v as ProviderConfig['personality'] })}
           />
         </label>
       )}
@@ -61,7 +62,7 @@ export function CodexTuningDefaults({
           testId={`providers-${adapterId}-reasoning-summary`}
           value={config.reasoningSummary}
           options={SUMMARY_OPTIONS}
-          onChange={(v) => onChange({ reasoningSummary: (v || undefined) as ProviderConfig['reasoningSummary'] })}
+          onChange={(v) => onChange({ reasoningSummary: v as ProviderConfig['reasoningSummary'] })}
         />
       </label>
     </div>

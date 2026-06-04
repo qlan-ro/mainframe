@@ -30,12 +30,14 @@ export function ProviderTuningDefaults({
           <span className="text-mf-small text-mf-text-secondary">Default Effort</span>
           <select
             data-testid={`providers-${adapterId}-default-effort`}
-            value={config.defaultEffort ?? model.defaultEffort ?? ''}
-            onChange={(e) =>
-              onChange({ defaultEffort: (e.target.value || undefined) as ProviderConfig['defaultEffort'] })
-            }
+            value={config.defaultEffort ?? ''}
+            // Send the raw value: '' is the clear sentinel the route deletes on
+            // (→ chat inherits the model default). Don't coerce to undefined, which
+            // JSON.stringify would omit, making the clear unreachable.
+            onChange={(e) => onChange({ defaultEffort: e.target.value as ProviderConfig['defaultEffort'] })}
             className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-mf-input focus:outline-none focus:border-mf-accent"
           >
+            <option value="">Inherit (model default)</option>
             {efforts.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.label}
