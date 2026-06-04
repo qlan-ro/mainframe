@@ -29,6 +29,9 @@ export class CodexAdapter implements Adapter {
   readonly capabilities = { planMode: true } as const;
 
   private sessions = new Set<CodexSession>();
+  /** Model catalog is static per session; cache it so resolution (spawn + every
+   *  composer toggle) doesn't respawn a temp app-server each time. */
+  private cachedModels: AdapterModel[] | null = null;
 
   createPlanModeHandler(): unknown {
     return new CodexPlanModeHandler();
@@ -56,11 +59,14 @@ export class CodexAdapter implements Adapter {
   }
 
   async listModels(): Promise<AdapterModel[]> {
+    if (this.cachedModels) return this.cachedModels;
     let client: JsonRpcClient | null = null;
     try {
       client = await this.spawnTempAppServer();
       const result = await client.request<ModelListResult>('model/list');
-      return result.data.filter((m) => !m.hidden).map(mapCodexModel);
+      const models = result.data.filter((m) => !m.hidden).map(mapCodexModel);
+      if (models.length > 0) this.cachedModels = models; // don't cache transient failures (empty)
+      return models;
     } catch (err) {
       log.warn({ err }, 'codex: failed to list models');
       return [];

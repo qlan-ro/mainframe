@@ -1,10 +1,10 @@
-import type { AdapterModel, ResolvedTuning } from '@qlan-ro/mainframe-types';
+import type { AdapterModel, Chat, ResolvedTuning } from '@qlan-ro/mainframe-types';
 import { resolveTuning } from './resolve-tuning.js';
 import { getProviderConfig } from '../settings/provider-config.js';
 
 interface ResolveDeps {
   db: {
-    chats: { get(id: string): { adapterId: string; model?: string; effort?: unknown; fast?: unknown; ultracode?: unknown; adaptiveThinking?: unknown } | null | undefined };
+    chats: { get(id: string): Chat | null | undefined };
     settings: { get(ns: string, key: string): string | null };
   };
   adapters: { get(id: string): { listModels(): Promise<AdapterModel[]> } | undefined };
@@ -20,12 +20,7 @@ export async function resolveTuningForChat(deps: ResolveDeps, chatId: string): P
   const model: AdapterModel = models.find((m) => m.id === modelId) ?? { id: modelId, label: modelId };
   const provider = getProviderConfig(deps.db, chat.adapterId);
   return resolveTuning(
-    {
-      effort: chat.effort as ResolvedTuning['effort'] | null | undefined,
-      fast: chat.fast as boolean | null | undefined,
-      ultracode: chat.ultracode as boolean | null | undefined,
-      adaptiveThinking: chat.adaptiveThinking as boolean | null | undefined,
-    },
+    { effort: chat.effort, fast: chat.fast, ultracode: chat.ultracode, adaptiveThinking: chat.adaptiveThinking },
     provider,
     model,
   );

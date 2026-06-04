@@ -155,7 +155,6 @@ export function settingRoutes(ctx: RouteContext): Router {
       defaultAdaptiveThinking,
       personality,
       reasoningSummary,
-      verbosity,
     } = parsed.data;
 
     if (defaultModel !== undefined) {
@@ -203,10 +202,6 @@ export function settingRoutes(ctx: RouteContext): Router {
     if (reasoningSummary !== undefined) {
       if (reasoningSummary) ctx.db.settings.set('provider', `${adapterId}.reasoningSummary`, reasoningSummary);
       else ctx.db.settings.delete('provider', `${adapterId}.reasoningSummary`);
-    }
-    if (verbosity !== undefined) {
-      if (verbosity) ctx.db.settings.set('provider', `${adapterId}.verbosity`, verbosity);
-      else ctx.db.settings.delete('provider', `${adapterId}.verbosity`);
     }
 
     res.json({ success: true });

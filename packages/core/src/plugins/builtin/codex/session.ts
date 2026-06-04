@@ -14,7 +14,6 @@ import type {
   ContextFile,
   SkillFileEntry,
   ResolvedTuning,
-  AdapterModel,
 } from '@qlan-ro/mainframe-types';
 import { JsonRpcClient } from './jsonrpc.js';
 import { handleNotification, type CodexSessionState } from './event-mapper.js';
@@ -232,11 +231,10 @@ export class CodexSession implements AdapterSession {
     // Start turn
     const { approvalPolicy, sandbox } = this.mapPermissionMode(this.pendingPermissionMode);
     const DEFAULT_RESOLVED: ResolvedTuning = { effort: null, fast: false, ultracode: false, adaptiveThinking: false };
-    const model: AdapterModel = { id: this.pendingModel ?? '', label: this.pendingModel ?? '' };
     const turnCfg = buildTurnConfig(
       this.pendingTuning ?? DEFAULT_RESOLVED,
       this.codexProviderTuning,
-      model,
+      this.pendingModel ?? '',
       this.pendingPlanMode ? 'plan' : 'default',
     );
 
@@ -247,10 +245,9 @@ export class CodexSession implements AdapterSession {
       sandboxPolicy: this.mapSandboxPolicy(sandbox),
       collaborationMode: turnCfg.collaborationMode,
       model: this.pendingModel,
-      ...(turnCfg.serviceTier ? { serviceTier: turnCfg.serviceTier } : {}),
+      serviceTier: turnCfg.serviceTier,
       ...(turnCfg.personality ? { personality: turnCfg.personality } : {}),
       ...(turnCfg.summary ? { summary: turnCfg.summary } : {}),
-      ...(turnCfg.verbosity ? { verbosity: turnCfg.verbosity } : {}),
     });
 
     this.status = 'running';

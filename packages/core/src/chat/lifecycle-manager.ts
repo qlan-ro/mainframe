@@ -468,8 +468,8 @@ export class ChatLifecycleManager {
 
     if (chat.adapterId === 'codex' && 'setCodexProviderTuning' in session) {
       const cfg = getProviderConfig(this.deps.db, 'codex');
-      (session as unknown as { setCodexProviderTuning(t: { personality?: string; reasoningSummary?: string; verbosity?: string }): void })
-        .setCodexProviderTuning({ personality: cfg.personality, reasoningSummary: cfg.reasoningSummary, verbosity: cfg.verbosity });
+      (session as unknown as { setCodexProviderTuning(t: { personality?: string; reasoningSummary?: string }): void })
+        .setCodexProviderTuning({ personality: cfg.personality, reasoningSummary: cfg.reasoningSummary });
     }
 
     const sink = this.deps.buildSink(chatId, session.id, (response) => session.respondToPermission(response));

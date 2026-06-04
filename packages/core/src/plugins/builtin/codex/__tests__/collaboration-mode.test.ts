@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildTurnConfig } from '../turn-config.js';
 import type { ResolvedTuning } from '@qlan-ro/mainframe-types';
 
-const baseModel = { id: 'codex-mini-latest', label: 'Codex Mini' };
+const baseModel = 'codex-mini-latest';
 const defaultTuning: ResolvedTuning = { effort: null, fast: false, ultracode: false, adaptiveThinking: false };
 
 describe('collaboration mode derivation', () => {

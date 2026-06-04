@@ -42,7 +42,6 @@ export const UpdateProviderSettingsBody = z.object({
   defaultAdaptiveThinking: z.enum(['true', 'false']).optional(),
   personality: z.enum(['none', 'friendly', 'pragmatic']).optional(),
   reasoningSummary: z.enum(['auto', 'concise', 'detailed', 'none']).optional(),
-  verbosity: z.enum(['low', 'medium', 'high']).optional(),
 });
 
 // Settings — general update.

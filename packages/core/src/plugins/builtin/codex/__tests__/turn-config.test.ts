@@ -5,23 +5,28 @@ describe('buildTurnConfig', () => {
   it('puts effort in collaborationMode.settings, fast as serviceTier, codex extras top-level', () => {
     const cfg = buildTurnConfig(
       { effort: 'high', fast: true, ultracode: false, adaptiveThinking: false },
-      { personality: 'pragmatic', reasoningSummary: 'concise', verbosity: 'low' },
-      { id: 'gpt-5.5', label: 'x', supportsFast: true, supportsPersonality: true },
+      { personality: 'pragmatic', reasoningSummary: 'concise' },
+      'gpt-5.5',
       'default',
     );
+    expect(cfg.collaborationMode.settings.model).toBe('gpt-5.5');
     expect(cfg.collaborationMode.settings.reasoning_effort).toBe('high');
     expect(cfg.serviceTier).toBe('fast');
     expect(cfg.personality).toBe('pragmatic');
     expect(cfg.summary).toBe('concise');
-    expect(cfg.verbosity).toBe('low');
   });
 
-  it('omits serviceTier/personality when the model lacks the capability', () => {
-    const cfg = buildTurnConfig(
-      { effort: 'high', fast: true, ultracode: false, adaptiveThinking: false },
-      { personality: 'pragmatic' }, { id: 'm', label: 'x' }, 'default',
-    );
-    expect(cfg.serviceTier).toBe('flex');
+  // Trusts already-resolved inputs — it does NOT re-gate on model caps (the resolver
+  // already clamped tuning.fast; the settings UI already gated personality). The
+  // session only knows the model id, so re-checking caps here would be inert.
+  it('serviceTier follows resolved tuning.fast, not a model-cap re-check', () => {
+    expect(buildTurnConfig({ effort: 'high', fast: false, ultracode: false, adaptiveThinking: false }, {}, 'm', 'default').serviceTier).toBe('flex');
+    expect(buildTurnConfig({ effort: 'high', fast: true, ultracode: false, adaptiveThinking: false }, {}, 'm', 'default').serviceTier).toBe('fast');
+  });
+
+  it('omits personality/summary when not provided', () => {
+    const cfg = buildTurnConfig({ effort: null, fast: false, ultracode: false, adaptiveThinking: false }, {}, 'm', 'default');
     expect(cfg.personality).toBeUndefined();
+    expect(cfg.summary).toBeUndefined();
   });
 });

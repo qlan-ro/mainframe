@@ -7,7 +7,7 @@ interface SettingsReader {
 const FIELDS = [
   'defaultModel', 'defaultMode', 'defaultPlanMode', 'executablePath', 'systemPrompt',
   'defaultEffort', 'defaultFast', 'defaultUltracode', 'defaultAdaptiveThinking',
-  'personality', 'reasoningSummary', 'verbosity',
+  'personality', 'reasoningSummary',
 ] as const;
 
 export function getProviderConfig(db: SettingsReader, adapterId: string): ProviderConfig {

@@ -24,7 +24,6 @@ export interface ProviderConfig {
   defaultAdaptiveThinking?: 'true' | 'false';
   personality?: 'none' | 'friendly' | 'pragmatic';
   reasoningSummary?: 'auto' | 'concise' | 'detailed' | 'none';
-  verbosity?: 'low' | 'medium' | 'high';
 }
 
 export interface NotificationConfig {
