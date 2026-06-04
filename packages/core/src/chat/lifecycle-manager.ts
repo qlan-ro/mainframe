@@ -17,6 +17,8 @@ import { extractPrFromToolResult, PR_CREATE_COMMANDS } from '../plugins/builtin/
 import type { MessageCache } from './message-cache.js';
 import type { PermissionManager } from './permission-manager.js';
 import type { ActiveChat } from './types.js';
+import { resolveTuningForChat } from './resolve-tuning-for-chat.js';
+import { getProviderConfig } from '../settings/provider-config.js';
 
 const log = createChildLogger('chat:lifecycle');
 
@@ -464,10 +466,17 @@ export class ChatLifecycleManager {
     });
     active.session = session;
 
+    if (chat.adapterId === 'codex' && 'setCodexProviderTuning' in session) {
+      const cfg = getProviderConfig(this.deps.db, 'codex');
+      (session as unknown as { setCodexProviderTuning(t: { personality?: string; reasoningSummary?: string }): void })
+        .setCodexProviderTuning({ personality: cfg.personality, reasoningSummary: cfg.reasoningSummary });
+    }
+
     const sink = this.deps.buildSink(chatId, session.id, (response) => session.respondToPermission(response));
 
     const executablePath = this.deps.db.settings.get('provider', `${chat.adapterId}.executablePath`) ?? undefined;
     const systemPrompt = this.deps.db.settings.get('provider', `${chat.adapterId}.systemPrompt`) ?? undefined;
+    const tuning = (await resolveTuningForChat({ db: this.deps.db, adapters: this.deps.adapters }, chatId)) ?? undefined;
     const processInfo = await session.spawn(
       {
         model: chat.model,
@@ -475,7 +484,7 @@ export class ChatLifecycleManager {
         planMode: chat.planMode ?? false,
         executablePath,
         systemPrompt,
-        effort: chat.effort,
+        tuning,
       },
       sink,
     );

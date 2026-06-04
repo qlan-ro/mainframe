@@ -11,6 +11,7 @@ export {
   unarchiveChat,
   pinChat,
   setChatEffort,
+  setChatTuning,
   getChatMessages,
   getAdapters,
 } from './projects-api';

@@ -75,9 +75,9 @@ describe('probeModels', () => {
         value: 'default',
         displayName: 'Default (recommended)',
         description: 'Opus 4.7 with 1M context',
-        supportsEffort: true,
+        supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
         supportsFastMode: true,
-        supportsAutoMode: true,
+        supportsAdaptiveThinking: true,
       },
       { value: 'claude-sonnet-4-6', displayName: 'Sonnet', description: 'Sonnet 4.6 · Best for everyday tasks' },
     ]);
@@ -89,9 +89,10 @@ describe('probeModels', () => {
       id: 'default',
       label: 'Default - Opus 4.7',
       description: 'Opus 4.7 with 1M context',
-      supportsEffort: true,
-      supportsFastMode: true,
-      supportsAutoMode: true,
+      supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      supportsFast: true,
+      supportsAdaptiveThinking: true,
+      supportsUltracode: true,
       isDefault: true,
     });
     expect(result![1]).toEqual({
@@ -125,5 +126,30 @@ describe('probeModels', () => {
     expect(result).toBeNull();
     expect(child.kill).toHaveBeenCalled();
     vi.useRealTimers();
+  });
+});
+
+import { mapModelInfo } from '../plugins/builtin/claude/probe-models.js';
+
+describe('mapModelInfo capabilities', () => {
+  it('maps effort levels, fast, adaptive-thinking, derives ultracode', () => {
+    const m = mapModelInfo({
+      value: 'default', displayName: 'Default',
+      description: 'Opus 4.8 with 1M context · Most capable',
+      supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      supportsAdaptiveThinking: true, supportsFastMode: true,
+    });
+    expect(m.supportedEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    expect(m.supportsFast).toBe(true);
+    expect(m.supportsAdaptiveThinking).toBe(true);
+    expect(m.supportsUltracode).toBe(true); // derived from xhigh
+  });
+
+  it('hides ultracode for models without xhigh (Sonnet)', () => {
+    const m = mapModelInfo({
+      value: 'sonnet', displayName: 'Sonnet', description: 'Sonnet 4.6',
+      supportedEffortLevels: ['low', 'medium', 'high', 'max'], supportsFastMode: true,
+    });
+    expect(m.supportsUltracode).toBeUndefined();
   });
 });

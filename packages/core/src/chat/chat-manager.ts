@@ -34,6 +34,7 @@ import { killTasksForChat } from '../background-tasks/kill.js';
 import { wrapMainframeCommand } from '../commands/wrap.js';
 import { findMainframeCommand } from '../commands/registry.js';
 import { prepareMessagesForClient } from '../messages/display-pipeline.js';
+import { resolveTuningForChat } from './resolve-tuning-for-chat.js';
 
 const logger = createChildLogger('chat:manager');
 
@@ -116,6 +117,7 @@ export class ChatManager {
       startChat: (chatId) => this.lifecycle.startChat(chatId),
       stopChat: (chatId) => this.lifecycle.stopChat(chatId),
       emitEvent: (event) => this.emitEvent(event),
+      applyTuning: (chatId) => this.applyTuning(chatId),
     });
     this.externalSessions = new ExternalSessionService(this.db, this.adapters, (e) => this.emitEvent(e));
     this.idleScanner = new IdleSessionScanner(this.activeChats);
@@ -531,6 +533,22 @@ export class ChatManager {
     const active = this.activeChats.get(chatId);
     if (!active) return;
     Object.assign(active.chat, partial);
+  }
+
+  /**
+   * Live-applies resolved tuning to the running session for this chat, if any.
+   * If no session is active, tuning is picked up at next spawn.
+   */
+  async applyTuning(chatId: string): Promise<void> {
+    const session = this.activeChats.get(chatId)?.session;
+    if (!session?.applyTuning) return; // no live session → applied at next spawn
+    const resolved = await resolveTuningForChat({ db: this.db, adapters: this.adapters }, chatId);
+    if (!resolved) return;
+    try {
+      await session.applyTuning(resolved);
+    } catch (err) {
+      logger.warn({ err, chatId }, 'live applyTuning failed');
+    }
   }
 
   getEffectivePath(chatId: string): string | null {

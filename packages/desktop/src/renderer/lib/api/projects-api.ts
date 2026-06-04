@@ -1,4 +1,4 @@
-import type { Project, Chat, ChatEffort, DisplayMessage, AdapterInfo } from '@qlan-ro/mainframe-types';
+import type { Project, Chat, ChatEffort, DisplayMessage, AdapterInfo, SessionTuning } from '@qlan-ro/mainframe-types';
 import { postJson, deleteRequest, API_BASE } from './http';
 import { createLogger } from '../logger';
 
@@ -67,6 +67,16 @@ export async function setChatEffort(chatId: string, effort: ChatEffort | null): 
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ effort }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function setChatTuning(chatId: string, tuning: SessionTuning): Promise<void> {
+  log.info('setChatTuning', { chatId, tuning });
+  const res = await fetch(`${API_BASE}/api/chats/${chatId}/tuning`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(tuning),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

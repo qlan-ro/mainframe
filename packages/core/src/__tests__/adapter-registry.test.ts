@@ -59,9 +59,10 @@ describe('ClaudeAdapter.listModels', () => {
     const adapter = new ClaudeAdapter();
     const models = await adapter.listModels();
     const opus46 = models.find((m) => m.id === 'claude-opus-4-6');
-    expect(opus46?.supportsEffort).toBe(true);
-    expect(opus46?.supportsFastMode).toBe(true);
-    expect(opus46?.supportsAutoMode).toBe(true);
+    expect(opus46?.supportedEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    expect(opus46?.supportsFast).toBe(true);
+    expect(opus46?.supportsUltracode).toBe(true);
+    expect(opus46?.supportsAdaptiveThinking).toBe(true);
   });
 });
 

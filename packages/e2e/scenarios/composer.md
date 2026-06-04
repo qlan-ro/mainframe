@@ -79,15 +79,40 @@ created. The composer (`composer-prompt-input`) is visible.
 
 **Test Steps:**
 1. Click `composer-model-select` → pick a model → label updates.
-2. If the model supports effort (Claude, supportsEffort) and agent not running, `composer-effort-select` is shown; pick Low/Medium/High → label updates optimistically.
+2. If the model has `supportedEfforts` (non-empty) and the agent is not running,
+   `composer-effort-select` is shown with the model's dynamic levels; pick a level → label updates.
+3. For an opus-level model the dropdown includes `xhigh` and `max`; for sonnet-level it includes
+   `max` but NOT `xhigh` (no `supportsUltracode`); for Haiku the picker is absent entirely.
 
 **Expected Outcomes:**
-- `composer-effort-select` hidden for non-Claude / no-effort models; disabled while running.
+- `composer-effort-select` hidden for models whose `supportedEfforts` is empty/absent; disabled while running.
+- Option set is model-specific — driven by `supportedEfforts`, not a static Low/Medium/High list.
 - Model/effort apply on the next turn, not mid-stream.
 
 ---
 
-## Scenario M6 — Permission mode selection
+## Scenario M6 — Features popover
+
+**Test Objective:** The features popover surfaces per-model boolean controls; `composer-features-trigger`
+is present only when the selected model has at least one tunable feature.
+
+**Test Steps:**
+1. Switch to an opus-level model (`supportsUltracode: true`, `supportsAdaptiveThinking: true`,
+   `supportsFast: true`) → `composer-features-trigger` appears.
+2. Click the trigger → popover opens listing `composer-feature-fast`,
+   `composer-feature-ultracode`, `composer-feature-adaptiveThinking`.
+3. Toggle `composer-feature-ultracode` ON → the effort chip now shows `Extra-high` and is disabled
+   (locked by `displayEffort`'s ultracode coercion). Toggle OFF → chip becomes interactive again.
+4. Switch to Haiku (no capability fields) → `composer-features-trigger` is absent.
+
+**Expected Outcomes:**
+- Popover closes on outside click.
+- Each toggle persists to the chat's `SessionTuning` via the `/api/chats/:id/tuning` endpoint.
+- `ultracode` lock is visual only — stored effort is unchanged (resolver coerces at apply time).
+
+---
+
+## Scenario M7 — Permission mode selection
 
 **Test Objective:** Permission mode changes the auto-approval level; `yolo` is visually flagged.
 

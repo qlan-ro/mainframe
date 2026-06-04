@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import type { Chat } from '@qlan-ro/mainframe-types';
+import type { Chat, SessionTuning } from '@qlan-ro/mainframe-types';
 import type { RouteContext } from './types.js';
 import { param } from './types.js';
 import { asyncHandler } from './async-handler.js';
@@ -131,7 +131,26 @@ export function chatRoutes(ctx: RouteContext): Router {
 
   const titleSchema = z.object({ title: z.string().trim().min(1) });
   const pinSchema = z.object({ pinned: z.boolean() });
-  const effortSchema = z.object({ effort: z.enum(['low', 'medium', 'high']).nullable() });
+
+  const EFFORT_VALUES = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+  const tuningSchema = z.object({
+    effort: z.enum(EFFORT_VALUES).nullable().optional(),
+    fast: z.boolean().nullable().optional(),
+    ultracode: z.boolean().nullable().optional(),
+    adaptiveThinking: z.boolean().nullable().optional(),
+  });
+  const effortOnlySchema = z.object({ effort: z.enum(EFFORT_VALUES).nullable() });
+
+  // One code path for both routes. Persists the RAW partial (tri-state: only touched
+  // fields become concrete; undefined skipped, null written) — NO clamp/coercion here.
+  function applyChatTuning(chatId: string, partial: SessionTuning): Chat | null {
+    ctx.db.chats.update(chatId, partial);
+    const chat = ctx.db.chats.get(chatId);
+    if (!chat) return null;
+    ctx.chats?.syncChatFields?.(chatId, partial);
+    void ctx.chats?.applyTuning?.(chatId); // live apply re-reads + resolves (Phase H); no-op if no method yet
+    return chat;
+  }
 
   router.patch('/api/chats/:id/pinned', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
@@ -155,24 +174,39 @@ export function chatRoutes(ctx: RouteContext): Router {
     }
   });
 
-  router.patch('/api/chats/:id/effort', (req: Request, res: Response) => {
+  router.patch('/api/chats/:id/tuning', (req: Request, res: Response) => {
     const chatId = param(req, 'id');
-    const parsed = effortSchema.safeParse(req.body);
+    const parsed = tuningSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ success: false, error: 'effort must be one of "low" | "medium" | "high" | null' });
+      res.status(400).json({ success: false, error: 'invalid tuning payload' });
       return;
     }
     try {
-      // Explicit null clears the stored effort; allowed effort values pass through.
-      // The DB update loop skips undefined keys, so we cast to pass null through.
-      const effortUpdate = parsed.data.effort;
-      ctx.db.chats.update(chatId, { effort: effortUpdate as Chat['effort'] });
-      const chat = ctx.db.chats.get(chatId);
+      const chat = applyChatTuning(chatId, parsed.data);
       if (!chat) {
         res.status(404).json({ success: false, error: 'Chat not found' });
         return;
       }
-      ctx.chats?.syncChatFields?.(chatId, { effort: effortUpdate as Chat['effort'] });
+      res.json({ success: true, data: chat });
+    } catch (err) {
+      logger.warn({ err, chatId }, 'Failed to update tuning');
+      res.status(500).json({ success: false, error: 'Operation failed' });
+    }
+  });
+
+  router.patch('/api/chats/:id/effort', (req: Request, res: Response) => {
+    const chatId = param(req, 'id');
+    const parsed = effortOnlySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: 'effort must be a valid level or null' });
+      return;
+    }
+    try {
+      const chat = applyChatTuning(chatId, { effort: parsed.data.effort });
+      if (!chat) {
+        res.status(404).json({ success: false, error: 'Chat not found' });
+        return;
+      }
       res.json({ success: true, data: chat });
     } catch (err) {
       logger.warn({ err, chatId }, 'Failed to update effort');

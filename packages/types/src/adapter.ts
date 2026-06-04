@@ -35,8 +35,7 @@ export interface SessionSpawnOptions {
   planMode?: boolean;
   executablePath?: string;
   systemPrompt?: string;
-  /** Reasoning effort passed as --effort to the CLI. Only honored by adapters whose selected model supports it. */
-  effort?: import('./chat.js').ChatEffort;
+  tuning?: import('./chat.js').ResolvedTuning;
 }
 
 export interface AdapterProcess {
@@ -187,6 +186,9 @@ export interface AdapterSession {
 
   /** Stop a running background task by id. Adapters that don't support bg tasks may resolve `{ok: false, error: 'unsupported'}`. */
   stopBackgroundTask(taskId: string): Promise<{ ok: boolean; error?: string }>;
+
+  /** Apply a fully-resolved tuning to a live session. */
+  applyTuning?(tuning: import('./chat.js').ResolvedTuning): Promise<void>;
 }
 
 export interface AdapterInfo {
@@ -201,16 +203,73 @@ export interface AdapterInfo {
   };
 }
 
+/**
+ * Full union across both CLIs. Codex ReasoningEffort = none/minimal/low/medium/high/xhigh;
+ * Claude adds 'max'. The per-model `supportedEfforts` array is the runtime gate.
+ */
+export type EffortLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface AdapterModel {
   id: string;
   label: string;
   description?: string;
   contextWindow?: number;
-  supportsEffort?: boolean;
-  supportsFastMode?: boolean;
-  supportsAutoMode?: boolean;
-  /** Marks the provider default. When the user hasn't picked a specific model, this one is used. */
   isDefault?: boolean;
+  /** Dynamic, per-model. Empty/absent → model has no effort control. */
+  supportedEfforts?: EffortLevel[];
+  defaultEffort?: EffortLevel;
+  supportsFast?: boolean;
+  supportsUltracode?: boolean;
+  supportsAdaptiveThinking?: boolean;
+  supportsPersonality?: boolean;
+}
+
+/**
+ * Single source of truth for the boolean tuning features. Resolver clamp, Claude
+ * flag-settings mapping, and renderer gating all iterate this — no per-feature branches.
+ */
+export const TUNABLE_FEATURES = [
+  { key: 'fast', capability: 'supportsFast', claudeSetting: 'fastMode', providerDefault: 'defaultFast' },
+  {
+    key: 'ultracode',
+    capability: 'supportsUltracode',
+    claudeSetting: 'ultracode',
+    providerDefault: 'defaultUltracode',
+  },
+  {
+    key: 'adaptiveThinking',
+    capability: 'supportsAdaptiveThinking',
+    claudeSetting: 'alwaysThinkingEnabled',
+    providerDefault: 'defaultAdaptiveThinking',
+  },
+] as const;
+
+export type FeatureKey = (typeof TUNABLE_FEATURES)[number]['key'];
+
+const EFFORT_RANK: Record<EffortLevel, number> = {
+  none: 0, minimal: 1, low: 2, medium: 3, high: 4, xhigh: 5, max: 6,
+};
+
+/**
+ * Clamp a requested effort to what a model supports — the single source of truth used
+ * by BOTH the core resolver (at spawn/apply) and the renderer (for display), so the
+ * composer chip can never disagree with what the server resolves.
+ *
+ *   requested ∈ supported            → requested
+ *   else defaultEffort ∈ supported   → defaultEffort
+ *   else highest supported ≤ requested (then lowest supported)
+ *   supported empty (no effort)      → null
+ */
+export function clampEffortToSupported(
+  requested: EffortLevel,
+  supported: readonly EffortLevel[],
+  defaultEffort?: EffortLevel,
+): EffortLevel | null {
+  if (supported.length === 0) return null;
+  if (supported.includes(requested)) return requested;
+  if (defaultEffort && supported.includes(defaultEffort)) return defaultEffort;
+  const below = supported.filter((e) => EFFORT_RANK[e] <= EFFORT_RANK[requested]).sort((a, b) => EFFORT_RANK[b] - EFFORT_RANK[a]);
+  return below[0] ?? [...supported].sort((a, b) => EFFORT_RANK[a] - EFFORT_RANK[b])[0] ?? null;
 }
 
 export interface ExternalSession {

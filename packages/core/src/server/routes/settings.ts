@@ -143,7 +143,19 @@ export function settingRoutes(ctx: RouteContext): Router {
       res.status(400).json({ success: false, error: parsed.error });
       return;
     }
-    const { defaultModel, defaultMode, defaultPlanMode, executablePath } = parsed.data;
+    const {
+      defaultModel,
+      defaultMode,
+      defaultPlanMode,
+      executablePath,
+      systemPrompt,
+      defaultEffort,
+      defaultFast,
+      defaultUltracode,
+      defaultAdaptiveThinking,
+      personality,
+      reasoningSummary,
+    } = parsed.data;
 
     if (defaultModel !== undefined) {
       if (defaultModel) ctx.db.settings.set('provider', `${adapterId}.defaultModel`, defaultModel);
@@ -162,10 +174,34 @@ export function settingRoutes(ctx: RouteContext): Router {
       if (executablePath) ctx.db.settings.set('provider', `${adapterId}.executablePath`, executablePath);
       else ctx.db.settings.delete('provider', `${adapterId}.executablePath`);
     }
-    const { systemPrompt } = parsed.data;
     if (systemPrompt !== undefined) {
       if (systemPrompt) ctx.db.settings.set('provider', `${adapterId}.systemPrompt`, systemPrompt);
       else ctx.db.settings.delete('provider', `${adapterId}.systemPrompt`);
+    }
+    if (defaultEffort !== undefined) {
+      if (defaultEffort) ctx.db.settings.set('provider', `${adapterId}.defaultEffort`, defaultEffort);
+      else ctx.db.settings.delete('provider', `${adapterId}.defaultEffort`);
+    }
+    if (defaultFast !== undefined) {
+      if (defaultFast) ctx.db.settings.set('provider', `${adapterId}.defaultFast`, defaultFast);
+      else ctx.db.settings.delete('provider', `${adapterId}.defaultFast`);
+    }
+    if (defaultUltracode !== undefined) {
+      if (defaultUltracode) ctx.db.settings.set('provider', `${adapterId}.defaultUltracode`, defaultUltracode);
+      else ctx.db.settings.delete('provider', `${adapterId}.defaultUltracode`);
+    }
+    if (defaultAdaptiveThinking !== undefined) {
+      if (defaultAdaptiveThinking)
+        ctx.db.settings.set('provider', `${adapterId}.defaultAdaptiveThinking`, defaultAdaptiveThinking);
+      else ctx.db.settings.delete('provider', `${adapterId}.defaultAdaptiveThinking`);
+    }
+    if (personality !== undefined) {
+      if (personality) ctx.db.settings.set('provider', `${adapterId}.personality`, personality);
+      else ctx.db.settings.delete('provider', `${adapterId}.personality`);
+    }
+    if (reasoningSummary !== undefined) {
+      if (reasoningSummary) ctx.db.settings.set('provider', `${adapterId}.reasoningSummary`, reasoningSummary);
+      else ctx.db.settings.delete('provider', `${adapterId}.reasoningSummary`);
     }
 
     res.json({ success: true });
