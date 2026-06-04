@@ -59,7 +59,11 @@ Rejected alternatives:
 
 ```ts
 // packages/types/src/adapter.ts
-export type EffortLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+// Full union across both CLIs. Codex ReasoningEffort = none/minimal/low/medium/high/xhigh;
+// Claude adds 'max'. The per-model `supportedEfforts` array is the runtime gate — most
+// models expose only a subset (live: Codex low–xhigh, Claude low–max), so 'none'/'minimal'
+// simply never appear in the UI unless a model lists them.
+export type EffortLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface AdapterModel {
   id: string;
@@ -107,7 +111,17 @@ Notes:
 - `supportsUltracode` is **derived**, not probed: `supportedEfforts.includes('xhigh')`
   (ultracode forces xhigh, so a model without xhigh — e.g. Sonnet — hides it).
 - `SessionTuning` fields are `| null` so "explicitly unset → fall back to the layer
-  below" is distinct from "not configured."
+  below" is distinct from "not configured." **`null`/absent is stored, never a
+  concrete copy** — see the inheritance rule in Section 5. Effective values are
+  resolved at render/spawn, so later changes to a provider default still propagate
+  to chats that never overrode it.
+- **Ultracode coercion is a resolver invariant, not just a UI nicety.** Because the
+  Claude CLI resolves an explicit `--effort` *before* `settings.ultracode`, the data
+  model alone allows the contradictory `effort:low + ultracode:true`. `resolveTuning`
+  (Section 3) collapses this: when `ultracode` resolves truthy, `effort` is coerced
+  to `'xhigh'`. This makes spawn and live-apply agree regardless of how the values
+  were persisted, and is why Claude effort is applied via `apply_flag_settings` (not
+  the `--effort` spawn flag) — see Section 3.
 
 ## Probe / normalize layer (Section 2)
 
@@ -152,17 +166,37 @@ Codex → `low–xhigh` + Fast; Haiku → neither effort nor flags.
 ## Apply layer (Section 3)
 
 A shared pure resolver computes effective tuning, then each adapter translates it.
+**The resolver both resolves precedence and clamps to the target model's
+capabilities** — UI gating alone is not enough, because stored chat/provider values
+can become invalid after a model switch (e.g. a chat carrying `xhigh`/`ultracode`
+moved to a model that supports neither).
 
 ```ts
 // resolveTuning(chat, providerConfig, model): Required<SessionTuning>
-// precedence: chat override ?? provider default ?? model.defaultEffort ?? 'medium' / false
+//
+// 1. precedence (per field):  chat override ?? provider default ?? model.defaultEffort ?? 'medium' / false
+// 2. clamp to capabilities:
+//      effort  → if not in model.supportedEfforts: fall back to model.defaultEffort
+//                (or nearest supported ≤ requested, else 'medium')
+//      fast             → false unless model.supportsFast
+//      ultracode        → false unless model.supportsUltracode
+//      adaptiveThinking → false unless model.supportsAdaptiveThinking
+// 3. coherence:  if ultracode === true → effort = 'xhigh'   (see Section 1 invariant)
+//
+// Pure + total: same (chat, provider, model) always yields a valid Required<SessionTuning>.
 ```
+
+`resolveTuning` runs at spawn (seeds `SessionSpawnOptions.tuning`), on every composer
+toggle, **and on model switch** — `setModel` re-resolves against the new model and
+calls `applyTuning(resolved)` so stale/invalid values are never sent.
 
 **Claude — `apply_flag_settings`** (extends the existing `sendControlRequest` setters)
 
-Spawn args keep what has CLI flags (`--model`, `--effort`). Flags with no CLI
-equivalent (`fast`, `ultracode`, `adaptiveThinking`) are pushed once after init,
-then on every change:
+Claude effort is applied via `apply_flag_settings`, **not** the `--effort` spawn flag
+— the CLI resolves an explicit `--effort` before `settings.ultracode`, so a spawn
+flag would defeat the ultracode→xhigh coercion. Only `--model` stays a spawn arg.
+All four knobs (`effortLevel`, `fastMode`, `ultracode`, `alwaysThinkingEnabled`) flow
+through one envelope, applied once at startup and on every change:
 
 ```ts
 async applyTuning(t: SessionTuning): Promise<void> {
@@ -177,30 +211,47 @@ async applyTuning(t: SessionTuning): Promise<void> {
 
 Envelope verified against the v2.1.156 binary: the handler reads `request.settings`,
 folds `model`/`effortLevel`/`ultracode` into app state, merges the rest. Mirrors the
-existing `setModel`/`setPermissionMode` pattern. (`ultracode:true` makes the CLI
-force effort to `xhigh` itself.)
+existing `setModel`/`setPermissionMode` pattern.
+
+**Startup timing:** `ClaudeSession.spawn()` writes the resolved-tuning
+`apply_flag_settings` to stdin **immediately after spawn**, before the first user
+message. The CLI buffers stdin and `system:init` only fires after the first API call,
+so this is the same proactive-stdin pattern already used for the resume permission
+path — it guarantees provider-default `fast`/`ultracode` are in effect on the first
+send, not one turn late. (If we instead deferred to a `system:init` hook the first
+fast user send could race ahead of it.)
 
 **Codex — `turn/start` overrides** (replaces hardcoded `reasoning_effort: null`)
 
-Codex applies config per turn (persists for subsequent turns), so resolved tuning is
-threaded into the `turn/start` params built on each `sendMessage`:
+Codex's `turn/start` **always** sends `collaborationMode`, and per the generated
+schema `collaborationMode` *takes precedence over* top-level `model`/`effort`/
+`reasoning_effort`. So effort must live in `collaborationMode.settings.reasoning_effort`
+(not top-level `turn/start.effort`, which would be ignored). The knobs
+`collaborationMode.settings` does **not** carry — `serviceTier`, `personality`,
+`summary`, `verbosity` — go on the top-level `turn/start` params:
 
 ```ts
-effort:      resolved.effort,                       // ReasoningEffort
-serviceTier: resolved.fast ? 'fast' : 'flex',       // only when model.supportsFast
-// settings-level, from ProviderConfig (Section 5):
-personality, summary, verbosity,
+// collaborationMode.settings (built by buildCollaborationMode — no longer hardcodes null):
+{ model: resolved.model, reasoning_effort: resolved.effort, developer_instructions: null }
+
+// top-level turn/start params:
+serviceTier: resolved.fast ? 'fast' : 'flex',   // only when model.supportsFast
+personality,                                     // from ProviderConfig (Section 5), if model.supportsPersonality
+summary, verbosity,                              // from ProviderConfig (Section 5)
 ```
 
-`buildCollaborationMode()` stops hardcoding `reasoning_effort: null`. Codex
-`applyTuning()` updates the session's pending tuning used by the next `turn/start`
-(no separate control message — per-turn is the protocol's own mechanism).
+Exact field names/enums to be re-verified against `codex app-server generate-ts`
+during implementation (the `codex-protocol-debugger` skill documents the current
+`Settings` / `TurnStartParams` shapes). Codex `applyTuning()` updates the session's
+pending tuning used by the next `turn/start` (no separate control message — per-turn
+is the protocol's own mechanism).
 
 **Asymmetry (accepted):** Claude applies immediately; Codex applies on the next
 message. Inherent to the two protocols; the UI treats both as "saved."
 
 **Interface:** `AdapterSession` gains `applyTuning(t: SessionTuning): Promise<void>`.
-`SessionOptions.effort` widens to `tuning?: SessionTuning`.
+`SessionSpawnOptions.effort` (the actual interface carrying it today, `adapter.ts:32`
+— **not** `SessionOptions`) is replaced by `tuning?: SessionTuning`.
 
 ## Composer UX (Section 4)
 
@@ -282,9 +333,14 @@ the `FEATURES` table, and gating predicates move into a shared renderer module
 (`lib/model-tuning.ts`) imported by `EffortPicker`, `FeaturesPopover`, and
 `ProviderSection`.
 
-**Inheritance:** at chat creation, `resolveTuning` seeds the new `Chat`'s tuning
-from provider defaults (string → boolean/enum decode); the composer overrides from
-there.
+**Inheritance (store `null`, resolve late — do NOT seed):** a new chat's tuning
+columns are left `null` (= inherit), **not** copied from the provider defaults.
+Effective values are computed by `resolveTuning` at render and at spawn. This keeps a
+later change to a provider default propagating to every chat that never overrode it;
+seeding concrete values at creation would silently freeze the defaults as per-chat
+overrides. The composer therefore displays the *resolved* effective value while the
+stored value stays `null` until the user explicitly toggles, at which point that one
+field becomes a concrete per-chat override (the others remain `null`/inherited).
 
 ## Persistence & API (Section 6)
 
@@ -336,8 +392,9 @@ const tuningSchema = z.object({
 **Provider settings** — key-value store, no migration. Extend the provider PUT
 route's Zod to validate the new enum fields.
 
-**Spawn path** — `SessionOptions.effort` → `tuning?: SessionTuning`; `ChatManager`
-builds it via `resolveTuning` at spawn.
+**Spawn path** — `SessionSpawnOptions.effort` → `tuning?: SessionTuning`; `ChatManager`
+builds it via `resolveTuning(chat, providerConfig, model)` at spawn (resolving the
+`null`/inherit values against the live provider defaults and clamping to the model).
 
 ## Testing (Section 7)
 
@@ -349,10 +406,17 @@ builds it via `resolveTuning` at spawn.
   filtered**, `[]` on probe failure.
 
 **Apply layer (core)** — highest-value (new behavior)
-- Claude `applyTuning` → exact `apply_flag_settings` envelope; `null` clears.
-- Codex turn/start → resolved `effort` + `serviceTier:'fast'|'flex'`; no more
-  hardcoded `null`.
-- `resolveTuning` precedence table test across all four fields.
+- Claude `applyTuning` → exact `apply_flag_settings` envelope; `null` clears; effort
+  flows through `apply_flag_settings` (no `--effort` spawn flag). Spawn writes the
+  startup tuning to stdin proactively (before first message).
+- Codex turn/start → resolved effort lands in `collaborationMode.settings.reasoning_effort`
+  (no longer `null`); `serviceTier:'fast'|'flex'` + personality/summary/verbosity on
+  top-level params.
+- `resolveTuning` — precedence table across all four fields **plus**: capability
+  clamping (effort not in `supportedEfforts` → `defaultEffort`; `fast`/`ultracode`/
+  `adaptiveThinking` forced false when unsupported), ultracode→xhigh coercion, and
+  model-switch re-resolve (`setModel` drops now-invalid stored values, no stale tuning
+  sent).
 
 **API (core)**
 - `chats.test.ts` — `/tuning` Zod (valid subsets, 400 on bad input, `null` clears,
@@ -394,7 +458,7 @@ builds it via `resolveTuning` at spawn.
 
 | Area | Files |
 |------|-------|
-| Types | `types/src/adapter.ts` (`AdapterModel`, `AdapterSession`, `SessionOptions`), `types/src/chat.ts` (`SessionTuning`, `Chat`, `ChatEffort`), `types/src/settings.ts` (`ProviderConfig`) |
+| Types | `types/src/adapter.ts` (`AdapterModel`, `AdapterSession`, `SessionSpawnOptions`), `types/src/chat.ts` (`SessionTuning`, `Chat`, `ChatEffort`), `types/src/settings.ts` (`ProviderConfig`) |
 | Probe/normalize | `core/.../claude/probe-models.ts`, `core/.../claude/adapter.ts`, `core/.../codex/adapter.ts` |
 | Apply | `core/.../claude/session.ts`, `core/.../codex/session.ts`, `core/.../codex/types.ts`, `core/src/chat/chat-manager.ts`, new `resolveTuning` helper |
 | API/DB | `core/src/db/schema.ts`, `core/src/db/chats.ts`, `core/src/server/routes/chats.ts`, `core/src/server/routes/settings.ts` |
