@@ -86,13 +86,38 @@ export interface AdapterModel {
 
 ```ts
 // packages/types/src/chat.ts
+//
+// Tri-state per field — this is the contract, document it on the type:
+//   undefined → not present in this partial (PATCH); leave as-is
+//   null      → explicitly inherit (fall back to provider default → model default)
+//   value     → concrete per-chat override
 export interface SessionTuning {
-  effort?: EffortLevel | null;       // null = inherit provider default → model default
+  effort?: EffortLevel | null;
   fast?: boolean | null;
   ultracode?: boolean | null;
   adaptiveThinking?: boolean | null;
 }
 ```
+
+**Single source of truth for the boolean features.** The relationship
+`featureKey ↔ model-capability field ↔ Claude settings key` is otherwise hand-wired
+in ~8 places (type field, DB column, Zod, resolver clamp, Claude apply, renderer
+gating…). One canonical descriptor in `@qlan-ro/mainframe-types` drives all the
+**behavioral** code; the flat type/DB fields stay explicit (required for strict
+typing + SQLite columns), but no logic re-derives the mapping:
+
+```ts
+// packages/types/src/adapter.ts
+export const TUNABLE_FEATURES = [
+  { key: 'fast',             capability: 'supportsFast',             claudeSetting: 'fastMode' },
+  { key: 'ultracode',        capability: 'supportsUltracode',        claudeSetting: 'ultracode' },
+  { key: 'adaptiveThinking', capability: 'supportsAdaptiveThinking', claudeSetting: 'alwaysThinkingEnabled' },
+] as const satisfies ReadonlyArray<{ key: keyof SessionTuning; capability: keyof AdapterModel; claudeSetting: string }>;
+```
+
+`resolveTuning`'s boolean clamp, Claude `applyTuning`'s settings construction, and the
+renderer's feature list all **iterate this** (renderer layers on `{label, desc}` only).
+Effort stays separate — it's an ordered enum with clamping, not a gate.
 
 Precedence chain (resolved by `resolveTuning`, Section 3):
 
@@ -181,17 +206,27 @@ moved to a model that supports neither).
 //                       else the first (lowest) supported  ← never returns an unsupported level
 //                else (model lists no efforts): 'medium' as a typed placeholder, and
 //                       effort is NOT sent to the adapter
-//      fast             → false unless model.supportsFast
-//      ultracode        → false unless model.supportsUltracode
-//      adaptiveThinking → false unless model.supportsAdaptiveThinking
+//      booleans → for (f of TUNABLE_FEATURES) if (!model[f.capability]) t[f.key] = false
+//                 (iterates the Section-1 descriptor — no per-feature branches)
 // 3. coherence:  if ultracode === true → effort = 'xhigh'   (see Section 1 invariant)
 //
 // Pure + total: same (chat, provider, model) always yields a valid Required<SessionTuning>.
 ```
 
-`resolveTuning` runs at spawn (seeds `SessionSpawnOptions.tuning`), on every composer
-toggle, **and on model switch** — `setModel` re-resolves against the new model and
-calls `applyTuning(resolved)` so stale/invalid values are never sent.
+`resolveTuning` is pure core logic (`core/.../resolve-tuning.ts`). Its `providerConfig`
+argument comes from a **single canonical provider-config loader** (one
+`getProviderConfig(adapterId)` that assembles the flat `provider.<id>.<field>` settings
+rows into a typed `ProviderConfig`) — reused by the spawn seam, the `/tuning` route,
+and `ProviderSection`'s read path. Do **not** scatter fresh `db.settings.get('provider', …)`
+calls at each call site.
+
+**Ownership / where it runs** (the spec's earlier "ChatManager" shorthand was loose):
+- **Spawn:** `lifecycle-manager.ts` (the seam at `lifecycle-manager.ts:471` that today
+  passes `effort: chat.effort` raw) calls `resolveTuning` and passes the result as
+  `SessionSpawnOptions.tuning`.
+- **Composer toggle & model switch:** the live path resolves and calls
+  `session.applyTuning(resolved)` (model switch re-resolves against the new model so
+  stale `xhigh`/`ultracode` are dropped, never sent).
 
 **Claude — all tuning via `apply_flag_settings` (NOT the `--effort` spawn flag)**
 
@@ -206,19 +241,22 @@ calls `applyTuning(resolved)` so stale/invalid values are never sent.
 > truth — mutable cleanly at startup and mid-session. (See
 > `claude-protocol-debugger/cli-binary-internals.md`.)
 
-Only `--model` stays a spawn arg. All four knobs (`effortLevel`, `fastMode`,
-`ultracode`, `alwaysThinkingEnabled`) flow through one envelope — written once at
-startup and again on every change:
+Only `--model` stays a spawn arg. The envelope is built by a pure helper in
+`claude/tuning.ts` (**not** inlined into the already-554-line `session.ts`):
+`effortLevel` from `t.effort`, and the booleans by iterating `TUNABLE_FEATURES`
+(`f.claudeSetting`), so there are no per-feature branches and adding a feature is a
+one-line descriptor edit:
 
 ```ts
-async applyTuning(t: SessionTuning): Promise<void> {
-  const settings: Record<string, unknown> = {};
-  if (t.effort !== undefined)           settings.effortLevel = t.effort;        // null clears
-  if (t.fast !== undefined)             settings.fastMode = t.fast;
-  if (t.ultracode !== undefined)        settings.ultracode = t.ultracode;
-  if (t.adaptiveThinking !== undefined) settings.alwaysThinkingEnabled = t.adaptiveThinking;
-  this.sendControlRequest(child.stdin, { subtype: 'apply_flag_settings', settings });
+// claude/tuning.ts
+export function tuningToFlagSettings(t: SessionTuning): Record<string, unknown> {
+  const s: Record<string, unknown> = {};
+  if (t.effort !== undefined) s.effortLevel = t.effort;                       // null clears
+  for (const f of TUNABLE_FEATURES) if (t[f.key] !== undefined) s[f.claudeSetting] = t[f.key];
+  return s;
 }
+// session.applyTuning(t) = sendControlRequest({ subtype: 'apply_flag_settings',
+//                                                settings: tuningToFlagSettings(t) })
 ```
 
 Envelope verified against the v2.1.156 binary: the handler reads `request.settings`,
@@ -239,23 +277,35 @@ schema `collaborationMode` *takes precedence over* top-level `model`/`effort`/
 `reasoning_effort`. So effort must live in `collaborationMode.settings.reasoning_effort`
 (not top-level `turn/start.effort`, which would be ignored). The knobs
 `collaborationMode.settings` does **not** carry — `serviceTier`, `personality`,
-`summary`, `verbosity` — go on the top-level `turn/start` params:
+`summary`, `verbosity` — go on the top-level `turn/start` params.
+
+**Boundary: Codex-only config does not touch the shared spawn type.** `personality`,
+`summary`, and `verbosity` are Codex-only and provider-level — they are **not** in
+`SessionTuning` and must **not** be bolted onto `SessionSpawnOptions` (no dead
+Codex-only optionals on every adapter), nor read via `db.settings` inside the session
+(no settings-store leak across the adapter boundary). Instead:
+
+- The cross-adapter slice stays in `SessionSpawnOptions.tuning: SessionTuning`
+  (effort/fast → Codex `reasoning_effort`/`serviceTier`).
+- A **Codex-package type** `CodexProviderTuning { personality; summary; verbosity }`
+  carries the Codex-only defaults, resolved by the **Codex adapter** from the canonical
+  `getProviderConfig('codex')` loader (the adapter already owns the app-server +
+  `model/list`; owning its own provider knobs is the natural home).
+- Turn-param assembly lives in a `codex/turn-config.ts` helper (**not** inlined into
+  the already-435-line `session.ts`):
 
 ```ts
-// collaborationMode.settings (built by buildCollaborationMode — no longer hardcodes null):
-{ model: resolved.model, reasoning_effort: resolved.effort, developer_instructions: null }
-
-// top-level turn/start params:
-serviceTier: resolved.fast ? 'fast' : 'flex',   // only when model.supportsFast
-personality,                                     // from ProviderConfig (Section 5), if model.supportsPersonality
-summary, verbosity,                              // from ProviderConfig (Section 5)
+// codex/turn-config.ts — pure
+collaborationMode.settings = { model, reasoning_effort: tuning.effort, developer_instructions: null };
+turnParams.serviceTier = tuning.fast ? 'fast' : 'flex';   // only when model.supportsFast
+turnParams.personality = codexCfg.personality;            // only when model.supportsPersonality
+turnParams.summary = codexCfg.summary; turnParams.verbosity = codexCfg.verbosity;
 ```
 
 Exact field names/enums to be re-verified against `codex app-server generate-ts`
-during implementation (the `codex-protocol-debugger` skill documents the current
-`Settings` / `TurnStartParams` shapes). Codex `applyTuning()` updates the session's
-pending tuning used by the next `turn/start` (no separate control message — per-turn
-is the protocol's own mechanism).
+during implementation. Codex `applyTuning()` updates the session's pending tuning used
+by the next `turn/start` (no separate control message — per-turn is the protocol's own
+mechanism).
 
 **Asymmetry (accepted):** Claude applies immediately; Codex applies on the next
 message. Inherent to the two protocols; the UI treats both as "saved."
@@ -288,14 +338,16 @@ toolbar:  [@ context] [model ▾] [⚡ High ▾] [⚙ ▾]            [send]
                                               Adaptive thinking    (●—)  on
 ```
 
-- One row per supported feature, from a declarative table:
+- One row per supported feature. The renderer does **not** redefine the key↔capability
+  mapping — it layers display strings onto the canonical `TUNABLE_FEATURES` descriptor
+  (Section 1), in the shared `lib/model-tuning.ts`:
   ```ts
-  const FEATURES = [
-    { key: 'fast',             cap: 'supportsFast',             label: 'Fast mode',         desc: 'Faster output; may draw on usage credits' },
-    { key: 'ultracode',        cap: 'supportsUltracode',        label: 'Ultracode',         desc: 'xhigh effort + dynamic workflows' },
-    { key: 'adaptiveThinking', cap: 'supportsAdaptiveThinking', label: 'Adaptive thinking', desc: 'Claude decides when/how much to think' },
-  ];
-  // visible = FEATURES.filter(f => model[f.cap])
+  const FEATURE_LABELS: Record<FeatureKey, { label: string; desc: string }> = {
+    fast:             { label: 'Fast mode',         desc: 'Faster output; may draw on usage credits' },
+    ultracode:        { label: 'Ultracode',         desc: 'xhigh effort + dynamic workflows' },
+    adaptiveThinking: { label: 'Adaptive thinking', desc: 'Claude decides when/how much to think' },
+  };
+  // visible = TUNABLE_FEATURES.filter(f => model[f.capability])
   ```
 - Each row uses the existing `ui/toggle.tsx` `<Toggle>` switch (`role="switch"`,
   sliding thumb, `bg-mf-accent`), **not** a checkbox.
@@ -330,22 +382,27 @@ export interface ProviderConfig {
 }
 ```
 
-`ProviderSection.tsx` additions (capability-gated off `config.defaultModel`'s model):
-- **Default Effort** dropdown — options from the default model's `supportedEfforts`
-  (same `EFFORT_META`); hidden if none.
-- **Default features** — a `<Toggle>` per supported feature, same `FEATURES` table.
-- **Codex tuning block** (gated `adapterId === 'codex'`): Personality
-  (additionally gated by `model.supportsPersonality`), Reasoning Summary, Verbosity
-  dropdowns.
-- All write through the existing `update({...})` → `updateProviderSettings` path.
-- `data-testid`s: `providers-${adapterId}-default-effort`,
-  `providers-${adapterId}-default-feature-${key}`, `providers-${adapterId}-personality`,
-  `providers-${adapterId}-reasoning-summary`, `providers-${adapterId}-verbosity`.
+**`ProviderSection.tsx` must be decomposed, not grown.** It is 174 lines today and
+these additions (effort dropdown + N feature toggles + a 3-field Codex block + gating)
+would push it past the repo's 300-line limit and tangle four concerns in one file.
+Extract two subcomponents, both capability-gated off `config.defaultModel`'s model:
+- **`<ProviderTuningDefaults>`** — Default Effort dropdown (options from the model's
+  `supportedEfforts`, shared `EFFORT_META`) + a `<Toggle>` per supported feature
+  (iterating `TUNABLE_FEATURES`). Adapter-agnostic; reused styling with the composer.
+- **`<CodexTuningDefaults>`** — the Codex-only block (gated `adapterId === 'codex'`):
+  Personality (additionally gated by `model.supportsPersonality`), Reasoning Summary,
+  Verbosity dropdowns. Mirrors the `CodexProviderTuning` type from Section 3.
+
+`ProviderSection` just composes these alongside its existing fields. All write through
+the existing `update({...})` → `updateProviderSettings` path. `data-testid`s:
+`providers-${adapterId}-default-effort`, `providers-${adapterId}-default-feature-${key}`,
+`providers-${adapterId}-personality`, `providers-${adapterId}-reasoning-summary`,
+`providers-${adapterId}-verbosity`.
 
 **Shared-helper extraction** (CLAUDE.md "extract if 3+ consumers"): `EFFORT_META`,
-the `FEATURES` table, and gating predicates move into a shared renderer module
-(`lib/model-tuning.ts`) imported by `EffortPicker`, `FeaturesPopover`, and
-`ProviderSection`.
+`FEATURE_LABELS`, and the gating predicates live in `lib/model-tuning.ts` (layered on
+the canonical `TUNABLE_FEATURES`), imported by `EffortPicker`, `FeaturesPopover`,
+`ProviderTuningDefaults`, and `CodexTuningDefaults`.
 
 **Inheritance (store `null`, resolve late — do NOT seed):** a new chat's tuning
 columns are left `null` (= inherit), **not** copied from the provider defaults.
@@ -392,23 +449,32 @@ const tuningSchema = z.object({
   ultracode:        z.boolean().nullable().optional(),
   adaptiveThinking: z.boolean().nullable().optional(),
 });
-// handler: validate → db.chats.update → syncChatFields → ctx.chats?.applyTuning?.(chatId, partial)
 ```
 
-- The existing `PATCH /api/chats/:id/effort` **stays** (enum widened to the full set)
-  so the **mobile submodule does not break** — it is a subset of `/tuning`. Composer
-  uses `/tuning`.
-- **Live-apply wiring:** after persisting, the handler calls
-  `ChatManager.applyTuning(chatId, partial)`, which looks up the active session and
-  calls `session.applyTuning(...)`; no active session → no-op (applied at next spawn
-  from the persisted chat).
+- **One internal helper, both routes.** Extract `applyChatTuning(chatId, partial:
+  SessionTuning)` (persist → `syncChatFields` → live-apply). `/tuning` passes the
+  validated body; the existing `PATCH /api/chats/:id/effort` **stays** (enum widened to
+  the full set, for the **mobile submodule**) and simply calls
+  `applyChatTuning(id, { effort })`. No copy-pasted `db.update`/`syncChatFields`
+  sequence — keeps `chats.ts` (251 lines) under 300.
+- **Drop the `as Chat['effort']` cast.** The current `/effort` handler casts to push
+  `null` through an update loop that skips `undefined`. Don't scale that across four
+  fields — make the DB update layer distinguish "key absent" (skip) from "key present
+  & `null`" (write NULL) explicitly **once** (`'effort' in partial`), so the tri-state
+  is honored without casts.
+- **Live-apply wiring (correct owner):** `applyChatTuning` resolves the live session
+  through the session registry (the same place `lifecycle-manager` holds active
+  sessions) and calls `session.applyTuning(resolved)`; no active session → no-op
+  (applied at next spawn). (Earlier "ChatManager" shorthand was loose — the active
+  session lives on the lifecycle layer.)
 
 **Provider settings** — key-value store, no migration. Extend the provider PUT
 route's Zod to validate the new enum fields.
 
-**Spawn path** — `SessionSpawnOptions.effort` → `tuning?: SessionTuning`; `ChatManager`
-builds it via `resolveTuning(chat, providerConfig, model)` at spawn (resolving the
-`null`/inherit values against the live provider defaults and clamping to the model).
+**Spawn path** — `SessionSpawnOptions.effort` → `tuning?: SessionTuning`;
+**`lifecycle-manager.ts`** (seam at `:471`) builds it via
+`resolveTuning(chat, getProviderConfig(adapterId), model)` at spawn — resolving the
+`null`/inherit values against the live provider defaults and clamping to the model.
 
 ## Testing (Section 7)
 
@@ -419,20 +485,21 @@ builds it via `resolveTuning(chat, providerConfig, model)` at spawn (resolving t
   `defaultEffort`, `supportsFast`, `supportsPersonality`, `isDefault`, **`hidden`
   filtered**, `[]` on probe failure.
 
-**Apply layer (core)** — highest-value (new behavior)
-- Claude: only `--model` is a spawn arg (**no `--effort`** — it would install a
-  masking effort permission layer); startup `apply_flag_settings` (effort + fast +
-  ultracode + thinking) written proactively to stdin before the first message;
-  mid-session `applyTuning` → exact `apply_flag_settings` envelope including
-  `effortLevel`; `null` clears. A regression test asserts no `--effort` in spawn args.
-- Codex turn/start → resolved effort lands in `collaborationMode.settings.reasoning_effort`
-  (no longer `null`); `serviceTier:'fast'|'flex'` + personality/summary/verbosity on
-  top-level params.
-- `resolveTuning` — precedence table across all four fields **plus**: capability
-  clamping (effort not in `supportedEfforts` → `defaultEffort`; `fast`/`ultracode`/
-  `adaptiveThinking` forced false when unsupported), ultracode→xhigh coercion, and
-  model-switch re-resolve (`setModel` drops now-invalid stored values, no stale tuning
-  sent).
+**Apply layer (core)** — highest-value (new behavior), tested on the pure helpers
+- `claude/tuning.ts` `tuningToFlagSettings` — exact `apply_flag_settings` payload from
+  a `SessionTuning` (descriptor-driven keys; `null` clears); Claude spawn asserts only
+  `--model`, **no `--effort`** (regression for the masking-layer finding) + startup
+  `apply_flag_settings` written proactively before first message.
+- `codex/turn-config.ts` — resolved effort lands in
+  `collaborationMode.settings.reasoning_effort` (no longer `null`);
+  `serviceTier:'fast'|'flex'`; `CodexProviderTuning` (personality/summary/verbosity)
+  on top-level params and **never** sourced from the shared spawn options.
+- `resolve-tuning.ts` — precedence table across all four fields **plus**: capability
+  clamping (effort not in `supportedEfforts` → guaranteed-supported fallback;
+  booleans forced false via `TUNABLE_FEATURES` when unsupported), ultracode→xhigh
+  coercion, and model-switch re-resolve (drops now-invalid stored values).
+- `applyChatTuning` — one helper; assert `/effort` and `/tuning` both route through it
+  (no duplicated persist/sync/apply); tri-state `'key' in partial` honored with no casts.
 
 **API (core)**
 - `chats.test.ts` — `/tuning` Zod (valid subsets, 400 on bad input, `null` clears,
@@ -474,9 +541,27 @@ builds it via `resolveTuning(chat, providerConfig, model)` at spawn (resolving t
 
 | Area | Files |
 |------|-------|
-| Types | `types/src/adapter.ts` (`AdapterModel`, `AdapterSession`, `SessionSpawnOptions`), `types/src/chat.ts` (`SessionTuning`, `Chat`, `ChatEffort`), `types/src/settings.ts` (`ProviderConfig`) |
+| Types | `types/src/adapter.ts` (`AdapterModel`, `AdapterSession`, `SessionSpawnOptions`, `TUNABLE_FEATURES`), `types/src/chat.ts` (`SessionTuning`, `Chat`, `ChatEffort`), `types/src/settings.ts` (`ProviderConfig`) |
 | Probe/normalize | `core/.../claude/probe-models.ts`, `core/.../claude/adapter.ts`, `core/.../codex/adapter.ts` |
-| Apply | `core/.../claude/session.ts`, `core/.../codex/session.ts`, `core/.../codex/types.ts`, `core/src/chat/chat-manager.ts`, new `resolveTuning` helper |
-| API/DB | `core/src/db/schema.ts`, `core/src/db/chats.ts`, `core/src/server/routes/chats.ts`, `core/src/server/routes/settings.ts` |
-| UI | `desktop/.../composer/EffortPicker.tsx`, new `FeaturesPopover.tsx`, `composer/ComposerCard.tsx`, `settings/ProviderSection.tsx`, new `lib/model-tuning.ts` |
+| Resolve/apply | **new** `core/src/chat/resolve-tuning.ts`, **new** `core/.../claude/tuning.ts`, **new** `core/.../codex/turn-config.ts` (+ `CodexProviderTuning` type), `core/.../codex/types.ts`; thin call-sites in `claude/session.ts`, `codex/session.ts`, `lifecycle-manager.ts`; canonical `getProviderConfig(adapterId)` loader |
+| API/DB | `core/src/db/schema.ts`, `core/src/db/chats.ts` (explicit `'key' in partial` null handling), `core/src/server/routes/chats.ts` (shared `applyChatTuning`), `core/src/server/routes/settings.ts` |
+| UI | `desktop/.../composer/EffortPicker.tsx`, **new** `FeaturesPopover.tsx`, `composer/ComposerCard.tsx`, **new** `lib/model-tuning.ts`; `settings/ProviderSection.tsx` decomposed → **new** `ProviderTuningDefaults.tsx` + **new** `CodexTuningDefaults.tsx` |
 | Tests | unit/integration per Section 7 + `e2e/tests/44-composer-config.spec.ts`, `e2e/tests/41-settings.spec.ts`, `e2e/scenarios/composer.md`, mock fixtures |
+
+## Implementation guardrails (from the code-quality review)
+
+- **No file crosses 300 lines.** `claude/session.ts` (554) and `codex/session.ts`
+  (435) are already over — the tuning/turn-config logic goes in **new** helper modules
+  they call, never inlined. `ProviderSection.tsx` (174) is decomposed into the two
+  subcomponents above rather than grown. `chats.ts` (251) stays under 300 via the
+  shared `applyChatTuning` helper.
+- **One source of truth for boolean features:** `TUNABLE_FEATURES`. Resolver clamp,
+  Claude flag-settings mapping, and renderer gating all iterate it — no per-feature
+  branches, no re-declared key↔capability maps. Adding a feature = one descriptor row
+  (+ its flat type/DB field + a label).
+- **No boundary leaks:** Codex-only config (`CodexProviderTuning`) stays in the Codex
+  package and is resolved by the Codex adapter; it never lands on the shared
+  `SessionSpawnOptions`, and the session never reads `db.settings` directly. Provider
+  config is read through one `getProviderConfig` loader.
+- **No casts for the tri-state:** the DB update layer keys off `'<field>' in partial`
+  to honor `undefined` vs `null` vs value — no `as Chat[...]` casts.
