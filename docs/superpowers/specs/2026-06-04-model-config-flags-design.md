@@ -175,9 +175,14 @@ moved to a model that supports neither).
 // resolveTuning(chat, providerConfig, model): Required<SessionTuning>
 //
 // 1. precedence (per field):  chat override ?? provider default ?? model.defaultEffort ?? 'medium' / false
-// 2. clamp to capabilities:
-//      effort  → if not in model.supportedEfforts: fall back to model.defaultEffort
-//                (or nearest supported ≤ requested, else 'medium')
+// 2. clamp to capabilities (effort result is GUARANTEED ∈ supportedEfforts, or the
+//    field is simply not applied when the model lists no efforts):
+//      effort  → if requested ∈ supportedEfforts: keep it
+//                else if model.defaultEffort ∈ supportedEfforts: use it
+//                else if supportedEfforts non-empty: highest supported ≤ requested,
+//                       else the first (lowest) supported  ← never returns an unsupported level
+//                else (model lists no efforts): 'medium' as a typed placeholder, and
+//                       effort is NOT sent to the adapter
 //      fast             → false unless model.supportsFast
 //      ultracode        → false unless model.supportsUltracode
 //      adaptiveThinking → false unless model.supportsAdaptiveThinking
@@ -260,7 +265,10 @@ Two toolbar controls, both pure functions of the selected model's capabilities.
 **`EffortPicker` (existing, made dynamic)** — `composer/EffortPicker.tsx`
 - Options come from `model.supportedEfforts` instead of the frozen `EFFORT_OPTIONS`.
   A static `EFFORT_META: Record<EffortLevel, {label, description}>` supplies display
-  text (adds `xhigh` → "Extra-high", `max` → "Maximum", `minimal`).
+  text — **exhaustive over the union** (`none`, `minimal`, `low`, `medium`, `high`,
+  `xhigh` → "Extra-high", `max` → "Maximum"). Only levels present in
+  `supportedEfforts` are rendered, so `none`/`minimal` stay hidden for today's models
+  but the `Record` stays type-complete.
 - Visibility: `(model.supportedEfforts?.length ?? 0) > 0` (replaces `supportsEffort`).
 - Writes `setChatTuning(chatId, { effort })` + live `applyTuning`.
 
@@ -373,7 +381,7 @@ This also fixes the other hardcoded `'low'|'medium'|'high'` spots in one move.
 ```ts
 // PATCH /api/chats/:id/tuning  — accepts any subset
 const tuningSchema = z.object({
-  effort:           z.enum(['minimal','low','medium','high','xhigh','max']).nullable().optional(),
+  effort:           z.enum(['none','minimal','low','medium','high','xhigh','max']).nullable().optional(),  // = EffortLevel; keep in sync
   fast:             z.boolean().nullable().optional(),
   ultracode:        z.boolean().nullable().optional(),
   adaptiveThinking: z.boolean().nullable().optional(),
