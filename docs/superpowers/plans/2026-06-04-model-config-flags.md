@@ -4,7 +4,7 @@
 
 **Goal:** Surface per-model effort levels + the fast / ultracode / adaptive-thinking feature flags (and Codex personality / reasoning-summary / verbosity) in the composer and provider settings, driven dynamically from each adapter's advertised capabilities instead of hardcoded lists.
 
-**Architecture:** One canonical `AdapterModel` carries dynamic capability data; a `TUNABLE_FEATURES` descriptor is the single source of truth for the boolean features; a pure `resolveTuning` resolver computes effective config (precedence → capability clamp → ultracode coercion); each adapter translates it natively (Claude `apply_flag_settings`, Codex `turn/start`). Composer knobs are per-chat (nullable = inherit); provider settings hold defaults.
+**Architecture:** One canonical `AdapterModel` carries dynamic capability data; a `TUNABLE_FEATURES` descriptor is the single source of truth for the boolean features; a pure `resolveTuning` resolver computes effective config (precedence → capability clamp → ultracode coercion). **Resolution happens in exactly one place** — `resolveTuningForChat(chatId)`, called by the spawn seam and live-apply — and hands sessions a complete `ResolvedTuning`; sessions only translate it natively (Claude `apply_flag_settings`, Codex `turn/start`). Persistence stays raw (`SessionTuning`, nullable = inherit); the UI sends raw partials and never coerces. Provider settings hold defaults.
 
 **Tech Stack:** TypeScript (strict, NodeNext), pnpm workspaces, better-sqlite3, Electron + React, Vitest, Playwright (e2e).
 
@@ -22,11 +22,12 @@
 | types | `packages/types/src/chat.ts` | `SessionTuning`, `ResolvedTuning`, `Chat` fields, `ChatEffort = EffortLevel` |
 | types | `packages/types/src/settings.ts` | `ProviderConfig` defaults + Codex knobs |
 | core | `packages/core/src/chat/resolve-tuning.ts` *(new)* | pure precedence + clamp + coercion |
+| core | `packages/core/src/chat/resolve-tuning-for-chat.ts` *(new)* | **single resolution site**: chat + provider + model → `ResolvedTuning`; used by spawn + live-apply |
 | core | `packages/core/src/settings/provider-config.ts` *(new)* | canonical `getProviderConfig(db, adapterId)` loader |
 | core | `packages/core/src/plugins/builtin/claude/probe-models.ts` | map CLI model info → caps |
 | core | `packages/core/src/plugins/builtin/claude/adapter.ts` | static catalog caps |
 | core | `packages/core/src/plugins/builtin/claude/tuning.ts` *(new)* | `tuningToFlagSettings` |
-| core | `packages/core/src/plugins/builtin/claude/session.ts` | spawn (no `--effort`), startup apply, `applyTuning`, `setModel` re-resolve |
+| core | `packages/core/src/plugins/builtin/claude/session.ts` | spawn (no `--effort`), startup apply, `applyTuning` (translate-only) |
 | core | `packages/core/src/plugins/builtin/codex/adapter.ts` | map `model/list` → caps, filter hidden |
 | core | `packages/core/src/plugins/builtin/codex/turn-config.ts` *(new)* | `CodexProviderTuning`, build turn/start config |
 | core | `packages/core/src/plugins/builtin/codex/session.ts` | thread tuning into `turn/start`, `applyTuning` |
@@ -98,20 +99,23 @@ export type FeatureKey = (typeof TUNABLE_FEATURES)[number]['key'];
 
 - [ ] **Step 2: Replace `effort` on `SessionSpawnOptions` with `tuning`**
 
-In `adapter.ts`, change the `SessionSpawnOptions` interface body field:
+In `adapter.ts`, change the `SessionSpawnOptions` interface body field. Sessions
+receive a **complete, resolved** config — `ResolvedTuning`, not the partial
+`SessionTuning` — so the type enforces "a session never resolves, it only translates":
 
 ```ts
 // remove: effort?: import('./chat.js').ChatEffort;
-tuning?: import('./chat.js').SessionTuning;
+tuning?: import('./chat.js').ResolvedTuning;
 ```
 
 - [ ] **Step 3: Add `applyTuning` to `AdapterSession`**
 
-In the `AdapterSession` interface, add:
+In the `AdapterSession` interface, add (note: `ResolvedTuning` — the caller has
+already resolved + clamped + coerced; the session just applies it):
 
 ```ts
-/** Apply runtime tuning to a live session. No-op fields are omitted by the caller. */
-applyTuning?(tuning: import('./chat.js').SessionTuning): Promise<void>;
+/** Apply a fully-resolved tuning to a live session. */
+applyTuning?(tuning: import('./chat.js').ResolvedTuning): Promise<void>;
 ```
 
 - [ ] **Step 4: Add the tuning types to `chat.ts`**
@@ -733,15 +737,17 @@ const tuningSchema = z.object({
   adaptiveThinking: z.boolean().nullable().optional(),
 });
 
-// One code path for both routes. `partial` keys are exactly the present fields,
-// so undefined-vs-null tri-state is preserved by db.chats.update (skips undefined,
-// writes null). No casts.
+// One code path for both routes. Persists the RAW partial (tri-state intent:
+// only touched fields become concrete; undefined skipped, null written) — NO
+// clamp/coercion here. Resolution is apply-time and lives in the chat layer.
 function applyChatTuning(chatId: string, partial: SessionTuning): Chat | null {
   ctx.db.chats.update(chatId, partial);
   const chat = ctx.db.chats.get(chatId);
   if (!chat) return null;
   ctx.chats?.syncChatFields?.(chatId, partial);
-  void ctx.chats?.applyTuning?.(chatId, partial); // fire-and-forget live apply; logs internally
+  // Live apply re-reads the now-persisted chat and resolves once (Phase H).
+  // Pass no partial — the chat layer is the single resolution site.
+  void ctx.chats?.applyTuning?.(chatId);
   return chat;
 }
 
@@ -782,7 +788,7 @@ router.patch('/api/chats/:id/effort', (req: Request, res: Response) => {
 });
 ```
 
-Add `import type { Chat, SessionTuning } from '@qlan-ro/mainframe-types';` if not present. Add a `applyTuning?(chatId: string, partial: SessionTuning): Promise<void>` optional method to the `ctx.chats` interface type (wired in Phase H).
+Add `import type { Chat, SessionTuning } from '@qlan-ro/mainframe-types';` if not present. Add `applyTuning?(chatId: string): Promise<void>` (no partial — it re-reads + resolves) to the `ctx.chats` interface type (wired in Phase H).
 
 - [ ] **Step 4: Run to verify pass** — Run: `pnpm --filter @qlan-ro/mainframe-core test routes/chats` → PASS.
 
@@ -827,13 +833,13 @@ import { describe, it, expect } from 'vitest';
 import { tuningToFlagSettings } from '../tuning.js';
 
 describe('tuningToFlagSettings', () => {
-  it('maps effort + descriptor features to flag settings keys', () => {
+  it('maps a resolved tuning to flag settings keys', () => {
     expect(tuningToFlagSettings({ effort: 'xhigh', fast: true, ultracode: false, adaptiveThinking: true }))
       .toEqual({ effortLevel: 'xhigh', fastMode: true, ultracode: false, alwaysThinkingEnabled: true });
   });
-  it('omits absent (undefined) keys but keeps null (clears)', () => {
-    expect(tuningToFlagSettings({ effort: null })).toEqual({ effortLevel: null });
-    expect(tuningToFlagSettings({ fast: true })).toEqual({ fastMode: true });
+  it('omits effortLevel when the model has no effort control (effort === null)', () => {
+    expect(tuningToFlagSettings({ effort: null, fast: true, ultracode: false, adaptiveThinking: false }))
+      .toEqual({ fastMode: true, ultracode: false, alwaysThinkingEnabled: false });
   });
 });
 ```
@@ -843,16 +849,15 @@ describe('tuningToFlagSettings', () => {
 - [ ] **Step 3: Implement**
 
 ```ts
-import type { SessionTuning } from '@qlan-ro/mainframe-types';
+import type { ResolvedTuning } from '@qlan-ro/mainframe-types';
 import { TUNABLE_FEATURES } from '@qlan-ro/mainframe-types';
 
-export function tuningToFlagSettings(t: SessionTuning): Record<string, unknown> {
+// Input is a complete ResolvedTuning (no undefined). Emit all three booleans;
+// omit effortLevel only when the model has no effort control (effort === null).
+export function tuningToFlagSettings(t: ResolvedTuning): Record<string, unknown> {
   const s: Record<string, unknown> = {};
-  if (t.effort !== undefined) s.effortLevel = t.effort;
-  for (const f of TUNABLE_FEATURES) {
-    const v = t[f.key as keyof SessionTuning];
-    if (v !== undefined) s[f.claudeSetting] = v;
-  }
+  if (t.effort !== null) s.effortLevel = t.effort;
+  for (const f of TUNABLE_FEATURES) s[f.claudeSetting] = t[f.key as keyof ResolvedTuning];
   return s;
 }
 ```
@@ -866,7 +871,7 @@ git add packages/core/src/plugins/builtin/claude/tuning.ts packages/core/src/plu
 git commit -m "feat(core): claude tuningToFlagSettings (descriptor-driven)"
 ```
 
-### Task F2: Claude session — drop `--effort`, startup apply, `applyTuning`, setModel re-resolve
+### Task F2: Claude session — drop `--effort`, startup apply, `applyTuning` (translate-only)
 
 **Files:**
 - Modify: `packages/core/src/plugins/builtin/claude/session.ts`
@@ -904,21 +909,22 @@ if (options.tuning) {
 
 Replace the debug field `effort: options.effort ?? null` (around line 245) with `tuning: options.tuning ?? null`. Import `tuningToFlagSettings` from `./tuning.js`.
 
-- [ ] **Step 4: Add `applyTuning` + `setModel` re-resolve**
+- [ ] **Step 4: Add `applyTuning`**
 
-Add the method (mirrors `setModel`):
+Add the method (mirrors `setModel`). It receives a **fully-resolved** `ResolvedTuning`
+from the chat layer — no clamping/coercion here, just translation:
 
 ```ts
-async applyTuning(tuning: SessionTuning): Promise<void> {
+async applyTuning(tuning: ResolvedTuning): Promise<void> {
   const child = this.state.child;
   if (!child) throw new Error(`Session ${this.id} not spawned`);
-  const settings = tuningToFlagSettings(tuning);
-  if (Object.keys(settings).length === 0) return;
-  this.sendControlRequest(child.stdin, { subtype: 'apply_flag_settings', settings });
+  this.sendControlRequest(child.stdin, { subtype: 'apply_flag_settings', settings: tuningToFlagSettings(tuning) });
 }
 ```
 
-`setModel` re-resolve is handled at the lifecycle layer (Phase H), since the resolver needs the new model's caps — leave `setModel` as-is here.
+Import `ResolvedTuning` from `@qlan-ro/mainframe-types`. Model-switch re-resolution is
+driven by the chat layer (Phase H) calling `applyTuning` with a freshly-resolved
+tuning — the session has no resolve logic.
 
 - [ ] **Step 5: Run to verify pass** — Run: `pnpm --filter @qlan-ro/mainframe-core test session-spawn-args` → PASS.
 
@@ -1035,17 +1041,31 @@ git commit -m "feat(core): codex buildTurnConfig + CodexProviderTuning boundary 
 - Modify: `packages/core/src/plugins/builtin/codex/session.ts`
 - Modify: `packages/core/src/plugins/builtin/codex/types.ts` (extend `CollaborationModeSettings.reasoning_effort` already string|null — confirm)
 
-- [ ] **Step 1: Store resolved tuning + codex defaults on the session**
+- [ ] **Step 1: Store the resolved tuning + cache codex defaults at spawn**
 
-Add fields `private pendingTuning: ResolvedTuning | null = null;` and `private codexDefaults: CodexProviderTuning = {};`. In `spawn(options)`, set `this.pendingTuning = options.tuning ? /* resolved upstream */ : null` — **note:** `options.tuning` is a `SessionTuning`; the Codex session resolves Codex defaults itself via `getProviderConfig(this.db, 'codex')` (the adapter/session already receives a db handle through its construction context; if not, pass it through `createSession`). Resolve once at spawn and on `applyTuning`.
+Add fields `private pendingTuning: ResolvedTuning | null = null;` and
+`private codexDefaults: CodexProviderTuning = {};`. The session **does not resolve** the
+cross-adapter tuning — it arrives already resolved as `options.tuning: ResolvedTuning`:
+
+```ts
+// in spawn(options):
+this.pendingTuning = options.tuning ?? null;
+// Codex-only provider defaults are provider-level (don't change per toggle) → cache once.
+this.codexDefaults = readCodexDefaults(getProviderConfig(this.deps.db, 'codex'));
+```
+
+`readCodexDefaults` picks `{ personality, reasoningSummary, verbosity }` off the
+`ProviderConfig`. Pass the `db`/settings reader into the Codex session at construction
+(`createSession`) if it doesn't already have one — that's the only new wiring needed.
 
 - [ ] **Step 2: Replace `buildCollaborationMode()` usage in the `turn/start` call**
 
 In the turn-start block (around line 229), replace the hand-built `collaborationMode` + `model` with `buildTurnConfig(...)` output and spread the top-level params:
 
 ```ts
-const model = await this.resolveModelMeta(this.pendingModel); // existing model lookup or from adapter cache
-const turnCfg = buildTurnConfig(this.pendingTuning ?? defaultResolved, this.codexDefaults, model, this.pendingPlanMode ? 'plan' : 'default');
+const model = this.resolveModelMeta(this.pendingModel); // adapter model cache; falls back to { id, label }
+const DEFAULT_RESOLVED: ResolvedTuning = { effort: null, fast: false, ultracode: false, adaptiveThinking: false };
+const turnCfg = buildTurnConfig(this.pendingTuning ?? DEFAULT_RESOLVED, this.codexDefaults, model, this.pendingPlanMode ? 'plan' : 'default');
 await this.client.request<TurnStartResult>('turn/start', {
   threadId: this.state.threadId,
   input,
@@ -1065,9 +1085,9 @@ Delete the old `buildCollaborationMode()` method (its `reasoning_effort: null` h
 - [ ] **Step 3: Add `applyTuning`**
 
 ```ts
-async applyTuning(tuning: SessionTuning): Promise<void> {
-  // Codex applies on the next turn/start; just update pending resolved tuning.
-  this.pendingTuning = this.resolvePendingTuning(tuning);
+async applyTuning(tuning: ResolvedTuning): Promise<void> {
+  // Already resolved upstream; Codex applies it on the next turn/start. Just store it.
+  this.pendingTuning = tuning;
 }
 ```
 
@@ -1087,68 +1107,123 @@ git commit -m "feat(core): codex session threads resolved tuning into turn/start
 
 ## Phase H — Spawn seam + live-apply wiring
 
-### Task H1: lifecycle-manager resolves tuning at spawn + live applyTuning
+### Task H1: single resolution site — `resolveTuningForChat`, used by spawn + live-apply
+
+**The one resolution site.** Both spawn and runtime-apply go through one helper that
+loads chat + provider + model and returns a `ResolvedTuning`. Sessions never resolve;
+the UI never coerces; persistence stays raw.
+
+**Pre-req — confirm the real seams (Finding 5):** before writing code, grep for the
+actual APIs this hangs off and use the real names:
+- model lookup by id → check `adapter-registry`/`chat-service` for an existing
+  `getModel`/`listModels` cache (Task C populated caps); if none, add a tiny
+  `findModel(adapterId, id)` that scans the adapter's models, returning `{ id, label: id }`
+  when absent (→ resolver yields "no effort control").
+- active live session lookup → the field `lifecycle-manager` already holds
+  (`active.session` in the spawn function; expose a `getActiveSession(chatId)` if not present).
 
 **Files:**
+- Create: `packages/core/src/chat/resolve-tuning-for-chat.ts`
 - Modify: `packages/core/src/chat/lifecycle-manager.ts`
-- Modify: `packages/core/src/chat/chat-manager.ts` (expose `applyTuning` on the `ctx.chats` surface used by routes)
-- Test: `packages/core/src/__tests__/lifecycle-tuning.test.ts` *(new, light integration)*
+- Modify: `packages/core/src/chat/chat-manager.ts`
+- Test: `packages/core/src/__tests__/resolve-tuning-for-chat.test.ts` *(new)*
 
-- [ ] **Step 1: Resolve tuning at the spawn seam**
-
-At `lifecycle-manager.ts:471`, replace `effort: chat.effort` with a resolved tuning. Just before `session.spawn(...)`:
+- [ ] **Step 1: Write the failing test**
 
 ```ts
-const providerCfg = getProviderConfig(this.deps.db, chat.adapterId);
-const model = this.deps.adapterRegistry.getModel(chat.adapterId, chat.model); // existing model lookup; fall back to a minimal {id,label}
-const tuning = resolveTuning(
-  { effort: chat.effort, fast: chat.fast, ultracode: chat.ultracode, adaptiveThinking: chat.adaptiveThinking },
-  providerCfg,
-  model,
-);
+import { describe, it, expect } from 'vitest';
+import { resolveTuningForChat } from '../chat/resolve-tuning-for-chat.js';
+
+const deps = (chat: any, model: any, provider: Record<string, string> = {}) => ({
+  db: { chats: { get: () => chat }, settings: { get: (_ns: string, k: string) => provider[k.split('.')[1]!] ?? null } },
+  findModel: () => model,
+});
+
+describe('resolveTuningForChat', () => {
+  it('resolves + clamps + coerces from chat/provider/model', () => {
+    const r = resolveTuningForChat(deps(
+      { adapterId: 'claude', model: 'opus', effort: 'low', ultracode: true },
+      { id: 'opus', label: 'Opus', supportedEfforts: ['low', 'xhigh'], supportsUltracode: true },
+    ) as never, 'c1');
+    expect(r).toMatchObject({ ultracode: true, effort: 'xhigh' }); // coercion applied once, here
+  });
+});
 ```
 
-Then pass `tuning` (the resolved object, which is a valid `SessionTuning`) into the spawn options object instead of `effort: chat.effort`:
+- [ ] **Step 2: Run to verify it fails** — Run: `pnpm --filter @qlan-ro/mainframe-core test resolve-tuning-for-chat` → FAIL.
+
+- [ ] **Step 3: Implement the single resolution helper**
 
 ```ts
+import type { ResolvedTuning } from '@qlan-ro/mainframe-types';
+import { resolveTuning } from './resolve-tuning.js';
+import { getProviderConfig } from '../settings/provider-config.js';
+
+interface Deps {
+  db: { chats: { get(id: string): any }; settings: { get(ns: string, key: string): string | null } };
+  findModel(adapterId: string, modelId: string): import('@qlan-ro/mainframe-types').AdapterModel;
+}
+
+export function resolveTuningForChat(deps: Deps, chatId: string): ResolvedTuning | null {
+  const chat = deps.db.chats.get(chatId);
+  if (!chat) return null;
+  const model = deps.findModel(chat.adapterId, chat.model);
+  const provider = getProviderConfig(deps.db, chat.adapterId);
+  return resolveTuning(
+    { effort: chat.effort, fast: chat.fast, ultracode: chat.ultracode, adaptiveThinking: chat.adaptiveThinking },
+    provider,
+    model,
+  );
+}
+```
+
+- [ ] **Step 4: Run to verify pass** — Run: `pnpm --filter @qlan-ro/mainframe-core test resolve-tuning-for-chat` → PASS.
+
+- [ ] **Step 5: Use it at the spawn seam**
+
+At `lifecycle-manager.ts:471`, replace `effort: chat.effort` with the resolved tuning:
+
+```ts
+const tuning = resolveTuningForChat(this.deps, chatId) ?? undefined;
 const processInfo = await session.spawn(
   { model: chat.model, permissionMode: chat.permissionMode, planMode: chat.planMode ?? false, executablePath, systemPrompt, tuning },
   sink,
 );
 ```
 
-(If `adapterRegistry.getModel` does not exist, add a small lookup that scans the adapter's cached `listModels()`/static catalog by id; a missing model yields `{ id, label: id }` so the resolver clamps to "no effort control".)
+- [ ] **Step 6: Use it for live-apply (no partial forwarded)**
 
-- [ ] **Step 2: Add live `applyTuning` to the chat-manager surface**
-
-In `chat-manager.ts`, add a method the routes call:
+In `chat-manager.ts`, the route-facing method re-reads + resolves through the same
+helper, then hands the session a complete `ResolvedTuning`:
 
 ```ts
-async applyTuning(chatId: string, partial: SessionTuning): Promise<void> {
-  const active = this.lifecycle.getActiveSession(chatId); // existing active-session lookup
-  if (!active?.session?.applyTuning) return; // no live session → applied at next spawn
+async applyTuning(chatId: string): Promise<void> {
+  const active = this.lifecycle.getActiveSession(chatId);
+  if (!active?.session?.applyTuning) return; // no live session → next spawn picks it up
+  const resolved = resolveTuningForChat(this.deps, chatId);
+  if (!resolved) return;
   try {
-    await active.session.applyTuning(partial);
+    await active.session.applyTuning(resolved);
   } catch (err) {
     this.log.warn({ err, chatId }, 'live applyTuning failed');
   }
 }
 ```
 
-Ensure this manager is what `ctx.chats` points to in the route context (it already exposes `syncChatFields`).
+This also covers **model switch**: `setModel` persists the new model, then calls
+`applyTuning(chatId)` — re-resolution against the new model's caps happens for free
+in the one helper. No session-side or UI-side resolution anywhere.
 
-- [ ] **Step 3: Write a light integration test**
+- [ ] **Step 7: Integration test + commit**
 
-Assert that spawning a chat with `effort: 'xhigh'` + an Opus-like model produces `SessionSpawnOptions.tuning.effort === 'xhigh'`, and with a no-effort model produces `tuning.effort === null`. Mock the adapter/session; capture the `spawn` argument.
-
-- [ ] **Step 4: Run to verify pass** — Run: `pnpm --filter @qlan-ro/mainframe-core test lifecycle-tuning` → PASS.
-
-- [ ] **Step 5: Typecheck + commit**
+Assert spawn receives `tuning.effort === 'xhigh'` for an Opus chat with `ultracode:true`
+and `tuning.effort === null` for a no-effort model (capture the `spawn` arg via a mock session).
 
 ```bash
 pnpm --filter @qlan-ro/mainframe-core typecheck
-git add packages/core/src/chat/lifecycle-manager.ts packages/core/src/chat/chat-manager.ts packages/core/src/__tests__/lifecycle-tuning.test.ts
-git commit -m "feat(core): resolve tuning at spawn + live applyTuning wiring"
+git add packages/core/src/chat/resolve-tuning-for-chat.ts packages/core/src/chat/lifecycle-manager.ts \
+        packages/core/src/chat/chat-manager.ts packages/core/src/__tests__/resolve-tuning-for-chat.test.ts
+git commit -m "feat(core): single resolution site — resolveTuningForChat for spawn + live apply"
 ```
 
 ---
@@ -1165,7 +1240,7 @@ git commit -m "feat(core): resolve tuning at spawn + live applyTuning wiring"
 
 ```ts
 import { describe, it, expect } from 'vitest';
-import { effortOptions, visibleFeatures, FEATURE_LABELS } from '../../renderer/lib/model-tuning';
+import { effortOptions, visibleFeatures, displayEffort, FEATURE_LABELS } from '../../renderer/lib/model-tuning';
 
 describe('model-tuning helpers', () => {
   it('effortOptions maps supportedEfforts to labelled options', () => {
@@ -1175,6 +1250,11 @@ describe('model-tuning helpers', () => {
   });
   it('visibleFeatures gates by capability', () => {
     expect(visibleFeatures({ id: 'm', label: 'M', supportsFast: true }).map((f) => f.key)).toEqual(['fast']);
+  });
+  it('displayEffort locks to xhigh under ultracode without changing stored effort', () => {
+    const model = { id: 'm', label: 'M', supportedEfforts: ['low', 'xhigh'] as const };
+    expect(displayEffort({ effort: 'low', ultracode: true }, model)).toEqual({ value: 'xhigh', locked: true });
+    expect(displayEffort({ effort: 'low' }, model)).toEqual({ value: 'low', locked: false });
   });
 });
 ```
@@ -1209,6 +1289,17 @@ export function effortOptions(model: AdapterModel) {
 
 export function visibleFeatures(model: AdapterModel) {
   return TUNABLE_FEATURES.filter((f) => model[f.capability]).map((f) => ({ key: f.key as FeatureKey, ...FEATURE_LABELS[f.key as FeatureKey] }));
+}
+
+/**
+ * Display-only effort for the chip. Mirrors the resolver's ultracode→xhigh coercion
+ * for presentation WITHOUT persisting it (the stored effort stays inherited). When
+ * ultracode is on, the chip shows xhigh and is locked; otherwise the chat's effort
+ * or the model default.
+ */
+export function displayEffort(chat: { effort?: EffortLevel | null; ultracode?: boolean | null }, model: AdapterModel): { value: EffortLevel; locked: boolean } {
+  if (chat.ultracode) return { value: 'xhigh', locked: true };
+  return { value: chat.effort ?? model.defaultEffort ?? 'medium', locked: false };
 }
 ```
 
@@ -1276,7 +1367,7 @@ it('is hidden for a model with no efforts', () => {
 - [ ] **Step 3: Rewrite EffortPicker to use the shared helpers**
 
 ```tsx
-import { effortOptions } from '../../../../lib/model-tuning';
+import { effortOptions, displayEffort } from '../../../../lib/model-tuning';
 import { setChatTuning } from '../../../../lib/api';
 
 export function shouldShowEffortPicker(adapterId: string, modelId: string, adapters: AdapterInfo[]): boolean {
@@ -1288,7 +1379,9 @@ export function EffortPicker({ chat, adapters, modelId, disabled = false }: Effo
   if (!shouldShowEffortPicker(chat.adapterId, modelId, adapters)) return null;
   const model = adapters.find((a) => a.id === chat.adapterId)?.models.find((m) => m.id === modelId)!;
   const options = effortOptions(model);
-  const current = chat.effort ?? model.defaultEffort ?? 'medium';
+  // Display-only: shows xhigh + locks while ultracode is on (mirrors the resolver
+  // coercion without persisting). Stored effort stays inherited.
+  const { value: current, locked } = displayEffort(chat, model);
   const updateChat = useChatsStore((s) => s.updateChat);
   const handleChange = useCallback((id: string) => {
     const next = id as ChatEffort;
@@ -1297,7 +1390,7 @@ export function EffortPicker({ chat, adapters, modelId, disabled = false }: Effo
   }, [chat, updateChat]);
   return (
     <ComposerDropdown data-testid="composer-effort-select" items={options} value={current}
-      onChange={handleChange} disabled={disabled} icon={<Gauge size={14} />} />
+      onChange={handleChange} disabled={disabled || locked} icon={<Gauge size={14} />} />
   );
 }
 ```
@@ -1337,12 +1430,14 @@ it('hides the trigger when no features are supported', () => {
   expect(screen.queryByTestId('composer-features-trigger')).toBeNull();
 });
 
-it('toggling ultracode persists and is reflected', () => {
+it('toggling ultracode persists the RAW field only (no UI coercion)', () => {
   const spy = vi.spyOn(api, 'setChatTuning').mockResolvedValue();
   render(<FeaturesPopover chat={chatFor('claude')} adapters={adaptersWith({ id: 'opus', supportsFast: true, supportsUltracode: true, supportsAdaptiveThinking: true, supportedEfforts: ['low','xhigh'] })} modelId="opus" />);
   fireEvent.click(screen.getByTestId('composer-features-trigger'));
   fireEvent.click(screen.getByTestId('composer-feature-ultracode'));
-  expect(spy).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ ultracode: true, effort: 'xhigh' }));
+  // The UI sends only the touched field; effort→xhigh coercion happens in resolveTuning
+  // (core), not here. Persistence stays raw so effort remains inherited.
+  expect(spy).toHaveBeenCalledWith(expect.any(String), { ultracode: true });
 });
 ```
 
@@ -1371,8 +1466,9 @@ export function FeaturesPopover({ chat, adapters, modelId, disabled = false }: {
   const updateChat = useChatsStore((s) => s.updateChat);
 
   const setFeature = useCallback((key: keyof SessionTuning, value: boolean) => {
+    // Send ONLY the touched field. The ultracode→xhigh coercion is a resolver invariant
+    // (core), not a UI concern — do NOT also write effort here, or it stops inheriting.
     const patch: SessionTuning = { [key]: value };
-    if (key === 'ultracode' && value) patch.effort = 'xhigh'; // coupling mirrors the CLI
     updateChat({ ...chat, ...patch });
     setChatTuning(chat.id, patch).catch((err) => log.warn('setChatTuning failed', { err: String(err) }));
   }, [chat, updateChat]);
