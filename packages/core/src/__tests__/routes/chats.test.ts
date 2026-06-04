@@ -257,7 +257,7 @@ describe('chatRoutes', () => {
       const handler = extractHandler(router, 'patch', '/api/chats/:id/effort');
       const res = mockRes();
 
-      handler({ params: { id: 'c1' }, query: {}, body: { effort: 'max' } }, res, vi.fn());
+      handler({ params: { id: 'c1' }, query: {}, body: { effort: 'turbo' } }, res, vi.fn());
 
       expect(ctx.db.chats.update).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(400);
@@ -330,6 +330,75 @@ describe('chatRoutes', () => {
       handler({ params: { id: 'c1' }, query: {}, body: { title: 42 } }, res, vi.fn());
 
       expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  describe('PATCH /api/chats/:id/tuning', () => {
+    it('persists a subset and clears a field with null', () => {
+      const chatAfterFast = { id: 'c1', projectId: 'p1', adapterId: 'claude', fast: true, effort: 'xhigh' };
+      (ctx.db.chats.update as any).mockImplementation(() => {});
+      (ctx.db.chats.get as any).mockReturnValue(chatAfterFast);
+
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'patch', '/api/chats/:id/tuning');
+      const res = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: { fast: true, effort: 'xhigh' } }, res, vi.fn());
+
+      expect(ctx.db.chats.update).toHaveBeenCalledWith('c1', { fast: true, effort: 'xhigh' });
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: chatAfterFast });
+
+      // Second call: clear effort with null
+      const chatAfterClear = { id: 'c1', projectId: 'p1', adapterId: 'claude', fast: true, effort: null };
+      (ctx.db.chats.update as any).mockClear();
+      (ctx.db.chats.get as any).mockReturnValue(chatAfterClear);
+      const res2 = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: { effort: null } }, res2, vi.fn());
+
+      expect(ctx.db.chats.update).toHaveBeenCalledWith('c1', { effort: null });
+      expect(res2.json).toHaveBeenCalledWith({ success: true, data: chatAfterClear });
+    });
+
+    it('rejects bad effort value with 400', () => {
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'patch', '/api/chats/:id/tuning');
+      const res = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: { effort: 'turbo' } }, res, vi.fn());
+
+      expect(ctx.db.chats.update).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('returns 404 when chat does not exist after update', () => {
+      (ctx.db.chats.update as any).mockImplementation(() => {});
+      (ctx.db.chats.get as any).mockReturnValue(null);
+
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'patch', '/api/chats/:id/tuning');
+      const res = mockRes();
+
+      handler({ params: { id: 'unknown' }, query: {}, body: { fast: true } }, res, vi.fn());
+
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+  });
+
+  describe('PATCH /api/chats/:id/effort (widened enum)', () => {
+    it('accepts max effort (widened enum) and routes through same path', () => {
+      const updatedChat = { id: 'c1', projectId: 'p1', adapterId: 'claude', effort: 'max' };
+      (ctx.db.chats.update as any).mockImplementation(() => {});
+      (ctx.db.chats.get as any).mockReturnValue(updatedChat);
+
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'patch', '/api/chats/:id/effort');
+      const res = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: { effort: 'max' } }, res, vi.fn());
+
+      expect(ctx.db.chats.update).toHaveBeenCalledWith('c1', { effort: 'max' });
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: updatedChat });
     });
   });
 

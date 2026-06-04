@@ -1,5 +1,5 @@
 import type { SessionMention } from './context.js';
-import type { DetectedPr, ControlRequest } from './adapter.js';
+import type { DetectedPr, ControlRequest, EffortLevel } from './adapter.js';
 import type { ExecutionMode } from './settings.js';
 import type { LeafContent } from './content.js';
 
@@ -9,7 +9,28 @@ export interface TodoItem {
   activeForm: string;
 }
 
-export type ChatEffort = 'low' | 'medium' | 'high';
+export type ChatEffort = EffortLevel; // back-compat alias for existing imports
+
+/**
+ * Per-chat / per-session tuning override. Tri-state per field:
+ *   undefined → absent from this partial (PATCH); leave as-is
+ *   null      → explicitly inherit (provider default → model default)
+ *   value     → concrete override
+ */
+export interface SessionTuning {
+  effort?: EffortLevel | null;
+  fast?: boolean | null;
+  ultracode?: boolean | null;
+  adaptiveThinking?: boolean | null;
+}
+
+/** Fully resolved, capability-clamped config. `effort: null` → model has no effort control. */
+export interface ResolvedTuning {
+  effort: EffortLevel | null;
+  fast: boolean;
+  ultracode: boolean;
+  adaptiveThinking: boolean;
+}
 
 export interface Chat {
   id: string;
@@ -39,8 +60,10 @@ export interface Chat {
   worktreeMissing?: boolean;
   todos?: TodoItem[];
   pinned?: boolean;
-  /** Reasoning effort for Claude adapter (gated on model.supportsEffort). Applied as --effort on CLI spawn. */
-  effort?: ChatEffort;
+  effort?: EffortLevel | null;
+  fast?: boolean | null;
+  ultracode?: boolean | null;
+  adaptiveThinking?: boolean | null;
   /** PRs detected in the session's tool_results (created via `gh pr create` or merely mentioned). */
   detectedPrs?: DetectedPr[];
   /** User-source tags applied to this chat. Synthetic chips (has-pr, has-worktree) are NOT included. */

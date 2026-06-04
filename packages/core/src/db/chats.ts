@@ -6,7 +6,7 @@ import type { ChatTagsRepository } from './chat-tags.js';
 /** Raw shape returned by SQLite before boolean/JSON coercion. */
 type RawChatRow = Omit<
   Chat,
-  'pinned' | 'planMode' | 'mentions' | 'modifiedFiles' | 'todos' | 'effort' | 'detectedPrs'
+  'pinned' | 'planMode' | 'mentions' | 'modifiedFiles' | 'todos' | 'effort' | 'detectedPrs' | 'fast' | 'ultracode' | 'adaptiveThinking'
 > & {
   mentions: string;
   modifiedFiles: string;
@@ -15,6 +15,9 @@ type RawChatRow = Omit<
   planMode: number;
   effort: string | null;
   detectedPrs: string;
+  fast: number | null;
+  ultracode: number | null;
+  adaptive_thinking: number | null;
 };
 
 const CHAT_SELECT_FIELDS = `
@@ -28,7 +31,8 @@ const CHAT_SELECT_FIELDS = `
   worktree_path as worktreePath, branch_name as branchName,
   process_state as processState, todos, pinned, effort,
   plan_mode as planMode, detected_prs as detectedPrs,
-  session_file_path as sessionFilePath
+  session_file_path as sessionFilePath,
+  fast, ultracode, adaptive_thinking
 `.trim();
 
 export interface ChatListFilters {
@@ -38,10 +42,14 @@ export interface ChatListFilters {
   includeArchived?: boolean;
 }
 
+const VALID_EFFORTS = new Set<string>(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
+
 function parseEffort(value: string | null | undefined): Chat['effort'] {
-  if (value === 'low' || value === 'medium' || value === 'high') return value;
+  if (value != null && VALID_EFFORTS.has(value)) return value as Chat['effort'];
   return undefined;
 }
+
+const parseNullableBool = (v: unknown): boolean | null => (v == null ? null : Boolean(v));
 
 function parseJsonColumn<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -164,6 +172,9 @@ export class ChatsRepository {
     updatedAt: { column: 'updated_at' },
     pinned: { column: 'pinned', transform: (v) => (v ? 1 : 0) },
     effort: { column: 'effort', transform: (v) => v ?? null },
+    fast: { column: 'fast', transform: (v) => (v == null ? null : v ? 1 : 0) },
+    ultracode: { column: 'ultracode', transform: (v) => (v == null ? null : v ? 1 : 0) },
+    adaptiveThinking: { column: 'adaptive_thinking', transform: (v) => (v == null ? null : v ? 1 : 0) },
     planMode: { column: 'plan_mode', transform: (v) => (v ? 1 : 0) },
   };
 
@@ -317,6 +328,9 @@ export class ChatsRepository {
       todos: parseJsonColumn(row.todos, undefined) ?? undefined,
       pinned: Boolean(row.pinned),
       effort: parseEffort(row.effort),
+      fast: parseNullableBool(row.fast),
+      ultracode: parseNullableBool(row.ultracode),
+      adaptiveThinking: parseNullableBool(row.adaptive_thinking),
       planMode: Boolean(row.planMode),
       detectedPrs: parseJsonColumn<DetectedPr[]>(row.detectedPrs, []),
     };

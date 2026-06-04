@@ -112,6 +112,9 @@ export function initializeSchema(db: Database.Database): void {
   if (!cols.some((c) => c.name === 'effort')) {
     db.exec('ALTER TABLE chats ADD COLUMN effort TEXT');
   }
+  if (!cols.some((c) => c.name === 'fast')) db.exec('ALTER TABLE chats ADD COLUMN fast INTEGER');
+  if (!cols.some((c) => c.name === 'ultracode')) db.exec('ALTER TABLE chats ADD COLUMN ultracode INTEGER');
+  if (!cols.some((c) => c.name === 'adaptive_thinking')) db.exec('ALTER TABLE chats ADD COLUMN adaptive_thinking INTEGER');
   if (!cols.some((c) => c.name === 'detected_prs')) {
     db.exec("ALTER TABLE chats ADD COLUMN detected_prs TEXT DEFAULT '[]'");
   }

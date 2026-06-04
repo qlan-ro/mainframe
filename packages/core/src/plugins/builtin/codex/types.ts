@@ -235,9 +235,21 @@ export interface CollaborationModeSettings {
   developer_instructions?: string | null;
 }
 
+export interface ReasoningEffortOption {
+  reasoningEffort: import('@qlan-ro/mainframe-types').EffortLevel;
+  description: string;
+}
+
 export interface ModelInfo {
   id: string;
   displayName?: string;
+  description?: string;
+  hidden?: boolean;
+  isDefault?: boolean;
+  supportedReasoningEfforts?: ReasoningEffortOption[];
+  defaultReasoningEffort?: import('@qlan-ro/mainframe-types').EffortLevel;
+  additionalSpeedTiers?: string[];
+  supportsPersonality?: boolean;
 }
 
 export interface ModelListResult {

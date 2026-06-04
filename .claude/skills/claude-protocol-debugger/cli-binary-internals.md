@@ -268,6 +268,124 @@ control_response (stdin)
 | Destination check | `e_8(dest)` — returns `true` for persistent destinations (v2.1.83) |
 | Settings write | `f8(dest, settings)` — writes settings JSON to disk (v2.1.83) |
 
+## Effort Levels & ultracode (verified in v2.1.156 binary + live probe)
+
+The `initialize` control_response advertises effort capability **per model**, and
+the set of levels is **model-specific** — do not hardcode it.
+
+### Live `initialize` response (v2.1.156)
+
+Each entry in `response.response.models[]` now carries:
+
+```jsonc
+{
+  "value": "default",
+  "displayName": "Default (recommended)",
+  "description": "Opus 4.8 with 1M context · Most capable for complex work",
+  "supportsEffort": true,
+  "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"],  // <-- the inference source
+  "supportsAdaptiveThinking": true,
+  "supportsFastMode": true,
+  "supportsAutoMode": true
+}
+```
+
+Per-model variance observed live (this is *why* a hardcoded list is wrong):
+
+| Model | supportedEffortLevels |
+|-------|-----------------------|
+| `default` (Opus 4.8 1M) | low, medium, high, **xhigh**, **max** |
+| `sonnet` / `sonnet[1m]` (4.6) | low, medium, high, **max** (NO xhigh) |
+| `haiku` (4.5) | *(no `supportsEffort`, no array)* |
+
+### Canonical effort enum (binary)
+
+The runtime enum is `nN=["low","medium","high","xhigh","max"]`. Confirmed in three Zod schemas:
+- `supportedEffortLevels: z.array(z.enum(["low","medium","high","xhigh","max"]))`
+- agent config: `effort: z.union([z.enum([...]), z.number().int()])` — **effort may also be a raw integer**
+- applied config: `effort: z.enum([...]).nullable(), ultracode: z.boolean()`
+
+### "ultracode" is NOT an effort level — it's a session flag
+
+Binary string: *"Enable ultracode for the session: **xhigh effort plus standing
+dynamic-workflow orchestration**."* and *"ultracode · xhigh effort + dynamic
+workflows for maximum thoroughness."*
+
+Resolution order (function `z67`):
+```js
+let _ = hx(H.cli.effort);              // explicit --effort wins
+if (_ !== void 0) return _;
+if (H.settings.ultracode === true) return "xhigh";  // ultracode => xhigh effort
+return BjH(H.settings.effortLevel...); // persisted settings default
+```
+
+So `ultracode` is a boolean in `settings` (alongside `effortLevel`, `fastMode`,
+`alwaysThinkingEnabled`). It is *not* a value you pass to `--effort`; it desugars
+to `xhigh` effort + turns on the standing dynamic-workflow orchestration behavior.
+The new high tiers reachable via `--effort` are `xhigh` and `max`.
+
+### Effort permission-layer masking (why `apply_flag_settings` effort + `--effort` don't mix)
+
+Surprising and important for any runtime effort control:
+
+- The per-turn effective effort is computed by `kz(H)`:
+  ```js
+  function kz(H){ let _=H.getAppState().effortValue, q=H.permissionLayers;
+    if(!q) return _; for(let K of q) if(K.kind==="effort") _=K.effort; return _ }
+  ```
+  i.e. `effortValue` from app state, **overridden by the last `{kind:"effort"}`
+  permission layer** if any exist. Every API query reads `effortValue: kz(_)`.
+- `--effort <x>` at spawn installs a persistent `{kind:"effort", effort:x}` permission
+  layer (`f3.permissionLayers=[...,{kind:"effort",effort:Y9}]` at query-context load).
+- `apply_flag_settings{effortLevel}` only mutates `effortValue` (`{...X6,effortValue:X_}`)
+  — it does **not** touch permission layers. So if `--effort` installed a layer, every
+  later `apply_flag_settings` effort change is **masked** by that layer and silently
+  ignored. Same for `ultracode:true` (sets `effortValue:"xhigh"` via `hi3`) — masked.
+- There is **no `set_effort` control request**. The only runtime `set_*` controls are
+  `set_model`, `set_permission_mode`, `set_max_thinking_tokens`.
+- The CLI's own mid-session effort mechanism is the **`/effort <level>` slash command**
+  (and the model menu's ultracode pick), which push a *new* last-wins `{kind:"effort"}`
+  layer — not `apply_flag_settings`.
+
+**Consequence for Mainframe:** to control effort at runtime via `apply_flag_settings`,
+do **not** pass `--effort` at spawn (no layer → `effortValue` is the sole source of
+truth, mutable at startup and mid-session). Mixing the flag with `apply_flag_settings`
+breaks mid-session changes.
+
+**Mainframe gap:** `probe-models.ts` reads `supportsEffort` (boolean) but drops
+`supportedEffortLevels`. `ChatEffort` is hardcoded `'low'|'medium'|'high'` and the
+UI `EFFORT_OPTIONS` mirrors it — so `xhigh`/`max` are unreachable, and Sonnet would
+wrongly offer `xhigh` if we naively widened the static list.
+
+## Model/Harness Config Flags — full inventory (v2.1.156)
+
+Per-model capability flags arrive in the `initialize` response. Application is
+split between **spawn flags** and the **`apply_flag_settings` control request**
+(the generic runtime settings push — merges an arbitrary settings object, then
+specially handles `model`/`effortLevel`/`ultracode` into app state).
+
+| Knob | Model capability field | Meaning (binary string) | Applied via | Spawn flag? |
+|------|------------------------|--------------------------|-------------|-------------|
+| effort | `supportsEffort` + `supportedEffortLevels[]` | reasoning depth low→max | `--effort` **or** `apply_flag_settings{effortLevel}` | `--effort` ✅ |
+| ultracode | *(none — session flag)* | "xhigh effort + standing dynamic-workflow orchestration" | `apply_flag_settings{ultracode}` only | ❌ |
+| fast mode | `supportsFastMode` | "faster output, paid subscription / usage credits required; uses Opus" | `apply_flag_settings{fastMode}` only | ❌ |
+| adaptive thinking | `supportsAdaptiveThinking` | "Claude decides dynamically when & how much to think; recommended for 4.6+" | `--thinking` / `apply_flag_settings{alwaysThinkingEnabled}` | `--thinking`, `--thinking-display` ✅ |
+| auto (permission) | `supportsAutoMode` | "Auto mode — Claude handles permission prompts, classifies risk/injection" — a **permission mode**, not a model knob | `set_permission_mode` / `--permission-mode` | via permission-mode |
+| fallback model | — | model to fall back to | `--fallback-model` | ✅ |
+| auto-compact | — | context auto-compaction window | `--autocompact` / settings `autoCompactWindow` | ✅ |
+
+Settings keys seen together in the flag-settings struct: `alwaysThinkingEnabled`,
+`effortLevel`, `ultracode`, `autoCompactWindow`, `advisorModel`, `fastMode`,
+`fastModePerSessionOptIn`. There is **no `--fast` or `--ultracode` spawn flag** —
+both are reachable only through `apply_flag_settings`.
+
+**Mainframe status:** spawns with `--model`, `--effort`, `--permission-mode` only.
+It probes `supportsEffort/supportsFastMode/supportsAutoMode` but **drops
+`supportedEffortLevels` and `supportsAdaptiveThinking`**, has **no
+`apply_flag_settings` path at all**, and exposes only the EffortPicker in the
+composer. So fast mode, ultracode, adaptive thinking, and the xhigh/max effort
+tiers are all currently unreachable from the UI.
+
 ## Tools Added Post-Leak (verified in v2.1.118 binary)
 
 The 2026-03-31 source leak does NOT include all tools shipping in current

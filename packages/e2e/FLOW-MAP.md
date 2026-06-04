@@ -78,8 +78,8 @@ _(The review-changes button and PR badges are session-bar actions, not cards —
 | M2 | Stop / interrupt | P0 | agent running | composer-stop | stop replaces send while running; race no-op if finishes first |
 | M3 | Queue while running + edit/cancel | P1 | agent running | composer-queued-edit, -edit-input, -save, -cancel | Enter while running queues; save no-ops if unchanged/empty; cancel = immediate, no confirm |
 | M4 | Adapter select | P1 | no messages yet | composer-adapter-select | **disabled once hasMessages**; resets model to adapter default |
-| M5 | Model select | P1 | any | composer-model-select | hides effort if model lacks supportsEffort |
-| M6 | Effort select | P2 | claude + supportsEffort + not running | composer-effort-select | hidden for non-claude/no-effort; disabled while running |
+| M5 | Model select | P1 | any | composer-model-select | hides effort if model's supportedEfforts is empty/absent |
+| M6 | Effort select + features popover | P2 | model with supportedEfforts + not running | composer-effort-select, composer-features-trigger, composer-feature-{key} | effort hidden for models with no supportedEfforts; option set is per-model; ultracode locks chip to xhigh; disabled while running |
 | M7 | Permission-mode select | P1 | any | composer-permission-mode-select | yolo renders red; controls auto-approval level |
 | M8 | Attach file | P1 | no error showing | composer-attach, composer-attachments | >5MB → error banner |
 | M9 | Dismiss composer error | P2 | composerError set | composer-dismiss-error | clears banner |

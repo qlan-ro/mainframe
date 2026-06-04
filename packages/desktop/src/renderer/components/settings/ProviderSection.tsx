@@ -7,10 +7,12 @@ import { useSettingsStore } from '../../store/settings';
 import { useAdaptersStore } from '../../store/adapters';
 import { getConfigConflicts, updateProviderSettings } from '../../lib/api';
 import { getModelOptions } from '../../lib/adapters';
-import type { ProviderConfig } from '@qlan-ro/mainframe-types';
+import type { ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { ModelDropdown } from './ModelDropdown';
 import { MODE_OPTIONS } from './constants';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
+import { ProviderTuningDefaults } from './ProviderTuningDefaults';
+import { CodexTuningDefaults } from './CodexTuningDefaults';
 
 const EMPTY_CONFIG: ProviderConfig = {};
 
@@ -30,9 +32,15 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
   }, [adapterId]);
 
   const update = useCallback(
-    (partial: Partial<ProviderConfig>) => {
-      const next = { ...config, ...partial };
-      setProviderConfig(adapterId, next);
+    (partial: ProviderConfigUpdate) => {
+      // Local store stays a clean ProviderConfig: '' (the clear sentinel) deletes the
+      // key so the control falls back to the inherit option immediately.
+      const next: Record<string, unknown> = { ...config };
+      for (const [k, v] of Object.entries(partial)) {
+        if (v === '') delete next[k];
+        else next[k] = v;
+      }
+      setProviderConfig(adapterId, next as ProviderConfig);
       updateProviderSettings(adapterId, partial).catch((err) =>
         log.warn('update provider settings failed', { err: String(err) }),
       );
@@ -132,6 +140,25 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
         options={models}
         onChange={(v) => update({ defaultModel: v })}
       />
+
+      {/* Per-model tuning defaults — gated by the selected default model's capabilities. */}
+      {(() => {
+        const defaultModel =
+          adapter?.models.find((m) => m.id === (config.defaultModel ?? '')) ?? adapter?.models.find((m) => m.isDefault) ?? adapter?.models[0];
+        return (
+          <>
+            {/* Effort/feature defaults need model caps; only shown when a model is known. */}
+            {defaultModel && (
+              <ProviderTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
+            )}
+            {/* Codex reasoning-summary is model-agnostic, so the block renders even when
+                the adapter's model list hasn't loaded (e.g. codex CLI absent). */}
+            {adapterId === 'codex' && (
+              <CodexTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
+            )}
+          </>
+        );
+      })()}
 
       {/* Default Mode */}
       <div className="space-y-1.5">

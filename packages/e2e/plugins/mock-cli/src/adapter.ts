@@ -32,7 +32,30 @@ export class MockCliAdapter implements Adapter {
     return '0.1.0';
   }
   async listModels(): Promise<AdapterModel[]> {
-    return [{ id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', isDefault: true }];
+    return [
+      {
+        id: 'claude-haiku-4-5-20251001',
+        label: 'Haiku 4.5',
+        isDefault: true,
+        // No capability fields — effort/features controls hide for this model.
+      },
+      {
+        id: 'claude-sonnet-4-5-20251101',
+        label: 'Sonnet 4.5',
+        supportedEfforts: ['low', 'medium', 'high', 'max'],
+        defaultEffort: 'medium',
+        supportsFast: true,
+      },
+      {
+        id: 'claude-opus-4-5-20251001',
+        label: 'Opus 4.5',
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+        defaultEffort: 'medium',
+        supportsFast: true,
+        supportsUltracode: true,
+        supportsAdaptiveThinking: true,
+      },
+    ];
   }
   killAll(): void {}
 

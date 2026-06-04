@@ -254,6 +254,19 @@ describe('ChatsRepository', () => {
     });
   });
 
+  describe('tuning fields (fast / ultracode / adaptiveThinking)', () => {
+    it('round-trips tuning fields incl. null vs false', () => {
+      const chat = chats.create(projectId, 'claude');
+      const id = chat.id;
+      chats.update(id, { fast: true, ultracode: false, adaptiveThinking: null, effort: 'xhigh' });
+      const c = chats.get(id)!;
+      expect(c.fast).toBe(true);
+      expect(c.ultracode).toBe(false);
+      expect(c.adaptiveThinking).toBeNull();
+      expect(c.effort).toBe('xhigh');
+    });
+  });
+
   describe('effort', () => {
     it('defaults to undefined on a new chat', () => {
       const chat = chats.create(projectId, 'claude');
@@ -286,7 +299,7 @@ describe('ChatsRepository', () => {
     it('returns undefined for unexpected stored values', () => {
       const chat = chats.create(projectId, 'claude');
       // Legacy / corrupted rows: the parser must coerce to undefined.
-      db.prepare('UPDATE chats SET effort = ? WHERE id = ?').run('max', chat.id);
+      db.prepare('UPDATE chats SET effort = ? WHERE id = ?').run('turbo', chat.id);
       expect(chats.get(chat.id)!.effort).toBeUndefined();
     });
 

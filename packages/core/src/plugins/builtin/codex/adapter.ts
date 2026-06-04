@@ -5,10 +5,23 @@ import { CodexSession } from './session.js';
 import { CodexPlanModeHandler } from './plan-mode-handler.js';
 import { JsonRpcClient } from './jsonrpc.js';
 import type { ToolCategories } from '../../../messages/tool-categorization.js';
-import type { InitializeResult, ModelListResult, ThreadListResult } from './types.js';
+import type { InitializeResult, ModelInfo, ModelListResult, ThreadListResult } from './types.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:adapter');
+
+export function mapCodexModel(m: ModelInfo): AdapterModel {
+  const model: AdapterModel = { id: m.id, label: m.displayName ?? m.id };
+  if (m.description) model.description = m.description;
+  if (m.isDefault) model.isDefault = true;
+  if (m.supportedReasoningEfforts?.length) {
+    model.supportedEfforts = m.supportedReasoningEfforts.map((e) => e.reasoningEffort);
+  }
+  if (m.defaultReasoningEffort) model.defaultEffort = m.defaultReasoningEffort;
+  if (m.additionalSpeedTiers?.includes('fast')) model.supportsFast = true;
+  if (m.supportsPersonality) model.supportsPersonality = true;
+  return model;
+}
 
 export class CodexAdapter implements Adapter {
   readonly id = 'codex';
@@ -16,6 +29,9 @@ export class CodexAdapter implements Adapter {
   readonly capabilities = { planMode: true } as const;
 
   private sessions = new Set<CodexSession>();
+  /** Model catalog is static per session; cache it so resolution (spawn + every
+   *  composer toggle) doesn't respawn a temp app-server each time. */
+  private cachedModels: AdapterModel[] | null = null;
 
   createPlanModeHandler(): unknown {
     return new CodexPlanModeHandler();
@@ -43,14 +59,14 @@ export class CodexAdapter implements Adapter {
   }
 
   async listModels(): Promise<AdapterModel[]> {
+    if (this.cachedModels) return this.cachedModels;
     let client: JsonRpcClient | null = null;
     try {
       client = await this.spawnTempAppServer();
       const result = await client.request<ModelListResult>('model/list');
-      return result.data.map((m) => ({
-        id: m.id,
-        label: m.displayName ?? m.id,
-      }));
+      const models = result.data.filter((m) => !m.hidden).map(mapCodexModel);
+      if (models.length > 0) this.cachedModels = models; // don't cache transient failures (empty)
+      return models;
     } catch (err) {
       log.warn({ err }, 'codex: failed to list models');
       return [];

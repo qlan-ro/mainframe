@@ -97,21 +97,12 @@ describe('ClaudeSession spawn args', () => {
     expect(args[idx + 1]).toBe(MAINFRAME_SYSTEM_PROMPT_APPEND);
   });
 
-  it('omits --effort when effort is undefined', async () => {
+  it('does NOT pass --effort (would install a masking permission layer)', async () => {
     const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
     const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
-    await session.spawn({} as any).catch(() => {});
+    await session.spawn({ tuning: { effort: 'high', fast: false, ultracode: false, adaptiveThinking: false }, model: 'opus' } as any).catch(() => {});
     const args = spawnMock.mock.calls[0]?.[1] as string[];
     expect(args).not.toContain('--effort');
-  });
-
-  it.each(['low', 'medium', 'high'] as const)('passes --effort %s when set', async (effort) => {
-    const { ClaudeSession } = await import('../plugins/builtin/claude/session.js');
-    const session = new ClaudeSession({ projectPath: '/tmp', chatId: undefined, mainframeChatId: 'test-chat-id' });
-    await session.spawn({ effort } as any).catch(() => {});
-    const args = spawnMock.mock.calls[0]?.[1] as string[];
-    const idx = args.indexOf('--effort');
-    expect(idx).toBeGreaterThan(-1);
-    expect(args[idx + 1]).toBe(effort);
+    expect(args).toContain('--model');
   });
 });

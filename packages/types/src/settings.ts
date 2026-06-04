@@ -1,3 +1,5 @@
+import type { EffortLevel } from './adapter.js';
+
 export const EXECUTION_MODES = ['default', 'acceptEdits', 'yolo'] as const;
 export type ExecutionMode = (typeof EXECUTION_MODES)[number];
 export type PermissionMode = ExecutionMode | 'plan';
@@ -16,7 +18,31 @@ export interface ProviderConfig {
   executablePath?: string;
   systemPrompt?: string;
   resolvedExecutable?: ResolvedExecutable;
+  defaultEffort?: EffortLevel;
+  defaultFast?: 'true' | 'false';
+  defaultUltracode?: 'true' | 'false';
+  defaultAdaptiveThinking?: 'true' | 'false';
+  personality?: 'none' | 'friendly' | 'pragmatic';
+  reasoningSummary?: 'auto' | 'concise' | 'detailed' | 'none';
 }
+
+/**
+ * Patch shape for updating provider settings. The enum-valued fields additionally
+ * accept `''` — the clear sentinel the server deletes on (→ the chat inherits the
+ * model default). Use this for the update path instead of casting `''` into the
+ * persisted `ProviderConfig`, whose unions don't include it.
+ */
+export type ProviderConfigUpdate = Omit<
+  Partial<ProviderConfig>,
+  'defaultEffort' | 'defaultFast' | 'defaultUltracode' | 'defaultAdaptiveThinking' | 'personality' | 'reasoningSummary'
+> & {
+  defaultEffort?: EffortLevel | '';
+  defaultFast?: 'true' | 'false' | '';
+  defaultUltracode?: 'true' | 'false' | '';
+  defaultAdaptiveThinking?: 'true' | 'false' | '';
+  personality?: 'none' | 'friendly' | 'pragmatic' | '';
+  reasoningSummary?: 'auto' | 'concise' | 'detailed' | 'none' | '';
+};
 
 export interface NotificationConfig {
   chat: { taskComplete: boolean; sessionError: boolean };

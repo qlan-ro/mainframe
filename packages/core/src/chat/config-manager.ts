@@ -13,6 +13,8 @@ export interface ConfigManagerDeps {
   startChat: (chatId: string) => Promise<void>;
   stopChat: (chatId: string) => Promise<void>;
   emitEvent: (event: DaemonEvent) => void;
+  /** Re-resolve tuning against the (possibly new) model and apply to the live session. */
+  applyTuning: (chatId: string) => Promise<void>;
   /** Stop launch processes for a project+path pair (e.g. before worktree removal) */
   stopLaunchProcesses?: (projectId: string, projectPath: string) => Promise<void>;
 }
@@ -88,6 +90,9 @@ export class ChatConfigManager {
         active.chat.planMode = planMode;
       }
       this.deps.db.chats.update(chatId, updates);
+      // Model switch can invalidate the live tuning (e.g. xhigh/ultracode on a model
+      // that doesn't support them). Re-resolve against the new model and re-apply.
+      if (modelChanged) await this.deps.applyTuning(chatId);
       this.deps.emitEvent({ type: 'chat.updated', chat: active.chat });
       return;
     }

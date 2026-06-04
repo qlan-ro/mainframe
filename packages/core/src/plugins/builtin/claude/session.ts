@@ -17,8 +17,10 @@ import type {
   ContextFile,
   SkillFileEntry,
   ExecutionMode,
+  ResolvedTuning,
 } from '@qlan-ro/mainframe-types';
 import { handleStdout, handleStderr } from './events.js';
+import { tuningToFlagSettings } from './tuning.js';
 import type { DetectedPrCore } from './pr-detection.js';
 import { ClaudeTaskEvents } from './task-events.js';
 import { BackgroundTaskTracker } from '../../../background-tasks/tracker.js';
@@ -202,7 +204,6 @@ export class ClaudeSession implements AdapterSession {
 
     if (this.resumeSessionId) args.push('--resume', this.resumeSessionId);
     if (options.model) args.push('--model', options.model);
-    if (options.effort) args.push('--effort', options.effort);
     // Remember the base (non-plan) mode so setPlanMode(false) can restore it.
     const baseMode = options.permissionMode === 'yolo' ? 'bypassPermissions' : (options.permissionMode ?? 'default');
     this.basePermissionMode = baseMode;
@@ -235,6 +236,13 @@ export class ClaudeSession implements AdapterSession {
     this.state.status = 'starting';
     this.state.lastActivityAt = Date.now();
 
+    if (options.tuning) {
+      const settings = tuningToFlagSettings(options.tuning);
+      if (Object.keys(settings).length > 0) {
+        this.sendControlRequest(this.state.child!.stdin, { subtype: 'apply_flag_settings', settings });
+      }
+    }
+
     log.debug(
       {
         sessionId: this.id,
@@ -242,7 +250,7 @@ export class ClaudeSession implements AdapterSession {
         resume: !!this.resumeSessionId,
         model: options.model ?? 'default',
         permissionMode: options.permissionMode ?? 'default',
-        effort: options.effort ?? null,
+        tuning: options.tuning ?? null,
       },
       'claude session spawned',
     );
@@ -363,6 +371,12 @@ export class ClaudeSession implements AdapterSession {
     const child = this.state.child;
     if (!child) throw new Error(`Session ${this.id} not spawned`);
     this.sendControlRequest(child.stdin, { subtype: 'set_model', model });
+  }
+
+  async applyTuning(tuning: ResolvedTuning): Promise<void> {
+    const child = this.state.child;
+    if (!child) throw new Error(`Session ${this.id} not spawned`);
+    this.sendControlRequest(child.stdin, { subtype: 'apply_flag_settings', settings: tuningToFlagSettings(tuning) });
   }
 
   async sendCommand(command: string, args = ''): Promise<void> {
