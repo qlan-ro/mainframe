@@ -13,6 +13,8 @@ import type {
   ChatMessage,
   ContextFile,
   SkillFileEntry,
+  ResolvedTuning,
+  AdapterModel,
 } from '@qlan-ro/mainframe-types';
 import { JsonRpcClient } from './jsonrpc.js';
 import { handleNotification, type CodexSessionState } from './event-mapper.js';
@@ -28,10 +30,10 @@ import type {
   ThreadReadResult,
   ApprovalPolicy,
   SandboxMode,
-  CollaborationMode,
   UserInput,
   ThreadItem,
 } from './types.js';
+import { buildTurnConfig, type CodexProviderTuning } from './turn-config.js';
 import { createChildLogger } from '../../../logger.js';
 
 const log = createChildLogger('codex:session');
@@ -75,6 +77,8 @@ export class CodexSession implements AdapterSession {
   private pendingModel: string | undefined;
   private pendingPermissionMode: ExecutionMode = 'default';
   private pendingPlanMode: boolean = false;
+  private pendingTuning: ResolvedTuning | null = null;
+  private codexProviderTuning: CodexProviderTuning = {};
   private pid = 0;
   private status: 'starting' | 'ready' | 'running' | 'stopped' | 'error' = 'starting';
 
@@ -107,6 +111,7 @@ export class CodexSession implements AdapterSession {
     this.pendingModel = options.model;
     this.pendingPermissionMode = options.permissionMode ?? 'default';
     this.pendingPlanMode = options.planMode ?? false;
+    this.pendingTuning = options.tuning ?? null;
 
     try {
       accessSync(this.projectPath);
@@ -226,15 +231,26 @@ export class CodexSession implements AdapterSession {
 
     // Start turn
     const { approvalPolicy, sandbox } = this.mapPermissionMode(this.pendingPermissionMode);
-    const collaborationMode = this.buildCollaborationMode();
+    const DEFAULT_RESOLVED: ResolvedTuning = { effort: null, fast: false, ultracode: false, adaptiveThinking: false };
+    const model: AdapterModel = { id: this.pendingModel ?? '', label: this.pendingModel ?? '' };
+    const turnCfg = buildTurnConfig(
+      this.pendingTuning ?? DEFAULT_RESOLVED,
+      this.codexProviderTuning,
+      model,
+      this.pendingPlanMode ? 'plan' : 'default',
+    );
 
     await this.client.request<TurnStartResult>('turn/start', {
       threadId: this.state.threadId,
       input,
       approvalPolicy,
       sandboxPolicy: this.mapSandboxPolicy(sandbox),
-      collaborationMode,
+      collaborationMode: turnCfg.collaborationMode,
       model: this.pendingModel,
+      ...(turnCfg.serviceTier ? { serviceTier: turnCfg.serviceTier } : {}),
+      ...(turnCfg.personality ? { personality: turnCfg.personality } : {}),
+      ...(turnCfg.summary ? { summary: turnCfg.summary } : {}),
+      ...(turnCfg.verbosity ? { verbosity: turnCfg.verbosity } : {}),
     });
 
     this.status = 'running';
@@ -286,6 +302,15 @@ export class CodexSession implements AdapterSession {
 
   async setPlanMode(on: boolean): Promise<void> {
     this.pendingPlanMode = on;
+  }
+
+  /** Called by lifecycle-manager (H1) to push Codex-only provider defaults. */
+  setCodexProviderTuning(tuning: CodexProviderTuning): void {
+    this.codexProviderTuning = tuning;
+  }
+
+  async applyTuning(tuning: ResolvedTuning): Promise<void> {
+    this.pendingTuning = tuning;
   }
 
   async sendCommand(_command: string, _args?: string): Promise<void> {
@@ -421,15 +446,4 @@ export class CodexSession implements AdapterSession {
     }
   }
 
-  private buildCollaborationMode(): CollaborationMode {
-    const mode = this.pendingPlanMode ? 'plan' : 'default';
-    return {
-      mode,
-      settings: {
-        model: this.pendingModel ?? '',
-        reasoning_effort: null,
-        developer_instructions: null,
-      },
-    };
-  }
 }
