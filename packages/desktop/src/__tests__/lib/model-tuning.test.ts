@@ -26,4 +26,12 @@ describe('model-tuning helpers', () => {
     // provider default 'xhigh' isn't supported → falls back to the supported default
     expect(displayEffort({}, model, { defaultEffort: 'xhigh' }).value).toBe('high');
   });
+
+  it('mirrors the resolver: highest supported <= requested when there is no valid defaultEffort', () => {
+    // Sonnet-like: supports low/medium/high/max but NOT xhigh, and no defaultEffort.
+    // Inherited provider 'xhigh' must display 'high' (highest <= xhigh) — same as the
+    // server resolver — NOT 'low' (the lowest supported).
+    const sonnet = { id: 'm', label: 'M', supportedEfforts: ['low', 'medium', 'high', 'max'] as const };
+    expect(displayEffort({}, sonnet, { defaultEffort: 'xhigh' }).value).toBe('high');
+  });
 });

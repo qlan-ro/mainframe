@@ -1,5 +1,4 @@
-import React from 'react';
-import type { AdapterModel, ProviderConfig } from '@qlan-ro/mainframe-types';
+import type { AdapterModel, EffortLevel, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { TUNABLE_FEATURES } from '@qlan-ro/mainframe-types';
 import { Toggle } from '../ui/toggle';
 import { effortOptions, visibleFeatures } from '../../lib/model-tuning';
@@ -13,7 +12,7 @@ export function ProviderTuningDefaults({
   adapterId: string;
   model: AdapterModel;
   config: ProviderConfig;
-  onChange: (partial: Partial<ProviderConfig>) => void;
+  onChange: (partial: ProviderConfigUpdate) => void;
 }) {
   const efforts = effortOptions(model);
   const features = visibleFeatures(model);
@@ -34,7 +33,7 @@ export function ProviderTuningDefaults({
             // Send the raw value: '' is the clear sentinel the route deletes on
             // (→ chat inherits the model default). Don't coerce to undefined, which
             // JSON.stringify would omit, making the clear unreachable.
-            onChange={(e) => onChange({ defaultEffort: e.target.value as ProviderConfig['defaultEffort'] })}
+            onChange={(e) => onChange({ defaultEffort: e.target.value as EffortLevel | '' })}
             className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-mf-input focus:outline-none focus:border-mf-accent"
           >
             <option value="">Inherit (model default)</option>
@@ -57,7 +56,7 @@ export function ProviderTuningDefaults({
             <Toggle
               data-testid={`providers-${adapterId}-default-feature-${f.key}`}
               checked={config[key] === 'true'}
-              onChange={(v) => onChange({ [key]: v ? 'true' : 'false' } as Partial<ProviderConfig>)}
+              onChange={(v) => onChange({ [key]: v ? 'true' : 'false' } as ProviderConfigUpdate)}
             />
           </label>
         );

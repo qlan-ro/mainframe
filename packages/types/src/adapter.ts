@@ -246,6 +246,32 @@ export const TUNABLE_FEATURES = [
 
 export type FeatureKey = (typeof TUNABLE_FEATURES)[number]['key'];
 
+const EFFORT_RANK: Record<EffortLevel, number> = {
+  none: 0, minimal: 1, low: 2, medium: 3, high: 4, xhigh: 5, max: 6,
+};
+
+/**
+ * Clamp a requested effort to what a model supports — the single source of truth used
+ * by BOTH the core resolver (at spawn/apply) and the renderer (for display), so the
+ * composer chip can never disagree with what the server resolves.
+ *
+ *   requested ∈ supported            → requested
+ *   else defaultEffort ∈ supported   → defaultEffort
+ *   else highest supported ≤ requested (then lowest supported)
+ *   supported empty (no effort)      → null
+ */
+export function clampEffortToSupported(
+  requested: EffortLevel,
+  supported: readonly EffortLevel[],
+  defaultEffort?: EffortLevel,
+): EffortLevel | null {
+  if (supported.length === 0) return null;
+  if (supported.includes(requested)) return requested;
+  if (defaultEffort && supported.includes(defaultEffort)) return defaultEffort;
+  const below = supported.filter((e) => EFFORT_RANK[e] <= EFFORT_RANK[requested]).sort((a, b) => EFFORT_RANK[b] - EFFORT_RANK[a]);
+  return below[0] ?? [...supported].sort((a, b) => EFFORT_RANK[a] - EFFORT_RANK[b])[0] ?? null;
+}
+
 export interface ExternalSession {
   sessionId: string; // CLI's native session UUID
   adapterId: string; // Which adapter discovered this session

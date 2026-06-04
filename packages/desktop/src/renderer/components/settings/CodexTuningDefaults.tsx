@@ -1,5 +1,4 @@
-import React from 'react';
-import type { AdapterModel, ProviderConfig } from '@qlan-ro/mainframe-types';
+import type { AdapterModel, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 
 const SUMMARY_OPTIONS = ['auto', 'concise', 'detailed', 'none'] as const;
 const PERSONALITY_OPTIONS = ['none', 'friendly', 'pragmatic'] as const;
@@ -43,7 +42,7 @@ export function CodexTuningDefaults({
    *  (model-agnostic) still renders; personality is gated on the model's capability. */
   model?: AdapterModel;
   config: ProviderConfig;
-  onChange: (partial: Partial<ProviderConfig>) => void;
+  onChange: (partial: ProviderConfigUpdate) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -54,7 +53,7 @@ export function CodexTuningDefaults({
             testId={`providers-${adapterId}-personality`}
             value={config.personality}
             options={PERSONALITY_OPTIONS}
-            onChange={(v) => onChange({ personality: v as ProviderConfig['personality'] })}
+            onChange={(v) => onChange({ personality: v as ProviderConfigUpdate['personality'] })}
           />
         </label>
       )}
@@ -64,7 +63,7 @@ export function CodexTuningDefaults({
           testId={`providers-${adapterId}-reasoning-summary`}
           value={config.reasoningSummary}
           options={SUMMARY_OPTIONS}
-          onChange={(v) => onChange({ reasoningSummary: v as ProviderConfig['reasoningSummary'] })}
+          onChange={(v) => onChange({ reasoningSummary: v as ProviderConfigUpdate['reasoningSummary'] })}
         />
       </label>
     </div>

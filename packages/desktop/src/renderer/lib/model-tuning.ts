@@ -1,5 +1,5 @@
 import type { AdapterModel, EffortLevel, FeatureKey } from '@qlan-ro/mainframe-types';
-import { TUNABLE_FEATURES } from '@qlan-ro/mainframe-types';
+import { TUNABLE_FEATURES, clampEffortToSupported } from '@qlan-ro/mainframe-types';
 
 export const EFFORT_META: Record<EffortLevel, { label: string; description: string }> = {
   none: { label: 'None', description: 'No reasoning' },
@@ -67,13 +67,7 @@ export function displayEffort(
     return { value: 'xhigh', locked: true };
   }
   const requested = chat.effort ?? provider?.defaultEffort ?? model.defaultEffort ?? 'medium';
-  const supported = model.supportedEfforts ?? [];
-  // Never display an effort the model doesn't support (the resolver would clamp it).
-  const value =
-    supported.length === 0 || supported.includes(requested)
-      ? requested
-      : model.defaultEffort && supported.includes(model.defaultEffort)
-        ? model.defaultEffort
-        : (supported[0] ?? requested);
+  // Same clamp the server resolver uses → the chip can never disagree with what spawns.
+  const value = clampEffortToSupported(requested, model.supportedEfforts ?? [], model.defaultEffort) ?? requested;
   return { value, locked: false };
 }

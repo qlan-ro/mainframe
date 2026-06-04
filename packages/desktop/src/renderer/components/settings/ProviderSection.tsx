@@ -7,7 +7,7 @@ import { useSettingsStore } from '../../store/settings';
 import { useAdaptersStore } from '../../store/adapters';
 import { getConfigConflicts, updateProviderSettings } from '../../lib/api';
 import { getModelOptions } from '../../lib/adapters';
-import type { ProviderConfig } from '@qlan-ro/mainframe-types';
+import type { ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { ModelDropdown } from './ModelDropdown';
 import { MODE_OPTIONS } from './constants';
 import { DirectoryPickerModal } from '../DirectoryPickerModal';
@@ -32,9 +32,15 @@ export function ProviderSection({ adapterId, label }: { adapterId: string; label
   }, [adapterId]);
 
   const update = useCallback(
-    (partial: Partial<ProviderConfig>) => {
-      const next = { ...config, ...partial };
-      setProviderConfig(adapterId, next);
+    (partial: ProviderConfigUpdate) => {
+      // Local store stays a clean ProviderConfig: '' (the clear sentinel) deletes the
+      // key so the control falls back to the inherit option immediately.
+      const next: Record<string, unknown> = { ...config };
+      for (const [k, v] of Object.entries(partial)) {
+        if (v === '') delete next[k];
+        else next[k] = v;
+      }
+      setProviderConfig(adapterId, next as ProviderConfig);
       updateProviderSettings(adapterId, partial).catch((err) =>
         log.warn('update provider settings failed', { err: String(err) }),
       );

@@ -1,4 +1,4 @@
-import type { ProviderConfig, GeneralConfig, NotificationConfig } from '@qlan-ro/mainframe-types';
+import type { ProviderConfig, ProviderConfigUpdate, GeneralConfig, NotificationConfig } from '@qlan-ro/mainframe-types';
 import { fetchJson, putJson, API_BASE } from './http';
 import { createLogger } from '../logger';
 
@@ -25,7 +25,7 @@ export async function getProviderSettings(): Promise<Record<string, ProviderConf
   return json.data;
 }
 
-export async function updateProviderSettings(adapterId: string, settings: Partial<ProviderConfig>): Promise<void> {
+export async function updateProviderSettings(adapterId: string, settings: ProviderConfigUpdate): Promise<void> {
   log.info('updateProviderSettings', { adapterId });
   await putJson(`${API_BASE}/api/settings/providers/${adapterId}`, settings);
 }
