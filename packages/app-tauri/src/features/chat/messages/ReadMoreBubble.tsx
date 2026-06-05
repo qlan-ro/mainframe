@@ -11,6 +11,7 @@
  * Keep-ours per the assistant-ui inventory (there is no native truncation gate).
  */
 import { useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { extractText } from '../parts/extract-text';
 
@@ -50,9 +51,9 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
         data-text-part
         className={cn(
           // Base prose styles — matched to the artboard type spec
-          'text-body leading-relaxed tracking-tight',
-          // Clamp to 6 lines when collapsed
-          collapsed && 'line-clamp-6',
+          'text-body leading-relaxed tracking-[-0.1px]',
+          // Clamp to 4 lines when collapsed
+          collapsed && 'line-clamp-4',
         )}
       >
         {children}
@@ -72,11 +73,16 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
           data-testid="chat-user-readmore-toggle"
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-1 text-caption font-semibold text-primary hover:underline"
+          className="mt-1 inline-flex items-center gap-0.5 text-caption font-semibold text-primary hover:underline"
           aria-label={expanded ? 'Show less' : 'Read more'}
           aria-expanded={expanded}
         >
           {expanded ? 'Show less' : 'Read more'}
+          {expanded ? (
+            <ChevronsUpDown size={10} className="text-primary" />
+          ) : (
+            <ChevronDown size={10} className="text-primary" />
+          )}
         </button>
       )}
     </div>

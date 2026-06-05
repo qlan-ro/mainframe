@@ -36,7 +36,7 @@ export function FamilyTile({ color, bg, children }: FamilyTileProps) {
   return (
     <span
       aria-hidden
-      className="w-[22px] h-[22px] rounded-md shrink-0 flex items-center justify-center"
+      className="w-[22px] h-[22px] rounded-sm shrink-0 flex items-center justify-center"
       style={{ backgroundColor: bg }}
     >
       <span className="text-[11px] font-bold leading-none select-none" style={{ color }}>
@@ -135,7 +135,7 @@ export function CollapsibleCardShell({
         )}
       >
         {tile}
-        <span className="text-label font-semibold text-muted-foreground shrink-0">{verb}</span>
+        <span className="text-label font-semibold text-foreground shrink-0">{verb}</span>
         {target && <span className="min-w-0 flex-1 truncate">{target}</span>}
         <span className="flex-1 min-w-0" />
         {trailing && <span className="flex items-center gap-1.5 shrink-0">{trailing}</span>}

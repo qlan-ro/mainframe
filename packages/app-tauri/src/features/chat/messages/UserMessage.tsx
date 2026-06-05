@@ -36,7 +36,7 @@ import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { AtSign, Wrench, Zap, Clock } from 'lucide-react';
+import { AtSign, Wrench, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
@@ -104,9 +104,9 @@ function CoolCard({ children, className }: CoolCardProps) {
     <div
       style={CARD_STYLE}
       className={cn(
-        'relative max-w-[75%] rounded-xl border px-[15px] py-[10px]',
+        'relative max-w-[75%] rounded-xl border-[0.5px] px-[15px] py-[10px]',
         'border-mf-um-edge text-mf-um-ink',
-        'text-body leading-relaxed tracking-tight',
+        'text-body leading-relaxed tracking-[-0.1px]',
         className,
       )}
     >
@@ -121,8 +121,11 @@ function CoolCard({ children, className }: CoolCardProps) {
 
 function QueuedBadge() {
   return (
-    <span className="mr-1 inline-flex items-center gap-1.5 font-mono text-caption text-mf-text-3">
-      <Clock size={12} className="animate-pulse" />
+    <span className="mr-1 inline-flex items-center gap-1.5 font-mono text-micro text-mf-text-3">
+      <span
+        className="inline-block h-[7px] w-[7px] shrink-0 animate-spin rounded-full border-[1.5px] border-mf-warning"
+        style={{ borderTopColor: 'transparent' }}
+      />
       Queued · sends after the current run
     </span>
   );
@@ -140,9 +143,10 @@ interface SlashPillProps {
 function SlashPill({ kind, name }: SlashPillProps) {
   const Icon = kind === 'command' ? Wrench : Zap;
   const colorClass = kind === 'command' ? 'text-primary' : 'text-[#7a4dd0]';
+  const pillBg = kind === 'command' ? 'rgba(10,132,255,0.08)' : 'rgba(122,77,208,0.08)';
 
   return (
-    <span className={cn('mr-2 inline-flex items-center gap-1 rounded-lg py-0.5 pl-1.5 pr-2 bg-mf-chip')}>
+    <span className="mr-2 inline-flex items-center gap-1 rounded-md py-0.5 pl-1.5 pr-2" style={{ background: pillBg }}>
       <Icon size={12} className={colorClass} />
       <span className={cn('font-mono text-caption font-semibold', colorClass)}>/{name}</span>
     </span>
@@ -166,7 +170,7 @@ function InlineImageThumbs({ parts }: InlineImageThumbsProps) {
           key={p.image}
           src={p.image}
           alt=""
-          className="size-16 rounded-[11px] border border-border object-cover shadow-sm"
+          className="size-16 rounded-[11px] border-[0.5px] border-border object-cover shadow-sm"
         />
       ))}
     </div>

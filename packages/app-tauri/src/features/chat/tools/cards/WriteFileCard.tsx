@@ -129,11 +129,11 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
   const trailing = (
     <>
       {stats?.added != null && (
-        <span className="font-mono tabular-nums text-caption shrink-0 px-1.5 py-0.5 rounded-full bg-mf-diff-add-bg text-mf-diff-add-text font-semibold">
+        <span className="font-mono tabular-nums text-micro shrink-0 font-semibold text-mf-diff-add-text">
           +{stats.added}
         </span>
       )}
-      <StatusDot result={result} isError={isError} />
+      <StatusDot result={result} isError={isError} label />
     </>
   );
 

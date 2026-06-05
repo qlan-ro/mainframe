@@ -80,7 +80,7 @@ describe('SearchCard — verb mapping', () => {
     expect(screen.getByText('Glob')).toBeInTheDocument();
   });
 
-  it('renders "Grep" for toolName="Grep"', () => {
+  it('renders "Search" for toolName="Grep"', () => {
     render(
       <Wrap>
         <SearchCard
@@ -92,7 +92,7 @@ describe('SearchCard — verb mapping', () => {
         />
       </Wrap>,
     );
-    expect(screen.getByText('Grep')).toBeInTheDocument();
+    expect(screen.getByText('Search')).toBeInTheDocument();
   });
 
   it('renders "List" for toolName="LS"', () => {
@@ -255,7 +255,7 @@ describe('SearchCard — pending state (result === undefined)', () => {
         <SearchCard {...baseProps} toolName="Grep" args={{ pattern: 'todo' }} result={undefined} isError={undefined} />
       </Wrap>,
     );
-    expect(screen.getByText('Grep')).toBeInTheDocument();
+    expect(screen.getByText('Search')).toBeInTheDocument();
     expect(screen.getByText('"todo"')).toBeInTheDocument();
   });
 });

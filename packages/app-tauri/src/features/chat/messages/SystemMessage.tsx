@@ -23,7 +23,7 @@ export function CompactionPill() {
     <div className="my-2 flex justify-center">
       <div
         data-testid="chat-compaction-pill"
-        className="inline-flex select-none items-center gap-1.5 rounded-full border border-border bg-mf-chip px-3 py-1 font-mono text-caption text-mf-text-3"
+        className="inline-flex select-none items-center gap-1.5 rounded-full border border-border bg-mf-content2 px-3 py-1 font-mono text-caption text-mf-text-3"
       >
         <LayersIcon size={11} className="shrink-0 text-mf-text-3" />
         <span>Context compacted</span>
@@ -42,7 +42,9 @@ function SystemTextPill({ text }: { text: string }) {
       <div
         className={cn(
           'inline-flex select-none items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-caption',
-          isError ? 'border-destructive bg-destructive/10 text-destructive' : 'border-border bg-mf-chip text-mf-text-3',
+          isError
+            ? 'border-destructive bg-mf-destructive-tint text-destructive'
+            : 'border-border bg-mf-content2 text-mf-text-3',
         )}
       >
         <Icon size={11} className="shrink-0" />

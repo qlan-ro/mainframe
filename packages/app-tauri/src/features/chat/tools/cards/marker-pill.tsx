@@ -65,7 +65,7 @@ export function MarkerPill({
         'transition-colors duration-100',
         clickable && 'hover:bg-accent cursor-pointer',
         !clickable && 'cursor-default',
-        isError && 'border-destructive bg-destructive/5',
+        isError && 'border-destructive bg-mf-destructive-tint',
         'max-w-full overflow-hidden',
       )}
     >

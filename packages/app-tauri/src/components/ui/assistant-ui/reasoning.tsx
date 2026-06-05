@@ -122,7 +122,9 @@ function ReasoningTrigger({
   active?: boolean;
   duration?: number;
 }) {
-  const label = duration != null ? formatDuration(duration) : 'Thinking';
+  // Live → "Thinking…"; done with a measured duration → "Thought for Ns";
+  // done without one (daemon doesn't yet emit a thinking duration) → "Reasoning".
+  const label = active ? 'Thinking…' : duration != null ? formatDuration(duration) : 'Reasoning';
 
   return (
     <CollapsibleTrigger
@@ -195,7 +197,7 @@ function ReasoningText({ className, ...props }: React.ComponentProps<'div'>) {
     <div
       data-slot="reasoning-text"
       className={cn(
-        'aui-reasoning-text relative z-0 max-h-64 space-y-3 overflow-y-auto ps-5 pt-1.5 pb-2 leading-relaxed',
+        'aui-reasoning-text relative z-0 ms-2.5 max-h-64 space-y-3 overflow-y-auto border-l-2 border-border ps-3.5 pt-1.5 pb-2 leading-relaxed',
         'transform-gpu transition-[transform,opacity]',
         'group-data-[state=open]/collapsible-content:animate-in',
         'group-data-[state=closed]/collapsible-content:animate-out',

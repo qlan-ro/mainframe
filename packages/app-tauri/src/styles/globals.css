@@ -49,6 +49,8 @@
   --accent-foreground: #1c1c1e;
   --destructive: #dc3545;
   --destructive-foreground: #ffffff;
+  /* Opaque error tint — --destructive is hex, so bg-destructive/N silently fails. */
+  --mf-destructive-tint: rgba(220, 53, 69, 0.08);
   --border: rgba(0, 0, 0, 0.08);
   --input: rgba(0, 0, 0, 0.08);
   --ring: #0a84ff;
@@ -139,6 +141,7 @@
   --accent-foreground: #f1ede5;
   --destructive: #ff6b6b;
   --destructive-foreground: #1a1714;
+  --mf-destructive-tint: rgba(255, 107, 107, 0.10);
   --border: rgba(255, 255, 255, 0.10);
   --input: rgba(255, 255, 255, 0.10);
   --ring: #0a84ff;
@@ -222,6 +225,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-mf-destructive-tint: var(--mf-destructive-tint);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

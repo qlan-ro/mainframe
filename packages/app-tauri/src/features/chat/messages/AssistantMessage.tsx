@@ -50,8 +50,8 @@ export function AssistantMessage() {
             if (part.type === 'group-reasoning') {
               const running = part.status?.type === 'running';
               return (
-                <ReasoningRoot defaultOpen={running}>
-                  <ReasoningTrigger />
+                <ReasoningRoot defaultOpen={running} variant="ghost">
+                  <ReasoningTrigger active={running} />
                   <ReasoningContent aria-busy={running}>
                     <ReasoningText>{children}</ReasoningText>
                   </ReasoningContent>

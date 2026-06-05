@@ -19,6 +19,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { StatusDot, cardStyle, isTruncatedResult, resolveResultText } from '../shared';
+import { FamilyTile } from '../shared/card-shell';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';
 
@@ -29,7 +30,7 @@ import { useChatId } from '../chat-tool-context';
 function outputLineClass(line: string): string {
   const t = line.trim();
   if (t.includes('✓') || /\bpass(ed|ing)?\b/i.test(t)) return 'text-mf-term-green';
-  if (t.includes('✗') || /\b(error|fail(ed|ure)?)\b/i.test(t)) return 'text-mf-term-amber';
+  if (t.includes('✗') || /\b(error|fail(ed|ure)?)\b/i.test(t)) return 'text-destructive';
   return 'text-mf-term-cmt';
 }
 
@@ -118,12 +119,15 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
           data-testid="chat-bash-trigger"
           disabled={!hasOutput}
           className={cn(
-            'flex w-full items-center gap-2 px-3 py-2 text-left',
+            'flex w-full items-center gap-2 px-3 py-[7px] text-left',
             'hover:bg-accent transition-colors',
             !hasOutput && 'cursor-default',
           )}
         >
-          <Terminal size={15} className="shrink-0" style={{ color: '#7a7a82' }} />
+          <FamilyTile color="#7a7a82" bg="rgba(122,122,130,0.11)">
+            <Terminal size={13} />
+          </FamilyTile>
+          <span className="font-mono text-micro font-semibold text-foreground shrink-0">Run</span>
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -138,7 +142,7 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
               {command}
             </TooltipContent>
           </Tooltip>
-          <StatusDot result={result} isError={isError} />
+          <StatusDot result={result} isError={isError} label />
         </CollapsibleTrigger>
 
         {description && (

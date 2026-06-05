@@ -29,7 +29,7 @@ const FAMILY_BG = `${FAMILY_COLOR}1c`;
 // ---------------------------------------------------------------------------
 
 function verbFor(toolName: string): string {
-  if (toolName === 'Grep') return 'Grep';
+  if (toolName === 'Grep') return 'Search';
   if (toolName === 'LS') return 'List';
   return 'Glob';
 }
@@ -70,6 +70,8 @@ export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId,
   const hasBody = Boolean(resultText);
   const verb = verbFor(toolName);
 
+  const matchCount = resultText ? resultText.split('\n').filter(Boolean).length : null;
+
   const tile = (
     <FamilyTile color={FAMILY_COLOR} bg={FAMILY_BG}>
       <SearchIcon size={13} style={{ color: FAMILY_COLOR }} />
@@ -85,7 +87,12 @@ export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId,
     </>
   ) : null;
 
-  const trailing = <StatusDot result={result} isError={isError} />;
+  const trailing = (
+    <>
+      {matchCount !== null && <span className="font-mono text-micro text-mf-text-3 shrink-0">· {matchCount}</span>}
+      <StatusDot result={result} isError={isError} />
+    </>
+  );
 
   const subHeader = searchPath ? (
     <div className="px-2.5 pb-1 pl-[38px]">

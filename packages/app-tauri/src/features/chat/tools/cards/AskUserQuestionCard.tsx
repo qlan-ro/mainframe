@@ -157,9 +157,9 @@ export const AskUserQuestionCard: ToolCallMessagePartComponent = (part) => {
               {askUserQuestion.length > 0
                 ? askUserQuestion.map((entry, i) => {
                     const question = questions.find((q) => q.question === entry.question) ?? questions[i];
-                    return <AnswerEntry key={`answered-${i}`} entry={entry} question={question} />;
+                    return <AnswerEntry key={entry.question} entry={entry} question={question} />;
                   })
-                : questions.map((q, i) => <PendingQuestion key={`pending-${i}`} question={q} />)}
+                : questions.map((q) => <PendingQuestion key={q.question} question={q} />)}
             </div>
           </CollapsibleContent>
         )}
