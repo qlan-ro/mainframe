@@ -17,6 +17,7 @@ If you're picking up the **desktop (Electron) → app-tauri (Tauri 2 + React)** 
 
 ### B. State & plan
 - `docs/architecture/MIGRATION-TRACKER.md` — the living checklist (folds in the 10-subsystem port analysis).
+- `docs/architecture/ASSISTANT-UI-INVENTORY.md` — the use-native checklist: every assistant-ui primitive/UI/hook vs our re-impl, with retire/keep/decide verdicts + a ~110-row master table. Consult before building any chat surface.
 
 ### C. Decisions (the "why", locked)
 - `docs/architecture/2026-06-05-chat-runtime-decision.md` — useExternalStoreRuntime + per-chat controller (react-opencode shape), no message cache, refetch-on-gap, useRemoteThreadListRuntime; rejects AssistantTransport (@alpha). Includes the 3-round evidence.
