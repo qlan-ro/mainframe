@@ -22,13 +22,7 @@ export interface AskUserQuestionGateProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildSelections(prev: Map<number, Set<string>>, qIdx: number): Map<number, Set<string>> {
-  const next = new Map(prev);
-  if (!next.has(qIdx)) next.set(qIdx, new Set());
-  return next;
-}
-
-function toggleSelection(
+function toggle(
   prev: Map<number, Set<string>>,
   qIdx: number,
   label: string,
@@ -56,18 +50,6 @@ function isQuestionAnswered(
     .map((label) => (label === OTHER ? (otherText.get(qIdx) ?? '').trim() : label))
     .filter(Boolean);
   return chosen.length > 0;
-}
-
-// ---------------------------------------------------------------------------
-// Counter badge
-// ---------------------------------------------------------------------------
-
-function StepCounter({ current, total }: { current: number; total: number }) {
-  return (
-    <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-micro font-semibold text-mf-text-3 ring-1 ring-border">
-      {current + 1} of {total}
-    </span>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -129,10 +111,7 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
 
   const handleToggle = useCallback(
     (label: string) => {
-      setSelections((prev) => {
-        const next = buildSelections(prev, current);
-        return toggleSelection(next, current, label, isMulti);
-      });
+      setSelections((prev) => toggle(prev, current, label, isMulti));
     },
     [current, isMulti],
   );
@@ -176,7 +155,13 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
           tileClassName="bg-mf-selection text-primary"
           eyebrow={eyebrow}
           title={title}
-          right={questions.length > 1 ? <StepCounter current={current} total={questions.length} /> : undefined}
+          right={
+            questions.length > 1 ? (
+              <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-micro font-semibold text-mf-text-3 ring-1 ring-border">
+                {current + 1} of {questions.length}
+              </span>
+            ) : undefined
+          }
         />
         {activeQuestion && (
           <AskQuestionWizard

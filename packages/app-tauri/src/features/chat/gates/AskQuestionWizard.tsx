@@ -40,19 +40,27 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
         isSelected ? 'border-primary bg-mf-selection' : 'border-border hover:border-mf-border-hover hover:bg-accent',
       )}
     >
-      <span
-        className={cn(
-          'mt-0.5 flex size-4 shrink-0 items-center justify-center border transition-colors',
-          isMulti ? 'rounded' : 'rounded-full',
-          isSelected ? 'border-primary bg-primary' : 'border-mf-text-3 bg-transparent',
-        )}
-      >
-        {isSelected && (
-          <span className={cn('bg-primary-foreground', isMulti ? 'size-2 rounded-sm' : 'size-2 rounded-full')} />
-        )}
-      </span>
+      {isMulti ? (
+        // Checkbox indicator: filled square when selected, outlined when not.
+        <span
+          className={cn(
+            'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
+            isSelected ? 'border-primary bg-primary' : 'border-mf-text-4 bg-transparent',
+          )}
+        >
+          {isSelected && <span className="size-2 rounded-sm bg-primary-foreground" />}
+        </span>
+      ) : (
+        // Radio indicator: thick border when selected (no fill), hairline when not.
+        <span
+          className={cn(
+            'mt-0.5 size-4 shrink-0 rounded-full transition-all',
+            isSelected ? 'border-[5px] border-primary' : 'border border-mf-text-4',
+          )}
+        />
+      )}
       <span className="min-w-0">
-        <span className="block text-label font-medium text-foreground">{label}</span>
+        <span className="block text-body font-semibold text-foreground">{label}</span>
         {description && <span className="block text-caption text-mf-text-3">{description}</span>}
       </span>
     </button>
