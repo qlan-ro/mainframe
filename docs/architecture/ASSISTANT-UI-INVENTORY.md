@@ -33,8 +33,34 @@ Reload · Edit/EditComposer · **BranchPicker** (no branches in CLI-resume) · s
 ## New shadcn components to add (build-order step 2, beyond ToolFallback/ToolGroup)
 `quote` (`QuoteBlock`/`SelectionToolbar`/`ComposerQuotePreview`); `reasoning` (gated on decision #4); `thread.tsx`/`message-timing` as layout references only.
 
-## Keep ours (no native equivalent — not a re-impl to retire)
-`use-expandable` (no expand-without-snap API; re-test vs 0.14.14 autoscroll) · `FindBar` (no native in-thread find) · `MessageRenderBoundary` · `ReadMoreBubble` · `TurnFooter` (CLI timing metadata) · `ImageThumbs`/`ImageLightbox` · `attachment-adapter` (legit custom `AttachmentAdapter`) · `AttachmentRejectionToaster` · `CaptureThumb`/sandbox captures · the **composer config toolbar** (Effort/Features/PlanMode/model+permission/Worktree) · `composer-drafts` persistence · `QueuedMessageBanner` · the shiki engine · `MainframeText` (markdown + error routing) · `MainframeRuntimeProvider` app context · `useChatSession` · the **global sessions sidebar** + its context-menu · the quote→CLI serialization glue.
+## Re-examined: keep-ours corrected (2026-06-05)
+
+**Key framing:** for this codebase it's rarely "keep ours vs adopt native" — it's **native presentational component + our CLI/daemon data + our config-write path.** The native *runtime-integration hooks* (`ModelContext.register`, `useThreadTokenUsage`, `useAssistantInstructions`) are **inert under our external-store runtime** (they target the AI-SDK transport). Use the native *components*; feed them our data; write config via the daemon. **Tally: 6 adopt-native · 9 native-shell+our-data · 9 genuine keep-ours.**
+
+### Flip → ADOPT-NATIVE (was over-conservative)
+- Composer attachment tile (`ImageAttachmentPreview`) → shadcn `AttachmentUI`/`ComposerAttachments` (reads the same state our adapter populates; restyle; optional tile-click → our gallery).
+- Message image (drop the self-imposed `convert-message.ts:113` `image` skip) → emit `{type:'image', image:data-URL}` parts → shadcn `Image` (built-in zoom); drop `ImageThumbs` single render.
+- Message **`ActionBar`** (net-new) — Copy + Export-markdown now; Reload/Edit/Feedback deferred to daemon endpoints (don't render disabled).
+- Syntax engine (`SyntaxHighlightedCode` + custom `code` override) → native `components.SyntaxHighlighter` slot via `react-shiki`, fed OUR shiki engine/theme; drop `dangerouslySetInnerHTML`.
+- `CodeHeader` → native `components.CodeHeader` slot (props match — pass our component through).
+
+### Native shell + our data (the correct middle path)
+- `attachment-adapter` — **IS** the native `AttachmentAdapter` (registered at `adapters.attachments`); not a re-impl. `AttachmentRejectionToaster` — native `unstable_on('attachmentAddError')` + our toast.
+- File chip → shadcn `File` (richer: mime icon/size/download) fed our attachment metadata (thread contentType+base64; fallback for replayed history).
+- Model picker → `ModelSelector.Root/Trigger/Content` (composable, NOT the default export — its `register` is inert) fed `getModelOptions`; write via `daemonClient.updateChatConfig`. Provider tier reuses the shell.
+- Context/token usage → `ContextDisplay.Bar/.Ring` with its **external `usage` prop** (bypasses the inert internal hook) fed our CLI `contextUsage`; drop our bespoke bar.
+- Timing footer → shadcn `MessageTiming` fed `metadata.timing` (converter passes it through) + a **Cost** row in `metadata.custom` (native type has no cost slot). Retire `TurnFooter`'s layout.
+- @/-mention + /-slash → `ComposerTriggerPopover` + custom `Unstable_TriggerAdapter` (the adapter is **synchronous** → cache+state bridge over async daemon search; use the `action` behavior to write plain `@path`/mention text, not directive chips). Gate on `Unstable_` churn.
+- Inline @/slash chips → `createDirectiveText` + custom `Unstable_DirectiveFormatter` (icon map) as the Text component; keep our outer `UserMessage` routing (PLAN card, captures, queued badge, source).
+
+### Genuinely keep ours (survives scrutiny)
+- Multi-image **gallery lightbox** (`ImageLightbox`) — native `ImageZoom` is single-image only; ours is shared by `SessionAttachmentsGrid` + 3 todos modals. (Single-image in-message zoom *can* go native.)
+- **Sandbox captures** (`CaptureThumb`/`SandboxCaptureContext`) — selector/annotation/color metadata + separate send path; no native slot.
+- **Composer drafts** (`composer-drafts`) — runtime doesn't persist the live composer buffer across switches; ours also spans captures+attachments.
+- **Effort / Features / PlanMode / permission-mode** — no native concept (`ModelContext` has `callSettings` only). Reskin via shared Popover/Select; logic stays ours.
+- **Selected-context** (`ContextPickerMenu` selected items) — `useAssistantInstructions` is a system-prompt injector (inert here); our system prompt is CLI/CLAUDE.md-owned.
+- **`ReadMoreBubble`** — assistant-ui ships no read-more/clamp toggle; thin presentation wrapper (doesn't block other adoptions).
+- Plus: `use-expandable`, `FindBar`, `MessageRenderBoundary`, `QueuedMessageBanner` (daemon queue), `MainframeRuntimeProvider`/`useChatSession` (app glue), the **global sessions sidebar** (hybrid), the quote→CLI glue.
 
 ---
 
@@ -179,3 +205,32 @@ Reload · Edit/EditComposer · **BranchPicker** (no branches in CLI-resume) · s
 | useAssistantInstructions / model-context | yes | none (instructions in CLI/CLAUDE.md) | NO-NATIVE | Intentionally unused; do not adopt | runtime-provider |
 | ReadonlyThreadProvider (static viewer) | yes | none | NO-NATIVE | Candidate for any non-interactive transcript surface | thread |
 | useThreadViewportAutoScroll (stick-to-bottom) | yes | use-expandable.ts (fights it), FindBar.tsx (manual) | PARTIAL | Read viewport store instead of dispatching synthetic scroll; FindBar can stay but consult store | thread / B2 |
+
+## Corrected verdict table (keep-ours re-examined)
+
+| Feature | Native component | Data fit | Revised verdict | Action |
+|---|---|---|---|---|
+| Composer attachment adapter (5MB cap, dataURL, accept-all, image/doc typing) | AttachmentAdapter interface (core/src/adapters/attachment.ts:9) | Perfect — IS the native extension point, registered at adapters.attachments (provider:261) | NATIVE-SHELL+OUR-DATA | Keep adapter body as the sanctioned plug-in. Stop calling it a reimpl. |
+| Composer pending-attachment tile (thumb + remove + caption) | shadcn attachment.tsx AttachmentUI/ComposerAttachments (:126/:198) | Reads the same composer state our adapter fills — zero glue | ADOPT-NATIVE | Replace ImageAttachmentPreview; restyle + testids. Override click -> our lightbox or keep native Dialog. |
+| Message-side image display (thumbnail grid) | shadcn image.tsx Image + MessagePart Image (:422) | Self-imposed blocker (convert-message.ts:113 skips 'image') | ADOPT-NATIVE | Stop skipping 'image'; emit data:URL image parts; render via native Image (built-in zoom). Drop ImageThumbs single-image. |
+| Multi-image lightbox WITH gallery nav (prev/next, counter, arrow keys) | Partial — ImageZoom (image.tsx:245) single-image only | Native has no array/index/onNavigate; shared by SessionAttachmentsGrid + 3 todos modals | KEEP-OURS | Keep ImageLightbox for gallery + non-chat consumers. Single-image in-message zoom may use native ImageZoom. |
+| Message-side file/document chip | shadcn file.tsx File (:190/:209) | Strictly richer (mime icon, size, Download); need contentType + base64 threaded onto message | NATIVE-SHELL+OUR-DATA | Adopt File; thread contentType+dataURL in convert-message. Fall back to Root+Icon+Name for name-only history. |
+| Attachment-add rejection toast | Native event (composer.unstable_on('attachmentAddError')) — no UI | Exact fit; AttachmentRejectionToaster already subscribes (line 19) | NATIVE-SHELL+OUR-DATA | Keep as-is. Reclassify to native-event-driven, not reimpl. |
+| Sandbox capture thumbnail (selector/annotation/color metadata) | none | Captures aren't Files/image-parts; separate sendCaptures path | KEEP-OURS | Keep CaptureThumb/SandboxCaptureContext entirely. No native analog. |
+| Model selector (model tier) | ModelSelector.Root/Trigger/Content (model-selector.tsx:64) | Strong; default export's modelContext().register is INERT under external store | NATIVE-SHELL+OUR-DATA | Use composable parts (not default export); feed getModelOptions, write via updateChatConfig. |
+| Adapter/provider selector (provider tier) | none (single flat tier) | Shell-reusable for parity; no provider+model semantics | NATIVE-SHELL+OUR-DATA | Optional: reuse ModelSelector.Root shell. Adapter-change + reset logic stays ours. |
+| Effort / reasoning-level picker | none (callSettings has no effort field) | No semantic fit; only generic dropdown chrome | KEEP-OURS | Keep EffortPicker; at most reskin via shared dropdown primitive. |
+| Features / per-model toggles popover | none (no feature-flag map) | No fit; borrow generic Popover chrome only | KEEP-OURS | Keep FeaturesPopover; optionally shared Popover host. |
+| Plan-mode toggle | none | No native target; already shared button+Tooltip | KEEP-OURS | Keep as-is. |
+| Permission-mode selector | none (no permission-mode concept) | Only dropdown chrome shareable | KEEP-OURS | Keep; reskin via shared Select if unifying chrome. |
+| Context-window / token-usage display | ContextDisplay Ring/Bar/Text (context-display.tsx:164) | Strong — accepts EXTERNAL usage prop, bypasses internal fetch | NATIVE-SHELL+OUR-DATA | Adopt ContextDisplay.Bar with usage from CLI contextUsage + modelContextWindow. Drop bespoke bar. |
+| Selected-context / attached-instructions | useAssistantInstructions/ContextProvider | Misfit — system-prompt injector, inert under external store; not a chip UI | KEEP-OURS | Keep inline @-text + addMention. Do not adopt. |
+| @-mention / /-slash picker popover | ComposerTriggerPopover + Unstable_TriggerAdapter (trigger.ts:7) | Partial — adapter is SYNCHRONOUS (no Promise); CLI wants plain @path not directive chips | NATIVE-SHELL+OUR-DATA | Prototype with custom adapter (sync cache bridge + `action` behavior). Gate on Unstable_ churn. |
+| Per-chat composer draft persistence | none (runtime persists thread metadata, not composer buffer) | No target; draft spans captures+attachments | KEEP-OURS | Keep composer-drafts.ts. |
+| Per-turn timing/stats footer | MessageTiming shadcn (message-timing.tsx:38) + hook | Feedable via metadata.timing passthrough; native type has NO cost slot (message.ts:253-257) | NATIVE-SHELL+OUR-DATA | Adopt component; feed CLI usage; edit copied file to drop TTFT/Chunks, add Cost row. Retire TurnFooter layout. |
+| Message action bar (copy/reload/edit/export/feedback) | ActionBarPrimitive (actionBar/*) | Copy+Export need zero backend; Reload/Edit/Feedback/Speak need daemon support we lack | ADOPT-NATIVE | Adopt net-new with Copy+ExportMarkdown now; autohide=not-last+float; defer the rest (don't render disabled). |
+| Inline directive/slash/mention chips | createDirectiveText(formatter,{iconMap}) (directive-text.tsx:19) | Chip layer fits; outer routing (plan/sandbox/queued/source) has no native equiv | NATIVE-SHELL+OUR-DATA | Adopt chip renderer with custom formatter+iconMap; keep our UserMessage routing shell. |
+| Clamp + Read more/Show less (long user msgs) | none (confirmed via grep) | No native component; pure client-side text measure | KEEP-OURS | Keep ReadMoreBubble. Pure styling — doesn't block other adoptions. |
+| Code-block syntax highlighting engine | SyntaxHighlighter slot -> react-shiki (shiki-highlighter.tsx:30) | No CLI data — markdown text only; our shiki 4.0.2 engine plugs in via `highlighter` prop | ADOPT-NATIVE | Use SyntaxHighlighter slot with our createHighlighterCore + `delay`. Add react-shiki dep; drop dangerouslySetInnerHTML. |
+| Raw shiki singleton (engine/streaming) | react-shiki `highlighter` + `delay` | Direct — our singleton IS a createHighlighter; `delay` supersedes our re-highlight | ADOPT-NATIVE | Build core once, hand to react-shiki; use `delay` for streaming. |
+| CodeHeader (lang label + copy) | CodeHeader slot (markdown-text.tsx:30) | Perfect contract match (CodeHeaderProps {language,code}) | ADOPT-NATIVE | Pass our existing CodeHeader through components.CodeHeader. No rewrite; testid+tests stay green. |

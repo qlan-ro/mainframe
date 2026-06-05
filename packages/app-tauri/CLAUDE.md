@@ -26,7 +26,9 @@ The per-area pointers below are where to look in step 1:
 - **Sessions / thread-list → HYBRID (decided).** One global `useRemoteThreadListRuntime` (all sessions; domain data in thread `custom`: projectId/tags/prState/worktree/status/pinned) + native `ThreadListItemPrimitive` rows (rename/archive/delete/select/active) rendered inside **our** grouped/filtered/pinned sidebar layout via `ThreadListItemRuntimeProvider`/`ThreadListItemByIndexProvider`. NOT the flat default `ThreadListPrimitive.Items`; NOT per-project runtimes.
 - **Markdown / reasoning / parts** → assistant-ui part components; restyle. **Reasoning: DECIDED — show the native `Reasoning` block, collapsed by default** (drop the dead `ThinkingPart`).
 
-*(Per-area verdicts above verified against the pinned `@assistant-ui/react@0.14.5` / `core@0.2.2` via the adoption-plan research, 2026-06-05.)*
+**Framing (don't repeat the over-conservative mistake):** the native *runtime-integration hooks* — `ModelContext.register`, `useThreadTokenUsage`, `useAssistantInstructions` — are **INERT under our external-store runtime** (they target the AI-SDK transport). But the native *presentational components* work fine. So the pattern is almost always **native component + our CLI/daemon data + our config-write path**, NOT "keep ours." e.g. `ModelSelector.Root` (composable, not the default export) fed our models; `ContextDisplay.Bar` with its external `usage` prop fed our CLI usage; `MessageTiming` fed `metadata.timing`; native `Image`/`File` parts fed `convert-message`; the `SyntaxHighlighter`/`CodeHeader` slots fed our shiki engine. Per-feature verdicts (6 adopt-native / 9 native-shell+our-data / 9 genuine keep-ours) live in `docs/architecture/ASSISTANT-UI-INVENTORY.md`.
+
+*(Verified against `@assistant-ui/react@0.14.14` / `core@0.2.10`, 2026-06-05.)*
 
 ---
 
