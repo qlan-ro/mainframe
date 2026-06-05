@@ -13,6 +13,7 @@ import { AssistantMessage } from '../messages/AssistantMessage';
 import { SystemMessage } from '../messages/SystemMessage';
 import { Composer } from '../composer/Composer';
 import { ComposerEditProvider } from '../composer/composer-edit-context';
+import { ChatGateMount } from '../gates/ChatGateMount';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';
 
@@ -45,6 +46,7 @@ export function ChatThread() {
         >
           <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
             <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage, SystemMessage }} />
+            <ChatGateMount />
           </div>
 
           {/* Sticky footer — its height is measured into the scroll inset. */}
