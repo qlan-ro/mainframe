@@ -12,7 +12,7 @@ We do **not** adopt `useAssistantTransportRuntime`, and we do **not** make the d
 
 The user's goals: the daemon owns conversation state (it already does), the UI is a thin consumer, and — critically — **no Zustand cache holding the message history** (the current desktop's `useChatsStore.messages` drifted from the daemon and caused real bugs).
 
-Three research rounds (installed `@assistant-ui/react@0.14.5` source + GitHub HEAD `0.14.14`):
+Three research rounds (installed `@assistant-ui/react@0.14.5` source + GitHub HEAD `0.14.14`) — *app-tauri is now pinned at `0.14.14` / `core 0.2.10`; the decision was re-verified there*:
 
 - **`useAssistantTransportRuntime` is `@alpha`, under `legacy-runtime/`**, and is **built on top of `useExternalStoreRuntime`**, keeping state in an internal `agentStateRef` — so it does **not** remove the UI store; it hides one inside an experimental runtime.
 - Its model (single client, POST-per-run, client-uploads-state) **inverts** the daemon (server-owned state, persistent WS push, multi-client broadcast). It has **no post-run fan-out** to passive subscribers and **no native server→client permission channel**, so the WS broadcast (and the mobile-co-owned contract) would be needed anyway → two protocols.
@@ -23,6 +23,8 @@ Three research rounds (installed `@assistant-ui/react@0.14.5` source + GitHub HE
 Key correction: **"external store" ≠ Zustand.** A per-chat `useSyncExternalStore` over the WS satisfies the contract with no app-managed cache — *less* UI state than the current desktop.
 
 ## Design: snapshot-authoritative, no message cache
+
+> **⚠ SUPERSEDED** by the "Update — react-opencode reference" section below: drift is handled by **refetch-on-gap** (client-side, no daemon `seq`, no WS-contract change). The versioned-snapshot/monotonic-version design in this section + the Risks below are **kept for history only** — do not implement them.
 
 - Messages live **only** in a per-chat subscriber, created on open and **torn down on switch**. No global/persistent message store.
 - The daemon's server-built display list (`prepareMessagesForClient` → `display.messages.set`) is **ground truth**; the UI renders it and never re-runs the pipeline.
@@ -75,7 +77,7 @@ Insert a local `pendingUserMessage` on send; reconcile against the server echo b
 3. **Permissions + ask-a-question + queued** via `extras` + hooks; reply over WS/REST.
 4. **Refetch-on-gap** reconcile (incremental merge limited to text/reasoning).
 5. **Optimistic send + fingerprint dedup.**
-6. **Tool-card registry** (`_ToolGroup`/`_TaskGroup`/`_TaskProgress`) + **shadcn** styling.
+6. **Native tool rendering** — `convert-message` projects flat groupable tool-calls + a Task tool-call carrying `messages`; render via `GroupedParts` + `groupPartByType` + `tools.by_name` + `MessagePartPrimitive.Messages`; shadcn styling. (Replaces the synthetic `_ToolGroup/_TaskGroup/_TaskProgress` encoding — the go-native decision.)
 7. **Two-windows-on-one-chat** test.
 
 ### Maturity note

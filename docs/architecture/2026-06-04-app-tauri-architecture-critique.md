@@ -4,6 +4,8 @@
 
 **Overall:** the folder *shape* (feature-first, drop-the-zone-system, single Tauri bridge, god-file decomposition) is sound. But several **headline claims and seams are wrong or underspecified**, and the riskiest integrations are deferred behind weeks of safe UI work. Do **not** scaffold until the items below are resolved and the risk-first spikes pass.
 
+> **⚠ Some recommendations below were SUPERSEDED by the 2026-06-05 decisions** (see `2026-06-05-chat-runtime-decision.md`, `ASSISTANT-UI-INVENTORY.md`, `MIGRATION-TRACKER.md`): the sessions list is a **hybrid** (one global `useRemoteThreadListRuntime` + native `ThreadListItemPrimitive` rows in our grouped sidebar), **not** "declare it fully custom"; tool/subagent rendering is **native `tools.by_name` + `GroupedParts` + `MessagePartPrimitive.Messages` via the `convert-message` projection**, **not** "make `renderToolCard` canonical"; and the `convert-message` sentinel/dual-encoding invariants are **load-bearing (keep them)** — the spike verifies the nested payload is rich enough for native projection *while preserving* those invariants, not whether they can be dropped. Read the points below with those corrections in mind.
+
 ---
 
 ## Critical risks (ranked)

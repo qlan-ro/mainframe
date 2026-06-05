@@ -33,7 +33,7 @@ Do the chat leaves in this order; ☑ = done.
 5. ☐ **groupBy + dispatch** — use `groupPartByType` (tool-call→group-tool, reasoning→group-thought) + `display:'standalone'` to float file-mutating/standalone tools out of the chain (needs the 2b bump); render `GroupedParts` incl. the `indicator` loading slot. Not the deprecated `Unstable_PartsGrouped`/`components.ToolGroup`.
 6. ☐ **tool registry** — port card bodies into one `tools.by_name` map (Fallback=`ToolFallback`); `useToolArgsStatus`; drop `makeAssistantToolUI`.
 7. ☐ **Task/subagent card** — `by_name` entry wrapping `MessagePartPrimitive.Messages` in `ReadonlyThreadProvider`.
-8. ☐ **composer shell** — native `ComposerPrimitive.*` (Root/Input/Send/Cancel/Attachments/Quote/Queue) + AttachmentAdapter.
+8. ☐ **composer shell** — native `ComposerPrimitive.*` (Root/Input/Send/Cancel/Attachments/Quote) + AttachmentAdapter. (NOT native `Queue` — keep daemon-backed `QueuedMessageBanner`.)
 9. ☐ **composer config toolbar** — stateless shadcn controls → `setRunConfig.custom` (shared Zod schema, daemon-validated); `@`-mention via `Command`.
 10. ☐ **permission/ask/plan cards** — port onto shadcn, read via `useChatPermissions`/`useChatQuestions` over `extras`; queue-front invariant; mount above composer.
 11. ☐ **sessions sidebar (hybrid)** — one global `useRemoteThreadListRuntime` (sessions + `custom` metadata via chats-REST adapter) + native `ThreadListItemPrimitive` rows (rename/archive/delete/select/active) rendered in OUR grouped/filtered/pinned layout via `ThreadListItemRuntimeProvider`/`ByIndexProvider`. NOT flat `ThreadListPrimitive.Items`; NOT per-project runtimes.
@@ -68,7 +68,7 @@ Do the chat leaves in this order; ☑ = done.
 - ☑ `refactor` runtime provider → controller/reducer + `extras` + refetch-on-gap (Phase 2A, `98f43f5a`)
 - ☐ `refactor` message components (Assistant/User/System/TurnFooter/RenderBoundary)
 - ☐ `refactor` tool cards (Edit/Write/Bash/Read/Search/Task/TaskGroup/ToolGroup/TaskProgress/MCP/Default/Plan/Skill/Worktree/Schedule + Collapsible + shared)
-- ☐ `replace` **unify the dual tool dispatcher** → single registry (renderToolCard canonical for nested groups)
+- ☐ `replace` **unify the dual tool dispatcher** → one `tools.by_name` map (drop `makeAssistantToolUI` + `renderToolCard`); native `GroupedParts` for grouping + `MessagePartPrimitive.Messages` for subagents
 - ☐ `refactor` markdown stack (markdown-text/MainframeText/Shiki/CodeHeader) · FindBar+QuoteOnSelection · ToolResultExpand · message-parsing
 - ☐ `port` small parts (SandboxCaptureContext/SelectorBreadcrumb/ImageThumbs/ReadMore/FileTypeIcon/ErrorPart/SkillLoadedCard/CompactionPill)
 - ☐ `drop` ThinkingPart.tsx
@@ -124,7 +124,7 @@ Do the chat leaves in this order; ☑ = done.
 
 ## Open decisions (resolve as we hit them)
 - ☐ **Shared pure-logic package** — where `convertMessage` + diff math + file-types live so desktop & app-tauri share one copy (extend `@qlan-ro/mainframe-types` vs new `@qlan-ro/mainframe-shared`). Currently app-tauri-local.
-- ☑ **Sessions list** — use `useRemoteThreadListRuntime` (decided; in Phase 2B).
+- ☑ **Sessions list** — hybrid: one global `useRemoteThreadListRuntime` + native `ThreadListItemPrimitive` rows in our grouped sidebar (build-order step 11).
 - ☑ **Drift handling** — refetch-on-gap, no daemon `seq` (decided).
 - ☑ **Tool cards / permissions / composer = assistant-ui** — adoption verdicts locked (2026-06-05): tool cards + composer are native-restyle MATCHES; permissions have no native UI → custom shadcn cards via `extras`. See `app-tauri/CLAUDE.md` golden-rule pointers + the build order below.
 - ☐ **Permission card mount placement** — above-composer (queue-front, simple, matches today) vs inline-under-tool. Inline needs the daemon `control_request` to carry the originating `tool_use` id. *Default: above-composer; revisit if the daemon carries the id.*

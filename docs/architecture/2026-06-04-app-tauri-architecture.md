@@ -1,6 +1,6 @@
 # `packages/app-tauri` — Proposed Folder Architecture
 
-**Status:** Proposed (pending plan-critique) · **Date:** 2026-06-04
+**Status:** Proposed (2026-06-04) — **⚠ PARTIALLY SUPERSEDED.** The folder tree + principles remain the target, BUT: the **runtime is NOT AssistantTransport** — it is `useExternalStoreRuntime` + a per-chat controller/reducer/projection (see `2026-06-05-chat-runtime-decision.md`). Read every "AssistantTransport" mention below as "ExternalStore controller seam." `convert-message` invariants are **load-bearing — keep them**. Pure logic goes to a **shared bundleable location (TBD)**, not the `mainframe-core` sidecar.
 
 Target: a new package in the existing pnpm monorepo. Tauri 2 shell + React 19 renderer.
 Reuses `@qlan-ro/mainframe-types`; consumes `mainframe-core` as a compiled sidecar (Phase 1),
@@ -62,7 +62,7 @@ packages/app-tauri/
 1. **Feature-first + thin surfaces** — `features/*` own the work; `layout/` + `surfaces/` only *compose* them into Chat / Files / Run. No feature knows about the surface engine.
 2. **One daemon seam** — `features/chat/runtime/` (AssistantTransport) + `lib/daemon` + `lib/api`. This is the frozen contract; the Rust daemon (Phase 2) re-implements it with zero renderer changes.
 3. **`lib/tauri/` is the only Tauri-aware module** — everything `window.mainframe.*` collapses here (the future `tauri-bridge` subagent's home).
-4. **Pure logic → `mainframe-core`** — diff math, message-variant derivation, tool summaries, file-type classification leave the renderer.
+4. **Pure logic → a shared bundleable location (TBD; not the `mainframe-core` sidecar process)** — diff math, message-variant derivation, tool summaries, file-type classification leave the renderer. *(Shared-package home is an open decision — see the tracker.)*
 5. **shadcn `components/ui/` first**, then port features onto it — dissolves the 6× duplicated overlay/dropdown code.
 
 ## Build order
@@ -80,7 +80,7 @@ packages/app-tauri/
 - `navigation.ts` regex go-to-definition (LSP covers it)
 - one of the two tool dispatchers (keep a single registry)
 - module-level nav-stack singletons; in-memory `composer-drafts` Map
-- the `convert-message` sentinel / dual-encoding hacks (largely unnecessary under AssistantTransport)
+- ~~the `convert-message` sentinel / dual-encoding hacks~~ — **do NOT drop these; the `convert-message` invariants (WS14c dual re-encode, `\0` sentinel, `uniqueId()` dedup) are load-bearing.** Reshape only inside the shared projection.
 
 ## Decompose before porting (God-files)
 

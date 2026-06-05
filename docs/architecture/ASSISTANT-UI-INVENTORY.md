@@ -23,7 +23,7 @@ The authoritative use-native checklist — every assistant-ui primitive/UI/hook 
 **→ RESOLVED 2026-06-05 (see `MIGRATION-TRACKER.md` "Open decisions" + `CLAUDE.md`):** part-grouping = **go native** (via the `convert-message` projection); subagent = **native `part.messages`**; sessions = **hybrid** (global runtime + native item rows in our layout); reasoning = **native, collapsed**; quote = **native UI + CLI glue**; errors = **keep text-routing**; queue = **keep daemon-backed**. Raw findings retained below for context.
 
 1. **Part grouping** — our **daemon-side** synthetic `_ToolGroup/_TaskGroup/_TaskProgress` (server-summarized pipeline) vs native client-side `GroupedParts` + `groupPartByType` + `display:'standalone'`. Big architectural call. *(Resolved: go native via projection.)*
-2. **Subagent/Task rendering** — `TaskCard` parses a `<usage>` string from flattened parts vs native `PartPrimitive.Messages` (real readonly nested thread). Native requires the **daemon to attach `messages` to Task tool-call parts** (pipeline change).
+2. **Subagent/Task rendering** — `TaskCard` parses a `<usage>` string from flattened parts vs native `PartPrimitive.Messages` (real readonly nested thread). *(Resolved: go native — Task tool-call parts carry `messages`; **prefer deriving them in `convert-message`** from the existing nested payload; daemon change only as fallback.)*
 3. **Thread-list / sessions sidebar** — native `ThreadListPrimitive` (flat, per-runtime) vs our **global cross-project sidebar** (grouping, filter pills, tags, PR/worktree badges, status dots, pin). **Domain conflict — the one place a re-impl may be justified.**
 4. **Reasoning** — native shadcn `Reasoning` (shimmer/auto-open) vs our `ThinkingPart` (currently wired OFF). Product choice: show reasoning or not.
 5. **Quote model** — native structured quote (`setQuote`/metadata) vs our `> ` markdown injection. **CLI wire format has no quote concept**, so adapter glue (serialize quote→text on `onNew` + round-trip `metadata.custom.quote` in `convert-message`) is unavoidable either way.
@@ -68,6 +68,8 @@ Reload · Edit/EditComposer · **BranchPicker** (no branches in CLI-resume) · s
 ---
 
 ## Master table
+
+> **⚠ HISTORICAL — pre-decision research snapshot (sweep 1). Row-level `KEEP`/`STOP-AND-ASK`/verdict cells here are SUPERSEDED.** For current guidance follow, in order: the **"Re-examined: keep-ours corrected"** section + the **"Corrected verdict table"** below, and the locked decisions in `MIGRATION-TRACKER.md` / `CLAUDE.md`. This table is retained only as the original raw map — do **not** follow its individual verdicts.
 
 <!-- master inventory table appended below -->
 | Feature | Native? | Our re-impl | Verdict | Action | Build leaf |
