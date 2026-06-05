@@ -69,6 +69,8 @@
   --mf-warning: #d97706;
   --mf-warning-tint: rgba(217, 119, 6, 0.10);
   --mf-success: #28a745;
+  --mf-success-tint: rgba(40, 167, 69, 0.10);
+  --mf-border-hover: rgba(0, 0, 0, 0.14);
 
   /* Editor syntax — LIGHT */
   --mf-code-bg: #fbfaf7;
@@ -162,6 +164,8 @@
   --mf-warning: #e6a23c;
   --mf-warning-tint: rgba(230, 162, 60, 0.12);
   --mf-success: #3ad06a;
+  --mf-success-tint: rgba(58, 208, 106, 0.12);
+  --mf-border-hover: rgba(255, 255, 255, 0.16);
 
   /* Editor syntax — DARK */
   --mf-code-bg: #1b1814;
@@ -248,6 +252,8 @@
   --color-mf-warning: var(--mf-warning);
   --color-mf-warning-tint: var(--mf-warning-tint);
   --color-mf-success: var(--mf-success);
+  --color-mf-success-tint: var(--mf-success-tint);
+  --color-mf-border-hover: var(--mf-border-hover);
   --color-mf-code-bg: var(--mf-code-bg);
   --color-mf-code-fg: var(--mf-code-fg);
   --color-mf-code-kw: var(--mf-code-kw);
