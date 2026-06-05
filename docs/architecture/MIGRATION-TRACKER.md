@@ -27,16 +27,16 @@
 Do the chat leaves in this order; ☑ = done.
 1. ☑ **shadcn foundation** — `components.json` + 18 `ui/` primitives + `globals.css` mapping shadcn vars → `--mf-*` (warm chrome, computed-CSS-verified); testid passthrough (`8e18e634`).
 2. ◐ **assistant-ui shadcn group** — `ToolFallback` + `ToolGroup` restyled (`8e18e634`); `quote` + markdown + other shadcn components pending the inventory sweep.
-2b. ☑ **bumped `@assistant-ui` → `react@0.14.14` / `core@0.2.10` / `store@0.2.13`** — set aligned (skew fixed), `groupPartByType`/`display:'standalone'` available (`48cfefd5`). *Drift re-verify on the bumped version pending.*
+2b. ☑ **bumped `@assistant-ui` → `react@0.14.14` / `core@0.2.10` / `store@0.2.13`** — set aligned (skew fixed), `groupPartByType`/`display:'standalone'` available (`48cfefd5`). Drift re-verify **PASSED** on 0.14.14 (no regression).
 3. ☑ **runtime spine** — controller/reducer + `extras` (Phase 2A, `98f43f5a`).
-4. ☐ **projection** — keep `\0` sentinel/uniqueId/≥1-part; **drop** `_ToolGroup/_TaskGroup/_TaskProgress` → native `part.messages` *(needs daemon support — open decision)*.
+4. ☐ **projection (go native)** — `convert-message` emits NATIVE parts: flat groupable tool-calls + a Task tool-call carrying `messages` (decode the daemon's nested encoding); keep `\0` sentinel/uniqueId/≥1-part. Daemon flat-parts only as fallback if the nested payload is insufficient.
 5. ☐ **groupBy + dispatch** — use `groupPartByType` (tool-call→group-tool, reasoning→group-thought) + `display:'standalone'` to float file-mutating/standalone tools out of the chain (needs the 2b bump); render `GroupedParts` incl. the `indicator` loading slot. Not the deprecated `Unstable_PartsGrouped`/`components.ToolGroup`.
 6. ☐ **tool registry** — port card bodies into one `tools.by_name` map (Fallback=`ToolFallback`); `useToolArgsStatus`; drop `makeAssistantToolUI`.
 7. ☐ **Task/subagent card** — `by_name` entry wrapping `MessagePartPrimitive.Messages` in `ReadonlyThreadProvider`.
 8. ☐ **composer shell** — native `ComposerPrimitive.*` (Root/Input/Send/Cancel/Attachments/Quote/Queue) + AttachmentAdapter.
 9. ☐ **composer config toolbar** — stateless shadcn controls → `setRunConfig.custom` (shared Zod schema, daemon-validated); `@`-mention via `Command`.
 10. ☐ **permission/ask/plan cards** — port onto shadcn, read via `useChatPermissions`/`useChatQuestions` over `extras`; queue-front invariant; mount above composer.
-11. ☐ **sessions sidebar** — `useRemoteThreadListRuntime` (chats-REST adapter) + **`ThreadListPrimitive`** (Root/Items/New/LoadMore) + **`ThreadListItemPrimitive`** (Root/Trigger/Title/Archive/Delete/Unarchive), restyled to our sessions design (FlatSessionRow + project grouping + queued badge + cost). Run the design-vs-native check at this leaf. Docs: assistant-ui.com/docs/primitives/thread-list.
+11. ☐ **sessions sidebar (hybrid)** — one global `useRemoteThreadListRuntime` (sessions + `custom` metadata via chats-REST adapter) + native `ThreadListItemPrimitive` rows (rename/archive/delete/select/active) rendered in OUR grouped/filtered/pinned layout via `ThreadListItemRuntimeProvider`/`ByIndexProvider`. NOT flat `ThreadListPrimitive.Items`; NOT per-project runtimes.
 12. ☐ **data-testid + stress validation** — tag everything; run the ADR stress matrix (long chat · nested subagent + mid-turn permission · reconnect · optimistic dedup · two windows).
 
 ---
@@ -128,8 +128,10 @@ Do the chat leaves in this order; ☑ = done.
 - ☑ **Drift handling** — refetch-on-gap, no daemon `seq` (decided).
 - ☑ **Tool cards / permissions / composer = assistant-ui** — adoption verdicts locked (2026-06-05): tool cards + composer are native-restyle MATCHES; permissions have no native UI → custom shadcn cards via `extras`. See `app-tauri/CLAUDE.md` golden-rule pointers + the build order below.
 - ☐ **Permission card mount placement** — above-composer (queue-front, simple, matches today) vs inline-under-tool. Inline needs the daemon `control_request` to carry the originating `tool_use` id. *Default: above-composer; revisit if the daemon carries the id.*
-- ☐ **Queued banner source** — native `ComposerPrimitive.Queue` (transient) vs persisted `QueuedMessageRef` (daemon concept) bridged through the runtime. *Decide at the composer leaf.*
-- ☐ **Daemon `part.messages` for subagents** — dropping the `_TaskGroup` virtual-tool encoding requires the daemon to populate `ToolCallMessagePart.messages` with `ThreadMessage[]`. *Confirm/port before the Task-card leaf; else subagent transcripts render nothing.*
+- ☑ **Part model = go native** — `GroupedParts`/`groupPartByType`/`display:'standalone'` + `part.messages` for subagents. **Preferred: do it in `convert-message`** (project the daemon's existing nested encoding → native parts); no daemon/contract change if the payload suffices, daemon flat-parts is the fallback (verify at build).
+- ☑ **Sessions list = hybrid** — one global `useRemoteThreadListRuntime` (domain data in thread `custom`) + native `ThreadListItemPrimitive` rows rendered in OUR grouped/filtered sidebar layout (not flat `Items`, not per-project runtimes).
+- ☑ **Reasoning = native, collapsed** — adopt native `Reasoning`, drop the dead `ThinkingPart`.
+- ☑ **Queued banner = keep daemon-backed** `QueuedMessageBanner` (native `Queue` is a different local model). **Message errors = keep text-part routing. Quote = native UI + unavoidable CLI serialization glue.**
 - ☐ **Phase-2 Rust daemon go/no-go + sizing** — biggest unscoped workstream; decide before committing.
 - ☐ **Electron app lifecycle** — retire vs coexist (port 31415 / data-dir / prefs-origin); parity definition-of-done.
 - ☐ **Mobile-contract governance** — the WS/REST contract is co-owned; changes stay additive.
