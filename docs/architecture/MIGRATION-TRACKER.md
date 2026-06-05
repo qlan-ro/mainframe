@@ -26,15 +26,16 @@
 Do the chat leaves in this order; ☑ = done.
 1. ☐ **shadcn foundation** — `components.json` + base `ui/` primitives + wire `mainframe-theme.css` → shadcn vars (`--mf-*`); testid passthrough.
 2. ☐ **assistant-ui shadcn group** — install + restyle `ToolFallback` + `ToolGroup` (map `bg-muted/*`→`--mf-*` via `opacity-*`).
+2b. ☐ **bump `@assistant-ui/*` set → `react@0.14.14` / `core@0.2.10`** (matches react-opencode peer; unlocks `groupPartByType` + `display:'standalone'` + `GroupedParts` `indicator`; fixes the `core@0.2.2`↔`store@0.2.10` skew). Re-verify Phase 2A typecheck + drift test after. *(do after the foundation lands, before step 4)*
 3. ☑ **runtime spine** — controller/reducer + `extras` (Phase 2A, `98f43f5a`).
 4. ☐ **projection** — keep `\0` sentinel/uniqueId/≥1-part; **drop** `_ToolGroup/_TaskGroup/_TaskProgress` → native `part.messages` *(needs daemon support — open decision)*.
-5. ☐ **groupBy + dispatch** — our `groupBy` over `buildGroupTree`; render `GroupedParts` (not deprecated `Unstable_PartsGrouped`/`components.ToolGroup`).
+5. ☐ **groupBy + dispatch** — use `groupPartByType` (tool-call→group-tool, reasoning→group-thought) + `display:'standalone'` to float file-mutating/standalone tools out of the chain (needs the 2b bump); render `GroupedParts` incl. the `indicator` loading slot. Not the deprecated `Unstable_PartsGrouped`/`components.ToolGroup`.
 6. ☐ **tool registry** — port card bodies into one `tools.by_name` map (Fallback=`ToolFallback`); `useToolArgsStatus`; drop `makeAssistantToolUI`.
 7. ☐ **Task/subagent card** — `by_name` entry wrapping `MessagePartPrimitive.Messages` in `ReadonlyThreadProvider`.
 8. ☐ **composer shell** — native `ComposerPrimitive.*` (Root/Input/Send/Cancel/Attachments/Quote/Queue) + AttachmentAdapter.
 9. ☐ **composer config toolbar** — stateless shadcn controls → `setRunConfig.custom` (shared Zod schema, daemon-validated); `@`-mention via `Command`.
 10. ☐ **permission/ask/plan cards** — port onto shadcn, read via `useChatPermissions`/`useChatQuestions` over `extras`; queue-front invariant; mount above composer.
-11. ☐ **`useRemoteThreadListRuntime`** sessions sidebar (chats-REST adapter).
+11. ☐ **sessions sidebar** — `useRemoteThreadListRuntime` (chats-REST adapter) + **`ThreadListPrimitive`** (Root/Items/New/LoadMore) + **`ThreadListItemPrimitive`** (Root/Trigger/Title/Archive/Delete/Unarchive), restyled to our sessions design (FlatSessionRow + project grouping + queued badge + cost). Run the design-vs-native check at this leaf. Docs: assistant-ui.com/docs/primitives/thread-list.
 12. ☐ **data-testid + stress validation** — tag everything; run the ADR stress matrix (long chat · nested subagent + mid-turn permission · reconnect · optimistic dedup · two windows).
 
 ---
