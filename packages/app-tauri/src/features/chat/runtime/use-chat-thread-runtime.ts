@@ -19,6 +19,10 @@
  *  - replyToPermission(requestId, response) — send a permission response
  */
 import { useExternalStoreRuntime, useAuiState } from '@assistant-ui/react';
+import { createAttachmentAdapter } from '../composer/attachment-adapter';
+
+/** Stateless — the per-chat daemon upload happens in the controller on send. */
+const ATTACHMENT_ADAPTER = createAttachmentAdapter();
 import type { AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
@@ -99,6 +103,7 @@ export function useChatThreadRuntime(controller: ChatThreadController): Assistan
     isRunning,
     messageRepository,
     extras,
+    adapters: { attachments: ATTACHMENT_ADAPTER },
     onNew: async (message) => {
       await controller.sendMessage(message);
     },

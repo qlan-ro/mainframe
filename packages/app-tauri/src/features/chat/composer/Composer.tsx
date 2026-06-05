@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { ComposerToolbar } from './ComposerToolbar';
 import { ComposerEditMode } from './ComposerEditMode';
 import { useComposerEdit } from './composer-edit-context';
+import { ComposerAttachments, ComposerAddAttachment } from '@/components/ui/assistant-ui/attachment';
 
 /** Send (idle, disabled while empty) ↔ Cancel (running) — swapped on thread.isRunning. */
 function SendOrCancelButton() {
@@ -54,20 +55,36 @@ export function Composer() {
       data-testid="chat-composer"
       className="rounded-2xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring/60"
     >
-      <ComposerPrimitive.Input
-        data-testid="chat-composer-input"
-        placeholder="Message the assistant…"
-        rows={1}
-        autoFocus
-        className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4"
-      />
-      <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2.5">
-        {/* Config toolbar — effort + features controls; model/plan/permission deferred. */}
-        <div data-testid="chat-composer-toolbar" className="flex min-h-8 items-center gap-1 text-mf-text-3">
-          <ComposerToolbar />
+      <ComposerPrimitive.AttachmentDropzone
+        data-testid="composer-dropzone"
+        className={cn(
+          'rounded-2xl transition-colors',
+          '[&[data-dragging]]:ring-2 [&[data-dragging]]:ring-primary [&[data-dragging]]:ring-offset-1',
+          '[&[data-dragging]]:bg-mf-selection',
+        )}
+      >
+        {/* Attachment tiles — renders nothing (empty:hidden) when no attachments pending */}
+        <div data-testid="composer-attachments" className="px-4 pt-3 empty:hidden">
+          <ComposerAttachments />
         </div>
-        <SendOrCancelButton />
-      </div>
+
+        <ComposerPrimitive.Input
+          data-testid="chat-composer-input"
+          placeholder="Message the assistant…"
+          rows={1}
+          autoFocus
+          className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4"
+        />
+
+        <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2.5">
+          {/* Left slot: paperclip + config toolbar */}
+          <div data-testid="chat-composer-toolbar" className="flex min-h-8 items-center gap-1 text-mf-text-3">
+            <ComposerAddAttachment />
+            <ComposerToolbar />
+          </div>
+          <SendOrCancelButton />
+        </div>
+      </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   );
 }

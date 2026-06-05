@@ -12,6 +12,7 @@ import type { AppendMessage } from '@assistant-ui/react';
 import type { DaemonEvent, ControlResponse, DisplayContent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import { getChatMessages, interruptChat, resumeChat } from '../../../lib/api/chats';
+import { uploadAttachments, type UploadAttachmentItem } from '../../../lib/api/attachments';
 import {
   createChatThreadState,
   reduceChatThreadState,
@@ -29,6 +30,26 @@ let localIdCounter = 0;
 function createLocalId(prefix: string): string {
   localIdCounter += 1;
   return `${prefix}_${Date.now().toString(36)}${localIdCounter.toString(36)}`;
+}
+
+/** AppendMessage attachments → daemon upload items (base64 extracted from the data-URL parts). */
+function toUploadItems(attachments: AppendMessage['attachments']): UploadAttachmentItem[] {
+  const items: UploadAttachmentItem[] = [];
+  for (const att of attachments ?? []) {
+    const part = att.content?.[0];
+    const dataUrl = part?.type === 'image' ? part.image : part?.type === 'text' ? part.text : undefined;
+    const m = dataUrl ? /^data:([^;]+);base64,(.*)$/.exec(dataUrl) : null;
+    if (!m) continue;
+    const data = m[2]!;
+    items.push({
+      name: att.name,
+      mediaType: m[1]!,
+      data,
+      sizeBytes: Math.floor((data.length * 3) / 4),
+      kind: att.type === 'image' ? 'image' : 'file',
+    });
+  }
+  return items;
 }
 
 const PENDING_MATCH_WINDOW_MS = 2 * 60 * 1000;
@@ -138,7 +159,8 @@ export class ChatThreadController {
 
     const textPart = message.content.find((p) => p.type === 'text');
     const text = textPart?.type === 'text' ? textPart.text.trim() : '';
-    if (!text) return;
+    const uploadItems = toUploadItems(message.attachments);
+    if (!text && uploadItems.length === 0) return;
 
     const pending: PendingUserMessage = {
       clientId: createLocalId('local'),
@@ -152,7 +174,15 @@ export class ChatThreadController {
     this.dispatch({ type: 'run.started' });
 
     try {
-      this.ws.send({ type: 'message.send', chatId: this.chatId, content: text });
+      // Upload attachments first → reference them by id (the daemon stores the bytes).
+      const attachmentIds =
+        uploadItems.length > 0 ? await uploadAttachments(this.port, this.chatId, uploadItems) : undefined;
+      this.ws.send({
+        type: 'message.send',
+        chatId: this.chatId,
+        content: text,
+        ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
+      });
     } catch (error) {
       this.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error });
       throw error;
