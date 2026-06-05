@@ -108,4 +108,11 @@ export function ChatRuntimeProvider({ chatId, daemonPort, children }: ChatRuntim
 // ---------------------------------------------------------------------------
 // Re-export convenience hooks so callers don't need to know the file paths.
 // ---------------------------------------------------------------------------
-export { useChatExtras, useChatPermissions, useChatQueuedMessages } from './use-chat-thread-runtime';
+export {
+  useChatExtras,
+  useChatPermissions,
+  useChatPermissionFront,
+  usePendingGate,
+  useChatQuestions,
+  useChatQueuedMessages,
+} from './use-chat-thread-runtime';

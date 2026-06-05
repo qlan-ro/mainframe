@@ -30,6 +30,7 @@ import type { ChatThreadController } from '../controller/chat-thread-controller'
 import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-thread-state';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { projectChatThreadRepository } from '../controller/project-messages';
+import { selectPermissionFront } from '../gates/select-front';
 
 // ---------------------------------------------------------------------------
 // Extras shape + brand
@@ -153,5 +154,40 @@ export function useChatQueuedMessages(): QueuedMessageRef[] {
   return useMemo(
     () => (extras ? Object.values(extras.queued).filter((q): q is QueuedMessageRef => q != null) : []),
     [extras],
+  );
+}
+
+/** Queue-front gate: pending sorted by askedAt asc, take [0]. Stable ref via useMemo([extras]). */
+export function useChatPermissionFront(): {
+  front: ChatPermissionEntry | undefined;
+  reply: (requestId: string, response: ControlResponse) => Promise<void>;
+} {
+  const extras = useChatExtras();
+  return useMemo(() => {
+    const front = selectPermissionFront(extras?.permissions);
+    const reply: (requestId: string, response: ControlResponse) => Promise<void> =
+      extras?.replyToPermission ??
+      (async () => {
+        throw new Error('Chat runtime not ready');
+      });
+    return { front, reply };
+  }, [extras]);
+}
+
+/** The front entry iff it gates the given toolUseId (reserved for future part-anchored use). */
+export function usePendingGate(toolUseId: string): ChatPermissionEntry | undefined {
+  const { front } = useChatPermissionFront();
+  return front?.request.toolUseId === toolUseId ? front : undefined;
+}
+
+/** Golden-rule naming: the front, narrowed to AskUserQuestion. */
+export function useChatQuestions(): {
+  front: ChatPermissionEntry | undefined;
+  reply: (requestId: string, response: ControlResponse) => Promise<void>;
+} {
+  const { front, reply } = useChatPermissionFront();
+  return useMemo(
+    () => ({ front: front?.request.toolName === 'AskUserQuestion' ? front : undefined, reply }),
+    [front, reply],
   );
 }
