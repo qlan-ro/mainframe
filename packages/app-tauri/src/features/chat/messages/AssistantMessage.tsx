@@ -96,7 +96,8 @@ export function AssistantMessage() {
         }}
       </MessagePrimitive.GroupedParts>
 
-      <div className="flex items-center gap-2 text-muted-foreground">
+      {/* Reserve the action-bar height so hover-revealing it doesn't shift the layout. */}
+      <div className="flex min-h-6 items-center gap-2 text-muted-foreground">
         <MessageActionBar />
         <MessageTiming />
       </div>

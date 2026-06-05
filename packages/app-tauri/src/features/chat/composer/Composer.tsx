@@ -53,7 +53,7 @@ export function Composer() {
   return (
     <ComposerPrimitive.Root
       data-testid="chat-composer"
-      className="rounded-2xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring/60"
+      className="rounded-2xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring"
     >
       <ComposerPrimitive.AttachmentDropzone
         data-testid="composer-dropzone"
@@ -70,6 +70,7 @@ export function Composer() {
 
         <ComposerPrimitive.Input
           data-testid="chat-composer-input"
+          data-noring
           placeholder="Message the assistant…"
           rows={1}
           autoFocus

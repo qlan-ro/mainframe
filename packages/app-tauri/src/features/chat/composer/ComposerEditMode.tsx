@@ -57,6 +57,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
 
       <textarea
         data-testid="chat-composer-edit-input"
+        data-noring
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
