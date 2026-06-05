@@ -66,12 +66,14 @@ Do the chat leaves in this order; ☑ = done.
 ### Chat thread → `features/chat/{runtime,thread,tools,parts,find}`
 - ☑ `refactor` convert-message.ts (projection) — *ported Phase 1, WS14c invariants preserved*
 - ☑ `refactor` runtime provider → controller/reducer + `extras` + refetch-on-gap (Phase 2A, `98f43f5a`)
-- ☐ `refactor` message components (Assistant/User/System/TurnFooter/RenderBoundary)
-- ☐ `refactor` tool cards (Edit/Write/Bash/Read/Search/Task/TaskGroup/ToolGroup/TaskProgress/MCP/Default/Plan/Skill/Worktree/Schedule + Collapsible + shared)
-- ☐ `replace` **unify the dual tool dispatcher** → one `tools.by_name` map (drop `makeAssistantToolUI` + `renderToolCard`); native `GroupedParts` for grouping + `MessagePartPrimitive.Messages` for subagents
-- ☐ `refactor` markdown stack (markdown-text/MainframeText/Shiki/CodeHeader) · FindBar+QuoteOnSelection · ToolResultExpand · message-parsing
-- ☐ `port` small parts (SandboxCaptureContext/SelectorBreadcrumb/ImageThumbs/ReadMore/FileTypeIcon/ErrorPart/SkillLoadedCard/CompactionPill)
-- ☐ `drop` ThinkingPart.tsx
+- ☑ `refactor` message components — `AssistantMessage` (GroupedParts dispatch + markdown + reasoning + action-bar/timing footer), `UserMessage` (cool card + slash pill + read-more + images), `SystemMessage` (compaction/skill pills). *(TurnFooter retired → MessageTiming; RenderBoundary deferred.)* **Empirically verified** on `~/.mainframe_dev`.
+- ☑ `refactor` tool cards (Edit/Write/Bash/Read/Search/Task/TaskGroup/ToolGroup/TaskProgress/MCP/Default/Plan/Skill/Worktree/Schedule + shared) — 14 families, warm-chrome, native registry.
+- ☑ `replace` **unify the dual tool dispatcher** → one `tools.by_name`-style registry (`makeAssistantToolUI`/`renderToolCard` dropped); native `GroupedParts` for grouping + `part.messages` for subagents.
+- ◐ `refactor` markdown stack — `markdown-text`(native `MarkdownTextPrimitive`)/`CodeHeader`/`syntax-highlight`(shiki)/`markdown-url-transform` ☑. FindBar+QuoteOnSelection (find leaf) · ToolResultExpand ☑ · message-parsing (inline mention highlight ported; full parser deferred).
+- ◐ `port` small parts — `ReadMoreBubble` ☑ · `CompactionPill` ☑ · `SkillLoadedCard` ☑ (tool card) · native image parts ☑. SandboxCaptureContext/SelectorBreadcrumb/ImageThumbs-gallery/FileTypeIcon/ErrorPart deferred to their leaves.
+- ☑ `drop` ThinkingPart.tsx — reasoning is native (shadcn `Reasoning`, collapsed).
+
+> **Thread shell:** `ChatThread` + `App` restyled to warm-chrome (light), centered max-width column, native `ScrollToBottom`, `If running`→`useAuiState`. Composer stays thin (full composer port is a later leaf). Pending: `ViewportFooter` inset, welcome/suggestions, design-conformance.
 
 ### Composer → `features/chat/composer/`
 - ☐ `replace` config controls → shadcn (ComposerDropdown/EffortPicker/FeaturesPopover/PlanModeToggle/permission chip)

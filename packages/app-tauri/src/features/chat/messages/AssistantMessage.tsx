@@ -5,16 +5,20 @@
  *
  * `groupBy` echoes the daemon's grouping (read from message metadata), so
  * explore runs coalesce exactly as the server decided and standalone tools
- * float onto their own line. Tool dispatch goes through the single registry
- * (MessageToolLeaf). Text and reasoning get minimal styling here — the markdown
- * + native-Reasoning leaves upgrade them later. The \0 permission sentinel
+ * float onto their own line. Text renders as markdown (MarkdownText), reasoning
+ * as a collapsed native block, tools through the registry. A hover action bar
+ * (copy / export) + timing footer sit under the turn. The \0 permission sentinel
  * renders nothing (the permission card is sibling chrome, a later leaf).
  */
 import { useMemo } from 'react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import { makeChatGroupBy, type PartGroups } from '../tools/group-parts';
 import { PERMISSION_PLACEHOLDER } from '../view-model/convert-message';
+import { MarkdownText } from '../parts/markdown-text';
+import { Reasoning } from '../parts/Reasoning';
 import { MessageToolLeaf, MessageToolGroup } from './tool-dispatch';
+import { MessageActionBar } from './MessageActionBar';
+import { MessageTiming } from './MessageTiming';
 
 const EMPTY_GROUPS: PartGroups = Object.freeze({});
 
@@ -23,24 +27,6 @@ function usePartGroups(): PartGroups {
     | { custom?: { mainframe?: { partGroups?: PartGroups } } }
     | undefined;
   return meta?.custom?.mainframe?.partGroups ?? EMPTY_GROUPS;
-}
-
-function TextLeaf({ text }: { text: string }) {
-  if (text === PERMISSION_PLACEHOLDER.text || !text) return null;
-  return (
-    <div data-slot="message-text" className="text-body text-foreground whitespace-pre-wrap leading-relaxed">
-      {text}
-    </div>
-  );
-}
-
-function ReasoningLeaf({ text }: { text: string }) {
-  if (!text) return null;
-  return (
-    <div data-slot="message-reasoning" className="text-caption text-muted-foreground italic whitespace-pre-wrap">
-      {text}
-    </div>
-  );
 }
 
 function RunningIndicator() {
@@ -58,19 +44,12 @@ export function AssistantMessage() {
   const groupBy = useMemo(() => makeChatGroupBy(partGroups), [partGroups]);
 
   return (
-    <MessagePrimitive.Root data-testid="chat-assistant-message" className="flex flex-col gap-2 py-2">
+    <MessagePrimitive.Root data-testid="chat-assistant-message" className="group/message flex flex-col gap-2 py-3">
       <MessagePrimitive.GroupedParts groupBy={groupBy}>
         {({ part, children }) => {
           // GroupPart nodes carry `indices`; leaf parts (EnrichedPartState /
-          // IndicatorPart) do not — this narrows the dynamic `group-tool-*` keys.
+          // IndicatorPart) do not — only tool groups are produced now.
           if ('indices' in part) {
-            if (part.type === 'group-reasoning') {
-              return (
-                <div data-slot="reasoning-group" className="flex flex-col gap-1">
-                  {children}
-                </div>
-              );
-            }
             return (
               <MessageToolGroup indices={part.indices} running={part.status?.type === 'running'}>
                 {children}
@@ -80,9 +59,11 @@ export function AssistantMessage() {
 
           switch (part.type) {
             case 'text':
-              return <TextLeaf text={part.text} />;
+              // Hide the permission sentinel; everything else is markdown.
+              // MarkdownText reads the text from part context; props satisfy the type.
+              return part.text === PERMISSION_PLACEHOLDER.text ? null : <MarkdownText {...part} />;
             case 'reasoning':
-              return <ReasoningLeaf text={part.text} />;
+              return <Reasoning text={part.text} />;
             case 'tool-call':
               return <MessageToolLeaf part={part} />;
             case 'image':
@@ -101,6 +82,11 @@ export function AssistantMessage() {
           }
         }}
       </MessagePrimitive.GroupedParts>
+
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <MessageActionBar />
+        <MessageTiming />
+      </div>
     </MessagePrimitive.Root>
   );
 }

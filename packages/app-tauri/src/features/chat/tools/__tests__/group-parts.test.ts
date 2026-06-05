@@ -30,8 +30,8 @@ function toolCallPart(toolCallId: string): PartState {
 describe('makeChatGroupBy', () => {
   const groupBy = makeChatGroupBy({ a: 'g1', b: 'g1' });
 
-  it('assigns a reasoning part to group-reasoning', () => {
-    expect(groupBy(reasoningPart())).toEqual(['group-reasoning']);
+  it('leaves a reasoning part ungrouped (the Reasoning leaf carries its own collapse chrome)', () => {
+    expect(groupBy(reasoningPart())).toEqual([]);
   });
 
   it('assigns a tool-call whose id is in the map to group-tool-<groupId>', () => {

@@ -9,7 +9,8 @@
  *
  * A standalone tool (Edit/Write/Bash/Task/_TaskProgress/marker pill) — and a LONE
  * explore tool, which the daemon never groups — has no recorded groupId and renders
- * on its own line. Reasoning parts coalesce into one collapsed block.
+ * on its own line. Reasoning renders as its own collapsed block per part (the
+ * Reasoning leaf carries the collapse chrome), so it is left ungrouped.
  */
 import type { PartState } from '@assistant-ui/react';
 
@@ -22,7 +23,6 @@ export type PartGroups = Readonly<Record<string, string>>;
  */
 export function makeChatGroupBy(partGroups: PartGroups): (part: PartState) => readonly ChatGroupKey[] {
   return (part) => {
-    if (part.type === 'reasoning') return ['group-reasoning'];
     if (part.type === 'tool-call') {
       const groupId = partGroups[part.toolCallId];
       return groupId ? [`group-tool-${groupId}`] : [];

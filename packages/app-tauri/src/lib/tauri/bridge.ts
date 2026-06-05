@@ -14,6 +14,7 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type Event, type UnlistenFn } from '@tauri-apps/api/event';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 /** Tauri injects this global into its webview; absent in a plain browser. */
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -59,6 +60,19 @@ export async function getDaemonStatus(): Promise<string> {
 export async function getAuthToken(): Promise<string | null> {
   if (!IS_TAURI) return null;
   return invoke<string | null>('get_auth_token', { dataDir: null });
+}
+
+/**
+ * Opens a URL in the system's default browser (or app for custom protocols).
+ * Replaces `window.mainframe.openExternal` from the Electron preload.
+ * Falls back to `window.open` in browser dev mode.
+ */
+export async function openExternal(url: string): Promise<void> {
+  if (!IS_TAURI) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  await openUrl(url);
 }
 
 export function onDaemonStatus(callback: (status: string) => void): Promise<UnlistenFn> {

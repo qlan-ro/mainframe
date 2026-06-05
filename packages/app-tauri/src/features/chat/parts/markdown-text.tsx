@@ -1,0 +1,292 @@
+/**
+ * Markdown renderer for assistant text parts.
+ *
+ * Wires MarkdownTextPrimitive from @assistant-ui/react-markdown with:
+ *   - remarkGfm: tables, strikethrough, task lists, footnotes
+ *   - remarkAppLinks: bare app-protocol URLs → clickable links
+ *   - urlTransform: extends default URL sanitiser to allow app schemes
+ *   - markdownComponents: warm-chrome styled component overrides
+ *   - SyntaxHighlighter: shiki-based token highlighter on mf-code-* tokens
+ *   - CodeHeader: language label + copy button (data-testid chat-code-copy)
+ *
+ * `MarkdownText` is the `TextMessagePartComponent` wired into AssistantMessage.
+ * `markdownComponents` is exported separately so UserMessage can reuse it.
+ */
+import React, { memo, useState, useCallback, type FC } from 'react';
+import type { TextMessagePartComponent } from '@assistant-ui/react';
+import {
+  MarkdownTextPrimitive,
+  unstable_memoizeMarkdownComponents,
+  useIsMarkdownCodeBlock,
+  type SyntaxHighlighterProps,
+} from '@assistant-ui/react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { Pluggable } from 'unified';
+import { cn } from '@/lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { openExternal } from '@/lib/tauri/bridge';
+import { urlTransform, remarkAppLinks } from './markdown-url-transform';
+import { SyntaxHighlighter } from './syntax-highlight';
+import { CodeHeader } from './CodeHeader';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function extractText(children: React.ReactNode): string {
+  if (typeof children === 'string') return children;
+  if (typeof children === 'number') return String(children);
+  if (Array.isArray(children)) return children.map(extractText).join('');
+  if (React.isValidElement(children) && children.props) {
+    return extractText((children.props as { children?: React.ReactNode }).children);
+  }
+  return '';
+}
+
+// ── Code block ───────────────────────────────────────────────────────────────
+
+function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
+  const isCodeBlock = useIsMarkdownCodeBlock();
+
+  if (isCodeBlock) {
+    const lang = className?.match(/language-(\w+)/)?.[1];
+    const code = extractText(children);
+    // SyntaxHighlighter is passed the pre+code components from the primitive;
+    // we compose the full block manually so we can slot CodeHeader above it.
+    const fakeProps: SyntaxHighlighterProps = {
+      language: lang ?? 'text',
+      code,
+      components: {
+        Pre: ({ children: c }) => <>{c}</>,
+        Code: ({ children: c }) => <>{c}</>,
+      },
+    };
+    return (
+      <div className="rounded-lg border border-border overflow-hidden my-3">
+        <CodeHeader language={lang} code={code} />
+        <SyntaxHighlighter {...fakeProps} />
+      </div>
+    );
+  }
+
+  return (
+    <code
+      className={cn(
+        'aui-md-inline-code',
+        'bg-mf-code-bg text-mf-code-fg',
+        'rounded-sm border border-border px-1.5 py-0.5',
+        'font-mono text-[0.85em]',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </code>
+  );
+}
+
+// ── Table components ─────────────────────────────────────────────────────────
+
+function MarkdownTable({ children, ...props }: React.ComponentProps<'table'>) {
+  return (
+    <div className="rounded-lg border border-border overflow-hidden my-3">
+      <table className="w-full border-collapse text-body" {...props}>
+        {children}
+      </table>
+    </div>
+  );
+}
+
+function MarkdownThead({ children, ...props }: React.ComponentProps<'thead'>) {
+  return (
+    <thead className="bg-muted" {...props}>
+      {children}
+    </thead>
+  );
+}
+
+function MarkdownTh({ children, ...props }: React.ComponentProps<'th'>) {
+  return (
+    <th
+      className="font-mono text-label font-semibold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left"
+      {...props}
+    >
+      {children}
+    </th>
+  );
+}
+
+function MarkdownTd({ children, ...props }: React.ComponentProps<'td'>) {
+  return (
+    <td className="font-mono text-label text-foreground px-3 py-2 border-t border-border" {...props}>
+      {children}
+    </td>
+  );
+}
+
+function MarkdownTr({ children, ...props }: React.ComponentProps<'tr'>) {
+  return (
+    <tr className="even:bg-accent" {...props}>
+      {children}
+    </tr>
+  );
+}
+
+// ── Link with URL tooltip ─────────────────────────────────────────────────────
+
+/** Writes `href` to clipboard and briefly shows "Copied" feedback. */
+function useCopyHref(href: string | undefined) {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!href) return;
+      navigator.clipboard.writeText(href).then(
+        () => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        },
+        () => {
+          console.warn('[markdown-text] clipboard write failed');
+        },
+      );
+    },
+    [href],
+  );
+  return { copied, copy };
+}
+
+function LinkWithPreview({
+  className,
+  href,
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
+  const { copied, copy } = useCopyHref(href);
+
+  const handleOpen = useCallback(
+    (e: React.MouseEvent) => {
+      if (!href) return;
+      e.preventDefault();
+      openExternal(href).catch(() => {
+        console.warn('[markdown-text] openExternal failed', href);
+      });
+    },
+    [href],
+  );
+
+  if (!href) {
+    return <a className={cn('aui-md-a text-primary underline underline-offset-2', className)} {...props} />;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          className={cn(
+            'aui-md-a text-primary underline underline-offset-2',
+            'hover:opacity-80 transition-opacity cursor-pointer',
+            className,
+          )}
+          href={href}
+          onClick={handleOpen}
+          {...props}
+        />
+      </TooltipTrigger>
+      <TooltipContent className="flex items-center gap-1.5 max-w-[400px]">
+        <span className="truncate min-w-0">{href}</span>
+        <button
+          data-testid="chat-link-copy-url"
+          type="button"
+          onClick={copy}
+          className={cn(
+            'shrink-0 px-1.5 py-0.5 rounded-sm',
+            'bg-accent hover:bg-muted text-muted-foreground hover:text-foreground',
+            'transition-colors text-micro',
+          )}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ── Component map ─────────────────────────────────────────────────────────────
+
+export const markdownComponents = unstable_memoizeMarkdownComponents({
+  h1: ({ className, ...props }) => (
+    <h1 className={cn('aui-md-h1 text-heading font-semibold mt-4 mb-2 first:mt-0', className)} {...props} />
+  ),
+  h2: ({ className, ...props }) => (
+    <h2 className={cn('aui-md-h2 text-body font-semibold mt-3 mb-1.5 first:mt-0', className)} {...props} />
+  ),
+  h3: ({ className, ...props }) => (
+    <h3 className={cn('aui-md-h3 text-body font-semibold mt-2.5 mb-1 first:mt-0', className)} {...props} />
+  ),
+  h4: ({ className, ...props }) => (
+    <h4 className={cn('aui-md-h4 text-body font-medium mt-2 mb-1 first:mt-0', className)} {...props} />
+  ),
+  p: ({ className, ...props }) => (
+    <p className={cn('aui-md-p my-2.5 leading-relaxed first:mt-0 last:mb-0', className)} {...props} />
+  ),
+  a: LinkWithPreview as FC<React.AnchorHTMLAttributes<HTMLAnchorElement>>,
+  blockquote: ({ className, ...props }) => (
+    <blockquote
+      className={cn(
+        'aui-md-blockquote border-s-2 border-mf-text-3 text-muted-foreground',
+        'my-2.5 ps-3 italic',
+        className,
+      )}
+      {...props}
+    />
+  ),
+  ul: ({ className, ...props }) => (
+    <ul
+      className={cn('aui-md-ul marker:text-muted-foreground my-2 ms-4 list-disc [&>li]:mt-1', className)}
+      {...props}
+    />
+  ),
+  ol: ({ className, ...props }) => (
+    <ol
+      className={cn('aui-md-ol marker:text-muted-foreground my-2 ms-4 list-decimal [&>li]:mt-1', className)}
+      {...props}
+    />
+  ),
+  li: ({ className, ...props }) => <li className={cn('aui-md-li leading-relaxed', className)} {...props} />,
+  hr: ({ className, ...props }) => <hr className={cn('aui-md-hr border-border my-3', className)} {...props} />,
+  table: MarkdownTable,
+  thead: MarkdownThead,
+  th: MarkdownTh,
+  td: MarkdownTd,
+  tr: MarkdownTr,
+  strong: ({ className, ...props }) => <strong className={cn('aui-md-strong font-semibold', className)} {...props} />,
+  del: ({ className, ...props }) => (
+    <del className={cn('aui-md-del line-through text-muted-foreground', className)} {...props} />
+  ),
+  // pre is rendered inside the Code component above — suppress the default wrapper
+  pre: ({ children }) => <>{children}</>,
+  code: Code,
+  // SyntaxHighlighter slot: used when the primitive detects a fenced code block
+  // with a language. We plug our own above via the code component instead.
+  SyntaxHighlighter,
+  CodeHeader,
+});
+
+// ── remark plugin set (stable reference — must not be defined inline) ─────────
+
+const REMARK_PLUGINS: Pluggable[] = [remarkGfm, remarkAppLinks];
+
+// ── MarkdownText: TextMessagePartComponent ────────────────────────────────────
+
+const MarkdownTextImpl: TextMessagePartComponent = () => {
+  return (
+    <MarkdownTextPrimitive
+      className="aui-md"
+      remarkPlugins={REMARK_PLUGINS}
+      urlTransform={urlTransform}
+      components={markdownComponents}
+    />
+  );
+};
+
+export const MarkdownText: TextMessagePartComponent = memo(MarkdownTextImpl);
+MarkdownText.displayName = 'MarkdownText';

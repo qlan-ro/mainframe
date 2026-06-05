@@ -30,15 +30,35 @@ function ensureNonEmpty(parts: ContentPart[]): ContentPart[] {
 export function convertMessage(message: DisplayMessage): ThreadMessageLike {
   switch (message.type) {
     case 'user': {
-      const parts: ContentPart[] = message.content
+      // Map text parts (primary content)
+      const textParts: ContentPart[] = message.content
         .filter((c): c is DisplayContent & { type: 'text' } => c.type === 'text' && !!c.text)
         .map((c) => ({ type: 'text' as const, text: c.text }));
+
+      // Map inline image parts (base64 thumbnails embedded by the daemon pipeline)
+      const imageParts: ContentPart[] = message.content
+        .filter((c): c is DisplayContent & { type: 'image' } => c.type === 'image')
+        .map((c) => ({
+          type: 'image' as const,
+          image: `data:${c.mediaType};base64,${c.data}`,
+        }));
+
+      const parts: ContentPart[] = [...textParts, ...imageParts];
+
+      // Carry daemon-side metadata (queued flag, cleanText, command info,
+      // file attachments) so UserMessage can render the cool-card variants
+      // without reaching into DisplayMessage directly.
+      const meta = message.metadata ?? {};
+      const custom: Record<string, unknown> = { ...meta };
 
       return {
         role: 'user',
         content: ensureNonEmpty(parts),
         id: message.id,
         createdAt: new Date(message.timestamp),
+        ...(Object.keys(custom).length > 0 && {
+          metadata: { custom: { mainframe: custom } },
+        }),
       };
     }
 
@@ -46,11 +66,15 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
       const skillBlock = message.content.find(
         (c): c is DisplayContent & { type: 'skill_loaded' } => c.type === 'skill_loaded',
       );
+      const isCompacted = message.content.some((c) => c.type === 'compaction');
       const textParts: ContentPart[] = message.content
         .filter((c): c is DisplayContent & { type: 'text' } => c.type === 'text')
         .map((c) => ({ type: 'text' as const, text: c.text }));
 
       const meta: Record<string, unknown> = { ...(message.metadata ?? {}) };
+      if (isCompacted) {
+        meta['isCompacted'] = true;
+      }
       if (skillBlock) {
         meta['skillLoaded'] = {
           skillName: skillBlock.skillName,
@@ -70,12 +94,47 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
 
     case 'assistant': {
       const { parts, groups } = mapAssistantBlocks(message.content);
+
+      // Daemon attaches turnDurationMs to the message.metadata after each
+      // result event. Map it to the native metadata.timing shape so
+      // MessageTiming (and useMessageTiming()) can read it.
+      const turnDurationMs =
+        typeof message.metadata?.turnDurationMs === 'number' ? message.metadata.turnDurationMs : undefined;
+      // Session-level cost is occasionally written back to the message by the
+      // daemon pipeline. Carry it in custom.mainframe.cost so MessageTiming can
+      // show a Cost row without needing a separate context.
+      const costUsd = typeof message.metadata?.cost_usd === 'number' ? message.metadata.cost_usd : undefined;
+
+      const hasGroups = Object.keys(groups).length > 0;
+      const hasTiming = turnDurationMs !== undefined;
+      const hasCost = costUsd !== undefined;
+
+      const metadata =
+        hasGroups || hasTiming || hasCost
+          ? {
+              ...(hasTiming && {
+                timing: {
+                  streamStartTime: 0,
+                  totalStreamTime: turnDurationMs,
+                  totalChunks: 0,
+                  toolCallCount: 0,
+                } as const,
+              }),
+              custom: {
+                mainframe: {
+                  ...(hasGroups && { partGroups: groups }),
+                  ...(hasCost && { cost: costUsd }),
+                },
+              },
+            }
+          : undefined;
+
       return {
         role: 'assistant',
         content: ensureNonEmpty(parts),
         id: message.id,
         createdAt: new Date(message.timestamp),
-        ...(Object.keys(groups).length > 0 && { metadata: { custom: { mainframe: { partGroups: groups } } } }),
+        ...(metadata && { metadata }),
       };
     }
 

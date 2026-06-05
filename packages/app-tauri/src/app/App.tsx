@@ -1,30 +1,26 @@
 /**
- * App — Phase 2A chat-seam prototype.
+ * App — Phase 2A chat-seam harness (warm-chrome).
  *
  * Wiring:
  *  useConnectionState → daemon port → daemonWs.setPort / connect
  *  User enters a chatId → ChatRuntimeProvider mounts (per-chat controller created)
  *  ChatThread renders transcript + composer
  *
- * Loading state is owned by the controller's loadState; ChatThread exposes it
- * via the assistant-ui runtime (isLoading prop on useExternalStoreRuntime).
- * No second subscriber — the controller is the single source of truth.
+ * The chat-id input bar is a dev harness; the real shell (sidebar / titlebar /
+ * sessions list) is a later migration leaf.
  */
 import { useState, useEffect } from 'react';
 import { useConnectionState, type ConnectionState } from './useConnectionState';
+import { cn } from '@/lib/utils';
 import { daemonWs } from '../lib/daemon/ws-client';
 import { ChatRuntimeProvider } from '../features/chat/runtime/ChatRuntimeProvider';
 import { ChatThread } from '../features/chat/thread/ChatThread';
 
-// ---- Connection dot -----------------------------------------------------------
-
-const STATUS_COLOR: Record<ConnectionState, string> = {
-  connecting: '#f59e0b',
-  connected: '#22c55e',
-  disconnected: '#ef4444',
+const STATUS_DOT: Record<ConnectionState, string> = {
+  connecting: 'bg-mf-warning',
+  connected: 'bg-mf-success',
+  disconnected: 'bg-destructive',
 };
-
-// ---- Root app -----------------------------------------------------------------
 
 export function App() {
   const { state, daemonStatus, port } = useConnectionState();
@@ -36,19 +32,13 @@ export function App() {
     if (port == null) return;
     daemonWs.setPort(port);
     daemonWs.connect();
-    return () => {
-      // Keep connection alive while App is mounted (singleton).
-    };
   }, [port]);
 
-  const handleOpenChat = () => {
+  const openChat = () => {
     const id = chatId.trim();
-    if (!id) return;
-    setActiveChatId(id);
+    if (id) setActiveChatId(id);
   };
-
-  const handleSwitchChat = () => {
-    // Clear active chat first — this disposes the old subscriber.
+  const switchChat = () => {
     setActiveChatId(null);
     setTimeout(() => {
       const id = chatId.trim();
@@ -57,58 +47,24 @@ export function App() {
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        background: '#0f172a',
-        color: '#f1f5f9',
-        fontFamily: 'system-ui, sans-serif',
-      }}
-    >
+    <div className="flex h-screen flex-col bg-background text-foreground font-sans">
       {/* Drag region for macOS traffic lights */}
-      <div data-tauri-drag-region style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 40, zIndex: 100 }} />
+      <div data-tauri-drag-region className="fixed inset-x-0 top-0 z-[100] h-10" />
 
       {/* Status bar */}
       <div
         data-testid="app-status-bar"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '12px 16px 4px',
-          marginTop: 40,
-          fontSize: 12,
-          color: '#64748b',
-          flexShrink: 0,
-        }}
+        className="mt-10 flex shrink-0 items-center gap-2 px-4 pb-1 pt-3 text-caption text-muted-foreground"
       >
-        <span
-          data-testid="app-connection-dot"
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: STATUS_COLOR[state],
-            display: 'inline-block',
-          }}
-        />
+        <span data-testid="app-connection-dot" className={cn('inline-block size-2 rounded-full', STATUS_DOT[state])} />
         <span>
-          {daemonStatus} {port != null ? `· port ${port}` : ''}
+          {daemonStatus}
+          {port != null ? ` · port ${port}` : ''}
         </span>
       </div>
 
-      {/* Chat ID input + controls */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 8,
-          padding: '8px 16px',
-          borderBottom: '1px solid #1e293b',
-          flexShrink: 0,
-        }}
-      >
+      {/* Chat ID input + controls (dev harness) */}
+      <div className="flex shrink-0 gap-2 border-b border-border px-4 py-2">
         <input
           data-testid="app-chatid-input"
           type="text"
@@ -116,36 +72,15 @@ export function App() {
           value={chatId}
           onChange={(e) => setChatId(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              if (activeChatId) handleSwitchChat();
-              else handleOpenChat();
-            }
+            if (e.key === 'Enter') (activeChatId ? switchChat : openChat)();
           }}
-          style={{
-            flex: 1,
-            background: '#1e293b',
-            border: '1px solid #334155',
-            borderRadius: 6,
-            padding: '6px 10px',
-            color: '#f1f5f9',
-            fontSize: 13,
-            outline: 'none',
-          }}
+          className="flex-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-body text-foreground outline-none placeholder:text-mf-text-4 focus-visible:ring-1 focus-visible:ring-ring"
         />
         <button
           data-testid="app-open-chat-btn"
-          onClick={activeChatId ? handleSwitchChat : handleOpenChat}
+          onClick={activeChatId ? switchChat : openChat}
           disabled={port == null || !chatId.trim()}
-          style={{
-            padding: '6px 14px',
-            background: port == null ? '#334155' : '#2563eb',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            cursor: port == null ? 'not-allowed' : 'pointer',
-            fontSize: 13,
-            fontWeight: 600,
-          }}
+          className="rounded-md bg-primary px-3.5 py-1.5 text-body font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {activeChatId ? 'Switch' : 'Open'}
         </button>
@@ -153,15 +88,7 @@ export function App() {
           <button
             data-testid="app-close-chat-btn"
             onClick={() => setActiveChatId(null)}
-            style={{
-              padding: '6px 14px',
-              background: '#334155',
-              color: '#94a3b8',
-              border: 'none',
-              borderRadius: 6,
-              cursor: 'pointer',
-              fontSize: 13,
-            }}
+            className="rounded-md border border-border bg-card px-3.5 py-1.5 text-body text-muted-foreground transition-colors hover:text-foreground"
           >
             Close
           </button>
@@ -169,22 +96,14 @@ export function App() {
       </div>
 
       {/* Chat area */}
-      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div className="relative flex-1 overflow-hidden">
         {!activeChatId && (
           <div
             data-testid="app-no-chat"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: '#475569',
-              gap: 8,
-            }}
+            className="flex h-full flex-col items-center justify-center gap-2 text-mf-text-4"
           >
-            <span style={{ fontSize: 32 }}>No chat open</span>
-            <span style={{ fontSize: 13 }}>Enter a chat ID above to open a transcript</span>
+            <span className="text-2xl">No chat open</span>
+            <span className="text-body">Enter a chat ID above to open a transcript</span>
           </div>
         )}
 
@@ -195,7 +114,7 @@ export function App() {
         )}
 
         {activeChatId && port == null && (
-          <div data-testid="app-waiting-port" style={{ padding: 16, color: '#94a3b8' }}>
+          <div data-testid="app-waiting-port" className="p-4 text-body text-muted-foreground">
             Waiting for daemon…
           </div>
         )}

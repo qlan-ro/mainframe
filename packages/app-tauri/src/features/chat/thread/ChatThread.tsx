@@ -1,61 +1,55 @@
 /**
- * ChatThread — thread shell wiring the native message dispatch.
+ * ChatThread — warm-chrome thread shell wiring the native message dispatch.
  *
  * Role-based message components (UserMessage / AssistantMessage / SystemMessage)
- * render through MessagePrimitive.GroupedParts + the tool-card registry. The
- * full thread-shell restyle (viewport footer, scroll-to-bottom, action bar) and
- * the composer port are later leaves — the chrome here stays intentionally thin.
+ * render through MessagePrimitive.GroupedParts + the tool-card registry inside a
+ * centered, max-width column. The full composer port (config toolbar, attachments,
+ * queue) is a later leaf — the composer here stays intentionally thin.
  */
-import { ThreadPrimitive, ComposerPrimitive } from '@assistant-ui/react';
+import { ThreadPrimitive, ComposerPrimitive, useAuiState } from '@assistant-ui/react';
+import { ArrowDownIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { UserMessage } from '../messages/UserMessage';
 import { AssistantMessage } from '../messages/AssistantMessage';
 import { SystemMessage } from '../messages/SystemMessage';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';
 
-// ---- Composer -----------------------------------------------------------------
+// ---- Generating indicator -----------------------------------------------------
+
+function GeneratingIndicator() {
+  const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
+  if (!isRunning) return null;
+  return (
+    <div
+      data-testid="chat-thread-running"
+      className="flex items-center gap-2 px-1 py-1 text-caption text-muted-foreground"
+    >
+      <span className="size-1.5 animate-pulse rounded-full bg-mf-warning" />
+      Thinking…
+    </div>
+  );
+}
+
+// ---- Composer (thin — full port is a later leaf) ------------------------------
 
 function Composer() {
   return (
-    <div
-      style={{
-        display: 'flex',
-        gap: 8,
-        padding: '12px 16px',
-        borderTop: '1px solid #1e293b',
-        background: '#0f172a',
-      }}
-    >
-      <ComposerPrimitive.Input
-        data-testid="chat-composer-input"
-        placeholder="Message the assistant…"
-        style={{
-          flex: 1,
-          background: '#1e293b',
-          border: '1px solid #334155',
-          borderRadius: 6,
-          padding: '8px 12px',
-          color: '#f1f5f9',
-          fontSize: 14,
-          resize: 'none',
-          outline: 'none',
-        }}
-      />
-      <ComposerPrimitive.Send
-        data-testid="chat-composer-send"
-        style={{
-          padding: '8px 16px',
-          background: '#2563eb',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 6,
-          cursor: 'pointer',
-          fontSize: 14,
-          fontWeight: 600,
-        }}
-      >
-        Send
-      </ComposerPrimitive.Send>
+    <div className="border-t border-border bg-background px-4 py-3">
+      <div className="mx-auto flex w-full max-w-3xl gap-2">
+        <ComposerPrimitive.Input
+          data-testid="chat-composer-input"
+          placeholder="Message the assistant…"
+          rows={1}
+          className="flex-1 resize-none rounded-lg border border-border bg-card px-3 py-2 text-body text-foreground outline-none placeholder:text-mf-text-4 focus-visible:ring-1 focus-visible:ring-ring"
+        />
+        <ComposerPrimitive.Send
+          data-testid="chat-composer-send"
+          className="rounded-lg bg-primary px-4 py-2 text-body font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-50"
+        >
+          Send
+        </ComposerPrimitive.Send>
+      </div>
     </div>
   );
 }
@@ -66,46 +60,32 @@ export function ChatThread() {
   return (
     <ThreadPrimitive.Root
       data-testid="chat-thread"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        background: '#0f172a',
-        color: '#f1f5f9',
-        fontFamily: 'system-ui, sans-serif',
-        overflow: 'hidden',
-      }}
+      className="flex h-full flex-col overflow-hidden bg-background text-foreground"
     >
-      {/* Messages scroll area */}
-      <ThreadPrimitive.Viewport
-        data-testid="chat-thread-viewport"
-        style={{ flex: 1, overflowY: 'auto', padding: '16px' }}
-      >
-        <ThreadPrimitive.Messages
-          components={{
-            UserMessage,
-            AssistantMessage,
-            SystemMessage,
-          }}
-        />
-        <ThreadPrimitive.ScrollToBottom />
+      <ThreadPrimitive.Viewport data-testid="chat-thread-viewport" className="relative flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl px-5 py-4">
+          <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage, SystemMessage }} />
+        </div>
+
+        <ThreadPrimitive.ScrollToBottom asChild>
+          <button
+            data-testid="chat-scroll-to-bottom"
+            aria-label="Scroll to bottom"
+            className={cn(
+              'absolute bottom-4 left-1/2 -translate-x-1/2 z-10',
+              'flex size-8 items-center justify-center rounded-full',
+              'border border-border bg-card text-muted-foreground shadow-[var(--mf-shadow-pop)]',
+              'transition-opacity hover:text-foreground disabled:invisible',
+            )}
+          >
+            <ArrowDownIcon className="size-4" />
+          </button>
+        </ThreadPrimitive.ScrollToBottom>
       </ThreadPrimitive.Viewport>
 
-      {/* Running indicator */}
-      <ThreadPrimitive.If running>
-        <div
-          data-testid="chat-thread-running"
-          style={{
-            padding: '4px 16px',
-            fontSize: 12,
-            color: '#94a3b8',
-            background: '#0f172a',
-          }}
-        >
-          Thinking…
-        </div>
-      </ThreadPrimitive.If>
-
+      <div className="mx-auto w-full max-w-3xl px-5">
+        <GeneratingIndicator />
+      </div>
       <Composer />
     </ThreadPrimitive.Root>
   );
