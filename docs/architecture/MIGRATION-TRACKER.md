@@ -22,6 +22,23 @@
 
 ---
 
+## Chat Phase-2 build order (refined by the assistant-ui adoption research, 2026-06-05)
+Do the chat leaves in this order; ☑ = done.
+1. ☐ **shadcn foundation** — `components.json` + base `ui/` primitives + wire `mainframe-theme.css` → shadcn vars (`--mf-*`); testid passthrough.
+2. ☐ **assistant-ui shadcn group** — install + restyle `ToolFallback` + `ToolGroup` (map `bg-muted/*`→`--mf-*` via `opacity-*`).
+3. ☑ **runtime spine** — controller/reducer + `extras` (Phase 2A, `98f43f5a`).
+4. ☐ **projection** — keep `\0` sentinel/uniqueId/≥1-part; **drop** `_ToolGroup/_TaskGroup/_TaskProgress` → native `part.messages` *(needs daemon support — open decision)*.
+5. ☐ **groupBy + dispatch** — our `groupBy` over `buildGroupTree`; render `GroupedParts` (not deprecated `Unstable_PartsGrouped`/`components.ToolGroup`).
+6. ☐ **tool registry** — port card bodies into one `tools.by_name` map (Fallback=`ToolFallback`); `useToolArgsStatus`; drop `makeAssistantToolUI`.
+7. ☐ **Task/subagent card** — `by_name` entry wrapping `MessagePartPrimitive.Messages` in `ReadonlyThreadProvider`.
+8. ☐ **composer shell** — native `ComposerPrimitive.*` (Root/Input/Send/Cancel/Attachments/Quote/Queue) + AttachmentAdapter.
+9. ☐ **composer config toolbar** — stateless shadcn controls → `setRunConfig.custom` (shared Zod schema, daemon-validated); `@`-mention via `Command`.
+10. ☐ **permission/ask/plan cards** — port onto shadcn, read via `useChatPermissions`/`useChatQuestions` over `extras`; queue-front invariant; mount above composer.
+11. ☐ **`useRemoteThreadListRuntime`** sessions sidebar (chats-REST adapter).
+12. ☐ **data-testid + stress validation** — tag everything; run the ADR stress matrix (long chat · nested subagent + mid-turn permission · reconnect · optimistic dedup · two windows).
+
+---
+
 ## Cross-cutting foundation (underpins everything — build/maintain first)
 
 - ☐ **shadcn `components/ui/` layer** (`replace`) — Dialog/Select/Dropdown/Popover/Command/Checkbox/Label/Switch/Tooltip. Root cause of ~6× duplicated overlay/dropdown code. **Build before porting feature UI.**
@@ -107,6 +124,10 @@
 - ☐ **Shared pure-logic package** — where `convertMessage` + diff math + file-types live so desktop & app-tauri share one copy (extend `@qlan-ro/mainframe-types` vs new `@qlan-ro/mainframe-shared`). Currently app-tauri-local.
 - ☑ **Sessions list** — use `useRemoteThreadListRuntime` (decided; in Phase 2B).
 - ☑ **Drift handling** — refetch-on-gap, no daemon `seq` (decided).
+- ☑ **Tool cards / permissions / composer = assistant-ui** — adoption verdicts locked (2026-06-05): tool cards + composer are native-restyle MATCHES; permissions have no native UI → custom shadcn cards via `extras`. See `app-tauri/CLAUDE.md` golden-rule pointers + the build order below.
+- ☐ **Permission card mount placement** — above-composer (queue-front, simple, matches today) vs inline-under-tool. Inline needs the daemon `control_request` to carry the originating `tool_use` id. *Default: above-composer; revisit if the daemon carries the id.*
+- ☐ **Queued banner source** — native `ComposerPrimitive.Queue` (transient) vs persisted `QueuedMessageRef` (daemon concept) bridged through the runtime. *Decide at the composer leaf.*
+- ☐ **Daemon `part.messages` for subagents** — dropping the `_TaskGroup` virtual-tool encoding requires the daemon to populate `ToolCallMessagePart.messages` with `ThreadMessage[]`. *Confirm/port before the Task-card leaf; else subagent transcripts render nothing.*
 - ☐ **Phase-2 Rust daemon go/no-go + sizing** — biggest unscoped workstream; decide before committing.
 - ☐ **Electron app lifecycle** — retire vs coexist (port 31415 / data-dir / prefs-origin); parity definition-of-done.
 - ☐ **Mobile-contract governance** — the WS/REST contract is co-owned; changes stay additive.
