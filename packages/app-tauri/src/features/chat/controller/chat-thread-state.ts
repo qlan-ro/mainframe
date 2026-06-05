@@ -77,6 +77,11 @@ export type ChatStateEvent =
   | { type: 'queued.added'; ref: QueuedMessageRef }
   | { type: 'queued.removed'; uuid: string }
   | { type: 'queued.cleared' }
+  | { type: 'queued.snapshot'; refs: QueuedMessageRef[] }
+  // cancel_failed: the message stays queued — no state mutation needed, but the
+  // case must be explicit so it doesn't fall through to the default no-op.
+  // User-facing surfacing (toast/badge) is deferred until toast infra exists.
+  | { type: 'queued.cancel_failed'; uuid: string }
   | { type: 'local.message.queued'; pending: PendingUserMessage }
   | { type: 'local.message.reconciled'; clientId: string }
   | { type: 'local.message.failed'; clientId: string; error: unknown };
@@ -223,6 +228,24 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
           queued: {} as Readonly<Record<string, QueuedMessageRef>>,
         },
       };
+
+    case 'queued.snapshot': {
+      // Rehydrates the queued list on open/reconnect: replace the entire queued
+      // map with a fresh record built from the snapshot refs.
+      const queued: Record<string, QueuedMessageRef> = {};
+      for (const ref of event.refs) {
+        queued[ref.uuid] = ref;
+      }
+      return {
+        ...state,
+        interactions: { ...state.interactions, queued },
+      };
+    }
+
+    case 'queued.cancel_failed':
+      // The cancel failed — the item remains queued. State is unchanged; this
+      // case is explicit so it is handled rather than silently dropped.
+      return state;
 
     case 'local.message.queued':
       return {

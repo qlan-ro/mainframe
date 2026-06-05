@@ -47,14 +47,27 @@ function normalizeText(value: string): string {
 
 function reconcilePendingOnAdd(state: ChatThreadState, content: DisplayContent[]): string | null {
   const textBlock = content.find((c): c is DisplayContent & { type: 'text' } => c.type === 'text');
-  if (!textBlock) return null;
+  const now = Date.now();
+
+  if (!textBlock) {
+    // Attachment-only server message: match the oldest pending whose text is
+    // empty (i.e. also attachment-only). Never reconcile a text-bearing pending
+    // against a no-text server message.
+    const candidates = Object.values(state.pendingUserMessages).filter(
+      (p): p is PendingUserMessage =>
+        p.status === 'pending' && p.text === '' && Math.abs(now - p.createdAt) <= PENDING_MATCH_WINDOW_MS,
+    );
+    if (candidates.length === 0) return null;
+    const match = candidates.sort((a, b) => a.createdAt - b.createdAt)[0]!;
+    return match.clientId;
+  }
 
   const serverFp = normalizeText(textBlock.text);
-  const now = Date.now();
 
   const candidates = Object.values(state.pendingUserMessages).filter(
     (p): p is PendingUserMessage =>
       p.status === 'pending' &&
+      p.text !== '' &&
       Math.abs(now - p.createdAt) <= PENDING_MATCH_WINDOW_MS &&
       (serverFp.length === 0 || normalizeText(p.text) === serverFp),
   );
@@ -68,6 +81,9 @@ function reconcilePendingOnAdd(state: ChatThreadState, content: DisplayContent[]
 // Controller
 // ---------------------------------------------------------------------------
 
+// How long to wait for subscribe:ack before falling back to an unconditional resume.
+const SUBSCRIBE_ACK_TIMEOUT_MS = 2000;
+
 export class ChatThreadController {
   private state: ChatThreadState;
   private readonly listeners = new Set<() => void>();
@@ -75,6 +91,10 @@ export class ChatThreadController {
   private unsubscribeFromConn: (() => void) | null = null;
   private loadPromise: Promise<void> | null = null;
   private disposed = false;
+  // subscribe:ack gating (fix #3)
+  private awaitingAck = false;
+  private isReconnect = false;
+  private ackFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly chatId: string,
@@ -109,6 +129,7 @@ export class ChatThreadController {
     this.disposed = true;
     this.detachWs();
     this.listeners.clear();
+    this.clearAckFallback();
   }
 
   // --------------------------------------------------------------------------
@@ -206,27 +227,60 @@ export class ChatThreadController {
   private ensureWsSubscription(): void {
     if (this.unsubscribeFromWs) return;
 
-    this.ws.subscribe(this.chatId);
-    void resumeChat(this.port, this.chatId).catch((err: unknown) =>
-      console.warn('[chat-controller] resumeChat failed', err),
-    );
-
+    // Attach the event handler FIRST so the subscribe:ack frame is never missed.
     this.unsubscribeFromWs = this.ws.onEvent((event: DaemonEvent) => {
       if (this.disposed) return;
       this.routeDaemonEvent(event);
     });
 
+    this.sendSubscribe(false /* initial, not a reconnect */);
+
     this.unsubscribeFromConn = this.ws.subscribeConnection(() => {
       if (this.disposed || !this.ws.connected) return;
-      this.ws.subscribe(this.chatId);
-      void resumeChat(this.port, this.chatId).catch((err: unknown) =>
-        console.warn('[chat-controller] reconnect resumeChat failed', err),
-      );
-      void this.refresh();
+      this.sendSubscribe(true /* reconnect */);
     });
   }
 
+  /**
+   * Sends `subscribe` to the daemon and arms the ack-fallback timer.
+   * resumeChat / refresh are called by `handleSubscribeAck` when the daemon
+   * confirms the subscription.  If the ack never arrives (older daemon or lost
+   * frame), the fallback timer fires after SUBSCRIBE_ACK_TIMEOUT_MS.
+   */
+  private sendSubscribe(reconnect: boolean): void {
+    this.clearAckFallback();
+    this.awaitingAck = true;
+    this.isReconnect = reconnect;
+    this.ws.subscribe(this.chatId);
+
+    this.ackFallbackTimer = setTimeout(() => {
+      if (!this.awaitingAck || this.disposed) return;
+      this.awaitingAck = false;
+      console.warn('[chat-controller] subscribe:ack not received within timeout — resuming anyway');
+      this.handleSubscribeAck(reconnect);
+    }, SUBSCRIBE_ACK_TIMEOUT_MS);
+  }
+
+  /** Called when subscribe:ack arrives OR when the fallback fires. */
+  private handleSubscribeAck(reconnect: boolean): void {
+    void resumeChat(this.port, this.chatId).catch((err: unknown) =>
+      console.warn('[chat-controller] resumeChat failed', err),
+    );
+    if (reconnect) {
+      this.refreshInBackground();
+    }
+  }
+
+  private clearAckFallback(): void {
+    if (this.ackFallbackTimer !== null) {
+      clearTimeout(this.ackFallbackTimer);
+      this.ackFallbackTimer = null;
+    }
+  }
+
   private detachWs(): void {
+    this.clearAckFallback();
+    this.awaitingAck = false;
     this.ws.unsubscribe(this.chatId);
     this.unsubscribeFromWs?.();
     this.unsubscribeFromWs = null;
@@ -239,6 +293,18 @@ export class ChatThreadController {
   // --------------------------------------------------------------------------
 
   private routeDaemonEvent(event: DaemonEvent): void {
+    // Intercept subscribe:ack before it reaches the generic handler so we can
+    // gate resumeChat on the daemon's confirmation that the subscription is live.
+    if (event.type === 'subscribe:ack' && event.chatId === this.chatId) {
+      if (this.awaitingAck) {
+        this.clearAckFallback();
+        const wasReconnect = this.isReconnect;
+        this.awaitingAck = false;
+        this.handleSubscribeAck(wasReconnect);
+      }
+      return; // do not pass ack through to handleDaemonEvent
+    }
+
     const result = handleDaemonEvent(event, this.chatId, this.state.messagesById);
 
     if (result.kind === 'refresh') {
