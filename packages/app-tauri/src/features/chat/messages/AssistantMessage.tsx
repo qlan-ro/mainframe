@@ -25,6 +25,7 @@ import {
 import { MessageToolLeaf, MessageToolGroup } from './tool-dispatch';
 import { MessageActionBar } from './MessageActionBar';
 import { MessageTiming } from './MessageTiming';
+import { MessageTimestamp } from './MessageTimestamp';
 
 function RunningIndicator() {
   return (
@@ -99,6 +100,7 @@ export function AssistantMessage() {
       {/* Reserve the action-bar height so hover-revealing it doesn't shift the layout. */}
       <div className="flex min-h-6 items-center gap-2 text-muted-foreground">
         <MessageActionBar />
+        <MessageTimestamp />
         <MessageTiming />
       </div>
     </MessagePrimitive.Root>
