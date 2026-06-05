@@ -19,14 +19,15 @@
 - ☑ **Chat seam Phase 1** — drift-free, no message cache; reconnect re-syncs (`de4a73d1`).
 - ☑ **AI toolkit** — skills (tauri-v2/shadcn/assistant-ui/radix/rust-best-practices), agents (tauri-shell-engineer/renderer-porter/design-conformance), review-gate hook.
 - ☑ **Chat seam Phase 2A** — controller/reducer + `handle-daemon-event` + projection + `extras` + refetch-on-gap; dead Phase-1 spine removed; drift/gap empirically verified (`98f43f5a`).
+- ☑ **shadcn foundation + theme + `@assistant-ui@0.14.14` bump** — 18 primitives, warm-chrome tokens, restyled ToolFallback/ToolGroup, aligned assistant-ui set (`8e18e634`, `48cfefd5`).
 
 ---
 
 ## Chat Phase-2 build order (refined by the assistant-ui adoption research, 2026-06-05)
 Do the chat leaves in this order; ☑ = done.
-1. ☐ **shadcn foundation** — `components.json` + base `ui/` primitives + wire `mainframe-theme.css` → shadcn vars (`--mf-*`); testid passthrough.
-2. ☐ **assistant-ui shadcn group** — install + restyle `ToolFallback` + `ToolGroup` (map `bg-muted/*`→`--mf-*` via `opacity-*`).
-2b. ☐ **bump `@assistant-ui/*` set → `react@0.14.14` / `core@0.2.10`** (matches react-opencode peer; unlocks `groupPartByType` + `display:'standalone'` + `GroupedParts` `indicator`; fixes the `core@0.2.2`↔`store@0.2.10` skew). Re-verify Phase 2A typecheck + drift test after. *(do after the foundation lands, before step 4)*
+1. ☑ **shadcn foundation** — `components.json` + 18 `ui/` primitives + `globals.css` mapping shadcn vars → `--mf-*` (warm chrome, computed-CSS-verified); testid passthrough (`8e18e634`).
+2. ◐ **assistant-ui shadcn group** — `ToolFallback` + `ToolGroup` restyled (`8e18e634`); `quote` + markdown + other shadcn components pending the inventory sweep.
+2b. ☑ **bumped `@assistant-ui` → `react@0.14.14` / `core@0.2.10` / `store@0.2.13`** — set aligned (skew fixed), `groupPartByType`/`display:'standalone'` available (`48cfefd5`). *Drift re-verify on the bumped version pending.*
 3. ☑ **runtime spine** — controller/reducer + `extras` (Phase 2A, `98f43f5a`).
 4. ☐ **projection** — keep `\0` sentinel/uniqueId/≥1-part; **drop** `_ToolGroup/_TaskGroup/_TaskProgress` → native `part.messages` *(needs daemon support — open decision)*.
 5. ☐ **groupBy + dispatch** — use `groupPartByType` (tool-call→group-tool, reasoning→group-thought) + `display:'standalone'` to float file-mutating/standalone tools out of the chain (needs the 2b bump); render `GroupedParts` incl. the `indicator` loading slot. Not the deprecated `Unstable_PartsGrouped`/`components.ToolGroup`.
@@ -42,7 +43,7 @@ Do the chat leaves in this order; ☑ = done.
 
 ## Cross-cutting foundation (underpins everything — build/maintain first)
 
-- ☐ **shadcn `components/ui/` layer** (`replace`) — Dialog/Select/Dropdown/Popover/Command/Checkbox/Label/Switch/Tooltip. Root cause of ~6× duplicated overlay/dropdown code. **Build before porting feature UI.**
+- ☑ **shadcn `components/ui/` layer** — 18 primitives built + theme-wired to `--mf-*` (`8e18e634`).
 - ☐ **Theming / tokens** (`refactor`) — `mainframe-theme.css` → Tailwind v4 `@theme`; 4 runtime-switchable themes; split Monaco/aui-md CSS out of `index.css`; token traps (no `/opacity` on CSS vars).
 - ◐ **Typed-surface layout engine** (`replace`) — SurfaceHost + SurfaceRail + by-arrival placement + per-session remembered layout (replaces the whole `zone/` system). *(designed in the brainstorm specs)*
 - ☑ **Login-shell env / sidecar spawn** (C1) — `src-tauri/shell_env.rs` + `sidecar.rs`.
