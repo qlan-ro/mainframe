@@ -14,7 +14,7 @@
  * We delegate to it unchanged so the projection stays thin.
  */
 import { ExportedMessageRepository } from '@assistant-ui/react';
-import type { ThreadMessage } from '@assistant-ui/react';
+import type { ThreadMessage, ThreadMessageLike, ThreadUserMessage } from '@assistant-ui/react';
 import { convertMessage } from '../view-model/convert-message';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 
@@ -22,15 +22,23 @@ import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 // Pending message projection
 // ---------------------------------------------------------------------------
 
-function projectPendingMessage(pending: PendingUserMessage): ThreadMessage {
-  return {
+/**
+ * Typed factory for non-assistant messages. Returning `ThreadUserMessage` —
+ * which structurally has no `status` field — makes a future re-introduction
+ * of `status` on user/system messages a compile error rather than the runtime
+ * throw ("status is only supported for assistant messages") that assistant-ui
+ * raises inside `fromThreadMessageLike` for non-assistant roles.
+ */
+function makeUserMessage(fields: Omit<ThreadUserMessage, 'role'>): ThreadUserMessage {
+  return { role: 'user', ...fields };
+}
+
+function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
+  return makeUserMessage({
     id: `local:${pending.clientId}`,
-    role: 'user',
     content: [{ type: 'text', text: pending.text }],
     attachments: [],
     createdAt: new Date(pending.createdAt),
-    // NOTE: no `status` — assistant-ui's fromThreadMessageLike throws "status is only
-    // supported for assistant messages" for user turns (the type allows it, runtime doesn't).
     metadata: {
       custom: {
         mainframe: {
@@ -45,7 +53,7 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadMessage {
         },
       },
     },
-  } satisfies ThreadMessage;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -53,20 +61,16 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadMessage {
 // ---------------------------------------------------------------------------
 
 export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage[] {
-  // Server messages in order
+  // Server messages in order — convertMessage returns ThreadMessageLike; a single
+  // cast suffices because fromArray also accepts ThreadMessageLike[], but we want
+  // a consistent ThreadMessage[] for downstream hooks.
   const serverMessages: ThreadMessage[] = state.messageOrder
     .map((id) => state.messagesById[id])
     .filter((msg): msg is NonNullable<typeof msg> => msg != null)
-    .map((msg) => {
-      const like = convertMessage(msg);
-      // convertMessage returns ThreadMessageLike; cast to ThreadMessage.
-      // ExportedMessageRepository.fromArray accepts ThreadMessageLike too,
-      // but typing consistently makes downstream hooks simpler.
-      return like as unknown as ThreadMessage;
-    });
+    .map((msg) => convertMessage(msg) as ThreadMessageLike as ThreadMessage);
 
   // Pending (optimistic) messages sorted by createdAt
-  const pendingMessages: ThreadMessage[] = Object.values(state.pendingUserMessages)
+  const pendingMessages: ThreadUserMessage[] = Object.values(state.pendingUserMessages)
     .filter((p): p is PendingUserMessage => p != null)
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(projectPendingMessage);

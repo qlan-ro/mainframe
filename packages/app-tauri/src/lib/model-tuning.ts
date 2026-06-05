@@ -13,6 +13,9 @@
 import type { AdapterModel, EffortLevel, FeatureKey } from '@qlan-ro/mainframe-types';
 import { TUNABLE_FEATURES, clampEffortToSupported } from '@qlan-ro/mainframe-types';
 
+/** Element type of the `as const` TUNABLE_FEATURES array. */
+type TunableFeature = (typeof TUNABLE_FEATURES)[number];
+
 export const EFFORT_META: Record<EffortLevel, { label: string; description: string }> = {
   none: { label: 'None', description: 'No reasoning' },
   minimal: { label: 'Minimal', description: 'Fastest, least reasoning' },
@@ -34,10 +37,12 @@ export function effortOptions(model: AdapterModel) {
 }
 
 export function visibleFeatures(model: AdapterModel) {
-  return TUNABLE_FEATURES.filter((f) => model[f.capability as keyof AdapterModel]).map((f) => ({
-    key: f.key as FeatureKey,
-    ...FEATURE_LABELS[f.key as FeatureKey],
-  }));
+  return (TUNABLE_FEATURES as readonly TunableFeature[])
+    .filter((f) => model[f.capability])
+    .map((f) => ({
+      key: f.key,
+      ...FEATURE_LABELS[f.key],
+    }));
 }
 
 /** Provider-default slice the composer reads to display the EFFECTIVE (inherited) value. */
@@ -63,8 +68,9 @@ export function effectiveFeature(
 ): boolean {
   const own = chat[key];
   if (own != null) return own;
-  const f = TUNABLE_FEATURES.find((t) => t.key === key)!;
-  return provider?.[f.providerDefault as keyof TuningDefaults] === 'true';
+  const f = (TUNABLE_FEATURES as readonly TunableFeature[]).find((t) => t.key === key);
+  if (f == null) return false;
+  return provider?.[f.providerDefault] === 'true';
 }
 
 /**

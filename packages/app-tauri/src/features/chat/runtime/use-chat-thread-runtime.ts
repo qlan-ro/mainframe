@@ -42,8 +42,11 @@ export interface ChatRuntimeExtras {
   readonly state: ChatThreadState;
   readonly permissions: Readonly<Record<string, ChatPermissionEntry>>;
   readonly queued: Readonly<Record<string, QueuedMessageRef>>;
+  readonly port: number;
   readonly cancel: () => Promise<void>;
   readonly replyToPermission: (requestId: string, response: ControlResponse) => Promise<void>;
+  readonly cancelQueued: (messageId: string) => Promise<void>;
+  readonly editQueued: (messageId: string, content: string) => Promise<void>;
 }
 
 function isChatRuntimeExtras(extras: unknown): extras is ChatRuntimeExtras {
@@ -74,7 +77,7 @@ function isRunningFromState(state: ChatThreadState): boolean {
 // Main hook
 // ---------------------------------------------------------------------------
 
-export function useChatThreadRuntime(controller: ChatThreadController): AssistantRuntime {
+export function useChatThreadRuntime(controller: ChatThreadController, port: number): AssistantRuntime {
   const state = useControllerState(controller);
 
   // Seed from REST once on mount (deduped by loadPromise inside controller).
@@ -92,10 +95,13 @@ export function useChatThreadRuntime(controller: ChatThreadController): Assistan
       state,
       permissions: state.interactions.permissions,
       queued: state.interactions.queued,
+      port,
       cancel: () => controller.cancel(),
       replyToPermission: (requestId, response) => controller.replyToPermission(requestId, response),
+      cancelQueued: (messageId) => controller.cancelQueued(messageId),
+      editQueued: (messageId, content) => controller.editQueued(messageId, content),
     }),
-    [controller, state],
+    [controller, port, state],
   );
 
   return useExternalStoreRuntime<ThreadMessage>({

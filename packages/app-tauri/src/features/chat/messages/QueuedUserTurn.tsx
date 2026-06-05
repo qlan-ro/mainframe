@@ -12,9 +12,7 @@
 import { useCallback, type ReactNode } from 'react';
 import { PencilIcon, XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDaemonPort } from '@/lib/tauri/bridge';
-import { cancelQueuedMessage } from '@/lib/api/chats';
-import { useChatId } from '../tools/chat-tool-context';
+import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useComposerEdit } from '../composer/composer-edit-context';
 
 const PENDING_CARD = { background: 'var(--mf-um-card)' } as const;
@@ -65,19 +63,15 @@ export function QueuedUserTurn({
   content: string;
   children: ReactNode;
 }) {
-  const chatId = useChatId();
+  const extras = useChatExtras();
   const { startEdit } = useComposerEdit();
 
   const handleCancel = useCallback(() => {
-    if (!chatId) return;
-    void (async () => {
-      try {
-        await cancelQueuedMessage(await getDaemonPort(), chatId, messageId);
-      } catch (err) {
-        console.warn('[queued] cancel failed', { messageId, err });
-      }
-    })();
-  }, [chatId, messageId]);
+    if (!extras) return;
+    extras.cancelQueued(messageId).catch((err: unknown) => {
+      console.warn('[queued] cancel failed', { messageId, err });
+    });
+  }, [extras, messageId]);
 
   const handleEdit = useCallback(() => startEdit({ messageId, content }), [startEdit, messageId, content]);
 

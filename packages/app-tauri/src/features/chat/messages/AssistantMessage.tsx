@@ -12,7 +12,7 @@
  */
 import { useMemo } from 'react';
 import { MessagePrimitive } from '@assistant-ui/react';
-import { makeChatGroupBy } from '../tools/group-parts';
+import { makeChatGroupBy, parseToolGroupKey } from '../tools/group-parts';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { PERMISSION_PLACEHOLDER } from '../view-model/convert-message';
 import { MarkdownText } from '../parts/markdown-text';
@@ -60,7 +60,7 @@ export function AssistantMessage() {
               );
             }
             // group-tool-<groupId>: the summary was derived in the projection.
-            const groupId = part.type.slice('group-tool-'.length);
+            const groupId = parseToolGroupKey(part.type) ?? '';
             return (
               <MessageToolGroup
                 indices={part.indices}

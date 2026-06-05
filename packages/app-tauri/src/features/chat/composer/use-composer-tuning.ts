@@ -11,11 +11,16 @@
  * Neither hook uses Zustand. They hold plain React state to avoid the
  * getSnapshot-loop trap that affects external-store selectors.
  *
+ * `disabled` reads the LIVE thread run-state from `useAuiState` (not the stale
+ * REST snapshot) so the toolbar is correctly disabled mid-run. The daemon port
+ * is threaded from `useChatExtras()` — no extra `getDaemonPort()` call here.
+ *
  * Provider defaults (`displayEffort` 3rd arg / `effectiveFeature` provider arg)
  * are NOT fetched in app-tauri yet — callers pass `undefined` (follow-up ticket).
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuiState } from '@assistant-ui/react';
 import type {
   AdapterInfo,
   AdapterModel,
@@ -27,8 +32,7 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import { getAdapters } from '@/lib/api/adapters';
 import { getChat, setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
-import { getDaemonPort } from '@/lib/tauri/bridge';
-import { useChatId } from '../tools/chat-tool-context';
+import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 
 // ---------------------------------------------------------------------------
 // useAdapters
@@ -39,15 +43,17 @@ import { useChatId } from '../tools/chat-tool-context';
  * Returns an empty array while loading or on error (logged via console.warn).
  */
 export function useAdapters(): AdapterInfo[] {
+  const extras = useChatExtras();
+  const port = extras?.port;
   const [adapters, setAdapters] = useState<AdapterInfo[]>([]);
 
   useEffect(() => {
+    if (port == null) return;
     let cancelled = false;
 
     async function load() {
       try {
-        const port = await getDaemonPort();
-        const data = await getAdapters(port);
+        const data = await getAdapters(port!);
         if (!cancelled) setAdapters(data);
       } catch (err) {
         console.warn('[composer/useAdapters] failed to load adapters', err);
@@ -58,7 +64,7 @@ export function useAdapters(): AdapterInfo[] {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [port]);
 
   return adapters;
 }
@@ -88,31 +94,19 @@ export interface ComposerTuningHook {
  * on error the previous value is restored and a warning is logged.
  */
 export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
-  const chatId = useChatId();
+  const extras = useChatExtras();
+  const chatId = extras?.state.chatId ?? null;
   const [chat, setChat] = useState<Chat | null>(null);
-  const portRef = useRef<number | null>(null);
-
-  // Fetch the port once and cache it.
-  useEffect(() => {
-    if (portRef.current != null) return;
-    getDaemonPort()
-      .then((p) => {
-        portRef.current = p;
-      })
-      .catch((err) => console.warn('[composer/useComposerTuning] getDaemonPort failed', err));
-  }, []);
 
   // Fetch the chat when chatId changes.
   useEffect(() => {
-    if (!chatId) return;
-    // Capture as a non-optional string so the async closure's type is stable.
+    if (!chatId || !extras) return;
     const id: string = chatId;
+    const port = extras.port;
     let cancelled = false;
 
     async function load() {
       try {
-        const port = portRef.current ?? (await getDaemonPort());
-        portRef.current = port;
         const data = await getChat(port, id);
         if (!cancelled) setChat(data);
       } catch (err) {
@@ -124,7 +118,12 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     return () => {
       cancelled = true;
     };
-  }, [chatId]);
+    // extras.port is stable within a chat epoch; only chatId triggers a re-fetch.
+  }, [chatId, extras?.port]);
+
+  // Live run-state from the assistant-ui thread — stays accurate mid-run
+  // (unlike the REST snapshot in `chat.isRunning` which is fetched once).
+  const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
 
   const adapter: AdapterInfo | null = chat != null ? (adapters.find((a) => a.id === chat.adapterId) ?? null) : null;
 
@@ -141,58 +140,56 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     );
   })();
 
-  const setEffort = useCallback(
-    (effort: EffortLevel) => {
-      if (!chat || !chatId || portRef.current == null) return;
+  /**
+   * Shared optimistic-mutate helper: captures prev, applies optimistic update,
+   * fires PATCH, reconciles on success, reverts on error.
+   */
+  const optimisticPatch = useCallback(
+    <T extends Partial<Chat>>(optimistic: T, patch: () => Promise<Chat>, label: string) => {
+      if (!chat || !extras) return;
       const prev = chat;
-      const next: Chat = { ...chat, effort };
-      setChat(next);
-
-      const patch: SessionTuning = { effort };
-      setChatTuning(portRef.current, chatId, patch)
+      setChat({ ...chat, ...optimistic });
+      patch()
         .then((updated) => setChat(updated))
-        .catch((err) => {
-          console.warn('[composer/useComposerTuning] setEffort failed — reverting', { err });
+        .catch((err: unknown) => {
+          console.warn(`[composer/useComposerTuning] ${label} failed — reverting`, { err });
           setChat(prev);
         });
     },
-    [chat, chatId],
+    [chat, extras],
+  );
+
+  const setEffort = useCallback(
+    (effort: EffortLevel) => {
+      if (!extras || !chatId) return;
+      const tuning: SessionTuning = { effort };
+      const { port } = extras;
+      optimisticPatch({ effort }, () => setChatTuning(port, chatId, tuning), 'setEffort');
+    },
+    [chatId, extras, optimisticPatch],
   );
 
   const setFeature = useCallback(
     (key: FeatureKey, on: boolean) => {
-      if (!chat || !chatId || portRef.current == null) return;
-      const prev = chat;
+      if (!extras || !chatId) return;
       // Write ONLY the touched field — ultracode→xhigh coercion is a daemon resolver invariant.
       const patch: SessionTuning = { [key]: on };
-      const next: Chat = { ...chat, ...patch };
-      setChat(next);
-
-      setChatTuning(portRef.current, chatId, patch)
-        .then((updated) => setChat(updated))
-        .catch((err) => {
-          console.warn('[composer/useComposerTuning] setFeature failed — reverting', { key, err });
-          setChat(prev);
-        });
+      const { port } = extras;
+      optimisticPatch(patch as Partial<Chat>, () => setChatTuning(port, chatId, patch), `setFeature(${key})`);
     },
-    [chat, chatId],
+    [chatId, extras, optimisticPatch],
   );
 
   // adapter / model / permission / plan all go through PATCH /config (one optimistic helper).
   const patchConfig = useCallback(
     (patch: ChatConfigPatch) => {
-      if (!chat || !chatId || portRef.current == null) return;
-      const prev = chat;
-      setChat({ ...chat, ...patch });
-      setChatConfig(portRef.current, chatId, patch)
-        .then((updated) => setChat(updated))
-        .catch((err) => {
-          console.warn('[composer/useComposerTuning] setChatConfig failed — reverting', { patch, err });
-          setChat(prev);
-        });
+      if (!extras || !chatId) return;
+      const { port } = extras;
+      optimisticPatch(patch as Partial<Chat>, () => setChatConfig(port, chatId, patch), 'patchConfig');
     },
-    [chat, chatId],
+    [chatId, extras, optimisticPatch],
   );
+
   const setModel = useCallback((m: string) => patchConfig({ model: m }), [patchConfig]);
   const setPlanMode = useCallback((on: boolean) => patchConfig({ planMode: on }), [patchConfig]);
   const setPermissionMode = useCallback((mode: ExecutionMode) => patchConfig({ permissionMode: mode }), [patchConfig]);
@@ -206,6 +203,6 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     setModel,
     setPlanMode,
     setPermissionMode,
-    disabled: chat?.isRunning === true,
+    disabled: isRunning,
   };
 }

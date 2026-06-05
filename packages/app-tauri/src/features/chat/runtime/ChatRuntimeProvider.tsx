@@ -63,7 +63,7 @@ interface RuntimeWiringProps {
 
 function RuntimeWiring({ chatId, port, registry, children }: RuntimeWiringProps) {
   const controller = registry.getOrCreate(chatId, port);
-  const runtime = useChatThreadRuntime(controller);
+  const runtime = useChatThreadRuntime(controller, port);
 
   return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;
 }

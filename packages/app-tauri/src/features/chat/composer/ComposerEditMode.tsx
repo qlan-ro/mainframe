@@ -8,38 +8,42 @@
  * toolbar is shown MUTED (the queue-edit contract is content-only — `PATCH
  * /queue/:id { content }`). Save updates the queued item; Cancel-edit discards
  * and leaves it queued.
+ *
+ * On save failure the editor stays open and an inline error line is shown —
+ * the edit is NOT silently discarded.
  */
 import { useState, useCallback } from 'react';
 import { PencilIcon, CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDaemonPort } from '@/lib/tauri/bridge';
-import { editQueuedMessage } from '@/lib/api/chats';
-import { useChatId } from '../tools/chat-tool-context';
+import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { ComposerToolbar } from './ComposerToolbar';
 import type { QueuedEdit } from './composer-edit-context';
 
 export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: () => void }) {
-  const chatId = useChatId();
+  const extras = useChatExtras();
   const [text, setText] = useState(edit.content);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSave = useCallback(() => {
     const trimmed = text.trim();
-    if (!chatId || !trimmed || trimmed === edit.content) {
+    if (!extras || !trimmed || trimmed === edit.content) {
       onDone();
       return;
     }
     setSaving(true);
-    void (async () => {
-      try {
-        await editQueuedMessage(await getDaemonPort(), chatId, edit.messageId, trimmed);
-      } catch (err) {
-        console.warn('[queued] edit save failed', { messageId: edit.messageId, err });
-      } finally {
+    setSaveError(null);
+    extras
+      .editQueued(edit.messageId, trimmed)
+      .then(() => {
         onDone();
-      }
-    })();
-  }, [text, chatId, edit, onDone]);
+      })
+      .catch((err: unknown) => {
+        console.warn('[queued] edit save failed', { messageId: edit.messageId, err });
+        setSaving(false);
+        setSaveError('Save failed — please try again.');
+      });
+  }, [text, extras, edit, onDone]);
 
   return (
     <div
@@ -51,7 +55,11 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
           <PencilIcon size={12} />
         </span>
         <span className="text-caption font-semibold text-foreground">Editing queued message</span>
-        <span className="text-caption text-mf-text-3">· stays queued until the run finishes</span>
+        {saveError ? (
+          <span className="text-caption text-destructive">{saveError}</span>
+        ) : (
+          <span className="text-caption text-mf-text-3">· stays queued until the run finishes</span>
+        )}
         <span className="ml-auto font-mono text-micro text-mf-text-4">esc to cancel</span>
       </div>
 

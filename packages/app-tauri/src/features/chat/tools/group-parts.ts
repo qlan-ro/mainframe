@@ -17,6 +17,22 @@ import type { PartState } from '@assistant-ui/react';
 export type ChatGroupKey = `group-${string}`;
 export type PartGroups = Readonly<Record<string, string>>;
 
+const TOOL_GROUP_PREFIX = 'group-tool-' as const;
+
+/** Encode a daemon groupId into the GroupedParts key. */
+export function toToolGroupKey(groupId: string): ChatGroupKey {
+  return `${TOOL_GROUP_PREFIX}${groupId}`;
+}
+
+/**
+ * Decode a GroupedParts key back to the daemon groupId.
+ * Returns `null` for non-tool-group keys (e.g. `'group-reasoning'`).
+ */
+export function parseToolGroupKey(key: string): string | null {
+  if (key.startsWith(TOOL_GROUP_PREFIX)) return key.slice(TOOL_GROUP_PREFIX.length);
+  return null;
+}
+
 /**
  * Builds a `groupBy` bound to one message's daemon group membership. Memoize on
  * `partGroups` identity at the call site so GroupedParts can reuse its tree.
@@ -28,7 +44,7 @@ export function makeChatGroupBy(partGroups: PartGroups): (part: PartState) => re
     if (part.type === 'reasoning') return ['group-reasoning'];
     if (part.type === 'tool-call') {
       const groupId = partGroups[part.toolCallId];
-      return groupId ? [`group-tool-${groupId}`] : [];
+      return groupId ? [toToolGroupKey(groupId)] : [];
     }
     return [];
   };

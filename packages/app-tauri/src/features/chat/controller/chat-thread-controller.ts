@@ -11,8 +11,15 @@
 import type { AppendMessage } from '@assistant-ui/react';
 import type { DaemonEvent, ControlResponse, DisplayContent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
-import { getChatMessages, interruptChat, resumeChat } from '../../../lib/api/chats';
-import { uploadAttachments, type UploadAttachmentItem } from '../../../lib/api/attachments';
+import {
+  getChatMessages,
+  interruptChat,
+  resumeChat,
+  cancelQueuedMessage,
+  editQueuedMessage,
+} from '../../../lib/api/chats';
+import { uploadAttachments } from '../../../lib/api/attachments';
+import { toUploadItems } from '../composer/attachment-adapter';
 import {
   createChatThreadState,
   reduceChatThreadState,
@@ -30,26 +37,6 @@ let localIdCounter = 0;
 function createLocalId(prefix: string): string {
   localIdCounter += 1;
   return `${prefix}_${Date.now().toString(36)}${localIdCounter.toString(36)}`;
-}
-
-/** AppendMessage attachments → daemon upload items (base64 extracted from the data-URL parts). */
-function toUploadItems(attachments: AppendMessage['attachments']): UploadAttachmentItem[] {
-  const items: UploadAttachmentItem[] = [];
-  for (const att of attachments ?? []) {
-    const part = att.content?.[0];
-    const dataUrl = part?.type === 'image' ? part.image : part?.type === 'text' ? part.text : undefined;
-    const m = dataUrl ? /^data:([^;]+);base64,(.*)$/.exec(dataUrl) : null;
-    if (!m) continue;
-    const data = m[2]!;
-    items.push({
-      name: att.name,
-      mediaType: m[1]!,
-      data,
-      sizeBytes: Math.floor((data.length * 3) / 4),
-      kind: att.type === 'image' ? 'image' : 'file',
-    });
-  }
-  return items;
 }
 
 const PENDING_MATCH_WINDOW_MS = 2 * 60 * 1000;
@@ -202,6 +189,14 @@ export class ChatThreadController {
   public async replyToPermission(requestId: string, response: ControlResponse): Promise<void> {
     this.ws.send({ type: 'permission.respond', chatId: this.chatId, response });
     this.dispatch({ type: 'permission.resolved', requestId });
+  }
+
+  public async cancelQueued(messageId: string): Promise<void> {
+    await cancelQueuedMessage(this.port, this.chatId, messageId);
+  }
+
+  public async editQueued(messageId: string, content: string): Promise<void> {
+    await editQueuedMessage(this.port, this.chatId, messageId, content);
   }
 
   // --------------------------------------------------------------------------

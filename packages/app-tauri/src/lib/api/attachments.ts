@@ -8,9 +8,9 @@ import { apiBase, request } from './http';
 export interface UploadAttachmentItem {
   name: string;
   mediaType: string;
-  sizeBytes: number;
-  kind: 'image' | 'file';
   data: string; // base64 (no data: prefix)
+  sizeBytes?: number;
+  kind?: 'image' | 'file';
   originalPath?: string;
 }
 
