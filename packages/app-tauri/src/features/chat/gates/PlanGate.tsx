@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { ClipboardListIcon } from 'lucide-react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import type { ReplyFn } from './gate-types';
 import { GateCardShell, GateHead } from './shared/GateShell';
@@ -21,8 +23,8 @@ export interface PlanGateProps {
 function PlanBody({ plan }: { plan: string }) {
   return (
     <div className="px-3.5 pb-3">
-      <div className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded-md bg-card px-3 py-2.5 text-body text-foreground">
-        {plan}
+      <div className="aui-md max-h-[300px] overflow-auto rounded-md bg-card px-3 py-2.5 text-body text-foreground">
+        <Markdown remarkPlugins={[remarkGfm]}>{plan}</Markdown>
       </div>
     </div>
   );
