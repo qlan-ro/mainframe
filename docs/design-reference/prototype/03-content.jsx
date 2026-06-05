@@ -654,7 +654,7 @@ function WorktreeButton() {
   );
 }
 
-function Composer({ sessionEmpty = false, quotes = [], onRemoveQuote, value, captures = [], embedded = false, initialProvider = 'anthropic', initialModel = 'sonnet-4.5', initialTuning }) {
+function Composer({ sessionEmpty = false, quotes = [], onRemoveQuote, value, captures = [], embedded = false, editing = false, onSave, onCancelEdit, initialProvider = 'anthropic', initialModel = 'sonnet-4.5', initialTuning }) {
   const UMScreenshot = window.UMCaptureScreenshot, UMInspect = window.UMInspectChip, UMFile = window.UMFileChip;
   // Shared model + tuning state so EffortPicker / FeaturesPopover read the
   // selected model's capabilities. Tuning merges so each control writes one key.
@@ -681,19 +681,30 @@ function Composer({ sessionEmpty = false, quotes = [], onRemoveQuote, value, cap
   };
   return (
     <ComposerModelCtx.Provider value={ctxValue}>
-    {ComposerBody({ sessionEmpty, quotes, onRemoveQuote, value, captures, embedded, UMScreenshot, UMInspect, UMFile })}
+    {ComposerBody({ sessionEmpty, quotes, onRemoveQuote, value, captures, embedded, editing, onSave, onCancelEdit, UMScreenshot, UMInspect, UMFile })}
     </ComposerModelCtx.Provider>
   );
 }
 
-function ComposerBody({ sessionEmpty, quotes, onRemoveQuote, value, captures, embedded, UMScreenshot, UMInspect, UMFile }) {
+function ComposerBody({ sessionEmpty, quotes, onRemoveQuote, value, captures, embedded, editing, onSave, onCancelEdit, UMScreenshot, UMInspect, UMFile }) {
   return (
     <div data-tut="composer" style={{
       margin: embedded ? 0 : '8px 22px 16px', flexShrink: 0,
       borderRadius: 13, background: T.content,
-      border: `0.5px solid ${T.borderH}`,
-      boxShadow: `0 1px 0 ${T.hairline}, 0 8px 22px rgba(0,0,0,0.05)`,
+      border: `0.5px solid ${editing ? T.amber + 'aa' : T.borderH}`,
+      boxShadow: editing
+        ? `0 0 0 3px ${T.amber}1c, 0 8px 22px rgba(0,0,0,0.06)`
+        : `0 1px 0 ${T.hairline}, 0 8px 22px rgba(0,0,0,0.05)`,
     }}>
+      {editing && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 11px 7px 9px', borderBottom: `0.5px solid ${T.hairline}`, background: `${T.amber}10`, borderRadius: '13px 13px 0 0' }}>
+          <span style={{ width: 19, height: 19, borderRadius: 6, background: `${T.amber}24`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon name="pencil" size={11} color={T.amber}/></span>
+          <span style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>Editing queued message</span>
+          <span style={{ fontFamily: FONT, fontSize: 11, color: T.text3 }}>· stays queued until the run finishes</span>
+          <div style={{ flex: 1 }}/>
+          <span style={{ fontFamily: MONO, fontSize: 10, color: T.text4 }}>esc to cancel</span>
+        </div>
+      )}
       {captures.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '9px 12px 0' }}>
           {captures.map((c, i) => {
@@ -735,25 +746,47 @@ function ComposerBody({ sessionEmpty, quotes, onRemoveQuote, value, captures, em
         <button style={{ ...gActionStyle(), width: 22, height: 22 }}>
           <Icon name="at" size={12} color={T.text2}/>
         </button>
-        <div style={{ width: 1, height: 12, background: T.border, margin: '0 4px' }}/>
-        <ModelSelector sessionEmpty={sessionEmpty}/>
-        <ComposerSelect title="Permission mode" icon="shield" value="unattended"
-          onChange={() => {}}
-          options={[
-            { id: 'interactive', label: 'Interactive', note: 'Approve every action' },
-            { id: 'auto-edits',  label: 'Auto-Edits',  note: 'Edits auto-applied; commands ask' },
-            { id: 'unattended',  label: 'Unattended',  note: 'Runs without prompts' },
-          ]}/>
-        <PlanModeToggle/>
-        <EffortPicker disabled={false}/>
-        <FeaturesPopover disabled={false}/>
-        <WorktreeButton/>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap',
+          opacity: editing ? 0.4 : 1, pointerEvents: editing ? 'none' : 'auto',
+          filter: editing ? 'saturate(0.6)' : 'none', transition: 'opacity .15s ease' }}>
+          <div style={{ width: 1, height: 12, background: T.border, margin: '0 4px' }}/>
+          <ModelSelector sessionEmpty={sessionEmpty}/>
+          <ComposerSelect title="Permission mode" icon="shield" value="unattended"
+            onChange={() => {}}
+            options={[
+              { id: 'interactive', label: 'Interactive', note: 'Approve every action' },
+              { id: 'auto-edits',  label: 'Auto-Edits',  note: 'Edits auto-applied; commands ask' },
+              { id: 'unattended',  label: 'Unattended',  note: 'Runs without prompts' },
+            ]}/>
+          <PlanModeToggle/>
+          <EffortPicker disabled={false}/>
+          <FeaturesPopover disabled={false}/>
+          <WorktreeButton/>
+        </div>
         <div style={{ flex: 1, minWidth: 8 }}/>
-        <button style={{
-          width: 26, height: 26, borderRadius: 8, background: ACCENT,
-          border: 'none', cursor: 'pointer',
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        }}><Icon name="arrow.up" size={13} color="#fff" stroke={2.2}/></button>
+        {editing ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={onCancelEdit} style={{
+              height: 26, padding: '0 12px', borderRadius: 8, cursor: 'pointer',
+              border: `0.5px solid ${T.border}`, background: 'transparent', color: T.text2,
+              fontFamily: FONT, fontSize: 12, fontWeight: 600, letterSpacing: -0.1, whiteSpace: 'nowrap',
+            }}
+              onMouseEnter={(e) => e.currentTarget.style.background = T.rowHover}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>Cancel edit</button>
+            <button onClick={onSave} style={{
+              height: 26, padding: '0 13px 0 11px', borderRadius: 8, cursor: 'pointer',
+              border: 'none', background: ACCENT, color: '#fff',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontFamily: FONT, fontSize: 12, fontWeight: 600, letterSpacing: -0.1,
+            }}><Icon name="checkmark" size={12} color="#fff" stroke={2.4}/>Save</button>
+          </div>
+        ) : (
+          <button style={{
+            width: 26, height: 26, borderRadius: 8, background: ACCENT,
+            border: 'none', cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icon name="arrow.up" size={13} color="#fff" stroke={2.2}/></button>
+        )}
       </div>
     </div>
   );

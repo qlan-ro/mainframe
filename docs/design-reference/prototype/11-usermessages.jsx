@@ -107,6 +107,88 @@ function UMQueuedBadge() {
   );
 }
 
+// ── Queued messages — pending cool-cards in the thread ─────────────
+// A queued message is a FULL message the user submitted while the agent
+// was still running; it sends automatically (FIFO) when the run finishes.
+// Design: a PENDING variant of the sent cool-card (same gradient/ink, but
+// a dashed hairline + slight ghost + flat) that lands in narrative order at
+// the thread tail — not a banner over the input. Per-item Edit / Cancel are
+// quiet (hover/focus-revealed). An amber meta footer (the existing spinner +
+// "sends after the current run" copy) carries the "not yet sent" semantics.
+function umOrdinal(n) { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+
+// Quiet leading action (Edit / Cancel) — ghost pill, revealed on hover.
+function UMQueuedAction({ icon, label, onClick, danger }) {
+  const [h, setH] = React.useState(false);
+  const col = danger ? T.red : T.text;
+  return (
+    <button onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4, height: 24, padding: '0 9px', borderRadius: 7, cursor: 'pointer',
+      border: `0.5px solid ${h ? (danger ? T.red + '55' : T.border) : 'transparent'}`,
+      background: h ? (danger ? T.red + '14' : T.rowHover) : 'transparent',
+      color: h ? col : T.text3, fontFamily: FONT, fontSize: 11, fontWeight: 600, letterSpacing: -0.1, transition: 'background .12s ease, border-color .12s ease, color .12s ease',
+    }}>
+      <Icon name={icon} size={11} color={h ? col : T.text3}/>{label}
+    </button>
+  );
+}
+
+// Amber meta footer — head item spins; later items show a steady amber dot.
+function UMQueuedMeta({ position = 1, total = 1, sending = false }) {
+  const head = position === 1;
+  let label;
+  if (sending) label = 'Sending now\u2026';
+  else if (total <= 1) label = 'Queued \u00b7 sends after the current run';
+  else if (head) label = 'Queued \u00b7 sends next, after the current run';
+  else label = `Queued \u00b7 ${umOrdinal(position)} to send`;
+  const spin = sending || head;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 10, color: spin ? T.text3 : T.text4, letterSpacing: -0.1, marginRight: 2 }}>
+      {spin
+        ? <span style={{ width: 7, height: 7, borderRadius: '50%', border: `1.5px solid ${T.amber}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'tw-spin 1.1s linear infinite' }}/>
+        : <span style={{ width: 7, height: 7, borderRadius: '50%', background: T.amber, opacity: 0.5, display: 'inline-block' }}/>}
+      {label}
+    </span>
+  );
+}
+
+// One queued message — pending bubble (+ optional attachments/context via
+// `extras`) with the amber meta footer and hover-revealed Edit / Cancel.
+function UMQueuedTurn({ children, position = 1, total = 1, sending = false, showActions = false, extras, onEdit, onCancel, maxWidth = 470 }) {
+  const [hover, setHover] = React.useState(false);
+  const reveal = showActions || hover;
+  return (
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+          opacity: reveal ? 1 : 0, transform: reveal ? 'translateX(0)' : 'translateX(6px)',
+          transition: 'opacity .16s ease, transform .16s ease', pointerEvents: reveal ? 'auto' : 'none' }}>
+          <UMQueuedAction icon="pencil" label="Edit" onClick={onEdit}/>
+          <UMQueuedAction icon="xmark" label="Cancel" onClick={onCancel} danger/>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 7, minWidth: 0 }}>
+          <div style={{ position: 'relative', maxWidth, background: UCARD, border: `1px dashed ${sending ? UEDGE : T.umDash}`, borderRadius: 13, padding: '10px 15px', fontFamily: FONT, fontSize: 13, color: UINK, lineHeight: 1.58, letterSpacing: -0.1, opacity: sending ? 1 : 0.82, transition: 'opacity .2s ease, border-color .2s ease' }}>
+            {children}
+          </div>
+          {extras && <div style={{ opacity: sending ? 1 : 0.9, transition: 'opacity .2s ease' }}>{extras}</div>}
+        </div>
+      </div>
+      <UMQueuedMeta position={position} total={total} sending={sending}/>
+    </div>
+  );
+}
+
+// FIFO stack — injects send-order position/total into each UMQueuedTurn child.
+function UMQueuedStack({ children, gap = 15 }) {
+  const arr = React.Children.toArray(children);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap }}>
+      {arr.map((ch, i) => React.cloneElement(ch, { position: i + 1, total: arr.length, key: i }))}
+    </div>
+  );
+}
+
 // ── Attachments — rich type-colored pills + image tiles ────────────
 const UM_FILE = {
   tsx: { c: '#2f74c0', l: 'TypeScript' }, ts: { c: '#2f74c0', l: 'TypeScript' },
@@ -284,6 +366,7 @@ function UMCodeRef({ file = 'Layout.tsx', range = 'L42–48', lines = [], collap
 
 Object.assign(window, {
   UMRow, UMBubble, UMTextTurn, UMSlashBubble, UMPlanBubble, UMQueuedBadge,
+  UMQueuedTurn, UMQueuedStack, UMQueuedMeta, UMQueuedAction, umOrdinal,
   UMThumbRow, UMFileThumb, UMImageThumb,
   UMCaptureScreenshot, UMInspectChip, UMFileChip, UMComposer, umMentions,
   UMContextRow, UMCodeRef,

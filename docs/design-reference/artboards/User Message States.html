@@ -20,13 +20,14 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <script type="text/babel" src="design-canvas.jsx"></script>
-<script type="text/babel" src="mainframe/01-base.jsx?v=ts89"></script>
-<script type="text/babel" src="mainframe/08-markdown.jsx?v=ts89"></script>
-<script type="text/babel" src="mainframe/11-usermessages.jsx?v=ts89"></script>
+<script type="text/babel" src="mainframe/01-base.jsx?v=ts112"></script>
+<script type="text/babel" src="mainframe/08-markdown.jsx?v=ts112"></script>
+<script type="text/babel" src="mainframe/11-usermessages.jsx?v=ts112"></script>
 
 <script type="text/babel" data-presets="env,react">
 const { DesignCanvas, DCSection, DCArtboard } = window;
 const { UMRow, UMBubble, UMTextTurn, UMSlashBubble, UMPlanBubble, UMQueuedBadge,
+        UMQueuedTurn, UMQueuedStack,
         UMThumbRow, UMFileThumb, UMImageThumb,
         UMCaptureScreenshot, UMInspectChip, UMFileChip, UMComposer, umMentions,
         UMContextRow, UMCodeRef } = window;
@@ -55,15 +56,12 @@ function App() {
         </DCArtboard>
       </DCSection>
 
-      <DCSection id="slash" title="Commands, skills & plans" subtitle="Slash invocations, the queued state, and the first message of a session implementing an approved plan">
+      <DCSection id="slash" title="Commands, skills & plans" subtitle="Slash invocations and the first message of a session implementing an approved plan">
         <DCArtboard id="command" label="/command (wrench)" width={420} height={120}>
           <Frame center><UMRow><UMSlashBubble kind="command" name="review">the open diff against main.</UMSlashBubble></UMRow></Frame>
         </DCArtboard>
         <DCArtboard id="skill" label="/skill (zap)" width={420} height={120}>
           <Frame center><UMRow><UMSlashBubble kind="skill" name="write-tests">for the new RailIcons component.</UMSlashBubble></UMRow></Frame>
-        </DCArtboard>
-        <DCArtboard id="queued" label="Queued" width={420} height={130}>
-          <Frame center><UMRow><UMQueuedBadge/><UMBubble>And once that's in, bump the version and tag a release.</UMBubble></UMRow></Frame>
         </DCArtboard>
         <DCArtboard id="plan" label="Implementing plan · prose + list" width={540} height={290}>
           <Frame center><UMRow><UMPlanBubble md={`I'll collapse the sidebar into an icon rail and make the state survive reloads. The header hook is already one-way, so it needs no change there.
@@ -79,6 +77,25 @@ I'll keep \`⌘1\` bound to the toggle and add a regression test.`}/></UMRow></F
           <Frame center><UMRow><UMPlanBubble md={`Going with the Zustand persist middleware so this matches the existing session-state convention rather than introducing a one-off.
 
 The migration is gated behind a version check so existing users don't lose their layout, and I'll land a test before wiring up the rail UI.`}/></UMRow></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="queued" title="Queued messages" subtitle="Submitted while the agent is still running. They land as PENDING cool-cards at the thread tail — in narrative order, where they'll send — and go out automatically (FIFO) when the run finishes. A dashed hairline + slight ghost + amber meta footer read 'not yet sent'; quiet Edit / Cancel reveal on hover. (Not a banner over the input.)">
+        <DCArtboard id="q-one" label="One queued message" width={480} height={140}>
+          <Frame center><UMQueuedTurn>And once that's in, bump the version and tag a release.</UMQueuedTurn></Frame>
+        </DCArtboard>
+        <DCArtboard id="q-hover" label="Hover / focus — Edit + Cancel revealed" width={560} height={140}>
+          <Frame center><UMQueuedTurn showActions>And once that's in, bump the version and tag a release.</UMQueuedTurn></Frame>
+        </DCArtboard>
+        <DCArtboard id="q-fifo" label="Multiple queued · FIFO order" width={540} height={300}>
+          <Frame center><UMQueuedStack>
+            <UMQueuedTurn>And once that's in, bump the version and tag a release.</UMQueuedTurn>
+            <UMQueuedTurn>Then regenerate the changelog from the merged PRs since the last tag.</UMQueuedTurn>
+            <UMQueuedTurn>Finally, post the release notes to the #ship channel.</UMQueuedTurn>
+          </UMQueuedStack></Frame>
+        </DCArtboard>
+        <DCArtboard id="q-attach" label="Queued + attachment" width={500} height={220}>
+          <Frame center><UMQueuedTurn extras={<UMThumbRow><UMFileThumb name="release.yml" size="1.2 KB"/></UMThumbRow>}>Use this workflow file when you cut the tag.</UMQueuedTurn></Frame>
         </DCArtboard>
       </DCSection>
 

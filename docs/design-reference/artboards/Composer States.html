@@ -23,11 +23,11 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <script type="text/babel" src="design-canvas.jsx"></script>
-<script type="text/babel" src="mainframe/01-base.jsx?v=ts108"></script>
-<script type="text/babel" src="mainframe/02-chrome.jsx?v=ts108"></script>
-<script type="text/babel" src="mainframe/03-content.jsx?v=ts108"></script>
-<script type="text/babel" src="mainframe/11-usermessages.jsx?v=ts108"></script>
-<script type="text/babel" src="mainframe/13-popover.jsx?v=ts108"></script>
+<script type="text/babel" src="mainframe/01-base.jsx?v=ts112"></script>
+<script type="text/babel" src="mainframe/02-chrome.jsx?v=ts112"></script>
+<script type="text/babel" src="mainframe/03-content.jsx?v=ts112"></script>
+<script type="text/babel" src="mainframe/11-usermessages.jsx?v=ts112"></script>
+<script type="text/babel" src="mainframe/13-popover.jsx?v=ts112"></script>
 
 <script type="text/babel" data-presets="env,react">
 const { DesignCanvas, DCSection, DCArtboard, Composer } = window;
@@ -53,6 +53,18 @@ function App() {
         </DCArtboard>
         <DCArtboard id="typing" label="Typed prompt" width={680} height={140}>
           <Frame><Composer embedded value="Refactor the layout so the sidebar collapses to an icon rail."/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="edit" title="Editing a queued message" subtitle="Clicking Edit on a queued item loads its ENTIRE content back into the one composer, which enters edit mode: the text and attachments/captures are populated and stay editable. The run-config it carries is shown muted (not the focus while editing). An amber header marks the mode; Save updates the queued item, Cancel edit discards changes and leaves it queued.">
+        <DCArtboard id="edit-loaded" label="Edit mode · text + attachment (config muted)" width={680} height={205}>
+          <Frame><Composer embedded editing
+            value="And once that's in, bump the version and tag a release — use the workflow file I attached."
+            captures={[{ kind: 'file', name: 'release.yml' }]}
+            initialProvider="anthropic" initialModel="opus-4.1" initialTuning={{ effort: 'high', adaptiveThinking: true }}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="edit-text" label="Edit mode · text only" width={680} height={165}>
+          <Frame><Composer embedded editing value="Then regenerate the changelog from the merged PRs since the last tag."/></Frame>
         </DCArtboard>
       </DCSection>
 

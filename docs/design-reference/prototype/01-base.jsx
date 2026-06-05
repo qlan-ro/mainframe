@@ -134,6 +134,7 @@ const MF_LIGHT = {
   umInk:       '#1b1e26',
   umCard:      'linear-gradient(180deg, #f4f6fb 0%, #eef1f9 100%)',
   umEdge:      'rgba(40,70,150,0.13)',
+  umDash:      'rgba(40,70,150,0.32)',
   umFade:      '#eef1f9',
   // Viewer matte / transparency checkerboard (module 15)
   viewerMatte: '#e6e2da',
@@ -184,6 +185,7 @@ const MF_DARK = {
   umInk:       '#e9ecf5',
   umCard:      'linear-gradient(180deg, #262a35 0%, #20242e 100%)',
   umEdge:      'rgba(150,175,235,0.20)',
+  umDash:      'rgba(150,175,235,0.34)',
   umFade:      '#20242e',
   viewerMatte: '#16140f',
   viewerCheckA:'#1c1a16',
