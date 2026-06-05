@@ -12,6 +12,7 @@ import { UserMessage } from '../messages/UserMessage';
 import { AssistantMessage } from '../messages/AssistantMessage';
 import { SystemMessage } from '../messages/SystemMessage';
 import { Composer } from '../composer/Composer';
+import { ComposerEditProvider } from '../composer/composer-edit-context';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';
 
@@ -31,38 +32,40 @@ function GeneratingIndicator() {
 
 export function ChatThread() {
   return (
-    <ThreadPrimitive.Root
-      data-testid="chat-thread"
-      className="flex h-full flex-col overflow-hidden bg-background text-foreground"
-    >
-      {/* Native autoscroll Viewport + a CSS warm-chrome thin scrollbar.
-          (Radix ScrollArea via asChild doesn't bind to ThreadPrimitive.Viewport.) */}
-      <ThreadPrimitive.Viewport
-        data-testid="chat-thread-viewport"
-        className="mf-thin-scrollbar relative flex flex-1 flex-col overflow-y-auto"
+    <ComposerEditProvider>
+      <ThreadPrimitive.Root
+        data-testid="chat-thread"
+        className="flex h-full flex-col overflow-hidden bg-background text-foreground"
       >
-        <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
-          <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage, SystemMessage }} />
-        </div>
-
-        {/* Sticky footer — its height is measured into the scroll inset. */}
-        <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex flex-col bg-background">
-          <ThreadPrimitive.ScrollToBottom asChild>
-            <button
-              data-testid="chat-scroll-to-bottom"
-              aria-label="Scroll to bottom"
-              className="absolute -top-10 left-1/2 z-10 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[var(--mf-shadow-pop)] transition-opacity hover:text-foreground disabled:invisible"
-            >
-              <ArrowDownIcon className="size-4" />
-            </button>
-          </ThreadPrimitive.ScrollToBottom>
-
-          <div className="mx-auto w-full max-w-3xl px-5 pb-4">
-            <GeneratingIndicator />
-            <Composer />
+        {/* Native autoscroll Viewport + a CSS warm-chrome thin scrollbar.
+          (Radix ScrollArea via asChild doesn't bind to ThreadPrimitive.Viewport.) */}
+        <ThreadPrimitive.Viewport
+          data-testid="chat-thread-viewport"
+          className="mf-thin-scrollbar relative flex flex-1 flex-col overflow-y-auto"
+        >
+          <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
+            <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage, SystemMessage }} />
           </div>
-        </ThreadPrimitive.ViewportFooter>
-      </ThreadPrimitive.Viewport>
-    </ThreadPrimitive.Root>
+
+          {/* Sticky footer — its height is measured into the scroll inset. */}
+          <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex flex-col bg-background">
+            <ThreadPrimitive.ScrollToBottom asChild>
+              <button
+                data-testid="chat-scroll-to-bottom"
+                aria-label="Scroll to bottom"
+                className="absolute -top-10 left-1/2 z-10 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[var(--mf-shadow-pop)] transition-opacity hover:text-foreground disabled:invisible"
+              >
+                <ArrowDownIcon className="size-4" />
+              </button>
+            </ThreadPrimitive.ScrollToBottom>
+
+            <div className="mx-auto w-full max-w-3xl px-5 pb-4">
+              <GeneratingIndicator />
+              <Composer />
+            </div>
+          </ThreadPrimitive.ViewportFooter>
+        </ThreadPrimitive.Viewport>
+      </ThreadPrimitive.Root>
+    </ComposerEditProvider>
   );
 }

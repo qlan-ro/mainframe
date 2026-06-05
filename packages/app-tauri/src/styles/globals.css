@@ -67,6 +67,7 @@
   --mf-chip: rgba(0, 0, 0, 0.05);
   --mf-selection: rgba(10, 132, 255, 0.10);
   --mf-warning: #d97706;
+  --mf-warning-tint: rgba(217, 119, 6, 0.10);
   --mf-success: #28a745;
 
   /* Editor syntax — LIGHT */
@@ -102,6 +103,7 @@
   --mf-um-fade: #eef1f9;
   --mf-um-ink: #1b1e26;
   --mf-um-edge: rgba(40, 70, 150, 0.13);
+  --mf-um-dash: rgba(40, 70, 150, 0.32);
 
   /* File-viewer backdrop — LIGHT */
   --mf-viewer-matte: #e6e2da;
@@ -158,6 +160,7 @@
   --mf-chip: rgba(255, 255, 255, 0.06);
   --mf-selection: rgba(10, 132, 255, 0.26);
   --mf-warning: #e6a23c;
+  --mf-warning-tint: rgba(230, 162, 60, 0.12);
   --mf-success: #3ad06a;
 
   /* Editor syntax — DARK */
@@ -191,6 +194,7 @@
   --mf-um-fade: #20242e;
   --mf-um-ink: #e9ecf5;
   --mf-um-edge: rgba(150, 175, 235, 0.20);
+  --mf-um-dash: rgba(150, 175, 235, 0.34);
 
   /* File-viewer backdrop — DARK */
   --mf-viewer-matte: #16140f;
@@ -242,6 +246,7 @@
   --color-mf-chip: var(--mf-chip);
   --color-mf-selection: var(--mf-selection);
   --color-mf-warning: var(--mf-warning);
+  --color-mf-warning-tint: var(--mf-warning-tint);
   --color-mf-success: var(--mf-success);
   --color-mf-code-bg: var(--mf-code-bg);
   --color-mf-code-fg: var(--mf-code-fg);
@@ -259,6 +264,7 @@
   --color-mf-term-amber: var(--mf-term-amber);
   --color-mf-um-ink: var(--mf-um-ink);
   --color-mf-um-edge: var(--mf-um-edge);
+  --color-mf-um-dash: var(--mf-um-dash);
   --color-mf-viewer-matte: var(--mf-viewer-matte);
 
   /* Diff tint utilities */

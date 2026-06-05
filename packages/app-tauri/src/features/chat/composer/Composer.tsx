@@ -15,6 +15,8 @@ import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ComposerToolbar } from './ComposerToolbar';
+import { ComposerEditMode } from './ComposerEditMode';
+import { useComposerEdit } from './composer-edit-context';
 
 /** Send (idle, disabled while empty) ↔ Cancel (running) — swapped on thread.isRunning. */
 function SendOrCancelButton() {
@@ -44,6 +46,9 @@ function SendOrCancelButton() {
 }
 
 export function Composer() {
+  const { editing, cancelEdit } = useComposerEdit();
+  if (editing) return <ComposerEditMode edit={editing} onDone={cancelEdit} />;
+
   return (
     <ComposerPrimitive.Root
       data-testid="chat-composer"

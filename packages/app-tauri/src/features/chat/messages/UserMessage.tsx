@@ -42,6 +42,7 @@ import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { ReadMoreBubble } from './ReadMoreBubble';
+import { QueuedUserTurn } from './QueuedUserTurn';
 import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text';
 import { mainframeUserFormatter } from './user-directives';
 
@@ -116,22 +117,6 @@ function CoolCard({ children, className }: CoolCardProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Queued badge
-// ─────────────────────────────────────────────────────────────────────────────
-
-function QueuedBadge() {
-  return (
-    <span className="mr-1 inline-flex items-center gap-1.5 font-mono text-micro text-mf-text-3">
-      <span
-        className="inline-block h-[7px] w-[7px] shrink-0 animate-spin rounded-full border-[1.5px] border-mf-warning"
-        style={{ borderTopColor: 'transparent' }}
-      />
-      Queued · sends after the current run
-    </span>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Slash (command / skill) pill — metadata-driven leading badge
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -184,6 +169,7 @@ function InlineImageThumbs({ parts }: InlineImageThumbsProps) {
 function UserMessageImpl() {
   const meta = useMainframeMeta();
   const isQueued = meta.queued === true;
+  const messageId = useAuiState((s) => (s as unknown as { message: { id: string } }).message.id);
 
   // Resolve text: prefer cleanText (pipeline-stripped) over raw part text
   const rawText = useAuiState((s) => {
@@ -221,25 +207,29 @@ function UserMessageImpl() {
   // TODO(leaf): SandboxCaptureContext — deferred to sandbox-capture leaf
   // TODO(leaf): FileAttachmentThumbs — deferred to attachment-chips leaf
 
+  const body = slashProps ? (
+    <ReadMoreBubble>
+      <SlashPill kind={slashProps.kind} name={slashProps.name} />
+      {slashProps.userText}
+    </ReadMoreBubble>
+  ) : cleanText ? (
+    <ReadMoreBubble>
+      <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userMarkdownComponents}>
+        {cleanText}
+      </Markdown>
+    </ReadMoreBubble>
+  ) : null;
+
   return (
     <MessagePrimitive.Root data-testid="chat-user-message" className="flex flex-col items-end gap-2 pt-2">
-      {isQueued && <QueuedBadge />}
-
-      {slashProps ? (
-        <CoolCard>
-          <ReadMoreBubble>
-            <SlashPill kind={slashProps.kind} name={slashProps.name} />
-            {slashProps.userText}
-          </ReadMoreBubble>
-        </CoolCard>
-      ) : cleanText ? (
-        <CoolCard>
-          <ReadMoreBubble>
-            <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={userMarkdownComponents}>
-              {cleanText}
-            </Markdown>
-          </ReadMoreBubble>
-        </CoolCard>
+      {isQueued ? (
+        body && (
+          <QueuedUserTurn messageId={messageId} content={cleanText}>
+            {body}
+          </QueuedUserTurn>
+        )
+      ) : body ? (
+        <CoolCard>{body}</CoolCard>
       ) : null}
 
       <InlineImageThumbs parts={imageParts} />

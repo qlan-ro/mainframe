@@ -4,7 +4,7 @@
  * isLocalhost() bypass confirmed in packages/core/src/server/middleware/auth.ts).
  */
 import type { ApiResponse, DisplayMessage, Chat, SessionTuning, ExecutionMode } from '@qlan-ro/mainframe-types';
-import { apiBase, fetchJson, postJson, patchJson } from './http';
+import { apiBase, fetchJson, postJson, patchJson, deleteJson } from './http';
 
 /** Body for PATCH /api/chats/:id/config — adapter / model / permission / plan. */
 export interface ChatConfigPatch {
@@ -56,6 +56,25 @@ export async function resumeChat(port: number, chatId: string): Promise<void> {
 
 export async function interruptChat(port: number, chatId: string): Promise<void> {
   const json = await postJson<ApiResponse<unknown>>(`${apiBase(port)}/api/chats/${chatId}/interrupt`);
+  if (!json.success) throw new Error(json.error);
+}
+
+/** Edit a queued message's text (it stays queued; sends after the current run). */
+export async function editQueuedMessage(
+  port: number,
+  chatId: string,
+  messageId: string,
+  content: string,
+): Promise<void> {
+  const json = await patchJson<ApiResponse<unknown>>(`${apiBase(port)}/api/chats/${chatId}/queue/${messageId}`, {
+    content,
+  });
+  if (!json.success) throw new Error(json.error);
+}
+
+/** Cancel (remove) a queued message before it sends. */
+export async function cancelQueuedMessage(port: number, chatId: string, messageId: string): Promise<void> {
+  const json = await deleteJson<ApiResponse<unknown>>(`${apiBase(port)}/api/chats/${chatId}/queue/${messageId}`);
   if (!json.success) throw new Error(json.error);
 }
 
