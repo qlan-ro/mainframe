@@ -19,7 +19,10 @@ The authoritative use-native checklist — every assistant-ui primitive/UI/hook 
 - **Message `ActionBarPrimitive`** (copy/export at least).
 
 ## Design-vs-native decisions (stop-and-ask)
-1. **Part grouping** — our **daemon-side** synthetic `_ToolGroup/_TaskGroup/_TaskProgress` (server-summarized pipeline) vs native client-side `GroupedParts` + `groupPartByType` + `display:'standalone'`. Big architectural call; sweep default = **keep daemon-driven**. *(Supersedes the earlier "drop the encoding" note.)*
+
+**→ RESOLVED 2026-06-05 (see `MIGRATION-TRACKER.md` "Open decisions" + `CLAUDE.md`):** part-grouping = **go native** (via the `convert-message` projection); subagent = **native `part.messages`**; sessions = **hybrid** (global runtime + native item rows in our layout); reasoning = **native, collapsed**; quote = **native UI + CLI glue**; errors = **keep text-routing**; queue = **keep daemon-backed**. Raw findings retained below for context.
+
+1. **Part grouping** — our **daemon-side** synthetic `_ToolGroup/_TaskGroup/_TaskProgress` (server-summarized pipeline) vs native client-side `GroupedParts` + `groupPartByType` + `display:'standalone'`. Big architectural call. *(Resolved: go native via projection.)*
 2. **Subagent/Task rendering** — `TaskCard` parses a `<usage>` string from flattened parts vs native `PartPrimitive.Messages` (real readonly nested thread). Native requires the **daemon to attach `messages` to Task tool-call parts** (pipeline change).
 3. **Thread-list / sessions sidebar** — native `ThreadListPrimitive` (flat, per-runtime) vs our **global cross-project sidebar** (grouping, filter pills, tags, PR/worktree badges, status dots, pin). **Domain conflict — the one place a re-impl may be justified.**
 4. **Reasoning** — native shadcn `Reasoning` (shimmer/auto-open) vs our `ThinkingPart` (currently wired OFF). Product choice: show reasoning or not.
