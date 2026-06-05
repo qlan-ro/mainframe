@@ -3,11 +3,29 @@
  * All routes are unauthenticated when called from localhost (daemon auth middleware
  * isLocalhost() bypass confirmed in packages/core/src/server/middleware/auth.ts).
  */
-import type { ApiResponse, DisplayMessage } from '@qlan-ro/mainframe-types';
-import { apiBase, fetchJson, postJson } from './http';
+import type { ApiResponse, DisplayMessage, Chat, SessionTuning } from '@qlan-ro/mainframe-types';
+import { apiBase, fetchJson, postJson, patchJson } from './http';
 
 export async function getChatMessages(port: number, chatId: string): Promise<DisplayMessage[]> {
   const json = await fetchJson<ApiResponse<DisplayMessage[]>>(`${apiBase(port)}/api/chats/${chatId}/messages`);
+  if (!json.success) throw new Error(json.error);
+  return json.data;
+}
+
+/** The chat record (model, effort, planMode, permissionMode, adapterId, isRunning, …). */
+export async function getChat(port: number, chatId: string): Promise<Chat> {
+  const json = await fetchJson<ApiResponse<Chat>>(`${apiBase(port)}/api/chats/${chatId}`);
+  if (!json.success) throw new Error(json.error);
+  return json.data;
+}
+
+/**
+ * Persist a tuning patch (effort + fast/ultracode/adaptiveThinking — the only
+ * REST-settable config). Tri-state: undefined skips, null clears, value sets.
+ * Returns the updated chat.
+ */
+export async function setChatTuning(port: number, chatId: string, tuning: SessionTuning): Promise<Chat> {
+  const json = await patchJson<ApiResponse<Chat>>(`${apiBase(port)}/api/chats/${chatId}/tuning`, tuning);
   if (!json.success) throw new Error(json.error);
   return json.data;
 }

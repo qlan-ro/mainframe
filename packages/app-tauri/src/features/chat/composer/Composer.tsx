@@ -14,6 +14,7 @@
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ComposerToolbar } from './ComposerToolbar';
 
 /** Send (idle, disabled while empty) ↔ Cancel (running) — swapped on thread.isRunning. */
 function SendOrCancelButton() {
@@ -56,8 +57,10 @@ export function Composer() {
         className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4"
       />
       <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2.5">
-        {/* Config toolbar (model · effort · features · plan · permission) → next increment. */}
-        <div data-testid="chat-composer-toolbar" className="flex min-h-8 items-center gap-1 text-mf-text-3" />
+        {/* Config toolbar — effort + features controls; model/plan/permission deferred. */}
+        <div data-testid="chat-composer-toolbar" className="flex min-h-8 items-center gap-1 text-mf-text-3">
+          <ComposerToolbar />
+        </div>
         <SendOrCancelButton />
       </div>
     </ComposerPrimitive.Root>

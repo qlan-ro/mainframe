@@ -36,3 +36,13 @@ export async function postJson<T>(url: string, body?: unknown): Promise<T> {
   if (!res.ok) throw new Error(await extractError(res));
   return res.json() as Promise<T>;
 }
+
+export async function patchJson<T>(url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) throw new Error(await extractError(res));
+  return res.json() as Promise<T>;
+}
