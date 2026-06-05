@@ -29,7 +29,8 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadMessage {
     content: [{ type: 'text', text: pending.text }],
     attachments: [],
     createdAt: new Date(pending.createdAt),
-    status: { type: 'complete', reason: 'unknown' },
+    // NOTE: no `status` — assistant-ui's fromThreadMessageLike throws "status is only
+    // supported for assistant messages" for user turns (the type allows it, runtime doesn't).
     metadata: {
       custom: {
         mainframe: {
