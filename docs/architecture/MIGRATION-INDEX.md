@@ -23,11 +23,11 @@ If you're picking up the **desktop (Electron) → app-tauri (Tauri 2 + React)** 
 
 ---
 
-## Resume here (PRIOR snapshot — 2026-06-05, end of chat-surface session)
+## Decisions log (PRIOR snapshot — 2026-06-05, end of chat-surface session)
 
-**Phase: the CHAT SURFACE is built, reviewed, and conformed → the COMPOSER leaf is next (scoped below).**
+> ⚠️ Historical. The forward-looking "NEXT/GATED composer" plan that used to live here is **removed** — the composer leaf is DONE (see the current snapshot at top) and its "config toolbar is GATED / needs a data layer" framing was the **over-conservative mistake** (the daemon had `/config`+`/tuning`+`/adapters` all along; it was wiring, not a prerequisite). The **decisions below are still authoritative.**
 
-**Committed this session on `feat/app-tauri-wt` (4 commits):**
+**Chat-surface session commits on `feat/app-tauri-wt` (4):**
 1. `15ee859e` **native tool-rendering leaf** — projection (`convert-message`/`map-assistant-blocks`/`map-tool-result`) + daemon-authoritative grouping + the 14-family card registry.
 2. `a90d37b6` **message-shell + markdown leaf** — `AssistantMessage`/`UserMessage`/`SystemMessage`, markdown (`MarkdownText`+shiki), action-bar, timing, warm-chrome thread shell.
 3. `33e52e41` **thermo-nuclear review-fixes** — shared `CollapsibleCardShell`+`resolveResultText`, one `MainframeMessageMeta` contract + `useMainframeMeta`, native **grouped reasoning**, rich `SkillLoadedCard` from the system message, native **DirectiveText** chips, markdown dedup.
@@ -47,15 +47,9 @@ All verified: typecheck 0, **290 tests**, empirical render vs `~/.mainframe_dev`
 - **Mention picker (when built) = native `Unstable_TriggerPopover` + custom `Unstable_TriggerAdapter`** (sync adapter over async daemon path-search; gate on @alpha churn).
 - Edit **sent** messages = runtime-gated (CLI-resume has no branches) → deferred; `MessageActionBar` ships **Copy + Export only**.
 
-**⬇ NEXT: the COMPOSER leaf — scoped (it CANNOT land in one pass; has unbuilt dependencies).**
-- **Buildable now (shell core, "~90% native restyle"):** `ComposerPrimitive` Root/Input/Send/Cancel restyled + running-swap (Send↔Cancel) · **`ThreadPrimitive.ViewportFooter`** (fixes a *real* scroll-inset bug — the bottom card height doesn't register as content inset today) · draft text · basic send via `controller.sendMessage` · the **daemon-backed `QueuedMessageBanner`** (controller state already wired: `interactions.queued`; needs daemon edit/cancel endpoints exposed in `lib/`) · attachments (native `AttachmentAdapter` + AddAttachment + Dropzone + tile).
-- **GATED (build the prerequisite first):**
-  - **Config toolbar** (model · effort · features · plan · permission) — app-tauri has **NO model/capabilities data layer and NO `runConfig` wiring** (`controller.sendMessage` takes no config; no `lib/api` models endpoint). Artboard "tuning": effort/features are a **pure function of the selected model's advertised capabilities**. This is a prerequisite sub-project before the toolbar.
-  - **Sandbox captures** (artboard "Context — from the sandbox": screenshots + inspected CSS-selector chips) — needs the **sandbox-preview surface** (not built). Also unblocks the deferred `UMInspectChip` user-message state.
-  - **Worktree popover** — needs worktree integration (only the `WorktreeStatusPillCard` tool card exists).
-- **Reference:** artboard `Composer States.html` (sections: base/sandbox/tuning) · desktop god-file `packages/desktop/.../composer/ComposerCard.tsx` (485 lines — **decompose, don't carry**) + its `EffortPicker`/`FeaturesPopover`/`PlanModeToggle`/`WorktreePopover`/`QueuedMessageBanner`/`ComposerHighlight`/`ImageAttachmentPreview`/`attachment-adapter`/`composer-drafts` · inventory rows **149–158** + decisions §31/§56/§63 · golden rule (research native + compare artboard + stop-and-ask on mismatch).
+*(The "NEXT: composer" plan that was here is removed — composer + gates are DONE; for what's next/deferred see the current snapshot at top + the tracker's "Review follow-ups — DEFERRED" section.)*
 
-**Open follow-ups:** reasoning "Thought for Ns" daemon thinking-duration field · deferred user-message states (`UMCodeRef` editor code-ref, `UMInspectChip` sandbox-inspect, PLAN bubble, file-attachment chips) · permission-card mount placement · runtime-gated (Reload/Edit/BranchPicker/native-error) · sidecar packaging · e2e harness + testids · Phase-2 Rust-daemon go/no-go · Electron lifecycle · shared-pure-package home for `convert-message`.
+**Still-open follow-ups (the rest resolved/superseded):** reasoning "Thought for Ns" daemon thinking-duration field · deferred user-message states (`UMCodeRef` editor code-ref, `UMInspectChip` sandbox-inspect, file-attachment chips) · runtime-gated edit-sent/Reload/BranchPicker · sidecar packaging · e2e harness + testids · Phase-2 Rust-daemon go/no-go · Electron lifecycle · shared-pure-package home for `convert-message`. *(Resolved: permission-card mount placement → inline at thread tail; PLAN bubble → PlanGate.)*
 
 ---
 
