@@ -9,6 +9,26 @@ If you're picking up the **desktop (Electron) → app-tauri (Tauri 2 + React)** 
 4. **`2026-06-05-chat-runtime-decision.md`** (ADR, + the react-opencode update) — *the* runtime decision and why.
 5. **`2026-06-04-app-tauri-architecture.md`** + **`-critique.md`** — target structure + the risks that shaped it.
 
+## Resume here (session snapshot — 2026-06-05)
+
+**Phase: design/decisions DONE → execution next.** The whole chat architecture + the assistant-ui adoption are decided, corrected, and committed. A fresh session can execute deterministically from the inventory + tracker + CLAUDE.md.
+
+**Committed on `feat/app-tauri-wt`:** C1 spike · runtime ADR · Phase-1 + Phase-2A chat seam (controller/reducer + extras + refetch-on-gap; verified on 0.14.14) · shadcn foundation + warm-chrome theme · `@assistant-ui@0.14.14` · full doc set (index/tracker/inventory/design-reference/CLAUDE.md).
+
+**Locked decisions (quick recall):**
+- Runtime = `useExternalStoreRuntime` + per-chat controller (react-opencode shape); **no message cache**; refetch-on-gap.
+- assistant-ui pinned at **0.14.14 / core 0.2.10**.
+- **Go native** part model (grouping + subagent) — via the `convert-message` projection (no daemon/contract change if the nested payload suffices; daemon flat-parts is the fallback).
+- Sessions = **hybrid** (one global `useRemoteThreadListRuntime` + native `ThreadListItemPrimitive` rows in our grouped sidebar).
+- Reasoning = **native, collapsed**. Quote = native UI + CLI glue. Errors = keep text-routing. Queue = keep daemon-backed.
+- **Framing:** native runtime-integration hooks are inert under external-store → native *components* + our CLI/daemon data + daemon config-write. Adoption split: 6 adopt-native / 9 native-shell+our-data / 9 keep-ours (see `ASSISTANT-UI-INVENTORY.md`).
+
+**Immediate next action:** the **native tool-rendering leaf** (build-order 4–7) — `convert-message` projection (native flat tool-calls + Task `messages` + native image/file parts) → `GroupedParts`+`groupPartByType` dispatch → `tools.by_name` registry → Task/subagent card. **First verify** the daemon's nested payload is rich enough for the projection path. Then fan out the leaves (thread-shell cleanup + `ViewportFooter`/`ScrollToBottom`/`ActionBar`/`MessageTiming`; composer shell + `ModelSelector`/`ContextDisplay`/toolbar; permission cards; sessions hybrid) per the corrected inventory verdicts.
+
+**Open / deferred:** permission-card mount placement (above-composer default vs inline) · runtime-gated (Reload/Edit/BranchPicker/native-error — don't build until the runtime exposes data) · sidecar packaging (Node bundle + native-dep rebuild + signing) · e2e harness + testids · Phase-2 Rust-daemon go/no-go · Electron lifecycle (retire vs coexist) · shared-pure-package home for `convert-message`.
+
+---
+
 ## Document catalog
 
 ### A. How to build (rules — obey these)
