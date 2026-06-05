@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Mainframe — Design Tokens & Typography</title>
+<style>
+  :root {
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --mono: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+    --paper: #e9e7e2;
+    --card: #ffffff;
+    --ink: #1c1c1e;
+    --ink2: #5e5d5a;
+    --ink3: #92918d;
+    --ink4: #bcbab5;
+    --line: rgba(0,0,0,0.08);
+    --hair: rgba(0,0,0,0.06);
+    --accent: #0a84ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(circle at 12% -5%, #f1efe9 0%, transparent 42%),
+      radial-gradient(circle at 95% 4%, #efece5 0%, transparent 40%),
+      var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+    padding: 64px 28px 120px;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+
+  /* ── Masthead ── */
+  .masthead { margin-bottom: 52px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--ink3); margin-bottom: 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  h1 {
+    font-size: 40px; font-weight: 700; letter-spacing: -1.1px;
+    line-height: 1.05; margin: 0 0 14px;
+  }
+  .lede {
+    font-size: 16px; line-height: 1.55; color: var(--ink2);
+    max-width: 660px; margin: 0; letter-spacing: -0.2px;
+  }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px;
+  }
+  .pill {
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink2);
+    background: rgba(0,0,0,0.045); border: 0.5px solid var(--line);
+    padding: 5px 11px; border-radius: 999px;
+  }
+  .pill b { color: var(--ink); font-weight: 600; }
+
+  /* ── Section ── */
+  section { margin-top: 56px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .sec-num {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    color: var(--accent); letter-spacing: 0;
+  }
+  h2 { font-size: 23px; font-weight: 700; letter-spacing: -0.5px; margin: 0; }
+  .sec-sub { font-size: 14px; color: var(--ink2); margin: 4px 0 24px 32px; letter-spacing: -0.1px; line-height: 1.5; max-width: 640px; }
+
+  /* ── Sub-group ── */
+  .group { margin: 30px 0; }
+  .group-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.9px; color: var(--ink3); margin: 0 0 14px;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .group-title .cnt { font-family: var(--mono); font-weight: 500; letter-spacing: 0; color: var(--ink4); text-transform: none; }
+
+  /* ── Swatch grid ── */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+  .sw {
+    background: var(--card); border: 0.5px solid var(--line); border-radius: 12px;
+    overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .sw-chip {
+    height: 72px; display: flex; align-items: flex-end; justify-content: flex-end;
+    padding: 7px; position: relative;
+  }
+  .sw-chip .pair {
+    display: flex; gap: 0; width: 100%; height: 100%;
+    position: absolute; inset: 0;
+  }
+  .sw-chip .pair > div { flex: 1; }
+  .sw-chip .lt-tag, .sw-chip .dk-tag {
+    position: absolute; top: 6px; font-family: var(--mono); font-size: 8.5px;
+    letter-spacing: 0.5px; text-transform: uppercase; padding: 1px 5px; border-radius: 4px;
+  }
+  .sw-chip .lt-tag { left: 7px; }
+  .sw-chip .dk-tag { right: 7px; }
+  .sw-body { padding: 9px 11px 11px; border-top: 0.5px solid var(--hair); }
+  .sw-name { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
+  .sw-vals { margin-top: 5px; display: flex; flex-direction: column; gap: 2px; }
+  .sw-val { font-family: var(--mono); font-size: 10.5px; color: var(--ink3); display: flex; gap: 6px; }
+  .sw-val .k { color: var(--ink4); width: 30px; flex-shrink: 0; }
+  .sw-val .v { color: var(--ink2); }
+
+  /* ── Accent feature ── */
+  .accent-feature {
+    display: flex; gap: 0; border-radius: 14px; overflow: hidden;
+    border: 0.5px solid var(--line); box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .accent-feature .big { flex: 1; min-height: 116px; background: var(--accent); display: flex; align-items: flex-end; padding: 16px; }
+  .accent-feature .big .tag { color: #fff; font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+  .accent-feature .alphas { width: 280px; flex-shrink: 0; background: var(--card); display: grid; grid-template-rows: repeat(4, 1fr); }
+  .accent-feature .alphas .row { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 0.5px solid var(--hair); font-family: var(--mono); font-size: 11px; }
+  .accent-feature .alphas .row:last-child { border-bottom: none; }
+  .accent-feature .alphas .dot { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; border: 0.5px solid var(--line); }
+  .accent-feature .alphas .row .lbl { color: var(--ink2); }
+  .accent-feature .alphas .row .use { color: var(--ink4); margin-left: auto; font-size: 10px; }
+
+  /* ── Type specimens ── */
+  .type-stack { background: var(--card); border: 0.5px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .type-row { display: flex; align-items: baseline; gap: 20px; padding: 16px 22px; border-bottom: 0.5px solid var(--hair); }
+  .type-row:last-child { border-bottom: none; }
+  .type-spec { font-family: var(--mono); font-size: 10.5px; color: var(--ink3); width: 150px; flex-shrink: 0; line-height: 1.5; padding-top: 3px; }
+  .type-spec b { color: var(--ink); font-weight: 600; font-size: 12px; display: block; }
+  .type-sample { flex: 1; min-width: 0; color: var(--ink); }
+  .type-use { font-size: 11.5px; color: var(--ink3); width: 150px; flex-shrink: 0; text-align: right; line-height: 1.45; }
+
+  /* weights */
+  .weights { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; }
+  .wt { background: var(--card); border: 0.5px solid var(--line); border-radius: 12px; padding: 18px; }
+  .wt .glyph { font-size: 38px; line-height: 1; letter-spacing: -1px; }
+  .wt .nm { font-family: var(--mono); font-size: 11px; color: var(--ink3); margin-top: 12px; }
+  .wt .nm b { color: var(--ink); }
+
+  /* mono / families */
+  .families { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .fam { background: var(--card); border: 0.5px solid var(--line); border-radius: 14px; padding: 22px 24px; }
+  .fam .role { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); }
+  .fam .big { font-size: 30px; font-weight: 600; letter-spacing: -0.6px; margin: 10px 0 4px; }
+  .fam .big.m { font-family: var(--mono); font-weight: 500; letter-spacing: -0.5px; }
+  .fam .stack { font-size: 11.5px; font-family: var(--mono); color: var(--ink2); line-height: 1.7; margin-top: 14px; word-break: break-word; }
+  .fam .gloss { font-size: 12.5px; color: var(--ink2); line-height: 1.5; margin-top: 12px; letter-spacing: -0.1px; }
+
+  /* token tables (radii, shadow, spacing, lh) */
+  .tbl { background: var(--card); border: 0.5px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .tbl .tr { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 0.5px solid var(--hair); }
+  .tbl .tr:last-child { border-bottom: none; }
+  .tbl .demo { width: 140px; flex-shrink: 0; display: flex; align-items: center; }
+  .tbl .tk { font-family: var(--mono); font-size: 12px; color: var(--ink); width: 120px; flex-shrink: 0; }
+  .tbl .dd { font-size: 12.5px; color: var(--ink2); flex: 1; letter-spacing: -0.1px; }
+  .tbl .vv { font-family: var(--mono); font-size: 11px; color: var(--ink3); flex-shrink: 0; text-align: right; }
+
+  .note { font-size: 12.5px; color: var(--ink3); line-height: 1.55; margin-top: 16px; letter-spacing: -0.1px; padding-left: 14px; border-left: 2px solid var(--line); }
+  code { font-family: var(--mono); font-size: 0.92em; background: rgba(0,0,0,0.05); padding: 1px 5px; border-radius: 4px; color: var(--ink2); }
+
+  footer { margin-top: 72px; padding-top: 22px; border-top: 0.5px solid var(--line); font-size: 12px; color: var(--ink4); font-family: var(--mono); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+  @media (max-width: 720px) {
+    .families { grid-template-columns: 1fr; }
+    .type-row { flex-direction: column; gap: 8px; }
+    .type-spec, .type-use { width: auto; text-align: left; }
+    .accent-feature { flex-direction: column; }
+    .accent-feature .alphas { width: 100%; }
+  }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .sw, .tbl, .type-stack, .fam, .wt, .accent-feature { box-shadow: none; }
+    section { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Mainframe · Design System</div>
+    <h1>Design Tokens<br/>&amp; Typography</h1>
+    <p class="lede">The complete color, type, and surface vocabulary powering the Mainframe workspace — a warm-chrome, macOS-native development environment. Every value below is extracted directly from the live implementation (<code>mainframe/01-base.jsx</code>).</p>
+    <div class="meta-row">
+      <span class="pill"><b>2</b> themes · light + dark</span>
+      <span class="pill"><b>8</b>-step type scale</span>
+      <span class="pill"><b>5</b>-step radius scale</span>
+      <span class="pill">single source: <b>T · FS · RADIUS</b></span>
+      <span class="pill"><b>glass</b> · one frosted chrome</span>
+      <span class="pill"><b>spacing · motion · focus</b> tokenized</span>
+    </div>
+  </header>
+
+  <!-- ════════ COLOR ════════ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>Color</h2></div>
+    <p class="sec-sub">Tokens are theme-swappable: at module load the active theme's map is copied into a single <code>T</code> object that every component reads as <code>T.x</code>. Each swatch shows <b>light</b> (left) and <b>dark</b> (right). The accent is shared across both themes.</p>
+
+    <div class="group">
+      <div class="group-title">Surfaces <span class="cnt" id="cnt-surf"></span></div>
+      <div class="swatches" id="grid-surf"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Text <span class="cnt" id="cnt-text"></span></div>
+      <div class="swatches" id="grid-text"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Lines &amp; fills <span class="cnt" id="cnt-line"></span></div>
+      <div class="swatches" id="grid-line"></div>
+    </div>
+  </section>
+
+  <!-- ════════ ACCENT ════════ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>Accent &amp; semantics</h2></div>
+    <p class="sec-sub">A single iOS-blue accent anchors interaction; it appears at full strength for primary actions and at low alpha (<code>${'{ACCENT}'}10</code>–<code>1f</code>) for selection tints and focus rings. Status colors shift slightly brighter in dark mode for contrast.</p>
+
+    <div class="group">
+      <div class="group-title">Accent · #0a84ff</div>
+      <div class="accent-feature">
+        <div class="big"><span class="tag">ACCENT — #0a84ff</span></div>
+        <div class="alphas">
+          <div class="row"><span class="dot" style="background:rgba(10,132,255,0.10)"></span><span class="lbl">selBg / 10%</span><span class="use">selection tint</span></div>
+          <div class="row"><span class="dot" style="background:rgba(10,132,255,0.12)"></span><span class="lbl">12% · 14%</span><span class="use">hover fills</span></div>
+          <div class="row"><span class="dot" style="background:rgba(10,132,255,0.20)"></span><span class="lbl">1f / 20%</span><span class="use">focus ring</span></div>
+          <div class="row"><span class="dot" style="background:rgba(10,132,255,1)"></span><span class="lbl">100%</span><span class="use">primary action</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Status <span class="cnt" id="cnt-sem"></span></div>
+      <div class="swatches" id="grid-sem"></div>
+    </div>
+  </section>
+
+  <!-- ════════ CODE & TERMINAL ════════ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>Code &amp; terminal</h2></div>
+    <p class="sec-sub">The editor and terminal carry their own palettes. Syntax colors are tuned per theme — a classic Xcode-style scheme on light paper, warmer pastels on dark charcoal.</p>
+
+    <div class="group">
+      <div class="group-title">Syntax highlighting <span class="cnt" id="cnt-code"></span></div>
+      <div id="code-demo"></div>
+      <div class="swatches" id="grid-code" style="margin-top:14px"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Terminal <span class="cnt" id="cnt-term"></span></div>
+      <div class="swatches" id="grid-term"></div>
+    </div>
+  </section>
+
+  <!-- ════════ COMPONENT ACCENTS ════════ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>Component palettes</h2></div>
+    <p class="sec-sub">Two surfaces carry bespoke tokens: the user-message "cool card" (a faint blue-shifted bubble that stands apart from warm assistant content) and the file-viewer matte with its transparency checkerboard.</p>
+
+    <div class="group">
+      <div class="group-title">User-message cool card <span class="cnt" id="cnt-um"></span></div>
+      <div class="swatches" id="grid-um"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">File-viewer backdrop <span class="cnt" id="cnt-view"></span></div>
+      <div class="swatches" id="grid-view"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Tab-type accents <span class="cnt">10 file kinds</span></div>
+      <div class="swatches" id="grid-tab"></div>
+    </div>
+  </section>
+
+  <!-- ════════ TYPOGRAPHY ════════ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>Typography</h2></div>
+    <p class="sec-sub">Two system stacks do all the work — no web fonts. SF Pro Text (via <code>-apple-system</code>) for UI and prose; SF Mono for code, metadata, counts, and identifiers. Tight tracking at display sizes, neutral at body.</p>
+
+    <div class="group">
+      <div class="group-title">Families</div>
+      <div class="families">
+        <div class="fam">
+          <div class="role">UI · Prose — <b>FONT</b></div>
+          <div class="big">Aa Bb Cc 123</div>
+          <div class="gloss">Native system sans. Carries every label, heading, body, and button. Tightened letter-spacing (−0.05 to −0.4px) scales with size.</div>
+          <div class="stack">-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif</div>
+        </div>
+        <div class="fam">
+          <div class="role">Code · Data — <b>MONO</b></div>
+          <div class="big m">Aa Bb Cc 123</div>
+          <div class="gloss">Monospace for editor content, terminal, file paths, token names, counts, status chips, and uppercase eyebrows.</div>
+          <div class="stack">"SF Mono", ui-monospace, Menlo, Monaco, monospace</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Type scale <span class="cnt">8 rungs · FS</span></div>
+      <div class="type-stack" id="type-scale"></div>
+      <p class="note">Consolidated to <b>8 named rungs</b> in <code>FS</code> — granular where dense UI lives (10 / 11 / 12 / 13), opening up for display (15 / 17 / 22 / 28). Every inline <code>fontSize</code> snaps to a rung; the old fractional half-points (11.5, 12.5, 14.5 …) are gone. Floor is 10px (mono micro-metadata); body sits at <b>13px</b>.</p>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Weights</div>
+      <div class="weights" id="weights"></div>
+      <p class="note">Regular (400) is reserved for muted/inline contexts; <b>500</b> is the resting UI weight, <b>600</b> marks active/selected state and buttons, <b>700</b> titles and headings, <b>800</b> the brand mark only.</p>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Letter-spacing &amp; line-height</div>
+      <div class="tbl" id="metrics-tbl"></div>
+    </div>
+  </section>
+
+  <!-- ════════ RADII, SHADOW ════════ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2>Radius, elevation &amp; spacing</h2></div>
+    <p class="sec-sub">Soft, consistent rounding and two shadow tiers — a tight popover lift and a deep modal float — both pairing a blur with a hairline ring so edges read on any surface.</p>
+
+    <div class="group">
+      <div class="group-title">Corner radius <span class="cnt">5 rungs · RADIUS</span></div>
+      <div class="tbl" id="radii-tbl"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Elevation <span class="cnt">+ focus ring</span></div>
+      <div class="tbl" id="shadow-tbl"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Spacing <span class="cnt">4px base · SPACE · 13 rungs</span></div>
+      <div class="tbl" id="space-tbl"></div>
+      <p class="note">A dense-desktop rhythm: a 2px half-step at the bottom for tight chrome, settling onto a 4px grid. A few legacy inline values (7 / 10 / 14px) still sit off-grid — a future pass should snap them, exactly like we did for type &amp; radii.</p>
+    </div>
+  </section>
+
+  <!-- ════════ MOTION ════════ -->
+  <section>
+    <div class="sec-head"><span class="sec-num">07</span><h2>Motion</h2></div>
+    <p class="sec-sub">Five duration steps and a small family of easing curves. UI transitions default to <code>fast</code>/<code>normal</code> on the standard ease; the <code>signature</code> curve is the workspace's slide-in.</p>
+
+    <div class="group">
+      <div class="group-title">Duration <span class="cnt">ms · DURATION</span></div>
+      <div class="tbl" id="dur-tbl"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Easing <span class="cnt">EASING</span></div>
+      <div class="tbl" id="ease-tbl"></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Mainframe Design System · tokens v ts87</span>
+    <span>Generated from mainframe/01-base.jsx</span>
+  </footer>
+
+</div>
+
+<script>
+// ── Token maps (mirror of mainframe/01-base.jsx) ──────────────────
+const ACCENT = '#0a84ff';
+const L = {
+  windowBg:'#e9e7e2', glass:'rgba(240,237,231,0.84)',
+  content:'#ffffff', content2:'#f8f6f2', raised:'#f3efe7', tabBar:'#f3f0ea', tabBarActive:'#ffffff',
+  popBg:'#ffffff', border:'rgba(0,0,0,0.08)', borderH:'rgba(0,0,0,0.14)', hairline:'rgba(0,0,0,0.06)',
+  text:'#1c1c1e', text2:'#5e5d5a', text3:'#92918d', text4:'#bcbab5',
+  chipBg:'rgba(0,0,0,0.05)', selBg:'rgba(10,132,255,0.10)', rowHover:'rgba(0,0,0,0.04)',
+  termBg:'#1d1d20', termFg:'#e7e6e3', termCmt:'#7a7a82', termGreen:'#30d158', termCyan:'#5ac8fa', termAmber:'#ff9f0a',
+  red:'#dc3545', amber:'#d97706', green:'#28a745',
+  codeBg:'#fbfaf7', codeKw:'#9b2393', codeStr:'#c41a16', codeFn:'#326d74', codeType:'#5b269a', codeNum:'#1c00cf', codeCmt:'#707f8c', codeFg:'#1f1f24',
+  umInk:'#1b1e26', umCard:'#eef1f9', umEdge:'rgba(40,70,150,0.13)', umFade:'#eef1f9',
+  viewerMatte:'#e6e2da', viewerCheckA:'#efece6', viewerCheckB:'#dcd8d0',
+};
+const D = {
+  windowBg:'#1a1714', glass:'rgba(30,27,22,0.85)',
+  content:'#221f1a', content2:'#1c1915', raised:'#2c2820', tabBar:'#1e1b16', tabBarActive:'#332e25',
+  popBg:'#2a261f', border:'rgba(255,255,255,0.10)', borderH:'rgba(255,255,255,0.18)', hairline:'rgba(255,255,255,0.06)',
+  text:'#f1ede5', text2:'#ada89f', text3:'#847f76', text4:'#585349',
+  chipBg:'rgba(255,255,255,0.06)', selBg:'rgba(10,132,255,0.26)', rowHover:'rgba(255,255,255,0.05)',
+  termBg:'#141310', termFg:'#e7e6e3', termCmt:'#7f7a72', termGreen:'#30d158', termCyan:'#5ac8fa', termAmber:'#ff9f0a',
+  red:'#ff6b6b', amber:'#e6a23c', green:'#3ad06a',
+  codeBg:'#1b1814', codeKw:'#e592d6', codeStr:'#eaa48f', codeFn:'#7fcfd6', codeType:'#c6a6f5', codeNum:'#9fb4ff', codeCmt:'#6f7a83', codeFg:'#e6e2da',
+  umInk:'#e9ecf5', umCard:'#20242e', umEdge:'rgba(150,175,235,0.20)', umFade:'#20242e',
+  viewerMatte:'#16140f', viewerCheckA:'#1c1a16', viewerCheckB:'#26231d',
+};
+
+function swatch(name, descLight, descDark){
+  const lv = L[name], dv = D[name];
+  const lightDark = (c) => {
+    // pick readable tag text color over a chip
+    return '#000';
+  };
+  return `
+  <div class="sw">
+    <div class="sw-chip">
+      <div class="pair"><div style="background:${lv}"></div><div style="background:${dv}"></div></div>
+    </div>
+    <div class="sw-body">
+      <div class="sw-name">${name}</div>
+      <div class="sw-vals">
+        <div class="sw-val"><span class="k">light</span><span class="v">${lv}</span></div>
+        <div class="sw-val"><span class="k">dark</span><span class="v">${dv}</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderGrid(id, keys){ document.getElementById(id).innerHTML = keys.map(k => swatch(k)).join(''); }
+function setCnt(id, n){ const e = document.getElementById(id); if(e) e.textContent = n + ' tokens'; }
+
+const SURF = ['windowBg','glass','content','content2','raised','tabBar','tabBarActive','popBg'];
+const TEXT = ['text','text2','text3','text4'];
+const LINE = ['border','borderH','hairline','chipBg','selBg','rowHover'];
+const SEM  = ['red','amber','green'];
+const CODE = ['codeBg','codeFg','codeKw','codeStr','codeFn','codeType','codeNum','codeCmt'];
+const TERM = ['termBg','termFg','termCmt','termGreen','termCyan','termAmber'];
+const UM   = ['umInk','umCard','umEdge','umFade'];
+const VIEW = ['viewerMatte','viewerCheckA','viewerCheckB'];
+
+renderGrid('grid-surf', SURF); setCnt('cnt-surf', SURF.length);
+renderGrid('grid-text', TEXT); setCnt('cnt-text', TEXT.length);
+renderGrid('grid-line', LINE); setCnt('cnt-line', LINE.length);
+renderGrid('grid-sem', SEM);  setCnt('cnt-sem', SEM.length);
+renderGrid('grid-code', CODE); setCnt('cnt-code', CODE.length);
+renderGrid('grid-term', TERM); setCnt('cnt-term', TERM.length);
+renderGrid('grid-um', UM);    setCnt('cnt-um', UM.length);
+renderGrid('grid-view', VIEW); setCnt('cnt-view', VIEW.length);
+
+// ── code demo (light + dark editor) ──
+function codeBlock(t){
+  const kw=t.codeKw, ty=t.codeType, fn=t.codeFn, st=t.codeStr, nu=t.codeNum, cm=t.codeCmt, fg=t.codeFg;
+  return `<div style="background:${t.codeBg};border:0.5px solid ${t.border};border-radius:10px;padding:16px 18px;font-family:var(--mono);font-size:12.5px;line-height:1.65;color:${fg};overflow:auto">
+<div style="color:${cm}">// theme-swappable token object</div>
+<div><span style="color:${kw}">const</span> <span style="color:${ty}">T</span> = {};</div>
+<div><span style="color:${ty}">Object</span>.<span style="color:${fn}">assign</span>(<span style="color:${ty}">T</span>, mode === <span style="color:${st}">'dark'</span> ? <span style="color:${ty}">MF_DARK</span> : <span style="color:${ty}">MF_LIGHT</span>);</div>
+<div><span style="color:${kw}">const</span> radius = <span style="color:${nu}">13</span>;</div>
+</div>`;
+}
+document.getElementById('code-demo').innerHTML =
+  `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+     <div><div style="font-family:var(--mono);font-size:10px;color:var(--ink4);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px">Light editor</div>${codeBlock(L)}</div>
+     <div><div style="font-family:var(--mono);font-size:10px;color:var(--ink4);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px">Dark editor</div>${codeBlock(D)}</div>
+   </div>`;
+
+// ── tab-type accents ──
+const TABS = [
+  ['chat','#0a84ff'],['code','#5b269a'],['terminal','#5ac8fa'],['preview','#34c759'],['diff','#ff9500'],
+  ['markdown','#2f6f78'],['csv','#1f8a4c'],['image','#d97706'],['svg','#7a3fb0'],['pdf','#c4362b'],
+];
+document.getElementById('grid-tab').innerHTML = TABS.map(([n,c]) => `
+  <div class="sw">
+    <div class="sw-chip" style="background:${c}"></div>
+    <div class="sw-body"><div class="sw-name">${n}</div><div class="sw-vals"><div class="sw-val"><span class="v">${c}</span></div></div></div>
+  </div>`).join('');
+
+// ── type scale · 8 named rungs (mainframe/01-base.jsx → FS) ──
+const SCALE = [
+  [28,800,-1.0,'hero', 'Brand mark · pair code'],
+  [22,700,-0.4,'display', 'Section headers · about name · viewer title'],
+  [17,700,-0.3,'title', 'Settings pane headings · preview title'],
+  [15,600,-0.2,'heading', 'Command palette · window-state titles'],
+  [13,500,-0.1,'body', 'Chat & user-message body — reading size'],
+  [12,500,-0.05,'label', 'Buttons · tabs · breadcrumbs · menu items'],
+  [11,600,-0.05,'caption', 'Help text · chips · keycaps · captions'],
+  [10,500,0,'micro', 'Mono metadata · status bars · badges'],
+];
+const WT = {400:'Regular',500:'Medium',600:'Semibold',700:'Bold',800:'Heavy'};
+document.getElementById('type-scale').innerHTML = SCALE.map(([px,wt,ls,role,use]) => `
+  <div class="type-row">
+    <div class="type-spec"><b>${px}px</b>${role} · ${WT[wt]}</div>
+    <div class="type-sample" style="font-size:${px}px;font-weight:${wt};letter-spacing:${ls}px;line-height:1.1">${role.charAt(0).toUpperCase()+role.slice(1)}</div>
+    <div class="type-use">${use}</div>
+  </div>`).join('');
+
+// ── weights ──
+// ── weights · named FW tokens ──
+const FWN = {400:'normal',500:'medium',600:'semibold',700:'bold',800:'heavy'};
+document.getElementById('weights').innerHTML = [400,500,600,700,800].map(w => `
+  <div class="wt">
+    <div class="glyph" style="font-weight:${w}">Ag</div>
+    <div class="nm"><b>${FWN[w]}</b> · ${w}</div>
+  </div>`).join('');
+
+// ── metrics table · named LH / LS tokens ──
+document.getElementById('metrics-tbl').innerHTML = [
+  ['LS.tight','−0.02em','Display & titles — negative tracking.'],
+  ['LS.normal','0','Body, labels, buttons.'],
+  ['LS.wide','+0.06em','Uppercase eyebrows & micro-labels.'],
+  ['LH.tight','1.15','Display & section headers (1.05–1.18).'],
+  ['LH.normal','1.5','Chat, prose, help text (1.45–1.58).'],
+  ['LH.relaxed','1.65','Editor, terminal, logs (1.55–1.65).'],
+].map(([k,v,d]) => `<div class="tr"><div class="tk">${k}</div><div class="dd">${d}</div><div class="vv">${v}</div></div>`).join('');
+
+// ── radii · 5 named rungs (mainframe/01-base.jsx → RADIUS) ──
+const RAD = [
+  [4,'xs','badges, chips, keycaps'],
+  [6,'sm','list rows, segmented controls, small icon buttons'],
+  [8,'md','buttons, fields, cards, menus, popovers'],
+  [11,'lg','panels, code blocks, composer surfaces'],
+  [13,'xl','message bubbles, modals & dialogs'],
+];
+document.getElementById('radii-tbl').innerHTML = RAD.map(([r,nm,u]) => `
+  <div class="tr">
+    <div class="demo"><div style="width:46px;height:46px;background:var(--accent);border-radius:${r}px;opacity:0.92"></div></div>
+    <div class="tk">${nm} · ${r}px</div>
+    <div class="dd">${u}</div>
+  </div>`).join('') + `
+  <div class="tr"><div class="demo"><div style="width:64px;height:26px;background:var(--ink4);border-radius:999px;opacity:0.5"></div></div><div class="tk">full · 999</div><div class="dd">fully-rounded pills & toggles (circles use 50%)</div></div>`;
+
+// ── spacing · SPACE ──
+const SPACE = {0:0,1:2,2:4,3:6,4:8,5:12,6:16,7:20,8:24,9:32,10:40,11:48,12:64};
+document.getElementById('space-tbl').innerHTML = Object.entries(SPACE).map(([k,v]) => `
+  <div class="tr">
+    <div class="demo"><div style="width:${v}px;height:16px;background:var(--accent);opacity:0.9;border-radius:2px"></div></div>
+    <div class="tk">space-${k}</div>
+    <div class="dd"></div>
+    <div class="vv">${v}px</div>
+  </div>`).join('');
+
+// ── motion · DURATION + EASING ──
+const DUR = [['instant',50],['fast',150],['normal',250],['slow',400],['slower',600]];
+document.getElementById('dur-tbl').innerHTML = DUR.map(([k,v]) => `
+  <div class="tr">
+    <div class="demo"><div style="width:46px;height:10px;border-radius:5px;background:rgba(10,132,255,0.15);overflow:hidden"><div style="height:100%;width:40%;background:var(--accent);border-radius:5px;animation:slide ${v}ms cubic-bezier(0.4,0,0.2,1) infinite alternate"></div></div></div>
+    <div class="tk">${k}</div><div class="dd"></div><div class="vv">${v}ms</div>
+  </div>`).join('');
+const EASE = [
+  ['default','cubic-bezier(0.4, 0, 0.2, 1)','standard UI transitions'],
+  ['in','cubic-bezier(0.4, 0, 1, 1)','exits / collapses'],
+  ['out','cubic-bezier(0, 0, 0.2, 1)','entrances'],
+  ['bounce','cubic-bezier(0.34, 1.56, 0.64, 1)','playful emphasis'],
+  ['signature','cubic-bezier(0.22, 1, 0.36, 1)','the workspace slide-in'],
+];
+document.getElementById('ease-tbl').innerHTML = EASE.map(([k,v,d]) => `
+  <div class="tr"><div class="tk" style="width:90px">${k}</div><div class="dd">${d}<div style="font-family:var(--mono);font-size:10px;color:var(--ink4);margin-top:3px">${v}</div></div></div>`).join('');
+const __anim = document.createElement('style'); __anim.textContent = '@keyframes slide{from{transform:translateX(-10%)}to{transform:translateX(160%)}}'; document.head.appendChild(__anim);
+
+// ── shadows + focus ring ──
+document.getElementById('shadow-tbl').innerHTML = [
+  ['popShadow','Popovers, menus, dropdowns','0 16px 40px rgba(0,0,0,.20), + 0.5px ring'],
+  ['shadow','Modals, focus overlays','0 24px 60px rgba(0,0,0,.22), + 0.5px ring'],
+].map(([k,d,v]) => `
+  <div class="tr">
+    <div class="demo"><div style="width:64px;height:42px;background:#fff;border-radius:9px;box-shadow:${k==='shadow'?'0 16px 34px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(0,0,0,0.12)':'0 10px 24px rgba(0,0,0,0.20), 0 0 0 0.5px rgba(0,0,0,0.12)'}"></div></div>
+    <div class="tk">${k}</div>
+    <div class="dd">${d}<div style="font-family:var(--mono);font-size:10px;color:var(--ink4);margin-top:3px">${v}</div></div>
+  </div>`).join('') + `
+  <div class="tr">
+    <div class="demo"><div style="width:64px;height:30px;background:#fff;border-radius:7px;box-shadow:0 0 0 3px rgba(10,132,255,0.35);border:0.5px solid var(--line)"></div></div>
+    <div class="tk">focusRing</div>
+    <div class="dd">Keyboard <code>:focus-visible</code> on buttons, inputs, links<div style="font-family:var(--mono);font-size:10px;color:var(--ink4);margin-top:3px">0 0 0 3px accent@35% (light) / 50% (dark)</div></div>
+  </div>`;
+</script>
+</body>
+</html>

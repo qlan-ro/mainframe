@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Mainframe — Composer States (Review)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+  * { box-sizing: border-box; }
+  @keyframes twPulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
+  .tw-pulse { animation: twPulse 1.6s ease-in-out infinite; }
+  @keyframes tw-spin { from { transform: rotate(0) } to { transform: rotate(360deg) } }
+  @keyframes tw-slidein { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
+  .tw-slidein { animation: tw-slidein 0.26s cubic-bezier(0.22,1,0.36,1) both; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="mainframe/01-base.jsx?v=ts108"></script>
+<script type="text/babel" src="mainframe/02-chrome.jsx?v=ts108"></script>
+<script type="text/babel" src="mainframe/03-content.jsx?v=ts108"></script>
+<script type="text/babel" src="mainframe/11-usermessages.jsx?v=ts108"></script>
+<script type="text/babel" src="mainframe/13-popover.jsx?v=ts108"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { DesignCanvas, DCSection, DCArtboard, Composer } = window;
+
+// White chat backdrop, composer pinned with the same 22px gutter as the workspace.
+function Frame({ children }) {
+  return (
+    <div style={{ background: '#ffffff', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 22px 16px' }}>
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="base" title="Composer — base" subtitle="The real workspace Composer (one implementation). Model · permission · plan · effort · worktree controls.">
+        <DCArtboard id="empty" label="Empty · new session (provider unlocked)" width={680} height={140}>
+          <Frame><Composer embedded sessionEmpty/></Frame>
+        </DCArtboard>
+        <DCArtboard id="locked" label="Active session (provider locked)" width={680} height={140}>
+          <Frame><Composer embedded/></Frame>
+        </DCArtboard>
+        <DCArtboard id="typing" label="Typed prompt" width={680} height={140}>
+          <Frame><Composer embedded value="Refactor the layout so the sidebar collapses to an icon rail."/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="sandbox" title="Context — from the sandbox" subtitle="Same Composer, with captures pulled from the preview: screenshots and inspected elements (CSS-selector paths)">
+        <DCArtboard id="shot" label="Screenshot capture" width={680} height={165}>
+          <Frame><Composer embedded value="Why is there a gap under the header?" captures={[{ kind: 'screenshot' }]}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="inspect" label="Inspected element · CSS path" width={680} height={165}>
+          <Frame><Composer embedded value="Tighten the spacing on this rail item." captures={[{ kind: 'element', selector: 'nav.sidebar > .rail-icon', hue: 150 }]}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="mixed" label="Attachments + inspector context" width={680} height={190}>
+          <Frame><Composer embedded value="Match the design here to the reference and seed data." captures={[
+            { kind: 'screenshot' },
+            { kind: 'element', selector: '.rail-icon.is-active', hue: 150 },
+            { kind: 'file', name: 'ref.png', hue: 25 },
+            { kind: 'file', name: 'seed.json' },
+          ]}/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="tuning" title="Model & harness config flags" subtitle="Effort + feature toggles are a pure function of the SELECTED model's advertised capabilities — nothing hardcoded. Open the gauge (effort) and sliders (⚙ features) controls in each artboard. Per-provider visibility falls out for free.">
+        <DCArtboard id="opus" label="Opus — low–max effort + Fast / Ultracode / Adaptive thinking" width={680} height={150}>
+          <Frame><Composer embedded sessionEmpty initialProvider="anthropic" initialModel="opus-4.1"/></Frame>
+        </DCArtboard>
+        <DCArtboard id="sonnet" label="Sonnet — low–high, NO Ultracode (no xhigh)" width={680} height={150}>
+          <Frame><Composer embedded sessionEmpty initialProvider="anthropic" initialModel="sonnet-4.5"/></Frame>
+        </DCArtboard>
+        <DCArtboard id="codex" label="Codex (GPT-5) — low–xhigh + Fast only" width={680} height={150}>
+          <Frame><Composer embedded sessionEmpty initialProvider="openai" initialModel="gpt-5"/></Frame>
+        </DCArtboard>
+        <DCArtboard id="haiku" label="Haiku — no effort, no features (both controls hidden)" width={680} height={150}>
+          <Frame><Composer embedded sessionEmpty initialProvider="anthropic" initialModel="haiku-4"/></Frame>
+        </DCArtboard>
+        <DCArtboard id="ultracode" label="Ultracode ON — effort locked to Extra-high" width={680} height={150}>
+          <Frame><Composer embedded sessionEmpty initialProvider="anthropic" initialModel="opus-4.1" initialTuning={{ ultracode: true, fast: true }}/></Frame>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

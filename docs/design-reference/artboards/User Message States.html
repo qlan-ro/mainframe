@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Mainframe — User Message States (Review)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+  * { box-sizing: border-box; }
+  @keyframes twPulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
+  .tw-pulse { animation: twPulse 1.6s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="mainframe/01-base.jsx?v=ts89"></script>
+<script type="text/babel" src="mainframe/08-markdown.jsx?v=ts89"></script>
+<script type="text/babel" src="mainframe/11-usermessages.jsx?v=ts89"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+const { UMRow, UMBubble, UMTextTurn, UMSlashBubble, UMPlanBubble, UMQueuedBadge,
+        UMThumbRow, UMFileThumb, UMImageThumb,
+        UMCaptureScreenshot, UMInspectChip, UMFileChip, UMComposer, umMentions,
+        UMContextRow, UMCodeRef } = window;
+const MONO = '"SF Mono", ui-monospace, Menlo, Monaco, monospace';
+
+function Frame({ children, pad = 20, center }) {
+  return (
+    <div style={{ background: '#ffffff', width: '100%', height: '100%', padding: pad, display: 'flex', flexDirection: 'column', justifyContent: center ? 'center' : 'flex-start' }}>
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="text" title="Text" subtitle="The base user turn — plain text, @mentions, and clamped long messages">
+        <DCArtboard id="plain" label="Plain text" width={420} height={130}>
+          <Frame center><UMRow><UMBubble>Refactor the layout so the sidebar collapses to an icon rail.</UMBubble></UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="mentions" label="@mentions" width={420} height={150}>
+          <Frame center><UMRow><UMBubble>{umMentions('Compare @Layout.tsx with @Sidebar.tsx and ask @reviewer to weigh in.')}</UMBubble></UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="readmore" label="Long · Read more (UMTextTurn)" width={520} height={210}>
+          <Frame center><UMTextTurn>Refactor the layout so the sidebar collapses to an icon rail. Persist the state across reloads, and clean up the legacy dock while you're in there. Keep the existing keyboard shortcuts working, make sure the rail still shows the active-section highlight, and don't break the resize handle on the right inspector. Gate any migration behind a version check so existing users don't lose their layout.</UMTextTurn></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="slash" title="Commands, skills & plans" subtitle="Slash invocations, the queued state, and the first message of a session implementing an approved plan">
+        <DCArtboard id="command" label="/command (wrench)" width={420} height={120}>
+          <Frame center><UMRow><UMSlashBubble kind="command" name="review">the open diff against main.</UMSlashBubble></UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="skill" label="/skill (zap)" width={420} height={120}>
+          <Frame center><UMRow><UMSlashBubble kind="skill" name="write-tests">for the new RailIcons component.</UMSlashBubble></UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="queued" label="Queued" width={420} height={130}>
+          <Frame center><UMRow><UMQueuedBadge/><UMBubble>And once that's in, bump the version and tag a release.</UMBubble></UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="plan" label="Implementing plan · prose + list" width={540} height={290}>
+          <Frame center><UMRow><UMPlanBubble md={`I'll collapse the sidebar into an icon rail and make the state survive reloads. The header hook is already one-way, so it needs no change there.
+
+**Steps**
+1. Add a persisted \`mode\` field to \`useLayoutStore\`.
+2. Render an icon-rail branch in \`Sidebar.tsx\` when collapsed.
+3. Delete the legacy free-form dock.
+
+I'll keep \`⌘1\` bound to the toggle and add a regression test.`}/></UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="plan-prose" label="Implementing plan · pure prose" width={500} height={210}>
+          <Frame center><UMRow><UMPlanBubble md={`Going with the Zustand persist middleware so this matches the existing session-state convention rather than introducing a one-off.
+
+The migration is gated behind a version check so existing users don't lose their layout, and I'll land a test before wiring up the rail UI.`}/></UMRow></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="attach" title="Attachments" subtitle="Files and images dragged into a message">
+        <DCArtboard id="file" label="Text + file" width={440} height={185}>
+          <Frame center><UMRow>
+            <UMBubble>Here's the failing trace — any idea what's throwing?</UMBubble>
+            <UMThumbRow><UMFileThumb name="error.log" size="18 KB"/></UMThumbRow>
+          </UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="images" label="Text + images" width={420} height={195}>
+          <Frame center><UMRow>
+            <UMBubble>The rail looks off at these two breakpoints.</UMBubble>
+            <UMThumbRow><UMImageThumb hue={210}/><UMImageThumb hue={280}/></UMThumbRow>
+          </UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="combo" label="Images + files" width={480} height={220}>
+          <Frame center><UMRow>
+            <UMBubble>Mock + the data file it's reading from.</UMBubble>
+            <UMThumbRow>
+              <UMImageThumb hue={20}/>
+              <UMFileThumb name="seed.json" size="2.1 KB"/>
+              <UMFileThumb name="Layout.tsx" size="6.4 KB"/>
+            </UMThumbRow>
+          </UMRow></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="sent-ctx" title="Sent with context" subtitle="Once sent, the user turn echoes the same context chips it carried in the composer">
+        <DCArtboard id="sent-css" label="Sent + CSS path + screenshot" width={500} height={170}>
+          <Frame center><UMRow>
+            <UMBubble>Tighten the spacing on this rail item to match the header.</UMBubble>
+            <UMContextRow>
+              <UMInspectChip selector="nav.sidebar > .rail-icon" hue={150}/>
+              <UMCaptureScreenshot/>
+            </UMContextRow>
+          </UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="sent-mixed" label="Sent + attachments + context" width={520} height={215}>
+          <Frame center><UMRow>
+            <UMBubble>Match the design here to the reference and the seed data.</UMBubble>
+            <UMContextRow>
+              <UMInspectChip selector=".rail-icon.is-active" hue={150}/>
+              <UMFileThumb name="ref.png" size="48 KB"/>
+              <UMFileThumb name="seed.json" size="2.1 KB"/>
+            </UMContextRow>
+          </UMRow></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="coderef" title="Code review (from the editor)" subtitle="A review comment sent from the file editor carries the referenced snippet + line metadata">
+        <DCArtboard id="review" label="Code reference + comment" width={500} height={250}>
+          <Frame center><UMRow>
+            <UMCodeRef file="Layout.tsx" range="L42–46" lines={[
+              { n: 42, t: <><span style={{color:'#9b2393'}}>const</span> rail = <span style={{color:'#326d74'}}>useZoneHeaderTabs</span>();</> },
+              { n: 43, t: <><span style={{color:'#9b2393'}}>return</span> (</> },
+              { n: 44, t: '  <div className="layout">' },
+              { n: 45, t: '    <Sidebar rail={rail} />' },
+              { n: 46, t: '  </div>' },
+            ]}/>
+            <UMBubble>This reads the rail on every render — can we memoize it so the sidebar doesn't thrash?</UMBubble>
+          </UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="review-line" label="Single-line reference" width={460} height={180}>
+          <Frame center><UMRow>
+            <UMCodeRef file="store/layout.ts" range="L6" lines={[
+              { n: 6, t: <>  sidebarWidth: <span style={{color:'#1c00cf'}}>256</span>,</> },
+            ]}/>
+            <UMBubble>Make this configurable instead of hard-coded.</UMBubble>
+          </UMRow></Frame>
+        </DCArtboard>
+        <DCArtboard id="review-big" label="Large snippet (clamped)" width={500} height={350}>
+          <Frame center><UMRow>
+            <UMCodeRef file="components/Sidebar.tsx" range="L18–34" lines={[
+              { n: 18, t: <><span style={{color:'#9b2393'}}>export function</span> <span style={{color:'#326d74'}}>Sidebar</span>({'{'} rail {'}'}) {'{'}</> },
+              { n: 19, t: <>  <span style={{color:'#9b2393'}}>const</span> [open, setOpen] = <span style={{color:'#326d74'}}>useState</span>(<span style={{color:'#9b2393'}}>true</span>);</> },
+              { n: 20, t: <>  <span style={{color:'#9b2393'}}>const</span> sections = <span style={{color:'#326d74'}}>useSections</span>();</> },
+              { n: 21, t: '' },
+              { n: 22, t: <>  <span style={{color:'#9b2393'}}>if</span> (rail.mode === <span style={{color:'#c41a16'}}>'collapsed'</span>) {'{'}</> },
+              { n: 23, t: <>    <span style={{color:'#9b2393'}}>return</span> <span style={{color:'#326d74'}}>{'<RailIcons'}</span> sections={'{'}sections{'}'} {'/>'};</> },
+              { n: 24, t: '  }' },
+              { n: 25, t: '' },
+              { n: 26, t: <>  <span style={{color:'#9b2393'}}>return</span> (</> },
+              { n: 27, t: '    <nav className="sidebar">' },
+              { n: 28, t: '      <SectionList items={sections} />' },
+              { n: 29, t: '    </nav>' },
+              { n: 30, t: '  );' },
+              { n: 31, t: '}' },
+            ]}/>
+            <UMBubble>The early-return skips the width persistence — can we keep both paths consistent?</UMBubble>
+          </UMRow></Frame>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,302 @@
+/* ════════════════════════════════════════════════════════════════════════
+   Mainframe — shadcn / Tailwind v4 theme
+   Generated from the prototype's design tokens (mainframe/01-base.jsx).
+
+   WHAT THIS IS
+   The single theme contract that styles BOTH your shadcn components AND every
+   assistant-ui component (which are shadcn components consuming these same
+   variables). Drop this into the renderer's global stylesheet (e.g.
+   src/renderer/index.css), after the Tailwind import.
+
+   LAYERS
+   1. :root / .dark          — the shadcn semantic token contract (warm-chrome).
+   2. --mf-*                 — app-specific surfaces shadcn has no slot for
+                               (window chrome, code + terminal palettes, the
+                               user-message cool card, the viewer matte).
+   3. @theme inline          — maps every var to a Tailwind utility so
+                               `bg-background`, `text-muted-foreground`,
+                               `bg-mf-glass`, `text-mf-code-kw`, `rounded-lg`,
+                               `font-mono`, etc. all resolve.
+
+   THEME SWITCH
+   Toggle dark by adding/removing `class="dark"` (or `[data-theme="dark"]`) on
+   <html>. Optionally honor the OS with the prefers-color-scheme block at the
+   bottom. (The prototype reloaded to re-bake a JS object; in the real app the
+   CSS variables cascade live — no reload needed.)
+
+   NOTE ON NAMING — this also closes audit gap #4 (semantic color names):
+   shadcn's contract (muted-foreground / popover / ring / destructive) IS the
+   industry-standard semantic vocabulary. Map to it; keep our richer hierarchy
+   (text2/3/4, the surface ladder) as --mf-* extensions.
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Radius (shadcn derives sm/md/lg/xl from --radius) ──
+     Prototype scale: xs 4 · sm 6 · md 8 · lg 11 · xl 13. Base = md. */
+  --radius: 0.5rem; /* 8px */
+
+  /* ── shadcn semantic contract — LIGHT (warm paper) ── */
+  --background: #ffffff;            /* content surface — chat/editor body          (T.content)      */
+  --foreground: #1c1c1e;            /* primary text                                (T.text)         */
+  --card: #f8f6f2;                  /* subtly raised card surface                  (T.content2)     */
+  --card-foreground: #1c1c1e;
+  --popover: #ffffff;              /* menus, dropdowns, popovers                  (T.popBg)        */
+  --popover-foreground: #1c1c1e;
+  --primary: #0a84ff;              /* BRAND accent — primary buttons, focus       (ACCENT)         */
+  --primary-foreground: #ffffff;
+  --secondary: #f3efe7;            /* secondary/ghost button fill                 (T.raised)       */
+  --secondary-foreground: #1c1c1e;
+  --muted: #f3efe7;                /* muted fill — bubbles, code-header bg         (T.raised)       */
+  --muted-foreground: #5e5d5a;     /* secondary text                              (T.text2)        */
+  --accent: rgba(0,0,0,0.04);      /* HOVER surface (shadcn 'accent' ≠ brand)     (T.rowHover)     */
+  --accent-foreground: #1c1c1e;
+  --destructive: #dc3545;          /* error / danger                              (T.red)          */
+  --destructive-foreground: #ffffff;
+  --border: rgba(0,0,0,0.08);      /* hairlines, dividers                         (T.border)       */
+  --input: rgba(0,0,0,0.08);       /* field borders                              (T.border)       */
+  --ring: #0a84ff;                 /* focus ring color                           (T.borderFocus)  */
+
+  /* ── App-specific surfaces shadcn has no slot for — LIGHT ── */
+  --mf-window: #e9e7e2;            /* desktop / app shell behind the chrome       */
+  --mf-glass: rgba(240,237,231,0.84); /* frosted titlebar + sidebar (backdrop-blur 40px) */
+  --mf-content2: #f8f6f2;          /* secondary panel                             */
+  --mf-raised: #f3efe7;            /* chips, segmented tracks, avatars            */
+  --mf-tab-bar: #f3f0ea;           /* tab strips, surface/viewer headers          */
+  --mf-tab-active: #ffffff;        /* active segmented chip / tab                 */
+  --mf-text-3: #92918d;            /* tertiary text                              */
+  --mf-text-4: #bcbab5;            /* quaternary / disabled text                  */
+  --mf-chip: rgba(0,0,0,0.05);     /* count / status chip fill                    */
+  --mf-selection: rgba(10,132,255,0.10); /* selected-row tint                     */
+  --mf-warning: #d97706;           /* amber status                               */
+  --mf-success: #28a745;           /* green status                               */
+
+  /* Editor syntax — LIGHT (Xcode-ish on warm paper) */
+  --mf-code-bg: #fbfaf7;
+  --mf-code-fg: #1f1f24;
+  --mf-code-kw: #9b2393;
+  --mf-code-str: #c41a16;
+  --mf-code-fn: #326d74;
+  --mf-code-type: #5b269a;
+  --mf-code-num: #1c00cf;
+  --mf-code-cmt: #707f8c;
+
+  /* Terminal — LIGHT */
+  --mf-term-bg: #1d1d20;
+  --mf-term-fg: #e7e6e3;
+  --mf-term-cmt: #7a7a82;
+  --mf-term-green: #30d158;
+  --mf-term-cyan: #5ac8fa;
+  --mf-term-amber: #ff9f0a;
+
+  /* User-message "cool card" — LIGHT */
+  --mf-um-card: linear-gradient(180deg, #f4f6fb 0%, #eef1f9 100%);
+  --mf-um-fade: #eef1f9;           /* solid end-stop for the line-clamp overlay   */
+  --mf-um-ink: #1b1e26;
+  --mf-um-edge: rgba(40,70,150,0.13);
+
+  /* File-viewer backdrop + transparency checkerboard — LIGHT */
+  --mf-viewer-matte: #e6e2da;
+  --mf-viewer-check-a: #efece6;
+  --mf-viewer-check-b: #dcd8d0;
+
+  /* Elevation + focus ring (full shadow strings) */
+  --mf-shadow-pop: 0 16px 40px rgba(0,0,0,0.20), 0 0 0 0.5px rgba(0,0,0,0.14);
+  --mf-shadow-modal: 0 24px 60px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(0,0,0,0.18);
+  --mf-focus-ring: 0 0 0 3px rgba(10,132,255,0.35);
+
+  /* Type + motion (shared across themes) */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-signature: cubic-bezier(0.22, 1, 0.36, 1); /* the app slide-in */
+}
+
+.dark {
+  /* ── shadcn semantic contract — DARK (warm charcoal) ── */
+  --background: #221f1a;           /* (T.content)      */
+  --foreground: #f1ede5;           /* (T.text)         */
+  --card: #1c1915;                 /* (T.content2)     */
+  --card-foreground: #f1ede5;
+  --popover: #2a261f;              /* (T.popBg)        */
+  --popover-foreground: #f1ede5;
+  --primary: #0a84ff;              /* (ACCENT — shared) */
+  --primary-foreground: #ffffff;
+  --secondary: #2c2820;            /* (T.raised)       */
+  --secondary-foreground: #f1ede5;
+  --muted: #2c2820;                /* (T.raised)       */
+  --muted-foreground: #ada89f;     /* (T.text2)        */
+  --accent: rgba(255,255,255,0.05);/* hover surface    (T.rowHover) */
+  --accent-foreground: #f1ede5;
+  --destructive: #ff6b6b;          /* (T.red — lightened for dark) */
+  --destructive-foreground: #1a1714;
+  --border: rgba(255,255,255,0.10);/* (T.border)       */
+  --input: rgba(255,255,255,0.10);
+  --ring: #0a84ff;
+
+  /* ── App-specific surfaces — DARK ── */
+  --mf-window: #1a1714;
+  --mf-glass: rgba(30,27,22,0.85);
+  --mf-content2: #1c1915;
+  --mf-raised: #2c2820;
+  --mf-tab-bar: #1e1b16;
+  --mf-tab-active: #332e25;
+  --mf-text-3: #847f76;
+  --mf-text-4: #585349;
+  --mf-chip: rgba(255,255,255,0.06);
+  --mf-selection: rgba(10,132,255,0.26);
+  --mf-warning: #e6a23c;
+  --mf-success: #3ad06a;
+
+  /* Editor syntax — DARK (warm pastels) */
+  --mf-code-bg: #1b1814;
+  --mf-code-fg: #e6e2da;
+  --mf-code-kw: #e592d6;
+  --mf-code-str: #eaa48f;
+  --mf-code-fn: #7fcfd6;
+  --mf-code-type: #c6a6f5;
+  --mf-code-num: #9fb4ff;
+  --mf-code-cmt: #6f7a83;
+
+  /* Terminal — DARK */
+  --mf-term-bg: #141310;
+  --mf-term-fg: #e7e6e3;
+  --mf-term-cmt: #7f7a72;
+  --mf-term-green: #30d158;
+  --mf-term-cyan: #5ac8fa;
+  --mf-term-amber: #ff9f0a;
+
+  /* User-message cool card — DARK */
+  --mf-um-card: linear-gradient(180deg, #262a35 0%, #20242e 100%);
+  --mf-um-fade: #20242e;
+  --mf-um-ink: #e9ecf5;
+  --mf-um-edge: rgba(150,175,235,0.20);
+
+  /* File-viewer backdrop — DARK */
+  --mf-viewer-matte: #16140f;
+  --mf-viewer-check-a: #1c1a16;
+  --mf-viewer-check-b: #26231d;
+
+  /* Elevation + focus ring — DARK */
+  --mf-shadow-pop: 0 18px 44px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.10);
+  --mf-shadow-modal: 0 28px 64px rgba(0,0,0,0.66), 0 0 0 0.5px rgba(255,255,255,0.10);
+  --mf-focus-ring: 0 0 0 3px rgba(10,132,255,0.50);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Tailwind v4 token mapping. Makes the variables above available as utilities.
+   ════════════════════════════════════════════════════════════════════════ */
+@theme inline {
+  /* shadcn contract → utilities (bg-background, text-muted-foreground, …) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* --mf-* extensions → utilities (bg-mf-glass, text-mf-code-kw, …) */
+  --color-mf-window: var(--mf-window);
+  --color-mf-glass: var(--mf-glass);
+  --color-mf-content2: var(--mf-content2);
+  --color-mf-raised: var(--mf-raised);
+  --color-mf-tab-bar: var(--mf-tab-bar);
+  --color-mf-tab-active: var(--mf-tab-active);
+  --color-mf-text-3: var(--mf-text-3);
+  --color-mf-text-4: var(--mf-text-4);
+  --color-mf-chip: var(--mf-chip);
+  --color-mf-selection: var(--mf-selection);
+  --color-mf-warning: var(--mf-warning);
+  --color-mf-success: var(--mf-success);
+  --color-mf-code-bg: var(--mf-code-bg);
+  --color-mf-code-fg: var(--mf-code-fg);
+  --color-mf-code-kw: var(--mf-code-kw);
+  --color-mf-code-str: var(--mf-code-str);
+  --color-mf-code-fn: var(--mf-code-fn);
+  --color-mf-code-type: var(--mf-code-type);
+  --color-mf-code-num: var(--mf-code-num);
+  --color-mf-code-cmt: var(--mf-code-cmt);
+  --color-mf-term-bg: var(--mf-term-bg);
+  --color-mf-term-fg: var(--mf-term-fg);
+  --color-mf-term-cmt: var(--mf-term-cmt);
+  --color-mf-term-green: var(--mf-term-green);
+  --color-mf-term-cyan: var(--mf-term-cyan);
+  --color-mf-term-amber: var(--mf-term-amber);
+  --color-mf-um-ink: var(--mf-um-ink);
+  --color-mf-um-edge: var(--mf-um-edge);
+  --color-mf-viewer-matte: var(--mf-viewer-matte);
+
+  /* Radius scale (xs 4 · sm 6 · md 8 · lg 11 · xl 13) */
+  --radius-xs: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 3px);
+  --radius-xl: calc(var(--radius) + 5px);
+
+  /* Type scale (8 rungs) → text-* utilities */
+  --text-micro: 0.625rem;   /* 10 */
+  --text-caption: 0.6875rem;/* 11 */
+  --text-label: 0.75rem;    /* 12 */
+  --text-body: 0.8125rem;   /* 13 */
+  --text-heading: 0.9375rem;/* 15 */
+  --text-title: 1.0625rem;  /* 17 */
+  --text-display: 1.375rem; /* 22 */
+  --text-hero: 1.75rem;     /* 28 */
+
+  /* Spacing (4px base) — supplements Tailwind's default scale where needed */
+  --spacing-1: 2px;
+  --spacing-2: 4px;
+  --spacing-3: 6px;
+  --spacing-4: 8px;
+  --spacing-5: 12px;
+  --spacing-6: 16px;
+  --spacing-7: 20px;
+  --spacing-8: 24px;
+  --spacing-9: 32px;
+  --spacing-10: 40px;
+  --spacing-11: 48px;
+  --spacing-12: 64px;
+
+  /* Fonts + easings */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --ease-default: var(--ease-default);
+  --ease-signature: var(--ease-signature);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Keyboard focus ring (the prototype's [data-noring] opt-out carries over:
+   controls inside an accent-bordered field set data-noring to skip the ring).
+   ════════════════════════════════════════════════════════════════════════ */
+[data-noring]:focus-visible { outline: none; }
+button:not([data-noring]):focus-visible,
+a:not([data-noring]):focus-visible,
+input:not([data-noring]):focus-visible,
+textarea:not([data-noring]):focus-visible,
+select:not([data-noring]):focus-visible,
+[tabindex]:not([data-noring]):focus-visible {
+  outline: none;
+  box-shadow: var(--mf-focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* Optional: also follow the OS theme when no explicit class is set.
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) { /* copy the .dark block's variables here */ /* }
+}
+*/

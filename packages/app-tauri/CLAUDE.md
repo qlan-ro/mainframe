@@ -2,8 +2,7 @@
 
 The new **Tauri 2 + React** desktop UI — a *parallel* rebuild of `packages/desktop` (Electron), not a modification of it. Treat `desktop/` as **reference only** (behavior + the visual target); never edit it from here.
 
-> Read alongside the root `CLAUDE.md` (monorepo-wide code rules still apply) and the canonical docs:
-> `docs/architecture/2026-06-04-app-tauri-architecture.md` · `…-critique.md` · `2026-06-05-chat-runtime-decision.md` · `MIGRATION-TRACKER.md`.
+> **New here? Read `docs/architecture/MIGRATION-INDEX.md` first** — it catalogs every doc, the vendored design spec (`docs/design-reference/`), and the flow. Then the root `CLAUDE.md` (monorepo code rules), the runtime ADR (`2026-06-05-chat-runtime-decision.md`), the tracker (`MIGRATION-TRACKER.md`), and the architecture/critique docs.
 
 ---
 

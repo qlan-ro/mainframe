@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Mainframe — Chat Markers & Task Cards (Review)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+  * { box-sizing: border-box; }
+  /* global keyframes used by the cards (normally injected by 04-engine) */
+  @keyframes twPulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
+  .tw-pulse { animation: twPulse 1.6s ease-in-out infinite; }
+  @keyframes tw-spin { from { transform: rotate(0) } to { transform: rotate(360deg) } }
+  @keyframes tw-shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+  .tw-shimmer { background: linear-gradient(90deg, #bcbab5 25%, #5e5d5a 50%, #bcbab5 75%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: tw-shimmer 2.2s linear infinite; }
+  @keyframes tw-slidein { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
+  .tw-slidein { animation: tw-slidein 0.26s cubic-bezier(0.22,1,0.36,1) both; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="mainframe/01-base.jsx?v=ts89"></script>
+<script type="text/babel" src="mainframe/08-markdown.jsx?v=ts89"></script>
+<script type="text/babel" src="mainframe/09-toolcards.jsx?v=ts89"></script>
+<script type="text/babel" src="mainframe/10-chatcards.jsx?v=ts89"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+const { CompactionPill, SkillLoadedCard, SlashCommandCard, WorktreeStatusPill,
+        SchedulePill, MCPToolCard, TaskGroupCard, TaskProgressCard, ToolGroup } = window;
+
+// Frame wrapper that mimics the chat pane backdrop so cards read in context.
+function ChatFrame({ children, pad = 22, center = true }) {
+  return (
+    <div style={{ background: '#ffffff', width: '100%', height: '100%', padding: pad, display: 'flex', flexDirection: 'column', justifyContent: center ? 'center' : 'flex-start' }}>
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="markers" title="System markers" subtitle="Quiet centered pills the assistant emits mid-stream for out-of-band events. One cohesive marker family.">
+        <DCArtboard id="compaction" label="Context compacted" width={420} height={120}>
+          <ChatFrame><CompactionPill/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="worktree-enter" label="Worktree · entered" width={460} height={120}>
+          <ChatFrame><WorktreeStatusPill action="enter" name="rail-refactor" path="~/dev/mainframe/.worktrees/rail-refactor"/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="worktree-states" label="Worktree · pending / kept / removed / error" width={460} height={230}>
+          <ChatFrame center={false}>
+            <WorktreeStatusPill action="enter" state="pending"/>
+            <WorktreeStatusPill action="exit"/>
+            <WorktreeStatusPill action="exit" removed/>
+            <WorktreeStatusPill action="enter" state="error"/>
+          </ChatFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="skill" title="Skill loaded" subtitle="Centered pill; click to disclose the skill's Markdown body (rendered by the real window.MD).">
+        <DCArtboard id="skill-collapsed" label="Collapsed" width={440} height={120}>
+          <ChatFrame><SkillLoadedCard skillName="react-store-refactor" path="~/.mainframe/skills/react-store-refactor.md"
+            content="## React store refactor"/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="skill-expanded" label="Expanded · markdown body" width={620} height={300}>
+          <ChatFrame><SkillLoadedCard skillName="react-store-refactor" path="~/.mainframe/skills/react-store-refactor.md" defaultOpen
+            content={`## React store refactor\n\nWhen extracting or reshaping a Zustand slice:\n\n1. **Co-locate** the new field with its action in one \`set\` call.\n2. Gate any persisted-shape change behind a **\`version\`** bump + \`migrate\`.\n3. Keep one-way data flow — derived hooks read, never write.`}/></ChatFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="schedule" title="Schedule · cron · monitor" subtitle="One pill, many event kinds. List & monitor disclose a body; pending & error states included.">
+        <DCArtboard id="sched-wakeup" label="Wakeup" width={480} height={120}>
+          <ChatFrame><SchedulePill kind="wakeup" delay="4m 30s" reason="re-check CI"/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="sched-create" label="Cron created · recurring" width={520} height={120}>
+          <ChatFrame><SchedulePill kind="create" schedule="every weekday at 9:00am" recurring/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="sched-list" label="Cron list · expandable" width={560} height={290}>
+          <ChatFrame><SchedulePill kind="list" defaultOpen jobs={[
+            { id: 'cr_8a2', schedule: 'every weekday at 9:00am', recurring: true },
+            { id: 'cr_3f1', schedule: 'in 2 hours', recurring: false, durable: false, prompt: 'summarize the open PRs' },
+          ]}/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="sched-states" label="Delete / monitor / pending / error" width={520} height={260}>
+          <ChatFrame center={false}>
+            <SchedulePill kind="delete" id="cr_3f1"/>
+            <SchedulePill kind="monitor" desc="dev server health" monitorOut={"watching :5173\n12:04  200 OK  (84ms)\n12:09  200 OK  (78ms)"}/>
+            <SchedulePill kind="create" state="pending"/>
+            <SchedulePill kind="wakeup" state="error"/>
+          </ChatFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="mcp" title="MCP tool call" subtitle="Connector-plug pill; disclose to inspect arguments + result JSON. Pending & error states too.">
+        <DCArtboard id="mcp-collapsed" label="Executed · collapsed" width={480} height={120}>
+          <ChatFrame><MCPToolCard server="Linear" tool="create_issue"
+            args={{ team: 'ENG', title: 'Persist sidebar rail state' }}
+            result={'{\n  "id": "ENG-482",\n  "url": "https://linear.app/acme/issue/ENG-482"\n}'}/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="mcp-expanded" label="Expanded · args + result" width={600} height={360}>
+          <ChatFrame><MCPToolCard server="Linear" tool="create_issue" defaultOpen
+            args={{ team: 'ENG', title: 'Persist sidebar rail state', priority: 2, labels: ['frontend', 'layout'] }}
+            result={'{\n  "id": "ENG-482",\n  "identifier": "ENG-482",\n  "url": "https://linear.app/acme/issue/ENG-482",\n  "state": "Todo"\n}'}/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="mcp-states" label="Pending / error" width={480} height={160}>
+          <ChatFrame center={false}>
+            <MCPToolCard server="Sentry" tool="list_issues" state="pending"/>
+            <MCPToolCard server="Sentry" tool="resolve_issue" state="error"/>
+          </ChatFrame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="inline" title="Inline cards" subtitle="Left-aligned in the assistant column: a /slash invocation, a subagent run, and a task checklist.">
+        <DCArtboard id="slash" label="Slash command" width={520} height={110}>
+          <ChatFrame><SlashCommandCard skill="review" args="--scope renderer --since main"/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="taskgroup-collapsed" label="Subagent · collapsed" width={620} height={110}>
+          <ChatFrame><TaskGroupCard agent="explore" model="haiku-4.5"
+            description="find the persistence convention in the store layer"
+            summary="Read 4 files · Searched 2 patterns"/></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="taskgroup-expanded" label="Subagent · expanded (real ToolGroup child)" width={680} height={420}>
+          <ChatFrame center={false}><TaskGroupCard agent="explore" model="haiku-4.5" defaultOpen
+            description="find the persistence convention in the store layer"
+            summary="Read 4 files · Searched 2 patterns"
+            prompt="Survey how state is persisted across the renderer stores. Report which mechanism is canonical and where the version/migrate hooks live."
+            result="Zustand `persist` middleware is the established convention — 3 of 4 stores use it with a version + migrate pair.">
+            <ToolGroup title="Surveying stores" time="0.9s" tools={[
+              { type: 'grep', status: 'done', target: 'persist(', meta: '· 3 matches', matches: [
+                { file: 'store/session.ts', line: 8, text: 'export const useSessionStore = create(persist(' },
+                { file: 'store/prefs.ts', line: 6, text: 'export const usePrefsStore = create(persist(' },
+              ] },
+              { type: 'read', status: 'done', target: 'store/session.ts', meta: '· 120 lines' },
+            ]}/>
+          </TaskGroupCard></ChatFrame>
+        </DCArtboard>
+        <DCArtboard id="taskprogress" label="Task checklist · mixed states" width={520} height={210}>
+          <ChatFrame><TaskProgressCard items={[
+            { subject: 'Add persisted mode field to layout store', status: 'completed' },
+            { subject: 'Render icon-rail branch + bind ⌘1', status: 'completed' },
+            { subject: 'Delete the legacy free-form dock', status: 'in_progress' },
+            { subject: 'Add a regression test for the toggle', status: 'pending' },
+          ]}/></ChatFrame>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
