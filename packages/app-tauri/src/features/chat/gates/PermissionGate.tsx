@@ -98,7 +98,7 @@ export function PermissionGate({ entry, reply }: PermissionGateProps) {
           icon={<ShieldIcon className="size-4" />}
           tileClassName="bg-mf-warning-tint text-mf-warning"
           eyebrow="Permission required"
-          title="Permission Required"
+          title="Permission required"
         />
         <ToolNameRow toolName={request.toolName} />
         <DetailsDisclosure input={request.input} />
