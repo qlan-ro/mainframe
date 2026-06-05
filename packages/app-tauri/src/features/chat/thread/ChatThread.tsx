@@ -1,90 +1,17 @@
 /**
- * ChatThread — Phase 1 minimal thread renderer.
+ * ChatThread — thread shell wiring the native message dispatch.
  *
- * Uses assistant-ui primitives directly (no shadcn yet — that is a Phase 2 task).
- * Text parts render as plain text. Tool-call parts render a fallback stub.
- * Permission sentinel (\0__MF_PERMISSION__) renders null.
- *
- * Phase 2: replace with proper shadcn-backed MessagePrimitive + tool-card registry.
+ * Role-based message components (UserMessage / AssistantMessage / SystemMessage)
+ * render through MessagePrimitive.GroupedParts + the tool-card registry. The
+ * full thread-shell restyle (viewport footer, scroll-to-bottom, action bar) and
+ * the composer port are later leaves — the chrome here stays intentionally thin.
  */
-import { ThreadPrimitive, MessagePrimitive, ComposerPrimitive, useAuiState } from '@assistant-ui/react';
-import { PERMISSION_PLACEHOLDER } from '../view-model/convert-message';
-
-// ---- Text part ----------------------------------------------------------------
-
-function TextPart() {
-  return <MessagePrimitive.Content />;
-}
-
-// ---- Role label ---------------------------------------------------------------
-
-function RoleLabel({ role }: { role: string }) {
-  const labels: Record<string, string> = {
-    user: 'You',
-    assistant: 'Assistant',
-    system: 'System',
-  };
-  return (
-    <span style={{ fontWeight: 600, fontSize: 12, color: '#888', textTransform: 'uppercase' }}>
-      {labels[role] ?? role}
-    </span>
-  );
-}
-
-// ---- Single message -----------------------------------------------------------
-
-function Message() {
-  const message = useAuiState((s) => s.message);
-  const role = message.role;
-
-  // Filter permission sentinel before rendering
-  const visibleContent = message.content.filter(
-    (part) => !(part.type === 'text' && part.text === PERMISSION_PLACEHOLDER.text),
-  );
-  if (visibleContent.length === 0) return null;
-
-  const isUser = role === 'user';
-
-  return (
-    <div
-      data-testid={`chat-message-${message.id}`}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: isUser ? 'flex-end' : 'flex-start',
-        padding: '8px 0',
-      }}
-    >
-      <RoleLabel role={role} />
-      <div
-        style={{
-          marginTop: 4,
-          maxWidth: '80%',
-          padding: '8px 12px',
-          borderRadius: 8,
-          background: isUser ? '#2563eb' : '#1e293b',
-          color: '#f1f5f9',
-          fontSize: 14,
-          lineHeight: 1.6,
-          whiteSpace: 'pre-wrap',
-        }}
-      >
-        <MessagePrimitive.Content
-          components={{
-            Text: ({ text }) => <span>{text}</span>,
-            tools: {
-              Fallback: ({ toolName, args }) => (
-                <span style={{ fontSize: 12, color: '#94a3b8', fontFamily: 'monospace' }}>
-                  [{toolName}({JSON.stringify(args).slice(0, 80)})]
-                </span>
-              ),
-            },
-          }}
-        />
-      </div>
-    </div>
-  );
-}
+import { ThreadPrimitive, ComposerPrimitive } from '@assistant-ui/react';
+import { UserMessage } from '../messages/UserMessage';
+import { AssistantMessage } from '../messages/AssistantMessage';
+import { SystemMessage } from '../messages/SystemMessage';
+// Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
+import '../tools/register-cards';
 
 // ---- Composer -----------------------------------------------------------------
 
@@ -156,7 +83,9 @@ export function ChatThread() {
       >
         <ThreadPrimitive.Messages
           components={{
-            Message,
+            UserMessage,
+            AssistantMessage,
+            SystemMessage,
           }}
         />
         <ThreadPrimitive.ScrollToBottom />
@@ -181,6 +110,3 @@ export function ChatThread() {
     </ThreadPrimitive.Root>
   );
 }
-
-// Satisfy the unused `TextPart` lint rule — it is scaffolding for Phase 2.
-void TextPart;

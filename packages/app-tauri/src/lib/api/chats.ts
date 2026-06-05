@@ -21,3 +21,12 @@ export async function interruptChat(port: number, chatId: string): Promise<void>
   const json = await postJson<ApiResponse<unknown>>(`${apiBase(port)}/api/chats/${chatId}/interrupt`);
   if (!json.success) throw new Error(json.error);
 }
+
+/** Full (untruncated) output for a tool call, fetched on demand for long results. */
+export async function getToolResultContent(port: number, chatId: string, toolUseId: string): Promise<string> {
+  const json = await fetchJson<ApiResponse<{ content: string }>>(
+    `${apiBase(port)}/api/chats/${chatId}/tool-result/${toolUseId}`,
+  );
+  if (!json.success) throw new Error(json.error);
+  return json.data.content;
+}

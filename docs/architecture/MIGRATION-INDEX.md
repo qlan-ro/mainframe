@@ -23,7 +23,13 @@ If you're picking up the **desktop (Electron) → app-tauri (Tauri 2 + React)** 
 - Reasoning = **native, collapsed**. Quote = native UI + CLI glue. Errors = keep text-routing. Queue = keep daemon-backed.
 - **Framing:** native runtime-integration hooks are inert under external-store → native *components* + our CLI/daemon data + daemon config-write. Adoption split: 6 adopt-native / 9 native-shell+our-data / 9 keep-ours (see `ASSISTANT-UI-INVENTORY.md`).
 
-**Immediate next action:** the **native tool-rendering leaf** (build-order 4–7) — `convert-message` projection (native flat tool-calls + Task `messages` + native image/file parts) → `GroupedParts`+`groupPartByType` dispatch → `tools.by_name` registry → Task/subagent card. **First verify** the daemon's nested payload is rich enough for the projection path. Then fan out the leaves (thread-shell cleanup + `ViewportFooter`/`ScrollToBottom`/`ActionBar`/`MessageTiming`; composer shell + `ModelSelector`/`ContextDisplay`/toolbar; permission cards; sessions hybrid) per the corrected inventory verdicts.
+**Immediate next action (IN PROGRESS — native tool-rendering leaf, build-order 4–7):**
+- ☑ Payload verified rich enough — **no daemon change**. Projection done (`convert-message` + `map-assistant-blocks` + `map-tool-result`): native flat tool-calls, `Task` part with native `messages`, native image parts; 13 unit tests green.
+- ☑ Dispatch done (`messages/AssistantMessage` + `tool-dispatch` + `tools/group-parts`): `GroupedParts` + a **daemon-authoritative `makeChatGroupBy`** (reads `metadata.custom.mainframe.partGroups`; NOT a tool-name heuristic). Contract layer + shared infra (`tools/shared/*`, `ToolResultExpand`, `tools/chat-tool-context`, diff-tint tokens) done. **Two seams removed** — see `2026-06-05-native-tool-rendering-seams.md` (cards are native `ToolCallMessagePartComponent`; grouping is server-decided).
+- ◐ The ~14 per-family cards (`tools/cards/*`) are being ported (fan-out) → then assemble `register-cards.ts`, wire into `ChatThread` (side-effect import), typecheck + tests, **design-conformance vs artboards**, **empirical drift test**.
+- Then fan out the remaining leaves (thread-shell cleanup + `ViewportFooter`/`ScrollToBottom`/`ActionBar`/`MessageTiming`; composer shell + toolbar; permission cards; sessions hybrid) per the corrected inventory verdicts.
+
+**⚠ Not yet committed** — the above lives in the working tree (uncommitted) as of this snapshot.
 
 **Open / deferred:** permission-card mount placement (above-composer default vs inline) · runtime-gated (Reload/Edit/BranchPicker/native-error — don't build until the runtime exposes data) · sidecar packaging (Node bundle + native-dep rebuild + signing) · e2e harness + testids · Phase-2 Rust-daemon go/no-go · Electron lifecycle (retire vs coexist) · shared-pure-package home for `convert-message`.
 
@@ -41,6 +47,7 @@ If you're picking up the **desktop (Electron) → app-tauri (Tauri 2 + React)** 
 
 ### C. Decisions (the "why", locked)
 - `docs/architecture/2026-06-05-chat-runtime-decision.md` — useExternalStoreRuntime + per-chat controller (react-opencode shape), no message cache, refetch-on-gap, useRemoteThreadListRuntime; rejects AssistantTransport (@alpha). Includes the 3-round evidence.
+- `docs/architecture/2026-06-05-native-tool-rendering-seams.md` — why tool cards are native `ToolCallMessagePartComponent` (not custom props) and why grouping is **daemon-authoritative** (`metadata.custom.partGroups`, not a tool-name list). Records the GroupedParts-vs-by_name tension + the deprecated `useAssistantToolUI`. Both seams removed.
 - `docs/architecture/2026-06-04-app-tauri-architecture.md` — target folder tree + principles (feature-first, lib/tauri seam, surface-intent bus, shadcn-first).
 - `docs/architecture/2026-06-04-app-tauri-architecture-critique.md` — the adversarial risks (C1 env, mobile-co-owned contract, missing workstreams).
 

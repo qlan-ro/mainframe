@@ -7,6 +7,8 @@
     "dev": "vite --port 5174",
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "tauri:dev": "cargo tauri dev",
     "tauri:build": "cargo tauri build",
     "preview": "vite preview"
@@ -33,6 +35,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "diff": "^9.0.0",
     "cmdk": "^1.1.1",
     "lucide-react": "^1.16.0",
     "react": "^19",
@@ -42,10 +45,15 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",
+    "jsdom": "^29.1.1",
     "typescript": "^6",
-    "vite": "^6"
+    "vite": "^6",
+    "vitest": "^4.1.6"
   }
 }

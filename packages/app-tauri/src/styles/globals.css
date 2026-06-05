@@ -85,6 +85,16 @@
   --mf-term-cyan: #5ac8fa;
   --mf-term-amber: #ff9f0a;
 
+  /* Diff tint tokens — opaque composites; NO /opacity modifier on these vars.
+     add = green family (~success@10% on code-bg), del = red family (~destructive@9% on code-bg).
+     Derived: mix(success, mf-code-bg, alpha) via straight-alpha composite. */
+  --mf-diff-add-bg: #e6f2e5;
+  --mf-diff-add-border: #bce1c2;
+  --mf-diff-add-text: #28a745;
+  --mf-diff-del-bg: #f8e9e7;
+  --mf-diff-del-border: #f2bfc2;
+  --mf-diff-del-text: #dc3545;
+
   /* User-message cool card — LIGHT */
   --mf-um-card: linear-gradient(180deg, #f4f6fb 0%, #eef1f9 100%);
   --mf-um-fade: #eef1f9;
@@ -165,6 +175,14 @@
   --mf-term-cyan: #5ac8fa;
   --mf-term-amber: #ff9f0a;
 
+  /* Diff tint tokens — DARK (same derivation on dark code-bg #1b1814) */
+  --mf-diff-add-bg: #1e2b1d;
+  --mf-diff-add-border: #244f2e;
+  --mf-diff-add-text: #3ad06a;
+  --mf-diff-del-bg: #30201c;
+  --mf-diff-del-border: #60312e;
+  --mf-diff-del-text: #ff6b6b;
+
   /* User-message cool card — DARK */
   --mf-um-card: linear-gradient(180deg, #262a35 0%, #20242e 100%);
   --mf-um-fade: #20242e;
@@ -238,6 +256,14 @@
   --color-mf-um-ink: var(--mf-um-ink);
   --color-mf-um-edge: var(--mf-um-edge);
   --color-mf-viewer-matte: var(--mf-viewer-matte);
+
+  /* Diff tint utilities */
+  --color-mf-diff-add-bg: var(--mf-diff-add-bg);
+  --color-mf-diff-add-border: var(--mf-diff-add-border);
+  --color-mf-diff-add-text: var(--mf-diff-add-text);
+  --color-mf-diff-del-bg: var(--mf-diff-del-bg);
+  --color-mf-diff-del-border: var(--mf-diff-del-border);
+  --color-mf-diff-del-text: var(--mf-diff-del-text);
 
   /* Radius scale (xs 4 · sm 6 · md 8 · lg 11 · xl 13) */
   --radius-xs: calc(var(--radius) - 4px);  /* 4px */
