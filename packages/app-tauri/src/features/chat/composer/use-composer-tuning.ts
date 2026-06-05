@@ -16,9 +16,17 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { AdapterInfo, AdapterModel, Chat, EffortLevel, FeatureKey, SessionTuning } from '@qlan-ro/mainframe-types';
+import type {
+  AdapterInfo,
+  AdapterModel,
+  Chat,
+  EffortLevel,
+  ExecutionMode,
+  FeatureKey,
+  SessionTuning,
+} from '@qlan-ro/mainframe-types';
 import { getAdapters } from '@/lib/api/adapters';
-import { getChat, setChatTuning } from '@/lib/api/chats';
+import { getChat, setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { getDaemonPort } from '@/lib/tauri/bridge';
 import { useChatId } from '../tools/chat-tool-context';
 
@@ -61,9 +69,13 @@ export function useAdapters(): AdapterInfo[] {
 
 export interface ComposerTuningHook {
   chat: Chat | null;
+  adapter: AdapterInfo | null;
   model: AdapterModel | null;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
+  setModel: (model: string) => void;
+  setPlanMode: (on: boolean) => void;
+  setPermissionMode: (mode: ExecutionMode) => void;
   disabled: boolean;
 }
 
@@ -114,13 +126,15 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     };
   }, [chatId]);
 
+  const adapter: AdapterInfo | null = chat != null ? (adapters.find((a) => a.id === chat.adapterId) ?? null) : null;
+
   // Resolve the AdapterModel: the chat's explicit model, else the adapter's
   // default (chat.model is null when the session inherits the adapter default).
   const model: AdapterModel | null = (() => {
-    if (chat == null) return null;
-    const adapterModels = adapters.find((a) => a.id === chat.adapterId)?.models ?? [];
+    if (adapter == null) return null;
+    const adapterModels = adapter.models;
     return (
-      (chat.model != null ? adapterModels.find((m) => m.id === chat.model) : undefined) ??
+      (chat?.model != null ? adapterModels.find((m) => m.id === chat.model) : undefined) ??
       adapterModels.find((m) => m.isDefault) ??
       adapterModels[0] ??
       null
@@ -164,11 +178,34 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     [chat, chatId],
   );
 
+  // adapter / model / permission / plan all go through PATCH /config (one optimistic helper).
+  const patchConfig = useCallback(
+    (patch: ChatConfigPatch) => {
+      if (!chat || !chatId || portRef.current == null) return;
+      const prev = chat;
+      setChat({ ...chat, ...patch });
+      setChatConfig(portRef.current, chatId, patch)
+        .then((updated) => setChat(updated))
+        .catch((err) => {
+          console.warn('[composer/useComposerTuning] setChatConfig failed — reverting', { patch, err });
+          setChat(prev);
+        });
+    },
+    [chat, chatId],
+  );
+  const setModel = useCallback((m: string) => patchConfig({ model: m }), [patchConfig]);
+  const setPlanMode = useCallback((on: boolean) => patchConfig({ planMode: on }), [patchConfig]);
+  const setPermissionMode = useCallback((mode: ExecutionMode) => patchConfig({ permissionMode: mode }), [patchConfig]);
+
   return {
     chat,
+    adapter,
     model,
     setEffort,
     setFeature,
+    setModel,
+    setPlanMode,
+    setPermissionMode,
     disabled: chat?.isRunning === true,
   };
 }

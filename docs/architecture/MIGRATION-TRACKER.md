@@ -79,13 +79,15 @@ Do the chat leaves in this order; ☑ = done.
 > **Thread shell:** `ChatThread` + `App` restyled to warm-chrome (light), centered max-width column, native `ScrollToBottom`, `If running`→`useAuiState`, **CSS thin scrollbar** (radix ScrollArea doesn't bind to the autoscroll Viewport). Composer stays thin. Pending: `ViewportFooter` inset (real scroll-inset bug), welcome/suggestions.
 > **Design-conformance:** chat cards + message shell PASSED (post-fixes) vs `Chat Cards`/`User Message`/`Chat Markers` artboards.
 
-### Composer → `features/chat/composer/` — **SCOPED (next leaf; can't land in one pass)**
-> The shell core is the "~90% native restyle"; the config toolbar + sandbox + worktree are GATED on data layers/surfaces not yet built. See `MIGRATION-INDEX.md` "Resume here" for the full scoping. Decompose the 485-line desktop `ComposerCard` — don't carry it.
-- ☐ **shell core (buildable now):** `ComposerPrimitive` Root/Input/Send/Cancel restyle + running-swap · `ThreadPrimitive.ViewportFooter` (scroll-inset fix) · draft text · send via `controller.sendMessage` · **daemon-backed `QueuedMessageBanner`** (state wired in `interactions.queued`; needs daemon edit/cancel endpoints in `lib/`) · attachments (native `AttachmentAdapter`/AddAttachment/Dropzone/tile + rejection-toaster)
-- ☐ **GATED — config toolbar** (model/effort/features/plan/permission): **prerequisite = a model-capabilities API + `runConfig` wiring** (app-tauri has neither; `controller.sendMessage` takes no config). Effort/features = pure fn of the selected model's advertised capabilities. Then reskin via shadcn Popover/Select (logic stays ours).
-- ☐ **GATED — sandbox captures** (CaptureThumb/inspect chips): needs the sandbox-preview surface (not built; also unblocks `UMInspectChip`).
-- ☐ **GATED — WorktreePopover**: needs worktree integration.
-- ☐ **mention/highlight:** `@`-mention picker = **native `Unstable_TriggerPopover` + custom `Unstable_TriggerAdapter`** (DECIDED 2026-06-05; sync adapter over async daemon path-search; gate on @alpha churn) + `ComposerHighlight` overlay (transparent caret).
+### Composer → `features/chat/composer/`
+> Decompose the 485-line desktop `ComposerCard` — don't carry it. **Correction (2026-06-05):** the config toolbar was NOT gated — the daemon already serves every endpoint (desktop proves it); "missing from app-tauri" = wiring, not a missing surface. Only genuine **surfaces** (sandbox preview) are gated.
+- ☑ **shell core** — `ComposerPrimitive` Root/Input/Send/Cancel restyle + running-swap · `ThreadPrimitive.ViewportFooter` (scroll-inset fix) · draft · send via `controller.sendMessage`. *(`a660d84d`)*
+- ☑ **config toolbar (FULL)** — model · permission · plan · effort · features. Data layer: `lib/api/{adapters,chats}` (`getAdapters`/`getChat`/`setChatTuning` `PATCH /tuning` for effort+features / `setChatConfig` `PATCH /config` for model+plan+permission) + ported `lib/model-tuning`. Controls: `EffortPicker`/`FeaturesPopover`/`ModelSelect`/`PermissionSelect`/`PlanModeToggle` + `ComposerToolbar`, driven by `useComposerTuning` (each control a pure fn of the selected model's capabilities). **Verified live** (write loop persists). *(`dbf70ba9` + model/plan/permission)*
+- ☐ **daemon-backed `QueuedMessageBanner`** — state wired (`interactions.queued`); needs the daemon edit/cancel endpoints in `lib/` + the new queued-message **design** (commissioned; thread-side cool-card + composer **edit mode**, NOT a banner). Edit reuses the full composer (text+attachments+config).
+- ☐ **attachments** (native `AttachmentAdapter`/AddAttachment/Dropzone/tile + rejection-toaster) — buildable now.
+- ☐ **GATED — sandbox captures** (CaptureThumb/inspect chips): needs the sandbox-preview **surface** (not built; also unblocks `UMInspectChip`).
+- ☐ **WorktreePopover** — needs worktree integration (verify whether it's REST-wireable like config before assuming gated).
+- ☐ **mention/highlight:** `@`-mention picker = **native `Unstable_TriggerPopover` + custom `Unstable_TriggerAdapter`** (DECIDED 2026-06-05; sync adapter over async daemon path-search) + `ComposerHighlight` overlay.
 - ☐ `replace` composer-drafts.ts (module Map → store)
 
 ### Editor & viewers → `features/editor/` (+lsp/) · `features/viewers/`
