@@ -51,22 +51,17 @@ interface TerminalBodyProps {
   isError: boolean | undefined;
   chatId: string | undefined;
   toolCallId: string | undefined;
-  rawResult: unknown;
+  truncated: boolean;
+  fullBytes: number;
 }
 
-function TerminalBody({ command, resultText, isError, chatId, toolCallId, rawResult }: TerminalBodyProps) {
-  const truncated = isTruncatedResult(rawResult);
+function TerminalBody({ command, resultText, isError, chatId, toolCallId, truncated, fullBytes }: TerminalBodyProps) {
   const lines = resultText.split('\n');
 
   return (
     <div className={cn('border-t border-border rounded-b-lg px-3 py-2 bg-mf-term-bg', isError && 'border-destructive')}>
       {truncated && chatId && toolCallId ? (
-        <ToolResultExpand
-          chatId={chatId}
-          toolUseId={toolCallId}
-          truncatedContent={resultText}
-          fullBytes={(rawResult as { fullBytes: number }).fullBytes}
-        />
+        <ToolResultExpand chatId={chatId} toolUseId={toolCallId} truncatedContent={resultText} fullBytes={fullBytes} />
       ) : (
         <pre
           data-testid="chat-bash-output"
@@ -109,12 +104,12 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
   const command = (args['command'] as string | undefined) ?? (args['input'] as string | undefined) ?? '';
   const description = args['description'] as string | undefined;
 
-  const { text: resultText } = resolveResultText(result);
+  const { text: resultText, fullBytes } = resolveResultText(result);
   const hasOutput = Boolean(resultText);
 
   return (
     <Collapsible data-testid="chat-bash-card" defaultOpen={false}>
-      <div className={cn(cardStyle(result, isError), 'group')}>
+      <div className={cn(cardStyle(result, isError))}>
         <CollapsibleTrigger
           data-testid="chat-bash-trigger"
           disabled={!hasOutput}
@@ -167,7 +162,8 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
               isError={isError}
               chatId={chatId}
               toolCallId={toolCallId}
-              rawResult={result}
+              truncated={isTruncatedResult(result)}
+              fullBytes={fullBytes}
             />
           </CollapsibleContent>
         )}

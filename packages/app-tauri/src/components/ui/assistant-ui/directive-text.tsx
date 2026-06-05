@@ -11,7 +11,7 @@
  * Chip styling follows warm-chrome mf-chip token (rgba overlay on current surface).
  * No /opacity modifier — uses solid token values only.
  */
-import { memo, type FC } from 'react';
+import { type FC } from 'react';
 import type { TextMessagePartComponent, Unstable_DirectiveFormatter } from '@assistant-ui/react';
 import { cn } from '@/lib/utils';
 
@@ -98,17 +98,3 @@ export function createDirectiveText(
   Component.displayName = 'DirectiveText';
   return Component;
 }
-
-// ── Default export ────────────────────────────────────────────────────────────
-
-import { unstable_defaultDirectiveFormatter } from '@assistant-ui/react';
-
-const DirectiveTextImpl = createDirectiveText(unstable_defaultDirectiveFormatter);
-
-/**
- * `TextMessagePartComponent` that parses `:type[label]{name=id}` directives and
- * renders them as inline warm-chrome chips. For per-type icons or a custom format,
- * build a component with `createDirectiveText(formatter, { iconMap })`.
- */
-export const DirectiveText: TextMessagePartComponent = memo(DirectiveTextImpl);
-DirectiveText.displayName = 'DirectiveText';

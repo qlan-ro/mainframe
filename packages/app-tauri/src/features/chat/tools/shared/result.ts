@@ -82,21 +82,3 @@ export function resolveResultText(result: unknown): ResolvedResult {
   }
   return { text: '', truncated: false, fullBytes: 0 };
 }
-
-// ---------------------------------------------------------------------------
-// ToolCardProps — shared prop interface for every per-family tool card
-// ---------------------------------------------------------------------------
-
-/**
- * Props every per-family tool card receives from the assistant-ui
- * `tools.by_name` registry. `chatId` and `toolCallId` are optional because
- * the base `ToolCallMessagePartComponent` type does not include them — each
- * card that needs them reads from `useChatId()` / the message part.
- */
-export interface ToolCardProps {
-  args: Record<string, unknown>;
-  result: unknown;
-  isError: boolean | undefined;
-  chatId?: string;
-  toolCallId?: string;
-}

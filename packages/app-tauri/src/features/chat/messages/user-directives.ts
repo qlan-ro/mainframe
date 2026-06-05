@@ -49,7 +49,7 @@ export const mainframeUserFormatter: Unstable_DirectiveFormatter = {
       }
       const name = cmdToken.slice(1); // strip leading /
       segments.push({ kind: 'mention', type: 'command', label: cmdToken, id: name });
-      workingText = text.slice(leadingWs.length + cmdToken.length);
+      workingText = workingText.slice(leadingWs.length + cmdToken.length);
     }
 
     // 2. Walk remaining text for @mention tokens

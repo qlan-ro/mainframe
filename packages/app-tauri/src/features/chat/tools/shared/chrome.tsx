@@ -19,9 +19,9 @@
  * StatusDot's "pending" animation uses opacity-40 as a utility class,
  * not a color modifier — which is correct.
  *
- * Note: StatusDot here accepts raw `result`/`isError` booleans (legacy API
- * matching desktop's ToolCardProps). The assistant-ui status-dot lives in
- * tool-status.ts and uses ToolCallMessagePartStatus.type — different concern.
+ * Note: StatusDot here accepts raw `result`/`isError` booleans.
+ * The assistant-ui status-dot lives in tool-status.ts and uses
+ * ToolCallMessagePartStatus.type — different concern.
  */
 import React from 'react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -83,18 +83,8 @@ export function ErrorDot({ isError }: { isError: boolean | undefined }) {
 }
 
 // ---------------------------------------------------------------------------
-// borderColor / cardStyle — Tailwind class helpers for card framing
+// cardStyle — Tailwind class helper for card framing
 // ---------------------------------------------------------------------------
-
-/**
- * Returns the left-border Tailwind class reflecting the tool result state.
- * Callers apply this as e.g. `border-l-2 ${borderColor(result, isError)}`.
- */
-export function borderColor(result: unknown, isError: boolean | undefined): string {
-  if (result === undefined) return 'border-l-border';
-  if (isError) return 'border-l-destructive';
-  return 'border-l-mf-diff-add-border';
-}
 
 /**
  * Returns the full card-frame Tailwind class string for a tool card shell.

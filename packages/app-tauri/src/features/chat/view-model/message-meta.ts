@@ -22,20 +22,17 @@ export interface MainframeMessageMeta {
   // user turn
   readonly queued?: boolean;
   readonly cleanText?: string;
-  readonly command?: { readonly name: string; readonly userText?: string; readonly source?: string };
-  readonly attachments?: ReadonlyArray<{ readonly name?: string; readonly kind?: string }>;
-  readonly attachedFiles?: ReadonlyArray<{ readonly name: string }>;
+  readonly command?: {
+    readonly name: string;
+    readonly userText?: string;
+    readonly source?: 'commands' | (string & {});
+  };
   // system turn
   readonly isCompacted?: boolean;
   readonly skillLoaded?: { readonly skillName: string; readonly path: string; readonly content: string };
 }
 
 /** Typed args for the synthetic tool-call parts (built in the projection, read by the cards). */
-export interface SkillLoadedArgs {
-  readonly skillName: string;
-  readonly path: string;
-  readonly content: string;
-}
 export interface TaskProgressArgs {
   readonly items: ReadonlyArray<{
     readonly toolCallId: string;

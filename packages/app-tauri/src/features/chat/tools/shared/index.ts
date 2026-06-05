@@ -5,7 +5,7 @@
  */
 
 // ── Pure result logic ────────────────────────────────────────────────────────
-export type { TruncatedResult, ToolCardProps, ResolvedResult } from './result';
+export type { TruncatedResult, ResolvedResult } from './result';
 export { isStructuredResult, isTruncatedResult, stripErrorXml, resolveResultText } from './result';
 
 // ── Diff math + rendering ────────────────────────────────────────────────────
@@ -13,7 +13,7 @@ export { countDiffStats, reconstructFromHunks, computeFallbackHunks } from './di
 export { DiffFromPatch, DiffFallback } from './diff';
 
 // ── Status chrome ────────────────────────────────────────────────────────────
-export { StatusDot, ErrorDot, borderColor, cardStyle, shortFilename, ClickableFilePath } from './chrome';
+export { StatusDot, ErrorDot, cardStyle, shortFilename, ClickableFilePath } from './chrome';
 
 // ── Card shell ───────────────────────────────────────────────────────────────
 export type { CollapsibleCardShellProps, FamilyTileProps, ErrorBodyProps } from './card-shell';

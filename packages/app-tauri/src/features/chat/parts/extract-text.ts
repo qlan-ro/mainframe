@@ -1,7 +1,6 @@
 /**
  * Walks a React node tree and extracts the concatenated string content.
- * Used by the markdown code-block path (to extract raw code text from children)
- * and by ReadMoreBubble (to estimate rendered character length for clamping).
+ * Used by ReadMoreBubble to estimate rendered character length for clamping.
  */
 import type { ReactNode } from 'react';
 

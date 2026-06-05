@@ -20,7 +20,6 @@ import {
   CollapsibleCardShell,
   FamilyTile,
 } from '../shared';
-import type { TruncatedResult } from '../shared';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';
@@ -60,7 +59,7 @@ interface WriteCardBodyProps {
   showExpand: boolean;
   chatId: string | undefined;
   toolCallId: string | undefined;
-  result: unknown;
+  fullBytes: number;
 }
 
 function WriteCardBody({
@@ -71,7 +70,7 @@ function WriteCardBody({
   showExpand,
   chatId,
   toolCallId,
-  result,
+  fullBytes,
 }: WriteCardBodyProps) {
   return (
     <div className="border-t border-border">
@@ -85,7 +84,7 @@ function WriteCardBody({
               chatId={chatId!}
               toolUseId={toolCallId!}
               truncatedContent={resultText}
-              fullBytes={(result as TruncatedResult).fullBytes}
+              fullBytes={fullBytes}
             />
           ) : (
             <pre
@@ -112,7 +111,7 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
   const filePath = (args['file_path'] as string) ?? '';
   const content = (args['content'] as string) ?? '';
 
-  const { text: resultText, truncated } = resolveResultText(result);
+  const { text: resultText, truncated, fullBytes } = resolveResultText(result);
   const structured = isStructuredResult(result);
 
   const hunks = structured ? (result.structuredPatch ?? null) : null;
@@ -147,7 +146,7 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
         showExpand={showExpand}
         chatId={chatId}
         toolCallId={toolCallId}
-        result={result}
+        fullBytes={fullBytes}
       />
     ) : null;
 

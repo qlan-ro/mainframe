@@ -64,7 +64,6 @@ const UserDirectiveText = createDirectiveText(mainframeUserFormatter, {
   iconMap: {
     mention: AtSign,
     command: Wrench,
-    skill: Zap,
   },
 });
 

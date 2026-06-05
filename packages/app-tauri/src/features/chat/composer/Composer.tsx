@@ -48,7 +48,7 @@ function SendOrCancelButton() {
 
 export function Composer() {
   const { editing, cancelEdit } = useComposerEdit();
-  if (editing) return <ComposerEditMode edit={editing} onDone={cancelEdit} />;
+  if (editing) return <ComposerEditMode key={editing.messageId} edit={editing} onDone={cancelEdit} />;
 
   return (
     <ComposerPrimitive.Root

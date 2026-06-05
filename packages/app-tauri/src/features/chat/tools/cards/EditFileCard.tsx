@@ -26,7 +26,6 @@ import {
   CollapsibleCardShell,
   FamilyTile,
 } from '../shared';
-import type { TruncatedResult } from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId, useOpenFile } from '../chat-tool-context';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
@@ -88,7 +87,7 @@ interface EditCardBodyProps {
   showExpand: boolean;
   chatId: string | undefined;
   toolCallId: string | undefined;
-  result: unknown;
+  fullBytes: number;
 }
 
 function EditCardBody({
@@ -100,7 +99,7 @@ function EditCardBody({
   showExpand,
   chatId,
   toolCallId,
-  result,
+  fullBytes,
 }: EditCardBodyProps) {
   return (
     <div className="border-t border-border">
@@ -118,7 +117,7 @@ function EditCardBody({
               chatId={chatId!}
               toolUseId={toolCallId!}
               truncatedContent={resultText}
-              fullBytes={(result as TruncatedResult).fullBytes}
+              fullBytes={fullBytes}
             />
           ) : (
             <pre
@@ -146,6 +145,7 @@ interface EditCardState {
   addedCount: number | null;
   removedCount: number | null;
   resultText: string;
+  fullBytes: number;
   hasError: boolean;
   showExpand: boolean;
   chatId: string | undefined;
@@ -165,7 +165,7 @@ function useEditCardState(
   const oldString = (args['old_string'] as string) ?? '';
   const newString = (args['new_string'] as string) ?? '';
 
-  const { text: resultText, truncated } = resolveResultText(result);
+  const { text: resultText, truncated, fullBytes } = resolveResultText(result);
   const structured = isStructuredResult(result);
 
   const hunks = structured ? (result.structuredPatch ?? null) : null;
@@ -198,6 +198,7 @@ function useEditCardState(
     addedCount: stats?.added ?? null,
     removedCount: stats?.removed ?? null,
     resultText,
+    fullBytes,
     hasError,
     showExpand,
     chatId,
@@ -238,7 +239,7 @@ export const EditFileCard: ToolCallMessagePartComponent = (part) => {
         showExpand={state.showExpand}
         chatId={state.chatId}
         toolCallId={toolCallId}
-        result={result}
+        fullBytes={state.fullBytes}
       />
     ) : null;
 
