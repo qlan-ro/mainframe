@@ -83,21 +83,14 @@ function ActionFooter({
 
 export interface PermissionGateProps {
   entry: ChatPermissionEntry;
-  /**
-   * Called when the user makes a decision. Typed as Function so that
-   * vitest's untyped vi.fn() (Mock<Procedure | Constructable>, which has no
-   * call signature) is accepted in tests. Real callers should use ReplyFn.
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  reply: Function;
+  /** Called when the user denies / allows-once / always-allows. */
+  reply: ReplyFn;
 }
 
 export function PermissionGate({ entry, reply }: PermissionGateProps) {
   const { request } = entry;
-  const typedReply = reply as ReplyFn;
 
-  const send = (kind: 'deny' | 'once' | 'always') =>
-    void typedReply(entry.requestId, buildPermissionResponse(entry, kind));
+  const send = (kind: 'deny' | 'once' | 'always') => void reply(entry.requestId, buildPermissionResponse(entry, kind));
 
   return (
     <div data-testid="chat-permission-gate">

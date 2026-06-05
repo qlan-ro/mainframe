@@ -20,12 +20,12 @@
  *  - Always-allow button present and calls reply with updatedPermissions when
  *    suggestions are provided.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 import type { ControlUpdate } from '@qlan-ro/mainframe-types';
-import { PermissionGate } from '../PermissionGate';
+import { PermissionGate, type ReplyFn } from '../PermissionGate';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -65,10 +65,10 @@ function makeEntry(suggestions: ControlUpdate[] = []): ChatPermissionEntry {
 // ---------------------------------------------------------------------------
 
 describe('PermissionGate', () => {
-  let reply: ReturnType<typeof vi.fn>;
+  let reply: Mock<ReplyFn>;
 
   beforeEach(() => {
-    reply = vi.fn();
+    reply = vi.fn<ReplyFn>();
   });
 
   // --- Behavior 1: root renders and shows tool name ---
