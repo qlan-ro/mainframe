@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { ChevronRight, ShieldIcon, TerminalIcon } from 'lucide-react';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
-import type { ControlResponse } from '@qlan-ro/mainframe-types';
 import { GateCardShell, GateHead } from './shared/GateShell';
 import { GateButton } from './shared/GateButton';
 import { buildPermissionResponse } from './build-control-response';
 import { cn } from '@/lib/utils';
+import type { ReplyFn } from './gate-types';
 
-/** Typed callback signature for real callers. Tests may pass vi.fn() directly. */
-export type ReplyFn = (requestId: string, response: ControlResponse) => void | Promise<void>;
+export type { ReplyFn } from './gate-types';
 
 // ---------------------------------------------------------------------------
 // Sub-components
