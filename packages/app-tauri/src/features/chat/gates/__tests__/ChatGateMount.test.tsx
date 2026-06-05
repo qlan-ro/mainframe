@@ -78,7 +78,7 @@ describe('ChatGateMount', () => {
     expect(screen.queryByTestId('chat-question-gate')).toBeNull();
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
     expect(screen.queryByTestId('chat-permission-gate')).toBeNull();
-    expect(container.firstChild).toBeEmptyDOMElement();
+    expect(container).toBeEmptyDOMElement();
   });
 
   // --- Behavior 2: AskUserQuestion → question gate only ---

@@ -173,21 +173,3 @@ export function useChatPermissionFront(): {
     return { front, reply };
   }, [extras]);
 }
-
-/** The front entry iff it gates the given toolUseId (reserved for future part-anchored use). */
-export function usePendingGate(toolUseId: string): ChatPermissionEntry | undefined {
-  const { front } = useChatPermissionFront();
-  return front?.request.toolUseId === toolUseId ? front : undefined;
-}
-
-/** Golden-rule naming: the front, narrowed to AskUserQuestion. */
-export function useChatQuestions(): {
-  front: ChatPermissionEntry | undefined;
-  reply: (requestId: string, response: ControlResponse) => Promise<void>;
-} {
-  const { front, reply } = useChatPermissionFront();
-  return useMemo(
-    () => ({ front: front?.request.toolName === 'AskUserQuestion' ? front : undefined, reply }),
-    [front, reply],
-  );
-}

@@ -153,16 +153,6 @@ describe('buildPlanResponse', () => {
     expect(res).not.toHaveProperty('clearContext');
   });
 
-  it("kind='reject' returns behavior:'deny' with ids only", () => {
-    const res = buildPlanResponse(planEntry, { kind: 'reject' });
-    expect(res).toEqual({
-      requestId: 'r1',
-      toolUseId: 'tu1',
-      toolName: 'ExitPlanMode',
-      behavior: 'deny',
-    });
-  });
-
   it("kind='revise' returns behavior:'deny' with message trimmed from feedback", () => {
     const res = buildPlanResponse(planEntry, { kind: 'revise', feedback: '  please redo  ' });
     expect(res).toEqual({

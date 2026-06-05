@@ -1,4 +1,4 @@
-import type { ControlResponse } from '@qlan-ro/mainframe-types';
+import type { ControlResponse, ExecutionMode } from '@qlan-ro/mainframe-types';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 
 type Base = Pick<ControlResponse, 'requestId' | 'toolUseId' | 'toolName'>;
@@ -24,8 +24,7 @@ export function buildAskUserQuestionResponse(
 }
 
 export type PlanDecision =
-  | { kind: 'approve'; executionMode: 'default' | 'acceptEdits' | 'yolo'; clearContext: boolean }
-  | { kind: 'reject' }
+  | { kind: 'approve'; executionMode: ExecutionMode; clearContext: boolean }
   | { kind: 'revise'; feedback: string };
 
 export function buildPlanResponse(e: ChatPermissionEntry, d: PlanDecision): ControlResponse {
@@ -36,6 +35,5 @@ export function buildPlanResponse(e: ChatPermissionEntry, d: PlanDecision): Cont
       executionMode: d.executionMode,
       ...(d.clearContext ? { clearContext: true } : {}),
     };
-  if (d.kind === 'revise') return { ...base(e), behavior: 'deny', message: d.feedback.trim() };
-  return { ...base(e), behavior: 'deny' };
+  return { ...base(e), behavior: 'deny', message: d.feedback.trim() };
 }

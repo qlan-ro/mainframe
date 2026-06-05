@@ -6,7 +6,7 @@ import { PlanGate } from './PlanGate';
 /** Renders the single pending gate (permission / question / plan) inline at the thread tail. */
 export function ChatGateMount() {
   const { front, reply } = useChatPermissionFront();
-  if (!front) return <div />;
+  if (!front) return null;
 
   const { toolName } = front.request;
   if (toolName === 'AskUserQuestion') return <AskUserQuestionGate entry={front} reply={reply} />;

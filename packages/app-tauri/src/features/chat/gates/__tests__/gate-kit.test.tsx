@@ -3,7 +3,7 @@
  *
  * Strategy:
  *  - No source modules exist yet; these tests drive the API contract for three
- *    shared presentational primitives: GateButton, ResolvedPill, GateCardShell,
+ *    shared presentational primitives: GateButton, GateCardShell,
  *    and GateHead (the last two exported from GateShell).
  *  - Wrap renders in TooltipProvider for Radix compatibility.
  *  - All expected values are hardcoded; no logic is duplicated from the
@@ -12,8 +12,6 @@
  * Behaviors covered:
  *  - GateButton: children text, data-testid forwarding, onClick callback,
  *    kind="primary" classes, kind="danger" classes, default-kind class.
- *  - ResolvedPill: tone="good" classes + label, tone="bad" class,
- *    tone="neutral" class.
  *  - GateCardShell: renders children, resolved/unresolved border classes.
  *  - GateHead: eyebrow text, title text, right slot, tileClassName on icon tile.
  */
@@ -21,7 +19,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { GateButton } from '../shared/GateButton';
-import { ResolvedPill } from '../shared/ResolvedPill';
 import { GateCardShell, GateHead } from '../shared/GateShell';
 
 // ---------------------------------------------------------------------------
@@ -76,32 +73,6 @@ describe('GateButton', () => {
   it('default kind (no kind prop) applies bg-background class', () => {
     wrap(<GateButton data-testid="gb-default">Default</GateButton>);
     expect(screen.getByTestId('gb-default')).toHaveClass('bg-background');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// ResolvedPill
-// ---------------------------------------------------------------------------
-
-describe('ResolvedPill', () => {
-  it('tone="good" renders label and has text-mf-success and bg-mf-success-tint classes', () => {
-    wrap(<ResolvedPill data-testid="pill-good" tone="good" label="Allowed" />);
-    const el = screen.getByTestId('pill-good');
-    expect(el).toHaveTextContent('Allowed');
-    expect(el).toHaveClass('text-mf-success');
-    expect(el).toHaveClass('bg-mf-success-tint');
-  });
-
-  it('tone="bad" has text-destructive and bg-mf-destructive-tint classes', () => {
-    wrap(<ResolvedPill data-testid="pill-bad" tone="bad" label="Denied" />);
-    const el = screen.getByTestId('pill-bad');
-    expect(el).toHaveClass('text-destructive');
-    expect(el).toHaveClass('bg-mf-destructive-tint');
-  });
-
-  it('tone="neutral" has text-muted-foreground class', () => {
-    wrap(<ResolvedPill data-testid="pill-neutral" tone="neutral" label="Pending" />);
-    expect(screen.getByTestId('pill-neutral')).toHaveClass('text-muted-foreground');
   });
 });
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ClipboardListIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import type { ReplyFn } from './gate-types';
@@ -8,8 +9,33 @@ import { GateCardShell, GateHead } from './shared/GateShell';
 import { GateButton } from './shared/GateButton';
 import { Textarea } from '@/components/ui/textarea';
 import { buildPlanResponse } from './build-control-response';
-import { PlanExecModeControl, type ExecMode } from './PlanExecModeControl';
+import { PlanExecModeControl } from './PlanExecModeControl';
+import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 import { PlanClearContextCheck } from './PlanClearContextCheck';
+
+// ---------------------------------------------------------------------------
+// Stable module-level markdown components map (warm-chrome typography)
+// ---------------------------------------------------------------------------
+
+const PLAN_MD_COMPONENTS: Components = {
+  p: ({ children }) => <p className="mb-2 text-body leading-relaxed">{children}</p>,
+  ul: ({ children }) => <ul className="mb-2 list-disc pl-5">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-2 list-decimal pl-5">{children}</ol>,
+  li: ({ children }) => <li className="mb-1">{children}</li>,
+  h1: ({ children }) => <h1 className="mb-1 mt-3 text-base font-semibold text-foreground">{children}</h1>,
+  h2: ({ children }) => <h2 className="mb-1 mt-3 text-sm font-semibold text-foreground">{children}</h2>,
+  h3: ({ children }) => <h3 className="mb-1 mt-3 text-xs font-semibold text-foreground">{children}</h3>,
+  code: ({ children }) => <code className="rounded bg-mf-raised px-1 py-0.5 font-mono text-caption">{children}</code>,
+  pre: ({ children }) => (
+    <pre className="mb-2 overflow-auto rounded-md bg-mf-raised p-3 font-mono text-caption">{children}</pre>
+  ),
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  a: ({ href, children }) => (
+    <a href={href} className="text-primary underline">
+      {children}
+    </a>
+  ),
+};
 
 export interface PlanGateProps {
   entry: ChatPermissionEntry;
@@ -23,8 +49,10 @@ export interface PlanGateProps {
 function PlanBody({ plan }: { plan: string }) {
   return (
     <div className="px-3.5 pb-3">
-      <div className="aui-md max-h-[300px] overflow-auto rounded-md bg-card px-3 py-2.5 text-body text-foreground">
-        <Markdown remarkPlugins={[remarkGfm]}>{plan}</Markdown>
+      <div className="max-h-[300px] overflow-auto rounded-md bg-card px-3 py-2.5 text-body text-foreground">
+        <Markdown remarkPlugins={[remarkGfm]} components={PLAN_MD_COMPONENTS}>
+          {plan}
+        </Markdown>
       </div>
     </div>
   );
@@ -40,8 +68,8 @@ function ControlsPanel({
   clearContext,
   setClearContext,
 }: {
-  execMode: ExecMode;
-  setExecMode: (m: ExecMode) => void;
+  execMode: ExecutionMode;
+  setExecMode: (m: ExecutionMode) => void;
   clearContext: boolean;
   setClearContext: (v: boolean) => void;
 }) {
@@ -113,7 +141,7 @@ function ReviseRow({
 // ---------------------------------------------------------------------------
 
 export function PlanGate({ entry, reply }: PlanGateProps) {
-  const [execMode, setExecMode] = useState<ExecMode>('default');
+  const [execMode, setExecMode] = useState<ExecutionMode>('default');
   const [clearContext, setClearContext] = useState(false);
   const [revising, setRevising] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -136,6 +164,7 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
           icon={<ClipboardListIcon className="size-4" />}
           tileClassName="bg-mf-selection text-primary"
           eyebrow="Plan"
+          eyebrowClassName="text-primary"
           title="Ready to implement"
         />
         {plan && <PlanBody plan={plan} />}

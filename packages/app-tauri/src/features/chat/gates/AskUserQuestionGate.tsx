@@ -154,6 +154,7 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
           icon={<MessageCircleQuestionIcon className="size-4" />}
           tileClassName="bg-mf-selection text-primary"
           eyebrow={eyebrow}
+          eyebrowClassName="text-primary"
           title={title}
           right={
             questions.length > 1 ? (

@@ -1,11 +1,10 @@
 import { ShieldIcon, PencilIcon, ZapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ComponentType } from 'react';
-
-export type ExecMode = 'default' | 'acceptEdits' | 'yolo';
+import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 
 interface ExecModeOption {
-  id: ExecMode;
+  id: ExecutionMode;
   label: string;
   Icon: ComponentType<{ className?: string }>;
   desc: string;
@@ -18,8 +17,8 @@ const EXEC_MODE_OPTIONS: ExecModeOption[] = [
 ];
 
 export interface PlanExecModeControlProps {
-  value: ExecMode;
-  onChange: (m: ExecMode) => void;
+  value: ExecutionMode;
+  onChange: (m: ExecutionMode) => void;
 }
 
 export function PlanExecModeControl({ value, onChange }: PlanExecModeControlProps) {

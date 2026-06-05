@@ -112,7 +112,5 @@ export {
   useChatExtras,
   useChatPermissions,
   useChatPermissionFront,
-  usePendingGate,
-  useChatQuestions,
   useChatQueuedMessages,
 } from './use-chat-thread-runtime';
