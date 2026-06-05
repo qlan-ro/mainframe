@@ -1,75 +1,111 @@
 /**
- * ChatRuntimeProvider — Phase 1 seam.
+ * ChatRuntimeProvider — Phase 2A controller/reducer wiring.
  *
- * Wires the per-chat WS subscriber to assistant-ui's `useExternalStoreRuntime`.
- * The daemon is the single source of truth; this component holds NO message
- * cache beyond the live useSyncExternalStore snapshot.
+ * Creates one ChatThreadController per chatId (via a per-provider registry),
+ * wires it to assistant-ui via useChatThreadRuntime, and disposes on switch.
  *
- * Outbound:
- *  - onNew  → WS message.send (fire-and-forget; daemon echoes the message back)
- *  - onCancel → POST /api/chats/:id/interrupt
+ * The controller registry is keyed by chatId so React StrictMode double-invoke
+ * doesn't re-create controllers on every render — the same controller is
+ * returned on the second mount. A real dispose only happens when this
+ * provider unmounts (key={chatId} in the parent ensures that on chat switch).
  *
- * Phase 2 additions: attachment upload, permission response, optimistic dedup,
- * thread-list adapter. None change the store-less design.
+ * Outbound actions flow through the controller:
+ *  - onNew      → controller.sendMessage (optimistic + WS fire)
+ *  - onCancel   → controller.cancel (POST /interrupt)
+ *  - permission → controller.replyToPermission (WS permission.respond)
  */
-import { useCallback, useContext, createContext } from 'react';
-import { AssistantRuntimeProvider, useExternalStoreRuntime, type AppendMessage } from '@assistant-ui/react';
-import { useChatSubscriber } from '../../../lib/daemon/use-chat-subscriber';
+import { useEffect, useMemo, useRef } from 'react';
+import { AssistantRuntimeProvider } from '@assistant-ui/react';
+import { ChatThreadController } from '../controller/chat-thread-controller';
+import { useChatThreadRuntime } from './use-chat-thread-runtime';
 import { daemonWs } from '../../../lib/daemon/ws-client';
-import { interruptChat } from '../../../lib/api/chats';
-import { convertMessage } from '../view-model/convert-message';
-import type { ControlRequest } from '@qlan-ro/mainframe-types';
 
-interface ChatRuntimeContextValue {
+// ---------------------------------------------------------------------------
+// Controller registry (per provider instance)
+// ---------------------------------------------------------------------------
+
+interface ControllerRegistry {
+  getOrCreate(chatId: string, port: number): ChatThreadController;
+  dispose(): void;
+}
+
+function createControllerRegistry(): ControllerRegistry {
+  const controllers = new Map<string, ChatThreadController>();
+
+  return {
+    getOrCreate(chatId: string, port: number): ChatThreadController {
+      const existing = controllers.get(chatId);
+      if (existing) return existing;
+
+      const controller = new ChatThreadController(chatId, port, daemonWs);
+      controllers.set(chatId, controller);
+      return controller;
+    },
+    dispose() {
+      for (const controller of controllers.values()) {
+        controller.dispose();
+      }
+      controllers.clear();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Inner wiring — runs at the correct hook call-site
+// ---------------------------------------------------------------------------
+
+interface RuntimeWiringProps {
   chatId: string;
-  /** Permission is driven by daemon events — Phase 1 surfaces it as-is for the banner. */
-  pendingPermission: ControlRequest | undefined;
+  port: number;
+  registry: ControllerRegistry;
+  children: React.ReactNode;
 }
 
-const ChatRuntimeContext = createContext<ChatRuntimeContextValue | null>(null);
+function RuntimeWiring({ chatId, port, registry, children }: RuntimeWiringProps) {
+  const controller = registry.getOrCreate(chatId, port);
+  const runtime = useChatThreadRuntime(controller);
 
-export function useChatRuntime(): ChatRuntimeContextValue {
-  const ctx = useContext(ChatRuntimeContext);
-  if (!ctx) throw new Error('useChatRuntime must be used inside ChatRuntimeProvider');
-  return ctx;
+  return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;
 }
 
-interface ChatRuntimeProviderProps {
+// ---------------------------------------------------------------------------
+// Public provider
+// ---------------------------------------------------------------------------
+
+export interface ChatRuntimeProviderProps {
   chatId: string;
   daemonPort: number;
   children: React.ReactNode;
 }
 
 export function ChatRuntimeProvider({ chatId, daemonPort, children }: ChatRuntimeProviderProps) {
-  const { messages, isRunning } = useChatSubscriber(chatId, daemonPort);
+  const registryRef = useRef<ControllerRegistry | null>(null);
 
-  const onNew = useCallback(
-    async (message: AppendMessage): Promise<void> => {
-      const textPart = message.content.find((p) => p.type === 'text');
-      const text = textPart?.type === 'text' ? textPart.text.trim() : '';
-      if (!text) return;
-      daemonWs.send({ type: 'message.send', chatId, content: text });
-    },
-    [chatId],
-  );
+  if (registryRef.current === null) {
+    registryRef.current = createControllerRegistry();
+  }
 
-  const onCancel = useCallback(async (): Promise<void> => {
-    await interruptChat(daemonPort, chatId).catch((err) => console.warn('[chat-runtime] interruptChat failed', err));
-  }, [chatId, daemonPort]);
+  const registry = registryRef.current;
 
-  const runtime = useExternalStoreRuntime({
-    isRunning,
-    messages,
-    convertMessage,
-    onNew,
-    onCancel,
-  });
+  // Memoize the port so the registry lookup is stable within a chatId epoch.
+  const port = useMemo(() => daemonPort, [daemonPort]);
+
+  // Dispose all controllers when this provider unmounts.
+  // parent mounts with key={chatId} so unmount === chat switch.
+  useEffect(() => {
+    return () => {
+      registry.dispose();
+    };
+  }, [registry]);
 
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <ChatRuntimeContext.Provider value={{ chatId, pendingPermission: undefined }}>
-        {children}
-      </ChatRuntimeContext.Provider>
-    </AssistantRuntimeProvider>
+    <RuntimeWiring chatId={chatId} port={port} registry={registry}>
+      {children}
+    </RuntimeWiring>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Re-export convenience hooks so callers don't need to know the file paths.
+// ---------------------------------------------------------------------------
+export { useChatExtras, useChatPermissions, useChatQueuedMessages } from './use-chat-thread-runtime';

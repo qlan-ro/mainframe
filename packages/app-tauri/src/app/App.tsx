@@ -1,21 +1,20 @@
 /**
- * App — Phase 1 chat-seam prototype.
+ * App — Phase 2A chat-seam prototype.
  *
- * Proof of concept wiring:
+ * Wiring:
  *  useConnectionState → daemon port → daemonWs.setPort / connect
- *  User enters a chatId → ChatRuntimeProvider mounts (per-chat subscriber created)
+ *  User enters a chatId → ChatRuntimeProvider mounts (per-chat controller created)
  *  ChatThread renders transcript + composer
  *
- * The chat switch field demonstrates the "torn down on switch" property:
- * clearing the chatId and entering a new one disposes the old subscriber
- * and creates a fresh one seeded from the daemon.
+ * Loading state is owned by the controller's loadState; ChatThread exposes it
+ * via the assistant-ui runtime (isLoading prop on useExternalStoreRuntime).
+ * No second subscriber — the controller is the single source of truth.
  */
 import { useState, useEffect } from 'react';
 import { useConnectionState, type ConnectionState } from './useConnectionState';
 import { daemonWs } from '../lib/daemon/ws-client';
 import { ChatRuntimeProvider } from '../features/chat/runtime/ChatRuntimeProvider';
 import { ChatThread } from '../features/chat/thread/ChatThread';
-import { useChatSubscriber } from '../lib/daemon/use-chat-subscriber';
 
 // ---- Connection dot -----------------------------------------------------------
 
@@ -24,18 +23,6 @@ const STATUS_COLOR: Record<ConnectionState, string> = {
   connected: '#22c55e',
   disconnected: '#ef4444',
 };
-
-// ---- Loading indicator shown while a subscriber seeds from daemon ---------------
-
-function LoadingIndicator({ chatId, port }: { chatId: string; port: number | null }) {
-  const { isLoading } = useChatSubscriber(chatId, port);
-  if (!isLoading) return null;
-  return (
-    <div data-testid="chat-loading" style={{ padding: 16, color: '#94a3b8', fontSize: 13 }}>
-      Loading transcript…
-    </div>
-  );
-}
 
 // ---- Root app -----------------------------------------------------------------
 
@@ -216,6 +203,3 @@ export function App() {
     </div>
   );
 }
-
-// Quiet unused lint — LoadingIndicator is scaffolding for when we embed it inside ChatRuntimeProvider.
-void LoadingIndicator;
