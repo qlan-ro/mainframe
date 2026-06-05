@@ -3,8 +3,7 @@
  * store (POST /api/chats/:id/attachments) which returns stable ids; the message
  * then references those ids (`message.send.attachmentIds`), not the bytes.
  */
-import type { ApiResponse } from '@qlan-ro/mainframe-types';
-import { apiBase, postJson } from './http';
+import { apiBase, request } from './http';
 
 export interface UploadAttachmentItem {
   name: string;
@@ -27,10 +26,10 @@ export async function uploadAttachments(
   chatId: string,
   attachments: UploadAttachmentItem[],
 ): Promise<string[]> {
-  const json = await postJson<ApiResponse<{ attachments: SavedAttachment[] }>>(
+  const { attachments: saved } = await request<{ attachments: SavedAttachment[] }>(
+    'POST',
     `${apiBase(port)}/api/chats/${chatId}/attachments`,
     { attachments },
   );
-  if (!json.success) throw new Error(json.error);
-  return json.data.attachments.map((a) => a.id);
+  return saved.map((a) => a.id);
 }
