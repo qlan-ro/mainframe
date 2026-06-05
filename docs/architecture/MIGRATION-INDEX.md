@@ -9,29 +9,39 @@ If you're picking up the **desktop (Electron) → app-tauri (Tauri 2 + React)** 
 4. **`2026-06-05-chat-runtime-decision.md`** (ADR, + the react-opencode update) — *the* runtime decision and why.
 5. **`2026-06-04-app-tauri-architecture.md`** + **`-critique.md`** — target structure + the risks that shaped it.
 
-## Resume here (session snapshot — 2026-06-05)
+## Resume here (session snapshot — 2026-06-05, end of chat-surface session)
 
-**Phase: design/decisions DONE → execution next.** The whole chat architecture + the assistant-ui adoption are decided, corrected, and committed. A fresh session can execute deterministically from the inventory + tracker + CLAUDE.md.
+**Phase: the CHAT SURFACE is built, reviewed, and conformed → the COMPOSER leaf is next (scoped below).**
 
-**Committed on `feat/app-tauri-wt`:** C1 spike · runtime ADR · Phase-1 + Phase-2A chat seam (controller/reducer + extras + refetch-on-gap; verified on 0.14.14) · shadcn foundation + warm-chrome theme · `@assistant-ui@0.14.14` · full doc set (index/tracker/inventory/design-reference/CLAUDE.md).
+**Committed this session on `feat/app-tauri-wt` (4 commits):**
+1. `15ee859e` **native tool-rendering leaf** — projection (`convert-message`/`map-assistant-blocks`/`map-tool-result`) + daemon-authoritative grouping + the 14-family card registry.
+2. `a90d37b6` **message-shell + markdown leaf** — `AssistantMessage`/`UserMessage`/`SystemMessage`, markdown (`MarkdownText`+shiki), action-bar, timing, warm-chrome thread shell.
+3. `33e52e41` **thermo-nuclear review-fixes** — shared `CollapsibleCardShell`+`resolveResultText`, one `MainframeMessageMeta` contract + `useMainframeMeta`, native **grouped reasoning**, rich `SkillLoadedCard` from the system message, native **DirectiveText** chips, markdown dedup.
+4. `dd68f777` **design-conformance pass** — fixed 2 invisible-error blockers (`--mf-destructive-tint`), reasoning ghost-frame+shimmer, BashCard family tile, StatusDot labels, slash-pill tint, + ~16 token deltas.
 
-**Locked decisions (quick recall):**
-- Runtime = `useExternalStoreRuntime` + per-chat controller (react-opencode shape); **no message cache**; refetch-on-gap.
-- assistant-ui pinned at **0.14.14 / core 0.2.10**.
-- **Go native** part model (grouping + subagent) — via the `convert-message` projection (no daemon/contract change if the nested payload suffices; daemon flat-parts is the fallback).
-- Sessions = **hybrid** (one global `useRemoteThreadListRuntime` + native `ThreadListItemPrimitive` rows in our grouped sidebar).
-- Reasoning = **native, collapsed**. Quote = native UI + CLI glue. Errors = keep text-routing. Queue = keep daemon-backed.
-- **Framing:** native runtime-integration hooks are inert under external-store → native *components* + our CLI/daemon data + daemon config-write. Adoption split: 6 adopt-native / 9 native-shell+our-data / 9 keep-ours (see `ASSISTANT-UI-INVENTORY.md`).
+All verified: typecheck 0, **290 tests**, empirical render vs `~/.mainframe_dev` (chat `1Musk9EUiUzGa9-z0QzF7`, 0 console errors). Earlier-phase commits (C1 spike, runtime ADR, Phase-1/2A seam, shadcn+theme, `@assistant-ui@0.14.14`, full doc set) still apply.
 
-**Immediate next action (IN PROGRESS — native tool-rendering leaf, build-order 4–7):**
-- ☑ Payload verified rich enough — **no daemon change**. Projection done (`convert-message` + `map-assistant-blocks` + `map-tool-result`): native flat tool-calls, `Task` part with native `messages`, native image parts; 13 unit tests green.
-- ☑ Dispatch done (`messages/AssistantMessage` + `tool-dispatch` + `tools/group-parts`): `GroupedParts` + a **daemon-authoritative `makeChatGroupBy`** (reads `metadata.custom.mainframe.partGroups`; NOT a tool-name heuristic). Contract layer + shared infra (`tools/shared/*`, `ToolResultExpand`, `tools/chat-tool-context`, diff-tint tokens) done. **Two seams removed** — see `2026-06-05-native-tool-rendering-seams.md` (cards are native `ToolCallMessagePartComponent`; grouping is server-decided).
-- ◐ The ~14 per-family cards (`tools/cards/*`) are being ported (fan-out) → then assemble `register-cards.ts`, wire into `ChatThread` (side-effect import), typecheck + tests, **design-conformance vs artboards**, **empirical drift test**.
-- Then fan out the remaining leaves (thread-shell cleanup + `ViewportFooter`/`ScrollToBottom`/`ActionBar`/`MessageTiming`; composer shell + toolbar; permission cards; sessions hybrid) per the corrected inventory verdicts.
+**Locked decisions (quick recall):** runtime = `useExternalStoreRuntime` + per-chat controller, no message cache, refetch-on-gap · assistant-ui **0.14.14 / core 0.2.10** · **go-native** part model via the projection · sessions = hybrid · reasoning = native collapsed · queue = **daemon-backed** · errors = text-routing · adoption split 6/9/9 (see `ASSISTANT-UI-INVENTORY.md`).
 
-**⚠ Not yet committed** — the above lives in the working tree (uncommitted) as of this snapshot.
+**New decisions THIS session (record, don't re-litigate):**
+- Metadata = **one `MainframeMessageMeta`** under `metadata.custom.mainframe` + one `useMainframeMeta()` reader; one `toJsonArgs()` cast site (`view-model/content.ts`).
+- Grouping = daemon-authoritative; **group summaries derived in the projection** (carried in metadata, not re-read at render).
+- Reasoning = canonical **`group-reasoning`** + `ReasoningRoot/Trigger/Content/Text`, **ghost** variant, `defaultOpen={running}`. "Thought for Ns" is **gated on a daemon thinking-duration field** (shows "Reasoning" until then).
+- Skill = rich `SkillLoadedCard` rendered by **`SystemMessage`** from `skillLoaded` metadata (dead `_SkillLoaded` assistant arm + registry entry removed).
+- `@mention` inline = native `createDirectiveText` **Badge chip** (kept as an **approved upgrade** over the artboard's plain accent text).
+- Scrollbar = **CSS thin scrollbar** on the native Viewport (radix `ScrollArea` via `asChild` does NOT bind to `ThreadPrimitive.Viewport` — left `overflow:visible`/unbounded, pushed composer off; reverted).
+- **Mention picker (when built) = native `Unstable_TriggerPopover` + custom `Unstable_TriggerAdapter`** (sync adapter over async daemon path-search; gate on @alpha churn).
+- Edit **sent** messages = runtime-gated (CLI-resume has no branches) → deferred; `MessageActionBar` ships **Copy + Export only**.
 
-**Open / deferred:** permission-card mount placement (above-composer default vs inline) · runtime-gated (Reload/Edit/BranchPicker/native-error — don't build until the runtime exposes data) · sidecar packaging (Node bundle + native-dep rebuild + signing) · e2e harness + testids · Phase-2 Rust-daemon go/no-go · Electron lifecycle (retire vs coexist) · shared-pure-package home for `convert-message`.
+**⬇ NEXT: the COMPOSER leaf — scoped (it CANNOT land in one pass; has unbuilt dependencies).**
+- **Buildable now (shell core, "~90% native restyle"):** `ComposerPrimitive` Root/Input/Send/Cancel restyled + running-swap (Send↔Cancel) · **`ThreadPrimitive.ViewportFooter`** (fixes a *real* scroll-inset bug — the bottom card height doesn't register as content inset today) · draft text · basic send via `controller.sendMessage` · the **daemon-backed `QueuedMessageBanner`** (controller state already wired: `interactions.queued`; needs daemon edit/cancel endpoints exposed in `lib/`) · attachments (native `AttachmentAdapter` + AddAttachment + Dropzone + tile).
+- **GATED (build the prerequisite first):**
+  - **Config toolbar** (model · effort · features · plan · permission) — app-tauri has **NO model/capabilities data layer and NO `runConfig` wiring** (`controller.sendMessage` takes no config; no `lib/api` models endpoint). Artboard "tuning": effort/features are a **pure function of the selected model's advertised capabilities**. This is a prerequisite sub-project before the toolbar.
+  - **Sandbox captures** (artboard "Context — from the sandbox": screenshots + inspected CSS-selector chips) — needs the **sandbox-preview surface** (not built). Also unblocks the deferred `UMInspectChip` user-message state.
+  - **Worktree popover** — needs worktree integration (only the `WorktreeStatusPillCard` tool card exists).
+- **Reference:** artboard `Composer States.html` (sections: base/sandbox/tuning) · desktop god-file `packages/desktop/.../composer/ComposerCard.tsx` (485 lines — **decompose, don't carry**) + its `EffortPicker`/`FeaturesPopover`/`PlanModeToggle`/`WorktreePopover`/`QueuedMessageBanner`/`ComposerHighlight`/`ImageAttachmentPreview`/`attachment-adapter`/`composer-drafts` · inventory rows **149–158** + decisions §31/§56/§63 · golden rule (research native + compare artboard + stop-and-ask on mismatch).
+
+**Open follow-ups:** reasoning "Thought for Ns" daemon thinking-duration field · deferred user-message states (`UMCodeRef` editor code-ref, `UMInspectChip` sandbox-inspect, PLAN bubble, file-attachment chips) · permission-card mount placement · runtime-gated (Reload/Edit/BranchPicker/native-error) · sidecar packaging · e2e harness + testids · Phase-2 Rust-daemon go/no-go · Electron lifecycle · shared-pure-package home for `convert-message`.
 
 ---
 

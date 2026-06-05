@@ -76,12 +76,16 @@ Do the chat leaves in this order; ☑ = done.
 - ◐ `port` small parts — `ReadMoreBubble` ☑ · `CompactionPill` ☑ · `SkillLoadedCard` ☑ (tool card) · native image parts ☑. SandboxCaptureContext/SelectorBreadcrumb/ImageThumbs-gallery/FileTypeIcon/ErrorPart deferred to their leaves.
 - ☑ `drop` ThinkingPart.tsx — reasoning is native (shadcn `Reasoning`, collapsed).
 
-> **Thread shell:** `ChatThread` + `App` restyled to warm-chrome (light), centered max-width column, native `ScrollToBottom`, `If running`→`useAuiState`. Composer stays thin (full composer port is a later leaf). Pending: `ViewportFooter` inset, welcome/suggestions, design-conformance.
+> **Thread shell:** `ChatThread` + `App` restyled to warm-chrome (light), centered max-width column, native `ScrollToBottom`, `If running`→`useAuiState`, **CSS thin scrollbar** (radix ScrollArea doesn't bind to the autoscroll Viewport). Composer stays thin. Pending: `ViewportFooter` inset (real scroll-inset bug), welcome/suggestions.
+> **Design-conformance:** chat cards + message shell PASSED (post-fixes) vs `Chat Cards`/`User Message`/`Chat Markers` artboards.
 
-### Composer → `features/chat/composer/`
-- ☐ `replace` config controls → shadcn (ComposerDropdown/EffortPicker/FeaturesPopover/PlanModeToggle/permission chip)
-- ☐ `refactor` model-tuning helpers · input+highlight overlay · WorktreePopover(+BranchSelect) · QueuedMessageBanner · decompose the 485-line ComposerCard
-- ☐ `port` attachments (adapter/preview/rejection-toaster) · sandbox captures (CaptureThumb)
+### Composer → `features/chat/composer/` — **SCOPED (next leaf; can't land in one pass)**
+> The shell core is the "~90% native restyle"; the config toolbar + sandbox + worktree are GATED on data layers/surfaces not yet built. See `MIGRATION-INDEX.md` "Resume here" for the full scoping. Decompose the 485-line desktop `ComposerCard` — don't carry it.
+- ☐ **shell core (buildable now):** `ComposerPrimitive` Root/Input/Send/Cancel restyle + running-swap · `ThreadPrimitive.ViewportFooter` (scroll-inset fix) · draft text · send via `controller.sendMessage` · **daemon-backed `QueuedMessageBanner`** (state wired in `interactions.queued`; needs daemon edit/cancel endpoints in `lib/`) · attachments (native `AttachmentAdapter`/AddAttachment/Dropzone/tile + rejection-toaster)
+- ☐ **GATED — config toolbar** (model/effort/features/plan/permission): **prerequisite = a model-capabilities API + `runConfig` wiring** (app-tauri has neither; `controller.sendMessage` takes no config). Effort/features = pure fn of the selected model's advertised capabilities. Then reskin via shadcn Popover/Select (logic stays ours).
+- ☐ **GATED — sandbox captures** (CaptureThumb/inspect chips): needs the sandbox-preview surface (not built; also unblocks `UMInspectChip`).
+- ☐ **GATED — WorktreePopover**: needs worktree integration.
+- ☐ **mention/highlight:** `@`-mention picker = **native `Unstable_TriggerPopover` + custom `Unstable_TriggerAdapter`** (DECIDED 2026-06-05; sync adapter over async daemon path-search; gate on @alpha churn) + `ComposerHighlight` overlay (transparent caret).
 - ☐ `replace` composer-drafts.ts (module Map → store)
 
 ### Editor & viewers → `features/editor/` (+lsp/) · `features/viewers/`
