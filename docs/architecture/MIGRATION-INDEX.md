@@ -9,7 +9,21 @@ If you're picking up the **desktop (Electron) → app-tauri (Tauri 2 + React)** 
 4. **`2026-06-05-chat-runtime-decision.md`** (ADR, + the react-opencode update) — *the* runtime decision and why.
 5. **`2026-06-04-app-tauri-architecture.md`** + **`-critique.md`** — target structure + the risks that shaped it.
 
-## Resume here (session snapshot — 2026-06-05, end of chat-surface session)
+## Resume here (session snapshot — 2026-06-05, end of COMPOSER + REVIEWS session)
+
+**Phase: the COMPOSER leaf is built, plus a thermo-nuclear + an architecture review (the fixes for the thermo pass are landed).**
+
+**Landed since the chat-surface snapshot (below):** the composer leaf — shell (Send↔Cancel swap, `ViewportFooter` scroll-inset), the full config toolbar (model · permission · plan · effort · features over REST `/config` + `/tuning`), queued messages (pending cards + composer edit mode), attachments (native `AttachmentAdapter` + shadcn attachment UI), the message timestamp, plus live spot-fixes (focus ring, hover layout-shift, Edit diff-icon, Bash "Run" drop). Then **the optimistic-send crash fix** (user messages must not carry `status`) and **the full thermo-nuclear review-fix batch**: `lib/api` `request<T>` collapse, controller seam (cancelQueued/editQueued via extras, port threading, live `isRunning`, toUploadItems→adapter, ComposerEditMode save-failure), dead-code/de-casts, the `makeUserMessage` typed factory, and **send/attachment/tuning tests (323 total, typecheck 0)**.
+
+**Open work is captured in 3 handoffs in the OS temp dir (`/tmp`, volatile — if cleared, re-derive from the arch review + this index):**
+- `handoff-permissions-ask-plan-cards.md` — the **next chat leaf** (3 custom shadcn cards over `extras`; the permission data+reply path is already wired).
+- `handoff-features-chat-restructure.md` + `handoff-architecture-review.md` — the **architecture review** (`woyzow9sq`), fully handed off (no work started).
+
+**Architecture-review CRITICALS to not lose (durable summary; full list in the arch handoff):** ① `ws-client.send()` silently drops frames when not OPEN + `replyToPermission` resolves before ack → permission hang. ② **`app-tauri/tsconfig.json` does NOT extend `tsconfig.base.json` → `noUncheckedIndexedAccess` is OFF package-wide.** ③ dead optimistic send-failure path (meta writes `pending`/`error`, nothing reads them → failed send looks sent). ④ WS event stream + user metadata enter unvalidated (no Zod). ⑤ 6× `s as unknown as {message}` casts (use `useMessage()`). The praised, **do-not-touch** part: the controller/reducer/projection data spine. Sequence the fixes type-first → content → UX → tests → **restructure last** (mechanical, moves-only).
+
+---
+
+## Resume here (PRIOR snapshot — 2026-06-05, end of chat-surface session)
 
 **Phase: the CHAT SURFACE is built, reviewed, and conformed → the COMPOSER leaf is next (scoped below).**
 
