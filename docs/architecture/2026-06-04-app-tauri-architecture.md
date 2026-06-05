@@ -60,7 +60,7 @@ packages/app-tauri/
 ## Principles
 
 1. **Feature-first + thin surfaces** — `features/*` own the work; `layout/` + `surfaces/` only *compose* them into Chat / Files / Run. No feature knows about the surface engine.
-2. **One daemon seam** — `features/chat/runtime/` (AssistantTransport) + `lib/daemon` + `lib/api`. This is the frozen contract; the Rust daemon (Phase 2) re-implements it with zero renderer changes.
+2. **One daemon seam** — the **frozen contract is the WS/REST schema behind `lib/daemon` + `lib/api`**; `features/chat/runtime/` is the chat *adapter* (ExternalStore controller/reducer/projection) over that seam, not part of the contract. The Rust daemon (Phase 2) re-implements the contract with zero renderer changes.
 3. **`lib/tauri/` is the only Tauri-aware module** — everything `window.mainframe.*` collapses here (the future `tauri-bridge` subagent's home).
 4. **Pure logic → a shared bundleable location (TBD; not the `mainframe-core` sidecar process)** — diff math, message-variant derivation, tool summaries, file-type classification leave the renderer. *(Shared-package home is an open decision — see the tracker.)*
 5. **shadcn `components/ui/` first**, then port features onto it — dissolves the 6× duplicated overlay/dropdown code.

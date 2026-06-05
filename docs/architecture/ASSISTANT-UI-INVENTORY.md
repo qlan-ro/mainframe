@@ -31,10 +31,10 @@ The authoritative use-native checklist — every assistant-ui primitive/UI/hook 
 7. **Composer queue** — native local `ComposerPrimitive.Queue` (Steer/Remove) vs our **daemon-backed** `QueuedMessageBanner` (edit/cancel by id). Different model; sweep default = keep ours.
 
 ## Runtime-gated (do NOT build until the external-store runtime exposes the data)
-Reload · Edit/EditComposer · **BranchPicker** (no branches in CLI-resume) · structured Quote round-trip · native error channel. Confirm with the runtime owner first.
+Reload · Edit/EditComposer · **BranchPicker** (no branches in CLI-resume) · native error channel. Confirm with the runtime owner first. *(Quote is NOT gated — it's native UI + CLI serialization glue, buildable now.)*
 
 ## New shadcn components to add (build-order step 2, beyond ToolFallback/ToolGroup)
-`quote` (`QuoteBlock`/`SelectionToolbar`/`ComposerQuotePreview`); `reasoning` (gated on decision #4); `thread.tsx`/`message-timing` as layout references only.
+`quote` (`QuoteBlock`/`SelectionToolbar`/`ComposerQuotePreview`); `reasoning` (add/restyle — native, collapsed, decided); `thread.tsx`/`message-timing` as layout references only.
 
 ## Re-examined: keep-ours corrected (2026-06-05)
 
