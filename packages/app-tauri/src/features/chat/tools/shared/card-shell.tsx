@@ -136,8 +136,8 @@ export function CollapsibleCardShell({
       >
         {tile}
         <span className="text-label font-semibold text-foreground shrink-0">{verb}</span>
-        {target && <span className="min-w-0 flex-1 truncate">{target}</span>}
-        <span className="flex-1 min-w-0" />
+        {target && <span className="min-w-0 truncate">{target}</span>}
+        <span className="min-w-2 flex-1" />
         {trailing && <span className="flex items-center gap-1.5 shrink-0">{trailing}</span>}
       </CollapsibleTrigger>
 

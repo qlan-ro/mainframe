@@ -11,7 +11,7 @@
  */
 import React, { useCallback } from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
-import { ExternalLinkIcon } from 'lucide-react';
+import { ExternalLinkIcon, FileDiffIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   isStructuredResult,
@@ -215,7 +215,7 @@ export const EditFileCard: ToolCallMessagePartComponent = (part) => {
 
   const tile = (
     <FamilyTile color="#d97706" bg="rgba(217,119,6,0.11)">
-      ±
+      <FileDiffIcon size={13} />
     </FamilyTile>
   );
 

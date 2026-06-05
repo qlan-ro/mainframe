@@ -127,7 +127,6 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
           <FamilyTile color="#7a7a82" bg="rgba(122,122,130,0.11)">
             <Terminal size={13} />
           </FamilyTile>
-          <span className="font-mono text-micro font-semibold text-foreground shrink-0">Run</span>
           <Tooltip>
             <TooltipTrigger asChild>
               <span
