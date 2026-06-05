@@ -23,6 +23,35 @@
 
 ---
 
+## Review follow-ups — DEFERRED (from the 2026-06-05 thermo-nuclear + architecture + codex reviews)
+
+Durable capture so these aren't lost (the full write-ups live in volatile `/tmp` handoffs: `handoff-architecture-review.md`, `handoff-features-chat-restructure.md`, `handoff-permissions-ask-plan-cards.md`). **Sequence: type/contract fixes → silent-failure UX → tests → restructure LAST (mechanical, moves-only).** Don't collapse the controller/reducer/projection spine — it's praised as clean.
+
+**🔴 Critical**
+- ☐ **ws-client drops frames silently + permission hang** — `lib/daemon/ws-client.ts:94` only buffers while CONNECTING; CLOSED/CLOSING → `console.warn` + drop. `replyToPermission` (controller) resolves the gate *before* delivery ack. A dropped `message.send`/`permission.respond` shows success while the daemon never got it. Fix: buffer on CLOSED/CLOSING (or signal the drop) + don't optimistically resolve. *(codex #2 + arch — independently corroborated.)*
+
+**🟠 High**
+- ☐ **`noUncheckedIndexedAccess` is OFF package-wide** — `app-tauri/tsconfig.json` doesn't `extend` `tsconfig.base.json`. Make it extend (or set the flag) + fix the surfaced index errors. Do this BEFORE the card cleanups. Add a `vitest.config.ts` coverage threshold (none today).
+- ☐ **Dead optimistic send-failure path** — `project-messages.ts` writes `pending`/`error` to meta, but `MainframeMessageMeta` declares neither and `UserMessage` reads neither → a failed send looks identical to a sent one (no toast infra). Add the fields + render a failed/retry bubble; surface `runState.type==='error'`.
+- ☐ **Unvalidated daemon boundaries (Zod rule)** — `ws-client.ts:53` `JSON.parse as DaemonEvent`; `convert-message.ts:40` blind-cast user metadata. Validate at the WS seam + a `coerceUserMeta`. *(codex #6 + arch.)*
+- ☐ **Daemon `error` events dropped** — `handle-daemon-event.ts` has no `case 'error'` (types:23) → server-side failures never surface as `run.failed`/visible errors. *(codex #7; adjacent to the dead-error-path fix.)*
+- ☐ **6× `s as unknown as {message}` casts** — replace with `useMessage((m)=>…)` (ScopeRegistry is empty); collapses all to one selector boundary.
+- ☐ **`features/chat/` directory restructure** — the refined tree in `handoff-architecture-review.md` (decision: **keep `controller/runtime/view-model` flat, NO `data/`**; move `tool-dispatch`→`tools/`, `tool-group-summary`→`view-model/`; sub-split `cards/` by family + `composer/` into `config-toolbar/`+`edit/`; add a `README` charter). Mechanical, moves-only — **do last**.
+
+**🟡 Medium**
+- ☐ Failed **history load renders as an empty chat** (`loadState` reduced, never read) — expose via extras + a retry state in `ChatThread`.
+- ☐ **`useConnectionState.init()` has no try/catch** — a `getDaemonPort()` reject pins the app on "connecting" forever.
+- ☐ **`isResultError` duplicated across 3 pill cards** (Worktree/Schedule/MCP) with unsound casts — add `isErrorResult`/`extractResultContent` to `tools/shared/result.ts`.
+- ☐ **cancel_failed UI surfacing** — the reducer now handles `queued.cancel_failed` (state-preserving) but there's no user feedback when a queued cancel fails (needs the toast infra above).
+
+**🟢 Low**
+- ☐ **CLAUDE.md drift** — prescribes `composer.setRunConfig` + `useChatQuestions` (neither exists; config flows via REST). Reconcile + move the inert-runtime-hooks footgun note to the code sites; add the `chat/README.md` charter.
+- ☐ **`TaskProgressCard` imports from the core sidecar** (`@qlan-ro/mainframe-core/messages`, undeclared dep) — move the type to `mainframe-types` or reuse the local one; drop the no-op enum casts.
+
+**✅ Already handled this session (not deferred):** codex #3 (subscribe-ack), #4 (queued snapshot rehydration), #5 (attachment reconcile) — fixed (`4b70efe1`) + tested + codex-APPROVED. codex #1 (gates not mounted) — the **parallel gates session** mounted inline gate dispatch (`35054382`). The thermo-nuclear batch (crash fix, `request<T>`, controller seam, dead-code, fullBytes de-casts, typed factory) — landed + tested. **Sandbox captures in the user message** — see the dedicated deferred line under *Composer* below.
+
+---
+
 ## Chat Phase-2 build order (refined by the assistant-ui adoption research, 2026-06-05)
 Do the chat leaves in this order; ☑ = done.
 1. ☑ **shadcn foundation** — `components.json` + 18 `ui/` primitives + `globals.css` mapping shadcn vars → `--mf-*` (warm chrome, computed-CSS-verified); testid passthrough (`8e18e634`).
