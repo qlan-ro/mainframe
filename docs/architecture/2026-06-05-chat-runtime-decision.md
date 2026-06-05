@@ -49,5 +49,34 @@ A long chat · a turn with a **nested subagent + a mid-turn permission** · a **
 
 - Pin all `@assistant-ui/*` sub-packages as a set (react/core/store/tap/assistant-stream) — independently versioned, several sub-1.0.
 - Lift `convert-message.ts` into core, preserving the WS14c dual re-encode, the `\0` permission sentinel, per-message `uniqueId()` dedup, ≥1-content-part fallback, and `getExternalStoreMessages` recovery.
-- Daemon: add monotonic per-chat snapshot versioning **additively**; keep the WS broadcast.
+- ~~Daemon: add monotonic per-chat snapshot versioning~~ — **superseded** (see Update below): drift is handled client-side via refetch-on-gap, so no WS-contract change is needed. Keep the WS broadcast.
 - A native `assistant-stream` endpoint stays an **optional, additive, Rust-era** surface — never a replacement for the WS.
+
+---
+
+## Update — `@assistant-ui/react-opencode` reference (2026-06-05)
+
+assistant-ui ships an official adapter for a stateful CLI coding agent — **`@assistant-ui/react-opencode`** (HEAD; flagged experimental, but the *supported* pattern). It is the canonical blueprint for our case and **validates this ADR**: it is built on **`useExternalStoreRuntime`** (not AssistantTransport), with **`useRemoteThreadListRuntime`** for the session list. We mirror its structure — we can't reuse the package (it's bound to `@opencode-ai/sdk`).
+
+### Architecture to mirror (react-opencode → app-tauri)
+- **One shared event source** (`OpenCodeEventSource` → our `lib/daemon/ws-client`) + a **per-session controller** holding state via a **pure reducer over server events** (`OpenCodeThreadController` + `reduceOpenCodeThreadState` → our per-chat controller/reducer), exposed via `useSyncExternalStore`, **projected** to ThreadMessages (`openCodeMessageProjection` → our `convertMessage`), fed to `useExternalStoreRuntime`.
+- **`extras`** on the runtime carries all non-message state + actions — permissions, ask-a-question, queued, worktree, cancel/interrupt/fork — surfaced via `useAuiState(s => s.thread.extras)` and dedicated hooks. **No separate store.** (This replaces "sibling chrome via WS-fed slices" with the assistant-ui-blessed `extras` mechanism.)
+- **Sessions list = `useRemoteThreadListRuntime`** + an adapter over the **chats REST** (`list / create(initialize) / rename / archive / unarchive / delete / fetch`). **Now in scope** — supersedes the earlier "bespoke sessions list / avoid the threadList adapter."
+
+### Drift — superseded (no daemon `seq`, no contract change)
+react-opencode is also unversioned and handles drift **client-side**: only `text`/`reasoning` deltas are merged incrementally (`isSupportedDelta`); **any delta referencing an unknown message/part triggers a full `refresh()`** (refetch history). We adopt the same **refetch-on-gap** + REST-seed-on-(re)connect. This **removes the mobile-co-owned WS-contract change** — risk #3 is mitigated without `seq`. (`seq` stays an optional future optimization, not a requirement.)
+
+### Optimistic send + dedup
+Insert a local `pendingUserMessage` on send; reconcile against the server echo by **fingerprint** (normalized text + a time window) — mirror `findPendingMatchByHistory` / `shadowParts`.
+
+### Revised Phase 2
+1. Restructure the chat adapter to the **controller/reducer + projection + `extras`** shape (evolve Phase 1's simpler spine).
+2. **`useRemoteThreadListRuntime`** for the sessions sidebar (chats-REST adapter).
+3. **Permissions + ask-a-question + queued** via `extras` + hooks; reply over WS/REST.
+4. **Refetch-on-gap** reconcile (incremental merge limited to text/reasoning).
+5. **Optimistic send + fingerprint dedup.**
+6. **Tool-card registry** (`_ToolGroup`/`_TaskGroup`/`_TaskProgress`) + **shadcn** styling.
+7. **Two-windows-on-one-chat** test.
+
+### Maturity note
+react-opencode rides `useRemoteThreadListRuntime` / `useAuiState` / `useExternalStoreRuntime` — the "supported but evolving" surface. Pin all `@assistant-ui/*` as a set; this is the same path assistant-ui's own official adapter uses, so materially lower risk than AssistantTransport's `@alpha`.
