@@ -1,55 +1,48 @@
 /**
- * Tests for SkillLoadedCard — expandable pill for the '_SkillLoaded' tool.
+ * Tests for SkillLoadedCard — expandable pill rendered by SystemMessage from
+ * skill_loaded metadata. Takes skillName/path/content as direct props (plain
+ * component, NOT a ToolCallMessagePartComponent).
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SkillLoadedCard } from '../SkillLoadedCard';
-import type { ToolCallMessagePartProps, ToolCallMessagePartStatus } from '@assistant-ui/react';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Wrapper ───────────────────────────────────────────────────────────────────
 
-const noop = () => {};
-const doneStatus: ToolCallMessagePartStatus = { type: 'complete' };
-
-function renderCard(args: Record<string, unknown>) {
-  return render(
-    <TooltipProvider>
-      <SkillLoadedCard
-        type="tool-call"
-        toolName="_SkillLoaded"
-        toolCallId="skill-loaded-1"
-        args={args as ToolCallMessagePartProps['args']}
-        argsText=""
-        result={undefined}
-        isError={false}
-        status={doneStatus}
-        messages={[]}
-        addResult={noop}
-        resume={noop}
-        respondToApproval={noop}
-      />
-    </TooltipProvider>,
-  );
+function Wrap({ children }: { children: React.ReactNode }) {
+  return <TooltipProvider>{children}</TooltipProvider>;
 }
 
 // ── Rendering — pill label ────────────────────────────────────────────────────
 
 describe('SkillLoadedCard — pill label', () => {
   it('renders "Using skill:" followed by the skillName', () => {
-    renderCard({ skillName: 'systematic-debugging', path: '/skills/sd.md', content: '# Skill content' });
+    render(
+      <Wrap>
+        <SkillLoadedCard skillName="systematic-debugging" path="/skills/sd.md" content="# Skill content" />
+      </Wrap>,
+    );
     const pill = screen.getByTestId('chat-skill-loaded-pill');
     expect(pill).toHaveTextContent('Using skill:');
     expect(pill).toHaveTextContent('systematic-debugging');
   });
 
   it('renders pill with data-testid="chat-skill-loaded-pill"', () => {
-    renderCard({ skillName: 'brainstorming', path: '', content: '' });
+    render(
+      <Wrap>
+        <SkillLoadedCard skillName="brainstorming" />
+      </Wrap>,
+    );
     expect(screen.getByTestId('chat-skill-loaded-pill')).toBeInTheDocument();
   });
 
-  it('renders empty skill name gracefully when skillName is absent', () => {
-    renderCard({ path: '/skills/foo.md', content: 'body' });
+  it('renders empty skill name gracefully when skillName is an empty string', () => {
+    render(
+      <Wrap>
+        <SkillLoadedCard skillName="" path="/skills/foo.md" content="body" />
+      </Wrap>,
+    );
     const pill = screen.getByTestId('chat-skill-loaded-pill');
     expect(pill).toHaveTextContent('Using skill:');
   });
@@ -59,18 +52,30 @@ describe('SkillLoadedCard — pill label', () => {
 
 describe('SkillLoadedCard — expandable behavior', () => {
   it('starts collapsed — content not visible', () => {
-    renderCard({ skillName: 'test-skill', path: '/p', content: 'secret content' });
+    render(
+      <Wrap>
+        <SkillLoadedCard skillName="test-skill" path="/p" content="secret content" />
+      </Wrap>,
+    );
     expect(screen.queryByText('secret content')).not.toBeInTheDocument();
   });
 
   it('clicking the pill reveals the content', () => {
-    renderCard({ skillName: 'test-skill', path: '/p', content: 'skill body text here' });
+    render(
+      <Wrap>
+        <SkillLoadedCard skillName="test-skill" path="/p" content="skill body text here" />
+      </Wrap>,
+    );
     fireEvent.click(screen.getByTestId('chat-skill-loaded-pill'));
     expect(screen.getByText('skill body text here')).toBeInTheDocument();
   });
 
   it('clicking the pill a second time collapses the content', () => {
-    renderCard({ skillName: 'test-skill', path: '/p', content: 'skill body text here' });
+    render(
+      <Wrap>
+        <SkillLoadedCard skillName="test-skill" path="/p" content="skill body text here" />
+      </Wrap>,
+    );
     const pill = screen.getByTestId('chat-skill-loaded-pill');
     fireEvent.click(pill);
     expect(screen.getByText('skill body text here')).toBeInTheDocument();
@@ -78,18 +83,30 @@ describe('SkillLoadedCard — expandable behavior', () => {
     expect(screen.queryByText('skill body text here')).not.toBeInTheDocument();
   });
 
-  it('is not expandable (disabled) when content is empty', () => {
-    renderCard({ skillName: 'empty-skill', path: '/p', content: '' });
+  it('is not expandable (disabled) when content is empty string', () => {
+    render(
+      <Wrap>
+        <SkillLoadedCard skillName="empty-skill" path="/p" content="" />
+      </Wrap>,
+    );
     expect(screen.getByTestId('chat-skill-loaded-pill')).toBeDisabled();
   });
 
-  it('is not expandable (disabled) when content is absent', () => {
-    renderCard({ skillName: 'empty-skill', path: '/p' });
+  it('is not expandable (disabled) when content prop is omitted', () => {
+    render(
+      <Wrap>
+        <SkillLoadedCard skillName="empty-skill" path="/p" />
+      </Wrap>,
+    );
     expect(screen.getByTestId('chat-skill-loaded-pill')).toBeDisabled();
   });
 
   it('is enabled when content is non-empty', () => {
-    renderCard({ skillName: 'has-content', path: '/p', content: 'some content' });
+    render(
+      <Wrap>
+        <SkillLoadedCard skillName="has-content" path="/p" content="some content" />
+      </Wrap>,
+    );
     expect(screen.getByTestId('chat-skill-loaded-pill')).not.toBeDisabled();
   });
 });

@@ -9,8 +9,8 @@
  *
  * A standalone tool (Edit/Write/Bash/Task/_TaskProgress/marker pill) — and a LONE
  * explore tool, which the daemon never groups — has no recorded groupId and renders
- * on its own line. Reasoning renders as its own collapsed block per part (the
- * Reasoning leaf carries the collapse chrome), so it is left ungrouped.
+ * on its own line. Consecutive reasoning parts coalesce into one `group-reasoning`
+ * block (the canonical native pattern: one ReasoningRoot wrapping the leaves).
  */
 import type { PartState } from '@assistant-ui/react';
 
@@ -20,18 +20,16 @@ export type PartGroups = Readonly<Record<string, string>>;
 /**
  * Builds a `groupBy` bound to one message's daemon group membership. Memoize on
  * `partGroups` identity at the call site so GroupedParts can reuse its tree.
+ * The AssistantMessage switch tells the two group kinds apart by `'group-reasoning'`
+ * vs the dynamic `group-tool-<groupId>` keys.
  */
 export function makeChatGroupBy(partGroups: PartGroups): (part: PartState) => readonly ChatGroupKey[] {
   return (part) => {
+    if (part.type === 'reasoning') return ['group-reasoning'];
     if (part.type === 'tool-call') {
       const groupId = partGroups[part.toolCallId];
       return groupId ? [`group-tool-${groupId}`] : [];
     }
     return [];
   };
-}
-
-/** True for a GroupedParts node key produced for a daemon tool group. */
-export function isToolGroupKey(type: string): boolean {
-  return type.startsWith('group-tool-');
 }

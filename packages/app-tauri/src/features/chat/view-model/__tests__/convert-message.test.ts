@@ -346,3 +346,77 @@ describe('convertMessage — partGroups: nested tool_group inside task_group', (
     expect(mainframeMeta).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// BEHAVIOR 2 — groupSummaries: derived header summary alongside partGroups
+// ---------------------------------------------------------------------------
+
+describe('convertMessage — groupSummaries: tool_group records derived summary', () => {
+  type MainframeMeta = {
+    partGroups?: Record<string, string>;
+    groupSummaries?: Record<string, string>;
+  };
+
+  it('records "Read 1 file" summary for a single-Read tool_group', () => {
+    const msg = assistant([
+      {
+        type: 'tool_group',
+        calls: [
+          { type: 'tool_call', id: 'r1', name: 'Read', input: { file_path: '/a.ts' }, category: 'explore' as const },
+        ],
+      },
+    ]);
+    const mainframe = (convertMessage(msg) as { metadata?: { custom?: { mainframe?: MainframeMeta } } }).metadata
+      ?.custom?.mainframe;
+
+    // groupId = first member id = 'r1'
+    expect(mainframe?.groupSummaries?.['r1']).toBe('Read 1 file');
+  });
+
+  it('records "Read 2 files · Searched 1 pattern" for a mixed Read+Grep group', () => {
+    const msg = assistant([
+      {
+        type: 'tool_group',
+        calls: [
+          { type: 'tool_call', id: 'g1', name: 'Read', input: {}, category: 'explore' as const },
+          { type: 'tool_call', id: 'g2', name: 'Read', input: {}, category: 'explore' as const },
+          { type: 'tool_call', id: 'g3', name: 'Grep', input: {}, category: 'explore' as const },
+        ],
+      },
+    ]);
+    const mainframe = (convertMessage(msg) as { metadata?: { custom?: { mainframe?: MainframeMeta } } }).metadata
+      ?.custom?.mainframe;
+
+    // groupId = 'g1' (first member)
+    expect(mainframe?.groupSummaries?.['g1']).toBe('Read 2 files · Searched 1 pattern');
+  });
+
+  it('groupSummaries key matches the groupId recorded in partGroups', () => {
+    const msg = assistant([
+      {
+        type: 'tool_group',
+        calls: [
+          { type: 'tool_call', id: 'x1', name: 'Glob', input: {}, category: 'explore' as const },
+          { type: 'tool_call', id: 'x2', name: 'LS', input: {}, category: 'explore' as const },
+        ],
+      },
+    ]);
+    const mainframe = (convertMessage(msg) as { metadata?: { custom?: { mainframe?: MainframeMeta } } }).metadata
+      ?.custom?.mainframe;
+
+    const groupId = mainframe?.partGroups?.['x1'];
+    // The summary must be indexed under the same groupId that partGroups points to.
+    expect(groupId).toBeDefined();
+    expect(mainframe?.groupSummaries?.[groupId!]).toBe('Globbed 1 pattern · Listed 1 directory');
+  });
+
+  it('a message with no tool_group has no groupSummaries in metadata', () => {
+    const msg = assistant([
+      { type: 'tool_call', id: 'solo', name: 'Bash', input: { command: 'ls' }, category: 'default' as const },
+    ]);
+    const mainframe = (convertMessage(msg) as { metadata?: { custom?: { mainframe?: MainframeMeta } } }).metadata
+      ?.custom?.mainframe;
+
+    expect(mainframe).toBeUndefined();
+  });
+});

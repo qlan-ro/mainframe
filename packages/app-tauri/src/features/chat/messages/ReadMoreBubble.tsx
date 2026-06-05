@@ -12,29 +12,13 @@
  */
 import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { extractText } from '../parts/extract-text';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tuning
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CHAR_THRESHOLD = 600;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-function extractTextLength(node: ReactNode): number {
-  if (typeof node === 'string') return node.length;
-  if (typeof node === 'number') return String(node).length;
-  if (Array.isArray(node)) {
-    return node.reduce<number>((acc, child) => acc + extractTextLength(child), 0);
-  }
-  if (node !== null && typeof node === 'object' && 'props' in node) {
-    const props = (node as { props?: { children?: ReactNode } }).props;
-    return extractTextLength(props?.children);
-  }
-  return 0;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
@@ -55,7 +39,7 @@ export interface ReadMoreBubbleProps {
 export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const textLength = extractTextLength(children);
+  const textLength = extractText(children).length;
   const needsToggle = textLength > CHAR_THRESHOLD;
   const collapsed = needsToggle && !expanded;
 

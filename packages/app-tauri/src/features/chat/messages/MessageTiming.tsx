@@ -1,31 +1,21 @@
 'use client';
 
 /**
- * MessageTiming — per-message timing + cost footer.
+ * MessageTiming — per-message duration + cost footer.
  *
- * Reads:
- *  - metadata.timing.totalStreamTime  ← projected from daemon's turnDurationMs
- *  - metadata.custom.mainframe.cost   ← session cost written by daemon pipeline
- *
- * Renders a compact badge (total time) with a tooltip that expands to show
- * First-token time (when present) and Cost (when present). Hides itself when
- * totalStreamTime is absent — matches the native MessageTiming contract.
- *
- * Placed standalone; the orchestrator wires it into AssistantMessage's footer.
- * Wrapped in TooltipProvider so it works outside a provider tree.
+ * Reads `metadata.timing.totalStreamTime` (← daemon turnDurationMs) and
+ * `metadata.custom.mainframe.cost`. The daemon's WS protocol surfaces only the
+ * total turn duration — no first-token / tokens-per-second — so those rows are
+ * intentionally omitted. Hides when there is no duration.
  */
-
 import type { FC } from 'react';
-import { useMessageTiming, useAuiState } from '@assistant-ui/react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMessageTiming } from '@assistant-ui/react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { useMainframeMeta } from '../view-model/message-meta';
 
-// ── Formatters ───────────────────────────────────────────────────────────────
-
-function formatMs(ms: number | undefined): string {
-  if (ms === undefined) return '—';
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(2)}s`;
+function formatMs(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
 }
 
 function formatCostUsd(usd: number): string {
@@ -34,24 +24,7 @@ function formatCostUsd(usd: number): string {
   return `$${usd.toFixed(3)}`;
 }
 
-// ── Cost from custom metadata ────────────────────────────────────────────────
-
-function useCostUsd(): number | undefined {
-  return useAuiState((s) => {
-    const custom = s.message.metadata?.custom as { mainframe?: { cost?: unknown } } | undefined;
-    const raw = custom?.mainframe?.cost;
-    return typeof raw === 'number' ? raw : undefined;
-  });
-}
-
-// ── Tooltip detail row ───────────────────────────────────────────────────────
-
-interface DetailRowProps {
-  label: string;
-  value: string;
-}
-
-function DetailRow({ label, value }: DetailRowProps) {
+function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="text-muted-foreground">{label}</span>
@@ -60,8 +33,6 @@ function DetailRow({ label, value }: DetailRowProps) {
   );
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
-
 export interface MessageTimingProps {
   className?: string;
   side?: 'top' | 'right' | 'bottom' | 'left';
@@ -69,56 +40,36 @@ export interface MessageTimingProps {
 
 export const MessageTiming: FC<MessageTimingProps> = ({ className, side = 'top' }) => {
   const timing = useMessageTiming();
-  const costUsd = useCostUsd();
+  const cost = useMainframeMeta().cost;
+  const totalMs = timing?.totalStreamTime;
 
-  // Nothing to show if the stream hasn't completed.
-  if (timing?.totalStreamTime === undefined) return null;
-
-  const hasCost = costUsd !== undefined;
-  const hasFirstToken = timing.firstTokenTime !== undefined;
-  const hasSpeed = timing.tokensPerSecond !== undefined;
+  if (totalMs === undefined) return null;
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            data-testid="chat-message-timing"
-            aria-label="Message timing"
-            className={cn(
-              'rounded-sm px-1 py-0.5',
-              'font-mono text-micro tabular-nums',
-              'text-mf-text-4 hover:text-mf-text-3',
-              'hover:bg-accent transition-colors',
-              'cursor-default',
-              className,
-            )}
-          >
-            {formatMs(timing.totalStreamTime)}
-          </button>
-        </TooltipTrigger>
-
-        <TooltipContent
-          side={side}
-          sideOffset={6}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          data-testid="chat-message-timing"
+          aria-label="Message timing"
           className={cn(
-            'bg-popover text-popover-foreground',
-            'rounded-lg border border-border px-3 py-2',
-            'shadow-[var(--mf-shadow-pop)]',
+            'cursor-default rounded-sm px-1 py-0.5 font-mono text-micro tabular-nums text-mf-text-4 transition-colors hover:bg-accent hover:text-mf-text-3',
+            className,
           )}
         >
-          <div className="grid min-w-36 gap-1.5 text-caption">
-            {hasFirstToken && <DetailRow label="First token" value={formatMs(timing.firstTokenTime)} />}
-
-            <DetailRow label="Total" value={formatMs(timing.totalStreamTime)} />
-
-            {hasSpeed && <DetailRow label="Speed" value={`${timing.tokensPerSecond!.toFixed(1)} tok/s`} />}
-
-            {hasCost && <DetailRow label="Cost" value={formatCostUsd(costUsd)} />}
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+          {formatMs(totalMs)}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        side={side}
+        sideOffset={6}
+        className="rounded-lg border border-border bg-popover px-3 py-2 text-popover-foreground shadow-[var(--mf-shadow-pop)]"
+      >
+        <div className="grid min-w-32 gap-1.5 text-caption">
+          <DetailRow label="Total" value={formatMs(totalMs)} />
+          {cost !== undefined && <DetailRow label="Cost" value={formatCostUsd(cost)} />}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   );
 };

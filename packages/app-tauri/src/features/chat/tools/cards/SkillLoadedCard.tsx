@@ -1,25 +1,25 @@
 /**
- * SkillLoadedCard — centered expandable pill for the '_SkillLoaded' tool.
+ * SkillLoadedCard — centered expandable "Using skill: X" pill.
  *
- * Registry key: '_SkillLoaded'.
- * Args: { skillName: string; path: string; content: string }.
+ * Rendered by SystemMessage from the system-message `skillLoaded` metadata (the
+ * only place the daemon surfaces skill_loaded). Takes the skill fields directly.
  *
- * Design (from desktop SkillLoadedCard.tsx + 10-chatcards.jsx SkillLoadedCard):
+ * Design (desktop SkillLoadedCard.tsx + 10-chatcards.jsx):
  *   - Zap icon (text-primary) + 'Using skill: {skillName}' (skillName accent).
- *   - Tooltip = path.
- *   - Expandable → MarkerBody with skill content as preformatted text.
- *   - Default collapsed (always has a result — args carry the content).
+ *   - Tooltip = path. Expandable → MarkerBody with skill content. Collapsed default.
  *   - data-testid="chat-skill-loaded-pill".
  */
-import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ZapIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MarkerWrap, MarkerPill, MarkerBody, MarkerPre, useMarkerOpen } from './marker-pill';
 
-export const SkillLoadedCard: ToolCallMessagePartComponent = ({ args }) => {
-  const skillName = typeof args['skillName'] === 'string' ? args['skillName'] : '';
-  const path = typeof args['path'] === 'string' ? args['path'] : '';
-  const content = typeof args['content'] === 'string' ? args['content'] : '';
+export interface SkillLoadedCardProps {
+  skillName: string;
+  path?: string;
+  content?: string;
+}
+
+export function SkillLoadedCard({ skillName, path = '', content = '' }: SkillLoadedCardProps) {
   const { open, toggle } = useMarkerOpen(false);
 
   const expandable = content.length > 0;
@@ -66,6 +66,6 @@ export const SkillLoadedCard: ToolCallMessagePartComponent = ({ args }) => {
       )}
     </MarkerWrap>
   );
-};
+}
 
 SkillLoadedCard.displayName = 'SkillLoadedCard';

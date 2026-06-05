@@ -1,0 +1,90 @@
+/**
+ * Behavior tests for resolveResultText — the centralized 3-way result ladder.
+ *
+ * Each test provides a concrete fixed input and asserts the exact return shape.
+ * No logic from the implementation is re-derived here.
+ */
+import { describe, it, expect } from 'vitest';
+import { resolveResultText } from '../result';
+
+// ---------------------------------------------------------------------------
+// Plain string
+// ---------------------------------------------------------------------------
+
+describe('resolveResultText — plain string', () => {
+  it('returns the string as text with truncated=false and fullBytes=0', () => {
+    expect(resolveResultText('hello world')).toEqual({ text: 'hello world', truncated: false, fullBytes: 0 });
+  });
+
+  it('strips <error> sentinel tags from a plain string', () => {
+    expect(resolveResultText('<error>file not found</error>')).toEqual({
+      text: 'file not found',
+      truncated: false,
+      fullBytes: 0,
+    });
+  });
+
+  it('returns empty text for an empty string', () => {
+    expect(resolveResultText('')).toEqual({ text: '', truncated: false, fullBytes: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TruncatedResult (has .truncated=true + .content + .fullBytes)
+// ---------------------------------------------------------------------------
+
+describe('resolveResultText — TruncatedResult', () => {
+  it('returns content as text, truncated=true, and the fullBytes count', () => {
+    const truncated = { content: 'first 500 chars…', truncated: true as const, fullBytes: 8192 };
+    expect(resolveResultText(truncated)).toEqual({ text: 'first 500 chars…', truncated: true, fullBytes: 8192 });
+  });
+
+  it('strips <error> tags from truncated content', () => {
+    const truncated = { content: '<error>truncated output</error>', truncated: true as const, fullBytes: 1024 };
+    expect(resolveResultText(truncated)).toEqual({ text: 'truncated output', truncated: true, fullBytes: 1024 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ToolCallResult (has .content + .structuredPatch — the structured diff shape)
+// ---------------------------------------------------------------------------
+
+describe('resolveResultText — ToolCallResult (structured)', () => {
+  it('returns .content as text with truncated=false when result has structuredPatch', () => {
+    const structured = { content: 'file written', structuredPatch: [], isError: false };
+    expect(resolveResultText(structured)).toEqual({ text: 'file written', truncated: false, fullBytes: 0 });
+  });
+
+  it('strips <error> tags from ToolCallResult.content', () => {
+    const structured = {
+      content: '<tool_use_error>write failed</tool_use_error>',
+      structuredPatch: [],
+      isError: true,
+    };
+    expect(resolveResultText(structured)).toEqual({ text: 'write failed', truncated: false, fullBytes: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Non-string / non-object edge cases
+// ---------------------------------------------------------------------------
+
+describe('resolveResultText — other shapes', () => {
+  it('JSON.stringifies a plain object that is neither ToolCallResult nor TruncatedResult', () => {
+    const obj = { files: ['a.ts', 'b.ts'] };
+    const result = resolveResultText(obj);
+    expect(result.truncated).toBe(false);
+    expect(result.fullBytes).toBe(0);
+    // The text must include the field name — exact formatting is JSON.stringify(obj,null,2)
+    expect(result.text).toContain('"files"');
+    expect(result.text).toContain('"a.ts"');
+  });
+
+  it('returns empty text for undefined', () => {
+    expect(resolveResultText(undefined)).toEqual({ text: '', truncated: false, fullBytes: 0 });
+  });
+
+  it('returns empty text for null', () => {
+    expect(resolveResultText(null)).toEqual({ text: '', truncated: false, fullBytes: 0 });
+  });
+});

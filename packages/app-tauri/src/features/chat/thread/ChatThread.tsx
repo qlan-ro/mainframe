@@ -62,7 +62,14 @@ export function ChatThread() {
       data-testid="chat-thread"
       className="flex h-full flex-col overflow-hidden bg-background text-foreground"
     >
-      <ThreadPrimitive.Viewport data-testid="chat-thread-viewport" className="relative flex-1 overflow-y-auto">
+      {/* Native autoscroll Viewport with a CSS-styled warm-chrome thin scrollbar.
+          (Radix ScrollArea via asChild doesn't wire its overflow/ref through
+          ThreadPrimitive.Viewport — it leaves overflow:visible, unbounded — so we
+          style the native scroller instead; same visual, scroll engine intact.) */}
+      <ThreadPrimitive.Viewport
+        data-testid="chat-thread-viewport"
+        className="mf-thin-scrollbar relative flex-1 overflow-y-auto"
+      >
         <div className="mx-auto w-full max-w-3xl px-5 py-4">
           <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage, SystemMessage }} />
         </div>
@@ -72,7 +79,7 @@ export function ChatThread() {
             data-testid="chat-scroll-to-bottom"
             aria-label="Scroll to bottom"
             className={cn(
-              'absolute bottom-4 left-1/2 -translate-x-1/2 z-10',
+              'absolute bottom-4 left-1/2 z-10 -translate-x-1/2',
               'flex size-8 items-center justify-center rounded-full',
               'border border-border bg-card text-muted-foreground shadow-[var(--mf-shadow-pop)]',
               'transition-opacity hover:text-foreground disabled:invisible',

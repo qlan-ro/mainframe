@@ -3,48 +3,27 @@
 /**
  * WriteFileCard — tool card for the 'Write' tool.
  *
- * Collapsed by default. Header: family tile (green #28a745) + verb 'Write' +
- * ClickableFilePath + +N stat pill + StatusDot. Body: structured diff patch
- * when available, otherwise an all-add per-line view of args.content.
+ * Collapsed by default. Header: green family tile + "Write" verb +
+ * ClickableFilePath + +N stat pill + StatusDot.
+ * Body: structured diff patch when available, otherwise an all-add line view.
  *
- * Native assistant-ui contract: `ToolCallMessagePartComponent`. Receives the
- * full part props; reads `args`, `result`, `isError`, `toolCallId` directly.
+ * Native assistant-ui contract: `ToolCallMessagePartComponent`.
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
 import {
   isStructuredResult,
-  isTruncatedResult,
-  stripErrorXml,
+  resolveResultText,
   countDiffStats,
   DiffFromPatch,
   ClickableFilePath,
   StatusDot,
-  cardStyle,
+  CollapsibleCardShell,
+  FamilyTile,
 } from '../shared';
 import type { TruncatedResult } from '../shared';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';
-
-// ---------------------------------------------------------------------------
-// Family tile (22×22 green square)
-// ---------------------------------------------------------------------------
-
-function WriteFamilyTile() {
-  return (
-    <span
-      aria-hidden
-      className="w-[22px] h-[22px] rounded-md shrink-0 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(40,167,69,0.10)' }}
-    >
-      <span className="text-[13px] font-bold leading-none select-none" style={{ color: '#28a745' }}>
-        +
-      </span>
-    </span>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // AllAddLines — renders every content line as an add row (no structuredPatch).
@@ -77,7 +56,7 @@ interface WriteCardBodyProps {
   hunks: DiffHunk[] | null;
   content: string;
   hasError: boolean;
-  resultText: string | undefined;
+  resultText: string;
   showExpand: boolean;
   chatId: string | undefined;
   toolCallId: string | undefined;
@@ -105,7 +84,7 @@ function WriteCardBody({
             <ToolResultExpand
               chatId={chatId!}
               toolUseId={toolCallId!}
-              truncatedContent={resultText!}
+              truncatedContent={resultText}
               fullBytes={(result as TruncatedResult).fullBytes}
             />
           ) : (
@@ -123,89 +102,69 @@ function WriteCardBody({
 }
 
 // ---------------------------------------------------------------------------
-// useWriteCardState — derives all display state from the part props
+// WriteFileCard
 // ---------------------------------------------------------------------------
 
-interface WriteCardState {
-  filePath: string;
-  content: string;
-  hunks: DiffHunk[] | null;
-  addedCount: number | null;
-  resultText: string | undefined;
-  hasError: boolean;
-  showExpand: boolean;
-  chatId: string | undefined;
-}
-
-function useWriteCardState(
-  args: Record<string, unknown>,
-  result: unknown,
-  isError: boolean | undefined,
-  toolCallId: string | undefined,
-): WriteCardState {
+export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
+  const { args, result, isError, toolCallId } = part;
   const chatId = useChatId();
 
   const filePath = (args['file_path'] as string) ?? '';
   const content = (args['content'] as string) ?? '';
 
+  const { text: resultText, truncated } = resolveResultText(result);
   const structured = isStructuredResult(result);
-  const truncated = isTruncatedResult(result);
-
-  const rawText = structured
-    ? result.content
-    : truncated
-      ? result.content
-      : typeof result === 'string'
-        ? result
-        : undefined;
-  const resultText = rawText ? stripErrorXml(rawText) : undefined;
 
   const hunks = structured ? (result.structuredPatch ?? null) : null;
   const stats = hunks ? countDiffStats(hunks) : null;
   const hasError = Boolean(resultText && isError);
   const showExpand = hasError && truncated && Boolean(chatId) && Boolean(toolCallId);
 
-  return { filePath, content, hunks, addedCount: stats?.added ?? null, resultText, hasError, showExpand, chatId };
-}
+  const tile = (
+    <FamilyTile color="#28a745" bg="rgba(40,167,69,0.10)">
+      +
+    </FamilyTile>
+  );
 
-// ---------------------------------------------------------------------------
-// WriteFileCard
-// ---------------------------------------------------------------------------
+  const trailing = (
+    <>
+      {stats?.added != null && (
+        <span className="font-mono tabular-nums text-caption shrink-0 px-1.5 py-0.5 rounded-full bg-mf-diff-add-bg text-mf-diff-add-text font-semibold">
+          +{stats.added}
+        </span>
+      )}
+      <StatusDot result={result} isError={isError} />
+    </>
+  );
 
-export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
-  const { args, result, isError, toolCallId } = part;
-  const state = useWriteCardState(args, result, isError, toolCallId);
+  const body =
+    hunks || content || hasError ? (
+      <WriteCardBody
+        hunks={hunks}
+        content={content}
+        hasError={hasError}
+        resultText={resultText}
+        showExpand={showExpand}
+        chatId={chatId}
+        toolCallId={toolCallId}
+        result={result}
+      />
+    ) : null;
 
   return (
-    <Collapsible defaultOpen={false} className={cn(cardStyle(result, isError), 'w-full')} data-testid="chat-write-card">
-      <CollapsibleTrigger
-        data-testid="chat-write-trigger"
-        className="flex w-full items-center gap-2 px-3 py-[7px] cursor-pointer select-none hover:bg-accent transition-colors"
-      >
-        <WriteFamilyTile />
-        <span className="text-label font-semibold text-muted-foreground shrink-0">Write</span>
-        <ClickableFilePath filePath={state.filePath} />
-        <span className="flex-1 min-w-0" />
-        {state.addedCount !== null && (
-          <span className="font-mono tabular-nums text-caption shrink-0 px-1.5 py-0.5 rounded-full bg-mf-diff-add-bg text-mf-diff-add-text font-semibold">
-            +{state.addedCount}
-          </span>
-        )}
-        <StatusDot result={result} isError={isError} />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <WriteCardBody
-          hunks={state.hunks}
-          content={state.content}
-          hasError={state.hasError}
-          resultText={state.resultText}
-          showExpand={state.showExpand}
-          chatId={state.chatId}
-          toolCallId={toolCallId}
-          result={result}
-        />
-      </CollapsibleContent>
-    </Collapsible>
+    <CollapsibleCardShell
+      testId="chat-write-card"
+      triggerId="chat-write-trigger"
+      result={result}
+      isError={isError}
+      defaultOpen={false}
+      tile={tile}
+      verb="Write"
+      target={<ClickableFilePath filePath={filePath} />}
+      trailing={trailing}
+    >
+      {body}
+    </CollapsibleCardShell>
   );
 };
 

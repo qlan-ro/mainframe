@@ -305,130 +305,44 @@ describe('SearchCard — error state', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Grep structured match rows
+// Grep / LS plain-string results (the daemon never returns a structured
+// GrepMatch array — all real results are plain strings)
 // ---------------------------------------------------------------------------
 
-describe('SearchCard — Grep structured matches', () => {
-  const grepResult = JSON.stringify([
-    { file: '/project/src/App.tsx', line: 42, text: 'const x = useEffect' },
-    { file: '/project/src/util.ts', line: 7, text: 'export function helper' },
-  ]);
-
-  it('renders match rows for each structured grep result', () => {
+describe('SearchCard — Grep plain-string result', () => {
+  it('renders a plain Grep result as text in the card body', () => {
     render(
       <Wrap>
         <SearchCard
           {...baseProps}
           toolName="Grep"
-          args={{ pattern: 'useEffect' }}
-          result={grepResult}
+          args={{ pattern: 'useState' }}
+          result={'src/App.tsx:14:  const [x, setX] = useState(0);\nsrc/util.ts:3:  useState(null)'}
           isError={false}
         />
       </Wrap>,
     );
     fireEvent.click(screen.getByTestId('search-card-trigger'));
-    const rows = screen.getAllByTestId('search-card-match-row');
-    // Two entries in the fixture → two rows
-    expect(rows).toHaveLength(2);
+    const body = screen.getByTestId('search-card-plain-body');
+    expect(body).toHaveTextContent('src/App.tsx');
+    expect(body).toHaveTextContent('useState(0)');
   });
 
-  it('renders the short filename (last two segments) in a match row', () => {
+  it('renders a plain LS result as text in the card body', () => {
     render(
       <Wrap>
         <SearchCard
           {...baseProps}
-          toolName="Grep"
-          args={{ pattern: 'useEffect' }}
-          result={grepResult}
+          toolName="LS"
+          args={{ path: '/project' }}
+          result={'src/\ndist/\npackage.json'}
           isError={false}
         />
       </Wrap>,
     );
     fireEvent.click(screen.getByTestId('search-card-trigger'));
-    // shortFilename('/project/src/App.tsx') → 'src/App.tsx'
-    const rows = screen.getAllByTestId('search-card-match-row');
-    expect(rows[0]).toHaveTextContent('src/App.tsx');
-  });
-
-  it('renders the line number in a match row', () => {
-    render(
-      <Wrap>
-        <SearchCard
-          {...baseProps}
-          toolName="Grep"
-          args={{ pattern: 'useEffect' }}
-          result={grepResult}
-          isError={false}
-        />
-      </Wrap>,
-    );
-    fireEvent.click(screen.getByTestId('search-card-trigger'));
-    const rows = screen.getAllByTestId('search-card-match-row');
-    expect(rows[0]).toHaveTextContent(':42');
-  });
-
-  it('renders the match text snippet in a match row', () => {
-    render(
-      <Wrap>
-        <SearchCard
-          {...baseProps}
-          toolName="Grep"
-          args={{ pattern: 'useEffect' }}
-          result={grepResult}
-          isError={false}
-        />
-      </Wrap>,
-    );
-    fireEvent.click(screen.getByTestId('search-card-trigger'));
-    const rows = screen.getAllByTestId('search-card-match-row');
-    expect(rows[0]).toHaveTextContent('const x = useEffect');
-  });
-
-  it('calls openFile with the full path when a match row is clicked', () => {
-    mockOpenFile.mockClear();
-    render(
-      <Wrap>
-        <SearchCard
-          {...baseProps}
-          toolName="Grep"
-          args={{ pattern: 'useEffect' }}
-          result={grepResult}
-          isError={false}
-        />
-      </Wrap>,
-    );
-    fireEvent.click(screen.getByTestId('search-card-trigger'));
-    const rows = screen.getAllByTestId('search-card-match-row');
-    fireEvent.click(rows[0]!);
-    expect(mockOpenFile).toHaveBeenCalledWith('/project/src/App.tsx');
-  });
-
-  it('renders structured matches from a raw array (not a JSON string)', () => {
-    const rawArray = [{ file: '/a/b/c.ts', line: 1, text: 'hello' }];
-    render(
-      <Wrap>
-        <SearchCard {...baseProps} toolName="Grep" args={{ pattern: 'hello' }} result={rawArray} isError={false} />
-      </Wrap>,
-    );
-    fireEvent.click(screen.getByTestId('search-card-trigger'));
-    expect(screen.getAllByTestId('search-card-match-row')).toHaveLength(1);
-  });
-
-  it('falls back to plain body when Grep result is a non-match JSON string', () => {
-    render(
-      <Wrap>
-        <SearchCard
-          {...baseProps}
-          toolName="Grep"
-          args={{ pattern: 'foo' }}
-          // valid JSON but not an array of {file:...} objects
-          result={'{"message":"no matches"}'}
-          isError={false}
-        />
-      </Wrap>,
-    );
-    fireEvent.click(screen.getByTestId('search-card-trigger'));
-    expect(screen.queryByTestId('search-card-grep-matches')).not.toBeInTheDocument();
-    expect(screen.getByTestId('search-card-plain-body')).toBeInTheDocument();
+    const body = screen.getByTestId('search-card-plain-body');
+    expect(body).toHaveTextContent('src/');
+    expect(body).toHaveTextContent('package.json');
   });
 });

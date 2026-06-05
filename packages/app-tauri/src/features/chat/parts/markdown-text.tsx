@@ -6,8 +6,12 @@
  *   - remarkAppLinks: bare app-protocol URLs → clickable links
  *   - urlTransform: extends default URL sanitiser to allow app schemes
  *   - markdownComponents: warm-chrome styled component overrides
- *   - SyntaxHighlighter: shiki-based token highlighter on mf-code-* tokens
- *   - CodeHeader: language label + copy button (data-testid chat-code-copy)
+ *   - SyntaxHighlighter slot: shiki-based token highlighter on mf-code-* tokens
+ *   - CodeHeader slot: language label + copy button (data-testid chat-code-copy)
+ *
+ * Code-block layout follows the native single path:
+ *   primitive detects fenced block → calls CodeHeader slot, then SyntaxHighlighter slot.
+ * The `code` override here handles ONLY inline code (no language class).
  *
  * `MarkdownText` is the `TextMessagePartComponent` wired into AssistantMessage.
  * `markdownComponents` is exported separately so UserMessage can reuse it.
@@ -18,7 +22,6 @@ import {
   MarkdownTextPrimitive,
   unstable_memoizeMarkdownComponents,
   useIsMarkdownCodeBlock,
-  type SyntaxHighlighterProps,
 } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Pluggable } from 'unified';
@@ -29,41 +32,21 @@ import { urlTransform, remarkAppLinks } from './markdown-url-transform';
 import { SyntaxHighlighter } from './syntax-highlight';
 import { CodeHeader } from './CodeHeader';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function extractText(children: React.ReactNode): string {
-  if (typeof children === 'string') return children;
-  if (typeof children === 'number') return String(children);
-  if (Array.isArray(children)) return children.map(extractText).join('');
-  if (React.isValidElement(children) && children.props) {
-    return extractText((children.props as { children?: React.ReactNode }).children);
-  }
-  return '';
-}
-
-// ── Code block ───────────────────────────────────────────────────────────────
+// ── Inline code ───────────────────────────────────────────────────────────────
+// Handles only inline `code` spans. Fenced code blocks are handled by the
+// native CodeHeader + SyntaxHighlighter slots (registered at the bottom of
+// markdownComponents); those slots are always called for block-level code.
 
 function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
   const isCodeBlock = useIsMarkdownCodeBlock();
 
   if (isCodeBlock) {
-    const lang = className?.match(/language-(\w+)/)?.[1];
-    const code = extractText(children);
-    // SyntaxHighlighter is passed the pre+code components from the primitive;
-    // we compose the full block manually so we can slot CodeHeader above it.
-    const fakeProps: SyntaxHighlighterProps = {
-      language: lang ?? 'text',
-      code,
-      components: {
-        Pre: ({ children: c }) => <>{c}</>,
-        Code: ({ children: c }) => <>{c}</>,
-      },
-    };
+    // The primitive owns the block layout — just pass through so CodeHeader and
+    // SyntaxHighlighter slots receive the fully-assembled pre+code children.
     return (
-      <div className="rounded-lg border border-border overflow-hidden my-3">
-        <CodeHeader language={lang} code={code} />
-        <SyntaxHighlighter {...fakeProps} />
-      </div>
+      <code className={className} {...props}>
+        {children}
+      </code>
     );
   }
 
@@ -262,11 +245,13 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
   del: ({ className, ...props }) => (
     <del className={cn('aui-md-del line-through text-muted-foreground', className)} {...props} />
   ),
-  // pre is rendered inside the Code component above — suppress the default wrapper
+  // pre is rendered inside the primitive's block layout — suppress the default wrapper
   pre: ({ children }) => <>{children}</>,
+  // code handles only inline spans; the primitive routes fenced blocks to
+  // the CodeHeader + SyntaxHighlighter slots below.
   code: Code,
-  // SyntaxHighlighter slot: used when the primitive detects a fenced code block
-  // with a language. We plug our own above via the code component instead.
+  // Fenced code-block slots: primitive calls CodeHeader first, then SyntaxHighlighter.
+  // Together they render the header bar + shiki-highlighted <pre> exactly once.
   SyntaxHighlighter,
   CodeHeader,
 });

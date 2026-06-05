@@ -3,23 +3,19 @@
 /**
  * EditFileCard — tool card for the 'Edit' tool.
  *
- * Default-open. Header: family tile (amber #d97706) + verb + ClickableFilePath
- * + +N/−N stat pills + open-in-diff icon button + StatusDot. Body: structured
- * diff patch when available, fallback hunks otherwise.
+ * Default-open. Header: amber family tile + "Edit" verb + ClickableFilePath
+ * + +N/−N stat pills + open-in-diff icon button + StatusDot.
+ * Body: structured diff patch when available, fallback hunks otherwise.
  *
- * Native assistant-ui contract: `ToolCallMessagePartComponent`. Receives the
- * full part props; reads `args`, `result`, `isError`, `toolCallId` directly.
+ * Native assistant-ui contract: `ToolCallMessagePartComponent`.
  */
 import React, { useCallback } from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ExternalLinkIcon } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import {
   isStructuredResult,
-  isTruncatedResult,
-  stripErrorXml,
+  resolveResultText,
   countDiffStats,
   computeFallbackHunks,
   reconstructFromHunks,
@@ -27,30 +23,13 @@ import {
   DiffFallback,
   ClickableFilePath,
   StatusDot,
-  cardStyle,
+  CollapsibleCardShell,
+  FamilyTile,
 } from '../shared';
 import type { TruncatedResult } from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId, useOpenFile } from '../chat-tool-context';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
-
-// ---------------------------------------------------------------------------
-// Family tile (22×22 amber square)
-// ---------------------------------------------------------------------------
-
-function EditFamilyTile() {
-  return (
-    <span
-      aria-hidden
-      className="w-[22px] h-[22px] rounded-md shrink-0 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(217,119,6,0.11)' }}
-    >
-      <span className="text-[11px] font-bold leading-none select-none" style={{ color: '#d97706' }}>
-        ±
-      </span>
-    </span>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Stat pills (+N / −N)
@@ -75,6 +54,36 @@ function StatPills({ added, removed }: { added: number | null; removed: number |
 }
 
 // ---------------------------------------------------------------------------
+// OpenDiffButton
+// ---------------------------------------------------------------------------
+
+function OpenDiffButton({ onOpenDiff }: { onOpenDiff: (e: React.MouseEvent | React.KeyboardEvent) => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-testid="chat-edit-open-diff"
+          role="button"
+          tabIndex={0}
+          aria-label="Open in diff editor"
+          onClick={onOpenDiff}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onOpenDiff(e);
+            }
+          }}
+          className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+        >
+          <ExternalLinkIcon size={13} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">Open in diff editor</TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // EditCardBody — diff view + optional error footer
 // ---------------------------------------------------------------------------
 
@@ -83,7 +92,7 @@ interface EditCardBodyProps {
   oldString: string;
   newString: string;
   hasError: boolean;
-  resultText: string | undefined;
+  resultText: string;
   showExpand: boolean;
   chatId: string | undefined;
   toolCallId: string | undefined;
@@ -116,7 +125,7 @@ function EditCardBody({
             <ToolResultExpand
               chatId={chatId!}
               toolUseId={toolCallId!}
-              truncatedContent={resultText!}
+              truncatedContent={resultText}
               fullBytes={(result as TruncatedResult).fullBytes}
             />
           ) : (
@@ -134,57 +143,7 @@ function EditCardBody({
 }
 
 // ---------------------------------------------------------------------------
-// EditCardHeader — trigger row with file tile, path, stats, diff-open button
-// ---------------------------------------------------------------------------
-
-interface EditCardHeaderProps {
-  filePath: string;
-  addedCount: number | null;
-  removedCount: number | null;
-  result: unknown;
-  isError: boolean | undefined;
-  onOpenDiff: (e: React.MouseEvent | React.KeyboardEvent) => void;
-}
-
-function EditCardHeader({ filePath, addedCount, removedCount, result, isError, onOpenDiff }: EditCardHeaderProps) {
-  return (
-    <CollapsibleTrigger
-      data-testid="chat-edit-trigger"
-      className="flex w-full items-center gap-2 px-3 py-[7px] cursor-pointer select-none hover:bg-accent transition-colors"
-    >
-      <EditFamilyTile />
-      <span className="text-label font-semibold text-muted-foreground shrink-0">Edit</span>
-      <ClickableFilePath filePath={filePath} />
-      <span className="flex-1 min-w-0" />
-      <StatPills added={addedCount} removed={removedCount} />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            data-testid="chat-edit-open-diff"
-            role="button"
-            tabIndex={0}
-            aria-label="Open in diff editor"
-            onClick={onOpenDiff}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onOpenDiff(e);
-              }
-            }}
-            className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
-          >
-            <ExternalLinkIcon size={13} />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="top">Open in diff editor</TooltipContent>
-      </Tooltip>
-      <StatusDot result={result} isError={isError} />
-    </CollapsibleTrigger>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// useEditCardState — derives all display state from the part props
+// useEditCardState
 // ---------------------------------------------------------------------------
 
 interface EditCardState {
@@ -194,7 +153,7 @@ interface EditCardState {
   displayHunks: DiffHunk[] | null;
   addedCount: number | null;
   removedCount: number | null;
-  resultText: string | undefined;
+  resultText: string;
   hasError: boolean;
   showExpand: boolean;
   chatId: string | undefined;
@@ -214,17 +173,8 @@ function useEditCardState(
   const oldString = (args['old_string'] as string) ?? '';
   const newString = (args['new_string'] as string) ?? '';
 
+  const { text: resultText, truncated } = resolveResultText(result);
   const structured = isStructuredResult(result);
-  const truncated = isTruncatedResult(result);
-
-  const rawText = structured
-    ? result.content
-    : truncated
-      ? result.content
-      : typeof result === 'string'
-        ? result
-        : undefined;
-  const resultText = rawText ? stripErrorXml(rawText) : undefined;
 
   const hunks = structured ? (result.structuredPatch ?? null) : null;
   const displayHunks = hunks ?? (oldString || newString ? computeFallbackHunks(oldString, newString) : null);
@@ -236,7 +186,7 @@ function useEditCardState(
   const handleOpenDiff = useCallback(
     (e: React.MouseEvent | React.KeyboardEvent) => {
       e.stopPropagation();
-      if (structured && result.originalFile && result.modifiedFile) {
+      if (structured && isStructuredResult(result) && result.originalFile && result.modifiedFile) {
         openFile(filePath);
         return;
       }
@@ -271,30 +221,49 @@ export const EditFileCard: ToolCallMessagePartComponent = (part) => {
   const { args, result, isError, toolCallId } = part;
   const state = useEditCardState(args, result, isError, toolCallId);
 
-  return (
-    <Collapsible defaultOpen className={cn(cardStyle(result, isError), 'w-full')} data-testid="chat-edit-card">
-      <EditCardHeader
-        filePath={state.filePath}
-        addedCount={state.addedCount}
-        removedCount={state.removedCount}
+  const tile = (
+    <FamilyTile color="#d97706" bg="rgba(217,119,6,0.11)">
+      ±
+    </FamilyTile>
+  );
+
+  const trailing = (
+    <>
+      <StatPills added={state.addedCount} removed={state.removedCount} />
+      <OpenDiffButton onOpenDiff={state.handleOpenDiff} />
+      <StatusDot result={result} isError={isError} />
+    </>
+  );
+
+  const body =
+    state.displayHunks || state.oldString || state.newString || state.hasError ? (
+      <EditCardBody
+        displayHunks={state.displayHunks}
+        oldString={state.oldString}
+        newString={state.newString}
+        hasError={state.hasError}
+        resultText={state.resultText}
+        showExpand={state.showExpand}
+        chatId={state.chatId}
+        toolCallId={toolCallId}
         result={result}
-        isError={isError}
-        onOpenDiff={state.handleOpenDiff}
       />
-      <CollapsibleContent>
-        <EditCardBody
-          displayHunks={state.displayHunks}
-          oldString={state.oldString}
-          newString={state.newString}
-          hasError={state.hasError}
-          resultText={state.resultText}
-          showExpand={state.showExpand}
-          chatId={state.chatId}
-          toolCallId={toolCallId}
-          result={result}
-        />
-      </CollapsibleContent>
-    </Collapsible>
+    ) : null;
+
+  return (
+    <CollapsibleCardShell
+      testId="chat-edit-card"
+      triggerId="chat-edit-trigger"
+      result={result}
+      isError={isError}
+      defaultOpen
+      tile={tile}
+      verb="Edit"
+      target={<ClickableFilePath filePath={state.filePath} />}
+      trailing={trailing}
+    >
+      {body}
+    </CollapsibleCardShell>
   );
 };
 

@@ -11,31 +11,39 @@
  *   - right-aligned, max-width 75% of thread
  *
  * Variants rendered by this file:
- *   - Plain text    → CoolCard + ReadMoreBubble + markdown + @mention highlights
- *   - /command|skill → CoolCard + leading pill badge + user text
+ *   - Plain text    → CoolCard + ReadMoreBubble + markdown + @mention chips
+ *   - /command|skill → CoolCard + leading pill badge (metadata-driven) + user text
  *   - Queued badge  → quiet animated footer badge above the card
  *   - Inline images → thumbnail row
+ *
+ * @mention inline rendering uses the native `createDirectiveText` pattern from
+ * @assistant-ui/react via our `mainframeUserFormatter` (see user-directives.ts).
+ * The SlashPill leading badge is kept metadata-driven: when daemon metadata carries
+ * `command.name`, we render the pill before the text body. If no metadata exists
+ * but the text itself starts with `/command`, the formatter will emit a command
+ * chip — so both paths produce a chip, just at different levels.
  *
  * Deferred (TODO-leaf — do NOT build here):
  *   - Sandbox capture context row (SandboxCaptureContext)
  *   - PLAN_PREFIX "Implementing plan" card
  *   - File attachment chips (FileAttachmentThumbs)
  *   - Context-sent chips (UMContextRow)
- *
- * Metadata access: reads from `useAuiState(s => s.message.metadata.custom.mainframe)`
- * which is populated by the user-message arm of convert-message.ts.
- * No `getExternalStoreMessages` or `useMessage` (legacy API).
+ *   - UMCodeRef (editor code-reference card)
+ *   - UMInspectChip (CSS-selector capture chips)
  */
 import { memo, useMemo, type ReactNode } from 'react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { Wrench, Zap, Clock } from 'lucide-react';
+import { AtSign, Wrench, Zap, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
+import { useMainframeMeta } from '../view-model/message-meta';
 import { ReadMoreBubble } from './ReadMoreBubble';
+import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text';
+import { mainframeUserFormatter } from './user-directives';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Remark plugin set (stable reference — never define inline)
@@ -44,52 +52,38 @@ import { ReadMoreBubble } from './ReadMoreBubble';
 const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// @mention highlighting
+// Directive-text inline renderer (replaces highlightMentions + MentionParagraph)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MENTION_RE = /(@[\w./\-]+)/g;
+/**
+ * TextMessagePartComponent for user text — renders @mentions as accent chips,
+ * optionally a leading /command chip if present in the raw text.
+ */
+const UserDirectiveText = createDirectiveText(mainframeUserFormatter, {
+  iconMap: {
+    mention: AtSign,
+    command: Wrench,
+    skill: Zap,
+  },
+});
 
 /**
- * Splits a string on @mention tokens and wraps each match in an accent span.
- * Cheap enough to run inline — only applies to user message text.
+ * `<p>` override for react-markdown that feeds string children through the
+ * directive formatter.  Non-string children (bold, italic, etc.) pass through
+ * unchanged — identical to the prior highlightMentions guard.
  */
-function highlightMentions(children: ReactNode): ReactNode {
-  if (typeof children !== 'string') return children;
-
-  const parts: ReactNode[] = [];
-  let lastIndex = 0;
-
-  for (const match of children.matchAll(MENTION_RE)) {
-    const mention = match[1]!;
-    const start = match.index! + match[0].indexOf(mention);
-
-    // Only highlight when preceded by whitespace or start of string
-    const prevChar = children[start - 1];
-    if (prevChar !== undefined && !/\s/.test(prevChar)) continue;
-
-    if (start > lastIndex) parts.push(children.slice(lastIndex, start));
-    parts.push(
-      <span key={start} className="rounded bg-primary/10 px-1 py-0.5 font-semibold text-primary">
-        {mention}
-      </span>,
-    );
-    lastIndex = start + mention.length;
+function DirectiveParagraph({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
+  if (typeof children !== 'string') {
+    return <p {...props}>{children}</p>;
   }
-
-  if (parts.length === 0) return children;
-  if (lastIndex < children.length) parts.push(children.slice(lastIndex));
-  return parts;
+  return (
+    <p {...props}>
+      <UserDirectiveText type="text" text={children} status={{ type: 'complete' }} />
+    </p>
+  );
 }
 
-/**
- * `<p>` override that wraps text children with @mention highlighting.
- * Only the plain `<p>` element needs this — headings, code, etc. are unchanged.
- */
-function MentionParagraph({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p {...props}>{highlightMentions(children)}</p>;
-}
-
-const userMarkdownComponents = { ...markdownComponents, p: MentionParagraph };
+const userMarkdownComponents = { ...markdownComponents, p: DirectiveParagraph };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cool-card shell
@@ -135,7 +129,7 @@ function QueuedBadge() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Slash (command / skill) pill
+// Slash (command / skill) pill — metadata-driven leading badge
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SlashPillProps {
@@ -146,10 +140,9 @@ interface SlashPillProps {
 function SlashPill({ kind, name }: SlashPillProps) {
   const Icon = kind === 'command' ? Wrench : Zap;
   const colorClass = kind === 'command' ? 'text-primary' : 'text-[#7a4dd0]';
-  const bgClass = kind === 'command' ? 'bg-primary/8' : 'bg-[#7a4dd0]/8';
 
   return (
-    <span className={cn('mr-2 inline-flex items-center gap-1 rounded-lg py-0.5 pl-1.5 pr-2', bgClass)}>
+    <span className={cn('mr-2 inline-flex items-center gap-1 rounded-lg py-0.5 pl-1.5 pr-2 bg-mf-chip')}>
       <Icon size={12} className={colorClass} />
       <span className={cn('font-mono text-caption font-semibold', colorClass)}>/{name}</span>
     </span>
@@ -181,33 +174,11 @@ function InlineImageThumbs({ parts }: InlineImageThumbsProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Metadata shape coming from convert-message.ts (metadata.custom.mainframe)
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface UserMessageMeta {
-  queued?: boolean;
-  cleanText?: string;
-  command?: { name: string; userText?: string; source?: string };
-  attachments?: Array<{ name?: string; kind?: string }>;
-  attachedFiles?: Array<{ name: string }>;
-}
-
-/** Stable empty fallback — returning a fresh `{}` from useAuiState loops (getSnapshot). */
-const EMPTY_USER_META: UserMessageMeta = Object.freeze({});
-
-function useUserMessageMeta(): UserMessageMeta {
-  return useAuiState((s) => {
-    const meta = (s as { message: { metadata?: { custom?: Record<string, unknown> } } }).message.metadata;
-    return (meta?.custom?.['mainframe'] as UserMessageMeta | undefined) ?? EMPTY_USER_META;
-  }) as UserMessageMeta;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
 function UserMessageImpl() {
-  const meta = useUserMessageMeta();
+  const meta = useMainframeMeta();
   const isQueued = meta.queued === true;
 
   // Resolve text: prefer cleanText (pipeline-stripped) over raw part text

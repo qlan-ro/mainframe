@@ -3,39 +3,35 @@
 /**
  * BashCard — tool card for the 'Bash' tool.
  *
- * Renders a collapsed terminal card with:
- *   - Terminal icon + monospace command in header
- *   - Optional description sub-header
- *   - StatusDot trailing indicator
- *   - Collapsible terminal output body (bg-mf-term-bg surface)
- *   - Color-coded output lines (green for success, amber for warnings, cmt for rest)
- *   - ToolResultExpand for truncated daemon results
+ * Collapsed by default. Header: terminal icon + truncated command (tooltip) +
+ * optional description sub-header + StatusDot. Body: color-coded terminal
+ * output on bg-mf-term-bg. ToolResultExpand for truncated results.
+ *
+ * BashCard's header is a full-width monospace command string (not a file path),
+ * so it uses Collapsible directly rather than CollapsibleCardShell which is
+ * optimised for the tile+verb+path pattern.
+ *
+ * Native assistant-ui contract: `ToolCallMessagePartComponent`.
  */
-
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { Terminal } from 'lucide-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { StatusDot, cardStyle, isTruncatedResult, stripErrorXml } from '../shared';
+import { StatusDot, cardStyle, isTruncatedResult, resolveResultText } from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';
 
-// ── Output line colorizer ─────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Output line colorizer
+// ---------------------------------------------------------------------------
 
-/** Maps a single output line to a Tailwind color class. */
 function outputLineClass(line: string): string {
-  const trimmed = line.trim();
-  if (trimmed.includes('✓') || /\bpass(ed|ing)?\b/i.test(trimmed)) {
-    return 'text-mf-term-green';
-  }
-  if (trimmed.includes('✗') || /\b(error|fail(ed|ure)?)\b/i.test(trimmed)) {
-    return 'text-mf-term-amber';
-  }
+  const t = line.trim();
+  if (t.includes('✓') || /\bpass(ed|ing)?\b/i.test(t)) return 'text-mf-term-green';
+  if (t.includes('✗') || /\b(error|fail(ed|ure)?)\b/i.test(t)) return 'text-mf-term-amber';
   return 'text-mf-term-cmt';
 }
-
-// ── Exit-code line ────────────────────────────────────────────────────────────
 
 function ExitLine({ text }: { text: string }) {
   const match = /exit\s+(\d+)/i.exec(text);
@@ -44,7 +40,9 @@ function ExitLine({ text }: { text: string }) {
   return <span className={code === 0 ? 'text-mf-term-green' : 'text-destructive'}>{text}</span>;
 }
 
-// ── Terminal body ─────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// TerminalBody
+// ---------------------------------------------------------------------------
 
 interface TerminalBodyProps {
   command: string;
@@ -73,7 +71,6 @@ function TerminalBody({ command, resultText, isError, chatId, toolCallId, rawRes
           data-testid="chat-bash-output"
           className="font-mono text-caption overflow-x-auto whitespace-pre-wrap max-h-[400px] overflow-y-auto"
         >
-          {/* Prompt line */}
           <span className="text-mf-term-green">$ </span>
           <span className="text-mf-term-fg">{command}</span>
           {'\n'}
@@ -100,7 +97,9 @@ function TerminalBody({ command, resultText, isError, chatId, toolCallId, rawRes
   );
 }
 
-// ── BashCard ──────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// BashCard
+// ---------------------------------------------------------------------------
 
 export const BashCard: ToolCallMessagePartComponent = (part) => {
   const { args, result, isError, toolCallId } = part;
@@ -109,22 +108,12 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
   const command = (args['command'] as string | undefined) ?? (args['input'] as string | undefined) ?? '';
   const description = args['description'] as string | undefined;
 
-  const rawResultText =
-    typeof result === 'string'
-      ? result
-      : isTruncatedResult(result)
-        ? result.content
-        : result !== undefined
-          ? JSON.stringify(result, null, 2)
-          : undefined;
-
-  const resultText = rawResultText ? stripErrorXml(rawResultText) : undefined;
+  const { text: resultText } = resolveResultText(result);
   const hasOutput = Boolean(resultText);
 
   return (
     <Collapsible data-testid="chat-bash-card" defaultOpen={false}>
       <div className={cn(cardStyle(result, isError), 'group')}>
-        {/* Header trigger */}
         <CollapsibleTrigger
           data-testid="chat-bash-trigger"
           disabled={!hasOutput}
@@ -134,7 +123,6 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
             !hasOutput && 'cursor-default',
           )}
         >
-          {/* Bash family icon — #7a7a82 as inline style (non-token hex) */}
           <Terminal size={15} className="shrink-0" style={{ color: '#7a7a82' }} />
           <Tooltip>
             <TooltipTrigger asChild>
@@ -153,7 +141,6 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
           <StatusDot result={result} isError={isError} />
         </CollapsibleTrigger>
 
-        {/* Optional description sub-header */}
         {description && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -169,8 +156,7 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
           </Tooltip>
         )}
 
-        {/* Collapsible output */}
-        {hasOutput && resultText && (
+        {hasOutput && (
           <CollapsibleContent>
             <TerminalBody
               command={command}

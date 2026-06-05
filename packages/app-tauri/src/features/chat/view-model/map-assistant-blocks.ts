@@ -4,26 +4,27 @@
  * `mapAssistantBlocks` runs at BOTH the top-level assistant message AND inside a
  * subagent transcript (`task_group.calls`). That single recursion IS the WS14c
  * invariant in native form: a `tool_group` / `task_progress` nested in a
- * subagent is flattened/encoded exactly as at the top level. Each call scopes
- * its own `toolCallId` dedup (assistant-ui crashes on a duplicate part key).
+ * subagent is flattened/encoded exactly as at the top level.
  *
  * Go-native projection (replaces the synthetic `_ToolGroup`/`_TaskGroup`):
- *  - `tool_group`     → flat native `tool-call` parts. Their server-decided
- *                       group membership is recorded in `groups` (toolCallId →
- *                       groupId) so the client `groupBy` echoes the DAEMON's
- *                       grouping instead of re-deriving it from tool names.
- *  - `task_group`     → ONE `Task` `tool-call` carrying `messages` (the subagent
- *                       transcript as a real readonly thread).
- *  - `task_progress`  → ONE `_TaskProgress` card part · `skill_loaded` → `_SkillLoaded`.
- *  - `image`          → native `{type:'image', image: data-URL}` part.
+ *  - `tool_group`     → flat native `tool-call` parts; their server-decided group
+ *                       membership (toolCallId→groupId) + the derived header
+ *                       summary are recorded so the client groupBy/ToolGroup
+ *                       echo the daemon instead of re-deriving at render time.
+ *  - `task_group`     → ONE `Task` `tool-call` carrying native `messages`.
+ *  - `task_progress`  → ONE `_TaskProgress` card part · `image` → native image.
+ *
+ * (skill_loaded is NOT handled here — the daemon only emits it on system
+ * messages, where SystemMessage renders the rich SkillLoadedCard.)
  */
 import { ExportedMessageRepository } from '@assistant-ui/react';
 import type { ThreadMessage, ThreadMessageLike } from '@assistant-ui/react';
 import type { DisplayContent } from '@qlan-ro/mainframe-types';
 import { mapToolCallPart, mapToolResult } from './map-tool-result';
+import { type ContentPart, ensureNonEmpty, toJsonArgs } from './content';
+import type { TaskProgressArgs } from './message-meta';
+import { toolGroupSummary } from '../tools/tool-group-summary';
 
-type ContentPart = Exclude<ThreadMessageLike['content'], string>[number];
-type ReadonlyJSONObject = import('assistant-stream/utils').ReadonlyJSONObject;
 type TaskGroupBlock = DisplayContent & { type: 'task_group' };
 
 /** Null-byte prefix prevents collision with real user content. */
@@ -32,25 +33,18 @@ export const PERMISSION_PLACEHOLDER = Object.freeze({
   text: '\0__MF_PERMISSION__',
 });
 
-/** Where the daemon's per-tool group membership rides to the client groupBy. */
-export interface MainframeMessageMeta {
-  readonly partGroups: Readonly<Record<string, string>>;
-}
-
 export interface MappedAssistantBlocks {
   readonly parts: ContentPart[];
-  /** toolCallId → daemon groupId, only for tools the daemon grouped. */
+  /** toolCallId → daemon groupId (only for tools the daemon grouped). */
   readonly groups: Record<string, string>;
-}
-
-/** Guarantees ≥1 content part so assistant-ui never receives an empty array. */
-function ensureNonEmpty(parts: ContentPart[]): ContentPart[] {
-  return parts.length > 0 ? parts : [{ type: 'text', text: '' }];
+  /** groupId → derived header summary (e.g. "Read 3 files · Searched 2 patterns"). */
+  readonly summaries: Record<string, string>;
 }
 
 export function mapAssistantBlocks(blocks: DisplayContent[]): MappedAssistantBlocks {
   const parts: ContentPart[] = [];
   const groups: Record<string, string> = {};
+  const summaries: Record<string, string> = {};
   const seen = new Set<string>();
   const uniqueId = (id: string): string => {
     const base = id.length > 0 ? id : `idx-${parts.length}`;
@@ -77,20 +71,6 @@ export function mapAssistantBlocks(blocks: DisplayContent[]): MappedAssistantBlo
         parts.push({ type: 'image', image: `data:${block.mediaType};base64,${block.data}` });
         break;
 
-      case 'skill_loaded':
-        parts.push({
-          type: 'tool-call',
-          toolCallId: uniqueId(`skill:${block.skillName}`),
-          toolName: '_SkillLoaded',
-          args: {
-            skillName: block.skillName,
-            path: block.path,
-            content: block.content,
-          } as unknown as ReadonlyJSONObject,
-          result: 'loaded',
-        });
-        break;
-
       case 'tool_call':
         if (block.category !== 'hidden') {
           parts.push(mapToolCallPart(block, uniqueId(block.id)));
@@ -98,19 +78,22 @@ export function mapAssistantBlocks(blocks: DisplayContent[]): MappedAssistantBlo
         break;
 
       case 'tool_group': {
-        // Flatten to native tool-calls; record the daemon's group membership so
-        // groupBy reconstructs THIS group (not a name-derived approximation).
+        // Flatten to native tool-calls; record the daemon's group membership +
+        // the derived summary so groupBy/ToolGroup reconstruct THIS group.
         const memberIds: string[] = [];
+        const memberNames: { toolName: string }[] = [];
         for (const call of block.calls) {
           if (call.type === 'tool_call' && call.category !== 'hidden') {
             const id = uniqueId(call.id);
             parts.push(mapToolCallPart(call, id));
             memberIds.push(id);
+            memberNames.push({ toolName: call.name });
           }
         }
         if (memberIds.length > 0) {
           const groupId = memberIds[0]!;
           for (const id of memberIds) groups[id] = groupId;
+          summaries[groupId] = toolGroupSummary(memberNames);
         }
         break;
       }
@@ -124,7 +107,7 @@ export function mapAssistantBlocks(blocks: DisplayContent[]): MappedAssistantBlo
           type: 'tool-call',
           toolCallId: uniqueId(block.items[0]?.id ?? ''),
           toolName: '_TaskProgress',
-          args: {
+          args: toJsonArgs<TaskProgressArgs>({
             items: block.items.map((item) => ({
               toolCallId: item.id,
               toolName: item.name,
@@ -132,7 +115,7 @@ export function mapAssistantBlocks(blocks: DisplayContent[]): MappedAssistantBlo
               result: item.result,
               isError: item.result?.isError,
             })),
-          } as unknown as ReadonlyJSONObject,
+          }),
           result: 'accumulated',
         });
         break;
@@ -145,11 +128,11 @@ export function mapAssistantBlocks(blocks: DisplayContent[]): MappedAssistantBlo
         parts.push(PERMISSION_PLACEHOLDER);
         break;
 
-      // 'compaction' — system-level marker, not rendered as an assistant part.
+      // 'skill_loaded' / 'compaction' — system-level, not assistant parts.
     }
   }
 
-  return { parts, groups };
+  return { parts, groups, summaries };
 }
 
 /** `task_group` → a `Task` tool-call part carrying the subagent transcript. */
@@ -158,7 +141,7 @@ function mapTaskGroupPart(block: TaskGroupBlock, toolCallId: string): ContentPar
     type: 'tool-call',
     toolCallId,
     toolName: 'Task',
-    args: { ...(block.taskArgs ?? {}) } as unknown as ReadonlyJSONObject,
+    args: toJsonArgs({ ...(block.taskArgs ?? {}) }),
     result: mapToolResult(block.result, 'Task'),
     isError: block.result?.isError,
     messages: projectSubagentMessages(block),
@@ -169,7 +152,7 @@ function mapTaskGroupPart(block: TaskGroupBlock, toolCallId: string): ContentPar
  * Project a subagent's `task_group.calls` into real `ThreadMessage`s for the
  * native readonly-thread renderer. The prompt (if any) becomes a leading user
  * turn; the agent's work an assistant turn whose metadata carries its OWN group
- * membership (so nested explore tools group correctly inside the transcript).
+ * membership + summaries (so nested explore tools group inside the transcript).
  */
 export function projectSubagentMessages(block: TaskGroupBlock): ThreadMessage[] {
   const likes: ThreadMessageLike[] = [];
@@ -179,13 +162,22 @@ export function projectSubagentMessages(block: TaskGroupBlock): ThreadMessage[] 
     likes.push({ role: 'user', id: `${block.agentId}:prompt`, content: [{ type: 'text', text: prompt }] });
   }
 
-  const { parts, groups } = mapAssistantBlocks(block.calls);
+  const { parts, groups, summaries } = mapAssistantBlocks(block.calls);
+  const mainframe = buildAssistantMainframeMeta(groups, summaries);
   likes.push({
     role: 'assistant',
     id: `${block.agentId}:transcript`,
     content: ensureNonEmpty(parts),
-    ...(Object.keys(groups).length > 0 && { metadata: { custom: { mainframe: { partGroups: groups } } } }),
+    ...(mainframe && { metadata: { custom: { mainframe } } }),
   });
 
   return ExportedMessageRepository.fromArray(likes).messages.map((m) => m.message);
+}
+
+/** The assistant-side mainframe metadata payload, or undefined when empty. */
+export function buildAssistantMainframeMeta(
+  groups: Record<string, string>,
+  summaries: Record<string, string>,
+): { partGroups: Record<string, string>; groupSummaries: Record<string, string> } | undefined {
+  return Object.keys(groups).length > 0 ? { partGroups: groups, groupSummaries: summaries } : undefined;
 }

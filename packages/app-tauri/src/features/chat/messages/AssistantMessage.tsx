@@ -3,31 +3,28 @@
 /**
  * Assistant message renderer — the native GroupedParts dispatch.
  *
- * `groupBy` echoes the daemon's grouping (read from message metadata), so
- * explore runs coalesce exactly as the server decided and standalone tools
- * float onto their own line. Text renders as markdown (MarkdownText), reasoning
- * as a collapsed native block, tools through the registry. A hover action bar
- * (copy / export) + timing footer sit under the turn. The \0 permission sentinel
- * renders nothing (the permission card is sibling chrome, a later leaf).
+ * `groupBy` echoes the daemon's grouping (read from message metadata): explore
+ * runs coalesce into a ToolGroup (header summary carried in metadata), reasoning
+ * coalesces into one collapsed native Reasoning block (auto-open while
+ * streaming), standalone tools float on their own line. Text renders as
+ * markdown, tools through the registry. A hover action bar (copy/export) +
+ * timing footer sit under the turn. The \0 permission sentinel renders nothing.
  */
 import { useMemo } from 'react';
-import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
-import { makeChatGroupBy, type PartGroups } from '../tools/group-parts';
+import { MessagePrimitive } from '@assistant-ui/react';
+import { makeChatGroupBy } from '../tools/group-parts';
+import { useMainframeMeta } from '../view-model/message-meta';
 import { PERMISSION_PLACEHOLDER } from '../view-model/convert-message';
 import { MarkdownText } from '../parts/markdown-text';
-import { Reasoning } from '../parts/Reasoning';
+import {
+  ReasoningRoot,
+  ReasoningTrigger,
+  ReasoningContent,
+  ReasoningText,
+} from '@/components/ui/assistant-ui/reasoning';
 import { MessageToolLeaf, MessageToolGroup } from './tool-dispatch';
 import { MessageActionBar } from './MessageActionBar';
 import { MessageTiming } from './MessageTiming';
-
-const EMPTY_GROUPS: PartGroups = Object.freeze({});
-
-function usePartGroups(): PartGroups {
-  const meta = useAuiState((s) => s.message.metadata) as
-    | { custom?: { mainframe?: { partGroups?: PartGroups } } }
-    | undefined;
-  return meta?.custom?.mainframe?.partGroups ?? EMPTY_GROUPS;
-}
 
 function RunningIndicator() {
   return (
@@ -40,18 +37,35 @@ function RunningIndicator() {
 }
 
 export function AssistantMessage() {
-  const partGroups = usePartGroups();
-  const groupBy = useMemo(() => makeChatGroupBy(partGroups), [partGroups]);
+  const meta = useMainframeMeta();
+  const groupBy = useMemo(() => makeChatGroupBy(meta.partGroups ?? {}), [meta.partGroups]);
+  const summaries = meta.groupSummaries;
 
   return (
     <MessagePrimitive.Root data-testid="chat-assistant-message" className="group/message flex flex-col gap-2 py-3">
       <MessagePrimitive.GroupedParts groupBy={groupBy}>
         {({ part, children }) => {
-          // GroupPart nodes carry `indices`; leaf parts (EnrichedPartState /
-          // IndicatorPart) do not — only tool groups are produced now.
+          // GroupPart nodes carry `indices`; leaf parts do not.
           if ('indices' in part) {
+            if (part.type === 'group-reasoning') {
+              const running = part.status?.type === 'running';
+              return (
+                <ReasoningRoot defaultOpen={running}>
+                  <ReasoningTrigger />
+                  <ReasoningContent aria-busy={running}>
+                    <ReasoningText>{children}</ReasoningText>
+                  </ReasoningContent>
+                </ReasoningRoot>
+              );
+            }
+            // group-tool-<groupId>: the summary was derived in the projection.
+            const groupId = part.type.slice('group-tool-'.length);
             return (
-              <MessageToolGroup indices={part.indices} running={part.status?.type === 'running'}>
+              <MessageToolGroup
+                indices={part.indices}
+                running={part.status?.type === 'running'}
+                summary={summaries?.[groupId]}
+              >
                 {children}
               </MessageToolGroup>
             );
@@ -59,11 +73,10 @@ export function AssistantMessage() {
 
           switch (part.type) {
             case 'text':
-              // Hide the permission sentinel; everything else is markdown.
               // MarkdownText reads the text from part context; props satisfy the type.
               return part.text === PERMISSION_PLACEHOLDER.text ? null : <MarkdownText {...part} />;
             case 'reasoning':
-              return <Reasoning text={part.text} />;
+              return <div className="whitespace-pre-wrap">{part.text}</div>;
             case 'tool-call':
               return <MessageToolLeaf part={part} />;
             case 'image':

@@ -22,7 +22,6 @@ import {
 } from './cards/SchedulePillCard';
 import { EnterWorktreeCard, ExitWorktreeCard } from './cards/WorktreeStatusPillCard';
 import { SlashCommandCard } from './cards/SlashCommandCard';
-import { SkillLoadedCard } from './cards/SkillLoadedCard';
 import { TaskCard } from './cards/TaskCard';
 import { TaskProgressCard } from './cards/TaskProgressCard';
 
@@ -49,7 +48,6 @@ Object.assign(TOOL_REGISTRY, {
   EnterWorktree: EnterWorktreeCard,
   ExitWorktree: ExitWorktreeCard,
   Skill: SlashCommandCard,
-  _SkillLoaded: SkillLoadedCard,
   // subagent + progress
   Task: TaskCard,
   _TaskProgress: TaskProgressCard,

@@ -6,15 +6,10 @@
  * Deltas: BrainIcon→SparklesIcon, collapsed default, "Thought for Ns" copy,
  * warm-chrome tokens (no /opacity on --mf-* vars), data-testid on trigger.
  */
-import { memo, useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { SparklesIcon, ChevronDownIcon } from 'lucide-react';
-import {
-  useScrollLock,
-  useAuiState,
-  type ReasoningMessagePartComponent,
-  type ReasoningGroupComponent,
-} from '@assistant-ui/react';
+import { useScrollLock } from '@assistant-ui/react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
@@ -217,57 +212,7 @@ function ReasoningText({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-// ── ReasoningGroupImpl — the GroupedParts integration ─────────────────────────
-
-const ReasoningGroupImpl: ReasoningGroupComponent = ({ children, startIndex, endIndex }) => {
-  const isReasoningStreaming = useAuiState((s) => {
-    if (s.message.status?.type !== 'running') return false;
-    const lastIndex = s.message.parts.length - 1;
-    if (lastIndex < 0) return false;
-    const lastType = s.message.parts[lastIndex]?.type;
-    if (lastType !== 'reasoning') return false;
-    return lastIndex >= startIndex && lastIndex <= endIndex;
-  });
-
-  return (
-    <ReasoningRoot defaultOpen={isReasoningStreaming}>
-      <ReasoningTrigger active={isReasoningStreaming} />
-      <ReasoningContent aria-busy={isReasoningStreaming}>
-        <ReasoningText>{children}</ReasoningText>
-      </ReasoningContent>
-    </ReasoningRoot>
-  );
-};
-
-// ── ReasoningImpl — leaf used by MessagePrimitive.Parts ───────────────────────
-// Renders nothing on its own; the GroupedParts path (ReasoningGroup) is canonical.
-const ReasoningImpl: ReasoningMessagePartComponent = () => null;
-
-const Reasoning = memo(ReasoningImpl) as unknown as ReasoningMessagePartComponent & {
-  Root: typeof ReasoningRoot;
-  Trigger: typeof ReasoningTrigger;
-  Content: typeof ReasoningContent;
-  Text: typeof ReasoningText;
-  Fade: typeof ReasoningFade;
-};
-
-Reasoning.displayName = 'Reasoning';
-Reasoning.Root = ReasoningRoot;
-Reasoning.Trigger = ReasoningTrigger;
-Reasoning.Content = ReasoningContent;
-Reasoning.Text = ReasoningText;
-Reasoning.Fade = ReasoningFade;
-
-const ReasoningGroup = memo(ReasoningGroupImpl);
-ReasoningGroup.displayName = 'ReasoningGroup';
-
-export {
-  Reasoning,
-  ReasoningGroup,
-  ReasoningRoot,
-  ReasoningTrigger,
-  ReasoningContent,
-  ReasoningText,
-  ReasoningFade,
-  reasoningVariants,
-};
+// Composed directly by AssistantMessage's `group-reasoning` case (one
+// ReasoningRoot wrapping the grouped reasoning leaves) — the canonical
+// GroupedParts pattern, so no ReasoningGroup/leaf wrapper is needed here.
+export { ReasoningRoot, ReasoningTrigger, ReasoningContent, ReasoningText, ReasoningFade, reasoningVariants };

@@ -46,6 +46,44 @@ export function stripErrorXml(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// resolveResultText — centralized 3-way result ladder
+// ---------------------------------------------------------------------------
+
+export interface ResolvedResult {
+  /** Cleaned display text (stripErrorXml applied). Empty string when no result yet. */
+  text: string;
+  /** True when the daemon truncated the output and provided a fullBytes count. */
+  truncated: boolean;
+  /** Full byte count if truncated, 0 otherwise. */
+  fullBytes: number;
+}
+
+/**
+ * Centralises the three-way result ladder that every tool card repeats:
+ *   1. ToolCallResult (has .content + structuredPatch) → use .content
+ *   2. TruncatedResult (has .truncated + .fullBytes)   → use .content
+ *   3. plain string                                    → use as-is
+ *   4. other object / undefined                        → JSON.stringify / ''
+ *
+ * stripErrorXml is always applied to the raw text before returning.
+ */
+export function resolveResultText(result: unknown): ResolvedResult {
+  if (isStructuredResult(result)) {
+    return { text: stripErrorXml(result.content), truncated: false, fullBytes: 0 };
+  }
+  if (isTruncatedResult(result)) {
+    return { text: stripErrorXml(result.content), truncated: true, fullBytes: result.fullBytes };
+  }
+  if (typeof result === 'string') {
+    return { text: stripErrorXml(result), truncated: false, fullBytes: 0 };
+  }
+  if (result !== undefined && result !== null) {
+    return { text: JSON.stringify(result, null, 2), truncated: false, fullBytes: 0 };
+  }
+  return { text: '', truncated: false, fullBytes: 0 };
+}
+
+// ---------------------------------------------------------------------------
 // ToolCardProps — shared prop interface for every per-family tool card
 // ---------------------------------------------------------------------------
 

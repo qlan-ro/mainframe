@@ -5,10 +5,9 @@
  * truncation / AskUserQuestion) lives in one place and is reused by both the
  * top-level assistant message and the subagent transcript.
  */
-import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { DisplayContent, ToolCallResult } from '@qlan-ro/mainframe-types';
+import { type ContentPart, toJsonArgs } from './content';
 
-type ContentPart = Exclude<ThreadMessageLike['content'], string>[number];
 type ToolCallBlock = DisplayContent & { type: 'tool_call' };
 
 /**
@@ -44,7 +43,7 @@ export function mapToolCallPart(block: ToolCallBlock, toolCallId: string): Conte
     type: 'tool-call',
     toolCallId,
     toolName: block.name,
-    args: block.input as import('assistant-stream/utils').ReadonlyJSONObject,
+    args: toJsonArgs(block.input),
     result: mapToolResult(block.result, block.name),
     isError: block.result?.isError,
   };

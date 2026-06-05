@@ -1,24 +1,21 @@
 /**
  * SearchCard — compact collapsible card for 'Glob', 'Grep', and 'LS' tools.
  *
- * Family: Search (purple, #9b59c4). One component, switches on part.toolName.
+ * Family: Search (purple #9b59c4). One component, switches on part.toolName.
  * Header: family tile + tool verb + quoted pattern/glob + optional "in {path}" sub-header.
- * Body (collapsed by default):
- *   - Grep structured output → clickable match rows (file + :line + text).
+ * Body (collapsed by default): plain match-list pre or ErrorBody.
  *   - TruncatedResult → ToolResultExpand.
- *   - Other string/JSON → pre listing.
- *   - isError → destructive-tinted pre.
+ *   - All string/JSON results → pre listing (the daemon never returns a
+ *     structured GrepMatch array — that dead path has been removed).
  *
  * Token rules: no /opacity modifier on --mf-* hex vars.
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { SearchIcon } from 'lucide-react';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import { StatusDot, cardStyle, isTruncatedResult, stripErrorXml, shortFilename } from '../shared';
+import { StatusDot, CollapsibleCardShell, FamilyTile, ErrorBody, resolveResultText } from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
-import { useChatId, useOpenFile } from '../chat-tool-context';
+import { useChatId } from '../chat-tool-context';
 
 // ---------------------------------------------------------------------------
 // Family constants
@@ -38,84 +35,10 @@ function verbFor(toolName: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Grep match row (structured result)
+// PlainBody — pre for plain search results
 // ---------------------------------------------------------------------------
 
-interface GrepMatch {
-  file: string;
-  line?: number;
-  text?: string;
-}
-
-function isGrepMatchArray(v: unknown): v is GrepMatch[] {
-  return (
-    Array.isArray(v) &&
-    v.length > 0 &&
-    typeof (v as unknown[])[0] === 'object' &&
-    (v as unknown[])[0] !== null &&
-    'file' in ((v as unknown[])[0] as object)
-  );
-}
-
-interface GrepMatchRowProps {
-  match: GrepMatch;
-  onOpen: (path: string) => void;
-}
-
-function GrepMatchRow({ match, onOpen }: GrepMatchRowProps) {
-  const handleClick = () => onOpen(match.file);
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onOpen(match.file);
-    }
-  };
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      data-testid="search-card-match-row"
-      className="flex items-baseline gap-2.5 px-3 py-0.5 cursor-pointer font-mono text-caption hover:bg-accent transition-colors"
-      onClick={handleClick}
-      onKeyDown={handleKey}
-    >
-      <span className="shrink-0 text-mf-code-fn truncate max-w-[240px]" title={match.file}>
-        {shortFilename(match.file)}
-      </span>
-      {match.line !== undefined && <span className="shrink-0 text-mf-text-4">:{match.line}</span>}
-      {match.text && (
-        <span className="text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
-          {match.text}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Result body variants
-// ---------------------------------------------------------------------------
-
-interface BodyProps {
-  resultText: string;
-  isError: boolean | undefined;
-}
-
-function PlainBody({ resultText, isError }: BodyProps) {
-  if (isError) {
-    return (
-      <div className="relative">
-        <div className="absolute inset-0 bg-destructive opacity-10 pointer-events-none" aria-hidden />
-        <pre
-          data-testid="search-card-error-body"
-          className="relative font-mono text-caption whitespace-pre-wrap break-words px-3 py-2 max-h-[300px] overflow-y-auto text-destructive"
-        >
-          {resultText}
-        </pre>
-      </div>
-    );
-  }
+function PlainBody({ resultText }: { resultText: string }) {
   return (
     <pre
       data-testid="search-card-plain-body"
@@ -132,7 +55,6 @@ function PlainBody({ resultText, isError }: BodyProps) {
 
 export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId, args, result, isError }) => {
   const chatId = useChatId();
-  const { openFile } = useOpenFile();
 
   const pattern =
     typeof args['pattern'] === 'string'
@@ -144,129 +66,79 @@ export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId,
           : '';
   const searchPath = typeof args['path'] === 'string' ? args['path'] : '';
 
-  const truncated = isTruncatedResult(result);
-
-  // Determine raw text for display
-  const rawText =
-    typeof result === 'string'
-      ? result
-      : truncated
-        ? result.content
-        : result !== undefined
-          ? JSON.stringify(result, null, 2)
-          : undefined;
-  const resultText = rawText ? stripErrorXml(rawText) : undefined;
-
-  // Try to parse structured grep results when toolName is Grep
-  let grepMatches: GrepMatch[] | null = null;
-  if (toolName === 'Grep' && typeof result === 'string') {
-    try {
-      const parsed: unknown = JSON.parse(result);
-      if (isGrepMatchArray(parsed)) grepMatches = parsed;
-    } catch {
-      // Not JSON — fall through to plain text rendering
-    }
-  } else if (toolName === 'Grep' && isGrepMatchArray(result)) {
-    grepMatches = result;
-  }
-
-  const hasBody = resultText !== undefined;
+  const { text: resultText, truncated, fullBytes } = resolveResultText(result);
+  const hasBody = Boolean(resultText);
   const verb = verbFor(toolName);
 
-  return (
-    <Collapsible
-      data-testid="search-card-root"
-      defaultOpen={false}
-      className={cn(cardStyle(result, isError), 'w-full')}
-    >
-      {/* Header */}
-      <CollapsibleTrigger
-        data-testid="search-card-trigger"
-        disabled={!hasBody}
-        className={cn(
-          'flex w-full items-center gap-2 px-2.5 py-1.5',
-          'text-body transition-colors hover:bg-accent',
-          !hasBody && 'cursor-default',
-        )}
-      >
-        <span
-          aria-hidden
-          className="flex shrink-0 items-center justify-center w-[22px] h-[22px] rounded-md"
-          style={{ backgroundColor: FAMILY_BG }}
-        >
-          <SearchIcon size={13} style={{ color: FAMILY_COLOR }} />
-        </span>
+  const tile = (
+    <FamilyTile color={FAMILY_COLOR} bg={FAMILY_BG}>
+      <SearchIcon size={13} style={{ color: FAMILY_COLOR }} />
+    </FamilyTile>
+  );
 
-        <span className="text-label font-semibold text-muted-foreground shrink-0">{verb}</span>
+  const patternTarget = pattern ? (
+    <>
+      <span className="text-mf-text-4 shrink-0">·</span>
+      <code className="font-mono text-caption text-muted-foreground truncate min-w-0 max-w-[200px]" title={pattern}>
+        &quot;{pattern}&quot;
+      </code>
+    </>
+  ) : null;
 
-        {pattern && (
-          <>
-            <span className="text-mf-text-4 shrink-0">·</span>
-            <code
-              className="font-mono text-caption text-muted-foreground truncate min-w-0 max-w-[200px]"
-              title={pattern}
-            >
-              &quot;{pattern}&quot;
-            </code>
-          </>
-        )}
+  const trailing = <StatusDot result={result} isError={isError} />;
 
-        <div className="flex-1 min-w-2" />
-        <StatusDot result={result} isError={isError} />
-      </CollapsibleTrigger>
+  const subHeader = searchPath ? (
+    <div className="px-2.5 pb-1 pl-[38px]">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            data-testid="search-card-path"
+            className="font-mono text-micro text-mf-text-4 truncate block cursor-default"
+            tabIndex={0}
+          >
+            in {searchPath}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{searchPath}</TooltipContent>
+      </Tooltip>
+    </div>
+  ) : null;
 
-      {/* Sub-header: search path */}
-      {searchPath && (
-        <div className="px-2.5 pb-1 pl-[38px]">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                data-testid="search-card-path"
-                className="font-mono text-micro text-mf-text-4 truncate block cursor-default"
-                tabIndex={0}
-              >
-                in {searchPath}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{searchPath}</TooltipContent>
-          </Tooltip>
+  const body = hasBody ? (
+    <div className="border-t border-border py-1.5">
+      {truncated && chatId ? (
+        <div className="px-3 py-1">
+          <ToolResultExpand
+            chatId={chatId}
+            toolUseId={toolCallId}
+            truncatedContent={resultText}
+            fullBytes={fullBytes}
+          />
         </div>
+      ) : isError ? (
+        <ErrorBody text={resultText} testId="search-card-error-body" />
+      ) : (
+        <PlainBody resultText={resultText} />
       )}
+    </div>
+  ) : null;
 
-      {/* Body */}
-      {hasBody && (
-        <CollapsibleContent
-          data-testid="search-card-content"
-          className={cn(
-            'overflow-hidden',
-            'data-[state=open]:animate-collapsible-down',
-            'data-[state=closed]:animate-collapsible-up',
-            'data-[state=closed]:fill-mode-forwards',
-          )}
-        >
-          <div className="border-t border-border py-1.5">
-            {truncated && chatId ? (
-              <div className="px-3 py-1">
-                <ToolResultExpand
-                  chatId={chatId}
-                  toolUseId={toolCallId}
-                  truncatedContent={resultText ?? ''}
-                  fullBytes={result.fullBytes}
-                />
-              </div>
-            ) : grepMatches ? (
-              <div data-testid="search-card-grep-matches">
-                {grepMatches.map((m, i) => (
-                  <GrepMatchRow key={`${m.file}-${m.line ?? i}`} match={m} onOpen={openFile} />
-                ))}
-              </div>
-            ) : (
-              <PlainBody resultText={resultText ?? ''} isError={isError} />
-            )}
-          </div>
-        </CollapsibleContent>
-      )}
-    </Collapsible>
+  return (
+    <CollapsibleCardShell
+      testId="search-card-root"
+      triggerId="search-card-trigger"
+      result={result}
+      isError={isError}
+      defaultOpen={false}
+      disableTrigger={!hasBody}
+      tile={tile}
+      verb={verb}
+      target={patternTarget}
+      trailing={trailing}
+      subHeader={subHeader}
+    >
+      {body}
+    </CollapsibleCardShell>
   );
 };
 
