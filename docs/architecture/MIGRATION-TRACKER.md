@@ -18,7 +18,7 @@
 - ☑ **Runtime decision** — `useExternalStoreRuntime` + per-chat controller, modeled on `@assistant-ui/react-opencode` (ADR).
 - ☑ **Chat seam Phase 1** — drift-free, no message cache; reconnect re-syncs (`de4a73d1`).
 - ☑ **AI toolkit** — skills (tauri-v2/shadcn/assistant-ui/radix/rust-best-practices), agents (tauri-shell-engineer/renderer-porter/design-conformance), review-gate hook.
-- ◐ **Chat seam Phase 2A** — restructure to controller/reducer + extras + refetch-on-gap (in progress).
+- ☑ **Chat seam Phase 2A** — controller/reducer + `handle-daemon-event` + projection + `extras` + refetch-on-gap; dead Phase-1 spine removed; drift/gap empirically verified (`98f43f5a`).
 
 ---
 
@@ -46,7 +46,7 @@
 
 ### Chat thread → `features/chat/{runtime,thread,tools,parts,find}`
 - ☑ `refactor` convert-message.ts (projection) — *ported Phase 1, WS14c invariants preserved*
-- ◐ `refactor` runtime provider (MainframeRuntimeProvider → controller/reducer + extras) — *Phase 2A*
+- ☑ `refactor` runtime provider → controller/reducer + `extras` + refetch-on-gap (Phase 2A, `98f43f5a`)
 - ☐ `refactor` message components (Assistant/User/System/TurnFooter/RenderBoundary)
 - ☐ `refactor` tool cards (Edit/Write/Bash/Read/Search/Task/TaskGroup/ToolGroup/TaskProgress/MCP/Default/Plan/Skill/Worktree/Schedule + Collapsible + shared)
 - ☐ `replace` **unify the dual tool dispatcher** → single registry (renderToolCard canonical for nested groups)
