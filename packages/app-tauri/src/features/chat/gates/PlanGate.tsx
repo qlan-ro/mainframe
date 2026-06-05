@@ -121,12 +121,12 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
   const plan = (entry.request.input.plan as string | undefined) ?? '';
 
   const handleApprove = () => {
-    void reply(buildPlanResponse(entry, { kind: 'approve', executionMode: execMode, clearContext }));
+    void reply(entry.requestId, buildPlanResponse(entry, { kind: 'approve', executionMode: execMode, clearContext }));
   };
 
   const handleSendFeedback = () => {
     if (!feedback.trim()) return;
-    void reply(buildPlanResponse(entry, { kind: 'revise', feedback }));
+    void reply(entry.requestId, buildPlanResponse(entry, { kind: 'revise', feedback }));
   };
 
   return (

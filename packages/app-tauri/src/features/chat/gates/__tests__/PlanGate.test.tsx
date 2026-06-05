@@ -79,7 +79,7 @@ describe('PlanGate', () => {
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith({
+    expect(reply).toHaveBeenCalledWith('r1', {
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
@@ -97,7 +97,7 @@ describe('PlanGate', () => {
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith({
+    expect(reply).toHaveBeenCalledWith('r1', {
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
@@ -115,7 +115,7 @@ describe('PlanGate', () => {
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith({
+    expect(reply).toHaveBeenCalledWith('r1', {
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
@@ -152,7 +152,7 @@ describe('PlanGate', () => {
     fireEvent.click(sendBtn);
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith({
+    expect(reply).toHaveBeenCalledWith('r1', {
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
