@@ -29,14 +29,14 @@
 Durable capture so these aren't lost (the full write-ups live in volatile `/tmp` handoffs: `handoff-architecture-review.md`, `handoff-features-chat-restructure.md`, `handoff-permissions-ask-plan-cards.md`). **Sequence: type/contract fixes → silent-failure UX → tests → restructure LAST (mechanical, moves-only).** Don't collapse the controller/reducer/projection spine — it's praised as clean.
 
 **🔴 Critical**
-- ◐ **ws-client drops frames silently** — `lib/daemon/ws-client.ts:94` only buffers while CONNECTING; CLOSED/CLOSING → `console.warn` + drop. **Permission-hang half RESOLVED this session** (`770a6c0a`): `replyToPermission` still drops the gate optimistically, but a 3s **verify-timer** re-reads the daemon's pending and restores the gate if the `permission.respond` was dropped; the ack-fallback no longer resumes while disconnected; a restore skips a just-answered tool use. **Still open:** a dropped `message.send` silently fails (buffer on CLOSED/CLOSING, or signal the drop). *(codex #2 + arch.)*
+- ☑ **ws-client drops frames silently** — RESOLVED (2026-06-06). Permission-hang half via the 3s verify-timer + connected-gated ack-fallback + restore-stale guard (`770a6c0a`); and `send()` now **buffers on any non-OPEN state** and kicks a reconnect (flushed on `onopen`) instead of dropping a `message.send`/`permission.respond` (H2, `7181e058`). *(codex #2 + arch.)*
 
 **🟠 High**
-- ☐ **`noUncheckedIndexedAccess` is OFF package-wide** — `app-tauri/tsconfig.json` doesn't `extend` `tsconfig.base.json`. Make it extend (or set the flag) + fix the surfaced index errors. Do this BEFORE the card cleanups. Add a `vitest.config.ts` coverage threshold (none today).
-- ☐ **Dead optimistic send-failure path** — `project-messages.ts` writes `pending`/`error` to meta, but `MainframeMessageMeta` declares neither and `UserMessage` reads neither → a failed send looks identical to a sent one (no toast infra). Add the fields + render a failed/retry bubble; surface `runState.type==='error'`.
-- ☐ **Unvalidated daemon boundaries (Zod rule)** — `ws-client.ts:53` `JSON.parse as DaemonEvent`; `convert-message.ts:40` blind-cast user metadata. Validate at the WS seam + a `coerceUserMeta`. *(codex #6 + arch.)*
-- ☐ **Daemon `error` events dropped** — `handle-daemon-event.ts` has no `case 'error'` (types:23) → server-side failures never surface as `run.failed`/visible errors. *(codex #7; adjacent to the dead-error-path fix.)*
-- ☐ **6× `s as unknown as {message}` casts** — replace with `useMessage((m)=>…)` (ScopeRegistry is empty); collapses all to one selector boundary.
+- ☑ **`noUncheckedIndexedAccess` ON** — set in `app-tauri/tsconfig.json` (**0 new errors** — the code was already index-safe) + a `vitest.config.ts` coverage floor (none before) (H1, `5fd7733d`).
+- ☑ **Optimistic send-failure is now visible** — `MainframeMessageMeta` declares `pending`/`clientId`/`error` (project-messages already wrote them); `UserMessage` renders a "Failed to send" indicator so a failed send no longer looks sent (H5, `841effe2`). *(retry-resend still needs controller wiring — minor follow-up.)*
+- ☑ **Daemon boundaries validated** — `ws-client.onmessage` drops malformed frames (object + string `type` guard; deliberately NOT re-declaring the `DaemonEvent` union); `convert-message` uses `coerceUserMeta` (type-checked extraction) instead of a blind cast (H4, `7181e058`). *(codex #6 + arch.)*
+- ☑ **Daemon `error` events surface** — `handle-daemon-event` maps `{type:'error'}` → `run.failed` (global or this-chat; other chats ignored) (H3, `f46fecb6`). *(codex #7.)*
+- ☑ **Unsound message casts removed** — the 3 `as unknown as {message}` reads were unnecessary (typed via the ScopeRegistry); replaced with direct `useAuiState` selectors (H6, `841effe2`).
 - ☐ **`features/chat/` directory restructure** — the refined tree in `handoff-architecture-review.md` (decision: **keep `controller/runtime/view-model` flat, NO `data/`**; move `tool-dispatch`→`tools/`, `tool-group-summary`→`view-model/`; sub-split `cards/` by family + `composer/` into `config-toolbar/`+`edit/`; add a `README` charter). Mechanical, moves-only — **do last**.
 
 **🟡 Medium**
@@ -46,7 +46,7 @@ Durable capture so these aren't lost (the full write-ups live in volatile `/tmp`
 - ☐ **cancel_failed UI surfacing** — the reducer now handles `queued.cancel_failed` (state-preserving) but there's no user feedback when a queued cancel fails (needs the toast infra above).
 
 **🟢 Low**
-- ☐ **CLAUDE.md drift** — prescribes `composer.setRunConfig` + `useChatQuestions` (neither exists; config flows via REST). Reconcile + move the inert-runtime-hooks footgun note to the code sites; add the `chat/README.md` charter.
+- ☑ **CLAUDE.md drift** — the `composer.setRunConfig` note is corrected (config flows via REST + is server-authoritative, judo-B) and the count-aware reconcile + response-only reply seam are documented (`3391a256`). *(The `chat/README.md` charter is still a nice-to-have — folded into the restructure item above.)*
 - ☐ **`TaskProgressCard` imports from the core sidecar** (`@qlan-ro/mainframe-core/messages`, undeclared dep) — move the type to `mainframe-types` or reuse the local one; drop the no-op enum casts.
 
 **✅ Already handled this session (not deferred):** codex #3 (subscribe-ack), #4 (queued snapshot rehydration), #5 (attachment reconcile) — fixed (`4b70efe1`) + tested + codex-APPROVED. codex #1 (gates not mounted) — the **parallel gates session** mounted inline gate dispatch (`35054382`). The thermo-nuclear batch (crash fix, `request<T>`, controller seam, dead-code, fullBytes de-casts, typed factory) — landed + tested. **Sandbox captures in the user message** — see the dedicated deferred line under *Composer* below.
