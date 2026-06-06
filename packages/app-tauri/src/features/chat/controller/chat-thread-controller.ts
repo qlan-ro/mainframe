@@ -259,13 +259,14 @@ export class ChatThreadController {
     }
   }
 
-  public async replyToPermission(requestId: string, response: ControlResponse): Promise<void> {
+  public async replyToPermission(response: ControlResponse): Promise<void> {
     // Optimistically drop the gate, but remember we answered this tool use so a
     // racing restore (subscribe/reconnect REST read of the not-yet-cleared
     // pending) doesn't resurrect it, and verify the answer actually landed.
+    // `response.requestId` is the request's own id — no separate arg to desync.
     this.recentlyRepliedToolUseIds.add(response.toolUseId);
     this.ws.send({ type: 'permission.respond', chatId: this.chatId, response });
-    this.dispatch({ type: 'permission.resolved', requestId });
+    this.dispatch({ type: 'permission.resolved', requestId: response.requestId });
     this.verifyPermissionDelivered(response.toolUseId);
   }
 

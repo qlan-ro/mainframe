@@ -89,7 +89,7 @@ export interface PermissionGateProps {
 export function PermissionGate({ entry, reply }: PermissionGateProps) {
   const { request } = entry;
 
-  const send = (kind: 'deny' | 'once' | 'always') => void reply(entry.requestId, buildPermissionResponse(entry, kind));
+  const send = (kind: 'deny' | 'once' | 'always') => void reply(buildPermissionResponse(entry, kind));
 
   return (
     <div data-testid="chat-permission-gate">

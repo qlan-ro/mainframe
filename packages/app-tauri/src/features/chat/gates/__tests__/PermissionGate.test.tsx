@@ -99,7 +99,7 @@ describe('PermissionGate', () => {
     fireEvent.click(screen.getByTestId('chat-permission-deny'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith('r1', {
+    expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'Bash',
@@ -114,7 +114,7 @@ describe('PermissionGate', () => {
     fireEvent.click(screen.getByTestId('chat-permission-allow-once'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith('r1', {
+    expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'Bash',
@@ -139,7 +139,7 @@ describe('PermissionGate', () => {
     fireEvent.click(screen.getByTestId('chat-permission-always-allow'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith('r1', {
+    expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'Bash',

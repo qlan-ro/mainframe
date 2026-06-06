@@ -16,7 +16,7 @@
  *  - permissions    — Record<requestId, ChatPermissionEntry> (pending only)
  *  - queued         — Record<uuid, QueuedMessageRef> (queued messages waiting)
  *  - cancel()       — interrupt the current run
- *  - replyToPermission(requestId, response) — send a permission response
+ *  - replyToPermission(response) — send a permission response
  */
 import { useExternalStoreRuntime, useAuiState } from '@assistant-ui/react';
 import { createAttachmentAdapter } from '../composer/attachment-adapter';
@@ -45,7 +45,7 @@ export interface ChatRuntimeExtras {
   readonly queued: Readonly<Record<string, QueuedMessageRef>>;
   readonly port: number;
   readonly cancel: () => Promise<void>;
-  readonly replyToPermission: (requestId: string, response: ControlResponse) => Promise<void>;
+  readonly replyToPermission: (response: ControlResponse) => Promise<void>;
   readonly cancelQueued: (messageId: string) => Promise<void>;
   readonly editQueued: (messageId: string, content: string) => Promise<void>;
 }
@@ -102,7 +102,7 @@ export function useChatThreadRuntime(controller: ChatThreadController, port: num
       queued: state.interactions.queued,
       port,
       cancel: () => controller.cancel(),
-      replyToPermission: (requestId, response) => controller.replyToPermission(requestId, response),
+      replyToPermission: (response) => controller.replyToPermission(response),
       cancelQueued: (messageId) => controller.cancelQueued(messageId),
       editQueued: (messageId, content) => controller.editQueued(messageId, content),
     }),
@@ -135,23 +135,6 @@ export function useChatExtras(): ChatRuntimeExtras | undefined {
   );
 }
 
-/** Pending permission requests as an array. */
-export function useChatPermissions(): {
-  pending: ChatPermissionEntry[];
-  reply: (requestId: string, response: ControlResponse) => Promise<void>;
-} {
-  const extras = useChatExtras();
-  return useMemo(() => {
-    const pending = extras ? Object.values(extras.permissions).filter((e): e is ChatPermissionEntry => e != null) : [];
-    const reply: (requestId: string, response: ControlResponse) => Promise<void> =
-      extras?.replyToPermission ??
-      (async () => {
-        throw new Error('Chat runtime not ready');
-      });
-    return { pending, reply };
-  }, [extras]);
-}
-
 /** Queued messages (waiting to be sent to the CLI). */
 export function useChatQueuedMessages(): QueuedMessageRef[] {
   const extras = useChatExtras();
@@ -164,12 +147,12 @@ export function useChatQueuedMessages(): QueuedMessageRef[] {
 /** Queue-front gate: pending sorted by askedAt asc, take [0]. Stable ref via useMemo([extras]). */
 export function useChatPermissionFront(): {
   front: ChatPermissionEntry | undefined;
-  reply: (requestId: string, response: ControlResponse) => Promise<void>;
+  reply: (response: ControlResponse) => Promise<void>;
 } {
   const extras = useChatExtras();
   return useMemo(() => {
     const front = selectPermissionFront(extras?.permissions);
-    const reply: (requestId: string, response: ControlResponse) => Promise<void> =
+    const reply: (response: ControlResponse) => Promise<void> =
       extras?.replyToPermission ??
       (async () => {
         throw new Error('Chat runtime not ready');

@@ -121,7 +121,7 @@ describe('ChatGateMount', () => {
     fireEvent.click(screen.getByTestId('chat-permission-deny'));
 
     expect(localReply).toHaveBeenCalledTimes(1);
-    expect(localReply).toHaveBeenCalledWith('r1', {
+    expect(localReply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'Bash',

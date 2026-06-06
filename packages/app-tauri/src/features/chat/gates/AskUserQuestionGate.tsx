@@ -5,7 +5,7 @@ import { GateCardShell, GateHead } from './shared/GateShell';
 import { GateButton } from './shared/GateButton';
 import { buildAskUserQuestionResponse } from './build-control-response';
 import { AskQuestionWizard } from './AskQuestionWizard';
-import { assembleAnswers, OTHER } from './answers';
+import { assembleAnswers, resolveChosen } from './answers';
 import type { AskQuestion } from './answers';
 import type { ReplyFn } from './gate-types';
 
@@ -40,16 +40,13 @@ function toggle(
   return next;
 }
 
-/** Mirror assembleAnswers for a single question to decide if it is answered. */
+/** Decide if a single question has at least one resolved answer. */
 function isQuestionAnswered(
   qIdx: number,
   selections: ReadonlyMap<number, ReadonlySet<string>>,
   otherText: ReadonlyMap<number, string>,
 ): boolean {
-  const chosen = [...(selections.get(qIdx) ?? new Set<string>())]
-    .map((label) => (label === OTHER ? (otherText.get(qIdx) ?? '').trim() : label))
-    .filter(Boolean);
-  return chosen.length > 0;
+  return resolveChosen([...(selections.get(qIdx) ?? new Set<string>())], otherText.get(qIdx) ?? '').length > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,7 +125,7 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
   );
 
   const handleSkip = useCallback(() => {
-    void reply(entry.requestId, buildAskUserQuestionResponse(entry, undefined));
+    void reply(buildAskUserQuestionResponse(entry, undefined));
   }, [entry, reply]);
 
   const handleBack = useCallback(() => {
@@ -141,7 +138,7 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
 
   const handleSubmit = useCallback(() => {
     const answers = assembleAnswers(questions, selections, otherText);
-    void reply(entry.requestId, buildAskUserQuestionResponse(entry, answers));
+    void reply(buildAskUserQuestionResponse(entry, answers));
   }, [entry, questions, reply, selections, otherText]);
 
   const eyebrow = isMulti ? 'Question · select all that apply' : 'Question';

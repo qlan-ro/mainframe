@@ -107,10 +107,12 @@ function ReviseRow({
   feedback,
   setFeedback,
   onSend,
+  onCancel,
 }: {
   feedback: string;
   setFeedback: (v: string) => void;
   onSend: () => void;
+  onCancel: () => void;
 }) {
   return (
     <div className="flex flex-col gap-2 px-3.5 pb-3">
@@ -122,7 +124,10 @@ function ReviseRow({
         onChange={(e) => setFeedback(e.target.value)}
         className="resize-none"
       />
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <GateButton kind="ghost" data-testid="chat-plan-revise-cancel" onClick={onCancel}>
+          Cancel
+        </GateButton>
         <GateButton
           kind="primary"
           data-testid="chat-plan-send-feedback"
@@ -149,12 +154,12 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
   const plan = (entry.request.input.plan as string | undefined) ?? '';
 
   const handleApprove = () => {
-    void reply(entry.requestId, buildPlanResponse(entry, { kind: 'approve', executionMode: execMode, clearContext }));
+    void reply(buildPlanResponse(entry, { kind: 'approve', executionMode: execMode, clearContext }));
   };
 
   const handleSendFeedback = () => {
     if (!feedback.trim()) return;
-    void reply(entry.requestId, buildPlanResponse(entry, { kind: 'revise', feedback }));
+    void reply(buildPlanResponse(entry, { kind: 'revise', feedback }));
   };
 
   return (
@@ -175,7 +180,12 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
           setClearContext={setClearContext}
         />
         {revising ? (
-          <ReviseRow feedback={feedback} setFeedback={setFeedback} onSend={handleSendFeedback} />
+          <ReviseRow
+            feedback={feedback}
+            setFeedback={setFeedback}
+            onSend={handleSendFeedback}
+            onCancel={() => setRevising(false)}
+          />
         ) : (
           <ActionRow onApprove={handleApprove} onKeepPlanning={() => setRevising(true)} />
         )}

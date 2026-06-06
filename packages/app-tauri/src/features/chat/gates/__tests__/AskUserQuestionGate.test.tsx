@@ -131,7 +131,7 @@ describe('AskUserQuestionGate', () => {
     fireEvent.click(screen.getByTestId('chat-question-submit'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith('r1', {
+    expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'AskUserQuestion',
@@ -142,7 +142,7 @@ describe('AskUserQuestionGate', () => {
       }),
     });
     // answers must be exact
-    const calledWith = reply.mock.calls[0]![1];
+    const calledWith = reply.mock.calls[0]![0];
     expect((calledWith.updatedInput as { answers: unknown }).answers).toEqual({ 'Pick a format': 'MP4' });
   });
 
@@ -158,7 +158,7 @@ describe('AskUserQuestionGate', () => {
     fireEvent.click(screen.getByTestId('chat-question-submit'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    const calledWith = reply.mock.calls[0]![1];
+    const calledWith = reply.mock.calls[0]![0];
     expect((calledWith.updatedInput as { answers: unknown }).answers).toEqual({ 'Pick tags': ['a', 'b'] });
   });
 
@@ -186,7 +186,7 @@ describe('AskUserQuestionGate', () => {
     fireEvent.click(screen.getByTestId('chat-question-submit'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    const calledWith = reply.mock.calls[0]![1];
+    const calledWith = reply.mock.calls[0]![0];
     expect((calledWith.updatedInput as { answers: unknown }).answers).toEqual({ 'Pick a format': 'custom answer' });
   });
 
@@ -236,7 +236,7 @@ describe('AskUserQuestionGate', () => {
     fireEvent.click(screen.getByTestId('chat-question-submit'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    const calledWith = reply.mock.calls[0]![1];
+    const calledWith = reply.mock.calls[0]![0];
     expect((calledWith.updatedInput as { answers: unknown }).answers).toEqual({ Q1: 'a1', Q2: 'b1' });
   });
 
@@ -251,7 +251,7 @@ describe('AskUserQuestionGate', () => {
     fireEvent.click(screen.getByTestId('chat-question-skip'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith('r1', {
+    expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'AskUserQuestion',

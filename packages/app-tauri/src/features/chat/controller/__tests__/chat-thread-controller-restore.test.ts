@@ -463,7 +463,7 @@ describe('verifyPermissionDelivered — answer lost: gate restored', () => {
       suggestions: [],
     });
 
-    await ctrl.replyToPermission('rq1', response);
+    await ctrl.replyToPermission(response);
 
     // Gate must be gone immediately after reply.
     expect('rq1' in ctrl.getState().interactions.permissions).toBe(false);
@@ -517,7 +517,7 @@ describe('verifyPermissionDelivered — answer landed: gate stays gone', () => {
     // Daemon cleared the pending — answer was received.
     vi.mocked(getPendingPermission).mockResolvedValue(null);
 
-    await ctrl.replyToPermission('rq2', response);
+    await ctrl.replyToPermission(response);
     expect('rq2' in ctrl.getState().interactions.permissions).toBe(false);
 
     await vi.advanceTimersByTimeAsync(3001);
@@ -573,7 +573,7 @@ describe('restorePendingPermission — skips recently-replied toolUseId', () => 
       toolName: 'Bash',
       behavior: 'deny',
     };
-    await ctrl.replyToPermission('rq3', response);
+    await ctrl.replyToPermission(response);
     expect('rq3' in ctrl.getState().interactions.permissions).toBe(false);
 
     // Trigger a restore via a subscribe:ack (simulating reconnect) — still within

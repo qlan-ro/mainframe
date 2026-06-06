@@ -79,7 +79,7 @@ describe('PlanGate', () => {
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith('r1', {
+    expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
@@ -98,7 +98,7 @@ describe('PlanGate', () => {
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith('r1', {
+    expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
@@ -117,7 +117,7 @@ describe('PlanGate', () => {
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith('r1', {
+    expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
@@ -155,12 +155,37 @@ describe('PlanGate', () => {
     fireEvent.click(sendBtn);
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith('r1', {
+    expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
       behavior: 'deny',
       message: 'please revise',
     });
+  });
+
+  // --- Behavior 6: keep-planning Cancel returns to the approve panel ---
+
+  it('clicking Keep planning then Cancel returns to the approve panel without calling reply', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+
+    // Initially the approve button is visible and the feedback textarea is not.
+    expect(screen.getByTestId('chat-plan-approve')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-plan-feedback-input')).not.toBeInTheDocument();
+
+    // Reveal the revise panel.
+    fireEvent.click(screen.getByTestId('chat-plan-keep-planning'));
+
+    expect(screen.getByTestId('chat-plan-feedback-input')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-plan-approve')).not.toBeInTheDocument();
+
+    // Cancel returns to the approve panel.
+    fireEvent.click(screen.getByTestId('chat-plan-revise-cancel'));
+
+    expect(screen.getByTestId('chat-plan-approve')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-plan-feedback-input')).not.toBeInTheDocument();
+
+    // reply must NOT have been called.
+    expect(reply).not.toHaveBeenCalled();
   });
 });
