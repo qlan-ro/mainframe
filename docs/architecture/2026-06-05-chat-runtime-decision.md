@@ -69,7 +69,9 @@ assistant-ui ships an official adapter for a stateful CLI coding agent — **`@a
 react-opencode is also unversioned and handles drift **client-side**: only `text`/`reasoning` deltas are merged incrementally (`isSupportedDelta`); **any delta referencing an unknown message/part triggers a full `refresh()`** (refetch history). We adopt the same **refetch-on-gap** + REST-seed-on-(re)connect. This **removes the mobile-co-owned WS-contract change** — risk #3 is mitigated without `seq`. (`seq` stays an optional future optimization, not a requirement.)
 
 ### Optimistic send + dedup
-Insert a local `pendingUserMessage` on send; reconcile against the server echo by **fingerprint** (normalized text + a time window) — mirror `findPendingMatchByHistory` / `shadowParts`.
+Insert a local `pendingUserMessage` on send; reconcile against the server echo by **fingerprint** (normalized text) — mirror `findPendingMatchByHistory` / `shadowParts`.
+
+> **Updated 2026-06-06 (judo-A):** implemented as a single **count-aware, server-authoritative** matcher (`reconcilePendings` in `chat-thread-controller.ts`) — each server copy clears at most one pending, oldest-first; the live `message.added` and the history re-seed share the call. The earlier "time window" was **dropped** (it stranded duplicates after a slow/wedged run); the daemon echo carries no client id, so matching is by normalized text + count, not id. See `packages/app-tauri/CLAUDE.md` → Runtime & data.
 
 ### Revised Phase 2
 1. Restructure the chat adapter to the **controller/reducer + projection + `extras`** shape (evolve Phase 1's simpler spine).
