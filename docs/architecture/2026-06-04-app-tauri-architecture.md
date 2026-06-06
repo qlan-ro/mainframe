@@ -26,13 +26,17 @@ packages/app-tauri/
     │   ├── files/
     │   └── run/
     ├── features/
-    │   ├── chat/
-    │   │   ├── runtime/            AssistantTransport custom runtime  ← the daemon seam
-    │   │   ├── thread/             message slots (MessagePrimitive), markers
-    │   │   ├── tools/              ONE tool-card registry + card library
-    │   │   ├── composer/           InputArea, ConfigToolbar, AttachmentTray, worktree/, QueuedBanner
-    │   │   ├── sessions/           decomposed ChatsPanel / FlatSessionRow
-    │   │   └── cards/              permission, plan, ask-question
+    │   ├── chat/                   REALIZED structure (see features/chat/README.md for the charter)
+    │   │   ├── controller/         per-chat ChatThreadController + pure reducer + handle-daemon-event  ← the daemon seam (ExternalStore, NOT AssistantTransport)
+    │   │   ├── runtime/            assistant-ui adapter: ChatRuntimeProvider + useExternalStoreRuntime wiring + extras
+    │   │   ├── view-model/         pure projection: convert-message + mappers + tool-group-summary (WS14c invariants)
+    │   │   ├── messages/           per-role message components (Assistant/User/System, queued, action bar, timing)
+    │   │   ├── parts/              content-part renderers (markdown-text, CodeHeader, syntax-highlight)
+    │   │   ├── thread/             the thread shell (ChatThread)
+    │   │   ├── tools/              ONE tool-card registry + dispatch + per-family display cards (cards/, shared/)
+    │   │   ├── gates/              interactive blocking cards: permission / ask-question / plan  (was the proposal's "cards/")
+    │   │   ├── composer/           shell + attachments · config-toolbar/ (model/effort/features/plan/permission) · edit/
+    │   │   └── sessions/           thread-list sidebar — NOT YET BUILT (build-order step 11)
     │   ├── editor/                 Monaco code+diff, inline comments (+ lsp/)
     │   ├── viewers/                image, svg, pdf, csv, markdown
     │   ├── terminal/               xterm UI (backed by the Rust PTY)
