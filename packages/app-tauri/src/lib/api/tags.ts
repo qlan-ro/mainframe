@@ -7,7 +7,7 @@
  * All later phases import from here — never re-create it.
  */
 import type { Tag, TagColor } from '@qlan-ro/mainframe-types';
-import { apiBase, request, requestEmpty } from './http';
+import { apiBase, request, requestNoContent } from './http';
 
 /**
  * Patch shape for updateTag.
@@ -46,9 +46,10 @@ export function updateTag(port: number, name: string, patch: TagPatch): Promise<
 /**
  * Delete a tag (cascades in SQLite but emits NO chat.updated events —
  * callers must mirror the removal across loaded thread customs client-side).
+ * Route returns HTTP 204 with no body.
  */
 export const deleteTag = (port: number, name: string): Promise<void> =>
-  requestEmpty('DELETE', `${apiBase(port)}/api/tags/${name}`);
+  requestNoContent('DELETE', `${apiBase(port)}/api/tags/${name}`);
 
 /** Get the tag names applied to a chat. */
 export const getChatTags = (port: number, chatId: string): Promise<string[]> =>
@@ -57,6 +58,7 @@ export const getChatTags = (port: number, chatId: string): Promise<string[]> =>
 /**
  * Replace the full tag set for a chat (PUT semantics — always send the complete desired set).
  * Tag names are lowercased server-side; the returned array reflects the stored names.
+ * Daemon expects a wrapped body `{ tags: [...] }`, not a raw array.
  */
 export const setChatTags = (port: number, chatId: string, tags: string[]): Promise<string[]> =>
-  request<string[]>('PUT', `${apiBase(port)}/api/chats/${chatId}/tags`, tags);
+  request<string[]>('PUT', `${apiBase(port)}/api/chats/${chatId}/tags`, { tags });

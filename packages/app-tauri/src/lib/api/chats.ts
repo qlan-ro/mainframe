@@ -75,14 +75,15 @@ export interface CreateChatBody {
   projectId: string;
   adapterId: string;
   model?: string;
-  permissionMode?: string;
+  permissionMode?: ExecutionMode;
   worktreePath?: string;
   branchName?: string;
 }
 
 /**
  * List all chats, with optional server-side filters.
- * Tags and synthetic are repeated query params: ?tags=a&tags=b
+ * Tags and synthetic are comma-joined single params: ?tags=a,b&synthetic=c,d
+ * (daemon splits on commas; repeated params would become an array and 400)
  */
 export function listChats(
   port: number,
@@ -90,8 +91,8 @@ export function listChats(
 ): Promise<Chat[]> {
   const url = new URL(`${apiBase(port)}/api/chats`);
   if (q?.project !== undefined) url.searchParams.set('project', q.project);
-  for (const t of q?.tags ?? []) url.searchParams.append('tags', t);
-  for (const s of q?.synthetic ?? []) url.searchParams.append('synthetic', s);
+  if (q?.tags?.length) url.searchParams.set('tags', q.tags.join(','));
+  if (q?.synthetic?.length) url.searchParams.set('synthetic', q.synthetic.join(','));
   return request<Chat[]>('GET', url.toString());
 }
 

@@ -92,15 +92,15 @@ describe('listChats', () => {
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/chats?project=proj-1', { method: 'GET' });
   });
 
-  it('appends repeated ?tags= params when tags filter is supplied', async () => {
+  it('appends comma-joined ?tags= param when tags filter is supplied', async () => {
     mockFetchOk([CHAT_FIXTURE]);
 
     await listChats(port, { tags: ['alpha', 'beta'] });
 
-    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/chats?tags=alpha&tags=beta', { method: 'GET' });
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/chats?tags=alpha%2Cbeta', { method: 'GET' });
   });
 
-  it('appends repeated ?synthetic= params when synthetic filter is supplied', async () => {
+  it('appends ?synthetic= param when synthetic filter is supplied', async () => {
     mockFetchOk([CHAT_FIXTURE]);
 
     await listChats(port, { synthetic: ['has-pr'] });

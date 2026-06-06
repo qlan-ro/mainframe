@@ -30,26 +30,6 @@ function mockFetchOk(data: unknown): void {
   );
 }
 
-function mockFetchEmpty(): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true }),
-    }),
-  );
-}
-
-function mockFetchApiError(error: string): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: false, error }),
-    }),
-  );
-}
-
 function mockFetchHttpError(status: number, error: string): void {
   vi.stubGlobal(
     'fetch',
@@ -195,7 +175,13 @@ describe('updateTag', () => {
 
 describe('deleteTag', () => {
   it('calls DELETE http://127.0.0.1:31415/api/tags/:name', async () => {
-    mockFetchEmpty();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+      }),
+    );
 
     await deleteTag(port, 'backend');
 
@@ -203,16 +189,25 @@ describe('deleteTag', () => {
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/tags/backend', { method: 'DELETE' });
   });
 
-  it('returns void on success', async () => {
-    mockFetchEmpty();
+  it('returns void on success (204 no body — json() is not called)', async () => {
+    const jsonSpy = vi.fn().mockRejectedValue(new Error('no body'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        json: jsonSpy,
+      }),
+    );
 
     const result = await deleteTag(port, 'backend');
 
     expect(result).toBeUndefined();
+    expect(jsonSpy).not.toHaveBeenCalled();
   });
 
-  it('throws when success is false', async () => {
-    mockFetchApiError('tag not found');
+  it('throws when HTTP response is not ok (404)', async () => {
+    mockFetchHttpError(404, 'tag not found');
 
     await expect(deleteTag(port, 'backend')).rejects.toThrow('tag not found');
   });
@@ -238,7 +233,7 @@ describe('getChatTags', () => {
 });
 
 describe('setChatTags', () => {
-  it('sends PUT with the tag array as the body', async () => {
+  it('sends PUT with a wrapped { tags: [...] } body (not a raw array)', async () => {
     mockFetchOk(['backend', 'infra']);
 
     await setChatTags(port, chatId, ['backend', 'infra']);
@@ -247,7 +242,7 @@ describe('setChatTags', () => {
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/chats/chat-abc123/tags', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: '["backend","infra"]',
+      body: '{"tags":["backend","infra"]}',
     });
   });
 
@@ -259,7 +254,7 @@ describe('setChatTags', () => {
     expect(result).toEqual(['backend', 'infra']);
   });
 
-  it('sends body "[]" when the tag list is empty', async () => {
+  it('sends body {"tags":[]} when the tag list is empty', async () => {
     mockFetchOk([]);
 
     await setChatTags(port, chatId, []);
@@ -267,7 +262,7 @@ describe('setChatTags', () => {
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/chats/chat-abc123/tags', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: '[]',
+      body: '{"tags":[]}',
     });
   });
 });

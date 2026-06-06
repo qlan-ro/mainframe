@@ -44,3 +44,9 @@ export async function requestEmpty(method: string, url: string, body?: unknown):
   const json = (await res.json()) as ApiResponseEmpty;
   if (!json.success) throw new Error(json.error);
 }
+
+/** For routes that return HTTP 204 with no body (e.g. DELETE /api/tags/:name). */
+export async function requestNoContent(method: string, url: string): Promise<void> {
+  const res = await fetch(url, { method });
+  if (!res.ok) throw new Error(await extractError(res));
+}
