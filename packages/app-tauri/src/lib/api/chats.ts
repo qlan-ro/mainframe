@@ -3,7 +3,14 @@
  * All routes are unauthenticated when called from localhost (daemon auth middleware
  * isLocalhost() bypass confirmed in packages/core/src/server/middleware/auth.ts).
  */
-import type { DisplayMessage, Chat, SessionTuning, ExecutionMode, ControlRequest } from '@qlan-ro/mainframe-types';
+import type {
+  DisplayMessage,
+  Chat,
+  SessionTuning,
+  ExecutionMode,
+  PermissionMode,
+  ControlRequest,
+} from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
 /** Body for PATCH /api/chats/:id/config — adapter / model / permission / plan. */
@@ -75,7 +82,12 @@ export interface CreateChatBody {
   projectId: string;
   adapterId: string;
   model?: string;
-  permissionMode?: ExecutionMode;
+  /**
+   * Draft permission mode. Accepts `'plan'` (the draft picker can select it);
+   * the daemon route maps it onto the new chat. Wider than {@link ExecutionMode}
+   * to carry the picker's full {@link PermissionMode} intent.
+   */
+  permissionMode?: PermissionMode;
   worktreePath?: string;
   branchName?: string;
 }
