@@ -126,7 +126,7 @@ export const AskUserQuestionCard: ToolCallMessagePartComponent = (part) => {
   const hasBody = answered ? askUserQuestion.length > 0 : questions.length > 0;
 
   return (
-    <Collapsible data-testid="chat-ask-card" defaultOpen={false} disabled={!hasBody}>
+    <Collapsible data-testid="chat-ask-card" defaultOpen={answered} disabled={!hasBody}>
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         {/* Header trigger */}
         <CollapsibleTrigger

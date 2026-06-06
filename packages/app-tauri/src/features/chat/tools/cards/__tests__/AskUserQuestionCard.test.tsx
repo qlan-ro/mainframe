@@ -230,7 +230,7 @@ describe('AskUserQuestionCard', () => {
     expect(screen.getByTestId('chat-ask-header')).not.toHaveTextContent(' — ');
   });
 
-  it('body shows answered question text after expanding', () => {
+  it('body shows answered question text on initial render (answered cards open by default)', () => {
     renderCard(
       makePart({
         args: SINGLE_QUESTION_ARGS,
@@ -240,7 +240,7 @@ describe('AskUserQuestionCard', () => {
         isError: false,
       }),
     );
-    fireEvent.click(screen.getByTestId('chat-ask-trigger'));
+    // Answered cards default to open — no trigger click needed
     expect(screen.getByTestId('chat-ask-question-text')).toHaveTextContent('Which framework should we use?');
   });
 
@@ -260,7 +260,7 @@ describe('AskUserQuestionCard', () => {
         isError: false,
       }),
     );
-    fireEvent.click(screen.getByTestId('chat-ask-trigger'));
+    // Answered cards default to open — body visible without clicking
     expect(screen.getByTestId('chat-ask-answer-notes')).toHaveTextContent('Team is most familiar with it');
   });
 
@@ -274,7 +274,7 @@ describe('AskUserQuestionCard', () => {
         isError: false,
       }),
     );
-    fireEvent.click(screen.getByTestId('chat-ask-trigger'));
+    // Answered cards default to open — body is visible, notes element simply absent
     expect(screen.queryByTestId('chat-ask-answer-notes')).not.toBeInTheDocument();
   });
 
@@ -294,7 +294,7 @@ describe('AskUserQuestionCard', () => {
         isError: false,
       }),
     );
-    fireEvent.click(screen.getByTestId('chat-ask-trigger'));
+    // Answered cards default to open — body visible without clicking
     expect(screen.getByTestId('chat-ask-answer-preview')).toHaveTextContent('Svelte compiles at build time');
   });
 
@@ -308,7 +308,7 @@ describe('AskUserQuestionCard', () => {
         isError: false,
       }),
     );
-    fireEvent.click(screen.getByTestId('chat-ask-trigger'));
+    // Answered cards default to open — body is visible, preview element simply absent
     expect(screen.queryByTestId('chat-ask-answer-preview')).not.toBeInTheDocument();
   });
 
@@ -327,16 +327,16 @@ describe('AskUserQuestionCard', () => {
         isError: false,
       }),
     );
-    fireEvent.click(screen.getByTestId('chat-ask-trigger'));
+    // Answered cards default to open — body visible without clicking
     const questionTexts = screen.getAllByTestId('chat-ask-question-text');
     expect(questionTexts).toHaveLength(2);
     expect(questionTexts[0]).toHaveTextContent('Preferred language?');
     expect(questionTexts[1]).toHaveTextContent('Testing framework?');
   });
 
-  // --- Body not visible before expand (defaultOpen=false) ---
+  // --- Body visible by default for answered cards (defaultOpen=answered) ---
 
-  it('does not show the body before the trigger is clicked', () => {
+  it('shows the body on initial render when answers are present', () => {
     renderCard(
       makePart({
         args: SINGLE_QUESTION_ARGS,
@@ -346,10 +346,10 @@ describe('AskUserQuestionCard', () => {
         isError: false,
       }),
     );
-    expect(screen.queryByTestId('chat-ask-body')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-ask-body')).toBeInTheDocument();
   });
 
-  it('shows then hides the body on two consecutive trigger clicks', () => {
+  it('hides then shows the body on two consecutive trigger clicks (answered card starts open)', () => {
     renderCard(
       makePart({
         args: SINGLE_QUESTION_ARGS,
@@ -360,10 +360,12 @@ describe('AskUserQuestionCard', () => {
       }),
     );
     const trigger = screen.getByTestId('chat-ask-trigger');
-    fireEvent.click(trigger);
-    expect(screen.getByTestId('chat-ask-body')).toBeInTheDocument();
+    // First click collapses the already-open body
     fireEvent.click(trigger);
     expect(screen.queryByTestId('chat-ask-body')).not.toBeInTheDocument();
+    // Second click re-expands it
+    fireEvent.click(trigger);
+    expect(screen.getByTestId('chat-ask-body')).toBeInTheDocument();
   });
 
   // --- Error state ---
