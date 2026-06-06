@@ -291,40 +291,54 @@ describe('reconcilePendingAgainstHistory — non-matching text', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. Double-fired send — both phantom pendings are cleared
+// 6. Count-aware reconcile (identical text)
 //
-// Two calls to sendMessage() with texts that normalize to the same fingerprint
-// ('ask me two questions' vs ' ask me two questions ') produce two distinct
-// pending entries (different clientIds, same normalized text). The server
-// history contains the message exactly ONCE. reconcilePendingAgainstHistory
-// must clear BOTH pendings — not just the first match — because it iterates
-// every pending and dispatches local.message.reconciled for each one whose
-// normalized text is in the server set.
+// Two sendMessage() calls whose texts normalize to the same fingerprint produce
+// two distinct pendings. Reconcile is COUNT-AWARE and server-authoritative: each
+// server copy reconciles AT MOST one pending (oldest first). So two identical
+// sends with only ONE server echo reconcile exactly ONE pending — the second is
+// a genuine send still awaiting its own echo, NOT a phantom to delete. Two
+// server copies reconcile both.
 // ---------------------------------------------------------------------------
 
-describe('reconcilePendingAgainstHistory — double-fired send', () => {
-  it('clears both phantom pendings when server history has the message exactly once', async () => {
+describe('reconcilePendingAgainstHistory — count-aware (identical text)', () => {
+  it('reconciles exactly one pending when two identical sends have only one server echo', async () => {
     vi.mocked(getChatMessages).mockResolvedValue([]);
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
     ctrl.subscribe(() => {});
 
-    // sendMessage trims text before creating the pending, so 'ask me two questions'
-    // and ' ask me two questions ' both store text 'ask me two questions'.
-    // The clientId counter is per-call, so two distinct pending entries are created.
+    // Both store text 'ask me two questions' (sendMessage trims); two distinct pendings.
     await ctrl.sendMessage(textAppendMsg('ask me two questions'));
     await ctrl.sendMessage(textAppendMsg(' ask me two questions '));
-
-    // Both pendings exist before refresh.
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(2);
 
-    // Server history has the message exactly once.
+    // Server history has the message exactly once → only one pending reconciles.
     vi.mocked(getChatMessages).mockResolvedValue([userDisplayMsg('srv-dbl-1', 'ask me two questions')]);
-
     await ctrl.refresh();
 
-    // Both phantom pendings must be cleared — the server copy is the sole source.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
+  });
+
+  it('reconciles both pendings when two identical sends have two server echoes', async () => {
+    vi.mocked(getChatMessages).mockResolvedValue([]);
+
+    const { fakeClient } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribe(() => {});
+
+    await ctrl.sendMessage(textAppendMsg('ask me two questions'));
+    await ctrl.sendMessage(textAppendMsg('ask me two questions'));
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(2);
+
+    // Two legitimate sends → two server copies → both reconcile.
+    vi.mocked(getChatMessages).mockResolvedValue([
+      userDisplayMsg('srv-dbl-1', 'ask me two questions'),
+      userDisplayMsg('srv-dbl-2', 'ask me two questions'),
+    ]);
+    await ctrl.refresh();
+
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
   });
 });

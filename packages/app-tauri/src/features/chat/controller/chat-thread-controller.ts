@@ -40,45 +40,54 @@ function createLocalId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${localIdCounter.toString(36)}`;
 }
 
-// Live message.added match window. Generous so a wedged/slow run (the echo can
-// land minutes after the optimistic send) still reconciles instead of stranding
-// a duplicate. History re-seed reconciliation ignores this entirely (authoritative).
-const PENDING_MATCH_WINDOW_MS = 10 * 60 * 1000;
-
 function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-function reconcilePendingOnAdd(state: ChatThreadState, content: DisplayContent[], ignoreWindow = false): string | null {
+// Sentinel key for attachment-only (no meaningful text) messages, so an empty
+// server text can never wildcard-match a text-bearing pending.
+const ATTACHMENT_KEY = '\0attachment';
+
+function reconcileKey(text: string): string {
+  const fp = normalizeText(text);
+  return fp.length > 0 ? fp : ATTACHMENT_KEY;
+}
+
+function contentKey(content: DisplayContent[]): string {
   const textBlock = content.find((c): c is DisplayContent & { type: 'text' } => c.type === 'text');
-  const now = Date.now();
-  const inWindow = (p: PendingUserMessage) => ignoreWindow || Math.abs(now - p.createdAt) <= PENDING_MATCH_WINDOW_MS;
+  return reconcileKey(textBlock?.text ?? '');
+}
 
-  if (!textBlock) {
-    // Attachment-only server message: match the oldest pending whose text is
-    // empty (i.e. also attachment-only). Never reconcile a text-bearing pending
-    // against a no-text server message.
-    const candidates = Object.values(state.pendingUserMessages).filter(
-      (p): p is PendingUserMessage => p.status === 'pending' && p.text === '' && inWindow(p),
-    );
-    if (candidates.length === 0) return null;
-    const match = candidates.sort((a, b) => a.createdAt - b.createdAt)[0]!;
-    return match.clientId;
+/**
+ * Match optimistic pendings against confirmed server user-messages by a
+ * count-aware multiset, oldest pending first. The server is authoritative:
+ * each server message reconciles AT MOST one pending, so N identical-text sends
+ * need N server copies — no over-clear, no empty-text wildcard, no time window.
+ * The single live `message.added` and the full history re-seed are the SAME
+ * call (one message vs many). Returns the clientIds to reconcile.
+ */
+function reconcilePendings(
+  pendings: Readonly<Record<string, PendingUserMessage>>,
+  serverMessages: readonly { content: DisplayContent[] }[],
+): string[] {
+  const remaining = new Map<string, number>();
+  for (const m of serverMessages) {
+    const k = contentKey(m.content);
+    remaining.set(k, (remaining.get(k) ?? 0) + 1);
   }
-
-  const serverFp = normalizeText(textBlock.text);
-
-  const candidates = Object.values(state.pendingUserMessages).filter(
-    (p): p is PendingUserMessage =>
-      p.status === 'pending' &&
-      p.text !== '' &&
-      inWindow(p) &&
-      (serverFp.length === 0 || normalizeText(p.text) === serverFp),
-  );
-
-  if (candidates.length === 0) return null;
-  const match = candidates.sort((a, b) => a.createdAt - b.createdAt)[0]!;
-  return match.clientId;
+  const matched: string[] = [];
+  const oldestFirst = Object.values(pendings)
+    .filter((p): p is PendingUserMessage => p.status === 'pending')
+    .sort((a, b) => a.createdAt - b.createdAt);
+  for (const p of oldestFirst) {
+    const k = reconcileKey(p.text);
+    const n = remaining.get(k) ?? 0;
+    if (n > 0) {
+      remaining.set(k, n - 1);
+      matched.push(p.clientId);
+    }
+  }
+  return matched;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,34 +180,13 @@ export class ChatThreadController {
    * Reconcile optimistic pendings against re-seeded history. A reconnect/refetch
    * delivers the server echo via `history.loaded`, NOT `message.added`, so the
    * live reconcile path never fires — without this the optimistic copy lingers
-   * as a duplicate.
-   *
-   * History is AUTHORITATIVE, so this ignores the live match window and clears
-   * EVERY pending whose text the server now has — covering both a wedged/slow
-   * echo (older than the window) and a double-fired send (an extra phantom
-   * pending the single-match live path leaves behind).
+   * as a duplicate. The full user-message list is fed to the same count-aware
+   * matcher the live path uses, so it is authoritative and count-correct.
    */
   private reconcilePendingAgainstHistory(messages: DisplayMessage[]): void {
-    const serverTexts = new Set<string>();
-    let hasAttachmentOnly = false;
-    for (const message of messages) {
-      if (message.type !== 'user') continue;
-      const textBlock = message.content.find((c): c is DisplayContent & { type: 'text' } => c.type === 'text');
-      if (textBlock) serverTexts.add(normalizeText(textBlock.text));
-      else hasAttachmentOnly = true;
-    }
-    for (const pending of Object.values(this.state.pendingUserMessages)) {
-      if (pending.status !== 'pending' || pending.text === '') continue;
-      if (serverTexts.has(normalizeText(pending.text)))
-        this.dispatch({ type: 'local.message.reconciled', clientId: pending.clientId });
-    }
-    // Attachment-only pendings (empty text) keep the per-message match.
-    if (hasAttachmentOnly) {
-      for (const message of messages) {
-        if (message.type !== 'user') continue;
-        const clientId = reconcilePendingOnAdd(this.state, message.content, true);
-        if (clientId) this.dispatch({ type: 'local.message.reconciled', clientId });
-      }
+    const userMessages = messages.filter((m) => m.type === 'user');
+    for (const clientId of reconcilePendings(this.state.pendingUserMessages, userMessages)) {
+      this.dispatch({ type: 'local.message.reconciled', clientId });
     }
   }
 
@@ -380,8 +368,7 @@ export class ChatThreadController {
       // Optimistic reconcile: on display.message.added with user content,
       // try to match and remove the pending entry.
       if (result.event.type === 'message.added' && result.event.message.type === 'user') {
-        const clientId = reconcilePendingOnAdd(this.state, result.event.message.content);
-        if (clientId) {
+        for (const clientId of reconcilePendings(this.state.pendingUserMessages, [result.event.message])) {
           this.dispatch({ type: 'local.message.reconciled', clientId });
         }
       }
