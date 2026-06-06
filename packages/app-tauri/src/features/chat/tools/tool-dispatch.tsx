@@ -13,7 +13,7 @@ import type { ReactNode } from 'react';
 import type { EnrichedPartState } from '@assistant-ui/react';
 import { ToolFallback } from '@/components/ui/assistant-ui/tool-fallback';
 import { ToolGroupRoot, ToolGroupTrigger, ToolGroupContent } from '@/components/ui/assistant-ui/tool-group';
-import { resolveToolCard } from '../tools/registry';
+import { resolveToolCard } from './registry';
 
 type ToolCallPart = Extract<EnrichedPartState, { type: 'tool-call' }>;
 

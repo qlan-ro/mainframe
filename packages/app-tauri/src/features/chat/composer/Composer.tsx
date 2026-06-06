@@ -14,9 +14,9 @@
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ComposerToolbar } from './ComposerToolbar';
-import { ComposerEditMode } from './ComposerEditMode';
-import { useComposerEdit } from './composer-edit-context';
+import { ComposerToolbar } from './config-toolbar/ComposerToolbar';
+import { ComposerEditMode } from './edit/ComposerEditMode';
+import { useComposerEdit } from './edit/composer-edit-context';
 import { ComposerAttachments, ComposerAddAttachment } from '@/components/ui/assistant-ui/attachment';
 
 /** Send (idle, disabled while empty) ↔ Cancel (running) — swapped on thread.isRunning. */

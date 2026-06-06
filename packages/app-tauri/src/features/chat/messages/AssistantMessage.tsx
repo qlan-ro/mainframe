@@ -22,7 +22,7 @@ import {
   ReasoningContent,
   ReasoningText,
 } from '@/components/ui/assistant-ui/reasoning';
-import { MessageToolLeaf, MessageToolGroup } from './tool-dispatch';
+import { MessageToolLeaf, MessageToolGroup } from '../tools/tool-dispatch';
 import { MessageActionBar } from './MessageActionBar';
 import { MessageTiming } from './MessageTiming';
 import { MessageTimestamp } from './MessageTimestamp';

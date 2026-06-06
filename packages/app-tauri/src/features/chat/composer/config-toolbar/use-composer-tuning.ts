@@ -32,7 +32,7 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import { getAdapters } from '@/lib/api/adapters';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 
 // ---------------------------------------------------------------------------
 // useAdapters

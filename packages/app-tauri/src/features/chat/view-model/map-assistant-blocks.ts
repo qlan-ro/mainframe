@@ -23,7 +23,7 @@ import type { DisplayContent } from '@qlan-ro/mainframe-types';
 import { mapToolCallPart, mapToolResult } from './map-tool-result';
 import { type ContentPart, ensureNonEmpty, toJsonArgs } from './content';
 import type { TaskProgressArgs } from './message-meta';
-import { toolGroupSummary } from '../tools/tool-group-summary';
+import { toolGroupSummary } from './tool-group-summary';
 
 type TaskGroupBlock = DisplayContent & { type: 'task_group' };
 

@@ -30,7 +30,7 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../../runtime/use-chat-thread-runtime', () => ({
   useChatExtras: vi.fn(),
 }));
 
@@ -48,7 +48,7 @@ vi.mock('@/lib/api/adapters', () => ({
 // ---------------------------------------------------------------------------
 
 import { useComposerTuning } from '../use-composer-tuning';
-import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../../runtime/use-chat-thread-runtime';
 import { useAuiState } from '@assistant-ui/react';
 import { setChatTuning, setChatConfig } from '@/lib/api/chats';
 import type { Chat, AdapterInfo } from '@qlan-ro/mainframe-types';

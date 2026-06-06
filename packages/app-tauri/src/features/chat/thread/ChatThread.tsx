@@ -12,7 +12,7 @@ import { UserMessage } from '../messages/UserMessage';
 import { AssistantMessage } from '../messages/AssistantMessage';
 import { SystemMessage } from '../messages/SystemMessage';
 import { Composer } from '../composer/Composer';
-import { ComposerEditProvider } from '../composer/composer-edit-context';
+import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';

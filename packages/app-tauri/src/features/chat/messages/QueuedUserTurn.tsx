@@ -13,7 +13,7 @@ import { useCallback, type ReactNode } from 'react';
 import { PencilIcon, XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
-import { useComposerEdit } from '../composer/composer-edit-context';
+import { useComposerEdit } from '../composer/edit/composer-edit-context';
 
 const PENDING_CARD = { background: 'var(--mf-um-card)' } as const;
 

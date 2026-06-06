@@ -15,8 +15,8 @@
 import { useState, useCallback } from 'react';
 import { PencilIcon, CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
-import { ComposerToolbar } from './ComposerToolbar';
+import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { ComposerToolbar } from '../config-toolbar/ComposerToolbar';
 import type { QueuedEdit } from './composer-edit-context';
 
 export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: () => void }) {
