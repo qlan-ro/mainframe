@@ -9,7 +9,8 @@
  *
  * Behaviors covered:
  *  - done state (string result): label visible, collapsible enabled, body
- *    text rendered after click
+ *    visible on initial render (defaultOpen=true when hasResult); clicking
+ *    the trigger collapses it; clicking again reveals it
  *  - pending state (result === undefined): label visible, collapsible
  *    disabled, no body
  *  - error state (isError=true + string result): card renders (border tokens
@@ -109,27 +110,30 @@ describe('PlanCard', () => {
     expect(screen.getByTestId('chat-plan-trigger')).not.toHaveAttribute('data-disabled');
   });
 
-  it('clicking the trigger reveals the plan body with the result text', () => {
+  it('plan body is visible on initial render when result is present', () => {
     renderCard(makePart({ result: 'Step 1: implement\nStep 2: test', isError: false }));
-    fireEvent.click(screen.getByTestId('chat-plan-trigger'));
     const body = screen.getByTestId('chat-plan-body');
     expect(body).toHaveTextContent('Step 1: implement');
     expect(body).toHaveTextContent('Step 2: test');
   });
 
-  it('plan body is not visible before the trigger is clicked (defaultOpen=false)', () => {
+  it('plan body is visible before any interaction when result is present (defaultOpen=true)', () => {
     renderCard(makePart({ result: 'The plan is here', isError: false }));
-    // Radix Collapsible hides content until opened
-    expect(screen.queryByTestId('chat-plan-body')).not.toBeInTheDocument();
+    // Radix Collapsible opens by default when hasResult is true
+    expect(screen.getByTestId('chat-plan-body')).toBeInTheDocument();
   });
 
-  it('clicking the trigger twice collapses the body again', () => {
+  it('clicking the trigger collapses the body; clicking again reveals it', () => {
     renderCard(makePart({ result: 'Plan text', isError: false }));
     const trigger = screen.getByTestId('chat-plan-trigger');
-    fireEvent.click(trigger);
+    // body open by default
     expect(screen.getByTestId('chat-plan-body')).toBeInTheDocument();
+    // first click collapses
     fireEvent.click(trigger);
     expect(screen.queryByTestId('chat-plan-body')).not.toBeInTheDocument();
+    // second click reveals again
+    fireEvent.click(trigger);
+    expect(screen.getByTestId('chat-plan-body')).toBeInTheDocument();
   });
 
   // --- XML sentinel stripping ---
@@ -141,7 +145,7 @@ describe('PlanCard', () => {
         isError: true,
       }),
     );
-    fireEvent.click(screen.getByTestId('chat-plan-trigger'));
+    // body is open by default when hasResult is true
     const body = screen.getByTestId('chat-plan-body');
     expect(body).toHaveTextContent('Plan failed to parse');
     expect(body).not.toHaveTextContent('<tool_use_error>');
@@ -154,7 +158,7 @@ describe('PlanCard', () => {
         isError: true,
       }),
     );
-    fireEvent.click(screen.getByTestId('chat-plan-trigger'));
+    // body is open by default when hasResult is true
     const body = screen.getByTestId('chat-plan-body');
     expect(body).toHaveTextContent('No plan mode active');
     expect(body).not.toHaveTextContent('<error>');

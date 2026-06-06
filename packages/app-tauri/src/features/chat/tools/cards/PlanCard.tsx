@@ -3,8 +3,10 @@
 /**
  * PlanCard — display card for the 'ExitPlanMode' tool.
  *
- * Shows a compact "Updated plan" chip that expands to reveal the plan text.
- * - Collapsed by default (no result = disabled/non-expandable)
+ * Shows an "Updated plan" card revealing the plan text.
+ * - Expanded by default when a plan result is present (the plan is important
+ *   context worth showing, not a chip to click open); still collapsible.
+ *   No result = disabled/non-expandable.
  * - Body: <pre> of the plan text result
  * - This is the DISPLAY-only card; the interactive plan-approval card
  *   (permission gate) is a separate leaf built elsewhere.
@@ -26,7 +28,7 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
   const hasResult = Boolean(resultText);
 
   return (
-    <Collapsible data-testid="chat-plan-card" defaultOpen={false} disabled={!hasResult}>
+    <Collapsible data-testid="chat-plan-card" defaultOpen={hasResult} disabled={!hasResult}>
       <div
         className={cn(
           'rounded-lg border border-border bg-card overflow-hidden',
