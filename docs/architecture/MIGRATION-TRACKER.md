@@ -42,12 +42,12 @@ Durable capture so these aren't lost (the full write-ups live in volatile `/tmp`
 **🟡 Medium**
 - ☑ Failed **history load renders as an empty chat** — DONE (2026-06-06). `extras.retry` (= `controller.refresh()`) + a "Couldn't load this chat / Retry" banner in `ChatThread` that reads `state.loadState.type === 'error'`. Tests cover load-fail → error → retry → ready.
 - ☑ **`useConnectionState.init()` has no try/catch** — DONE (2026-06-06). Port acquisition is guarded → `disconnected`/`unavailable` + a 2s retry (sidecar may still be spawning); status-listener registration is separate. No longer pins on "connecting". Tested.
-- ☐ **`isResultError` duplicated across 3 pill cards** (Worktree/Schedule/MCP) with unsound casts — add `isErrorResult`/`extractResultContent` to `tools/shared/result.ts`.
-- ☐ **cancel_failed UI surfacing** — the reducer now handles `queued.cancel_failed` (state-preserving) but there's no user feedback when a queued cancel fails (needs the toast infra above).
+- ☑ **`isResultError` duplicated across 3 pill cards** — DONE (2026-06-06). Type-safe `isErrorResult`/`extractResultContent` extracted to `tools/shared/result.ts` (barrel-exported); Worktree/Schedule/MCP cards import them.
+- ☑ **cancel_failed UI surfacing** — DONE (2026-06-06). **Toast infra added** (sonner `<Toaster />` themed + mounted at the app root, `components/ui/sonner.tsx`); `routeDaemonEvent` raises `toast.error` on `message.queued.cancel_failed`. *(This also unblocks the deferred composer rejection-toaster.)*
 
 **🟢 Low**
 - ☑ **CLAUDE.md drift** — the `composer.setRunConfig` note is corrected (config flows via REST + is server-authoritative, judo-B) and the count-aware reconcile + response-only reply seam are documented (`3391a256`). *(The `chat/README.md` charter is still a nice-to-have — folded into the restructure item above.)*
-- ☐ **`TaskProgressCard` imports from the core sidecar** (`@qlan-ro/mainframe-core/messages`, undeclared dep) — move the type to `mainframe-types` or reuse the local one; drop the no-op enum casts.
+- ☑ **`TaskProgressCard` imports from the core sidecar** — DONE (2026-06-06). `TaskProgressItem` exported from `view-model/message-meta.ts` (identical shape) + imported locally; **zero `@qlan-ro/mainframe-core` imports remain** in `app-tauri/src`.
 
 **✅ Already handled this session (not deferred):** codex #3 (subscribe-ack), #4 (queued snapshot rehydration), #5 (attachment reconcile) — fixed (`4b70efe1`) + tested + codex-APPROVED. codex #1 (gates not mounted) — the **parallel gates session** mounted inline gate dispatch (`35054382`). The thermo-nuclear batch (crash fix, `request<T>`, controller seam, dead-code, fullBytes de-casts, typed factory) — landed + tested. **Sandbox captures in the user message** — see the dedicated deferred line under *Composer* below.
 
