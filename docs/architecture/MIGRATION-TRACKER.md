@@ -41,7 +41,7 @@ Durable capture so these aren't lost (the full write-ups live in volatile `/tmp`
 
 **🟡 Medium**
 - ☑ Failed **history load renders as an empty chat** — DONE (2026-06-06). `extras.retry` (= `controller.refresh()`) + a "Couldn't load this chat / Retry" banner in `ChatThread` that reads `state.loadState.type === 'error'`. Tests cover load-fail → error → retry → ready.
-- ☐ **`useConnectionState.init()` has no try/catch** — a `getDaemonPort()` reject pins the app on "connecting" forever.
+- ☑ **`useConnectionState.init()` has no try/catch** — DONE (2026-06-06). Port acquisition is guarded → `disconnected`/`unavailable` + a 2s retry (sidecar may still be spawning); status-listener registration is separate. No longer pins on "connecting". Tested.
 - ☐ **`isResultError` duplicated across 3 pill cards** (Worktree/Schedule/MCP) with unsound casts — add `isErrorResult`/`extractResultContent` to `tools/shared/result.ts`.
 - ☐ **cancel_failed UI surfacing** — the reducer now handles `queued.cancel_failed` (state-preserving) but there's no user feedback when a queued cancel fails (needs the toast infra above).
 
