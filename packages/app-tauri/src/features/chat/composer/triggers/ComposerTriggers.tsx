@@ -3,21 +3,23 @@
 /**
  * Wires both native trigger popovers into the composer:
  *   `/` — skills picker (sync, preloaded via SkillsProvider)
- *   `@` — file picker (async-over-sync, debounced fetch into a local cache)
+ *   `@` — desktop-parity mention picker (agents + project files fuzzy;
+ *         `@dir/` project-tree + `@/`,`@~` filesystem drill-down) via an
+ *         async-over-sync cache.
  *
- * Both triggers use a literal directive formatter so the inserted text is plain
- * `/skill-name ` / `@rel/path ` — the CLI/daemon parses those, no chip tokens.
+ * `/` inserts plain `/skill `; `@` inserts `@<id> ` for files/agents and
+ * `@<dir>/` (no space, keeps the token open) for directories — drill-down.
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ComposerPrimitive } from '@assistant-ui/react';
 import type { Unstable_TriggerItem } from '@assistant-ui/react';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
-import { useChatSkills } from '@/features/skills/use-chat-skills';
-import { searchFiles } from '@/lib/api/files';
+import { useChatSkills, useChatAgents } from '@/features/skills/use-chat-skills';
+import { searchFiles, getFileTree, browseFilesystem } from '@/lib/api/files';
 import { buildSkillsTriggerAdapter } from './skills-trigger-adapter';
-import { createFileSearchCache, buildFileTriggerAdapter } from './file-trigger-adapter';
-import { literalDirectiveFormatter } from './directive-formatter';
+import { createMentionCache, buildMentionTriggerAdapter, type MentionCache } from './mention-adapter';
+import { literalDirectiveFormatter, mentionDirectiveFormatter } from './directive-formatter';
 
 // ---------------------------------------------------------------------------
 // Alias for brevity
@@ -55,11 +57,12 @@ function PopoverShell({ children }: { children: ReactNode }) {
 }
 
 /**
- * Reads the live `@` query, debounces it, and calls `cache.request(q)` so the
- * async fetch is kicked off. Rendered as a child of the `@` `<TP>`, so
+ * Reads the live `@` token body, debounces it, and calls `cache.request(body)`
+ * so the right async fetch (file search / project tree / filesystem browse) is
+ * kicked off. Rendered as a child of the `@` `<TP>`, so
  * `unstable_useTriggerPopoverScopeContext` resolves to the `@` trigger's scope.
  */
-function FileSearchDriver({ cache }: { cache: ReturnType<typeof createFileSearchCache> }) {
+function MentionDriver({ cache }: { cache: MentionCache }) {
   const { query } = ComposerPrimitive.unstable_useTriggerPopoverScopeContext();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -87,29 +90,43 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
   const chatId = extras?.state.chatId ?? null;
 
   const { skills } = useChatSkills();
+  const agents = useChatAgents();
 
   // Skills adapter: rebuilt only when the skills list changes.
   const skillsAdapter = useMemo(() => buildSkillsTriggerAdapter(skills), [skills]);
 
-  // File search cache: rebuilt when the chat context changes.
-  const fileCache = useMemo(
+  // Mention cache (files / project-tree / filesystem): rebuilt when the chat context changes.
+  const mentionCache = useMemo(
     () =>
-      createFileSearchCache((q) =>
-        port != null && projectId != null ? searchFiles(port, projectId, q, chatId ?? undefined) : Promise.resolve([]),
-      ),
+      createMentionCache({
+        searchFiles: (q) =>
+          port != null && projectId != null
+            ? searchFiles(port, projectId, q, chatId ?? undefined)
+            : Promise.resolve([]),
+        getFileTree: (dir) =>
+          port != null && projectId != null
+            ? getFileTree(port, projectId, dir, chatId ?? undefined)
+            : Promise.resolve([]),
+        browseFilesystem: (dir) =>
+          port != null ? browseFilesystem(port, dir, { includeFiles: true, includeHidden: true }) : Promise.resolve([]),
+      }),
     [port, projectId, chatId],
   );
 
-  // Bump a version counter every time the cache emits so the fileAdapter memo
+  // Bump a version counter every time the cache emits so the mentionAdapter memo
   // deps change, forcing a new adapter reference and invalidating the native
   // trigger memo that memoizes adapter.search(query) on [open, adapter, query].
   const [version, bump] = useState(0);
-  useEffect(() => fileCache.subscribe(() => bump((n) => n + 1)), [fileCache]);
+  useEffect(() => mentionCache.subscribe(() => bump((n) => n + 1)), [mentionCache]);
 
-  const fileAdapter = useMemo(() => buildFileTriggerAdapter(fileCache), [fileCache, version]);
+  // agents merge into fuzzy results → rebuild when agents change too.
+  const mentionAdapter = useMemo(
+    () => buildMentionTriggerAdapter(mentionCache, agents),
+    [mentionCache, agents, version],
+  );
 
   const slashFmt = useMemo(() => literalDirectiveFormatter('/'), []);
-  const atFmt = useMemo(() => literalDirectiveFormatter('@'), []);
+  const atFmt = useMemo(() => mentionDirectiveFormatter(), []);
 
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>
@@ -130,10 +147,10 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
         </ComposerPrimitive.Unstable_TriggerPopoverItems>
       </TP>
 
-      {/* `@` file trigger */}
-      <TP char="@" adapter={fileAdapter}>
+      {/* `@` mention trigger (agents + files + tree/filesystem drill-down) */}
+      <TP char="@" adapter={mentionAdapter}>
         <TP.Directive formatter={atFmt} />
-        <FileSearchDriver cache={fileCache} />
+        <MentionDriver cache={mentionCache} />
         <ComposerPrimitive.Unstable_TriggerPopoverItems>
           {(items) =>
             items.length === 0 ? null : (

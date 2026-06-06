@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { literalDirectiveFormatter } from '../directive-formatter';
+import { literalDirectiveFormatter, mentionDirectiveFormatter } from '../directive-formatter';
 
 describe('literalDirectiveFormatter', () => {
   describe('with "@" prefix', () => {
@@ -47,6 +47,39 @@ describe('literalDirectiveFormatter', () => {
       const segments = fmt.parse('@src/index.ts /my-skill');
       expect(segments).toHaveLength(1);
       expect(segments[0]).toEqual({ kind: 'text', text: '@src/index.ts /my-skill' });
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mentionDirectiveFormatter
+// ---------------------------------------------------------------------------
+
+describe('mentionDirectiveFormatter', () => {
+  const fmt = mentionDirectiveFormatter();
+
+  describe('serialize', () => {
+    it('file item → @<id> with trailing space', () => {
+      expect(fmt.serialize({ id: 'src/foo.ts', type: 'file', label: 'foo.ts' })).toBe('@src/foo.ts ');
+    });
+
+    it('agent item → @<id> with trailing space', () => {
+      expect(fmt.serialize({ id: 'agent-name', type: 'agent', label: 'agent-name' })).toBe('@agent-name ');
+    });
+
+    it('directory item → @<id>/ with NO trailing space (keeps token open for drill-down)', () => {
+      expect(fmt.serialize({ id: 'src/components', type: 'directory', label: 'components' })).toBe('@src/components/');
+    });
+  });
+
+  describe('parse', () => {
+    it('returns a single text segment containing the full input — never produces directive chips', () => {
+      const segments = fmt.parse('any @x text');
+      expect(segments).toEqual([{ kind: 'text', text: 'any @x text' }]);
+    });
+
+    it('returns a single text segment for an empty string', () => {
+      expect(fmt.parse('')).toEqual([{ kind: 'text', text: '' }]);
     });
   });
 });
