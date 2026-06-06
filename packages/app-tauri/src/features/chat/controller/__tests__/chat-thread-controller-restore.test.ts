@@ -289,3 +289,109 @@ describe('reconcilePendingAgainstHistory — non-matching text', () => {
     expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.text).toBe('original message');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6. Double-fired send — both phantom pendings are cleared
+//
+// Two calls to sendMessage() with texts that normalize to the same fingerprint
+// ('ask me two questions' vs ' ask me two questions ') produce two distinct
+// pending entries (different clientIds, same normalized text). The server
+// history contains the message exactly ONCE. reconcilePendingAgainstHistory
+// must clear BOTH pendings — not just the first match — because it iterates
+// every pending and dispatches local.message.reconciled for each one whose
+// normalized text is in the server set.
+// ---------------------------------------------------------------------------
+
+describe('reconcilePendingAgainstHistory — double-fired send', () => {
+  it('clears both phantom pendings when server history has the message exactly once', async () => {
+    vi.mocked(getChatMessages).mockResolvedValue([]);
+
+    const { fakeClient } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribe(() => {});
+
+    // sendMessage trims text before creating the pending, so 'ask me two questions'
+    // and ' ask me two questions ' both store text 'ask me two questions'.
+    // The clientId counter is per-call, so two distinct pending entries are created.
+    await ctrl.sendMessage(textAppendMsg('ask me two questions'));
+    await ctrl.sendMessage(textAppendMsg(' ask me two questions '));
+
+    // Both pendings exist before refresh.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(2);
+
+    // Server history has the message exactly once.
+    vi.mocked(getChatMessages).mockResolvedValue([userDisplayMsg('srv-dbl-1', 'ask me two questions')]);
+
+    await ctrl.refresh();
+
+    // Both phantom pendings must be cleared — the server copy is the sole source.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Reconcile on history — only the matching pending is removed; the other
+//    pending (different text) is retained
+// ---------------------------------------------------------------------------
+
+describe('reconcilePendingAgainstHistory — partial match: one cleared, one retained', () => {
+  it('removes only the pending whose text is in history, leaving the other intact', async () => {
+    vi.mocked(getChatMessages).mockResolvedValue([]);
+
+    const { fakeClient } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribe(() => {});
+
+    await ctrl.sendMessage(textAppendMsg('first question'));
+    await ctrl.sendMessage(textAppendMsg('second question'));
+
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(2);
+
+    // History only contains the first message — second has not echoed yet.
+    vi.mocked(getChatMessages).mockResolvedValue([userDisplayMsg('srv-p1', 'first question')]);
+
+    await ctrl.refresh();
+
+    // Exactly one pending remains — the one whose text is absent from history.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
+    expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.text).toBe('second question');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Delayed echo — pending older than the live match window reconciles on
+//    history re-seed (the history path ignores the time window entirely)
+//
+// vi.useFakeTimers() is already in beforeEach, so Date.now() is controlled.
+// We advance the fake clock by 11 minutes AFTER seeding the pending, making
+// its createdAt appear 11 minutes in the past relative to the refresh call.
+// The live reconcile path would reject this (window = 10 min), but
+// reconcilePendingAgainstHistory is authoritative and must still clear it.
+// ---------------------------------------------------------------------------
+
+describe('reconcilePendingAgainstHistory — delayed echo past the live match window', () => {
+  it('reconciles a pending older than 10 minutes when history contains the matching text', async () => {
+    vi.mocked(getChatMessages).mockResolvedValue([]);
+
+    const { fakeClient } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribe(() => {});
+
+    // Seed the pending at t=0.
+    await ctrl.sendMessage(textAppendMsg('delayed echo message'));
+
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
+
+    // Advance the fake clock by 11 minutes so the pending's createdAt is now
+    // outside the 10-minute live-match window.
+    vi.advanceTimersByTime(11 * 60 * 1000);
+
+    // History now contains the server echo.
+    vi.mocked(getChatMessages).mockResolvedValue([userDisplayMsg('srv-late-1', 'delayed echo message')]);
+
+    await ctrl.refresh();
+
+    // The pending must be reconciled despite its age — history path is authoritative.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+  });
+});

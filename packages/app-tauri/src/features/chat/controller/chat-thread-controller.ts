@@ -40,23 +40,26 @@ function createLocalId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${localIdCounter.toString(36)}`;
 }
 
-const PENDING_MATCH_WINDOW_MS = 2 * 60 * 1000;
+// Live message.added match window. Generous so a wedged/slow run (the echo can
+// land minutes after the optimistic send) still reconciles instead of stranding
+// a duplicate. History re-seed reconciliation ignores this entirely (authoritative).
+const PENDING_MATCH_WINDOW_MS = 10 * 60 * 1000;
 
 function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-function reconcilePendingOnAdd(state: ChatThreadState, content: DisplayContent[]): string | null {
+function reconcilePendingOnAdd(state: ChatThreadState, content: DisplayContent[], ignoreWindow = false): string | null {
   const textBlock = content.find((c): c is DisplayContent & { type: 'text' } => c.type === 'text');
   const now = Date.now();
+  const inWindow = (p: PendingUserMessage) => ignoreWindow || Math.abs(now - p.createdAt) <= PENDING_MATCH_WINDOW_MS;
 
   if (!textBlock) {
     // Attachment-only server message: match the oldest pending whose text is
     // empty (i.e. also attachment-only). Never reconcile a text-bearing pending
     // against a no-text server message.
     const candidates = Object.values(state.pendingUserMessages).filter(
-      (p): p is PendingUserMessage =>
-        p.status === 'pending' && p.text === '' && Math.abs(now - p.createdAt) <= PENDING_MATCH_WINDOW_MS,
+      (p): p is PendingUserMessage => p.status === 'pending' && p.text === '' && inWindow(p),
     );
     if (candidates.length === 0) return null;
     const match = candidates.sort((a, b) => a.createdAt - b.createdAt)[0]!;
@@ -69,7 +72,7 @@ function reconcilePendingOnAdd(state: ChatThreadState, content: DisplayContent[]
     (p): p is PendingUserMessage =>
       p.status === 'pending' &&
       p.text !== '' &&
-      Math.abs(now - p.createdAt) <= PENDING_MATCH_WINDOW_MS &&
+      inWindow(p) &&
       (serverFp.length === 0 || normalizeText(p.text) === serverFp),
   );
 
@@ -168,14 +171,34 @@ export class ChatThreadController {
    * Reconcile optimistic pendings against re-seeded history. A reconnect/refetch
    * delivers the server echo via `history.loaded`, NOT `message.added`, so the
    * live reconcile path never fires — without this the optimistic copy lingers
-   * as a duplicate. Matches by text within the pending window (same rule as the
-   * live path), and removes each matched pending.
+   * as a duplicate.
+   *
+   * History is AUTHORITATIVE, so this ignores the live match window and clears
+   * EVERY pending whose text the server now has — covering both a wedged/slow
+   * echo (older than the window) and a double-fired send (an extra phantom
+   * pending the single-match live path leaves behind).
    */
   private reconcilePendingAgainstHistory(messages: DisplayMessage[]): void {
+    const serverTexts = new Set<string>();
+    let hasAttachmentOnly = false;
     for (const message of messages) {
       if (message.type !== 'user') continue;
-      const clientId = reconcilePendingOnAdd(this.state, message.content);
-      if (clientId) this.dispatch({ type: 'local.message.reconciled', clientId });
+      const textBlock = message.content.find((c): c is DisplayContent & { type: 'text' } => c.type === 'text');
+      if (textBlock) serverTexts.add(normalizeText(textBlock.text));
+      else hasAttachmentOnly = true;
+    }
+    for (const pending of Object.values(this.state.pendingUserMessages)) {
+      if (pending.status !== 'pending' || pending.text === '') continue;
+      if (serverTexts.has(normalizeText(pending.text)))
+        this.dispatch({ type: 'local.message.reconciled', clientId: pending.clientId });
+    }
+    // Attachment-only pendings (empty text) keep the per-message match.
+    if (hasAttachmentOnly) {
+      for (const message of messages) {
+        if (message.type !== 'user') continue;
+        const clientId = reconcilePendingOnAdd(this.state, message.content, true);
+        if (clientId) this.dispatch({ type: 'local.message.reconciled', clientId });
+      }
     }
   }
 
