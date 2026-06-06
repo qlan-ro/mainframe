@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { FileResult } from '../files';
-import { searchFiles } from '../files';
+import type { FileResult, FileTreeEntry } from '../files';
+import { searchFiles, getFileTree, browseFilesystem } from '../files';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -9,6 +9,16 @@ import { searchFiles } from '../files';
 const FILE_FIXTURE: FileResult[] = [
   { name: 'index.ts', path: 'src/index.ts', type: 'file', exact: true },
   { name: 'utils.ts', path: 'src/utils/utils.ts', type: 'file', exact: false },
+];
+
+const TREE_FIXTURE: FileTreeEntry[] = [
+  { name: 'src', path: 'src', type: 'directory' },
+  { name: 'README.md', path: 'README.md', type: 'file' },
+];
+
+const BROWSE_FIXTURE: FileTreeEntry[] = [
+  { name: 'Documents', path: '/Users/me/Documents', type: 'directory' },
+  { name: 'notes.txt', path: '/Users/me/notes.txt', type: 'file' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -46,6 +56,10 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+// ---------------------------------------------------------------------------
+// searchFiles
+// ---------------------------------------------------------------------------
 
 describe('searchFiles', () => {
   it('calls GET /api/projects/<projectId>/search/files with q and limit=30', async () => {
@@ -115,5 +129,146 @@ describe('searchFiles', () => {
     );
 
     await expect(searchFiles(31415, 'proj-1', 'foo')).rejects.toThrow('not found');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getFileTree
+// ---------------------------------------------------------------------------
+
+describe('getFileTree', () => {
+  it('calls GET /api/projects/<projectId>/tree?path=. by default', async () => {
+    mockFetchOk(TREE_FIXTURE);
+
+    await getFileTree(31415, 'proj-1');
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/projects/proj-1/tree?path=.', { method: 'GET' });
+  });
+
+  it('uses the provided dir argument in the path param', async () => {
+    mockFetchOk(TREE_FIXTURE);
+
+    await getFileTree(31415, 'proj-1', 'src/components');
+
+    const calledUrl = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(calledUrl).toContain('path=src%2Fcomponents');
+  });
+
+  it('includes chatId when provided', async () => {
+    mockFetchOk([]);
+
+    await getFileTree(31415, 'proj-1', '.', 'chat-xyz');
+
+    const calledUrl = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(calledUrl).toContain('chatId=chat-xyz');
+  });
+
+  it('omits chatId when not provided', async () => {
+    mockFetchOk([]);
+
+    await getFileTree(31415, 'proj-1', '.');
+
+    const calledUrl = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(calledUrl).not.toContain('chatId');
+  });
+
+  it('URL-encodes the projectId in the path', async () => {
+    mockFetchOk([]);
+
+    await getFileTree(31415, 'my project/1');
+
+    const calledUrl = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(calledUrl).toContain('/api/projects/my%20project%2F1/tree');
+  });
+
+  it('returns the unwrapped FileTreeEntry[] from the ApiResponse envelope', async () => {
+    mockFetchOk(TREE_FIXTURE);
+
+    const result = await getFileTree(31415, 'proj-1');
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ name: 'src', path: 'src', type: 'directory' });
+    expect(result[1]).toEqual({ name: 'README.md', path: 'README.md', type: 'file' });
+  });
+
+  it('throws when success is false', async () => {
+    mockFetchApiError('project not found');
+
+    await expect(getFileTree(31415, 'proj-1')).rejects.toThrow('project not found');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// browseFilesystem
+// ---------------------------------------------------------------------------
+
+describe('browseFilesystem', () => {
+  it('calls GET /api/filesystem/browse?path=<dir>', async () => {
+    mockFetchOk({ path: '/Users/me', entries: BROWSE_FIXTURE });
+
+    await browseFilesystem(31415, '/Users/me');
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/filesystem/browse?path=%2FUsers%2Fme', {
+      method: 'GET',
+    });
+  });
+
+  it('appends includeFiles=true when set', async () => {
+    mockFetchOk({ path: '/Users/me', entries: BROWSE_FIXTURE });
+
+    await browseFilesystem(31415, '/Users/me', { includeFiles: true });
+
+    const calledUrl = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(calledUrl).toContain('includeFiles=true');
+  });
+
+  it('appends includeHidden=false when set', async () => {
+    mockFetchOk({ path: '/Users/me', entries: BROWSE_FIXTURE });
+
+    await browseFilesystem(31415, '/Users/me', { includeHidden: false });
+
+    const calledUrl = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(calledUrl).toContain('includeHidden=false');
+  });
+
+  it('omits includeFiles/includeHidden when opts not provided', async () => {
+    mockFetchOk({ path: '/Users/me', entries: [] });
+
+    await browseFilesystem(31415, '/Users/me');
+
+    const calledUrl = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(calledUrl).not.toContain('includeFiles');
+    expect(calledUrl).not.toContain('includeHidden');
+  });
+
+  it('returns the entries array unwrapped from the nested data.entries shape', async () => {
+    mockFetchOk({ path: '/Users/me', entries: BROWSE_FIXTURE });
+
+    const result = await browseFilesystem(31415, '/Users/me', { includeFiles: true, includeHidden: false });
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ name: 'Documents', path: '/Users/me/Documents', type: 'directory' });
+    expect(result[1]).toEqual({ name: 'notes.txt', path: '/Users/me/notes.txt', type: 'file' });
+  });
+
+  it('throws when success is false', async () => {
+    mockFetchApiError('path not found');
+
+    await expect(browseFilesystem(31415, '/bad/path')).rejects.toThrow('path not found');
+  });
+
+  it('throws when the HTTP response is not ok', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: 'server error' }),
+      }),
+    );
+
+    await expect(browseFilesystem(31415, '/Users/me')).rejects.toThrow('server error');
   });
 });
