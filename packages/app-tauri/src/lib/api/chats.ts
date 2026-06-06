@@ -3,7 +3,7 @@
  * All routes are unauthenticated when called from localhost (daemon auth middleware
  * isLocalhost() bypass confirmed in packages/core/src/server/middleware/auth.ts).
  */
-import type { DisplayMessage, Chat, SessionTuning, ExecutionMode } from '@qlan-ro/mainframe-types';
+import type { DisplayMessage, Chat, SessionTuning, ExecutionMode, ControlRequest } from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
 /** Body for PATCH /api/chats/:id/config — adapter / model / permission / plan. */
@@ -28,6 +28,15 @@ export const getChatMessages = (port: number, chatId: string): Promise<DisplayMe
 /** The chat record (model, effort, planMode, permissionMode, adapterId, isRunning, …). */
 export const getChat = (port: number, chatId: string): Promise<Chat> =>
   request<Chat>('GET', `${apiBase(port)}/api/chats/${chatId}`);
+
+/**
+ * The chat's currently-pending permission (control_request), or null. Used to
+ * restore the permission gate on load/reconnect — the daemon does NOT re-emit
+ * `permission.requested` on subscribe/resume, so a live event missed during a
+ * disconnect must be recovered via this REST read.
+ */
+export const getPendingPermission = (port: number, chatId: string): Promise<ControlRequest | null> =>
+  request<ControlRequest | null>('GET', `${apiBase(port)}/api/chats/${chatId}/pending-permission`);
 
 /**
  * Persist a tuning patch (effort + fast/ultracode/adaptiveThinking — the only

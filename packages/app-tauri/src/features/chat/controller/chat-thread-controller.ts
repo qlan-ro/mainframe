@@ -9,10 +9,11 @@
  * Reconciliation of optimistic pending messages happens on display.message.added.
  */
 import type { AppendMessage } from '@assistant-ui/react';
-import type { DaemonEvent, ControlResponse, DisplayContent } from '@qlan-ro/mainframe-types';
+import type { DaemonEvent, ControlResponse, DisplayContent, DisplayMessage } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import {
   getChatMessages,
+  getPendingPermission,
   interruptChat,
   resumeChat,
   cancelQueuedMessage,
@@ -145,6 +146,7 @@ export class ChatThreadController {
       .then((messages) => {
         if (this.loadPromise !== request) return;
         this.dispatch({ type: 'history.loaded', messages });
+        this.reconcilePendingAgainstHistory(messages);
       })
       .catch((error: unknown) => {
         if (this.loadPromise !== request) return;
@@ -160,6 +162,21 @@ export class ChatThreadController {
 
   public refresh(): Promise<void> {
     return this.load(true);
+  }
+
+  /**
+   * Reconcile optimistic pendings against re-seeded history. A reconnect/refetch
+   * delivers the server echo via `history.loaded`, NOT `message.added`, so the
+   * live reconcile path never fires — without this the optimistic copy lingers
+   * as a duplicate. Matches by text within the pending window (same rule as the
+   * live path), and removes each matched pending.
+   */
+  private reconcilePendingAgainstHistory(messages: DisplayMessage[]): void {
+    for (const message of messages) {
+      if (message.type !== 'user') continue;
+      const clientId = reconcilePendingOnAdd(this.state, message.content);
+      if (clientId) this.dispatch({ type: 'local.message.reconciled', clientId });
+    }
   }
 
   public async sendMessage(message: AppendMessage): Promise<void> {
@@ -266,9 +283,25 @@ export class ChatThreadController {
     void resumeChat(this.port, this.chatId).catch((err: unknown) =>
       console.warn('[chat-controller] resumeChat failed', err),
     );
+    // The daemon does NOT re-emit `permission.requested` on subscribe/resume, so
+    // a permission requested before this client loaded (or during a disconnect)
+    // must be restored via REST — otherwise the gate never appears.
+    this.restorePendingPermission();
     if (reconnect) {
       this.refreshInBackground();
     }
+  }
+
+  /** Fetch the chat's pending permission (if any) and seed the gate. */
+  private restorePendingPermission(): void {
+    void getPendingPermission(this.port, this.chatId)
+      .then((request) => {
+        if (this.disposed || !request) return;
+        // Skip if we already hold this one (a live event beat the REST read).
+        if (request.requestId && request.requestId in this.state.interactions.permissions) return;
+        this.dispatch({ type: 'permission.requested', requestId: request.requestId, request });
+      })
+      .catch((err: unknown) => console.warn('[chat-controller] restore pending-permission failed', err));
   }
 
   private clearAckFallback(): void {
