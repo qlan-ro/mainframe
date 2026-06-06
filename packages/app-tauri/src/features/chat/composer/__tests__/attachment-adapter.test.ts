@@ -1,18 +1,32 @@
 /**
- * Behavior tests for toUploadItems.
+ * Behavior tests for toUploadItems and createAttachmentAdapter().add.
  *
- * Each test uses a concrete fixed CompleteAttachment input and asserts the
- * exact UploadAttachmentItem output — no logic from the implementation is
- * re-derived here.
+ * Each test uses a concrete fixed input and asserts the exact output —
+ * no logic from the implementation is re-derived here.
  *
- * Shapes under test:
+ * Shapes under test (toUploadItems):
  *   - image content part  → { type:'image', image: '<data-url>' }
  *   - non-image (document/text) content part → { type:'text', text: '<data-url>' }
  *   - malformed / missing data-URL → attachment is skipped
  *   - empty attachments array / undefined → returns []
+ *
+ * Shapes under test (createAttachmentAdapter().add):
+ *   - oversized file (>5 MB) → toast.error called once with exact message, add() throws same message
+ *   - under-limit image file  → no toast, resolves to PendingAttachment with type:'image'
+ *   - under-limit document file → no toast, resolves to PendingAttachment with type:'document'
  */
-import { describe, it, expect } from 'vitest';
-import { toUploadItems } from '../attachment-adapter';
+
+// ---------------------------------------------------------------------------
+// sonner mock — must be hoisted before any import that touches sonner
+// ---------------------------------------------------------------------------
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn() },
+}));
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { toast } from 'sonner';
+import { toUploadItems, createAttachmentAdapter } from '../attachment-adapter';
 
 // ---------------------------------------------------------------------------
 // Helpers — build minimal CompleteAttachment-compatible objects
@@ -154,5 +168,83 @@ describe('toUploadItems — malformed data-URL skipping', () => {
     };
     const good = makeDocument('ok.pdf', 'application/pdf', 'T0s=');
     expect(toUploadItems([bad, good])).toEqual([{ name: 'ok.pdf', mediaType: 'application/pdf', data: 'T0s=' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createAttachmentAdapter().add — oversized and under-limit file handling
+// ---------------------------------------------------------------------------
+
+describe('createAttachmentAdapter().add — oversized file', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('calls toast.error exactly once with the exact message for a file > 5 MB', async () => {
+    const adapter = createAttachmentAdapter();
+    const file = new File(['x'], 'huge.png', { type: 'image/png' });
+    Object.defineProperty(file, 'size', { value: 6 * 1024 * 1024 });
+
+    await expect(adapter.add({ file })).rejects.toThrow('"huge.png" is too large. Max file size is 5MB.');
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledOnce();
+    expect(vi.mocked(toast.error).mock.calls[0]![0]).toBe('"huge.png" is too large. Max file size is 5MB.');
+  });
+
+  it('the thrown Error message exactly matches the toast message', async () => {
+    const adapter = createAttachmentAdapter();
+    const file = new File(['y'], 'video.mp4', { type: 'video/mp4' });
+    Object.defineProperty(file, 'size', { value: 10 * 1024 * 1024 });
+
+    let caughtMessage: string | undefined;
+    try {
+      await adapter.add({ file });
+    } catch (err) {
+      caughtMessage = err instanceof Error ? err.message : String(err);
+    }
+
+    expect(caughtMessage).toBe('"video.mp4" is too large. Max file size is 5MB.');
+    expect(vi.mocked(toast.error).mock.calls[0]![0]).toBe(caughtMessage);
+  });
+});
+
+describe('createAttachmentAdapter().add — under-limit file', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('resolves to a PendingAttachment with type:"image" for an image/* file', async () => {
+    const adapter = createAttachmentAdapter();
+    const file = new File(['fake-png-bytes'], 'avatar.png', { type: 'image/png' });
+    // size defaults to the byte length of 'fake-png-bytes' (~14 bytes) — well under 5 MB
+
+    const result = await adapter.add({ file });
+
+    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+    // add() may return a PendingAttachment or an AsyncGenerator; ours is the former.
+    if (!('type' in result)) throw new Error('expected a PendingAttachment, got an AsyncGenerator');
+    expect(result.type).toBe('image');
+    expect(result.name).toBe('avatar.png');
+  });
+
+  it('resolves to a PendingAttachment with type:"document" for a non-image file', async () => {
+    const adapter = createAttachmentAdapter();
+    const file = new File(['%PDF-1.4'], 'report.pdf', { type: 'application/pdf' });
+
+    const result = await adapter.add({ file });
+
+    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+    if (!('type' in result)) throw new Error('expected a PendingAttachment, got an AsyncGenerator');
+    expect(result.type).toBe('document');
+    expect(result.name).toBe('report.pdf');
+  });
+
+  it('does NOT call toast.error for a file at exactly the 5 MB limit boundary', async () => {
+    const adapter = createAttachmentAdapter();
+    const file = new File(['x'], 'boundary.png', { type: 'image/png' });
+    Object.defineProperty(file, 'size', { value: 5 * 1024 * 1024 });
+
+    await expect(adapter.add({ file })).resolves.toBeDefined();
+    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
   });
 });

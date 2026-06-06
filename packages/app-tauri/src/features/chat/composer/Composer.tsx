@@ -12,15 +12,16 @@
  * so its height registers as scroll inset — the last message never hides behind it.)
  */
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
-import { ArrowUpIcon, SquareIcon } from 'lucide-react';
+import { AlertTriangleIcon, ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ComposerToolbar } from './config-toolbar/ComposerToolbar';
 import { ComposerEditMode } from './edit/ComposerEditMode';
 import { useComposerEdit } from './edit/composer-edit-context';
 import { ComposerAttachments, ComposerAddAttachment } from '@/components/ui/assistant-ui/attachment';
+import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 
-/** Send (idle, disabled while empty) ↔ Cancel (running) — swapped on thread.isRunning. */
-function SendOrCancelButton() {
+/** Send (idle, disabled while empty or worktree-missing) ↔ Cancel (running) — swapped on thread.isRunning. */
+function SendOrCancelButton({ sendDisabled }: { sendDisabled?: boolean }) {
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const base = 'flex size-8 shrink-0 items-center justify-center rounded-full transition-opacity';
 
@@ -39,6 +40,7 @@ function SendOrCancelButton() {
     <ComposerPrimitive.Send
       data-testid="chat-composer-send"
       aria-label="Send"
+      disabled={sendDisabled}
       className={cn(base, 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40')}
     >
       <ArrowUpIcon className="size-4" />
@@ -46,8 +48,33 @@ function SendOrCancelButton() {
   );
 }
 
+/** Shown when the session's worktree was deleted out from under it — input is locked until it's restored or the chat archived. */
+function WorktreeMissingBanner({ worktreePath }: { worktreePath?: string }) {
+  return (
+    <div
+      data-testid="chat-composer-worktree-missing"
+      className="mx-3 mt-2 flex items-center gap-2 rounded-md bg-mf-destructive-tint px-3 py-2 text-caption text-destructive"
+    >
+      <AlertTriangleIcon className="size-3.5 shrink-0" />
+      <span>
+        The worktree for this session was deleted. Archive this session or recreate the worktree
+        {worktreePath ? (
+          <>
+            {' '}
+            at <code className="font-mono">{worktreePath}</code>.
+          </>
+        ) : (
+          '.'
+        )}
+      </span>
+    </div>
+  );
+}
+
 export function Composer() {
   const { editing, cancelEdit } = useComposerEdit();
+  const chat = useChatExtras()?.state.chatConfig ?? null;
+  const worktreeMissing = chat?.worktreeMissing ?? false;
   if (editing) return <ComposerEditMode key={editing.messageId} edit={editing} onDone={cancelEdit} />;
 
   return (
@@ -57,12 +84,15 @@ export function Composer() {
     >
       <ComposerPrimitive.AttachmentDropzone
         data-testid="composer-dropzone"
+        disabled={worktreeMissing}
         className={cn(
           'rounded-2xl transition-colors',
           '[&[data-dragging]]:ring-2 [&[data-dragging]]:ring-primary [&[data-dragging]]:ring-offset-1',
           '[&[data-dragging]]:bg-mf-selection',
         )}
       >
+        {worktreeMissing && <WorktreeMissingBanner worktreePath={chat?.worktreePath} />}
+
         {/* Attachment tiles — renders nothing (empty:hidden) when no attachments pending */}
         <div data-testid="composer-attachments" className="px-4 pt-3 empty:hidden">
           <ComposerAttachments />
@@ -70,11 +100,13 @@ export function Composer() {
 
         <ComposerPrimitive.Input
           data-testid="chat-composer-input"
+          data-mf-composer-input
           data-noring
+          disabled={worktreeMissing}
           placeholder="Message the assistant…"
           rows={1}
           autoFocus
-          className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4"
+          className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
         />
 
         <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2.5">
@@ -83,7 +115,7 @@ export function Composer() {
             <ComposerAddAttachment />
             <ComposerToolbar />
           </div>
-          <SendOrCancelButton />
+          <SendOrCancelButton sendDisabled={worktreeMissing} />
         </div>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>

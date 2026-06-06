@@ -3,9 +3,14 @@
  * `adapters.attachments`). Reads a file into a data URL as a pending image/
  * document part; the actual daemon upload happens on send in the controller.
  *
- * Ported from the desktop adapter (only @assistant-ui/react + browser APIs).
+ * Ported from the desktop adapter. The native composer swallows a rejected
+ * `add()` (the dropzone only `console.error`s it; the button path doesn't catch
+ * at all), so we surface the >5 MB rejection ourselves via `toast.error` before
+ * re-throwing — otherwise an oversized drop fails with no user signal. Desktop
+ * showed an inline error band; we reuse the app-wide toaster (M1) instead.
  */
 import type { AttachmentAdapter, PendingAttachment, CompleteAttachment, AppendMessage } from '@assistant-ui/react';
+import { toast } from 'sonner';
 import type { UploadAttachmentItem } from '../../../lib/api/attachments';
 
 export const FILE_SIZE_LIMIT_MB = 5;
@@ -53,7 +58,9 @@ export function createAttachmentAdapter(): AttachmentAdapter {
     accept: ACCEPT_ALL,
     async add({ file }) {
       if (file.size > MAX_SIZE) {
-        throw new Error(`"${file.name}" is too large. Max file size is ${FILE_SIZE_LIMIT_MB}MB.`);
+        const message = `"${file.name}" is too large. Max file size is ${FILE_SIZE_LIMIT_MB}MB.`;
+        toast.error(message);
+        throw new Error(message);
       }
       const dataUrl = await readFileAsDataUrl(file);
       const isImage = file.type.startsWith('image/');
