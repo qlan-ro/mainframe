@@ -96,6 +96,13 @@ export function handleDaemonEvent(
       if (event.chatId !== chatId) return { kind: 'noop' };
       return { kind: 'event', event: { type: 'queued.cancel_failed', uuid: event.uuid } };
 
+    case 'error':
+      // chatId is optional on error events. Ignore only when explicitly
+      // targeting a different chat; a missing chatId means it is global and
+      // applies to whatever chat is currently running.
+      if (event.chatId !== undefined && event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'run.failed', error: event.error } };
+
     default:
       return { kind: 'noop' };
   }

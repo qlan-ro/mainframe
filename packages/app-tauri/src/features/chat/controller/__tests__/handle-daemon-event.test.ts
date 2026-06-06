@@ -108,3 +108,33 @@ describe('handleDaemonEvent — message.queued.cancel_failed', () => {
     expect(result).toEqual({ kind: 'noop' });
   });
 });
+
+// ---------------------------------------------------------------------------
+// error
+// ---------------------------------------------------------------------------
+
+describe('handleDaemonEvent — error', () => {
+  it('returns run.failed when chatId matches this chat', () => {
+    const result = handleDaemonEvent({ type: 'error', chatId: CHAT_ID, error: 'boom' }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: { type: 'run.failed', error: 'boom' },
+    });
+  });
+
+  it('returns run.failed when chatId is absent (global error applies to current run)', () => {
+    const result = handleDaemonEvent({ type: 'error', error: 'boom' }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({
+      kind: 'event',
+      event: { type: 'run.failed', error: 'boom' },
+    });
+  });
+
+  it('returns noop when chatId targets a different chat', () => {
+    const result = handleDaemonEvent({ type: 'error', chatId: OTHER_CHAT, error: 'boom' }, CHAT_ID, EMPTY_MSGS);
+
+    expect(result).toEqual({ kind: 'noop' });
+  });
+});
