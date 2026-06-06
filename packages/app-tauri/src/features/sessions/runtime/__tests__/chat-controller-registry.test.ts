@@ -4,11 +4,14 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 // Mock ChatThreadController — no WS / REST runs
 // ---------------------------------------------------------------------------
 
+// The mock implementation is a regular `function` (not an arrow): vitest 4 /
+// tinyspy invokes the spy's implementation via Reflect.construct on `new`, and
+// arrow functions are not constructable. A plain function returning an object
+// keeps the same shape ({ chatId, dispose: vi.fn() }) and is `new`-safe.
 vi.mock('../../../chat/controller/chat-thread-controller', () => ({
-  ChatThreadController: vi.fn().mockImplementation((chatId: string) => ({
-    chatId,
-    dispose: vi.fn(),
-  })),
+  ChatThreadController: vi.fn().mockImplementation(function (chatId: string) {
+    return { chatId, dispose: vi.fn() };
+  }),
 }));
 
 // Import AFTER the mock is registered so the registry module picks up the mock.
