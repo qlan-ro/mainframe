@@ -135,11 +135,8 @@ export class ChatManager {
    * Call once at daemon boot, after construction (see `index.ts`).
    */
   recoverStaleWorkingState(): void {
-    for (const chat of this.db.chats.listAll()) {
-      if (chat.processState === 'working') {
-        this.db.chats.update(chat.id, { processState: 'idle' });
-      }
-    }
+    const count = this.db.chats.resetWorkingToIdle();
+    logger.info({ count }, 'reset orphaned working chats to idle on boot');
   }
 
   /** Stop background timers. Idempotent. Tests and shutdown should call this. */

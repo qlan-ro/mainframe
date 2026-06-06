@@ -21,6 +21,16 @@ function makeStatefulDb(initial: Array<Partial<Chat> & { id: string }>): Databas
         const existing = store.get(_id);
         if (existing) store.set(_id, { ...existing, ...partial });
       },
+      resetWorkingToIdle: () => {
+        let count = 0;
+        for (const [id, chat] of store) {
+          if (chat.processState === 'working') {
+            store.set(id, { ...chat, processState: 'idle' });
+            count++;
+          }
+        }
+        return count;
+      },
       list: vi.fn().mockReturnValue([]),
       create: vi.fn(),
       archive: vi.fn(),

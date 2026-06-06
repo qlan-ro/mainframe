@@ -100,10 +100,17 @@ export function chatRoutes(ctx: RouteContext): Router {
     }),
   );
 
+  const PendingPermissionParams = z.object({ id: z.string().min(1) });
+
   router.get(
     '/api/chats/:id/pending-permission',
     asyncHandler(async (req: Request, res: Response) => {
-      const permission = await ctx.chats.getPendingPermission(param(req, 'id'));
+      const parsed = PendingPermissionParams.safeParse(req.params);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: parsed.error.message });
+        return;
+      }
+      const permission = await ctx.chats.getPendingPermission(parsed.data.id);
       res.json({ success: true, data: permission });
     }),
   );
