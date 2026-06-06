@@ -46,6 +46,7 @@ import { QueuedUserTurn } from './QueuedUserTurn';
 import { ZoomableImage } from '../parts/ZoomableImage';
 import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text';
 import { mainframeUserFormatter } from './user-directives';
+import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Remark plugin set (stable reference — never define inline)
@@ -194,13 +195,14 @@ function UserMessageImpl() {
   const cleanText = meta.cleanText ?? rawText;
 
   // ── Command / skill resolution from metadata ──────────────────────────────
+  const { skills } = useChatSkills();
   const metaCmd = meta.command;
   let slashProps: { kind: 'command' | 'skill'; name: string; userText: string } | null = null;
   if (metaCmd?.name) {
     const isCommand = metaCmd.source === 'commands';
     slashProps = {
       kind: isCommand ? 'command' : 'skill',
-      name: metaCmd.name,
+      name: isCommand ? metaCmd.name : resolveSkillName(metaCmd.name, skills),
       userText: metaCmd.userText ?? cleanText,
     };
   }

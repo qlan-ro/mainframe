@@ -88,3 +88,21 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
 export function useChatSkills(): ChatSkills {
   return useContext(Ctx);
 }
+
+// ---------------------------------------------------------------------------
+// Skill name resolution (mirrors core's resolveSkillName — app-tauri must not
+// depend on @qlan-ro/mainframe-core; this copy stays in sync with the source)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves a raw skill command name (e.g. `my-skill`) to its canonical
+ * invocation name (e.g. `plugin:my-skill`) using the preloaded skills list.
+ * Falls back to the raw name when no match is found (safe when skills is `[]`).
+ */
+export function resolveSkillName(name: string, skills: Skill[]): string {
+  const exact = skills.find((s) => s.invocationName === name || s.name === name);
+  if (exact) return exact.invocationName || exact.name;
+  const suffix = skills.find((s) => s.invocationName?.endsWith(`:${name}`));
+  if (suffix) return suffix.invocationName!;
+  return name;
+}

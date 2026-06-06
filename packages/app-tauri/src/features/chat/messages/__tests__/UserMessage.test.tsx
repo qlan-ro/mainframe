@@ -46,6 +46,11 @@ interface SyntheticMessageState {
         error?: string;
         queued?: boolean;
         cleanText?: string;
+        command?: {
+          name: string;
+          userText?: string;
+          source?: 'commands' | (string & {});
+        };
       };
     };
   };
@@ -64,6 +69,22 @@ vi.mock('@assistant-ui/react', () => ({
     Root: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
   },
 }));
+
+// ---------------------------------------------------------------------------
+// Mock @/features/skills/use-chat-skills
+// ---------------------------------------------------------------------------
+
+// Mutable so tests can swap skills per scenario.
+let __skillsFixture: import('@qlan-ro/mainframe-types').Skill[] = [];
+
+vi.mock('@/features/skills/use-chat-skills', async (importActual) => {
+  // Keep resolveSkillName from the real implementation (it's pure).
+  const actual = await importActual<typeof import('@/features/skills/use-chat-skills')>();
+  return {
+    ...actual,
+    useChatSkills: () => ({ skills: __skillsFixture, loading: false }),
+  };
+});
 
 // ReadMoreBubble and QueuedUserTurn don't need mocking — they render children.
 
@@ -154,5 +175,65 @@ describe('UserMessage — H6: message id and content rendering', () => {
     // cleanText takes priority over the raw content part
     expect(screen.getByText('cleaned text here')).toBeInTheDocument();
     expect(screen.queryByText('raw text here')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — T10: skill chip name resolution
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — T10: skill chip name resolution', () => {
+  const SKILL_FIXTURE: import('@qlan-ro/mainframe-types').Skill = {
+    id: 'skill-1',
+    adapterId: 'claude',
+    name: 'my-skill',
+    displayName: 'My Skill',
+    invocationName: 'plugin:my-skill',
+    description: 'A test skill',
+    scope: 'plugin',
+    filePath: '/path/to/my-skill.md',
+    content: '# My Skill',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('resolves skill chip to invocationName when skills are loaded', () => {
+    // resolveSkillName('my-skill', [SKILL_FIXTURE]):
+    //   exact match via s.name === 'my-skill' → returns s.invocationName = 'plugin:my-skill'
+    __skillsFixture = [SKILL_FIXTURE];
+    __messageFixture = makeFixture({
+      mainframe: {
+        command: { name: 'my-skill', source: 'skills', userText: 'do the thing' },
+      },
+    });
+    renderUserMessage();
+    // The SlashPill renders "/<name>" so expect "/plugin:my-skill" in the DOM.
+    expect(screen.getByText('/plugin:my-skill')).toBeInTheDocument();
+  });
+
+  it('falls back to raw name when skills list is empty', () => {
+    __skillsFixture = [];
+    __messageFixture = makeFixture({
+      mainframe: {
+        command: { name: 'my-skill', source: 'skills', userText: 'do the thing' },
+      },
+    });
+    renderUserMessage();
+    // resolveSkillName('my-skill', []) → 'my-skill' (no match, returns raw name)
+    expect(screen.getByText('/my-skill')).toBeInTheDocument();
+  });
+
+  it('keeps raw name for custom commands (source === commands), no resolution', () => {
+    __skillsFixture = [SKILL_FIXTURE];
+    __messageFixture = makeFixture({
+      mainframe: {
+        command: { name: 'my-skill', source: 'commands', userText: 'do the thing' },
+      },
+    });
+    renderUserMessage();
+    // Custom commands skip resolveSkillName — the raw name is used as-is.
+    expect(screen.getByText('/my-skill')).toBeInTheDocument();
   });
 });
