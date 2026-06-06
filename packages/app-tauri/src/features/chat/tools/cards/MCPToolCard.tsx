@@ -23,6 +23,7 @@ import {
   useMarkerOpen,
   type MarkerState,
 } from './marker-pill';
+import { isErrorResult, extractResultContent } from '../shared/result';
 
 // ── Parse MCP tool name ───────────────────────────────────────────────────────
 
@@ -38,13 +39,12 @@ function parseMcpToolName(toolName: string): { server: string; tool: string } {
 // ── Result text extraction ────────────────────────────────────────────────────
 
 function extractResultText(result: unknown): string {
-  if (result === undefined || result === null) return '';
-  if (typeof result === 'string') return result;
-  if (typeof result === 'object') {
-    const r = result as Record<string, unknown>;
-    if (typeof r['content'] === 'string') return r['content'];
+  const content = extractResultContent(result);
+  if (content !== '') return content;
+  if (result !== undefined && result !== null && typeof result !== 'string') {
+    return JSON.stringify(result, null, 2);
   }
-  return JSON.stringify(result, null, 2);
+  return content;
 }
 
 // ── MCPToolCard ───────────────────────────────────────────────────────────────
@@ -54,15 +54,12 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolName, args, resu
   const { open, toggle } = useMarkerOpen(false);
 
   const isPending = result === undefined;
-  const isResultError =
-    !isPending &&
-    (isError === true ||
-      (typeof result === 'object' && result !== null && (result as Record<string, unknown>)['isError'] === true));
+  const errored = !isPending && isErrorResult(result, isError);
 
-  const state: MarkerState = isPending ? 'pending' : isResultError ? 'error' : 'done';
+  const state: MarkerState = isPending ? 'pending' : errored ? 'error' : 'done';
   const expandable = state === 'done';
 
-  const verb = isResultError ? 'failed:' : isPending ? 'executing' : 'executed';
+  const verb = errored ? 'failed:' : isPending ? 'executing' : 'executed';
 
   const argsText = JSON.stringify(args, null, 2);
   const resultText = extractResultText(result);

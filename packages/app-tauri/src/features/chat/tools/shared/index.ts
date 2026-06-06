@@ -6,7 +6,14 @@
 
 // ── Pure result logic ────────────────────────────────────────────────────────
 export type { TruncatedResult, ResolvedResult } from './result';
-export { isStructuredResult, isTruncatedResult, stripErrorXml, resolveResultText } from './result';
+export {
+  isStructuredResult,
+  isTruncatedResult,
+  stripErrorXml,
+  resolveResultText,
+  isErrorResult,
+  extractResultContent,
+} from './result';
 
 // ── Diff math + rendering ────────────────────────────────────────────────────
 export { countDiffStats, reconstructFromHunks, computeFallbackHunks } from './diff';

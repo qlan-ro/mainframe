@@ -24,6 +24,48 @@ export function isStructuredResult(result: unknown): result is ToolCallResult {
   return typeof result === 'object' && result !== null && 'structuredPatch' in result;
 }
 
+// ---------------------------------------------------------------------------
+// isErrorResult / extractResultContent — shared pill-card helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the tool call resulted in an error.
+ *
+ * Two signal sources:
+ *   1. The `isError` prop forwarded by assistant-ui (boolean flag on the part).
+ *   2. The result object itself carrying `{ isError: true }` (daemon envelope).
+ *
+ * Either signal alone is sufficient — this mirrors what each pill card previously
+ * checked inline with its own local copy.
+ */
+export function isErrorResult(result: unknown, isError?: boolean): boolean {
+  if (isError === true) return true;
+  if (typeof result === 'object' && result !== null) {
+    return (result as Record<string, unknown>)['isError'] === true;
+  }
+  return false;
+}
+
+/**
+ * Extracts a displayable string from an opaque tool-call result.
+ *
+ * Resolution ladder:
+ *   1. `result` is a string                          → return it directly.
+ *   2. `result` is an object with a string `.content` → return `.content`.
+ *   3. Anything else (undefined, null, other object)  → return `''`.
+ *
+ * Callers that need JSON.stringify for a verbose body section should do so
+ * themselves — this helper is for the compact pill label / short display text.
+ */
+export function extractResultContent(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (typeof result === 'object' && result !== null) {
+    const content = (result as Record<string, unknown>)['content'];
+    if (typeof content === 'string') return content;
+  }
+  return '';
+}
+
 /**
  * Returns true when the daemon truncated the tool output and provided a
  * `fullBytes` count so the client can offer an on-demand expand.

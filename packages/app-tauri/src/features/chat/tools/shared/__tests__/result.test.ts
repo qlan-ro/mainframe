@@ -1,11 +1,90 @@
 /**
- * Behavior tests for resolveResultText — the centralized 3-way result ladder.
+ * Behavior tests for result helpers:
+ *   - isErrorResult  — shared pill-card error detection
+ *   - extractResultContent — shared pill-card content extraction
+ *   - resolveResultText — centralized 3-way result ladder
  *
  * Each test provides a concrete fixed input and asserts the exact return shape.
  * No logic from the implementation is re-derived here.
  */
 import { describe, it, expect } from 'vitest';
-import { resolveResultText } from '../result';
+import { resolveResultText, isErrorResult, extractResultContent } from '../result';
+
+// ---------------------------------------------------------------------------
+// isErrorResult
+// ---------------------------------------------------------------------------
+
+describe('isErrorResult', () => {
+  it('returns true when isError prop is true, regardless of result shape', () => {
+    expect(isErrorResult('some text', true)).toBe(true);
+  });
+
+  it('returns true when result object has isError: true', () => {
+    expect(isErrorResult({ isError: true }, undefined)).toBe(true);
+  });
+
+  it('returns true when both isError prop and result.isError are true', () => {
+    expect(isErrorResult({ isError: true }, true)).toBe(true);
+  });
+
+  it('returns false when isError prop is false and result has no isError flag', () => {
+    expect(isErrorResult({ content: 'ok' }, false)).toBe(false);
+  });
+
+  it('returns false when result object has isError: false', () => {
+    expect(isErrorResult({ isError: false }, undefined)).toBe(false);
+  });
+
+  it('returns false for a plain string result with no isError prop', () => {
+    expect(isErrorResult('plain result', undefined)).toBe(false);
+  });
+
+  it('returns false for undefined result with no isError prop', () => {
+    expect(isErrorResult(undefined, undefined)).toBe(false);
+  });
+
+  it('returns false for null result with no isError prop', () => {
+    expect(isErrorResult(null, undefined)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractResultContent
+// ---------------------------------------------------------------------------
+
+describe('extractResultContent', () => {
+  it('returns the string directly when result is a plain string', () => {
+    expect(extractResultContent('hello')).toBe('hello');
+  });
+
+  it('returns empty string for an empty string', () => {
+    expect(extractResultContent('')).toBe('');
+  });
+
+  it('returns the .content field when result is an object with a string content', () => {
+    expect(extractResultContent({ content: 'tool output' })).toBe('tool output');
+  });
+
+  it('returns empty string when result is an object whose .content is not a string', () => {
+    expect(extractResultContent({ content: 42 })).toBe('');
+  });
+
+  it('returns empty string when result is an object without a .content field', () => {
+    expect(extractResultContent({ isError: true })).toBe('');
+  });
+
+  it('returns empty string for undefined', () => {
+    expect(extractResultContent(undefined)).toBe('');
+  });
+
+  it('returns empty string for null', () => {
+    expect(extractResultContent(null)).toBe('');
+  });
+
+  it('returns empty string for a number', () => {
+    expect(extractResultContent(123)).toBe('');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Plain string

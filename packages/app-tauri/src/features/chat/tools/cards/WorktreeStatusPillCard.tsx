@@ -18,16 +18,12 @@ import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { GitBranchIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MarkerWrap, MarkerPill, type MarkerState } from './marker-pill';
+import { isErrorResult, extractResultContent } from '../shared/result';
 
 // ── Result parsing ────────────────────────────────────────────────────────────
 
 function parseEnterResult(result: unknown): { worktreePath?: string; worktreeBranch?: string } {
-  const text =
-    typeof result === 'string'
-      ? result
-      : typeof result === 'object' && result !== null
-        ? (((result as Record<string, unknown>)['content'] as string | undefined) ?? '')
-        : '';
+  const text = extractResultContent(result);
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
     return {
@@ -35,16 +31,9 @@ function parseEnterResult(result: unknown): { worktreePath?: string; worktreeBra
       worktreeBranch: typeof parsed['worktreeBranch'] === 'string' ? parsed['worktreeBranch'] : undefined,
     };
   } catch {
-    return {};
+    /* expected: non-JSON result text */
   }
-}
-
-function isResultError(result: unknown, isError: boolean | undefined): boolean {
-  if (isError === true) return true;
-  if (typeof result === 'object' && result !== null) {
-    return (result as Record<string, unknown>)['isError'] === true;
-  }
-  return false;
+  return {};
 }
 
 // ── WorktreeStatusPillCard factory ────────────────────────────────────────────
@@ -54,7 +43,7 @@ function buildWorktreeCard(kind: 'EnterWorktree' | 'ExitWorktree'): ToolCallMess
 
   const Card: ToolCallMessagePartComponent = ({ args, result, isError }) => {
     const isPending = result === undefined;
-    const errored = !isPending && isResultError(result, isError);
+    const errored = !isPending && isErrorResult(result, isError);
 
     const state: MarkerState = isPending ? 'pending' : errored ? 'error' : 'done';
 

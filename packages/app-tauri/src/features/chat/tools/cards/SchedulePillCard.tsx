@@ -15,6 +15,7 @@ import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { AlarmClockIcon, CalendarClockIcon, CalendarXIcon, CalendarDaysIcon, ActivityIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MarkerWrap, MarkerPill, MarkerBody, MarkerPre, useMarkerOpen, type MarkerState } from './marker-pill';
+import { isErrorResult, extractResultContent } from '../shared/result';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,25 +39,13 @@ function formatDelay(seconds: number): string {
 }
 
 function parseResultObject(result: unknown): { text: string; parsed: unknown } {
-  const text =
-    typeof result === 'string'
-      ? result
-      : typeof result === 'object' && result !== null
-        ? (((result as Record<string, unknown>)['content'] as string | undefined) ?? '')
-        : '';
+  const text = extractResultContent(result);
   try {
     return { text, parsed: JSON.parse(text) };
   } catch {
-    return { text, parsed: null };
+    /* expected: non-JSON result text */
   }
-}
-
-function isResultError(result: unknown, isError: boolean | undefined): boolean {
-  if (isError === true) return true;
-  if (typeof result === 'object' && result !== null) {
-    return (result as Record<string, unknown>)['isError'] === true;
-  }
-  return false;
+  return { text, parsed: null };
 }
 
 // ── Label builders ────────────────────────────────────────────────────────────
@@ -178,7 +167,7 @@ function buildScheduleCard(kind: ScheduleKind): ToolCallMessagePartComponent {
   const Card: ToolCallMessagePartComponent = ({ args, result, isError }) => {
     const { open, toggle } = useMarkerOpen(false);
     const isPending = result === undefined;
-    const errored = !isPending && isResultError(result, isError);
+    const errored = !isPending && isErrorResult(result, isError);
     const { text, parsed } = parseResultObject(result);
 
     const state: MarkerState = isPending ? 'pending' : errored ? 'error' : 'done';
