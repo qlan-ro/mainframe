@@ -53,6 +53,33 @@ Durable capture so these aren't lost (the full write-ups live in volatile `/tmp`
 
 ---
 
+## Parity gaps — desktop→app-tauri audit (2026-06-06)
+
+A 5-area parallel sweep (messages · composer · tools · gates · runtime/parts) comparing the desktop chat surface against the app-tauri port. **Runtime/data + tool cards came back clean-or-better; most absences are the tracker-deferred items above (each verified by its tracker quote).** Below are the **UNTRACKED** gaps it surfaced — logged so they aren't silently "missed". They cluster in the composer; the data/runtime spine is solid.
+
+**🔴 Silent failures (no user signal — fix first)**
+- ☐ **`worktreeMissing` guard gone (composer)** — desktop disables input + send and shows a "worktree was deleted" banner (`desktop ComposerCard.tsx:355-363,392,477`); app-tauri `composer/Composer.tsx` never reads `worktreeMissing`, so a deleted-worktree session is fully editable/sendable with no warning.
+- ☐ **Attachment rejection unsurfaced (composer)** — the adapter still throws on >5MB (`composer/attachment-adapter.ts`) but nothing renders it; desktop showed an inline error band (`ComposerCard.tsx:341-354`). **Toast infra now exists (M1)** — wire `toast.error` (or an inline band) on the reject. Cheap.
+
+**🟠 Lost controls / features (untracked)**
+- ☐ **Adapter (agent) selector dropped (composer toolbar)** — desktop has a Claude/Gemini/Codex/OpenCode dropdown disabled once the chat has messages (`ComposerCard.tsx:413-420`); app-tauri `ComposerToolbar` has none and `use-composer-tuning` exposes no `setAdapter`. New chats can't pick their agent.
+- ☐ **`/`-skills context picker + skill-injection gone** — desktop's context-picker button + `ContextPickerMenu` (`ComposerCard.tsx:292-306`) and the `pendingInvocation→setText` skill-injection (`:213-225`) have no app-tauri equivalent. Only the `@`-mention picker was deferred; the placeholder even lost "/ for skills".
+- ☐ **In-message image click-to-zoom lost** — desktop opens a lightbox (+ multi-image nav) on user (`UserMessage.tsx:110,153,173`) and assistant (`AssistantMessage.tsx:45`) thumbs; app-tauri renders inert `<img>` with no zoom (`messages/UserMessage.tsx` InlineImageThumbs, `AssistantMessage.tsx:83-91`). The native `Image` part has built-in zoom — adopt it.
+- ☐ **Plan "Reject" button removed** — desktop offers Reject (deny, no message) + Revise (deny + feedback) + Approve (`PlanApprovalCard.tsx:196-210`); app-tauri only Approve + "Keep planning" (which forces typing feedback to deny — `gates/PlanGate.tsx:89-99,133`). Add a bare-deny path.
+
+**⚪ Needs a live check**
+- ☐ **Enter-to-send-while-running (queue)** — desktop intercepts Enter mid-run to enqueue (`ComposerCard.tsx:396-406`); app-tauri relies on native `ComposerPrimitive.Send`. Verify native submit enqueues mid-run under the external-store runtime — if it's gated on `!isRunning`, the keyboard path to queue is silently lost (the queued *cards* exist, but you may not be able to populate them by typing).
+
+**🟡 Minor / latent**
+- ☐ AskUserQuestion **`header` title ignored** — app-tauri uses the raw question text + a static "Question" eyebrow (`gates/AskUserQuestionGate.tsx:144-145`); desktop titles with the model's `header` (`AskUserQuestionCard.tsx:75`). `header` is in the type (`gates/answers.ts:3`) but never read.
+- ☐ Markdown **link right-click context menu dropped** — desktop's `LinkWithPreview` had a Copy/Open context menu (`markdown-text.tsx:115-128,157`); app-tauri keeps the tooltip+copy but no `onContextMenu` (`parts/markdown-text.tsx:141-194`).
+- ☐ **Skill id→display-name not resolved** — desktop runs `resolveSkillName` for the `/skill` chip (`UserMessage.tsx:64`); app-tauri renders `metaCmd.name` raw, so the chip may show a slug.
+- ☐ **`data-mf-composer-input` hook lost** — desktop tags the input so quote/find key off it (`ComposerCard.tsx:387`); app-tauri's input carries only `data-testid`. Re-add before porting quote/find.
+- ☐ **MessageRenderBoundary not ported (resilience)** — desktop scopes assistant-ui `tapClientLookup` "Index out of bounds" crashes to ONE message (`MessageRenderBoundary.tsx`); app-tauri has none. **Re-verify the crash on `@assistant-ui@0.14.14`** — if it still exists, one message throw takes down the whole thread.
+- ☐ Read-more clamp tightened 6→4 lines (`messages/ReadMoreBubble.tsx`) — cosmetic.
+
+---
+
 ## Chat Phase-2 build order (refined by the assistant-ui adoption research, 2026-06-05)
 Do the chat leaves in this order; ☑ = done.
 1. ☑ **shadcn foundation** — `components.json` + 18 `ui/` primitives + `globals.css` mapping shadcn vars → `--mf-*` (warm chrome, computed-CSS-verified); testid passthrough (`8e18e634`).
