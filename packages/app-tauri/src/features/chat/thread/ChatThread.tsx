@@ -13,6 +13,7 @@ import { Composer } from '../composer/Composer';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { SkillsProvider } from '@/features/skills/use-chat-skills';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';
 
@@ -56,41 +57,43 @@ function GeneratingIndicator() {
 export function ChatThread() {
   return (
     <ComposerEditProvider>
-      <ThreadPrimitive.Root
-        data-testid="chat-thread"
-        className="flex h-full flex-col overflow-hidden bg-background text-foreground"
-      >
-        {/* Native autoscroll Viewport + a CSS warm-chrome thin scrollbar.
-          (Radix ScrollArea via asChild doesn't bind to ThreadPrimitive.Viewport.) */}
-        <ThreadPrimitive.Viewport
-          data-testid="chat-thread-viewport"
-          className="mf-thin-scrollbar relative flex flex-1 flex-col overflow-y-auto"
+      <SkillsProvider>
+        <ThreadPrimitive.Root
+          data-testid="chat-thread"
+          className="flex h-full flex-col overflow-hidden bg-background text-foreground"
         >
-          <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
-            <LoadErrorBanner />
-            <ThreadPrimitive.Messages components={boundedMessageComponents} />
-            <ChatGateMount />
-          </div>
-
-          {/* Sticky footer — its height is measured into the scroll inset. */}
-          <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex flex-col bg-background">
-            <ThreadPrimitive.ScrollToBottom asChild>
-              <button
-                data-testid="chat-scroll-to-bottom"
-                aria-label="Scroll to bottom"
-                className="absolute -top-10 left-1/2 z-10 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[var(--mf-shadow-pop)] transition-opacity hover:text-foreground disabled:invisible"
-              >
-                <ArrowDownIcon className="size-4" />
-              </button>
-            </ThreadPrimitive.ScrollToBottom>
-
-            <div className="mx-auto w-full max-w-3xl px-5 pb-4">
-              <GeneratingIndicator />
-              <Composer />
+          {/* Native autoscroll Viewport + a CSS warm-chrome thin scrollbar.
+          (Radix ScrollArea via asChild doesn't bind to ThreadPrimitive.Viewport.) */}
+          <ThreadPrimitive.Viewport
+            data-testid="chat-thread-viewport"
+            className="mf-thin-scrollbar relative flex flex-1 flex-col overflow-y-auto"
+          >
+            <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
+              <LoadErrorBanner />
+              <ThreadPrimitive.Messages components={boundedMessageComponents} />
+              <ChatGateMount />
             </div>
-          </ThreadPrimitive.ViewportFooter>
-        </ThreadPrimitive.Viewport>
-      </ThreadPrimitive.Root>
+
+            {/* Sticky footer — its height is measured into the scroll inset. */}
+            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex flex-col bg-background">
+              <ThreadPrimitive.ScrollToBottom asChild>
+                <button
+                  data-testid="chat-scroll-to-bottom"
+                  aria-label="Scroll to bottom"
+                  className="absolute -top-10 left-1/2 z-10 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[var(--mf-shadow-pop)] transition-opacity hover:text-foreground disabled:invisible"
+                >
+                  <ArrowDownIcon className="size-4" />
+                </button>
+              </ThreadPrimitive.ScrollToBottom>
+
+              <div className="mx-auto w-full max-w-3xl px-5 pb-4">
+                <GeneratingIndicator />
+                <Composer />
+              </div>
+            </ThreadPrimitive.ViewportFooter>
+          </ThreadPrimitive.Viewport>
+        </ThreadPrimitive.Root>
+      </SkillsProvider>
     </ComposerEditProvider>
   );
 }

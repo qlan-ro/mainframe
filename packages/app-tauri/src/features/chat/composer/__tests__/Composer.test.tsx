@@ -96,6 +96,13 @@ vi.mock('@/components/ui/assistant-ui/attachment', () => ({
   ComposerAddAttachment: () => null,
 }));
 
+// ComposerTriggers pulls in Unstable_TriggerPopover* primitives, useChatSkills,
+// and searchFiles — stub it to a passthrough so Composer.test doesn't exercise
+// the native trigger machinery (the triggers have their own unit tests).
+vi.mock('../triggers/ComposerTriggers', () => ({
+  ComposerTriggers: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // ---------------------------------------------------------------------------
 // Subject under test — imported AFTER mocks are registered.
 // ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ import { ComposerEditMode } from './edit/ComposerEditMode';
 import { useComposerEdit } from './edit/composer-edit-context';
 import { ComposerAttachments, ComposerAddAttachment } from '@/components/ui/assistant-ui/attachment';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { ComposerTriggers } from './triggers/ComposerTriggers';
 
 /** Send (idle, disabled while empty or worktree-missing) ↔ Cancel (running) — swapped on thread.isRunning. */
 function SendOrCancelButton({ sendDisabled }: { sendDisabled?: boolean }) {
@@ -102,47 +103,49 @@ export function Composer() {
   if (editing) return <ComposerEditMode key={editing.messageId} edit={editing} onDone={cancelEdit} />;
 
   return (
-    <ComposerPrimitive.Root
-      data-testid="chat-composer"
-      className="rounded-2xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring"
-    >
-      <ComposerPrimitive.AttachmentDropzone
-        data-testid="composer-dropzone"
-        disabled={worktreeMissing}
-        className={cn(
-          'rounded-2xl transition-colors',
-          '[&[data-dragging]]:ring-2 [&[data-dragging]]:ring-primary [&[data-dragging]]:ring-offset-1',
-          '[&[data-dragging]]:bg-mf-selection',
-        )}
+    <ComposerTriggers>
+      <ComposerPrimitive.Root
+        data-testid="chat-composer"
+        className="rounded-2xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring"
       >
-        {worktreeMissing && <WorktreeMissingBanner worktreePath={chat?.worktreePath} />}
-
-        {/* Attachment tiles — renders nothing (empty:hidden) when no attachments pending */}
-        <div data-testid="composer-attachments" className="px-4 pt-3 empty:hidden">
-          <ComposerAttachments />
-        </div>
-
-        <ComposerPrimitive.Input
-          data-testid="chat-composer-input"
-          data-mf-composer-input
-          data-noring
+        <ComposerPrimitive.AttachmentDropzone
+          data-testid="composer-dropzone"
           disabled={worktreeMissing}
-          onKeyDown={handleInputKeyDown}
-          placeholder="Message the assistant…"
-          rows={1}
-          autoFocus
-          className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
-        />
+          className={cn(
+            'rounded-2xl transition-colors',
+            '[&[data-dragging]]:ring-2 [&[data-dragging]]:ring-primary [&[data-dragging]]:ring-offset-1',
+            '[&[data-dragging]]:bg-mf-selection',
+          )}
+        >
+          {worktreeMissing && <WorktreeMissingBanner worktreePath={chat?.worktreePath} />}
 
-        <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2.5">
-          {/* Left slot: paperclip + config toolbar */}
-          <div data-testid="chat-composer-toolbar" className="flex min-h-8 items-center gap-1 text-mf-text-3">
-            <ComposerAddAttachment />
-            <ComposerToolbar />
+          {/* Attachment tiles — renders nothing (empty:hidden) when no attachments pending */}
+          <div data-testid="composer-attachments" className="px-4 pt-3 empty:hidden">
+            <ComposerAttachments />
           </div>
-          <SendOrCancelButton sendDisabled={worktreeMissing} />
-        </div>
-      </ComposerPrimitive.AttachmentDropzone>
-    </ComposerPrimitive.Root>
+
+          <ComposerPrimitive.Input
+            data-testid="chat-composer-input"
+            data-mf-composer-input
+            data-noring
+            disabled={worktreeMissing}
+            onKeyDown={handleInputKeyDown}
+            placeholder="Type @ to search files, / for skills…"
+            rows={1}
+            autoFocus
+            className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+
+          <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2.5">
+            {/* Left slot: paperclip + config toolbar */}
+            <div data-testid="chat-composer-toolbar" className="flex min-h-8 items-center gap-1 text-mf-text-3">
+              <ComposerAddAttachment />
+              <ComposerToolbar />
+            </div>
+            <SendOrCancelButton sendDisabled={worktreeMissing} />
+          </div>
+        </ComposerPrimitive.AttachmentDropzone>
+      </ComposerPrimitive.Root>
+    </ComposerTriggers>
   );
 }
