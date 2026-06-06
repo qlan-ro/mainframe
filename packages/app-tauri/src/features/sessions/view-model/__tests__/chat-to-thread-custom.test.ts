@@ -221,9 +221,9 @@ describe('chatToThreadCustom — custom.worktreeMissing', () => {
 // ---------------------------------------------------------------------------
 
 describe('chatToThreadCustom — custom.updatedAt', () => {
-  it('converts ISO updatedAt to numeric milliseconds — 2026-06-01T12:00:00.000Z is 1748779200000', () => {
+  it('converts ISO updatedAt to numeric milliseconds — 2026-06-01T12:00:00.000Z is 1780315200000', () => {
     expect(chatToThreadCustom(makeChat({ updatedAt: '2026-06-01T12:00:00.000Z' })).custom.updatedAt).toBe(
-      1748779200000,
+      1780315200000,
     );
   });
 });
