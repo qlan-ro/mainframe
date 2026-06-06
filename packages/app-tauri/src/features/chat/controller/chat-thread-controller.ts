@@ -1,9 +1,11 @@
 /**
  * Per-chat controller — mirrors react-opencode's `OpenCodeThreadController`.
  *
- * Lifecycle: created on chat open, disposed on chat switch.
- * Holds the pure ChatThreadState, subscribes to the shared DaemonWsClient,
- * seeds from REST on load() / reconnect, and dispatches reducer events.
+ * Created once per thread id in the global registry and kept warm across
+ * switches. `subscribeState` always feeds the UI from in-memory state;
+ * `subscribeLive` opens the WS sub only while the thread is active. A new
+ * (`__LOCALID_*`) thread adopts its daemon id via `setRemoteId` once createChat
+ * resolves.
  *
  * Daemon event routing is in handle-daemon-event.ts (pure function).
  * Reconciliation of optimistic pending messages happens on display.message.added.
@@ -29,7 +31,7 @@ import {
   type PendingUserMessage,
 } from './chat-thread-state';
 import { handleDaemonEvent } from './handle-daemon-event';
-import { ChatWsSubscription } from './chat-ws-subscription';
+import { ChatWsSubscription, type ChatWsHost } from './chat-ws-subscription';
 import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
@@ -110,27 +112,24 @@ export class ChatThreadController {
   // just-answered permission while the reply is still in flight (#5).
   private readonly permissionVerifyTimers = new Set<ReturnType<typeof setTimeout>>();
   private readonly recentlyRepliedToolUseIds = new Set<string>();
+  // The id used for all network ops. Equals the daemon chat id for pre-existing
+  // threads; for a new (__LOCALID_*) thread it starts local and is replaced by
+  // setRemoteId() once the daemon chat is created. The WS sub never opens while
+  // this is still a __LOCALID_*.
+  private daemonId: string;
+  private remoteIdSet = false;
+  private liveRefs = 0;
   // WS attachment (subscribe / ack-gating / resume / reconnect refresh / restore).
-  private readonly wsSub: ChatWsSubscription;
+  // Constructed lazily in subscribeLive() so it always carries the current daemonId.
+  private wsSub: ChatWsSubscription | null = null;
 
   constructor(
-    private readonly chatId: string,
+    chatId: string,
     private readonly port: number,
     private readonly ws: DaemonWsClient,
   ) {
+    this.daemonId = chatId;
     this.state = createChatThreadState(chatId);
-    this.wsSub = new ChatWsSubscription({
-      chatId,
-      port,
-      ws,
-      onEvent: (event) => this.routeDaemonEvent(event),
-      getRecentlyReplied: () => this.recentlyRepliedToolUseIds,
-      getHeldPermissionIds: () => new Set(Object.keys(this.state.interactions.permissions)),
-      dispatchPermission: (request) =>
-        this.dispatch({ type: 'permission.requested', requestId: request.requestId, request }),
-      onReconnectRefresh: () => this.refreshInBackground(),
-      isDisposed: () => this.disposed,
-    });
   }
 
   // --------------------------------------------------------------------------
@@ -141,12 +140,59 @@ export class ChatThreadController {
     return this.state;
   }
 
-  public subscribe(listener: () => void): () => void {
+  /**
+   * State-change subscription — ALWAYS available, never opens a WS sub. Backs
+   * useControllerState so a dormant (backgrounded) thread still re-renders from
+   * in-memory state. Does NOT keep the chat warm on the wire.
+   */
+  public subscribeState(listener: () => void): () => void {
     this.listeners.add(listener);
-    this.wsSub.attach();
     return () => {
       this.listeners.delete(listener);
-      if (this.listeners.size === 0) this.wsSub.detach();
+    };
+  }
+
+  /**
+   * Live (wire) subscription — open the WS sub + resume loop. Call ONLY when the
+   * thread is the active (main) one. Ref-counted + idempotent (StrictMode-safe).
+   * No-op for a __LOCALID_* thread: there is no daemon chat to subscribe to yet.
+   * Returns a teardown that drops the WS sub once the last live ref releases.
+   */
+  public subscribeLive(): () => void {
+    if (this.isLocalOnly()) return () => {};
+    this.liveRefs += 1;
+    if (this.liveRefs === 1) {
+      this.wsSub = new ChatWsSubscription(this.makeWsHost());
+      this.wsSub.attach();
+    }
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.liveRefs -= 1;
+      if (this.liveRefs === 0) {
+        this.wsSub?.detach();
+        this.wsSub = null;
+      }
+    };
+  }
+
+  private isLocalOnly(): boolean {
+    return this.daemonId.startsWith('__LOCALID_');
+  }
+
+  private makeWsHost(): ChatWsHost {
+    return {
+      chatId: this.daemonId,
+      port: this.port,
+      ws: this.ws,
+      onEvent: (event) => this.routeDaemonEvent(event),
+      getRecentlyReplied: () => this.recentlyRepliedToolUseIds,
+      getHeldPermissionIds: () => new Set(Object.keys(this.state.interactions.permissions)),
+      dispatchPermission: (request) =>
+        this.dispatch({ type: 'permission.requested', requestId: request.requestId, request }),
+      onReconnectRefresh: () => this.refreshInBackground(),
+      isDisposed: () => this.disposed,
     };
   }
 
@@ -154,9 +200,25 @@ export class ChatThreadController {
   // Lifecycle
   // --------------------------------------------------------------------------
 
+  /**
+   * Adopt the daemon chat id for a thread created this session (S2). Set once by
+   * the new-thread coordinator after createChat; thereafter all network ops use
+   * it and subscribeLive() can open a real WS sub. No id-flip in aui — the
+   * thread's item.id stays __LOCALID_*; only this network id changes.
+   */
+  public setRemoteId(remoteId: string): void {
+    if (this.remoteIdSet) {
+      if (this.daemonId === remoteId) return;
+      throw new Error(`[chat-controller] setRemoteId called twice (${this.daemonId} → ${remoteId})`);
+    }
+    this.remoteIdSet = true;
+    this.daemonId = remoteId;
+  }
+
   public dispose(): void {
     this.disposed = true;
-    this.wsSub.detach();
+    this.wsSub?.detach();
+    this.wsSub = null;
     this.listeners.clear();
     for (const timer of this.permissionVerifyTimers) clearTimeout(timer);
     this.permissionVerifyTimers.clear();
@@ -176,14 +238,14 @@ export class ChatThreadController {
     // first chat.updated; thereafter chat.updated keeps it live (the composer
     // reads state.chatConfig — no its own fetch).
     if (!this.state.chatConfig) {
-      void getChat(this.port, this.chatId)
+      void getChat(this.port, this.daemonId)
         .then((chat) => {
           if (!this.disposed) this.dispatch({ type: 'chat.config.updated', chat });
         })
         .catch((err: unknown) => console.warn('[chat-controller] seed chat config failed', err));
     }
 
-    const request = getChatMessages(this.port, this.chatId)
+    const request = getChatMessages(this.port, this.daemonId)
       .then((messages) => {
         if (this.loadPromise !== request) return;
         this.dispatch({ type: 'history.loaded', messages });
@@ -227,9 +289,16 @@ export class ChatThreadController {
     const uploadItems = toUploadItems(message.attachments);
     if (!text && uploadItems.length === 0) return;
 
+    // Seed history against the current daemonId before the first send. A new
+    // (local→remote) thread is created, then sent into without ever mounting the
+    // load effect, so its just-created daemon chat (chat-99, not the stale
+    // __LOCALID_*) must be loaded here. Deduped: skips once a load is in flight
+    // or already settled, so repeat sends don't refetch.
+    if (!this.loadPromise && this.state.loadState.type === 'idle') void this.load();
+
     const pending: PendingUserMessage = {
       clientId: createLocalId('local'),
-      chatId: this.chatId,
+      chatId: this.daemonId,
       text,
       createdAt: Date.now(),
       status: 'pending',
@@ -241,10 +310,10 @@ export class ChatThreadController {
     try {
       // Upload attachments first → reference them by id (the daemon stores the bytes).
       const attachmentIds =
-        uploadItems.length > 0 ? await uploadAttachments(this.port, this.chatId, uploadItems) : undefined;
+        uploadItems.length > 0 ? await uploadAttachments(this.port, this.daemonId, uploadItems) : undefined;
       this.ws.send({
         type: 'message.send',
-        chatId: this.chatId,
+        chatId: this.daemonId,
         content: text,
         ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
       });
@@ -257,7 +326,7 @@ export class ChatThreadController {
   public async cancel(): Promise<void> {
     this.dispatch({ type: 'run.cancelling' });
     try {
-      await interruptChat(this.port, this.chatId);
+      await interruptChat(this.port, this.daemonId);
     } catch (error) {
       this.dispatch({ type: 'run.failed', error });
       throw error;
@@ -270,7 +339,7 @@ export class ChatThreadController {
     // pending) doesn't resurrect it, and verify the answer actually landed.
     // `response.requestId` is the request's own id — no separate arg to desync.
     this.recentlyRepliedToolUseIds.add(response.toolUseId);
-    this.ws.send({ type: 'permission.respond', chatId: this.chatId, response });
+    this.ws.send({ type: 'permission.respond', chatId: this.daemonId, response });
     this.dispatch({ type: 'permission.resolved', requestId: response.requestId });
     this.verifyPermissionDelivered(response.toolUseId);
   }
@@ -285,7 +354,7 @@ export class ChatThreadController {
     const timer = setTimeout(() => {
       this.permissionVerifyTimers.delete(timer);
       if (this.disposed) return;
-      void getPendingPermission(this.port, this.chatId)
+      void getPendingPermission(this.port, this.daemonId)
         .then((request) => {
           this.recentlyRepliedToolUseIds.delete(toolUseId);
           if (this.disposed || !request || request.toolUseId !== toolUseId) return;
@@ -301,11 +370,11 @@ export class ChatThreadController {
   }
 
   public async cancelQueued(messageId: string): Promise<void> {
-    await cancelQueuedMessage(this.port, this.chatId, messageId);
+    await cancelQueuedMessage(this.port, this.daemonId, messageId);
   }
 
   public async editQueued(messageId: string, content: string): Promise<void> {
-    await editQueuedMessage(this.port, this.chatId, messageId, content);
+    await editQueuedMessage(this.port, this.daemonId, messageId, content);
   }
 
   // --------------------------------------------------------------------------
@@ -320,19 +389,19 @@ export class ChatThreadController {
     // mirror the daemon's chat metadata into state so the toolbar reflects
     // daemon-side changes (e.g. the agent exiting plan mode). This is additive —
     // handleDaemonEvent below still maps chat.updated → run.started/stopped.
-    if (event.type === 'chat.updated' && event.chat.id === this.chatId) {
+    if (event.type === 'chat.updated' && event.chat.id === this.daemonId) {
       this.dispatch({ type: 'chat.config.updated', chat: event.chat });
     }
 
     // A queued-message cancel the daemon couldn't honor leaves the message
     // queued — surface it (the reducer keeps state, so there's no other signal).
-    if (event.type === 'message.queued.cancel_failed' && event.chatId === this.chatId) {
+    if (event.type === 'message.queued.cancel_failed' && event.chatId === this.daemonId) {
       toast.error("Couldn't cancel the queued message", {
         description: 'It will still be sent when the current run finishes.',
       });
     }
 
-    const result = handleDaemonEvent(event, this.chatId, this.state.messagesById);
+    const result = handleDaemonEvent(event, this.daemonId, this.state.messagesById);
 
     if (result.kind === 'refresh') {
       this.refreshInBackground();

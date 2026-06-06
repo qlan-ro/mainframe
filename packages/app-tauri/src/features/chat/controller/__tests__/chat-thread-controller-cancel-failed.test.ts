@@ -92,7 +92,7 @@ describe('message.queued.cancel_failed toast', () => {
   it('fires toast.error once with the correct message when chatId matches', () => {
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     pushEvent({ type: 'message.queued.cancel_failed', chatId: CHAT_ID, uuid: 'u1' });
 
@@ -103,7 +103,7 @@ describe('message.queued.cancel_failed toast', () => {
   it('does NOT fire toast.error when the event is for a different chat', () => {
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     pushEvent({ type: 'message.queued.cancel_failed', chatId: 'other-chat', uuid: 'u2' });
 

@@ -34,6 +34,8 @@ vi.mock('../../../../lib/api/attachments', () => ({
 
 vi.mock('../../../../lib/api/chats', () => ({
   getChatMessages: vi.fn().mockResolvedValue([]),
+  getChat: vi.fn().mockResolvedValue(null),
+  getPendingPermission: vi.fn().mockResolvedValue(null),
   resumeChat: vi.fn().mockResolvedValue(undefined),
   interruptChat: vi.fn().mockResolvedValue(undefined),
   cancelQueuedMessage: vi.fn().mockResolvedValue(undefined),

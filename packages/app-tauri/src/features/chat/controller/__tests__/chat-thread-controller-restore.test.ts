@@ -154,7 +154,7 @@ describe('restorePendingPermission — non-null result', () => {
 
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     // Deliver the subscribe:ack to trigger handleSubscribeAck → restorePendingPermission.
     pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
@@ -178,7 +178,7 @@ describe('restorePendingPermission — null result', () => {
 
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
     await flushMicrotasks();
@@ -210,7 +210,7 @@ describe('restorePendingPermission — duplicate guard', () => {
 
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     // Deliver the live WS permission event BEFORE the ack so it reaches state first.
     pushEvent({
@@ -248,7 +248,7 @@ describe('reconcilePendingAgainstHistory — matching text', () => {
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     // Seed an optimistic pending via sendMessage.
     await ctrl.sendMessage(textAppendMsg('hello reconnect'));
@@ -275,7 +275,7 @@ describe('reconcilePendingAgainstHistory — non-matching text', () => {
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     await ctrl.sendMessage(textAppendMsg('original message'));
 
@@ -309,7 +309,7 @@ describe('reconcilePendingAgainstHistory — count-aware (identical text)', () =
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     // Both store text 'ask me two questions' (sendMessage trims); two distinct pendings.
     await ctrl.sendMessage(textAppendMsg('ask me two questions'));
@@ -328,7 +328,7 @@ describe('reconcilePendingAgainstHistory — count-aware (identical text)', () =
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     await ctrl.sendMessage(textAppendMsg('ask me two questions'));
     await ctrl.sendMessage(textAppendMsg('ask me two questions'));
@@ -356,7 +356,7 @@ describe('reconcilePendingAgainstHistory — partial match: one cleared, one ret
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     await ctrl.sendMessage(textAppendMsg('first question'));
     await ctrl.sendMessage(textAppendMsg('second question'));
@@ -391,7 +391,7 @@ describe('reconcilePendingAgainstHistory — delayed echo past the live match wi
 
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     // Seed the pending at t=0.
     await ctrl.sendMessage(textAppendMsg('delayed echo message'));
@@ -428,7 +428,7 @@ describe('verifyPermissionDelivered — answer lost: gate restored', () => {
 
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     pushEvent({
       type: 'permission.requested',
@@ -490,7 +490,7 @@ describe('verifyPermissionDelivered — answer landed: gate stays gone', () => {
 
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     pushEvent({
       type: 'permission.requested',
@@ -549,7 +549,7 @@ describe('restorePendingPermission — skips recently-replied toolUseId', () => 
 
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     // Seed the permission via a live WS event.
     pushEvent({

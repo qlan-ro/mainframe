@@ -1,12 +1,12 @@
 /**
  * Regression tests for useControllerState — subscribe stability fix.
  *
- * Bug (now fixed): an inline arrow `(l) => controller.subscribe(l)` was passed
- * directly to useSyncExternalStore. React received a new function reference on
- * every render, triggering a fresh subscribe/unsubscribe cycle each time.
- * Because controller.subscribe() runs ensureWsSubscription() (→ resumeChat)
- * and the unsubscribe tears down the WS, every render kicked off a resume
- * call — a self-sustaining storm.
+ * Bug (now fixed): an inline arrow `(l) => controller.subscribeState(l)` was
+ * passed directly to useSyncExternalStore. React received a new function
+ * reference on every render, triggering a fresh subscribe/unsubscribe cycle
+ * each time. After the dormancy split useControllerState reads
+ * `controller.subscribeState` (state-change only — never opens a WS sub), so
+ * the storm risk is gone; this test still pins the stable-identity contract.
  *
  * Fix: subscribe and getSnapshot are wrapped in useCallback(..., [controller]),
  * making them stable across renders. They only change when the controller
@@ -21,21 +21,21 @@ import { useControllerState } from '../use-chat-thread-runtime';
 import type { ChatThreadController } from '../../controller/chat-thread-controller';
 
 // ---------------------------------------------------------------------------
-// Minimal fake controller — only subscribe and getState are used by the hook.
+// Minimal fake controller — only subscribeState and getState are used by the hook.
 // ---------------------------------------------------------------------------
 
 function fakeController() {
   const state = { foo: 'bar' } as const;
   const unsubscribe = vi.fn();
-  const subscribe = vi.fn((_listener: () => void) => unsubscribe);
+  const subscribeState = vi.fn((_listener: () => void) => unsubscribe);
   const getState = vi.fn(() => state);
   return {
-    subscribe,
+    subscribeState,
     getState,
     unsubscribe,
     state,
   } as unknown as {
-    subscribe: ReturnType<typeof vi.fn>;
+    subscribeState: ReturnType<typeof vi.fn>;
     getState: ReturnType<typeof vi.fn>;
     unsubscribe: ReturnType<typeof vi.fn>;
     state: { foo: string };
@@ -47,7 +47,7 @@ function fakeController() {
 // ---------------------------------------------------------------------------
 
 describe('useControllerState', () => {
-  it('calls controller.subscribe exactly once across multiple re-renders of the same controller (regression)', () => {
+  it('calls controller.subscribeState exactly once across multiple re-renders of the same controller (regression)', () => {
     const fake = fakeController();
 
     const { rerender } = renderHook(
@@ -62,7 +62,7 @@ describe('useControllerState', () => {
     rerender({ c: fake });
 
     // subscribe must have been called ONCE — stable callback identity across renders.
-    expect(fake.subscribe).toHaveBeenCalledTimes(1);
+    expect(fake.subscribeState).toHaveBeenCalledTimes(1);
     // Still mounted with the same controller — unsubscribe must NOT have been called.
     expect(fake.unsubscribe).toHaveBeenCalledTimes(0);
   });
@@ -94,9 +94,9 @@ describe('useControllerState', () => {
     // Old controller must have been unsubscribed exactly once.
     expect(fake1.unsubscribe).toHaveBeenCalledTimes(1);
     // New controller must have been subscribed exactly once.
-    expect(fake2.subscribe).toHaveBeenCalledTimes(1);
+    expect(fake2.subscribeState).toHaveBeenCalledTimes(1);
     // Old controller was only ever subscribed once total (initial mount).
-    expect(fake1.subscribe).toHaveBeenCalledTimes(1);
+    expect(fake1.subscribeState).toHaveBeenCalledTimes(1);
   });
 
   it('unsubscribes from the controller on unmount', () => {

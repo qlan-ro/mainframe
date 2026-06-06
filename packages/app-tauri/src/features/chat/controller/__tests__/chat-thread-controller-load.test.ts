@@ -82,7 +82,7 @@ describe('ChatThreadController.load — getChatMessages rejects', () => {
     vi.mocked(getChatMessages).mockRejectedValueOnce(new Error('boom'));
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     await ctrl.load();
 
@@ -94,7 +94,7 @@ describe('ChatThreadController.load — getChatMessages rejects', () => {
     vi.mocked(getChatMessages).mockRejectedValueOnce(boom);
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     await ctrl.load();
 
@@ -119,7 +119,7 @@ describe('ChatThreadController.refresh — recovers from a prior failure', () =>
     vi.mocked(getChatMessages).mockResolvedValueOnce([]);
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     await ctrl.load();
     expect(ctrl.getState().loadState.type).toBe('error');
@@ -140,7 +140,7 @@ describe('ChatThreadController.load — getChatMessages resolves', () => {
     vi.mocked(getChatMessages).mockResolvedValueOnce([]);
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     await ctrl.load();
 

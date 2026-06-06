@@ -63,11 +63,10 @@ function isChatRuntimeExtras(extras: unknown): extras is ChatRuntimeExtras {
 export function useControllerState(controller: ChatThreadController): ChatThreadState {
   // The subscribe/getSnapshot callbacks MUST be stable. An inline arrow gets a
   // fresh identity every render, which makes useSyncExternalStore re-subscribe
-  // on every render — and `controller.subscribe` runs `ensureWsSubscription()`
-  // (→ resumeChat) on subscribe and `detachWs()` when listeners hit 0, so each
-  // re-subscribe fires a resume. Combined with chat.updated → run.* re-renders,
-  // that self-sustains into a resume/chat.updated storm. Keep them stable.
-  const subscribe = useCallback((listener: () => void) => controller.subscribe(listener), [controller]);
+  // on every render. `subscribeState` only registers a state-change listener
+  // (it never opens a WS sub), so this stays cheap; the live WS sub is gated
+  // separately via `subscribeLive` in the active effect. Keep them stable.
+  const subscribe = useCallback((listener: () => void) => controller.subscribeState(listener), [controller]);
   const getSnapshot = useCallback(() => controller.getState(), [controller]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

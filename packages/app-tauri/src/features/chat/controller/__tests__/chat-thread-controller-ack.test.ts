@@ -12,7 +12,7 @@
  * - The fake WS client captures the onEvent handler so we can push a synthetic
  *   ack event.
  * - resumeChat is vi.mock'd — we count how many times it was called.
- * - ensureWsSubscription is triggered by calling ctrl.subscribe().
+ * - the WS subscription is opened by calling ctrl.subscribeLive().
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
@@ -110,7 +110,7 @@ describe('subscribe:ack gating', () => {
   it('does not call resumeChat before the ack is delivered', () => {
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {}); // triggers ensureWsSubscription
+    ctrl.subscribeLive(); // triggers ensureWsSubscription
 
     // No ack yet — resumeChat must not have been called.
     expect(resumeChat).not.toHaveBeenCalled();
@@ -119,7 +119,7 @@ describe('subscribe:ack gating', () => {
   it('calls resumeChat exactly once when a matching subscribe:ack arrives', async () => {
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
 
@@ -133,7 +133,7 @@ describe('subscribe:ack gating', () => {
   it('does NOT call resumeChat when the ack chatId does not match', async () => {
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     pushEvent({ type: 'subscribe:ack', chatId: 'chat-other' });
     await flushMicrotasks();
@@ -150,7 +150,7 @@ describe('subscribe:ack fallback timer', () => {
   it('calls resumeChat once when no ack arrives within the timeout', async () => {
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     // Advance past the 2000ms fallback.
     await vi.advanceTimersByTimeAsync(2001);
@@ -162,7 +162,7 @@ describe('subscribe:ack fallback timer', () => {
   it('does not call resumeChat before the full timeout has elapsed', async () => {
     const { fakeClient } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     await vi.advanceTimersByTimeAsync(1999);
 
@@ -178,7 +178,7 @@ describe('subscribe:ack — late ack after fallback', () => {
   it('does not call resumeChat a second time when a late ack arrives after the fallback', async () => {
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     // Let the fallback fire first.
     await vi.advanceTimersByTimeAsync(2001);
@@ -202,7 +202,7 @@ describe('subscribe:ack fallback timer — disconnected socket', () => {
     // Build the controller with a disconnected WS client.
     const { fakeClient } = makeFakeWs(false);
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    ctrl.subscribe(() => {});
+    ctrl.subscribeLive();
 
     // Advance past the 2000ms fallback — the timer fires but ws.connected is false.
     await vi.advanceTimersByTimeAsync(2001);
