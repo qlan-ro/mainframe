@@ -15,7 +15,7 @@
  *  - interactions.queued — from message.queued.* events
  *  - pendingUserMessages — optimistic send, reconciled on echo
  */
-import type { DisplayMessage, ControlRequest, QueuedMessageRef } from '@qlan-ro/mainframe-types';
+import type { DisplayMessage, ControlRequest, QueuedMessageRef, Chat } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -55,6 +55,14 @@ export interface ChatThreadState {
     readonly queued: Readonly<Record<string, QueuedMessageRef>>;
   };
   readonly pendingUserMessages: Readonly<Record<string, PendingUserMessage>>;
+  /**
+   * Latest chat metadata from the daemon's `chat.updated` broadcast — model,
+   * planMode, permissionMode, effort, features, etc. Null until the first
+   * `chat.updated` arrives. The composer config toolbar reads this so its
+   * controls stay in sync when the daemon changes them on its own (e.g. the
+   * agent exiting plan mode), instead of a stale one-shot REST snapshot.
+   */
+  readonly chatConfig: Chat | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +92,8 @@ export type ChatStateEvent =
   | { type: 'queued.cancel_failed'; uuid: string }
   | { type: 'local.message.queued'; pending: PendingUserMessage }
   | { type: 'local.message.reconciled'; clientId: string }
-  | { type: 'local.message.failed'; clientId: string; error: unknown };
+  | { type: 'local.message.failed'; clientId: string; error: unknown }
+  | { type: 'chat.config.updated'; chat: Chat };
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -102,6 +111,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
       queued: {} as Readonly<Record<string, QueuedMessageRef>>,
     },
     pendingUserMessages: {} as Readonly<Record<string, PendingUserMessage>>,
+    chatConfig: null,
   };
 }
 
@@ -161,6 +171,9 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
 
     case 'run.failed':
       return { ...state, runState: { type: 'error', error: event.error } };
+
+    case 'chat.config.updated':
+      return { ...state, chatConfig: event.chat };
 
     case 'message.added':
       return upsertMessage(state, event.message);

@@ -305,6 +305,14 @@ export class ChatThreadController {
       return; // do not pass ack through to handleDaemonEvent
     }
 
+    // Keep the composer config (model/plan/permission/effort/features) live:
+    // mirror the daemon's chat metadata into state so the toolbar reflects
+    // daemon-side changes (e.g. the agent exiting plan mode). This is additive —
+    // handleDaemonEvent below still maps chat.updated → run.started/stopped.
+    if (event.type === 'chat.updated' && event.chat.id === this.chatId) {
+      this.dispatch({ type: 'chat.config.updated', chat: event.chat });
+    }
+
     const result = handleDaemonEvent(event, this.chatId, this.state.messagesById);
 
     if (result.kind === 'refresh') {

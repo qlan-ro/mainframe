@@ -121,6 +121,16 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     // extras.port is stable within a chat epoch; only chatId triggers a re-fetch.
   }, [chatId, extras?.port]);
 
+  // Adopt daemon-side config changes (model/plan/permission/effort/features) live.
+  // The controller mirrors `chat.updated` into state.chatConfig, so the toolbar
+  // stays correct when the daemon changes config on its own (e.g. the agent
+  // exiting plan mode → planMode:false) — no manual reload needed. The REST fetch
+  // above seeds the initial value before the first chat.updated arrives.
+  const liveChat = extras?.state.chatConfig ?? null;
+  useEffect(() => {
+    if (liveChat) setChat(liveChat);
+  }, [liveChat]);
+
   // Live run-state from the assistant-ui thread — stays accurate mid-run
   // (unlike the REST snapshot in `chat.isRunning` which is fetched once).
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
