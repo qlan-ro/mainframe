@@ -30,7 +30,7 @@
  *       → no banner, no crash
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, createEvent, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +44,13 @@ let __extrasReturn: 'none' | { worktreeMissing?: boolean; worktreePath?: string 
 vi.mock('../../runtime/use-chat-thread-runtime', () => ({
   useChatExtras: () => (__extrasReturn === 'none' ? undefined : { state: { chatConfig: __extrasReturn } }),
 }));
+
+// Mutable state for @assistant-ui/react mocks — mutated per-test via helpers below.
+// `__isRunning` controls the value that useAuiState returns when the selector
+// `(s) => s.thread.isRunning` is applied. The stub invokes the selector against
+// a fake state object so the real selector path is exercised.
+let __isRunning = false;
+let __sendSpy = vi.fn();
 
 // Stub ComposerPrimitive with passthrough primitives that forward the props
 // our assertions depend on (data-testid, disabled, children).
@@ -63,8 +70,14 @@ vi.mock('@assistant-ui/react', () => ({
       <button {...rest}>{children}</button>
     ),
   },
-  // useAuiState in SendOrCancelButton checks thread.isRunning; return false so Send renders.
-  useAuiState: () => false,
+  // useAuiState invokes the selector against a fake state object. This means
+  // the component's real selector `(s) => s.thread.isRunning` is exercised and
+  // the return value tracks __isRunning. Both the Composer and SendOrCancelButton
+  // call useAuiState with the same selector, so a single fake state object works.
+  useAuiState: (selector: (s: { thread: { isRunning: boolean } }) => boolean) =>
+    selector({ thread: { isRunning: __isRunning } }),
+  // useAui returns a composer handle; send() is a spy so tests can assert on it.
+  useAui: () => ({ composer: () => ({ send: __sendSpy }) }),
 }));
 
 // Edit context — editing is null so Composer renders the normal shell, not ComposerEditMode.
@@ -108,6 +121,8 @@ function renderComposer() {
 describe('Composer — worktreeMissing=true shows banner and disables input/send', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __isRunning = false;
+    __sendSpy = vi.fn();
   });
 
   it('renders the worktree-missing banner', () => {
@@ -145,6 +160,8 @@ describe('Composer — worktreeMissing=true shows banner and disables input/send
 describe('Composer — worktreeMissing=false has no banner and enabled input', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __isRunning = false;
+    __sendSpy = vi.fn();
   });
 
   it('does NOT render the worktree-missing banner', () => {
@@ -165,6 +182,8 @@ describe('Composer — worktreeMissing=false has no banner and enabled input', (
 describe('Composer — chatConfig undefined (extras not available)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __isRunning = false;
+    __sendSpy = vi.fn();
   });
 
   it('renders without crashing and shows no banner when extras is undefined', () => {
@@ -174,5 +193,68 @@ describe('Composer — chatConfig undefined (extras not available)', () => {
     expect(screen.queryByTestId('chat-composer-worktree-missing')).not.toBeInTheDocument();
     // The composer root should still be present
     expect(screen.getByTestId('chat-composer')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mid-run Enter-to-queue interception (handleInputKeyDown)
+// ---------------------------------------------------------------------------
+//
+// When isRunning=true and worktreeMissing=false, pressing plain Enter on the
+// composer input must call aui.composer().send() exactly once (the daemon-backed
+// queue path) and prevent the default browser action.  Every other combination
+// must leave sendSpy uncalled so the native path handles the event.
+
+describe('Composer — mid-run Enter-to-queue interception', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __sendSpy = vi.fn();
+  });
+
+  it('calls send() once and prevents default when isRunning=true and worktreeMissing=false', () => {
+    __isRunning = true;
+    __extrasReturn = { worktreeMissing: false };
+    renderComposer();
+
+    const input = screen.getByTestId('chat-composer-input');
+    // Use createEvent so we can inspect defaultPrevented after dispatch.
+    const event = createEvent.keyDown(input, { key: 'Enter', bubbles: true });
+    fireEvent(input, event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(__sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT call send() when Shift+Enter is pressed (isRunning=true)', () => {
+    __isRunning = true;
+    __extrasReturn = { worktreeMissing: false };
+    renderComposer();
+
+    const input = screen.getByTestId('chat-composer-input');
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+
+    expect(__sendSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call send() when isRunning=false (idle — native path handles submit)', () => {
+    __isRunning = false;
+    __extrasReturn = { worktreeMissing: false };
+    renderComposer();
+
+    const input = screen.getByTestId('chat-composer-input');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(__sendSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call send() when isRunning=true but worktreeMissing=true', () => {
+    __isRunning = true;
+    __extrasReturn = { worktreeMissing: true, worktreePath: '/tmp/wt' };
+    renderComposer();
+
+    const input = screen.getByTestId('chat-composer-input');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(__sendSpy).not.toHaveBeenCalled();
   });
 });

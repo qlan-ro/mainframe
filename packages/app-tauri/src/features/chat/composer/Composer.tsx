@@ -11,7 +11,8 @@
  * (Decomposed out of ChatThread; mounted inside `ThreadPrimitive.ViewportFooter`
  * so its height registers as scroll inset — the last message never hides behind it.)
  */
-import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
+import { useCallback } from 'react';
+import { ComposerPrimitive, useAui, useAuiState } from '@assistant-ui/react';
 import { AlertTriangleIcon, ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ComposerToolbar } from './config-toolbar/ComposerToolbar';
@@ -75,6 +76,29 @@ export function Composer() {
   const { editing, cancelEdit } = useComposerEdit();
   const chat = useChatExtras()?.state.chatConfig ?? null;
   const worktreeMissing = chat?.worktreeMissing ?? false;
+  const aui = useAui();
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+
+  // Mid-run Enter-to-queue. The native ComposerPrimitive.Input gates Enter off
+  // while running unless `thread.capabilities.queue` is set — and that is false
+  // for us because we use the daemon-backed queue, not assistant-ui's native
+  // Queue adapter. So intercept Enter ourselves and send directly: the composer's
+  // `send()` ignores isRunning, routes through `onNew` → controller.sendMessage,
+  // and the daemon enqueues the message behind the in-flight run (mirrors desktop).
+  const handleInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!isRunning || worktreeMissing) return;
+      if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+      e.preventDefault();
+      try {
+        aui.composer().send();
+      } catch (err) {
+        console.warn('[composer] mid-run queued send failed', err);
+      }
+    },
+    [aui, isRunning, worktreeMissing],
+  );
+
   if (editing) return <ComposerEditMode key={editing.messageId} edit={editing} onDone={cancelEdit} />;
 
   return (
@@ -103,6 +127,7 @@ export function Composer() {
           data-mf-composer-input
           data-noring
           disabled={worktreeMissing}
+          onKeyDown={handleInputKeyDown}
           placeholder="Message the assistant…"
           rows={1}
           autoFocus
