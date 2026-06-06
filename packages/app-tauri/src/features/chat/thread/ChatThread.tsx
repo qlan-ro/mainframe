@@ -14,8 +14,32 @@ import { SystemMessage } from '../messages/SystemMessage';
 import { Composer } from '../composer/Composer';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
+import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';
+
+/** Surfaces a failed history load (loadState reduced to error) with a retry —
+ *  otherwise a failed load renders as a silent empty chat. */
+function LoadErrorBanner() {
+  const extras = useChatExtras();
+  if (extras?.state.loadState.type !== 'error') return null;
+  return (
+    <div
+      data-testid="chat-thread-load-error"
+      className="mx-auto my-8 flex max-w-sm flex-col items-center gap-3 rounded-lg border border-border bg-card px-4 py-6 text-center"
+    >
+      <p className="text-body text-muted-foreground">Couldn’t load this chat.</p>
+      <button
+        data-testid="chat-thread-load-retry"
+        type="button"
+        onClick={() => void extras.retry()}
+        className="rounded-md border border-border px-3 py-1.5 text-caption text-foreground transition-colors hover:bg-accent"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
 
 function GeneratingIndicator() {
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
@@ -45,6 +69,7 @@ export function ChatThread() {
           className="mf-thin-scrollbar relative flex flex-1 flex-col overflow-y-auto"
         >
           <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
+            <LoadErrorBanner />
             <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage, SystemMessage }} />
             <ChatGateMount />
           </div>

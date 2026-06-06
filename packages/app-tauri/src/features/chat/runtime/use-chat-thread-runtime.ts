@@ -48,6 +48,8 @@ export interface ChatRuntimeExtras {
   readonly replyToPermission: (response: ControlResponse) => Promise<void>;
   readonly cancelQueued: (messageId: string) => Promise<void>;
   readonly editQueued: (messageId: string, content: string) => Promise<void>;
+  /** Re-run the history load — used to retry after `state.loadState.type === 'error'`. */
+  readonly retry: () => Promise<void>;
 }
 
 function isChatRuntimeExtras(extras: unknown): extras is ChatRuntimeExtras {
@@ -105,6 +107,7 @@ export function useChatThreadRuntime(controller: ChatThreadController, port: num
       replyToPermission: (response) => controller.replyToPermission(response),
       cancelQueued: (messageId) => controller.cancelQueued(messageId),
       editQueued: (messageId, content) => controller.editQueued(messageId, content),
+      retry: () => controller.refresh(),
     }),
     [controller, port, state],
   );
