@@ -106,7 +106,10 @@ function makeFakeWs(initiallyConnected = true): FakeWs {
   } as unknown as DaemonWsClient;
 
   function pushEvent(event: DaemonEvent): void {
-    if (!eventHandler) throw new Error('onEvent handler not yet registered');
+    // After detach the handler is torn down (its unsub nulls it); a real WS would
+    // simply not forward — mirror that no-op rather than throwing, so the
+    // "stops forwarding events after detach" assertion can run.
+    if (!eventHandler) return;
     eventHandler(event);
   }
 

@@ -16,7 +16,6 @@ import {
   getChatMessages,
   getPendingPermission,
   interruptChat,
-  resumeChat,
   cancelQueuedMessage,
   editQueuedMessage,
 } from '../../../lib/api/chats';
@@ -30,6 +29,7 @@ import {
   type PendingUserMessage,
 } from './chat-thread-state';
 import { handleDaemonEvent } from './handle-daemon-event';
+import { ChatWsSubscription } from './chat-ws-subscription';
 import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
@@ -96,9 +96,6 @@ function reconcilePendings(
 // Controller
 // ---------------------------------------------------------------------------
 
-// How long to wait for subscribe:ack before falling back to an unconditional resume.
-const SUBSCRIBE_ACK_TIMEOUT_MS = 2000;
-
 // After answering a permission we optimistically drop the gate, but a WS send is
 // dropped if the socket is closed. Re-check the daemon's pending after this delay;
 // if the same tool use is still pending, the answer was lost — restore the gate.
@@ -107,18 +104,14 @@ const PERMISSION_VERIFY_DELAY_MS = 3000;
 export class ChatThreadController {
   private state: ChatThreadState;
   private readonly listeners = new Set<() => void>();
-  private unsubscribeFromWs: (() => void) | null = null;
-  private unsubscribeFromConn: (() => void) | null = null;
   private loadPromise: Promise<void> | null = null;
   private disposed = false;
-  // subscribe:ack gating (fix #3)
-  private awaitingAck = false;
-  private isReconnect = false;
-  private ackFallbackTimer: ReturnType<typeof setTimeout> | null = null;
   // Permission-reply reliability: re-check delivery (#2) and suppress restoring a
   // just-answered permission while the reply is still in flight (#5).
   private readonly permissionVerifyTimers = new Set<ReturnType<typeof setTimeout>>();
   private readonly recentlyRepliedToolUseIds = new Set<string>();
+  // WS attachment (subscribe / ack-gating / resume / reconnect refresh / restore).
+  private readonly wsSub: ChatWsSubscription;
 
   constructor(
     private readonly chatId: string,
@@ -126,6 +119,18 @@ export class ChatThreadController {
     private readonly ws: DaemonWsClient,
   ) {
     this.state = createChatThreadState(chatId);
+    this.wsSub = new ChatWsSubscription({
+      chatId,
+      port,
+      ws,
+      onEvent: (event) => this.routeDaemonEvent(event),
+      getRecentlyReplied: () => this.recentlyRepliedToolUseIds,
+      getHeldPermissionIds: () => new Set(Object.keys(this.state.interactions.permissions)),
+      dispatchPermission: (request) =>
+        this.dispatch({ type: 'permission.requested', requestId: request.requestId, request }),
+      onReconnectRefresh: () => this.refreshInBackground(),
+      isDisposed: () => this.disposed,
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -138,10 +143,10 @@ export class ChatThreadController {
 
   public subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
-    this.ensureWsSubscription();
+    this.wsSub.attach();
     return () => {
       this.listeners.delete(listener);
-      if (this.listeners.size === 0) this.detachWs();
+      if (this.listeners.size === 0) this.wsSub.detach();
     };
   }
 
@@ -151,9 +156,8 @@ export class ChatThreadController {
 
   public dispose(): void {
     this.disposed = true;
-    this.detachWs();
+    this.wsSub.detach();
     this.listeners.clear();
-    this.clearAckFallback();
     for (const timer of this.permissionVerifyTimers) clearTimeout(timer);
     this.permissionVerifyTimers.clear();
     this.recentlyRepliedToolUseIds.clear();
@@ -305,113 +309,12 @@ export class ChatThreadController {
   }
 
   // --------------------------------------------------------------------------
-  // WS subscription
-  // --------------------------------------------------------------------------
-
-  private ensureWsSubscription(): void {
-    if (this.unsubscribeFromWs) return;
-
-    // Attach the event handler FIRST so the subscribe:ack frame is never missed.
-    this.unsubscribeFromWs = this.ws.onEvent((event: DaemonEvent) => {
-      if (this.disposed) return;
-      this.routeDaemonEvent(event);
-    });
-
-    this.sendSubscribe(false /* initial, not a reconnect */);
-
-    this.unsubscribeFromConn = this.ws.subscribeConnection(() => {
-      if (this.disposed || !this.ws.connected) return;
-      this.sendSubscribe(true /* reconnect */);
-    });
-  }
-
-  /**
-   * Sends `subscribe` to the daemon and arms the ack-fallback timer.
-   * resumeChat / refresh are called by `handleSubscribeAck` when the daemon
-   * confirms the subscription.  If the ack never arrives (older daemon or lost
-   * frame), the fallback timer fires after SUBSCRIBE_ACK_TIMEOUT_MS.
-   */
-  private sendSubscribe(reconnect: boolean): void {
-    this.clearAckFallback();
-    this.awaitingAck = true;
-    this.isReconnect = reconnect;
-    this.ws.subscribe(this.chatId);
-
-    this.ackFallbackTimer = setTimeout(() => {
-      if (!this.awaitingAck || this.disposed) return;
-      // If the socket is down, the `subscribe` frame was dropped — resuming now
-      // would talk to a dead subscription. Stay armed; the reconnect handler
-      // re-sends `subscribe` (and re-arms this timer) once the socket reopens.
-      if (!this.ws.connected) return;
-      this.awaitingAck = false;
-      console.warn('[chat-controller] subscribe:ack not received within timeout — resuming anyway');
-      this.handleSubscribeAck(reconnect);
-    }, SUBSCRIBE_ACK_TIMEOUT_MS);
-  }
-
-  /** Called when subscribe:ack arrives OR when the fallback fires. */
-  private handleSubscribeAck(reconnect: boolean): void {
-    void resumeChat(this.port, this.chatId).catch((err: unknown) =>
-      console.warn('[chat-controller] resumeChat failed', err),
-    );
-    // The daemon does NOT re-emit `permission.requested` on subscribe/resume, so
-    // a permission requested before this client loaded (or during a disconnect)
-    // must be restored via REST — otherwise the gate never appears.
-    this.restorePendingPermission();
-    if (reconnect) {
-      this.refreshInBackground();
-    }
-  }
-
-  /** Fetch the chat's pending permission (if any) and seed the gate. */
-  private restorePendingPermission(): void {
-    void getPendingPermission(this.port, this.chatId)
-      .then((request) => {
-        if (this.disposed || !request) return;
-        // Don't resurrect a permission we just answered — its reply may still be
-        // in flight and the daemon may not have cleared the pending yet.
-        // verifyPermissionDelivered owns the "was it actually delivered?" check.
-        if (this.recentlyRepliedToolUseIds.has(request.toolUseId)) return;
-        // Skip if we already hold this one (a live event beat the REST read).
-        if (request.requestId && request.requestId in this.state.interactions.permissions) return;
-        this.dispatch({ type: 'permission.requested', requestId: request.requestId, request });
-      })
-      .catch((err: unknown) => console.warn('[chat-controller] restore pending-permission failed', err));
-  }
-
-  private clearAckFallback(): void {
-    if (this.ackFallbackTimer !== null) {
-      clearTimeout(this.ackFallbackTimer);
-      this.ackFallbackTimer = null;
-    }
-  }
-
-  private detachWs(): void {
-    this.clearAckFallback();
-    this.awaitingAck = false;
-    this.ws.unsubscribe(this.chatId);
-    this.unsubscribeFromWs?.();
-    this.unsubscribeFromWs = null;
-    this.unsubscribeFromConn?.();
-    this.unsubscribeFromConn = null;
-  }
-
-  // --------------------------------------------------------------------------
   // Event routing
   // --------------------------------------------------------------------------
 
   private routeDaemonEvent(event: DaemonEvent): void {
-    // Intercept subscribe:ack before it reaches the generic handler so we can
-    // gate resumeChat on the daemon's confirmation that the subscription is live.
-    if (event.type === 'subscribe:ack' && event.chatId === this.chatId) {
-      if (this.awaitingAck) {
-        this.clearAckFallback();
-        const wasReconnect = this.isReconnect;
-        this.awaitingAck = false;
-        this.handleSubscribeAck(wasReconnect);
-      }
-      return; // do not pass ack through to handleDaemonEvent
-    }
+    // subscribe:ack is consumed by ChatWsSubscription before it reaches here, so
+    // routing only sees real daemon events (ack-gating lives in the helper now).
 
     // Keep the composer config (model/plan/permission/effort/features) live:
     // mirror the daemon's chat metadata into state so the toolbar reflects
