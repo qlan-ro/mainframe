@@ -68,3 +68,55 @@ export async function getToolResultContent(port: number, chatId: string, toolUse
   );
   return content;
 }
+
+// ── Sessions sidebar additions ─────────────────────────────────────────────
+
+export interface CreateChatBody {
+  projectId: string;
+  adapterId: string;
+  model?: string;
+  permissionMode?: string;
+  worktreePath?: string;
+  branchName?: string;
+}
+
+/**
+ * List all chats, with optional server-side filters.
+ * Tags and synthetic are repeated query params: ?tags=a&tags=b
+ */
+export function listChats(
+  port: number,
+  q?: { project?: string; tags?: string[]; synthetic?: string[] },
+): Promise<Chat[]> {
+  const url = new URL(`${apiBase(port)}/api/chats`);
+  if (q?.project !== undefined) url.searchParams.set('project', q.project);
+  for (const t of q?.tags ?? []) url.searchParams.append('tags', t);
+  for (const s of q?.synthetic ?? []) url.searchParams.append('synthetic', s);
+  return request<Chat[]>('GET', url.toString());
+}
+
+/** Create a new daemon chat session. */
+export const createChat = (port: number, body: CreateChatBody): Promise<Chat> =>
+  request<Chat>('POST', `${apiBase(port)}/api/chats`, body);
+
+/** Rename a chat (PATCH /api/chats/:id/title). */
+export const renameChat = (port: number, chatId: string, title: string): Promise<Chat> =>
+  request<Chat>('PATCH', `${apiBase(port)}/api/chats/${chatId}/title`, { title });
+
+/** Pin or unpin a chat (PATCH /api/chats/:id/pinned). */
+export const pinChat = (port: number, chatId: string, pinned: boolean): Promise<Chat> =>
+  request<Chat>('PATCH', `${apiBase(port)}/api/chats/${chatId}/pinned`, { pinned });
+
+/**
+ * Archive a chat.
+ * deleteWorktree defaults to TRUE server-side — only send the query param when false.
+ */
+export function archiveChat(port: number, chatId: string, deleteWorktree: boolean): Promise<void> {
+  const base = `${apiBase(port)}/api/chats/${chatId}/archive`;
+  const url = deleteWorktree ? base : `${base}?deleteWorktree=false`;
+  return requestEmpty('POST', url);
+}
+
+/** Unarchive a chat (POST /api/chats/:id/unarchive). */
+export const unarchiveChat = (port: number, chatId: string): Promise<Chat> =>
+  request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/unarchive`);
