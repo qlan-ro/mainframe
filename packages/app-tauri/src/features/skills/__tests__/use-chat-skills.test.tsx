@@ -168,3 +168,131 @@ describe('useChatSkills — extras undefined', () => {
     expect(vi.mocked(getSkills)).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 4. Project id not in returned list → getSkills not called, empty skills
+// ---------------------------------------------------------------------------
+
+describe('useChatSkills — projectId not in getProjects result', () => {
+  it('returns { skills:[], loading:false } and never calls getSkills', async () => {
+    // getProjects returns a project with a different id than what the chat uses
+    const otherProject: Project = {
+      id: 'other',
+      name: 'X',
+      path: '/x',
+      createdAt: '2026-06-06T00:00:00.000Z',
+      lastOpenedAt: '2026-06-06T00:00:00.000Z',
+    };
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([otherProject]);
+
+    const { result } = renderHook(() => useChatSkills(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.skills).toEqual([]);
+    expect(vi.mocked(getSkills)).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. getSkills rejects → empty skills, no throw, console.warn called
+// ---------------------------------------------------------------------------
+
+describe('useChatSkills — getSkills rejects', () => {
+  it('returns { skills:[], loading:false } and logs a warning', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockRejectedValue(new Error('skills fetch failed'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const { result } = renderHook(() => useChatSkills(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.skills).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith('[skills] failed to load skills', expect.any(Error));
+    warnSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. Stale-clear on dependency change — old skills are not retained
+// ---------------------------------------------------------------------------
+
+describe('useChatSkills — stale-clear on projectId change', () => {
+  it('does not retain p1 skills after switching to p2', async () => {
+    // ---- p1 fixtures ----
+    const PROJECT_P2_PATH = '/proj-two';
+    const PROJECT_P2: Project = {
+      id: 'p2',
+      name: 'P2',
+      path: PROJECT_P2_PATH,
+      createdAt: '2026-06-06T00:00:00.000Z',
+      lastOpenedAt: '2026-06-06T00:00:00.000Z',
+    };
+    const SKILL_P2: Skill = {
+      id: 'skill-p2',
+      adapterId: ADAPTER_ID,
+      name: 'p2-skill',
+      displayName: 'P2 Skill',
+      description: 'Belongs to project 2',
+      scope: 'project',
+      filePath: '/proj-two/.claude/skills/p2-skill.md',
+      content: '# P2 Skill',
+      invocationName: 'p2-skill',
+    };
+
+    // p1: resolves immediately
+    const extrasP1 = makeFakeExtras();
+    vi.mocked(useChatExtras).mockReturnValue(extrasP1 as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+
+    const { result, rerender } = renderHook(() => useChatSkills(), { wrapper });
+
+    // Wait for p1 skills to settle
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    expect(result.current.skills).toEqual([SKILL_FIXTURE]);
+
+    // ---- switch to p2 ----
+    // Use a controlled promise so we can observe the cleared state before p2 resolves
+    let resolveP2Skills!: (v: Skill[]) => void;
+    const p2SkillsPromise = new Promise<Skill[]>((res) => {
+      resolveP2Skills = res;
+    });
+
+    const extrasP2 = {
+      ...makeFakeExtras(),
+      state: {
+        chatId: 'c1',
+        chatConfig: { adapterId: ADAPTER_ID, projectId: 'p2' },
+      },
+    };
+    vi.mocked(useChatExtras).mockReturnValue(extrasP2 as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_P2]);
+    vi.mocked(getSkills).mockReturnValue(p2SkillsPromise);
+
+    rerender();
+
+    // The provider calls setSkills([]) synchronously before the async refetch;
+    // skills must be cleared (p1 skills must NOT be visible) while p2 is in-flight.
+    await waitFor(() => {
+      expect(result.current.skills).toEqual([]);
+    });
+
+    // Now let p2 resolve and confirm the final state shows p2 skills only
+    resolveP2Skills([SKILL_P2]);
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    expect(result.current.skills).toEqual([SKILL_P2]);
+  });
+});

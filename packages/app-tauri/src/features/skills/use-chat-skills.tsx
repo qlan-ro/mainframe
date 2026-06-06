@@ -50,6 +50,9 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
     if (port == null || !adapterId || !projectId) return;
 
     let cancelled = false;
+    // Clear stale skills from a previous adapter/project so consumers never see
+    // wrong-project skills during the in-flight refetch when the chat config changes.
+    setSkills([]);
     setLoading(true);
 
     void (async () => {
