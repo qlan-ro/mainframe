@@ -48,13 +48,23 @@ export class DaemonWsClient {
     };
 
     socket.onmessage = (ev) => {
-      let data: DaemonEvent;
+      let parsed: unknown;
       try {
-        data = JSON.parse(ev.data as string) as DaemonEvent;
+        parsed = JSON.parse(ev.data as string);
       } catch (err) {
         console.warn('[ws-client] failed to parse event', err);
         return;
       }
+      // Boundary guard: only dispatch well-formed events (object + string `type`)
+      // to the reducers. We deliberately do NOT re-declare the daemon's full
+      // `DaemonEvent` union here (single canonical type lives in mainframe-types;
+      // the discriminated handler's default case covers unknown types) — this
+      // just stops a malformed/non-object frame from reaching `h(data)`.
+      if (typeof parsed !== 'object' || parsed === null || typeof (parsed as { type?: unknown }).type !== 'string') {
+        console.warn('[ws-client] dropping malformed daemon event', parsed);
+        return;
+      }
+      const data = parsed as DaemonEvent;
       this.handlers.forEach((h) => h(data));
     };
 
@@ -94,10 +104,20 @@ export class DaemonWsClient {
   send(event: ClientEvent): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(event));
-    } else if (this.ws?.readyState === WebSocket.CONNECTING) {
-      this.pendingMessages.push(event);
-    } else {
-      console.warn('[ws-client] dropping message — socket not ready', event.type);
+      return;
+    }
+    // Never silently drop: a lost message.send / permission.respond looks like
+    // success while the daemon never received it. Buffer and let the
+    // (re)connection flush it (`flushPending` runs on `onopen`). A CONNECTING
+    // socket flushes on its own; an absent/CLOSED one needs a reconnect kick.
+    this.pendingMessages.push(event);
+    if (
+      !this.intentionalClose &&
+      this.port != null &&
+      this.reconnectTimer == null &&
+      this.ws?.readyState !== WebSocket.CONNECTING
+    ) {
+      this.connect();
     }
   }
 

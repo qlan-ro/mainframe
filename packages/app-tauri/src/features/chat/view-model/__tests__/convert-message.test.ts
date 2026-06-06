@@ -13,6 +13,24 @@ function assistant(content: DisplayContent[]): DisplayMessage {
   return { id: 'm1', chatId: 'c1', type: 'assistant', timestamp: '2026-06-05T00:00:00.000Z', content };
 }
 
+function user(content: DisplayContent[], metadata?: Record<string, unknown>): DisplayMessage {
+  return { id: 'u1', chatId: 'c1', type: 'user', timestamp: '2026-06-05T00:00:00.000Z', content, metadata };
+}
+
+type MainframeMeta = {
+  cleanText?: string;
+  error?: string;
+  queued?: boolean;
+  pending?: boolean;
+  clientId?: string;
+  command?: { name: string; userText?: string; source?: string };
+  [key: string]: unknown;
+};
+
+function userMainframe(msg: DisplayMessage): MainframeMeta | undefined {
+  return (convertMessage(msg) as { metadata?: { custom?: { mainframe?: MainframeMeta } } }).metadata?.custom?.mainframe;
+}
+
 function parts(msg: DisplayMessage): Part[] {
   return convertMessage(msg).content as Part[];
 }
@@ -418,5 +436,50 @@ describe('convertMessage — groupSummaries: tool_group records derived summary'
       ?.custom?.mainframe;
 
     expect(mainframe).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// coerceUserMeta — type-safe metadata extraction for user messages
+// (driven through convertMessage since coerceUserMeta is not exported)
+// ---------------------------------------------------------------------------
+
+describe('convertMessage — coerceUserMeta: user-turn metadata fields', () => {
+  it('passes through valid string fields cleanText and error', () => {
+    const msg = user([{ type: 'text', text: 'hi' }], { cleanText: 'hi', error: 'boom' });
+    const mf = userMainframe(msg);
+    expect(mf?.cleanText).toBe('hi');
+    expect(mf?.error).toBe('boom');
+  });
+
+  it('drops a wrong-typed error field (number instead of string)', () => {
+    const msg = user([{ type: 'text', text: 'hi' }], { error: 123 });
+    const result = convertMessage(msg);
+    // An error:123 payload yields no valid string fields → mf is {} → metadata is omitted.
+    // Either the whole mainframe key is absent, or error is not 123.
+    const mf = (result as { metadata?: { custom?: { mainframe?: { error?: unknown } } } }).metadata?.custom?.mainframe;
+    expect(mf?.error).not.toBe(123);
+  });
+
+  it('handles null metadata without throwing and produces no mainframe meta', () => {
+    // metadata typed as Record<string,unknown>|undefined; passing undefined covers the null branch in coerceUserMeta.
+    const msg = user([{ type: 'text', text: 'hello' }], undefined);
+    expect(() => convertMessage(msg)).not.toThrow();
+    const mf = userMainframe(msg);
+    expect(mf).toBeUndefined();
+  });
+
+  it('passes through a valid command object when name is a string', () => {
+    const msg = user([{ type: 'text', text: 'go' }], { command: { name: 'plan', userText: 'go' } });
+    const mf = userMainframe(msg);
+    expect(mf?.command?.name).toBe('plan');
+    expect((mf?.command as { userText?: string } | undefined)?.userText).toBe('go');
+  });
+
+  it('drops a command object whose name is not a string', () => {
+    const msg = user([{ type: 'text', text: 'go' }], { command: { name: 99 } });
+    const mf = userMainframe(msg);
+    // name is not a string → command is dropped entirely.
+    expect(mf?.command).toBeUndefined();
   });
 });

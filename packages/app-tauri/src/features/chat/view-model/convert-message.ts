@@ -27,6 +27,31 @@ function withMainframe(
   return { metadata: { ...extra, custom: { mainframe: mf } } };
 }
 
+/**
+ * Safely extract the user-turn mainframe fields from raw daemon message metadata,
+ * instead of blind-casting the whole object. Each field is type-checked, so a
+ * malformed/unexpected daemon payload yields `{}` rather than corrupt meta the UI
+ * then reads (e.g. a non-string `error` rendering a bogus failed-send state).
+ */
+function coerceUserMeta(metadata: unknown): MainframeMessageMeta {
+  if (typeof metadata !== 'object' || metadata === null) return {};
+  const m = metadata as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof m.queued === 'boolean') out.queued = m.queued;
+  if (typeof m.cleanText === 'string') out.cleanText = m.cleanText;
+  if (typeof m.pending === 'boolean') out.pending = m.pending;
+  if (typeof m.clientId === 'string') out.clientId = m.clientId;
+  if (typeof m.error === 'string') out.error = m.error;
+  if (
+    typeof m.command === 'object' &&
+    m.command !== null &&
+    typeof (m.command as { name?: unknown }).name === 'string'
+  ) {
+    out.command = m.command;
+  }
+  return out as MainframeMessageMeta;
+}
+
 export function convertMessage(message: DisplayMessage): ThreadMessageLike {
   const base = { id: message.id, createdAt: new Date(message.timestamp) };
 
@@ -37,7 +62,7 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
         if (c.type === 'image') return [{ type: 'image', image: `data:${c.mediaType};base64,${c.data}` }];
         return [];
       });
-      const mf = (message.metadata ?? {}) as MainframeMessageMeta;
+      const mf = coerceUserMeta(message.metadata);
       return {
         role: 'user',
         content: ensureNonEmpty(parts),
