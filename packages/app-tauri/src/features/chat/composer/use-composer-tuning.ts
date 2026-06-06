@@ -31,7 +31,7 @@ import type {
   SessionTuning,
 } from '@qlan-ro/mainframe-types';
 import { getAdapters } from '@/lib/api/adapters';
-import { getChat, setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
+import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 
 // ---------------------------------------------------------------------------
@@ -86,50 +86,20 @@ export interface ComposerTuningHook {
 }
 
 /**
- * Resolves the current chat + its model from the adapter registry, then
- * exposes optimistic mutators.  Returns null values until both are loaded.
+ * Resolves the current chat + its model from the adapter registry, then exposes
+ * config mutators. Returns null values until the config is loaded.
  *
- * Optimistic invariant: local state is updated immediately, then the PATCH
- * is sent; on success the returned Chat reconciles any server-side coercion;
- * on error the previous value is restored and a warning is logged.
+ * Server-authoritative, NO optimistic UI (mirrors the desktop client): `chat` is
+ * read live from the controller's `state.chatConfig` (seeded from REST on load,
+ * then mirrored from every `chat.updated`). A mutator just sends the PATCH; the
+ * daemon's resulting `chat.updated` broadcast updates `chatConfig` and the toolbar
+ * reflects it. No local copy → no optimistic-vs-broadcast race, no flicker.
  */
 export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const extras = useChatExtras();
   const chatId = extras?.state.chatId ?? null;
-  const [chat, setChat] = useState<Chat | null>(null);
-
-  // Fetch the chat when chatId changes.
-  useEffect(() => {
-    if (!chatId || !extras) return;
-    const id: string = chatId;
-    const port = extras.port;
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const data = await getChat(port, id);
-        if (!cancelled) setChat(data);
-      } catch (err) {
-        console.warn('[composer/useComposerTuning] getChat failed', { chatId: id, err });
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-    // extras.port is stable within a chat epoch; only chatId triggers a re-fetch.
-  }, [chatId, extras?.port]);
-
-  // Adopt daemon-side config changes (model/plan/permission/effort/features) live.
-  // The controller mirrors `chat.updated` into state.chatConfig, so the toolbar
-  // stays correct when the daemon changes config on its own (e.g. the agent
-  // exiting plan mode → planMode:false) — no manual reload needed. The REST fetch
-  // above seeds the initial value before the first chat.updated arrives.
-  const liveChat = extras?.state.chatConfig ?? null;
-  useEffect(() => {
-    if (liveChat) setChat(liveChat);
-  }, [liveChat]);
+  const port = extras?.port ?? null;
+  const chat = extras?.state.chatConfig ?? null;
 
   // Live run-state from the assistant-ui thread — stays accurate mid-run
   // (unlike the REST snapshot in `chat.isRunning` which is fetched once).
@@ -150,59 +120,46 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     );
   })();
 
-  /**
-   * Shared optimistic-mutate helper: captures prev, applies optimistic update,
-   * fires PATCH, reconciles on success, reverts on error.
-   */
-  const optimisticPatch = useCallback(
-    <T extends Partial<Chat>>(optimistic: T, patch: () => Promise<Chat>, label: string) => {
-      if (!chat || !extras) return;
-      const prev = chat;
-      setChat({ ...chat, ...optimistic });
-      patch()
-        .then((updated) => setChat(updated))
-        .catch((err: unknown) => {
-          console.warn(`[composer/useComposerTuning] ${label} failed — reverting`, { err });
-          setChat(prev);
-        });
-    },
-    [chat, extras],
-  );
-
   const setEffort = useCallback(
     (effort: EffortLevel) => {
-      if (!extras || !chatId) return;
+      if (port == null || !chatId) return;
       const tuning: SessionTuning = { effort };
-      const { port } = extras;
-      optimisticPatch({ effort }, () => setChatTuning(port, chatId, tuning), 'setEffort');
+      setChatTuning(port, chatId, tuning).catch((err: unknown) =>
+        console.warn('[composer/useComposerTuning] setEffort failed', { err }),
+      );
     },
-    [chatId, extras, optimisticPatch],
+    [chatId, port],
   );
 
   const setFeature = useCallback(
     (key: FeatureKey, on: boolean) => {
-      if (!extras || !chatId) return;
+      if (port == null || !chatId) return;
       // Write ONLY the touched field — ultracode→xhigh coercion is a daemon resolver invariant.
       const patch: SessionTuning = { [key]: on };
-      const { port } = extras;
-      optimisticPatch(patch as Partial<Chat>, () => setChatTuning(port, chatId, patch), `setFeature(${key})`);
+      setChatTuning(port, chatId, patch).catch((err: unknown) =>
+        console.warn(`[composer/useComposerTuning] setFeature(${key}) failed`, { err }),
+      );
     },
-    [chatId, extras, optimisticPatch],
+    [chatId, port],
   );
 
-  // adapter / model / permission / plan all go through PATCH /config (one optimistic helper).
+  // adapter / model / permission / plan all go through PATCH /config.
   const patchConfig = useCallback(
-    (patch: ChatConfigPatch) => {
-      if (!extras || !chatId) return;
-      const { port } = extras;
-      optimisticPatch(patch as Partial<Chat>, () => setChatConfig(port, chatId, patch), 'patchConfig');
+    (patch: ChatConfigPatch, label: string) => {
+      if (port == null || !chatId) return;
+      setChatConfig(port, chatId, patch).catch((err: unknown) =>
+        console.warn(`[composer/useComposerTuning] ${label} failed`, { err }),
+      );
     },
-    [chatId, extras, optimisticPatch],
+    [chatId, port],
   );
 
-  const setModel = useCallback((m: string) => patchConfig({ model: m }), [patchConfig]);
-  const setPlanMode = useCallback((on: boolean) => patchConfig({ planMode: on }), [patchConfig]);
-  const setPermissionMode = useCallback((mode: ExecutionMode) => patchConfig({ permissionMode: mode }), [patchConfig]);
+  const setModel = useCallback((m: string) => patchConfig({ model: m }, 'setModel'), [patchConfig]);
+  const setPlanMode = useCallback((on: boolean) => patchConfig({ planMode: on }, 'setPlanMode'), [patchConfig]);
+  const setPermissionMode = useCallback(
+    (mode: ExecutionMode) => patchConfig({ permissionMode: mode }, 'setPermissionMode'),
+    [patchConfig],
+  );
 
   return {
     chat,

@@ -1,28 +1,26 @@
 /**
- * Behavior tests for useComposerTuning — optimistic patch lifecycle.
+ * Behavior tests for useComposerTuning — pure-reader + fire-and-forget PATCH.
  *
  * What we verify:
- *   - optimistic apply is immediate (chat state updates before the PATCH resolves)
- *   - on success, the resolved server Chat reconciles state (may differ from
- *     the optimistic value, e.g. server coercion)
- *   - on error, the previous value is restored exactly
- *   - setFeature sends ONLY the touched key in the PATCH payload (not the full chat)
+ *   - chat is read live from extras.state.chatConfig (no getChat, no local state)
+ *   - adapter + model are resolved from the passed adapters array
+ *   - setEffort / setFeature / setModel / setPlanMode / setPermissionMode each
+ *     fire the correct PATCH with exactly the right args (hardcoded expectations)
+ *   - PATCH rejection is swallowed (fire-and-forget .catch(console.warn))
+ *   - disabled mirrors useAuiState isRunning
+ *   - mutators are no-ops when extras / chatId are absent
  *
  * Mocking strategy
  * ----------------
  * 1. `@assistant-ui/react` → stub `useAuiState` to return a fixed isRunning
- *    value (false by default).  This avoids needing an AssistantRuntime tree.
- * 2. `../runtime/use-chat-thread-runtime` → stub `useChatExtras` to return
- *    a fake extras with a controllable chatId + port.  Eliminates the full
- *    external-store runtime context.
- * 3. `@/lib/api/chats` → vi.fn() stubs for `getChat` and `setChatTuning`.
- * 4. `@/lib/api/adapters` → stub `getAdapters` (not under test, just silenced).
- *
- * Both modules are vi.mock'd at the top (hoisted by vitest) so the import
- * of `useComposerTuning` picks up the stubs.
+ *    value (false by default).
+ * 2. `../runtime/use-chat-thread-runtime` → stub `useChatExtras` to return a
+ *    fake extras whose `state.chatConfig` carries the chat fixture.
+ * 3. `@/lib/api/chats` → vi.fn() stubs for `setChatTuning` and `setChatConfig`.
+ * 4. `@/lib/api/adapters` → stub `getAdapters` (silenced; not under test here).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
 // Module mocks (hoisted — must be declared before imports that depend on them)
@@ -37,9 +35,8 @@ vi.mock('../../runtime/use-chat-thread-runtime', () => ({
 }));
 
 vi.mock('@/lib/api/chats', () => ({
-  getChat: vi.fn(),
-  setChatTuning: vi.fn(),
-  setChatConfig: vi.fn(),
+  setChatTuning: vi.fn().mockResolvedValue(undefined),
+  setChatConfig: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/api/adapters', () => ({
@@ -52,8 +49,9 @@ vi.mock('@/lib/api/adapters', () => ({
 
 import { useComposerTuning } from '../use-composer-tuning';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
-import { getChat, setChatTuning } from '@/lib/api/chats';
-import type { Chat } from '@qlan-ro/mainframe-types';
+import { useAuiState } from '@assistant-ui/react';
+import { setChatTuning, setChatConfig } from '@/lib/api/chats';
+import type { Chat, AdapterInfo } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -62,7 +60,7 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 const CHAT_ID = 'chat-tuning-test';
 const PORT = 9988;
 
-/** Minimal Chat with effort + ultracode fields in play. */
+/** Minimal Chat fixture with all tuning fields present. */
 function makeChat(overrides?: Partial<Chat>): Chat {
   return {
     id: CHAT_ID,
@@ -83,10 +81,21 @@ function makeChat(overrides?: Partial<Chat>): Chat {
   };
 }
 
-/** Fake extras returned by useChatExtras — carries state.chatId + port. */
-function makeFakeExtras() {
+/** Minimal AdapterInfo with two models — one default. */
+const ADAPTER_CLAUDE: AdapterInfo = {
+  id: 'claude',
+  name: 'Claude',
+  models: [
+    { id: 'claude-3-haiku', name: 'Haiku', isDefault: false },
+    { id: 'claude-3-sonnet', name: 'Sonnet', isDefault: true },
+    { id: 'claude-3-opus', name: 'Opus', isDefault: false },
+  ],
+} as unknown as AdapterInfo;
+
+/** Fake extras whose state.chatConfig carries the supplied chat. */
+function makeFakeExtras(chat: Chat | null = makeChat()) {
   return {
-    state: { chatId: CHAT_ID },
+    state: { chatId: CHAT_ID, chatConfig: chat },
     port: PORT,
     permissions: {},
     queued: {},
@@ -99,147 +108,122 @@ function makeFakeExtras() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Default: extras are available with a known chatId.
+  vi.mocked(useAuiState).mockReturnValue(false);
   vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+  vi.mocked(setChatTuning).mockResolvedValue(undefined as unknown as Chat);
+  vi.mocked(setChatConfig).mockResolvedValue(undefined as unknown as Chat);
 });
 
 // ---------------------------------------------------------------------------
-// 1. optimistic apply is immediate
+// 1. chat reads live from extras.state.chatConfig
 // ---------------------------------------------------------------------------
 
-describe('useComposerTuning — setEffort optimistic apply', () => {
-  it('updates chat.effort to the new value synchronously before the PATCH resolves', async () => {
-    const initialChat = makeChat({ effort: 'medium' });
-    const serverChat = makeChat({ effort: 'high' });
+describe('useComposerTuning — chat from extras.state.chatConfig', () => {
+  it('returns the chat object directly from chatConfig (no getChat call)', () => {
+    const chat = makeChat({ effort: 'high' });
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras(chat) as unknown as ReturnType<typeof useChatExtras>);
 
-    vi.mocked(getChat).mockResolvedValueOnce(initialChat);
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
 
-    // The PATCH resolves after a tick — we want to see the optimistic value
-    // in the window before it settles.
-    let resolveServerPatch!: (c: Chat) => void;
-    vi.mocked(setChatTuning).mockReturnValueOnce(
-      new Promise<Chat>((res) => {
-        resolveServerPatch = res;
-      }),
+    expect(result.current.chat).toBe(chat);
+  });
+
+  it('resolves adapter from the passed adapters array using chat.adapterId', () => {
+    vi.mocked(useChatExtras).mockReturnValue(
+      makeFakeExtras(makeChat({ adapterId: 'claude' })) as unknown as ReturnType<typeof useChatExtras>,
     );
 
-    const { result } = renderHook(() => useComposerTuning([]));
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
 
-    // Wait for getChat to settle so chat !== null.
-    await waitFor(() => expect(result.current.chat).not.toBeNull());
+    expect(result.current.adapter?.id).toBe('claude');
+  });
 
-    // Trigger optimistic update.
-    act(() => {
-      result.current.setEffort('high');
-    });
+  it('resolves the default model when chat.model is null', () => {
+    vi.mocked(useChatExtras).mockReturnValue(
+      makeFakeExtras(makeChat({ model: undefined })) as unknown as ReturnType<typeof useChatExtras>,
+    );
 
-    // The optimistic value is reflected immediately — before the server responds.
-    expect(result.current.chat?.effort).toBe('high');
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
 
-    // Now let the server respond.
-    act(() => {
-      resolveServerPatch(serverChat);
-    });
+    // Default model from the fixture adapter is 'claude-3-sonnet'.
+    expect(result.current.model?.id).toBe('claude-3-sonnet');
+  });
 
-    await waitFor(() => expect(result.current.chat?.effort).toBe('high'));
+  it('resolves the explicit chat model when chat.model is set', () => {
+    vi.mocked(useChatExtras).mockReturnValue(
+      makeFakeExtras(makeChat({ model: 'claude-3-opus' })) as unknown as ReturnType<typeof useChatExtras>,
+    );
+
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
+
+    expect(result.current.model?.id).toBe('claude-3-opus');
+  });
+
+  it('returns null chat/adapter/model when chatConfig is null', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras(null) as unknown as ReturnType<typeof useChatExtras>);
+
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
+
+    expect(result.current.chat).toBeNull();
+    expect(result.current.adapter).toBeNull();
+    expect(result.current.model).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. success — server value reconciles state
+// 2. setEffort fires setChatTuning with { effort }
 // ---------------------------------------------------------------------------
 
-describe('useComposerTuning — setEffort reconciles server value on success', () => {
-  it('replaces the optimistic chat with the server-returned Chat on success', async () => {
-    const initialChat = makeChat({ effort: 'low' });
-    // Server coerces 'max' → 'xhigh' (example of server-side coercion).
-    const serverChat = makeChat({ effort: 'xhigh' });
-
-    vi.mocked(getChat).mockResolvedValueOnce(initialChat);
-    vi.mocked(setChatTuning).mockResolvedValueOnce(serverChat);
-
+describe('useComposerTuning — setEffort', () => {
+  it("calls setChatTuning(port, chatId, { effort: 'high' }) exactly once", () => {
     const { result } = renderHook(() => useComposerTuning([]));
-    await waitFor(() => expect(result.current.chat).not.toBeNull());
-
-    act(() => {
-      result.current.setEffort('max');
-    });
-
-    // Wait for the PATCH to settle and reconcile.
-    await waitFor(() => expect(result.current.chat?.effort).toBe('xhigh'));
-
-    // The full server chat object is stored — not just the effort field.
-    expect(result.current.chat?.id).toBe(CHAT_ID);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. error — previous value is restored
-// ---------------------------------------------------------------------------
-
-describe('useComposerTuning — setEffort reverts on error', () => {
-  it('restores the previous chat when setChatTuning rejects', async () => {
-    const initialChat = makeChat({ effort: 'medium' });
-
-    vi.mocked(getChat).mockResolvedValueOnce(initialChat);
-    vi.mocked(setChatTuning).mockRejectedValueOnce(new Error('daemon unreachable'));
-
-    const { result } = renderHook(() => useComposerTuning([]));
-    await waitFor(() => expect(result.current.chat).not.toBeNull());
 
     act(() => {
       result.current.setEffort('high');
     });
 
-    // Optimistic update is applied first.
-    expect(result.current.chat?.effort).toBe('high');
+    expect(vi.mocked(setChatTuning)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, { effort: 'high' });
+  });
 
-    // After the rejection, the previous value is restored.
-    await waitFor(() => expect(result.current.chat?.effort).toBe('medium'));
+  it('does not mutate local state (chat object unchanged after setEffort)', () => {
+    const chat = makeChat({ effort: 'medium' });
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras(chat) as unknown as ReturnType<typeof useChatExtras>);
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setEffort('high');
+    });
+
+    // No optimistic update — chat is still the fixture (unchanged).
+    expect(result.current.chat?.effort).toBe('medium');
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. setFeature sends ONLY the touched key
+// 3. setFeature sends only the touched key
 // ---------------------------------------------------------------------------
 
 describe('useComposerTuning — setFeature sends only the touched key', () => {
-  it('calls setChatTuning with only { ultracode: true } when toggling ultracode', async () => {
-    const initialChat = makeChat({ ultracode: false });
-
-    vi.mocked(getChat).mockResolvedValueOnce(initialChat);
-    vi.mocked(setChatTuning).mockResolvedValueOnce(makeChat({ ultracode: true }));
-
+  it('calls setChatTuning with { ultracode: true } (no other fields)', () => {
     const { result } = renderHook(() => useComposerTuning([]));
-    await waitFor(() => expect(result.current.chat).not.toBeNull());
 
     act(() => {
       result.current.setFeature('ultracode', true);
     });
 
-    await waitFor(() => expect(vi.mocked(setChatTuning)).toHaveBeenCalled());
-
     const [portArg, chatIdArg, tuningArg] = vi.mocked(setChatTuning).mock.calls[0]!;
     expect(portArg).toBe(PORT);
     expect(chatIdArg).toBe(CHAT_ID);
-    // The patch must contain ONLY the toggled key — no other fields.
     expect(tuningArg).toEqual({ ultracode: true });
   });
 
-  it('calls setChatTuning with only { fast: false } when toggling fast off', async () => {
-    const initialChat = makeChat({ fast: true });
-
-    vi.mocked(getChat).mockResolvedValueOnce(initialChat);
-    vi.mocked(setChatTuning).mockResolvedValueOnce(makeChat({ fast: false }));
-
+  it('calls setChatTuning with { fast: false } when toggling fast off', () => {
     const { result } = renderHook(() => useComposerTuning([]));
-    await waitFor(() => expect(result.current.chat).not.toBeNull());
 
     act(() => {
       result.current.setFeature('fast', false);
     });
-
-    await waitFor(() => expect(vi.mocked(setChatTuning)).toHaveBeenCalled());
 
     const [, , tuningArg] = vi.mocked(setChatTuning).mock.calls[0]!;
     expect(tuningArg).toEqual({ fast: false });
@@ -247,23 +231,120 @@ describe('useComposerTuning — setFeature sends only the touched key', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. no-op when extras are not yet available
+// 4. setModel fires setChatConfig with { model }
+// ---------------------------------------------------------------------------
+
+describe('useComposerTuning — setModel', () => {
+  it("calls setChatConfig(port, chatId, { model: 'claude-x' }) exactly once", () => {
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setModel('claude-x');
+    });
+
+    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, { model: 'claude-x' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. setPlanMode / setPermissionMode fire setChatConfig
+// ---------------------------------------------------------------------------
+
+describe('useComposerTuning — setPlanMode and setPermissionMode', () => {
+  it('calls setChatConfig(port, chatId, { planMode: true })', () => {
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setPlanMode(true);
+    });
+
+    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, { planMode: true });
+  });
+
+  it("calls setChatConfig(port, chatId, { permissionMode: 'yolo' })", () => {
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setPermissionMode('yolo' as Parameters<typeof result.current.setPermissionMode>[0]);
+    });
+
+    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, {
+      permissionMode: 'yolo',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. disabled mirrors useAuiState isRunning
+// ---------------------------------------------------------------------------
+
+describe('useComposerTuning — disabled', () => {
+  it('is true when useAuiState reports isRunning=true', () => {
+    vi.mocked(useAuiState).mockReturnValue(true);
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    expect(result.current.disabled).toBe(true);
+  });
+
+  it('is false when useAuiState reports isRunning=false', () => {
+    vi.mocked(useAuiState).mockReturnValue(false);
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    expect(result.current.disabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. PATCH rejection is swallowed (fire-and-forget)
+// ---------------------------------------------------------------------------
+
+describe('useComposerTuning — PATCH rejection is swallowed', () => {
+  it('does not throw when setChatTuning rejects', async () => {
+    vi.mocked(setChatTuning).mockRejectedValue(new Error('daemon unreachable'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    // Must not throw synchronously or produce an unhandled rejection.
+    await expect(
+      new Promise<void>((resolve) => {
+        act(() => {
+          result.current.setEffort('high');
+        });
+        // Flush microtasks so the .catch fires.
+        setTimeout(resolve, 0);
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(vi.mocked(setChatTuning)).toHaveBeenCalledOnce();
+    warnSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. no-op when extras are absent
 // ---------------------------------------------------------------------------
 
 describe('useComposerTuning — no-op without extras', () => {
-  it('does not throw and does not call setChatTuning when useChatExtras returns undefined', async () => {
+  it('does not call setChatTuning when useChatExtras returns undefined', () => {
     vi.mocked(useChatExtras).mockReturnValue(undefined);
-    vi.mocked(getChat).mockResolvedValue(makeChat());
 
     const { result } = renderHook(() => useComposerTuning([]));
 
     act(() => {
-      // setEffort is a no-op when extras/chatId are absent.
       result.current.setEffort('high');
     });
 
-    expect(setChatTuning).not.toHaveBeenCalled();
-    // chat remains null because no chatId → no getChat call.
+    expect(vi.mocked(setChatTuning)).not.toHaveBeenCalled();
+  });
+
+  it('returns null chat when extras are absent', () => {
+    vi.mocked(useChatExtras).mockReturnValue(undefined);
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
     expect(result.current.chat).toBeNull();
   });
 });

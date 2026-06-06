@@ -133,6 +133,21 @@ function removePending(state: ChatThreadState, clientId: string): ChatThreadStat
   return { ...state, pendingUserMessages };
 }
 
+/** True when every composer-toolbar field of two chats is equal (ignores cost/token/updatedAt churn). */
+function sameComposerConfig(a: Chat | null, b: Chat): boolean {
+  return (
+    a !== null &&
+    a.adapterId === b.adapterId &&
+    a.model === b.model &&
+    a.permissionMode === b.permissionMode &&
+    a.planMode === b.planMode &&
+    a.effort === b.effort &&
+    a.fast === b.fast &&
+    a.ultracode === b.ultracode &&
+    a.adaptiveThinking === b.adaptiveThinking
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Reducer
 // ---------------------------------------------------------------------------
@@ -173,7 +188,10 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
       return { ...state, runState: { type: 'error', error: event.error } };
 
     case 'chat.config.updated':
-      return { ...state, chatConfig: event.chat };
+      // chat.updated also fires for cost/token/updatedAt churn during a run.
+      // Only adopt a new identity when a composer-relevant field actually changed,
+      // so the toolbar doesn't re-render on every broadcast.
+      return sameComposerConfig(state.chatConfig, event.chat) ? state : { ...state, chatConfig: event.chat };
 
     case 'message.added':
       return upsertMessage(state, event.message);

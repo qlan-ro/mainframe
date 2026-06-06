@@ -12,6 +12,7 @@ import type { AppendMessage } from '@assistant-ui/react';
 import type { DaemonEvent, ControlResponse, DisplayContent, DisplayMessage } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import {
+  getChat,
   getChatMessages,
   getPendingPermission,
   interruptChat,
@@ -165,6 +166,17 @@ export class ChatThreadController {
     if (this.loadPromise && !force) return this.loadPromise;
 
     this.dispatch({ type: 'history.loading' });
+
+    // Seed the composer config from REST so the toolbar isn't empty before the
+    // first chat.updated; thereafter chat.updated keeps it live (the composer
+    // reads state.chatConfig — no its own fetch).
+    if (!this.state.chatConfig) {
+      void getChat(this.port, this.chatId)
+        .then((chat) => {
+          if (!this.disposed) this.dispatch({ type: 'chat.config.updated', chat });
+        })
+        .catch((err: unknown) => console.warn('[chat-controller] seed chat config failed', err));
+    }
 
     const request = getChatMessages(this.port, this.chatId)
       .then((messages) => {
