@@ -84,6 +84,21 @@ const two = (): ChatPermissionEntry => ({
   },
 });
 
+/** Single question with NO header — question text is the title. */
+const singleNoHeader = (): ChatPermissionEntry => ({
+  requestId: 'r2',
+  askedAt: 1,
+  request: {
+    requestId: 'r2',
+    toolName: 'AskUserQuestion',
+    toolUseId: 'tu2',
+    suggestions: [],
+    input: {
+      questions: [{ question: 'Which auth approach?', options: [{ label: 'OAuth' }, { label: 'PAT' }] }],
+    },
+  },
+});
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -257,5 +272,48 @@ describe('AskUserQuestionGate', () => {
       toolName: 'AskUserQuestion',
       behavior: 'deny',
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // 7. Header present: GateHead title = header; question text in body element
+  // -------------------------------------------------------------------------
+
+  it('with header "Auth method" the head title is the header and question text is in chat-question-text', () => {
+    const entry: ChatPermissionEntry = {
+      requestId: 'r3',
+      askedAt: 1,
+      request: {
+        requestId: 'r3',
+        toolName: 'AskUserQuestion',
+        toolUseId: 'tu3',
+        suggestions: [],
+        input: {
+          questions: [{ question: 'Which auth approach?', header: 'Auth method', options: [{ label: 'OAuth' }] }],
+        },
+      },
+    };
+    wrap(<AskUserQuestionGate entry={entry} reply={reply} />);
+
+    // The header is the title shown in GateHead.
+    expect(screen.getByText('Auth method')).toBeInTheDocument();
+
+    // The question text is demoted to the body paragraph.
+    const body = screen.getByTestId('chat-question-text');
+    expect(body).toBeInTheDocument();
+    expect(body).toHaveTextContent('Which auth approach?');
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. No header: question text IS the title; no chat-question-text element
+  // -------------------------------------------------------------------------
+
+  it('without a header the question text is the title and chat-question-text is absent', () => {
+    wrap(<AskUserQuestionGate entry={singleNoHeader()} reply={reply} />);
+
+    // The question text should appear as the head title (no header to displace it).
+    expect(screen.getByText('Which auth approach?')).toBeInTheDocument();
+
+    // No separate body paragraph element should be present.
+    expect(screen.queryByTestId('chat-question-text')).toBeNull();
   });
 });

@@ -27,6 +27,7 @@ import remarkGfm from 'remark-gfm';
 import type { Pluggable } from 'unified';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
 import { openExternal } from '@/lib/tauri/bridge';
 import { urlTransform, remarkAppLinks } from './markdown-url-transform';
 import { SyntaxHighlighter } from './syntax-highlight';
@@ -119,9 +120,9 @@ function MarkdownTr({ children, ...props }: React.ComponentProps<'tr'>) {
 function useCopyHref(href: string | undefined) {
   const [copied, setCopied] = useState(false);
   const copy = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    (e?: React.MouseEvent) => {
+      e?.preventDefault();
+      e?.stopPropagation();
       if (!href) return;
       navigator.clipboard.writeText(href).then(
         () => {
@@ -146,9 +147,9 @@ function LinkWithPreview({
   const { copied, copy } = useCopyHref(href);
 
   const handleOpen = useCallback(
-    (e: React.MouseEvent) => {
+    (e?: React.MouseEvent) => {
       if (!href) return;
-      e.preventDefault();
+      e?.preventDefault();
       openExternal(href).catch(() => {
         console.warn('[markdown-text] openExternal failed', href);
       });
@@ -162,18 +163,30 @@ function LinkWithPreview({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <a
-          className={cn(
-            'aui-md-a text-primary underline underline-offset-2',
-            'hover:opacity-80 transition-opacity cursor-pointer',
-            className,
-          )}
-          href={href}
-          onClick={handleOpen}
-          {...props}
-        />
-      </TooltipTrigger>
+      <ContextMenu>
+        <TooltipTrigger asChild>
+          <ContextMenuTrigger asChild>
+            <a
+              className={cn(
+                'aui-md-a text-primary underline underline-offset-2',
+                'hover:opacity-80 transition-opacity cursor-pointer',
+                className,
+              )}
+              href={href}
+              onClick={handleOpen}
+              {...props}
+            />
+          </ContextMenuTrigger>
+        </TooltipTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem data-testid="chat-link-copy" onClick={copy}>
+            Copy link
+          </ContextMenuItem>
+          <ContextMenuItem data-testid="chat-link-open" onClick={handleOpen}>
+            Open link
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
       <TooltipContent className="flex items-center gap-1.5 max-w-[400px]">
         <span className="truncate min-w-0">{href}</span>
         <button

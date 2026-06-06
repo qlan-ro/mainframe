@@ -142,7 +142,12 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
   }, [entry, questions, reply, selections, otherText]);
 
   const eyebrow = isMulti ? 'Question · select all that apply' : 'Question';
-  const title = activeQuestion?.question ?? '';
+  // Title with the model's short `header` label when present (e.g. "Auth method"),
+  // mirroring desktop; the question text then drops to a body line so it isn't lost.
+  // Without a header, the question text stays the title (current behavior).
+  const headerTitle = activeQuestion?.header ?? questions[0]?.header;
+  const title = headerTitle ?? activeQuestion?.question ?? '';
+  const questionBody = headerTitle ? activeQuestion?.question : undefined;
 
   return (
     <div data-testid="chat-question-gate">
@@ -161,6 +166,11 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
             ) : undefined
           }
         />
+        {questionBody && (
+          <p data-testid="chat-question-text" className="px-3.5 pb-1 text-body text-foreground">
+            {questionBody}
+          </p>
+        )}
         {activeQuestion && (
           <AskQuestionWizard
             question={activeQuestion}
