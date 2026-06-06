@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { daemonWs } from '../lib/daemon/ws-client';
 import { ChatRuntimeProvider } from '../features/chat/runtime/ChatRuntimeProvider';
 import { ChatThread } from '../features/chat/thread/ChatThread';
+import { Toaster } from '@/components/ui/sonner';
 
 const STATUS_DOT: Record<ConnectionState, string> = {
   connecting: 'bg-mf-warning',
@@ -119,6 +120,8 @@ export function App() {
           </div>
         )}
       </div>
+
+      <Toaster />
     </div>
   );
 }

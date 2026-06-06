@@ -37,8 +37,8 @@
     "@tauri-apps/plugin-opener": "^2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "diff": "^9.0.0",
     "cmdk": "^1.1.1",
+    "diff": "^9.0.0",
     "lucide-react": "^1.16.0",
     "react": "^19",
     "react-dom": "^19",
@@ -46,6 +46,7 @@
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "shiki": "^4.0.2",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0"
   },

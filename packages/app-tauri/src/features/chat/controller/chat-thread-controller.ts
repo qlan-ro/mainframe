@@ -30,6 +30,7 @@ import {
   type PendingUserMessage,
 } from './chat-thread-state';
 import { handleDaemonEvent } from './handle-daemon-event';
+import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
 // Optimistic send helpers
@@ -418,6 +419,14 @@ export class ChatThreadController {
     // handleDaemonEvent below still maps chat.updated → run.started/stopped.
     if (event.type === 'chat.updated' && event.chat.id === this.chatId) {
       this.dispatch({ type: 'chat.config.updated', chat: event.chat });
+    }
+
+    // A queued-message cancel the daemon couldn't honor leaves the message
+    // queued — surface it (the reducer keeps state, so there's no other signal).
+    if (event.type === 'message.queued.cancel_failed' && event.chatId === this.chatId) {
+      toast.error("Couldn't cancel the queued message", {
+        description: 'It will still be sent when the current run finishes.',
+      });
     }
 
     const result = handleDaemonEvent(event, this.chatId, this.state.messagesById);
