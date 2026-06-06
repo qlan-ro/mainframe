@@ -1,24 +1,26 @@
 'use client';
 
 /**
- * Per-chat skills provider + hook.
+ * Per-chat skills + agents provider and hooks.
  *
- * Preloads the skills available for the current chat's adapter + project once
- * on mount (when port/adapterId/projectId are known). Holds plain React state —
- * same pattern as `useAdapters` in `use-composer-tuning.ts`.
+ * Preloads the skills and agents available for the current chat's adapter +
+ * project once on mount (when port/adapterId/projectId are known). Holds plain
+ * React state — same pattern as `useAdapters` in `use-composer-tuning.ts`.
  *
  * Usage:
  *   // In the chat thread root:
  *   <SkillsProvider>…children…</SkillsProvider>
  *
  *   // In any descendant:
- *   const { skills, loading } = useChatSkills();
+ *   const { skills, agents, loading } = useChatSkills();
+ *   const agents = useChatAgents();
  */
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Skill } from '@qlan-ro/mainframe-types';
+import type { Skill, AgentConfig } from '@qlan-ro/mainframe-types';
 import { getProjects } from '@/lib/api/projects';
 import { getSkills } from '@/lib/api/skills';
+import { getAgents } from '@/lib/api/agents';
 import { useChatExtras } from '../chat/runtime/use-chat-thread-runtime';
 
 // ---------------------------------------------------------------------------
@@ -27,10 +29,11 @@ import { useChatExtras } from '../chat/runtime/use-chat-thread-runtime';
 
 interface ChatSkills {
   skills: Skill[];
+  agents: AgentConfig[];
   loading: boolean;
 }
 
-const DEFAULT: ChatSkills = { skills: [], loading: false };
+const DEFAULT: ChatSkills = { skills: [], agents: [], loading: false };
 const Ctx = createContext<ChatSkills>(DEFAULT);
 
 // ---------------------------------------------------------------------------
@@ -44,15 +47,17 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
   const projectId = extras?.state.chatConfig?.projectId ?? null;
 
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (port == null || !adapterId || !projectId) return;
 
     let cancelled = false;
-    // Clear stale skills from a previous adapter/project so consumers never see
-    // wrong-project skills during the in-flight refetch when the chat config changes.
+    // Clear stale skills and agents from a previous adapter/project so consumers
+    // never see wrong-project data during the in-flight refetch when chat config changes.
     setSkills([]);
+    setAgents([]);
     setLoading(true);
 
     void (async () => {
@@ -60,14 +65,26 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
         const projects = await getProjects(port);
         const path = projects.find((p) => p.id === projectId)?.path;
         if (!path) {
-          if (!cancelled) setSkills([]);
+          if (!cancelled) {
+            setSkills([]);
+            setAgents([]);
+          }
           return;
         }
-        const list = await getSkills(port, adapterId, path);
-        if (!cancelled) setSkills(list);
+        const [list, agentList] = await Promise.all([
+          getSkills(port, adapterId, path),
+          getAgents(port, adapterId, path),
+        ]);
+        if (!cancelled) {
+          setSkills(list);
+          setAgents(agentList);
+        }
       } catch (err) {
         console.warn('[skills] failed to load skills', err);
-        if (!cancelled) setSkills([]);
+        if (!cancelled) {
+          setSkills([]);
+          setAgents([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -78,15 +95,19 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
     };
   }, [port, adapterId, projectId]);
 
-  return <Ctx.Provider value={{ skills, loading }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ skills, agents, loading }}>{children}</Ctx.Provider>;
 }
 
 // ---------------------------------------------------------------------------
-// Hook
+// Hooks
 // ---------------------------------------------------------------------------
 
 export function useChatSkills(): ChatSkills {
   return useContext(Ctx);
+}
+
+export function useChatAgents(): AgentConfig[] {
+  return useContext(Ctx).agents;
 }
 
 // ---------------------------------------------------------------------------

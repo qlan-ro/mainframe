@@ -1,16 +1,17 @@
 /**
- * Behavior tests for SkillsProvider + useChatSkills.
+ * Behavior tests for SkillsProvider + useChatSkills + useChatAgents.
  *
  * What we verify:
  *   - Happy path: resolves the project path from getProjects, fetches skills
- *     with (port, adapterId, path), returns { skills, loading:false }.
- *   - getProjects rejects → { skills:[], loading:false }, no throw (warn logged).
- *   - extras undefined → { skills:[], loading:false }, no fetch at all.
+ *     AND agents with (port, adapterId, path), returns { skills, agents, loading:false }.
+ *   - getProjects rejects → { skills:[], agents:[], loading:false }, no throw (warn logged).
+ *   - extras undefined → { skills:[], agents:[], loading:false }, no fetch at all.
  *
  * Mocking strategy:
  *   1. `@/lib/api/projects`  → vi.fn() stub for getProjects
  *   2. `@/lib/api/skills`    → vi.fn() stub for getSkills
- *   3. `../chat/runtime/use-chat-thread-runtime` → stub useChatExtras
+ *   3. `@/lib/api/agents`    → vi.fn() stub for getAgents
+ *   4. `../chat/runtime/use-chat-thread-runtime` → stub useChatExtras
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
@@ -28,6 +29,10 @@ vi.mock('@/lib/api/skills', () => ({
   getSkills: vi.fn(),
 }));
 
+vi.mock('@/lib/api/agents', () => ({
+  getAgents: vi.fn(),
+}));
+
 vi.mock('../../chat/runtime/use-chat-thread-runtime', () => ({
   useChatExtras: vi.fn(),
 }));
@@ -36,11 +41,12 @@ vi.mock('../../chat/runtime/use-chat-thread-runtime', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { SkillsProvider, useChatSkills } from '../use-chat-skills';
+import { SkillsProvider, useChatSkills, useChatAgents } from '../use-chat-skills';
 import { getProjects } from '@/lib/api/projects';
 import { getSkills } from '@/lib/api/skills';
+import { getAgents } from '@/lib/api/agents';
 import { useChatExtras } from '../../chat/runtime/use-chat-thread-runtime';
-import type { Skill, Project } from '@qlan-ro/mainframe-types';
+import type { Skill, Project, AgentConfig } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -69,6 +75,16 @@ const SKILL_FIXTURE: Skill = {
   filePath: '/proj/.claude/skills/my-skill.md',
   content: '# My Skill',
   invocationName: 'my-skill',
+};
+
+const AGENT_FIXTURE: AgentConfig = {
+  id: 'claude:project:agent:design-conformance',
+  adapterId: ADAPTER_ID,
+  name: 'design-conformance',
+  description: 'Reviews components',
+  scope: 'project',
+  filePath: '/proj/.claude/agents/design-conformance.md',
+  content: '# Design Conformance\n',
 };
 
 /** Standard extras with a chat config that has adapterId + projectId. */
@@ -109,6 +125,7 @@ describe('useChatSkills — happy path', () => {
     vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+    vi.mocked(getAgents).mockResolvedValue([AGENT_FIXTURE]);
 
     const { result } = renderHook(() => useChatSkills(), { wrapper });
 
@@ -123,6 +140,7 @@ describe('useChatSkills — happy path', () => {
     vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+    vi.mocked(getAgents).mockResolvedValue([AGENT_FIXTURE]);
 
     const { result } = renderHook(() => useChatSkills(), { wrapper });
 
@@ -133,11 +151,11 @@ describe('useChatSkills — happy path', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. getProjects rejects → empty skills, no throw
+// 2. getProjects rejects → empty skills + agents, no throw
 // ---------------------------------------------------------------------------
 
 describe('useChatSkills — getProjects rejects', () => {
-  it('returns { skills:[], loading:false } and does not throw', async () => {
+  it('returns { skills:[], agents:[], loading:false } and does not throw', async () => {
     vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
     vi.mocked(getProjects).mockRejectedValue(new Error('network error'));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -147,6 +165,7 @@ describe('useChatSkills — getProjects rejects', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.skills).toEqual([]);
+    expect(result.current.agents).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[skills]'), expect.any(Error));
     warnSpy.mockRestore();
   });
@@ -157,25 +176,26 @@ describe('useChatSkills — getProjects rejects', () => {
 // ---------------------------------------------------------------------------
 
 describe('useChatSkills — extras undefined', () => {
-  it('returns { skills:[], loading:false } and never calls getProjects or getSkills', () => {
+  it('returns { skills:[], agents:[], loading:false } and never calls getProjects, getSkills, or getAgents', () => {
     vi.mocked(useChatExtras).mockReturnValue(undefined);
 
     const { result } = renderHook(() => useChatSkills(), { wrapper });
 
     expect(result.current.skills).toEqual([]);
+    expect(result.current.agents).toEqual([]);
     expect(result.current.loading).toBe(false);
     expect(vi.mocked(getProjects)).not.toHaveBeenCalled();
     expect(vi.mocked(getSkills)).not.toHaveBeenCalled();
+    expect(vi.mocked(getAgents)).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. Project id not in returned list → getSkills not called, empty skills
+// 4. Project id not in returned list → getSkills + getAgents not called
 // ---------------------------------------------------------------------------
 
 describe('useChatSkills — projectId not in getProjects result', () => {
-  it('returns { skills:[], loading:false } and never calls getSkills', async () => {
-    // getProjects returns a project with a different id than what the chat uses
+  it('returns { skills:[], agents:[], loading:false } and never calls getSkills or getAgents', async () => {
     const otherProject: Project = {
       id: 'other',
       name: 'X',
@@ -193,19 +213,22 @@ describe('useChatSkills — projectId not in getProjects result', () => {
     });
 
     expect(result.current.skills).toEqual([]);
+    expect(result.current.agents).toEqual([]);
     expect(vi.mocked(getSkills)).not.toHaveBeenCalled();
+    expect(vi.mocked(getAgents)).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 5. getSkills rejects → empty skills, no throw, console.warn called
+// 5. getSkills rejects → empty skills + agents, no throw, console.warn called
 // ---------------------------------------------------------------------------
 
 describe('useChatSkills — getSkills rejects', () => {
-  it('returns { skills:[], loading:false } and logs a warning', async () => {
+  it('returns { skills:[], agents:[], loading:false } and logs a warning', async () => {
     vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockRejectedValue(new Error('skills fetch failed'));
+    vi.mocked(getAgents).mockResolvedValue([AGENT_FIXTURE]);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const { result } = renderHook(() => useChatSkills(), { wrapper });
@@ -215,13 +238,14 @@ describe('useChatSkills — getSkills rejects', () => {
     });
 
     expect(result.current.skills).toEqual([]);
+    expect(result.current.agents).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith('[skills] failed to load skills', expect.any(Error));
     warnSpy.mockRestore();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 6. Stale-clear on dependency change — old skills are not retained
+// 6. Stale-clear on dependency change — old skills + agents are not retained
 // ---------------------------------------------------------------------------
 
 describe('useChatSkills — stale-clear on projectId change', () => {
@@ -252,6 +276,7 @@ describe('useChatSkills — stale-clear on projectId change', () => {
     vi.mocked(useChatExtras).mockReturnValue(extrasP1 as unknown as ReturnType<typeof useChatExtras>);
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+    vi.mocked(getAgents).mockResolvedValue([AGENT_FIXTURE]);
 
     const { result, rerender } = renderHook(() => useChatSkills(), { wrapper });
 
@@ -262,7 +287,6 @@ describe('useChatSkills — stale-clear on projectId change', () => {
     expect(result.current.skills).toEqual([SKILL_FIXTURE]);
 
     // ---- switch to p2 ----
-    // Use a controlled promise so we can observe the cleared state before p2 resolves
     let resolveP2Skills!: (v: Skill[]) => void;
     const p2SkillsPromise = new Promise<Skill[]>((res) => {
       resolveP2Skills = res;
@@ -278,11 +302,12 @@ describe('useChatSkills — stale-clear on projectId change', () => {
     vi.mocked(useChatExtras).mockReturnValue(extrasP2 as unknown as ReturnType<typeof useChatExtras>);
     vi.mocked(getProjects).mockResolvedValue([PROJECT_P2]);
     vi.mocked(getSkills).mockReturnValue(p2SkillsPromise);
+    vi.mocked(getAgents).mockResolvedValue([]);
 
     rerender();
 
-    // The provider calls setSkills([]) synchronously before the async refetch;
-    // skills must be cleared (p1 skills must NOT be visible) while p2 is in-flight.
+    // The provider calls setSkills([]) and setAgents([]) synchronously before
+    // the async refetch; both must be cleared while p2 is in-flight.
     await waitFor(() => {
       expect(result.current.skills).toEqual([]);
     });
@@ -294,5 +319,70 @@ describe('useChatSkills — stale-clear on projectId change', () => {
       expect(result.current.loading).toBe(false);
     });
     expect(result.current.skills).toEqual([SKILL_P2]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Agents are fetched and exposed via useChatAgents
+// ---------------------------------------------------------------------------
+
+describe('useChatAgents', () => {
+  it('fetches agents in the same effect as skills and exposes them via useChatAgents', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+    vi.mocked(getAgents).mockResolvedValue([AGENT_FIXTURE]);
+
+    const { result } = renderHook(() => useChatAgents(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current).toEqual([AGENT_FIXTURE]);
+    });
+
+    expect(vi.mocked(getAgents)).toHaveBeenCalledExactlyOnceWith(PORT, ADAPTER_ID, PROJECT_PATH);
+  });
+
+  it('calls getAgents with (port, adapterId, resolvedPath) — same args as getSkills', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([]);
+    vi.mocked(getAgents).mockResolvedValue([AGENT_FIXTURE]);
+
+    const { result } = renderHook(() => useChatSkills(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(vi.mocked(getAgents)).toHaveBeenCalledExactlyOnceWith(PORT, ADAPTER_ID, PROJECT_PATH);
+    expect(result.current.agents).toEqual([AGENT_FIXTURE]);
+  });
+
+  it('returns [] when extras is undefined', () => {
+    vi.mocked(useChatExtras).mockReturnValue(undefined);
+
+    const { result } = renderHook(() => useChatAgents(), { wrapper });
+
+    expect(result.current).toEqual([]);
+  });
+
+  it('returns [] when getAgents rejects (covered by shared catch)', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
+    vi.mocked(getAgents).mockRejectedValue(new Error('agents fetch failed'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const { result } = renderHook(() => useChatAgents(), { wrapper });
+
+    await waitFor(() => {
+      // loading settles to false in the finally block
+      expect(vi.mocked(getProjects)).toHaveBeenCalled();
+    });
+
+    // The Promise.all rejects → catch resets both
+    await waitFor(() => {
+      expect(result.current).toEqual([]);
+    });
+
+    warnSpy.mockRestore();
   });
 });
