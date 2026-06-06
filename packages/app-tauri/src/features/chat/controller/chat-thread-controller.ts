@@ -119,6 +119,10 @@ export class ChatThreadController {
   private daemonId: string;
   private remoteIdSet = false;
   private liveRefs = 0;
+  // The stable aui item.id (the constructor chatId). Unlike daemonId, this never
+  // changes when a __LOCALID_* thread adopts its remote id — onNew uses it as the
+  // createForLocal localId so the draft lookup keys off the same id the picker used.
+  private readonly threadId: string;
   // WS attachment (subscribe / ack-gating / resume / reconnect refresh / restore).
   // Constructed lazily in subscribeLive() so it always carries the current daemonId.
   private wsSub: ChatWsSubscription | null = null;
@@ -129,6 +133,7 @@ export class ChatThreadController {
     private readonly ws: DaemonWsClient,
   ) {
     this.daemonId = chatId;
+    this.threadId = chatId;
     this.state = createChatThreadState(chatId);
   }
 
@@ -138,6 +143,16 @@ export class ChatThreadController {
 
   public getState(): ChatThreadState {
     return this.state;
+  }
+
+  /** The stable aui item.id (constructor chatId) — onNew's createForLocal localId. */
+  public getThreadId(): string {
+    return this.threadId;
+  }
+
+  /** True once a daemon chat id is known (pre-existing thread, or after setRemoteId). */
+  public hasRemoteId(): boolean {
+    return this.remoteIdSet || !this.isLocalOnly();
   }
 
   /**

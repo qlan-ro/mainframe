@@ -4,8 +4,10 @@
  * Per-chat runtime hook — mirrors react-opencode's `useOpenCodeThreadRuntime`.
  *
  * Wires a ChatThreadController to assistant-ui's `useExternalStoreRuntime`.
- * The controller is created once per chatId (via the registry in
- * ChatRuntimeProvider) and disposed on switch/unmount.
+ * The controller is created once per thread id (global registry) and kept warm
+ * across switches via `subscribeState`; `opts.active` gates `subscribeLive` (the
+ * live WS sub). `onNew` creates the daemon chat for a `__LOCALID_*` thread
+ * (createForLocal → setRemoteId) before the first send.
  *
  * `extras` carries all non-message state + action callbacks, surfaced via
  * `useAuiState(s => s.thread.extras)` and the convenience hooks below.
@@ -23,7 +25,7 @@ import { createAttachmentAdapter } from '../composer/attachment-adapter';
 
 /** Stateless — the per-chat daemon upload happens in the controller on send. */
 const ATTACHMENT_ADAPTER = createAttachmentAdapter();
-import type { AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
+import type { AppendMessage, AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
 import type { ChatThreadController } from '../controller/chat-thread-controller';
@@ -31,6 +33,7 @@ import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-th
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { projectChatThreadRepository } from '../controller/project-messages';
 import { selectPermissionFront } from '../gates/select-front';
+import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
 
 // ---------------------------------------------------------------------------
 // Extras shape + brand
@@ -83,13 +86,26 @@ function isRunningFromState(state: ChatThreadState): boolean {
 // Main hook
 // ---------------------------------------------------------------------------
 
-export function useChatThreadRuntime(controller: ChatThreadController, port: number): AssistantRuntime {
-  const state = useControllerState(controller);
+export function useChatThreadRuntime(
+  controller: ChatThreadController,
+  port: number,
+  opts?: { active?: boolean },
+): AssistantRuntime {
+  const state = useControllerState(controller); // uses controller.subscribeState (always)
 
   // Seed from REST once on mount (deduped by loadPromise inside controller).
   useEffect(() => {
     void controller.load();
   }, [controller]);
+
+  // Dormancy (D4): open the live WS sub only while this is the active thread.
+  // The effect cleanup is the live teardown, so deactivation drops the sub.
+  const active = opts?.active ?? false;
+  useEffect(() => {
+    if (!active) return;
+    const stop = controller.subscribeLive();
+    return stop;
+  }, [controller, active]);
 
   const isRunning = isRunningFromState(state);
 
@@ -111,15 +127,29 @@ export function useChatThreadRuntime(controller: ChatThreadController, port: num
     [controller, port, state],
   );
 
+  // onNew: a new (__LOCALID_*) thread has no daemon chat yet — create it, adopt
+  // its id (setRemoteId), then send. A thread that already has a remoteId
+  // (pre-existing chat, or one created earlier this session) just sends.
+  const onNew = useCallback(
+    async (message: AppendMessage): Promise<void> => {
+      if (!controller.hasRemoteId()) {
+        const { remoteId } = await createForLocal(controller.getThreadId(), port);
+        controller.setRemoteId(remoteId);
+        await controller.sendMessage(message);
+      } else {
+        await controller.sendMessage(message);
+      }
+    },
+    [controller, port],
+  );
+
   return useExternalStoreRuntime<ThreadMessage>({
     isLoading: state.loadState.type === 'loading',
     isRunning,
     messageRepository,
     extras,
     adapters: { attachments: ATTACHMENT_ADAPTER },
-    onNew: async (message) => {
-      await controller.sendMessage(message);
-    },
+    onNew,
     onCancel: async () => {
       await controller.cancel();
     },
