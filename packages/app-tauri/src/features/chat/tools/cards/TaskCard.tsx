@@ -9,8 +9,8 @@
  *
  * Body (expanded): the subagent transcript rendered as a real readonly nested
  * thread using `part.messages` (native field). Tool cards inside the transcript
- * dispatch through our standard message components — no import-cycle risk
- * because we import the MESSAGE components, not registry.ts.
+ * dispatch through our standard (boundary-wrapped) message components — no
+ * import-cycle risk because we import the MESSAGE components, not registry.ts.
  *
  * Deliberately DROPS:
  *  - Desktop's <usage> regex parser (usage metrics not in the native part shape)
@@ -26,9 +26,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { ErrorDot } from '../shared';
-import { AssistantMessage } from '../../messages/AssistantMessage';
-import { UserMessage } from '../../messages/UserMessage';
-import { SystemMessage } from '../../messages/SystemMessage';
+import { boundedMessageComponents } from '../../messages/bounded-messages';
 
 // ── Header sub-components ─────────────────────────────────────────────────────
 
@@ -118,7 +116,7 @@ function SubagentTranscript({ messages }: { messages: readonly import('@assistan
   return (
     <div className="ml-3 border-l-2 border-border pl-3.5">
       <ReadonlyThreadProvider messages={messages}>
-        <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage, SystemMessage }} />
+        <ThreadPrimitive.Messages components={boundedMessageComponents} />
       </ReadonlyThreadProvider>
     </div>
   );

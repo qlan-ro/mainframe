@@ -8,9 +8,7 @@
  */
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
-import { UserMessage } from '../messages/UserMessage';
-import { AssistantMessage } from '../messages/AssistantMessage';
-import { SystemMessage } from '../messages/SystemMessage';
+import { boundedMessageComponents } from '../messages/bounded-messages';
 import { Composer } from '../composer/Composer';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
@@ -70,7 +68,7 @@ export function ChatThread() {
         >
           <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
             <LoadErrorBanner />
-            <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage, SystemMessage }} />
+            <ThreadPrimitive.Messages components={boundedMessageComponents} />
             <ChatGateMount />
           </div>
 
