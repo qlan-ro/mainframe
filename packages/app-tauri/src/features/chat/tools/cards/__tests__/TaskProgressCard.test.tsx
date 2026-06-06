@@ -13,7 +13,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { TaskProgressCard } from '../TaskProgressCard';
 import type { ToolCallMessagePartProps } from '@assistant-ui/react';
-import type { TaskProgressItem } from '@qlan-ro/mainframe-core/messages';
+import type { TaskProgressItem } from '@/features/chat/view-model/message-meta';
 
 // ---------------------------------------------------------------------------
 // Wrapper — Radix Tooltip + Collapsible require a Provider

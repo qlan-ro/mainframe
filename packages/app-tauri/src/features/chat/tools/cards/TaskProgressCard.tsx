@@ -19,7 +19,7 @@ import { Check } from 'lucide-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { TaskProgressItem } from '@qlan-ro/mainframe-core/messages';
+import type { TaskProgressItem } from '@/features/chat/view-model/message-meta';
 
 // ── Internal types ────────────────────────────────────────────────────────────
 
