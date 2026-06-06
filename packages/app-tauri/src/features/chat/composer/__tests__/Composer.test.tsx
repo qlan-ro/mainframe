@@ -74,19 +74,19 @@ vi.mock('@assistant-ui/react', () => ({
   // the component's real selector `(s) => s.thread.isRunning` is exercised and
   // the return value tracks __isRunning. Both the Composer and SendOrCancelButton
   // call useAuiState with the same selector, so a single fake state object works.
-  useAuiState: (selector: (s: { thread: { isRunning: boolean } }) => boolean) =>
-    selector({ thread: { isRunning: __isRunning } }),
+  useAuiState: (selector: (s: { thread: { isRunning: boolean; messages: unknown[] } }) => unknown) =>
+    selector({ thread: { isRunning: __isRunning, messages: [] } }),
   // useAui returns a composer handle; send() is a spy so tests can assert on it.
   useAui: () => ({ composer: () => ({ send: __sendSpy }) }),
 }));
 
 // Edit context — editing is null so Composer renders the normal shell, not ComposerEditMode.
-vi.mock('../../edit/composer-edit-context', () => ({
+vi.mock('../edit/composer-edit-context', () => ({
   useComposerEdit: () => ({ editing: null, cancelEdit: vi.fn() }),
 }));
 
 // ComposerToolbar uses many hooks internally — stub it to avoid those.
-vi.mock('../../config-toolbar/ComposerToolbar', () => ({
+vi.mock('../config-toolbar/ComposerToolbar', () => ({
   ComposerToolbar: () => null,
 }));
 
