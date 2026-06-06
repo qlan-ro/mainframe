@@ -124,6 +124,24 @@ export class ChatManager {
     this.idleScanner.start();
   }
 
+  /**
+   * On boot, no in-memory CLI sessions exist, so any persisted
+   * `processState: 'working'` was orphaned by a previous daemon restart/crash.
+   * Reset it to 'idle' so the UI doesn't treat the chat as running — otherwise a
+   * new message queues forever ("sends after the current run") because there is
+   * no live run to finish. A chat that was genuinely mid-run is interrupted by
+   * the restart anyway (the CLI dies with the daemon), so 'idle' is correct.
+   *
+   * Call once at daemon boot, after construction (see `index.ts`).
+   */
+  recoverStaleWorkingState(): void {
+    for (const chat of this.db.chats.listAll()) {
+      if (chat.processState === 'working') {
+        this.db.chats.update(chat.id, { processState: 'idle' });
+      }
+    }
+  }
+
   /** Stop background timers. Idempotent. Tests and shutdown should call this. */
   dispose(): void {
     this.idleScanner.stop();

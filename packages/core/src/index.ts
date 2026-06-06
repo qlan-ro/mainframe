@@ -74,6 +74,10 @@ async function main(): Promise<void> {
   // server.start() (plugin loading) are safely dropped — no WS clients yet.
   let broadcastEvent: (event: DaemonEvent) => void = () => {};
   const chats = new ChatManager(db, adapters, backgroundTasks, attachmentStore, (event) => broadcastEvent(event));
+  // No in-memory CLI sessions survive a restart, so reset any persisted
+  // processState:'working' (orphaned by the previous shutdown/crash) to 'idle' —
+  // otherwise those chats look "running" and new messages queue forever.
+  chats.recoverStaleWorkingState();
   const tunnelManager = new TunnelManager((event) => broadcastEvent(event));
   const launchRegistry = new LaunchRegistry((event) => broadcastEvent(event), tunnelManager);
 
