@@ -247,7 +247,23 @@ describe('useComposerTuning — setModel', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. setPlanMode / setPermissionMode fire setChatConfig
+// 5. setAdapter fires setChatConfig with { adapterId }
+// ---------------------------------------------------------------------------
+
+describe('useComposerTuning — setAdapter', () => {
+  it("calls setChatConfig(port, chatId, { adapterId: 'gemini' }) exactly once", () => {
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setAdapter('gemini');
+    });
+
+    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, { adapterId: 'gemini' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. setPlanMode / setPermissionMode fire setChatConfig
 // ---------------------------------------------------------------------------
 
 describe('useComposerTuning — setPlanMode and setPermissionMode', () => {

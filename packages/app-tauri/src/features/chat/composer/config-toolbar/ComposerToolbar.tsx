@@ -6,13 +6,15 @@
  * Calls useAdapters + useComposerTuning ONCE and fans out resolved props to
  * all config controls so no child runs its own hooks.
  *
- * Left→right order (matches artboard): Model · Permission · Plan · Effort · Features.
+ * Left→right order (matches artboard): Agent · Model · Permission · Plan · Effort · Features.
  * Renders nothing when every control is hidden (e.g. before chat/model loads).
  *
  * Wired into Composer.tsx via the `data-testid="chat-composer-toolbar"` slot.
  */
 
+import { useAuiState } from '@assistant-ui/react';
 import { useAdapters, useComposerTuning } from './use-composer-tuning';
+import { AdapterSelect } from './AdapterSelect';
 import { ModelSelect } from './ModelSelect';
 import { PermissionSelect } from './PermissionSelect';
 import { PlanModeToggle } from './PlanModeToggle';
@@ -21,14 +23,29 @@ import { FeaturesPopover } from './FeaturesPopover';
 
 export function ComposerToolbar() {
   const adapters = useAdapters();
-  const { chat, adapter, model, setModel, setPermissionMode, setPlanMode, setEffort, setFeature, disabled } =
-    useComposerTuning(adapters);
+  const {
+    chat,
+    adapter,
+    model,
+    setModel,
+    setAdapter,
+    setPermissionMode,
+    setPlanMode,
+    setEffort,
+    setFeature,
+    disabled,
+  } = useComposerTuning(adapters);
+
+  // The agent is locked once the thread has any messages — switching mid-thread
+  // would orphan the CLI session (mirrors desktop's hasMessages guard).
+  const hasMessages = useAuiState((s) => s.thread.messages.length > 0);
 
   // All controls need a resolved chat; nothing to render while loading.
   if (!chat) return null;
 
   return (
     <>
+      <AdapterSelect chat={chat} adapters={adapters} locked={hasMessages} setAdapter={setAdapter} />
       {adapter != null && <ModelSelect chat={chat} adapter={adapter} model={model} setModel={setModel} />}
       <PermissionSelect chat={chat} setPermissionMode={setPermissionMode} />
       {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}

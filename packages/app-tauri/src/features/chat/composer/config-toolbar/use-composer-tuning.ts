@@ -80,6 +80,7 @@ export interface ComposerTuningHook {
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
   setModel: (model: string) => void;
+  setAdapter: (adapterId: string) => void;
   setPlanMode: (on: boolean) => void;
   setPermissionMode: (mode: ExecutionMode) => void;
   disabled: boolean;
@@ -155,6 +156,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   );
 
   const setModel = useCallback((m: string) => patchConfig({ model: m }, 'setModel'), [patchConfig]);
+  const setAdapter = useCallback((id: string) => patchConfig({ adapterId: id }, 'setAdapter'), [patchConfig]);
   const setPlanMode = useCallback((on: boolean) => patchConfig({ planMode: on }, 'setPlanMode'), [patchConfig]);
   const setPermissionMode = useCallback(
     (mode: ExecutionMode) => patchConfig({ permissionMode: mode }, 'setPermissionMode'),
@@ -168,6 +170,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     setEffort,
     setFeature,
     setModel,
+    setAdapter,
     setPlanMode,
     setPermissionMode,
     disabled: isRunning,
