@@ -90,6 +90,19 @@ describe('createFileSearchCache', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  it("request('') short-circuits: fetcher is never called and getItems('') returns []", async () => {
+    const fetcher = vi.fn().mockResolvedValue(fileFixtures);
+    const cache = createFileSearchCache(fetcher);
+
+    cache.request('');
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(cache.getItems('')).toEqual([]);
+  });
+
   it('logs a warning and does not throw when fetcher rejects', async () => {
     const err = new Error('network error');
     const fetcher = vi.fn().mockRejectedValue(err);

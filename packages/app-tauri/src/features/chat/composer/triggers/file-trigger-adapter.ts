@@ -29,6 +29,10 @@ export function createFileSearchCache(fetcher: (q: string) => Promise<FileResult
   return {
     getItems: (q) => cache.get(q) ?? [],
     request: (q) => {
+      // Authoritative empty-query guard (the chokepoint for BOTH the adapter
+      // and FileSearchDriver paths): never fetch on a bare `@` — desktop
+      // required ≥1 char and an empty file search is meaningless.
+      if (q === '') return;
       if (cache.has(q) || inflight.has(q)) return;
       inflight.add(q);
       fetcher(q).then(
