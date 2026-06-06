@@ -23,7 +23,9 @@ const toItem = (s: Skill): Unstable_TriggerItem => ({
 export function buildSkillsTriggerAdapter(skills: Skill[]): TriggerAdapter {
   const items = skills.map(toItem);
   return {
-    categories: () => [{ id: 'skills', label: 'Skills' }],
+    // Search-first: no categories → the native resource renders items for an
+    // empty query, so bare `/` lists all skills (see header note).
+    categories: () => [],
     categoryItems: () => items,
     search: (q) => {
       const needle = q.toLowerCase();

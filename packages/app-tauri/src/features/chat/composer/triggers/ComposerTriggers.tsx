@@ -113,25 +113,38 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
 
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>
-      {/* `/` skills trigger */}
+      {/* `/` skills trigger. PopoverShell renders INSIDE the items render-prop so
+          the bordered box only appears when there are results (no empty shell). */}
       <TP char="/" adapter={skillsAdapter}>
         <TP.Directive formatter={slashFmt} />
-        <PopoverShell>
-          <ComposerPrimitive.Unstable_TriggerPopoverItems>
-            {(items) => items.map((it) => <ItemRow key={it.id} item={it} testidPrefix="composer-skill-item" />)}
-          </ComposerPrimitive.Unstable_TriggerPopoverItems>
-        </PopoverShell>
+        <ComposerPrimitive.Unstable_TriggerPopoverItems>
+          {(items) =>
+            items.length === 0 ? null : (
+              <PopoverShell>
+                {items.map((it) => (
+                  <ItemRow key={it.id} item={it} testidPrefix="composer-skill-item" />
+                ))}
+              </PopoverShell>
+            )
+          }
+        </ComposerPrimitive.Unstable_TriggerPopoverItems>
       </TP>
 
       {/* `@` file trigger */}
       <TP char="@" adapter={fileAdapter}>
         <TP.Directive formatter={atFmt} />
         <FileSearchDriver cache={fileCache} />
-        <PopoverShell>
-          <ComposerPrimitive.Unstable_TriggerPopoverItems>
-            {(items) => items.map((it) => <ItemRow key={it.id} item={it} testidPrefix="composer-file-item" />)}
-          </ComposerPrimitive.Unstable_TriggerPopoverItems>
-        </PopoverShell>
+        <ComposerPrimitive.Unstable_TriggerPopoverItems>
+          {(items) =>
+            items.length === 0 ? null : (
+              <PopoverShell>
+                {items.map((it) => (
+                  <ItemRow key={it.id} item={it} testidPrefix="composer-file-item" />
+                ))}
+              </PopoverShell>
+            )
+          }
+        </ComposerPrimitive.Unstable_TriggerPopoverItems>
       </TP>
 
       {children}

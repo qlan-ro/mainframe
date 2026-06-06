@@ -52,11 +52,17 @@ export function createFileSearchCache(fetcher: (q: string) => Promise<FileResult
 
 export function buildFileTriggerAdapter(cache: FileSearchCache): TriggerAdapter {
   const items = (q: string) => {
+    // No fetch on a bare `@` (empty query) — desktop required ≥1 char; an empty
+    // file search is meaningless and would spam the daemon. Results appear once
+    // the user types.
+    if (q === '') return [];
     cache.request(q);
     return cache.getItems(q);
   };
   return {
-    categories: () => [{ id: 'files', label: 'Files' }],
+    // Search-first (no categories) so the native resource renders items for the
+    // current query directly (mirrors skills-trigger-adapter; see its header).
+    categories: () => [],
     categoryItems: () => items(''),
     search: (q) => items(q),
   };

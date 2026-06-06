@@ -41,8 +41,32 @@ const skillFixtures: Skill[] = [
 describe('buildSkillsTriggerAdapter', () => {
   const adapter = buildSkillsTriggerAdapter(skillFixtures);
 
-  it('categories returns single skills category', () => {
-    expect(adapter.categories()).toEqual([{ id: 'skills', label: 'Skills' }]);
+  it('categories is empty (search-first)', () => {
+    expect(adapter.categories()).toEqual([]);
+  });
+
+  it("search('') returns all skills — bare / lists everything", () => {
+    const results = adapter.search!('');
+    expect(results).toEqual([
+      {
+        id: 'plugin:code-review',
+        type: 'skill',
+        label: 'Code Review',
+        description: 'Reviews code for quality issues',
+      },
+      {
+        id: 'test-writer',
+        type: 'skill',
+        label: 'Test Writer',
+        description: 'Writes unit tests for functions',
+      },
+      {
+        id: 'plugin:foo-debug',
+        type: 'skill',
+        label: 'Foo Debugger',
+        description: 'Debugs foo-related failures',
+      },
+    ]);
   });
 
   it('categoryItems returns all skills mapped to TriggerItems', () => {

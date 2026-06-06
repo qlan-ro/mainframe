@@ -107,29 +107,40 @@ describe('createFileSearchCache', () => {
 });
 
 describe('buildFileTriggerAdapter', () => {
-  it('categories returns single files category', async () => {
+  it('categories is empty (search-first)', () => {
     const fetcher = vi.fn().mockResolvedValue(fileFixtures);
     const cache = createFileSearchCache(fetcher);
     const adapter = buildFileTriggerAdapter(cache);
-    expect(adapter.categories()).toEqual([{ id: 'files', label: 'Files' }]);
+    expect(adapter.categories()).toEqual([]);
   });
 
-  it('categoryItems triggers a request and returns cached items', async () => {
+  it('categoryItems returns [] and does NOT fetch on empty query', async () => {
     const fetcher = vi.fn().mockResolvedValue(fileFixtures);
     const cache = createFileSearchCache(fetcher);
     const adapter = buildFileTriggerAdapter(cache);
 
-    // Before resolve: empty
-    const before = adapter.categoryItems('files');
-    expect(before).toEqual([]);
+    const result = adapter.categoryItems('files');
+    expect(result).toEqual([]);
 
-    // Wait for fetcher to resolve
+    // Allow microtasks to settle — fetcher must never have been called
     await Promise.resolve();
     await Promise.resolve();
 
-    // Calling again after resolve should return mapped items
-    const after = adapter.categoryItems('files');
-    expect(after).toEqual(expectedItems);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("search('') returns [] and does NOT fetch — no request on bare @", async () => {
+    const fetcher = vi.fn().mockResolvedValue(fileFixtures);
+    const cache = createFileSearchCache(fetcher);
+    const adapter = buildFileTriggerAdapter(cache);
+
+    const result = adapter.search!('');
+    expect(result).toEqual([]);
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it('search triggers a request and returns cached items for the query', async () => {
