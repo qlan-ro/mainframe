@@ -48,45 +48,59 @@ export function useConnectionState(): {
     let cancelled = false;
     let pollTimer: ReturnType<typeof setTimeout>;
 
-    async function init() {
-      // Listen for daemon:status Rust events (emitted from lib.rs on setup).
-      const unlisten = await onDaemonStatus((status) => {
-        setDaemonStatus(status);
-      });
+    let unlisten: (() => void) | undefined;
 
-      const p = await getDaemonPort();
-      const s = await getDaemonStatus();
-      if (cancelled) {
-        unlisten();
+    async function poll() {
+      if (cancelled) return;
+      const currentPort = portRef.current;
+      if (currentPort == null) {
+        setState('connecting');
+        pollTimer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
         return;
       }
-
-      setPort(p);
-      portRef.current = p;
-      setDaemonStatus(s);
-
-      async function poll() {
-        if (cancelled) return;
-        const currentPort = portRef.current;
-        if (currentPort == null) {
-          setState('connecting');
-          pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
-          return;
-        }
-        const healthy = await checkHealth(currentPort);
-        if (cancelled) return;
-        setState(healthy ? 'connected' : 'disconnected');
-        pollTimer = setTimeout(poll, POLL_INTERVAL_MS);
-      }
-
-      void poll();
-      return unlisten;
+      const healthy = await checkHealth(currentPort);
+      if (cancelled) return;
+      setState(healthy ? 'connected' : 'disconnected');
+      pollTimer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
     }
 
-    let unlisten: (() => void) | undefined;
-    void init().then((u) => {
-      unlisten = u;
-    });
+    // Acquire the daemon port (+ status). A bridge/port reject must NOT pin the
+    // app on "connecting" — show disconnected and retry (the sidecar may still
+    // be spawning), so a slow or restarting daemon recovers on its own.
+    async function acquirePort() {
+      try {
+        const p = await getDaemonPort();
+        const s = await getDaemonStatus();
+        if (cancelled) return;
+        setPort(p);
+        portRef.current = p;
+        setDaemonStatus(s);
+        void poll();
+      } catch (err) {
+        if (cancelled) return;
+        console.warn('[useConnectionState] daemon port unavailable — retrying', err);
+        setState('disconnected');
+        setDaemonStatus('unavailable');
+        pollTimer = setTimeout(() => void acquirePort(), POLL_INTERVAL_MS);
+      }
+    }
+
+    async function init() {
+      // Register the daemon:status listener once (NOT in the retry loop). A
+      // failure here is non-fatal — the poll loop still provides liveness.
+      try {
+        unlisten = await onDaemonStatus((status) => setDaemonStatus(status));
+      } catch (err) {
+        console.warn('[useConnectionState] daemon status listener failed', err);
+      }
+      if (cancelled) {
+        unlisten?.();
+        return;
+      }
+      void acquirePort();
+    }
+
+    void init();
 
     return () => {
       cancelled = true;
