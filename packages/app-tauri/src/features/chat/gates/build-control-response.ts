@@ -32,6 +32,10 @@ export function buildPlanResponse(e: ChatPermissionEntry, d: PlanDecision): Cont
     return {
       ...base(e),
       behavior: 'allow',
+      // The Claude CLI's control_response schema requires `updatedInput` on every
+      // `allow` (desktop always sends the request's own input as the passthrough).
+      // Omitting it makes the CLI reject the approval ("permission request failed").
+      updatedInput: e.request.input,
       executionMode: d.executionMode,
       ...(d.clearContext ? { clearContext: true } : {}),
     };

@@ -136,6 +136,7 @@ describe('buildPlanResponse', () => {
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
       behavior: 'allow',
+      updatedInput: { cmd: 'ls' },
       executionMode: 'yolo',
       clearContext: true,
     });
@@ -148,6 +149,7 @@ describe('buildPlanResponse', () => {
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
       behavior: 'allow',
+      updatedInput: { cmd: 'ls' },
       executionMode: 'default',
     });
     expect(res).not.toHaveProperty('clearContext');

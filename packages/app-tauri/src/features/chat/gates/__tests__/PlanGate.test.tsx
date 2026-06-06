@@ -84,6 +84,7 @@ describe('PlanGate', () => {
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
       behavior: 'allow',
+      updatedInput: makeEntry().request.input,
       executionMode: 'default',
     });
   });
@@ -102,6 +103,7 @@ describe('PlanGate', () => {
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
       behavior: 'allow',
+      updatedInput: makeEntry().request.input,
       executionMode: 'yolo',
     });
   });
@@ -120,6 +122,7 @@ describe('PlanGate', () => {
       toolUseId: 'tu1',
       toolName: 'ExitPlanMode',
       behavior: 'allow',
+      updatedInput: makeEntry().request.input,
       executionMode: 'default',
       clearContext: true,
     });
