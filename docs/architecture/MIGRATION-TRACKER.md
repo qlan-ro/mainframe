@@ -40,7 +40,7 @@ Durable capture so these aren't lost (the full write-ups live in volatile `/tmp`
 - ☑ **`features/chat/` directory restructure** — DONE (2026-06-06). Reframed after review: the code had already *improved* on the 06-04 proposal (the `runtime/` placeholder became `controller/`+`runtime/`+`view-model/`; the proposal's `cards/` became `gates/`), so the real drift was doc-vs-code. Landed: `tool-dispatch`→`tools/`, `tool-group-summary`→`view-model/`, `composer/`→`config-toolbar/`+`edit/`, a `features/chat/README.md` charter, and architecture.md's tree updated to the realized structure. **Intentionally dropped:** the `cards/`-by-family split — 15 flat card files are fine and families don't match the flat registry lookup. Moves-only, 455 tests green.
 
 **🟡 Medium**
-- ☐ Failed **history load renders as an empty chat** (`loadState` reduced, never read) — expose via extras + a retry state in `ChatThread`.
+- ☑ Failed **history load renders as an empty chat** — DONE (2026-06-06). `extras.retry` (= `controller.refresh()`) + a "Couldn't load this chat / Retry" banner in `ChatThread` that reads `state.loadState.type === 'error'`. Tests cover load-fail → error → retry → ready.
 - ☐ **`useConnectionState.init()` has no try/catch** — a `getDaemonPort()` reject pins the app on "connecting" forever.
 - ☐ **`isResultError` duplicated across 3 pill cards** (Worktree/Schedule/MCP) with unsound casts — add `isErrorResult`/`extractResultContent` to `tools/shared/result.ts`.
 - ☐ **cancel_failed UI surfacing** — the reducer now handles `queued.cancel_failed` (state-preserving) but there's no user feedback when a queued cancel fails (needs the toast infra above).
