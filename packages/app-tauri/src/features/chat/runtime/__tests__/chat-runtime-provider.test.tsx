@@ -31,7 +31,7 @@ const SENTINEL_RUNTIME = Symbol('sentinel-sessions-runtime');
 const capturedRuntimeProp: { current: unknown } = { current: undefined };
 const useSessionsThreadListCallCount = { current: 0 };
 
-vi.mock('../../sessions/runtime/use-sessions-thread-list', () => ({
+vi.mock('../../../sessions/runtime/use-sessions-thread-list', () => ({
   useSessionsThreadList: () => {
     useSessionsThreadListCallCount.current += 1;
     return SENTINEL_RUNTIME;

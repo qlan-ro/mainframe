@@ -109,7 +109,7 @@ export function App() {
         )}
 
         {activeChatId && port != null && (
-          <ChatRuntimeProvider key={activeChatId} chatId={activeChatId} daemonPort={port}>
+          <ChatRuntimeProvider port={port}>
             <ChatThread />
           </ChatRuntimeProvider>
         )}
