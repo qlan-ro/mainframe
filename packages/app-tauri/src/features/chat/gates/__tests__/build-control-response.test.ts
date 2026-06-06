@@ -165,4 +165,15 @@ describe('buildPlanResponse', () => {
       message: 'please redo',
     });
   });
+
+  it("kind='reject' returns bare deny with requestId/toolUseId/toolName and no message field", () => {
+    const res = buildPlanResponse(planEntry, { kind: 'reject' });
+    expect(res).toEqual({
+      requestId: 'r1',
+      toolUseId: 'tu1',
+      toolName: 'ExitPlanMode',
+      behavior: 'deny',
+    });
+    expect(res).not.toHaveProperty('message');
+  });
 });

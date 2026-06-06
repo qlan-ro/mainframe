@@ -86,7 +86,15 @@ function ControlsPanel({
 // Action row — approve / keep-planning
 // ---------------------------------------------------------------------------
 
-function ActionRow({ onApprove, onKeepPlanning }: { onApprove: () => void; onKeepPlanning: () => void }) {
+function ActionRow({
+  onApprove,
+  onKeepPlanning,
+  onReject,
+}: {
+  onApprove: () => void;
+  onKeepPlanning: () => void;
+  onReject: () => void;
+}) {
   return (
     <div className="flex items-center gap-2 px-3.5 pb-3">
       <GateButton kind="primary" data-testid="chat-plan-approve" onClick={onApprove} className="flex-1">
@@ -94,6 +102,9 @@ function ActionRow({ onApprove, onKeepPlanning }: { onApprove: () => void; onKee
       </GateButton>
       <GateButton kind="ghost" data-testid="chat-plan-keep-planning" onClick={onKeepPlanning}>
         Keep planning
+      </GateButton>
+      <GateButton kind="ghost" data-testid="chat-plan-reject" onClick={onReject}>
+        Reject
       </GateButton>
     </div>
   );
@@ -162,6 +173,10 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
     void reply(buildPlanResponse(entry, { kind: 'revise', feedback }));
   };
 
+  const handleReject = () => {
+    void reply(buildPlanResponse(entry, { kind: 'reject' }));
+  };
+
   return (
     <div data-testid="chat-plan-gate">
       <GateCardShell>
@@ -187,7 +202,7 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
             onCancel={() => setRevising(false)}
           />
         ) : (
-          <ActionRow onApprove={handleApprove} onKeepPlanning={() => setRevising(true)} />
+          <ActionRow onApprove={handleApprove} onKeepPlanning={() => setRevising(true)} onReject={handleReject} />
         )}
       </GateCardShell>
     </div>

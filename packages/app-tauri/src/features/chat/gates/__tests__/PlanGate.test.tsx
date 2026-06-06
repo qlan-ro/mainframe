@@ -164,7 +164,33 @@ describe('PlanGate', () => {
     });
   });
 
-  // --- Behavior 6: keep-planning Cancel returns to the approve panel ---
+  // --- Behavior 6: reject sends bare deny immediately, no feedback textarea ---
+
+  it('clicking Reject calls reply once with behavior deny and no message property', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+
+    fireEvent.click(screen.getByTestId('chat-plan-reject'));
+
+    expect(reply).toHaveBeenCalledTimes(1);
+    const arg = reply.mock.calls[0]![0];
+    expect(arg).toMatchObject({
+      requestId: 'r1',
+      toolUseId: 'tu1',
+      toolName: 'ExitPlanMode',
+      behavior: 'deny',
+    });
+    expect(arg).not.toHaveProperty('message');
+  });
+
+  it('clicking Reject does not open the feedback textarea (reject is immediate, not revise)', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+
+    fireEvent.click(screen.getByTestId('chat-plan-reject'));
+
+    expect(screen.queryByTestId('chat-plan-feedback-input')).not.toBeInTheDocument();
+  });
+
+  // --- Behavior 7: keep-planning Cancel returns to the approve panel ---
 
   it('clicking Keep planning then Cancel returns to the approve panel without calling reply', () => {
     wrap(<PlanGate entry={makeEntry()} reply={reply} />);

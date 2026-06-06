@@ -25,7 +25,8 @@ export function buildAskUserQuestionResponse(
 
 export type PlanDecision =
   | { kind: 'approve'; executionMode: ExecutionMode; clearContext: boolean }
-  | { kind: 'revise'; feedback: string };
+  | { kind: 'revise'; feedback: string }
+  | { kind: 'reject' };
 
 export function buildPlanResponse(e: ChatPermissionEntry, d: PlanDecision): ControlResponse {
   if (d.kind === 'approve')
@@ -39,5 +40,7 @@ export function buildPlanResponse(e: ChatPermissionEntry, d: PlanDecision): Cont
       executionMode: d.executionMode,
       ...(d.clearContext ? { clearContext: true } : {}),
     };
+  // Reject = bare deny (abandon the plan, no message); revise = deny + feedback.
+  if (d.kind === 'reject') return { ...base(e), behavior: 'deny' };
   return { ...base(e), behavior: 'deny', message: d.feedback.trim() };
 }
