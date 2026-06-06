@@ -144,4 +144,32 @@ describe('buildFileTriggerAdapter', () => {
 
     expect(adapter.search!('index')).toEqual(expectedItems);
   });
+
+  it('new adapter built after cache-emit returns fetched items (models version-bumped useMemo)', async () => {
+    // Arrange: a manually-controlled promise so we can observe both phases.
+    let resolve!: (v: FileResult[]) => void;
+    const promise = new Promise<FileResult[]>((r) => {
+      resolve = r;
+    });
+    const fetcher = vi.fn().mockReturnValue(promise);
+    const cache = createFileSearchCache(fetcher);
+
+    // Phase 1 — adapter built BEFORE the cache settles (mirrors the first render).
+    const adapterBefore = buildFileTriggerAdapter(cache);
+    adapterBefore.search!('index'); // trigger the fetch via the adapter
+    expect(adapterBefore.search!('index')).toEqual([]); // still in-flight
+
+    // Phase 2 — resolve the fetch; cache emits to subscribers.
+    resolve(fileFixtures);
+    await promise; // let the .then() inside cache run
+
+    // A NEW adapter built after the emit (mirrors what the version-bumped useMemo
+    // produces) must return the fetched items for the same query.
+    const adapterAfter = buildFileTriggerAdapter(cache);
+    expect(adapterAfter.search!('index')).toEqual(expectedItems);
+
+    // Sanity: the old adapter reference, unchanged, also sees the results because
+    // the cache is shared — but the critical path is the new adapter reference.
+    expect(adapterBefore.search!('index')).toEqual(expectedItems);
+  });
 });

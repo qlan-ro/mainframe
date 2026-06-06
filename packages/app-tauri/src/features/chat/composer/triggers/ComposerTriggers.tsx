@@ -91,10 +91,6 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
   // Skills adapter: rebuilt only when the skills list changes.
   const skillsAdapter = useMemo(() => buildSkillsTriggerAdapter(skills), [skills]);
 
-  // Force re-render counter — incremented by the cache's onChange subscriber so
-  // newly-fetched file results flow into the popover without a full remount.
-  const [, forceUpdate] = useState(0);
-
   // File search cache: rebuilt when the chat context changes.
   const fileCache = useMemo(
     () =>
@@ -104,10 +100,13 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
     [port, projectId, chatId],
   );
 
-  // Subscribe to cache changes so the popover re-renders when results land.
-  useEffect(() => fileCache.subscribe(() => forceUpdate((n) => n + 1)), [fileCache]);
+  // Bump a version counter every time the cache emits so the fileAdapter memo
+  // deps change, forcing a new adapter reference and invalidating the native
+  // trigger memo that memoizes adapter.search(query) on [open, adapter, query].
+  const [version, bump] = useState(0);
+  useEffect(() => fileCache.subscribe(() => bump((n) => n + 1)), [fileCache]);
 
-  const fileAdapter = useMemo(() => buildFileTriggerAdapter(fileCache), [fileCache]);
+  const fileAdapter = useMemo(() => buildFileTriggerAdapter(fileCache), [fileCache, version]);
 
   const slashFmt = useMemo(() => literalDirectiveFormatter('/'), []);
   const atFmt = useMemo(() => literalDirectiveFormatter('@'), []);
