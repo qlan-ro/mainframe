@@ -168,20 +168,23 @@ function InlineImageThumbs({ parts }: InlineImageThumbsProps) {
 function UserMessageImpl() {
   const meta = useMainframeMeta();
   const isQueued = meta.queued === true;
-  const messageId = useAuiState((s) => (s as unknown as { message: { id: string } }).message.id);
 
-  // Resolve text: prefer cleanText (pipeline-stripped) over raw part text
+  // H6: s.message is typed as MessageState (= ThreadMessage & extras) via the
+  // ScopeRegistry augmentation in @assistant-ui/core — no cast needed.
+  const messageId = useAuiState((s) => s.message.id);
+
+  // Resolve text: prefer cleanText (pipeline-stripped) over raw part text.
+  // Read the stable content ref; derive text outside useAuiState to avoid a
+  // fresh-array reference on every render triggering a getSnapshot loop.
   const rawText = useAuiState((s) => {
-    const parts = (s as unknown as { message: { content: Array<{ type: string; text?: string }> } }).message.content;
-    return parts.find((p) => p.type === 'text')?.text ?? '';
-  }) as string;
+    const textPart = s.message.content.find((p) => p.type === 'text');
+    return textPart && 'text' in textPart ? (textPart.text as string) : '';
+  });
 
   // Native image parts projected from DisplayContent images in convert-message.
   // Select the stable content ref, then derive — a filter inside useAuiState
   // returns a fresh array each render and loops (getSnapshot).
-  const content = useAuiState(
-    (s) => (s as unknown as { message: { content: Array<{ type: string; image?: string }> } }).message.content,
-  );
+  const content = useAuiState((s) => s.message.content);
   const imageParts = useMemo(
     () =>
       content.filter((p): p is { type: 'image'; image: string } => p.type === 'image' && typeof p.image === 'string'),
@@ -219,6 +222,11 @@ function UserMessageImpl() {
     </ReadMoreBubble>
   ) : null;
 
+  // H5: surface send failures. `error` is set by projectPendingMessage when
+  // status === 'failed'. Retry action is out of scope — that requires controller
+  // wiring that doesn't exist yet (follow-up TODO).
+  const sendError = meta.error;
+
   return (
     <MessagePrimitive.Root data-testid="chat-user-message" className="flex flex-col items-end gap-2 pt-2">
       {isQueued ? (
@@ -230,6 +238,12 @@ function UserMessageImpl() {
       ) : body ? (
         <CoolCard>{body}</CoolCard>
       ) : null}
+
+      {sendError != null && (
+        <p data-testid="chat-user-message-send-failed" className="text-caption text-destructive">
+          Failed to send
+        </p>
+      )}
 
       <InlineImageThumbs parts={imageParts} />
     </MessagePrimitive.Root>

@@ -27,6 +27,10 @@ export interface MainframeMessageMeta {
     readonly userText?: string;
     readonly source?: 'commands' | (string & {});
   };
+  // optimistic pending (written by projectPendingMessage in project-messages.ts)
+  readonly pending?: boolean;
+  readonly clientId?: string;
+  readonly error?: string;
   // system turn
   readonly isCompacted?: boolean;
   readonly skillLoaded?: { readonly skillName: string; readonly path: string; readonly content: string };
