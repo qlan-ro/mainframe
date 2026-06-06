@@ -56,12 +56,12 @@ interface FakeWs {
   pushEvent: (event: DaemonEvent) => void;
 }
 
-function makeFakeWs(): FakeWs {
+function makeFakeWs(connected = true): FakeWs {
   let capturedHandler: ((event: DaemonEvent) => void) | null = null;
 
   const fakeClient: DaemonWsClient = {
     get connected() {
-      return false;
+      return connected;
     },
     send: () => {},
     onEvent(handler: (event: DaemonEvent) => void) {
@@ -190,5 +190,24 @@ describe('subscribe:ack — late ack after fallback', () => {
 
     // Still only one call — the awaitingAck guard prevents the second.
     expect(resumeChat).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (d) Fallback timer does NOT resume when the socket is disconnected (fix #3)
+// ---------------------------------------------------------------------------
+
+describe('subscribe:ack fallback timer — disconnected socket', () => {
+  it('does not call resumeChat when the socket is disconnected at fallback time', async () => {
+    // Build the controller with a disconnected WS client.
+    const { fakeClient } = makeFakeWs(false);
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribe(() => {});
+
+    // Advance past the 2000ms fallback — the timer fires but ws.connected is false.
+    await vi.advanceTimersByTimeAsync(2001);
+
+    // The guard inside the fallback timer must prevent resumeChat from being called.
+    expect(resumeChat).not.toHaveBeenCalled();
   });
 });

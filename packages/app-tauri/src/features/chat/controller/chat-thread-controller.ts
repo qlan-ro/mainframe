@@ -97,6 +97,11 @@ function reconcilePendings(
 // How long to wait for subscribe:ack before falling back to an unconditional resume.
 const SUBSCRIBE_ACK_TIMEOUT_MS = 2000;
 
+// After answering a permission we optimistically drop the gate, but a WS send is
+// dropped if the socket is closed. Re-check the daemon's pending after this delay;
+// if the same tool use is still pending, the answer was lost — restore the gate.
+const PERMISSION_VERIFY_DELAY_MS = 3000;
+
 export class ChatThreadController {
   private state: ChatThreadState;
   private readonly listeners = new Set<() => void>();
@@ -108,6 +113,10 @@ export class ChatThreadController {
   private awaitingAck = false;
   private isReconnect = false;
   private ackFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  // Permission-reply reliability: re-check delivery (#2) and suppress restoring a
+  // just-answered permission while the reply is still in flight (#5).
+  private readonly permissionVerifyTimers = new Set<ReturnType<typeof setTimeout>>();
+  private readonly recentlyRepliedToolUseIds = new Set<string>();
 
   constructor(
     private readonly chatId: string,
@@ -143,6 +152,9 @@ export class ChatThreadController {
     this.detachWs();
     this.listeners.clear();
     this.clearAckFallback();
+    for (const timer of this.permissionVerifyTimers) clearTimeout(timer);
+    this.permissionVerifyTimers.clear();
+    this.recentlyRepliedToolUseIds.clear();
   }
 
   // --------------------------------------------------------------------------
@@ -236,8 +248,38 @@ export class ChatThreadController {
   }
 
   public async replyToPermission(requestId: string, response: ControlResponse): Promise<void> {
+    // Optimistically drop the gate, but remember we answered this tool use so a
+    // racing restore (subscribe/reconnect REST read of the not-yet-cleared
+    // pending) doesn't resurrect it, and verify the answer actually landed.
+    this.recentlyRepliedToolUseIds.add(response.toolUseId);
     this.ws.send({ type: 'permission.respond', chatId: this.chatId, response });
     this.dispatch({ type: 'permission.resolved', requestId });
+    this.verifyPermissionDelivered(response.toolUseId);
+  }
+
+  /**
+   * 3s after answering, re-read the daemon's pending permission. If the SAME
+   * tool use is still pending, our `permission.respond` was dropped (socket was
+   * closed) — restore the gate so the user can retry. Either way the tool use
+   * leaves the in-flight set so a genuine later pending can surface again.
+   */
+  private verifyPermissionDelivered(toolUseId: string): void {
+    const timer = setTimeout(() => {
+      this.permissionVerifyTimers.delete(timer);
+      if (this.disposed) return;
+      void getPendingPermission(this.port, this.chatId)
+        .then((request) => {
+          this.recentlyRepliedToolUseIds.delete(toolUseId);
+          if (this.disposed || !request || request.toolUseId !== toolUseId) return;
+          if (request.requestId && request.requestId in this.state.interactions.permissions) return;
+          this.dispatch({ type: 'permission.requested', requestId: request.requestId, request });
+        })
+        .catch((err: unknown) => {
+          this.recentlyRepliedToolUseIds.delete(toolUseId);
+          console.warn('[chat-controller] verify permission delivery failed', err);
+        });
+    }, PERMISSION_VERIFY_DELAY_MS);
+    this.permissionVerifyTimers.add(timer);
   }
 
   public async cancelQueued(messageId: string): Promise<void> {
@@ -283,6 +325,10 @@ export class ChatThreadController {
 
     this.ackFallbackTimer = setTimeout(() => {
       if (!this.awaitingAck || this.disposed) return;
+      // If the socket is down, the `subscribe` frame was dropped — resuming now
+      // would talk to a dead subscription. Stay armed; the reconnect handler
+      // re-sends `subscribe` (and re-arms this timer) once the socket reopens.
+      if (!this.ws.connected) return;
       this.awaitingAck = false;
       console.warn('[chat-controller] subscribe:ack not received within timeout — resuming anyway');
       this.handleSubscribeAck(reconnect);
@@ -308,6 +354,10 @@ export class ChatThreadController {
     void getPendingPermission(this.port, this.chatId)
       .then((request) => {
         if (this.disposed || !request) return;
+        // Don't resurrect a permission we just answered — its reply may still be
+        // in flight and the daemon may not have cleared the pending yet.
+        // verifyPermissionDelivered owns the "was it actually delivered?" check.
+        if (this.recentlyRepliedToolUseIds.has(request.toolUseId)) return;
         // Skip if we already hold this one (a live event beat the REST read).
         if (request.requestId && request.requestId in this.state.interactions.permissions) return;
         this.dispatch({ type: 'permission.requested', requestId: request.requestId, request });

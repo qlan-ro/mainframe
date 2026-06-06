@@ -39,6 +39,7 @@ vi.mock('../../../../lib/api/chats', () => ({
 }));
 
 import { getChatMessages, getPendingPermission } from '../../../../lib/api/chats';
+import type { ControlResponse } from '@qlan-ro/mainframe-types';
 import { ChatThreadController } from '../chat-thread-controller';
 
 // ---------------------------------------------------------------------------
@@ -407,5 +408,180 @@ describe('reconcilePendingAgainstHistory — delayed echo past the live match wi
 
     // The pending must be reconciled despite its age — history path is authoritative.
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Permission-verify timer (#2): answer lost → gate restored after 3s
+//
+// After replyToPermission the gate is optimistically removed. The controller
+// schedules a verify check at PERMISSION_VERIFY_DELAY_MS (3000ms). If
+// getPendingPermission still returns the same toolUseId, the WS send was
+// dropped and the gate must be re-raised so the user can retry.
+// ---------------------------------------------------------------------------
+
+describe('verifyPermissionDelivered — answer lost: gate restored', () => {
+  it('re-dispatches permission.requested when getPendingPermission still holds the same toolUseId after 3s', async () => {
+    // Seed a permission into state via a live WS event.
+    vi.mocked(getPendingPermission).mockResolvedValue(null);
+
+    const { fakeClient, pushEvent } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribe(() => {});
+
+    pushEvent({
+      type: 'permission.requested',
+      chatId: CHAT_ID,
+      request: {
+        requestId: 'rq1',
+        toolName: 'Bash',
+        toolUseId: 'tu1',
+        input: { command: 'ls' },
+        suggestions: [],
+      },
+      notify: false,
+    });
+
+    // Gate is present immediately after the live WS event.
+    expect('rq1' in ctrl.getState().interactions.permissions).toBe(true);
+
+    // The user answers. Gate is optimistically removed.
+    const response: ControlResponse = {
+      requestId: 'rq1',
+      toolUseId: 'tu1',
+      toolName: 'Bash',
+      behavior: 'deny',
+    };
+
+    // Daemon still shows the same permission (reply was dropped).
+    vi.mocked(getPendingPermission).mockResolvedValue({
+      requestId: 'rq1',
+      toolName: 'Bash',
+      toolUseId: 'tu1',
+      input: { command: 'ls' },
+      suggestions: [],
+    });
+
+    await ctrl.replyToPermission('rq1', response);
+
+    // Gate must be gone immediately after reply.
+    expect('rq1' in ctrl.getState().interactions.permissions).toBe(false);
+
+    // Advance past PERMISSION_VERIFY_DELAY_MS and drain the promise chain.
+    await vi.advanceTimersByTimeAsync(3001);
+    await flushMicrotasks();
+
+    // Gate must be restored because the daemon still reports it pending.
+    expect('rq1' in ctrl.getState().interactions.permissions).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Permission-verify timer (#2): answer landed → gate NOT restored
+//
+// If getPendingPermission returns null, the daemon processed our reply. The
+// controller must NOT re-raise the gate.
+// ---------------------------------------------------------------------------
+
+describe('verifyPermissionDelivered — answer landed: gate stays gone', () => {
+  it('does NOT restore the gate when getPendingPermission resolves to null after 3s', async () => {
+    vi.mocked(getPendingPermission).mockResolvedValue(null);
+
+    const { fakeClient, pushEvent } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribe(() => {});
+
+    pushEvent({
+      type: 'permission.requested',
+      chatId: CHAT_ID,
+      request: {
+        requestId: 'rq2',
+        toolName: 'Bash',
+        toolUseId: 'tu2',
+        input: { command: 'pwd' },
+        suggestions: [],
+      },
+      notify: false,
+    });
+
+    expect('rq2' in ctrl.getState().interactions.permissions).toBe(true);
+
+    const response: ControlResponse = {
+      requestId: 'rq2',
+      toolUseId: 'tu2',
+      toolName: 'Bash',
+      behavior: 'allow',
+    };
+
+    // Daemon cleared the pending — answer was received.
+    vi.mocked(getPendingPermission).mockResolvedValue(null);
+
+    await ctrl.replyToPermission('rq2', response);
+    expect('rq2' in ctrl.getState().interactions.permissions).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(3001);
+    await flushMicrotasks();
+
+    // Gate must remain absent — daemon confirmed the answer landed.
+    expect(Object.keys(ctrl.getState().interactions.permissions)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Restore skips a just-answered tool use (#5)
+//
+// Within the PERMISSION_VERIFY_DELAY_MS window, a subscribe/reconnect restore
+// (handleSubscribeAck → restorePendingPermission) must NOT resurrect the
+// permission the user just answered — the reply may still be in flight.
+// ---------------------------------------------------------------------------
+
+describe('restorePendingPermission — skips recently-replied toolUseId', () => {
+  it('does not restore the gate when the tool use was just answered and the verify window has not elapsed', async () => {
+    // Daemon reports the same permission still pending (reply in flight).
+    vi.mocked(getPendingPermission).mockResolvedValue({
+      requestId: 'rq3',
+      toolName: 'Bash',
+      toolUseId: 'tu3',
+      input: { command: 'echo hi' },
+      suggestions: [],
+    });
+
+    const { fakeClient, pushEvent } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    ctrl.subscribe(() => {});
+
+    // Seed the permission via a live WS event.
+    pushEvent({
+      type: 'permission.requested',
+      chatId: CHAT_ID,
+      request: {
+        requestId: 'rq3',
+        toolName: 'Bash',
+        toolUseId: 'tu3',
+        input: { command: 'echo hi' },
+        suggestions: [],
+      },
+      notify: false,
+    });
+    expect('rq3' in ctrl.getState().interactions.permissions).toBe(true);
+
+    // User answers — gate is optimistically dropped and toolUseId is tracked.
+    const response: ControlResponse = {
+      requestId: 'rq3',
+      toolUseId: 'tu3',
+      toolName: 'Bash',
+      behavior: 'deny',
+    };
+    await ctrl.replyToPermission('rq3', response);
+    expect('rq3' in ctrl.getState().interactions.permissions).toBe(false);
+
+    // Trigger a restore via a subscribe:ack (simulating reconnect) — still within
+    // the 3000ms verify window, so recentlyRepliedToolUseIds still contains 'tu3'.
+    pushEvent({ type: 'subscribe:ack', chatId: CHAT_ID });
+    await flushMicrotasks();
+
+    // The anti-flicker guard must suppress the restore.
+    expect('rq3' in ctrl.getState().interactions.permissions).toBe(false);
+    expect(Object.keys(ctrl.getState().interactions.permissions)).toHaveLength(0);
   });
 });
