@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import type { Project } from '@qlan-ro/mainframe-types';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
 import { groupSessions } from '../group-sessions';
-import type { SessionGroup } from '../group-sessions';
 
 // ---------------------------------------------------------------------------
 // Fixtures

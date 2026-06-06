@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { type SessionItem, type SessionCustom } from '../../view-model/chat-to-thread-custom';
+import { type SessionItem } from '../../view-model/chat-to-thread-custom';
 import { tagsInUse, hasSynthetic } from '../tags-in-use';
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { type SessionItem } from '../../view-model/chat-to-thread-custom';
-import { applySessionFilters, type SessionFilters } from '../apply-session-filters';
+import { applySessionFilters } from '../apply-session-filters';
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
