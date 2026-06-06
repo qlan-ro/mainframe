@@ -43,6 +43,7 @@ import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { ReadMoreBubble } from './ReadMoreBubble';
 import { QueuedUserTurn } from './QueuedUserTurn';
+import { ZoomableImage } from '../parts/ZoomableImage';
 import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text';
 import { mainframeUserFormatter } from './user-directives';
 
@@ -150,10 +151,9 @@ function InlineImageThumbs({ parts }: InlineImageThumbsProps) {
   return (
     <div className="flex flex-wrap justify-end gap-2">
       {parts.map((p) => (
-        <img
+        <ZoomableImage
           key={p.image}
           src={p.image}
-          alt=""
           className="size-16 rounded-[11px] border-[0.5px] border-border object-cover shadow-sm"
         />
       ))}

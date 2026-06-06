@@ -23,6 +23,7 @@ import {
   ReasoningText,
 } from '@/components/ui/assistant-ui/reasoning';
 import { MessageToolLeaf, MessageToolGroup } from '../tools/tool-dispatch';
+import { ZoomableImage } from '../parts/ZoomableImage';
 import { MessageActionBar } from './MessageActionBar';
 import { MessageTiming } from './MessageTiming';
 import { MessageTimestamp } from './MessageTimestamp';
@@ -82,10 +83,8 @@ export function AssistantMessage() {
               return <MessageToolLeaf part={part} />;
             case 'image':
               return (
-                <img
-                  data-slot="message-image"
+                <ZoomableImage
                   src={part.image}
-                  alt=""
                   className="max-h-80 max-w-full rounded-md border border-border object-contain"
                 />
               );
