@@ -11,18 +11,17 @@ import { useAuiState } from '@assistant-ui/react';
 import { ChatThread } from '../../../features/chat/thread/ChatThread';
 import { NewThreadConfigPicker } from './NewThreadConfigPicker';
 
-interface ActiveItem {
-  id: string;
-  status?: string;
-}
-
 export function ChatSurface({ port }: { port: number }) {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
-  const item = useAuiState((s) => s.threadListItem as unknown as ActiveItem | undefined);
+  // s.threadListItem is the native active ThreadListItemState; its `status`
+  // ('new' | 'regular' | 'archived' | 'deleted') is read directly — the
+  // SessionItem projection would collapse 'new' to 'regular' and break the
+  // new-thread surface, so it is NOT used here.
+  const itemStatus = useAuiState((s) => s.threadListItem?.status);
   const messageCount = useAuiState((s) => s.thread.messages.length);
 
   const isNewLocal =
-    mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && item?.status === 'new' && messageCount === 0;
+    mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
 
   if (isNewLocal) {
     return (

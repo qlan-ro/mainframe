@@ -70,3 +70,73 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
     custom,
   };
 }
+
+/**
+ * Canonical assistant-ui thread-entry → SessionItem seam.
+ *
+ * assistant-ui exposes the thread list through TWO containers with the same
+ * per-entry shape but different wrappers:
+ *   - the legacy runtime `ThreadListState` (useAssistantRuntime().threads.getState):
+ *     `threadIds` + a `threadItems` Record keyed by id;
+ *   - the store-scope `ThreadsState` (useAuiState((s) => s.threads)):
+ *     `threadItems` as an ordered array.
+ * Both carry per-entry `{ id, remoteId, status, title?, custom? }` where `custom`
+ * is typed `Record<string, unknown>`. Our chatToThreadCustom projection always
+ * writes a SessionCustom into that slot (see chats-remote-adapter), so the
+ * narrowing is sound. This module is the ONE place we narrow `custom` and the ONE
+ * place that maps a thread entry to a SessionItem.
+ *
+ * The structural types below mirror the real `@assistant-ui/core` shapes (verified
+ * against core@0.2.10) WITHOUT importing aui, keeping this module dependency-free;
+ * the live aui state is assignable to them.
+ */
+export interface ThreadListEntry {
+  id: string;
+  remoteId?: string;
+  title?: string;
+  status: string;
+  custom?: Record<string, unknown> | undefined;
+}
+
+/** Runtime-shaped state: ordered ids + a Record of entries. */
+export interface ThreadListRecordState {
+  threadIds: readonly string[];
+  threadItems: Readonly<Record<string, ThreadListEntry>>;
+}
+
+/** The single narrowing of the aui-boundary `custom` to our SessionCustom. */
+function narrowSessionCustom(custom: Record<string, unknown> | undefined): SessionCustom {
+  return custom as unknown as SessionCustom;
+}
+
+/** Map one aui thread-list entry to a SessionItem (status + custom narrowed once). */
+function threadEntryToSessionItem(entry: ThreadListEntry): SessionItem {
+  return {
+    id: entry.id,
+    remoteId: entry.remoteId,
+    title: entry.title ?? undefined,
+    status: entry.status === 'archived' ? 'archived' : 'regular',
+    custom: narrowSessionCustom(entry.custom),
+  };
+}
+
+/**
+ * Project an already-ordered array of thread entries (the store-scope
+ * `s.threads.threadItems`) to SessionItem[].
+ */
+export function threadItemsToSessionItems(entries: readonly ThreadListEntry[]): SessionItem[] {
+  return entries.map(threadEntryToSessionItem);
+}
+
+/**
+ * Project the runtime `ThreadListState` (Record + threadIds) to an ordered
+ * SessionItem[] — the source for the sidebar list. Walks `threadIds` (the
+ * canonical order) and resolves each via the `threadItems` Record, skipping ids
+ * without a materialized entry.
+ */
+export function threadListStateToSessionItems(state: ThreadListRecordState): SessionItem[] {
+  return state.threadIds
+    .map((id) => state.threadItems[id])
+    .filter((entry): entry is ThreadListEntry => entry != null)
+    .map(threadEntryToSessionItem);
+}

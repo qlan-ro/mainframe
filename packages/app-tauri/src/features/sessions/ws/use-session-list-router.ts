@@ -14,24 +14,22 @@
  * falls back to the first non-archived thread when the active chat was archived
  * out from under us (blank surface if none remain).
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '../../../lib/daemon/ws-client';
 import { useUnreadStore } from '../../../store/unread-store';
 import { useSessionFilters } from '../../../store/session-filters';
+import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { createSessionListRouter } from './session-list-router';
-
-interface ActiveThreadItem {
-  id: string;
-  status?: string;
-  custom?: { projectId?: string };
-}
 
 export function useSessionListRouter(): void {
   const runtime = useAssistantRuntime();
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
-  const threadItems = useAuiState((s) => s.threads.threadItems as unknown as ActiveThreadItem[]);
+  // Select the stable store-scope threadItems array; project to SessionItem[]
+  // outside the selector (a fresh array would loop useAuiState's Object.is).
+  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const items = useMemo(() => threadItemsToSessionItems(threadItems), [threadItems]);
 
   // Static WS → list wiring; created once, disposed on unmount.
   useEffect(() => {
@@ -48,10 +46,10 @@ export function useSessionListRouter(): void {
   const lastActiveRef = useRef<string | null>(null);
   useEffect(() => {
     if (mainThreadId == null) return;
-    const active = threadItems.find((t) => t.id === mainThreadId);
+    const active = items.find((t) => t.id === mainThreadId);
 
     if (active != null && active.status === 'archived') {
-      const fallback = threadItems.find((t) => t.id !== mainThreadId && t.status !== 'archived');
+      const fallback = items.find((t) => t.id !== mainThreadId && t.status !== 'archived');
       if (fallback != null) runtime.threads.switchToThread(fallback.id);
       return;
     }
@@ -66,5 +64,5 @@ export function useSessionListRouter(): void {
     if (filterProjectId != null && projectId != null && projectId !== filterProjectId) {
       setFilterProjectId(null);
     }
-  }, [mainThreadId, threadItems, runtime]);
+  }, [mainThreadId, items, runtime]);
 }

@@ -5,7 +5,7 @@
  *   header (+ New) → ProjectFilterPillBar → TagFilterBar → scrollable grouped list
  *
  * Data:
- *   - useAssistantRuntime().threads for the native thread list (mapped via threadsToSessionItems)
+ *   - useAssistantRuntime().threads for the native thread list (mapped via threadListStateToSessionItems)
  *   - useProjects() for the project set (filter pills + grouping)
  *   - useSessionFilters() for project/tag/synthetic filter state
  *   - useUnreadStore() for attention counts
@@ -14,60 +14,21 @@
  */
 import { useMemo } from 'react';
 import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
-import type { ThreadListState } from '@assistant-ui/react';
 import { PlusIcon } from 'lucide-react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
-import type { SessionCustom } from '../view-model/chat-to-thread-custom';
+import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
 import { groupSessions } from '../view-model/group-sessions';
 import { attentionCount } from '../view-model/attention-counts';
 import { applySessionFilters } from '../filter/apply-session-filters';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
 import { useProjects } from '../use-projects';
-import { threadsToSessionItems } from './use-session-items';
 import { SessionGroup } from './SessionGroup';
 import { SessionRow } from './SessionRow';
 import { ProjectFilterPillBar } from './ProjectFilterPillBar';
 import { TagFilterBar } from '../filter/TagFilterBar';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
-
-/**
- * Internal view of the thread list state as returned by the remote thread list
- * runtime. The official ThreadListState provides threadIds + threadItems for
- * reactive use; we project them to a flat `threads` array here so the rest of
- * the sidebar works with a single ordered list.
- *
- * `custom` is typed as Record<string, unknown> at the aui boundary; our
- * chatToThreadCustom projection always writes a SessionCustom into it, so we
- * narrow it here.
- */
-interface ThreadEntry {
-  id: string;
-  remoteId?: string;
-  title?: string | null;
-  status: string;
-  custom: SessionCustom;
-}
-
-/** Narrow the aui-boundary `custom` (Record<string, unknown>) to our SessionCustom. */
-function asSessionCustom(custom: unknown): SessionCustom {
-  return custom as SessionCustom;
-}
-
-function extractThreads(state: ThreadListState): readonly ThreadEntry[] {
-  const { threadIds, threadItems } = state;
-  return threadIds
-    .map((id) => threadItems[id])
-    .filter((t): t is NonNullable<typeof t> => t != null)
-    .map((t) => ({
-      id: t.id,
-      remoteId: t.remoteId,
-      title: t.title,
-      status: t.status,
-      custom: asSessionCustom(t.custom),
-    }));
-}
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
@@ -89,18 +50,14 @@ function buildAttentionMap(
   return map;
 }
 
-const EMPTY_THREADS: readonly ThreadEntry[] = [];
-
 export function SessionSidebar() {
   const threadListRuntime = useAssistantRuntime().threads;
-  const threads = threadListRuntime ? extractThreads(threadListRuntime.getState()) : EMPTY_THREADS;
+  const allItems: SessionItem[] = threadListRuntime ? threadListStateToSessionItems(threadListRuntime.getState()) : [];
   const { filterProjectId, selectedTags, selectedSynthetic, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);
   const { projects } = useProjects();
   const port = useDaemonPort();
   const registry = useTagRegistry(port);
-
-  const allItems = useMemo<SessionItem[]>(() => threadsToSessionItems(threads), [threads]);
 
   const filteredItems = useMemo(
     () => applySessionFilters(allItems, { filterProjectId, selectedTags, selectedSynthetic }),

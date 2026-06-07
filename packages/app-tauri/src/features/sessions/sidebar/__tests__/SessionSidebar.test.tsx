@@ -4,7 +4,7 @@
  * Strategy:
  *  - Mock @assistant-ui/react: useAssistantRuntime().threads returns a controlled
  *    thread list whose getState() yields the REAL ThreadListState shape
- *    (threadIds + threadItems), exercising the production extractThreads path;
+ *    (threadIds + threadItems), exercising the canonical threadListStateToSessionItems path;
  *    ThreadListPrimitive.New renders as a passthrough div.
  *  - Mock ../use-projects so projects are controlled per test.
  *  - Mock @/store/session-filters so filterProjectId / selectedTags are controlled.

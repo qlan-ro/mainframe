@@ -8,27 +8,26 @@
  * apply setChatTags(port, id, newTags) for each affected thread, then reload the
  * native list so derived custom re-syncs from the daemon (server-authoritative).
  */
+import { useMemo } from 'react';
 import { useAuiState, useAssistantRuntime } from '@assistant-ui/react';
 import { setChatTags } from '../../../lib/api/tags';
+import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import type { TagCascadeUpdate } from './build-tag-cascade';
 import { useTagRegistry } from './use-tag-registry';
 import { useTagPopoverTarget } from './use-tag-popover-target';
 import { TagPopover } from './TagPopover';
-
-interface ThreadSnapshot {
-  id: string;
-  remoteId?: string;
-  custom?: { tags?: string[] };
-}
 
 export function TagPopoverHost({ port }: { port: number }) {
   const target = useTagPopoverTarget((s) => s.target);
   const close = useTagPopoverTarget((s) => s.close);
   const registry = useTagRegistry(port);
   const runtime = useAssistantRuntime();
-  const items = useAuiState((s) => s.threads.threadItems as unknown as ThreadSnapshot[]);
+  // Select the stable store-scope threadItems array; project outside the selector
+  // so the fresh array does not loop useAuiState's Object.is comparison.
+  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const items = useMemo(() => threadItemsToSessionItems(threadItems), [threadItems]);
 
-  const threads = items.map((t) => ({ id: t.id, custom: { tags: t.custom?.tags ?? [] } }));
+  const threads = items.map((t) => ({ id: t.id, custom: { tags: t.custom.tags } }));
 
   async function applyCascade(updates: TagCascadeUpdate[]): Promise<void> {
     if (updates.length === 0) return;
