@@ -8,9 +8,8 @@
  * returns a promise; the user's button click calls `resolve(choice)`. A
  * 'cancel' makes the adapter throw so aui rolls back the optimistic archive (S5).
  *
- * `hasWorktree` comes from the thread's custom.worktreePath at the call site —
- * the dialog uses it to decide whether to offer the "delete worktree" option.
- * No getChat round-trip.
+ * `hasWorktree` is passed in by the adapter caller (which derives it via getChat)
+ * — the dialog uses it to decide whether to offer the "delete worktree" option.
  */
 import { create } from 'zustand';
 

@@ -42,10 +42,6 @@ export class ChatWsSubscription {
 
   constructor(private readonly host: ChatWsHost) {}
 
-  get attached(): boolean {
-    return this.unsubscribeFromWs !== null;
-  }
-
   attach(): void {
     if (this.unsubscribeFromWs) return;
     const { ws } = this.host;
