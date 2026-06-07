@@ -23,7 +23,7 @@ function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
 
   return (
-    <div className="flex flex-1 overflow-hidden pt-10">
+    <div className="flex flex-1 gap-2 overflow-hidden bg-mf-window p-2 pt-10">
       <SessionSidebar />
 
       <main data-testid="chat-thread-area" className="relative flex flex-1 flex-col overflow-hidden">

@@ -23,7 +23,7 @@ export function ProjectFilterPillBar({
   const totalAttn = Object.values(attentionCounts).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="flex flex-wrap gap-1.5 px-2.5 py-1.5">
+    <div className="flex flex-wrap gap-1 px-2.5 pb-1.5 pt-1">
       <FilterPill
         label="All"
         active={filterProjectId == null}

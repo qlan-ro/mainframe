@@ -19,12 +19,12 @@ export function SessionGroup({ group, renderItem }: SessionGroupProps) {
   const isCollapsed = collapsed.has(group.projectId);
 
   return (
-    <div data-testid={`sessions-group-${group.projectId}`} className="border-b border-border/40 last:border-b-0">
+    <div data-testid={`sessions-group-${group.projectId}`}>
       <button
         data-testid={`sessions-group-header-${group.projectId}`}
         type="button"
         onClick={() => toggle(group.projectId)}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left hover:bg-accent"
+        className="sticky top-0 z-[1] flex w-full items-center gap-1 bg-mf-glass px-3 pb-1 pt-[7px] text-left backdrop-blur-[40px] backdrop-saturate-[1.8]"
       >
         <ChevronDownIcon
           className={[
@@ -32,7 +32,7 @@ export function SessionGroup({ group, renderItem }: SessionGroupProps) {
             isCollapsed ? '-rotate-90' : '',
           ].join(' ')}
         />
-        <span className="flex-1 truncate text-micro font-bold uppercase tracking-wide text-muted-foreground">
+        <span className="flex-1 truncate text-micro font-bold uppercase tracking-[0.07em] text-mf-text-3">
           {group.projectName}
         </span>
         <span className="text-micro text-mf-text-3">{group.count}</span>

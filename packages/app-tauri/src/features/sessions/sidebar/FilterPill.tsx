@@ -22,7 +22,7 @@ export function FilterPill({ label, active, testId, onClick, badgeCount = 0, bad
       onClick={onClick}
       type="button"
       className={[
-        'inline-flex h-[22px] shrink-0 items-center gap-1.5 rounded-full px-2.5 text-caption font-medium transition-colors',
+        'inline-flex h-[22px] shrink-0 items-center gap-1.5 rounded-[11px] px-2.5 text-caption font-medium tracking-[-0.05px] transition-colors',
         active ? 'bg-primary text-primary-foreground' : 'bg-accent text-muted-foreground hover:text-foreground',
       ].join(' ')}
     >
@@ -31,8 +31,8 @@ export function FilterPill({ label, active, testId, onClick, badgeCount = 0, bad
         <span
           data-testid={badgeTestId}
           className={[
-            'inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-micro font-bold leading-none',
-            active ? 'bg-white text-primary opacity-90' : 'bg-primary text-white',
+            'inline-flex h-4 min-w-4 items-center justify-center rounded-lg px-1 text-micro font-bold leading-none text-white',
+            active ? 'bg-white/25' : 'bg-primary',
           ].join(' ')}
         >
           {badgeCount}

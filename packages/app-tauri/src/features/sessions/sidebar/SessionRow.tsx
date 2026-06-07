@@ -9,6 +9,7 @@
  * not the item STATE (useThreadListItem). Status dot via deriveSessionStatus + unread.
  * Responsive: @max-[300px] hides time; @max-[220px] hides meta row.
  */
+import type { MouseEvent } from 'react';
 import { useState } from 'react';
 import {
   ThreadListItemPrimitive,
@@ -16,6 +17,7 @@ import {
   useAssistantRuntime,
   useThreadListItemRuntime,
 } from '@assistant-ui/react';
+import { ArchiveIcon, PencilIcon, PinIcon, TagIcon } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { deriveSessionStatus, type SessionStatus } from '../view-model/session-status';
@@ -31,7 +33,7 @@ import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
 const DOT_CLASS: Record<SessionStatus, string> = {
   'worktree-missing': 'size-1.5 bg-destructive',
   working: 'size-2 border-[1.5px] border-primary border-t-transparent animate-spin',
-  waiting: 'size-2 border-[1.5px] border-mf-warning border-t-transparent animate-spin',
+  waiting: 'size-2 border-[1.5px] border-primary border-t-transparent animate-spin',
   unread: 'size-1.5 bg-primary',
   idle: 'size-1.5 bg-mf-text-4 opacity-50',
 };
@@ -51,10 +53,59 @@ function RelativeTime({ updatedAt }: { updatedAt: number }) {
   return (
     <span
       data-testid="sessions-row-relative-time"
-      className="flex-shrink-0 text-micro tabular-nums text-mf-text-3 @max-[300px]:hidden"
+      className="flex-shrink-0 text-micro tabular-nums text-mf-text-3 group-hover:hidden @max-[300px]:hidden"
     >
       {text}
     </span>
+  );
+}
+
+/**
+ * RowHoverActions — tag / rename / archive icon buttons revealed on row hover
+ * (artboard SessionRowDense `.tw-row-actions` shown on `:hover`, swapping out
+ * the time). Each click stops propagation so it doesn't also select the row,
+ * and wires to the same handlers the right-click context menu uses.
+ */
+function RowHoverActions({
+  onTags,
+  onRename,
+  onArchive,
+}: {
+  onTags: () => void;
+  onRename: () => void;
+  onArchive: () => void;
+}) {
+  const btn =
+    'inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
+  const stop = (fn: () => void) => (e: MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    fn();
+  };
+  return (
+    <div className="hidden flex-shrink-0 items-center group-hover:flex">
+      <button data-testid="sessions-row-action-tags" type="button" title="Tags" className={btn} onClick={stop(onTags)}>
+        <TagIcon className="size-[11px]" />
+      </button>
+      <button
+        data-testid="sessions-row-action-rename"
+        type="button"
+        title="Rename"
+        className={btn}
+        onClick={stop(onRename)}
+      >
+        <PencilIcon className="size-[11px]" />
+      </button>
+      <button
+        data-testid="sessions-row-action-archive"
+        type="button"
+        title="Archive"
+        className={btn}
+        onClick={stop(onArchive)}
+      >
+        <ArchiveIcon className="size-[11px]" />
+      </button>
+    </div>
   );
 }
 
@@ -118,13 +169,16 @@ function SessionRowInner({ item, colorOf }: { item: SessionItem; colorOf: (name:
     >
       <ThreadListItemPrimitive.Root
         data-testid="sessions-row"
-        className="group relative flex cursor-pointer items-start gap-2.5 border-l-2 border-l-transparent px-2.5 py-2 transition-colors hover:bg-accent data-[active=true]:border-l-primary data-[active=true]:bg-accent"
+        className="group relative flex cursor-pointer items-center gap-[9px] border-l-2 border-l-transparent py-2 pl-2.5 pr-3 transition-colors hover:bg-accent data-[active=true]:border-l-primary data-[active=true]:bg-accent"
       >
-        <div className="mt-1 flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          {custom.pinned && (
+            <PinIcon data-testid="sessions-row-pin-glyph" className="size-3 flex-shrink-0 text-primary" />
+          )}
           <StatusDot status={status} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-[22px] min-w-0 items-center gap-[9px]">
             {isRenaming ? (
               <SessionRowRename
                 initialTitle={title}
@@ -145,6 +199,11 @@ function SessionRowInner({ item, colorOf }: { item: SessionItem; colorOf: (name:
               </ThreadListItemPrimitive.Trigger>
             )}
             <RelativeTime updatedAt={custom.updatedAt} />
+            <RowHoverActions
+              onTags={handleTags}
+              onRename={() => queueMicrotask(() => setIsRenaming(true))}
+              onArchive={() => void itemRuntime.archive()}
+            />
           </div>
           <div className="mt-1 @max-[220px]:hidden">
             <SessionRowMeta

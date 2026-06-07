@@ -1,8 +1,14 @@
 /**
- * SessionSidebar — the full left panel shell.
+ * SessionSidebar — the full left panel shell (warm-chrome glass panel).
  *
- * Composition:
- *   header (+ New) → ProjectFilterPillBar → TagFilterBar → scrollable grouped list
+ * Composition (matches the 02-chrome artboard Sidebar):
+ *   header → "Sessions" group header (chevron + count + new/sort/more) →
+ *   ProjectFilterPillBar → scrollable grouped list (flex-1) →
+ *   TagFilterBar pinned at the BOTTOM (border-t, flex-shrink-0)
+ *
+ * The list scrolls between the pinned project pills (top) and the pinned tag
+ * filter bar (bottom), per the artboard "Tag filter row … sits above bottom
+ * panel" placement.
  *
  * Data:
  *   - useAssistantRuntime().threads for the native thread list (mapped via threadListStateToSessionItems)
@@ -14,7 +20,7 @@
  */
 import { useMemo } from 'react';
 import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
-import { PlusIcon } from 'lucide-react';
+import { ChevronDownIcon, PlusIcon, ChevronsUpDownIcon, MoreHorizontalIcon } from 'lucide-react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
 import { groupSessions } from '../view-model/group-sessions';
@@ -32,8 +38,39 @@ import { useTagRegistry } from '../tags/use-tag-registry';
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
-    <div data-testid="sessions-empty-state" className="px-4 py-10 text-center text-caption text-muted-foreground">
+    <div data-testid="sessions-empty-state" className="px-3 py-5 text-center text-caption text-mf-text-3">
       {hasFilters ? 'No sessions match these filters.' : 'No sessions yet'}
+    </div>
+  );
+}
+
+/**
+ * SessionsGroupHeader — the sticky "SESSIONS" group header with the chevron,
+ * count, and the new/sort/more icon-button cluster (artboard Sidebar
+ * "Sessions group header"). The +new button is wired to the native
+ * ThreadListPrimitive.New; sort/more are presentational placeholders for now
+ * (popovers not yet ported) but carry stable testids.
+ */
+function SessionsGroupHeader({ count }: { count: number }) {
+  const iconBtn =
+    'inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
+  return (
+    <div className="flex items-center gap-1 px-3 pb-1 pt-2">
+      <ChevronDownIcon className="size-2.5 flex-shrink-0 text-mf-text-3" />
+      <span className="text-micro font-bold uppercase tracking-[0.06em] text-muted-foreground">Sessions</span>
+      <span className="text-micro text-mf-text-3">{count}</span>
+      <div className="flex-1" />
+      <ThreadListPrimitive.New asChild>
+        <button data-testid="sessions-new-button" type="button" title="New session" className={iconBtn}>
+          <PlusIcon className="size-3" />
+        </button>
+      </ThreadListPrimitive.New>
+      <button data-testid="sessions-sort-button" type="button" title="Sort sessions" className={iconBtn}>
+        <ChevronsUpDownIcon className="size-[11px]" />
+      </button>
+      <button data-testid="sessions-more-button" type="button" title="More" className={iconBtn}>
+        <MoreHorizontalIcon className="size-[11px]" />
+      </button>
     </div>
   );
 }
@@ -79,21 +116,9 @@ export function SessionSidebar() {
   return (
     <div
       data-testid="sessions-sidebar"
-      className="flex h-full w-full flex-col overflow-hidden bg-mf-glass font-sans text-foreground @container"
+      className="flex h-full w-[280px] flex-shrink-0 flex-col overflow-hidden rounded-[13px] bg-mf-glass font-sans text-foreground shadow-[0_0_0_0.5px_var(--border),0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-[40px] backdrop-saturate-[1.8] @container"
     >
-      <div className="flex flex-shrink-0 items-center gap-1 border-b border-border/60 px-2.5 py-1.5">
-        <span className="flex-1 text-micro font-bold uppercase tracking-widest text-muted-foreground">Sessions</span>
-        <ThreadListPrimitive.New asChild>
-          <button
-            data-testid="sessions-new-button"
-            type="button"
-            title="New session"
-            className="inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <PlusIcon className="size-3" />
-          </button>
-        </ThreadListPrimitive.New>
-      </div>
+      <SessionsGroupHeader count={allItems.length} />
 
       <ProjectFilterPillBar
         projects={projects}
@@ -101,8 +126,6 @@ export function SessionSidebar() {
         attentionCounts={attentionCounts}
         onSelect={setFilterProjectId}
       />
-
-      <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
 
       <div className="min-h-0 flex-1 overflow-y-auto py-0.5">
         {filteredItems.length === 0 ? (
@@ -117,6 +140,8 @@ export function SessionSidebar() {
           ))
         )}
       </div>
+
+      <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
     </div>
   );
 }

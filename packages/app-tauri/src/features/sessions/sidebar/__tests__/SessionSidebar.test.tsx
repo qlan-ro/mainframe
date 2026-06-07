@@ -311,11 +311,21 @@ describe('SessionSidebar — ProjectFilterPillBar is rendered', () => {
 
 // ---------------------------------------------------------------------------
 // 8. TagFilterBar is mounted (sessions-tag-filter-bar present)
+// Per the warm-chrome artboard it is now pinned at the BOTTOM, AFTER the
+// scrollable session list — assert it renders AND comes after the list region.
 // ---------------------------------------------------------------------------
 
-describe('SessionSidebar — TagFilterBar is mounted below ProjectFilterPillBar', () => {
+describe('SessionSidebar — TagFilterBar is mounted at the bottom, after the list', () => {
   it('renders data-testid="sessions-tag-filter-bar"', () => {
     render(<SessionSidebar />);
     expect(screen.getByTestId('sessions-tag-filter-bar')).toBeTruthy();
+  });
+
+  it('renders the tag filter bar AFTER the project filter pills in DOM order', () => {
+    render(<SessionSidebar />);
+    const pills = screen.getByTestId('sessions-filter-pill-all');
+    const tagBar = screen.getByTestId('sessions-tag-filter-bar');
+    // compareDocumentPosition: FOLLOWING (4) means tagBar comes after pills.
+    expect(pills.compareDocumentPosition(tagBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

@@ -1,7 +1,8 @@
 /**
- * Horizontal scrollable tag + synthetic filter bar shown below the project
- * pill bar. Reads the in-use tag set from the loaded items and dispatches
- * toggles into the session-filters store.
+ * Horizontal scrollable tag + synthetic filter bar pinned at the BOTTOM of the
+ * sidebar (artboard "Tag filter row … sits above bottom panel"). Reads the
+ * in-use tag set from the loaded items and dispatches toggles into the
+ * session-filters store.
  *
  * Color swatches use an inline style from tag-colors.ts — never a
  * `bg-mf-tag-*` utility, which has no token in app-tauri's globals.css and
@@ -28,9 +29,10 @@ const SYNTHETIC_LABELS: Record<SyntheticTag, string> = {
   'has-worktree': 'has-worktree',
 };
 
-const CHIP_BASE = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs transition-colors shrink-0 border';
-const CHIP_ACTIVE = 'bg-mf-selection text-primary border-transparent';
-const CHIP_IDLE = 'bg-mf-chip text-muted-foreground hover:bg-accent hover:text-accent-foreground border-transparent';
+const CHIP_BASE =
+  'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-[11px] px-[9px] text-caption tracking-[-0.05px] transition-colors';
+const CHIP_ACTIVE = 'bg-mf-selection font-semibold text-primary';
+const CHIP_IDLE = 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground';
 
 function TagPill({
   name,
@@ -74,6 +76,7 @@ function SyntheticChip({
       onClick={onClick}
       className={cn(CHIP_BASE, active ? CHIP_ACTIVE : CHIP_IDLE)}
     >
+      <span className="size-1.5 shrink-0 rounded-full bg-mf-text-3" aria-hidden="true" />
       {SYNTHETIC_LABELS[kind]}
     </button>
   );
@@ -93,9 +96,9 @@ export function TagFilterBar({ items, filterProjectId, registry }: Props): React
   return (
     <div
       data-testid="sessions-tag-filter-bar"
-      className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border overflow-x-auto scrollbar-none"
+      className="flex flex-shrink-0 items-center gap-1.5 overflow-x-auto border-t border-border/60 px-3 py-1.5 scrollbar-none"
     >
-      <span className="text-xs text-mf-text-3 uppercase tracking-wide shrink-0 select-none">Tags</span>
+      <span className="shrink-0 select-none text-micro font-semibold uppercase tracking-wide text-mf-text-3">Tags</span>
       {inUse.map((name) => (
         <TagPill
           key={name}
