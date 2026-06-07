@@ -153,6 +153,9 @@ importers:
       tailwindcss:
         specifier: ^4.3.0
         version: 4.3.0
+      zustand:
+        specifier: ^5.0.14
+        version: 5.0.14(@types/react@19.2.14)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2
