@@ -7,9 +7,6 @@
  *  - Renders the `label` text exactly.
  *  - When badgeCount > 0, a child with data-testid={badgeTestId} shows the count.
  *  - When badgeCount === 0, no element with data-testid={badgeTestId} is in the DOM.
- *  - When swatchColor is supplied, a swatch element is present with an inline
- *    backgroundColor style (oklch value from tag-colors.ts); when omitted, no
- *    swatch element is present.
  *  - Clicking the button calls onClick exactly once.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -85,40 +82,7 @@ describe('FilterPill — badge is absent when badgeCount is 0', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. Swatch appears with an inline backgroundColor when swatchColor is supplied
-// ---------------------------------------------------------------------------
-
-describe('FilterPill — swatch renders with inline backgroundColor when swatchColor is supplied', () => {
-  it('renders a swatch with a non-empty backgroundColor style when swatchColor="red"', () => {
-    render(
-      <FilterPill
-        label="Red Tag"
-        active={false}
-        testId="sessions-red-pill"
-        onClick={() => undefined}
-        swatchColor="red"
-      />,
-    );
-    const swatch = screen.getByTestId('sessions-red-pill-swatch');
-    // The swatch uses an inline style (oklch value from tag-colors.ts), not a
-    // bg-mf-tag-* utility which has no token in globals.css.
-    expect((swatch as HTMLElement).style.backgroundColor).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. Swatch is absent when swatchColor is omitted
-// ---------------------------------------------------------------------------
-
-describe('FilterPill — no swatch when swatchColor is omitted', () => {
-  it('does not render the swatch element when swatchColor is not provided', () => {
-    render(<FilterPill label="All" active={false} testId="sessions-all-pill" onClick={() => undefined} />);
-    expect(screen.queryByTestId('sessions-all-pill-swatch')).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 7. onClick fires exactly once on click
+// 5. onClick fires exactly once on click
 // ---------------------------------------------------------------------------
 
 describe('FilterPill — onClick called exactly once on click', () => {

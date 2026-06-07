@@ -112,7 +112,7 @@ export function SessionSidebar() {
             <SessionGroup
               key={group.projectId}
               group={group}
-              renderItem={(item) => <SessionRow key={item.id} item={item} />}
+              renderItem={(item) => <SessionRow key={item.id} item={item} colorOf={registry.colorOf} />}
             />
           ))
         )}

@@ -16,13 +16,13 @@ import {
   useAssistantRuntime,
   useThreadListItemRuntime,
 } from '@assistant-ui/react';
+import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { deriveSessionStatus, type SessionStatus } from '../view-model/session-status';
 import { formatRelativeTime } from '../view-model/relative-time';
 import { useUnreadStore } from '@/store/unread-store';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { pinChat } from '@/lib/api/chats';
-import { useTagRegistry } from '../tags/use-tag-registry';
 import { SessionRowMeta } from './SessionRowMeta';
 import { SessionRowRename } from './SessionRowRename';
 import { SessionContextMenu } from './SessionContextMenu';
@@ -58,14 +58,21 @@ function RelativeTime({ updatedAt }: { updatedAt: number }) {
   );
 }
 
-function SessionRowInner({ item }: { item: SessionItem }) {
+/**
+ * `colorOf` is threaded down from the sidebar's single `useTagRegistry` so the
+ * whole list shares ONE `listTags()` fetch — rows never fetch the registry
+ * themselves. Defaults to the registry's own fallback color when omitted (e.g.
+ * a row rendered in isolation), so tag dots still paint.
+ */
+const DEFAULT_COLOR_OF = (): TagColor => 'blue';
+
+function SessionRowInner({ item, colorOf }: { item: SessionItem; colorOf: (name: string) => TagColor }) {
   const { custom } = item;
   const port = useDaemonPort();
   const itemRuntime = useThreadListItemRuntime();
   const isUnread = useUnreadStore((s) => s.isUnread(item.id));
   const status = deriveSessionStatus(custom, isUnread);
   const [isRenaming, setIsRenaming] = useState(false);
-  const registry = useTagRegistry(port);
 
   const title = item.title ?? 'Untitled session';
 
@@ -142,7 +149,7 @@ function SessionRowInner({ item }: { item: SessionItem }) {
               detectedPrs={custom.detectedPrs}
               status={status}
               tags={custom.tags}
-              colorOf={registry.colorOf}
+              colorOf={colorOf}
             />
           </div>
         </div>
@@ -159,7 +166,13 @@ function SessionRowInner({ item }: { item: SessionItem }) {
  * race. We read getState().threadItems (a plain Record) first; only if the id
  * is present do we call getItemById to get the live runtime binding.
  */
-export function SessionRow({ item }: { item: SessionItem }) {
+export function SessionRow({
+  item,
+  colorOf = DEFAULT_COLOR_OF,
+}: {
+  item: SessionItem;
+  colorOf?: (name: string) => TagColor;
+}) {
   const threadListRuntime = useAssistantRuntime().threads;
   const threadItems = threadListRuntime?.getState().threadItems;
   if (threadItems == null || !(item.id in threadItems)) return null;
@@ -167,7 +180,7 @@ export function SessionRow({ item }: { item: SessionItem }) {
   const itemRuntime = threadListRuntime.getItemById(item.id);
   return (
     <ThreadListItemRuntimeProvider runtime={itemRuntime}>
-      <SessionRowInner item={item} />
+      <SessionRowInner item={item} colorOf={colorOf} />
     </ThreadListItemRuntimeProvider>
   );
 }
