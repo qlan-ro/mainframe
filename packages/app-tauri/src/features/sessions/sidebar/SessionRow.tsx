@@ -24,6 +24,7 @@ import { pinChat } from '@/lib/api/chats';
 import { SessionRowMeta } from './SessionRowMeta';
 import { SessionRowRename } from './SessionRowRename';
 import { SessionContextMenu } from './SessionContextMenu';
+import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
 
 const DOT_CLASS: Record<SessionStatus, string> = {
   'worktree-missing': 'size-1.5 bg-destructive',
@@ -85,6 +86,12 @@ function SessionRowInner({ item }: { item: SessionItem }) {
     });
   }
 
+  function handleTags() {
+    const chatId = item.remoteId ?? item.id;
+    const currentTags = custom.tags ?? [];
+    useTagPopoverTarget.getState().open(chatId, currentTags);
+  }
+
   return (
     <SessionContextMenu
       pinned={custom.pinned}
@@ -93,6 +100,7 @@ function SessionRowInner({ item }: { item: SessionItem }) {
       onRename={() => {
         queueMicrotask(() => setIsRenaming(true));
       }}
+      onTags={handleTags}
       onArchive={() => void itemRuntime.archive()}
       claudeSessionId={item.remoteId}
     >

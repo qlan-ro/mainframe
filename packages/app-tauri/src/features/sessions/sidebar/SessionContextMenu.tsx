@@ -11,13 +11,14 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { CopyIcon, ArchiveIcon, PencilIcon, PinIcon, PinOffIcon } from 'lucide-react';
+import { CopyIcon, ArchiveIcon, PencilIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
 
 interface SessionContextMenuProps {
   pinned: boolean;
   onPin: () => void;
   onUnpin: () => void;
   onRename: () => void;
+  onTags: () => void;
   onArchive: () => void;
   claudeSessionId?: string;
   children: ReactNode;
@@ -28,6 +29,7 @@ export function SessionContextMenu({
   onPin,
   onUnpin,
   onRename,
+  onTags,
   onArchive,
   claudeSessionId,
   children,
@@ -49,6 +51,10 @@ export function SessionContextMenu({
         <ContextMenuItem data-testid="sessions-ctx-rename" onSelect={onRename}>
           <PencilIcon className="mr-2 size-3.5" />
           Rename
+        </ContextMenuItem>
+        <ContextMenuItem data-testid="sessions-ctx-tags" onSelect={onTags}>
+          <TagIcon className="mr-2 size-3.5" />
+          Tags
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem data-testid="sessions-ctx-archive" onSelect={onArchive} className="text-muted-foreground">

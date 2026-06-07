@@ -25,6 +25,7 @@ function renderAndOpen(props: {
   onPin?: () => void;
   onUnpin?: () => void;
   onRename?: () => void;
+  onTags?: () => void;
   onArchive?: () => void;
   claudeSessionId?: string;
 }) {
@@ -34,6 +35,7 @@ function renderAndOpen(props: {
       onPin={props.onPin ?? (() => undefined)}
       onUnpin={props.onUnpin ?? (() => undefined)}
       onRename={props.onRename ?? (() => undefined)}
+      onTags={props.onTags ?? (() => undefined)}
       onArchive={props.onArchive ?? (() => undefined)}
       claudeSessionId={props.claudeSessionId}
     >
@@ -155,5 +157,21 @@ describe('SessionContextMenu — copy-id item absent when claudeSessionId is und
   it('does not render sessions-ctx-copy-id when claudeSessionId is undefined', () => {
     renderAndOpen({ pinned: false, claudeSessionId: undefined });
     expect(screen.queryByTestId('sessions-ctx-copy-id')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Tags item is always present and clicking it calls onTags once
+// ---------------------------------------------------------------------------
+
+describe('SessionContextMenu — tags item always present and calls onTags', () => {
+  it('renders sessions-ctx-tags and calls onTags exactly once when clicked', async () => {
+    const onTags = vi.fn();
+    renderAndOpen({ pinned: false, onTags });
+
+    expect(screen.getByTestId('sessions-ctx-tags')).toBeTruthy();
+    await userEvent.click(screen.getByTestId('sessions-ctx-tags'));
+
+    expect(onTags).toHaveBeenCalledTimes(1);
   });
 });
