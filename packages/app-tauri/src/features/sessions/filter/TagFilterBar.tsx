@@ -29,7 +29,7 @@ const SYNTHETIC_LABELS: Record<SyntheticTag, string> = {
 };
 
 const CHIP_BASE = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs transition-colors shrink-0 border';
-const CHIP_ACTIVE = 'bg-primary/10 text-primary border-primary/30';
+const CHIP_ACTIVE = 'bg-mf-selection text-primary border-transparent';
 const CHIP_IDLE = 'bg-mf-chip text-muted-foreground hover:bg-accent hover:text-accent-foreground border-transparent';
 
 function TagPill({

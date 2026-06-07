@@ -2,13 +2,14 @@
  * SessionSidebar — the full left panel shell.
  *
  * Composition:
- *   header (+ New) → ProjectFilterPillBar → scrollable grouped list
+ *   header (+ New) → ProjectFilterPillBar → TagFilterBar → scrollable grouped list
  *
  * Data:
  *   - useAssistantRuntime().threads for the native thread list (mapped via threadsToSessionItems)
  *   - useProjects() for the project set (filter pills + grouping)
  *   - useSessionFilters() for project/tag/synthetic filter state
  *   - useUnreadStore() for attention counts
+ *   - useTagRegistry() for tag color resolution (TagFilterBar swatches)
  *   - groupSessions / applySessionFilters / attentionCount (pure VMs)
  */
 import { useMemo } from 'react';
@@ -27,6 +28,9 @@ import { threadsToSessionItems } from './use-session-items';
 import { SessionGroup } from './SessionGroup';
 import { SessionRow } from './SessionRow';
 import { ProjectFilterPillBar } from './ProjectFilterPillBar';
+import { TagFilterBar } from '../filter/TagFilterBar';
+import { useDaemonPort } from '../runtime/daemon-port-context';
+import { useTagRegistry } from '../tags/use-tag-registry';
 
 /**
  * Internal view of the thread list state as returned by the remote thread list
@@ -93,6 +97,8 @@ export function SessionSidebar() {
   const { filterProjectId, selectedTags, selectedSynthetic, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);
   const { projects } = useProjects();
+  const port = useDaemonPort();
+  const registry = useTagRegistry(port);
 
   const allItems = useMemo<SessionItem[]>(() => threadsToSessionItems(threads), [threads]);
 
@@ -138,6 +144,8 @@ export function SessionSidebar() {
         attentionCounts={attentionCounts}
         onSelect={setFilterProjectId}
       />
+
+      <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
 
       <div className="min-h-0 flex-1 overflow-y-auto py-0.5">
         {filteredItems.length === 0 ? (

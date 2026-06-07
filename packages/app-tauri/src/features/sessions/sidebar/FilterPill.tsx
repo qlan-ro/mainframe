@@ -1,11 +1,14 @@
 /**
  * FilterPill — shared pill button for the sidebar filter bars.
  *
- * Used by ProjectFilterPillBar (no swatch, optional attention badge) and reusable
- * by the tag filter bar (color swatch via bg-mf-tag-<color>). CSS-var tokens are
- * hex, so we NEVER use the `/opacity` modifier here — solid tokens only.
+ * Used by ProjectFilterPillBar (no swatch, optional attention badge). When a
+ * swatchColor is provided the swatch is painted via an inline style using the
+ * canonical oklch values from tag-colors.ts — NOT a `bg-mf-tag-*` class, which
+ * has no token in app-tauri's globals.css and would silently render nothing
+ * (MEMORY Tailwind trap).
  */
 import type { TagColor } from '@qlan-ro/mainframe-types';
+import { TAG_DOT_STYLE } from '../tags/tag-colors';
 
 export interface FilterPillProps {
   label: string;
@@ -41,7 +44,8 @@ export function FilterPill({
         <span
           data-testid={`${testId}-swatch`}
           aria-hidden="true"
-          className={`size-1.5 shrink-0 rounded-full bg-mf-tag-${swatchColor}`}
+          className="size-1.5 shrink-0 rounded-full"
+          style={TAG_DOT_STYLE(swatchColor)}
         />
       )}
       <span className="max-w-[140px] truncate">{label}</span>

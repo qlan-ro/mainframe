@@ -132,6 +132,34 @@ vi.mock('../ArchiveWorktreeDialog', () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Stub TagFilterBar — renders a sentinel div so test 8 can assert its presence
+// ---------------------------------------------------------------------------
+
+vi.mock('../../filter/TagFilterBar', () => ({
+  TagFilterBar: () => <div data-testid="sessions-tag-filter-bar" />,
+}));
+
+// ---------------------------------------------------------------------------
+// Stub daemon-port-context + use-tag-registry so the sidebar can call them
+// ---------------------------------------------------------------------------
+
+vi.mock('../../runtime/daemon-port-context', () => ({
+  useDaemonPort: () => 31415,
+}));
+
+vi.mock('../../tags/use-tag-registry', () => ({
+  useTagRegistry: () => ({
+    tags: [],
+    loading: false,
+    refresh: async () => undefined,
+    create: async () => undefined,
+    update: async () => undefined,
+    remove: async () => undefined,
+    colorOf: () => 'blue',
+  }),
+}));
+
+// ---------------------------------------------------------------------------
 // Import the component AFTER all mocks are registered
 // ---------------------------------------------------------------------------
 
@@ -278,5 +306,16 @@ describe('SessionSidebar — ProjectFilterPillBar is rendered', () => {
   it('renders data-testid="sessions-filter-pill-all"', () => {
     render(<SessionSidebar />);
     expect(screen.getByTestId('sessions-filter-pill-all')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. TagFilterBar is mounted (sessions-tag-filter-bar present)
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — TagFilterBar is mounted below ProjectFilterPillBar', () => {
+  it('renders data-testid="sessions-tag-filter-bar"', () => {
+    render(<SessionSidebar />);
+    expect(screen.getByTestId('sessions-tag-filter-bar')).toBeTruthy();
   });
 });
