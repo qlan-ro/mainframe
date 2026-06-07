@@ -33,7 +33,12 @@ let reloadSpy: ReturnType<typeof vi.fn>;
 // Values that tests can mutate before re-render to control hook behaviour
 let filterProjectIdValue: string | null;
 let mainThreadIdValue: string | null;
-let fakeThreadItems: Array<{ id: string; remoteId: string; status?: string; custom?: { projectId?: string } }>;
+let fakeThreadItems: Array<{
+  id: string;
+  remoteId: string;
+  status?: string;
+  custom?: { projectId?: string; updatedAt?: number };
+}>;
 
 // Captured from the createSessionListRouter factory mock
 let capturedDeps: {
@@ -293,6 +298,112 @@ describe('useSessionListRouter — dispose is called on unmount', () => {
     unmount();
 
     expect(disposeSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Boot auto-select tests (new — one-shot most-recent non-archived session)
+// ---------------------------------------------------------------------------
+
+/**
+ * Helper: build a fakeThreadItems entry that carries an updatedAt in custom so
+ * threadItemsToSessionItems projects it to a full SessionItem with the right
+ * updatedAt, which pickInitialSession then ranks.
+ */
+function bootItem(
+  id: string,
+  updatedAt: number,
+  status: 'regular' | 'archived' = 'regular',
+  projectId = 'proj-boot',
+): (typeof fakeThreadItems)[number] {
+  return { id, remoteId: id, status, custom: { projectId, updatedAt } };
+}
+
+// ---------------------------------------------------------------------------
+// 13. Boot auto-select: __LOCALID_* draft → switchToThread(most-recent non-archived)
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — boot auto-select when on a __LOCALID_* draft', () => {
+  it('calls switchSpy once with "chat-newest" (most-recent non-archived) when mainThreadId is a draft', () => {
+    mainThreadIdValue = '__LOCALID_abc123';
+    fakeThreadItems = [bootItem('chat-oldest', 1000), bootItem('chat-newest', 3000), bootItem('chat-middle', 2000)];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-newest');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14. Boot auto-select: mainThreadId null → switchToThread(most-recent non-archived)
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — boot auto-select when mainThreadId is null', () => {
+  it('calls switchSpy once with "chat-b" when mainThreadId is null and sessions load', () => {
+    mainThreadIdValue = null;
+    fakeThreadItems = [bootItem('chat-a', 500), bootItem('chat-b', 1500)];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-b');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. No boot auto-select: already on a real (non-draft) thread
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — no boot auto-select when already on a real thread', () => {
+  it('does NOT call switchSpy for the boot effect when mainThreadId is already a real session id', () => {
+    // Use a non-archived active session as the current thread so the
+    // archived-active fallback effect also stays silent, isolating boot behavior.
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [bootItem('chat-A', 1000), bootItem('chat-B', 2000)];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. One-shot: auto-select fires only on the first non-empty list
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — boot auto-select is one-shot', () => {
+  it('calls switchSpy only once even after the items change a second time', () => {
+    mainThreadIdValue = '__LOCALID_xyz';
+    fakeThreadItems = [bootItem('chat-first', 1000)];
+
+    const { rerender } = renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-first');
+
+    // Simulate a later items update (e.g. daemon reload adds more sessions)
+    fakeThreadItems = [bootItem('chat-first', 1000), bootItem('chat-second', 9000)];
+
+    rerender();
+
+    // The one-shot ref is consumed; switchSpy must NOT be called again
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. Boot auto-select: empty list → switchSpy not called
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — boot auto-select does nothing on empty list', () => {
+  it('does NOT call switchSpy when the items list is empty at boot', () => {
+    mainThreadIdValue = '__LOCALID_empty';
+    fakeThreadItems = [];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).not.toHaveBeenCalled();
   });
 });
 
