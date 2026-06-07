@@ -1,14 +1,16 @@
 /**
- * Horizontal scrollable tag + synthetic filter bar pinned at the BOTTOM of the
- * sidebar (artboard "Tag filter row … sits above bottom panel"). Reads the
- * in-use tag set from the loaded items and dispatches toggles into the
- * session-filters store.
+ * Wrapping, collapsible tag + synthetic filter bar pinned at the BOTTOM of the
+ * sidebar (artboard "Tag filter row … sits above bottom panel"). Wraps to
+ * multiple lines and collapses to the first 4 tags with a "+N more"/"Less"
+ * toggle (synthetic has-pr/has-worktree chips reveal when expanded) — no
+ * horizontal scroll. Reads the in-use tag set from the loaded items and
+ * dispatches toggles into the session-filters store.
  *
  * Color swatches use an inline style from tag-colors.ts — never a
  * `bg-mf-tag-*` utility, which has no token in app-tauri's globals.css and
  * would silently render nothing (MEMORY Tailwind trap).
  */
-import React from 'react';
+import React, { useState } from 'react';
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
 import { cn } from '../../../lib/utils';
@@ -88,18 +90,25 @@ export function TagFilterBar({ items, filterProjectId, registry }: Props): React
   const toggleTag = useSessionFilters((s) => s.toggleTag);
   const toggleSynthetic = useSessionFilters((s) => s.toggleSynthetic);
 
+  const [expanded, setExpanded] = useState(false);
+
   const inUse = tagsInUse(items, filterProjectId);
   const visibleSynthetic = SYNTHETIC_TAGS.filter((kind) => hasSynthetic(items, kind));
 
   if (inUse.length === 0 && visibleSynthetic.length === 0) return null;
 
+  const COLLAPSE_AT = 4;
+  const shownTags = expanded ? inUse : inUse.slice(0, COLLAPSE_AT);
+  const hiddenCount = Math.max(0, inUse.length - COLLAPSE_AT) + visibleSynthetic.length;
+  const collapsible = hiddenCount > 0;
+
   return (
     <div
       data-testid="sessions-tag-filter-bar"
-      className="flex flex-shrink-0 items-center gap-1.5 overflow-x-auto border-t border-border/60 px-3 py-1.5 scrollbar-none"
+      className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-t border-border/60 px-3 py-1.5"
     >
       <span className="shrink-0 select-none text-micro font-semibold uppercase tracking-wide text-mf-text-3">Tags</span>
-      {inUse.map((name) => (
+      {shownTags.map((name) => (
         <TagPill
           key={name}
           name={name}
@@ -108,14 +117,26 @@ export function TagFilterBar({ items, filterProjectId, registry }: Props): React
           onClick={() => toggleTag(name)}
         />
       ))}
-      {visibleSynthetic.map((kind) => (
-        <SyntheticChip
-          key={kind}
-          kind={kind}
-          active={selectedSynthetic.has(kind)}
-          onClick={() => toggleSynthetic(kind)}
-        />
-      ))}
+      {expanded &&
+        visibleSynthetic.map((kind) => (
+          <SyntheticChip
+            key={kind}
+            kind={kind}
+            active={selectedSynthetic.has(kind)}
+            onClick={() => toggleSynthetic(kind)}
+          />
+        ))}
+      {collapsible && (
+        <button
+          type="button"
+          data-testid="sessions-tag-filter-more"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+          className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[11px] bg-accent px-2 text-caption font-semibold tracking-[-0.05px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {expanded ? 'Less' : `+${hiddenCount} more`}
+        </button>
+      )}
     </div>
   );
 }
