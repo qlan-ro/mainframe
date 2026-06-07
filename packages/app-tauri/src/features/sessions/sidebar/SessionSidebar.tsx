@@ -132,7 +132,10 @@ export function SessionSidebar() {
         onSelect={setFilterProjectId}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto py-0.5">
+      <div
+        className="mf-thin-scrollbar overscroll-contain min-h-0 flex-1 overflow-y-auto py-0.5"
+        data-testid="sessions-list-scroll"
+      >
         {filteredItems.length === 0 ? (
           <EmptyState hasFilters={hasFilters} />
         ) : (
