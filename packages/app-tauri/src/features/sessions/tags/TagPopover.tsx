@@ -23,19 +23,12 @@ import type { TagColor } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '../../../components/ui/popover';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '../../../components/ui/dialog';
 import { setChatTags } from '../../../lib/api/tags';
 import { validateTagName, tagNameErrorMessage } from './validate-tag-name';
 import { buildTagCascade, type ThreadTagSnapshot, type TagCascadeUpdate } from './build-tag-cascade';
 import { TagRegistryItemMenu } from './TagRegistryItemMenu';
 import { TagRecolorPanel } from './TagRecolorPanel';
+import { TagDeleteConfirm } from './TagDeleteConfirm';
 import { TAG_DOT_STYLE } from './tag-colors';
 import type { TagRegistry } from './use-tag-registry';
 
@@ -270,43 +263,13 @@ export function TagPopover({
           )}
         </PopoverContent>
       </Popover>
-      {/* Dialog is a sibling of Popover, not nested inside PopoverContent, to avoid
-          nested Radix FocusScope conflicts (two focus-trapping layers recurse in jsdom). */}
-      <Dialog
-        open={confirmDelete !== null}
-        onOpenChange={(o) => {
-          if (!o) setConfirmDelete(null);
-        }}
-      >
-        <DialogContent data-testid="sessions-tag-delete-confirm">
-          <DialogHeader>
-            <DialogTitle>Delete tag</DialogTitle>
-            <DialogDescription>
-              Delete &quot;{confirmDelete}&quot;? This removes it from all sessions.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              data-testid="sessions-tag-delete-confirm-cancel"
-              onClick={() => setConfirmDelete(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              data-testid="sessions-tag-delete-confirm-ok"
-              onClick={() => {
-                if (confirmDelete) void remove(confirmDelete);
-              }}
-            >
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* TagDeleteConfirm is a sibling of Popover, not nested inside PopoverContent,
+          to avoid nested Radix FocusScope conflicts (two focus-trapping layers recurse). */}
+      <TagDeleteConfirm
+        tagName={confirmDelete}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={(name) => void remove(name)}
+      />
     </>
   );
 }
