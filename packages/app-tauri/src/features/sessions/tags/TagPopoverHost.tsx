@@ -47,6 +47,7 @@ export function TagPopoverHost({ port }: { port: number }) {
       registry={registry}
       threads={threads}
       onCascade={(updates) => void applyCascade(updates)}
+      onReload={() => void runtime.threads.reload()}
     />
   );
 }

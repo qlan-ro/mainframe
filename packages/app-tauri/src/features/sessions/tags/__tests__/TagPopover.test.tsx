@@ -445,3 +445,62 @@ describe('TagPopover — Escape on search input calls onClose', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 19. Tag toggle calls onReload after success (MED-3/4)
+// ---------------------------------------------------------------------------
+
+describe('TagPopover — toggle calls onReload after setChatTags resolves', () => {
+  it('calls onReload exactly once after successfully toggling a tag', async () => {
+    const onReload = vi.fn();
+    render(
+      <TagPopover
+        open={true}
+        onClose={vi.fn()}
+        chatId="chat-1"
+        port={31415}
+        currentTags={[]}
+        registry={makeRegistry()}
+        threads={TWO_THREADS}
+        onCascade={vi.fn()}
+        onReload={onReload}
+      />,
+    );
+
+    await userEvent.click(screen.getByTestId('sessions-tag-toggle-alpha'));
+
+    expect(mockSetChatTags).toHaveBeenCalledTimes(1);
+    expect(onReload).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 20. Create-and-apply calls onReload after success (MED-3/4)
+// ---------------------------------------------------------------------------
+
+describe('TagPopover — createAndApply calls onReload after setChatTags resolves', () => {
+  it('calls onReload exactly once after successfully creating and applying a tag', async () => {
+    const onReload = vi.fn();
+    const registry = makeRegistry([]);
+    render(
+      <TagPopover
+        open={true}
+        onClose={vi.fn()}
+        chatId="chat-1"
+        port={31415}
+        currentTags={[]}
+        registry={registry}
+        threads={TWO_THREADS}
+        onCascade={vi.fn()}
+        onReload={onReload}
+      />,
+    );
+
+    const search = screen.getByTestId('sessions-tag-popover-search');
+    await userEvent.type(search, 'newt');
+    await userEvent.click(screen.getByTestId('sessions-tag-popover-create'));
+
+    expect(mockSetChatTags).toHaveBeenCalledTimes(1);
+    expect(onReload).toHaveBeenCalledTimes(1);
+  });
+});

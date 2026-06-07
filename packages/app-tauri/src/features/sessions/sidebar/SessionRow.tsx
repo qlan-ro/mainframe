@@ -70,6 +70,7 @@ function SessionRowInner({ item, colorOf }: { item: SessionItem; colorOf: (name:
   const { custom } = item;
   const port = useDaemonPort();
   const itemRuntime = useThreadListItemRuntime();
+  const assistantRuntime = useAssistantRuntime();
   const isUnread = useUnreadStore((s) => s.isUnread(item.id));
   const status = deriveSessionStatus(custom, isUnread);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -82,15 +83,19 @@ function SessionRowInner({ item, colorOf }: { item: SessionItem; colorOf: (name:
   }
 
   function handlePin() {
-    void pinChat(port, item.id, true).catch((e: unknown) => {
-      console.warn('[SessionRow] pinChat failed', e);
-    });
+    void pinChat(port, item.id, true)
+      .then(() => assistantRuntime.threads.reload())
+      .catch((e: unknown) => {
+        console.warn('[SessionRow] pinChat failed', e);
+      });
   }
 
   function handleUnpin() {
-    void pinChat(port, item.id, false).catch((e: unknown) => {
-      console.warn('[SessionRow] unpinChat failed', e);
-    });
+    void pinChat(port, item.id, false)
+      .then(() => assistantRuntime.threads.reload())
+      .catch((e: unknown) => {
+        console.warn('[SessionRow] unpinChat failed', e);
+      });
   }
 
   function handleTags() {

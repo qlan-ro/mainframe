@@ -31,12 +31,25 @@ export function useSessionListRouter(): void {
   const threadItems = useAuiState((s) => s.threads.threadItems);
   const items = useMemo(() => threadItemsToSessionItems(threadItems), [threadItems]);
 
+  // Keep a ref so the router callback (created once in [runtime] effect) can
+  // read the current active thread id without closing over a stale value.
+  const mainThreadIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    mainThreadIdRef.current = mainThreadId ?? null;
+  }, [mainThreadId]);
+
   // Static WS → list wiring; created once, disposed on unmount.
   useEffect(() => {
     const router = createSessionListRouter(daemonWs, {
       onReload: () => void runtime.threads.reload(),
       onChatUpdated: (_chat: Chat) => void runtime.threads.reload(),
-      onMarkUnread: (id) => useUnreadStore.getState().markUnread(id),
+      onMarkUnread: (id) => {
+        // Skip marking unread when the notification is for the active thread —
+        // the active-thread effect already clears unread on focus, so marking
+        // it here would leave a stale dot until the next thread switch.
+        if (id === mainThreadIdRef.current) return;
+        useUnreadStore.getState().markUnread(id);
+      },
     });
     return () => router.dispose();
   }, [runtime]);

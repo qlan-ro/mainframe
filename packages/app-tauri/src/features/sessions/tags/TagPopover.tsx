@@ -41,6 +41,7 @@ interface Props {
   registry: TagRegistry;
   threads: ThreadTagSnapshot[];
   onCascade: (updates: TagCascadeUpdate[]) => void;
+  onReload?: () => void;
   children?: React.ReactNode;
 }
 
@@ -53,6 +54,7 @@ export function TagPopover({
   registry,
   threads,
   onCascade,
+  onReload,
   children,
 }: Props): React.ReactElement {
   const [query, setQuery] = useState('');
@@ -92,6 +94,7 @@ export function TagPopover({
     else next.add(name);
     try {
       await setChatTags(port, chatId, [...next]);
+      onReload?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update tags');
       console.warn('[tag-popover] toggle failed', err);
@@ -105,6 +108,7 @@ export function TagPopover({
       await registry.create(lower, undefined);
       await setChatTags(port, chatId, [...applied, lower]);
       setQuery('');
+      onReload?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Create failed');
       console.warn('[tag-popover] create failed', err);

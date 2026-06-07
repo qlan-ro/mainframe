@@ -295,3 +295,39 @@ describe('useSessionListRouter — dispose is called on unmount', () => {
     expect(disposeSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 12. onMarkUnread is a no-op for the currently active thread (MED-5)
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — onMarkUnread for active thread is a no-op', () => {
+  it('does NOT call markUnreadSpy when the marked id matches the active mainThreadId', () => {
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p1' } }];
+
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      capturedDeps.onMarkUnread('chat-A');
+    });
+
+    expect(markUnreadSpy).not.toHaveBeenCalled();
+  });
+
+  it('calls markUnreadSpy when the marked id is NOT the active mainThreadId', () => {
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p1' } },
+      { id: 'chat-B', remoteId: 'chat-B', custom: { projectId: 'p1' } },
+    ];
+
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      capturedDeps.onMarkUnread('chat-B');
+    });
+
+    expect(markUnreadSpy).toHaveBeenCalledTimes(1);
+    expect(markUnreadSpy).toHaveBeenCalledWith('chat-B');
+  });
+});

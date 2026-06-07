@@ -45,6 +45,9 @@ let __isUnread = false;
 const renameSpy = vi.fn();
 const archiveSpy = vi.fn();
 
+/** Spy on runtime.threads.reload — reset per test. */
+const reloadSpy = vi.fn();
+
 // ---------------------------------------------------------------------------
 // Mock @assistant-ui/react
 // ---------------------------------------------------------------------------
@@ -90,6 +93,7 @@ vi.mock('@assistant-ui/react', () => ({
     threads: {
       getState: () => ({ threadItems: { 'chat-1': {} } }),
       getItemById: (_id: string) => ({ rename: renameSpy, archive: archiveSpy }),
+      reload: reloadSpy,
     },
   }),
 
@@ -162,6 +166,8 @@ beforeEach(() => {
   __isUnread = false;
   renameSpy.mockReset();
   archiveSpy.mockReset();
+  reloadSpy.mockReset();
+  reloadSpy.mockResolvedValue(undefined);
   pinChatSpy.mockReset();
   pinChatSpy.mockResolvedValue({});
 });
@@ -317,5 +323,45 @@ describe('SessionRow — tag dots cluster when tags are present', () => {
   it('does not render sessions-row-meta-tag-dots when custom.tags is empty', () => {
     render(<SessionRow item={makeItem({ tags: [] })} />);
     expect(screen.queryByTestId('sessions-row-meta-tag-dots')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Pin triggers runtime.threads.reload() (MED-3/4)
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — pin calls runtime.threads.reload() on success', () => {
+  it('calls reloadSpy once after pinChat(true) resolves when sessions-ctx-pin is clicked', async () => {
+    // pinned=false so the context menu shows the "Pin" action
+    render(<SessionRow item={makeItem({ pinned: false })} />);
+
+    fireEvent.contextMenu(screen.getByTestId('sessions-row'));
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('sessions-ctx-pin'));
+    });
+
+    expect(pinChatSpy).toHaveBeenCalledTimes(1);
+    expect(pinChatSpy).toHaveBeenCalledWith(31415, 'chat-1', true);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Unpin triggers runtime.threads.reload() (MED-3/4)
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — unpin calls runtime.threads.reload() on success', () => {
+  it('calls reloadSpy once after pinChat(false) resolves when sessions-ctx-pin is clicked while pinned', async () => {
+    // pinned=true so the context menu shows the "Unpin" action
+    render(<SessionRow item={makeItem({ pinned: true })} />);
+
+    fireEvent.contextMenu(screen.getByTestId('sessions-row'));
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('sessions-ctx-pin'));
+    });
+
+    expect(pinChatSpy).toHaveBeenCalledTimes(1);
+    expect(pinChatSpy).toHaveBeenCalledWith(31415, 'chat-1', false);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 });
