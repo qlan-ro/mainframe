@@ -1,15 +1,23 @@
 /**
- * SessionRowMeta — adapter label + worktree pill + PR pill for session rows.
+ * SessionRowMeta — adapter label + worktree pill + PR pill + "Needs input"
+ * label + tag-dot cluster for session rows.
+ *
  * Kept separate so SessionRow stays under 300 lines.
  */
 
+import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
+import { TAG_DOT_STYLE } from '../tags/tag-colors';
+import type { SessionStatus } from '../view-model/session-status';
 
 interface SessionRowMetaProps {
   adapterId: string;
   worktreePath?: string;
   worktreeMissing: boolean;
   detectedPrs: DetectedPr[];
+  status?: SessionStatus;
+  tags?: string[];
+  colorOf?: (name: string) => TagColor;
 }
 
 function worktreeBasename(path: string): string {
@@ -17,7 +25,17 @@ function worktreeBasename(path: string): string {
   return parts[parts.length - 1] ?? path;
 }
 
-export function SessionRowMeta({ adapterId, worktreePath, worktreeMissing, detectedPrs }: SessionRowMetaProps) {
+export function SessionRowMeta({
+  adapterId,
+  worktreePath,
+  worktreeMissing,
+  detectedPrs,
+  status,
+  tags,
+  colorOf,
+}: SessionRowMetaProps) {
+  const visibleTags = tags != null && tags.length > 0 ? tags.slice(0, 4) : [];
+
   return (
     <div className="flex min-w-0 flex-shrink-0 items-center gap-1.5">
       <span data-testid="sessions-row-meta-adapter" className="truncate text-micro font-mono text-mf-text-3">
@@ -56,6 +74,31 @@ export function SessionRowMeta({ adapterId, worktreePath, worktreeMissing, detec
           #{pr.number}
         </a>
       ))}
+      {status === 'waiting' && (
+        <span
+          data-testid="sessions-row-meta-needs-input"
+          className="flex-shrink-0 text-micro font-semibold text-mf-warning"
+        >
+          Needs input
+        </span>
+      )}
+      {visibleTags.length > 0 && colorOf != null && (
+        <span
+          data-testid="sessions-row-meta-tag-dots"
+          className="ml-auto inline-flex flex-shrink-0 items-center gap-[3px]"
+          title={tags?.join(' · ')}
+        >
+          {visibleTags.map((name) => (
+            <span
+              key={name}
+              data-testid={`sessions-row-meta-tag-dot-${name}`}
+              className="inline-block size-1.5 rounded-full"
+              style={TAG_DOT_STYLE(colorOf(name))}
+              aria-hidden="true"
+            />
+          ))}
+        </span>
+      )}
     </div>
   );
 }

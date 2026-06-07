@@ -18,9 +18,11 @@ import {
 } from '@assistant-ui/react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { deriveSessionStatus, type SessionStatus } from '../view-model/session-status';
+import { formatRelativeTime } from '../view-model/relative-time';
 import { useUnreadStore } from '@/store/unread-store';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { pinChat } from '@/lib/api/chats';
+import { useTagRegistry } from '../tags/use-tag-registry';
 import { SessionRowMeta } from './SessionRowMeta';
 import { SessionRowRename } from './SessionRowRename';
 import { SessionContextMenu } from './SessionContextMenu';
@@ -29,7 +31,7 @@ import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
 const DOT_CLASS: Record<SessionStatus, string> = {
   'worktree-missing': 'size-1.5 bg-destructive',
   working: 'size-2 border-[1.5px] border-primary border-t-transparent animate-spin',
-  waiting: 'size-2 border-[1.5px] border-primary border-t-transparent animate-spin',
+  waiting: 'size-2 border-[1.5px] border-mf-warning border-t-transparent animate-spin',
   unread: 'size-1.5 bg-primary',
   idle: 'size-1.5 bg-mf-text-4 opacity-50',
 };
@@ -45,10 +47,7 @@ function StatusDot({ status }: { status: SessionStatus }) {
 }
 
 function RelativeTime({ updatedAt }: { updatedAt: number }) {
-  const text = new Date(updatedAt).toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const text = formatRelativeTime(updatedAt, Date.now());
   return (
     <span
       data-testid="sessions-row-relative-time"
@@ -66,6 +65,7 @@ function SessionRowInner({ item }: { item: SessionItem }) {
   const isUnread = useUnreadStore((s) => s.isUnread(item.id));
   const status = deriveSessionStatus(custom, isUnread);
   const [isRenaming, setIsRenaming] = useState(false);
+  const registry = useTagRegistry(port);
 
   const title = item.title ?? 'Untitled session';
 
@@ -140,6 +140,9 @@ function SessionRowInner({ item }: { item: SessionItem }) {
               worktreePath={custom.worktreePath}
               worktreeMissing={custom.worktreeMissing}
               detectedPrs={custom.detectedPrs}
+              status={status}
+              tags={custom.tags}
+              colorOf={registry.colorOf}
             />
           </div>
         </div>
@@ -148,11 +151,20 @@ function SessionRowInner({ item }: { item: SessionItem }) {
   );
 }
 
+/**
+ * Guard: check whether the thread item exists in the store BEFORE calling
+ * getItemById. getItemById constructs a ShallowMemoizeSubject that throws
+ * synchronously ("Entry not available in the store") when the item is absent —
+ * reachable during optimistic archive/delete removal or a cross-window reload
+ * race. We read getState().threadItems (a plain Record) first; only if the id
+ * is present do we call getItemById to get the live runtime binding.
+ */
 export function SessionRow({ item }: { item: SessionItem }) {
   const threadListRuntime = useAssistantRuntime().threads;
-  const itemRuntime = threadListRuntime?.getItemById(item.id) ?? null;
-  if (itemRuntime == null) return null;
+  const threadItems = threadListRuntime?.getState().threadItems;
+  if (threadItems == null || !(item.id in threadItems)) return null;
 
+  const itemRuntime = threadListRuntime.getItemById(item.id);
   return (
     <ThreadListItemRuntimeProvider runtime={itemRuntime}>
       <SessionRowInner item={item} />

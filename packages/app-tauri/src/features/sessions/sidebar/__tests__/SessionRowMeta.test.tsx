@@ -96,3 +96,85 @@ describe('SessionRowMeta — empty state', () => {
     expect(screen.queryByTestId('sessions-row-meta-pr')).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6. "Needs input" label renders when status='waiting'
+// ---------------------------------------------------------------------------
+
+describe('SessionRowMeta — Needs input label', () => {
+  it('renders data-testid="sessions-row-meta-needs-input" with text "Needs input" when status="waiting"', () => {
+    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} status="waiting" />);
+    const label = screen.getByTestId('sessions-row-meta-needs-input');
+    expect(label.textContent).toBe('Needs input');
+  });
+
+  it('does not render sessions-row-meta-needs-input when status is not "waiting"', () => {
+    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} status="idle" />);
+    expect(screen.queryByTestId('sessions-row-meta-needs-input')).toBeNull();
+  });
+
+  it('does not render sessions-row-meta-needs-input when status is undefined', () => {
+    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} />);
+    expect(screen.queryByTestId('sessions-row-meta-needs-input')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Tag dots cluster renders for non-empty tags with a colorOf resolver
+// ---------------------------------------------------------------------------
+
+describe('SessionRowMeta — tag dots cluster', () => {
+  const colorOf = (_name: string) => 'blue' as const;
+
+  it('renders data-testid="sessions-row-meta-tag-dots" when tags=["alpha","beta"] and colorOf is provided', () => {
+    render(
+      <SessionRowMeta
+        adapterId="claude"
+        worktreeMissing={false}
+        detectedPrs={[]}
+        tags={['alpha', 'beta']}
+        colorOf={colorOf}
+      />,
+    );
+    expect(screen.getByTestId('sessions-row-meta-tag-dots')).toBeTruthy();
+  });
+
+  it('renders individual dot for each tag keyed by name', () => {
+    render(
+      <SessionRowMeta
+        adapterId="claude"
+        worktreeMissing={false}
+        detectedPrs={[]}
+        tags={['alpha', 'beta']}
+        colorOf={colorOf}
+      />,
+    );
+    expect(screen.getByTestId('sessions-row-meta-tag-dot-alpha')).toBeTruthy();
+    expect(screen.getByTestId('sessions-row-meta-tag-dot-beta')).toBeTruthy();
+  });
+
+  it('slices to at most 4 dots when tags has more than 4 entries', () => {
+    render(
+      <SessionRowMeta
+        adapterId="claude"
+        worktreeMissing={false}
+        detectedPrs={[]}
+        tags={['a', 'b', 'c', 'd', 'e']}
+        colorOf={colorOf}
+      />,
+    );
+    const cluster = screen.getByTestId('sessions-row-meta-tag-dots');
+    expect(cluster.children.length).toBe(4);
+    expect(screen.queryByTestId('sessions-row-meta-tag-dot-e')).toBeNull();
+  });
+
+  it('does not render tag-dots when tags is empty', () => {
+    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} tags={[]} colorOf={colorOf} />);
+    expect(screen.queryByTestId('sessions-row-meta-tag-dots')).toBeNull();
+  });
+
+  it('does not render tag-dots when colorOf is not provided', () => {
+    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} tags={['alpha']} />);
+    expect(screen.queryByTestId('sessions-row-meta-tag-dots')).toBeNull();
+  });
+});

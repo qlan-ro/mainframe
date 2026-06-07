@@ -88,6 +88,7 @@ vi.mock('@assistant-ui/react', () => ({
 
   useAssistantRuntime: () => ({
     threads: {
+      getState: () => ({ threadItems: { 'chat-1': {} } }),
       getItemById: (_id: string) => ({ rename: renameSpy, archive: archiveSpy }),
     },
   }),
@@ -113,6 +114,22 @@ vi.mock('@/store/unread-store', () => ({
 
 vi.mock('../../runtime/daemon-port-context', () => ({
   useDaemonPort: () => 31415,
+}));
+
+// ---------------------------------------------------------------------------
+// Mock ../../tags/use-tag-registry
+// ---------------------------------------------------------------------------
+
+vi.mock('../../tags/use-tag-registry', () => ({
+  useTagRegistry: () => ({
+    tags: [],
+    loading: false,
+    refresh: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    colorOf: (_name: string) => 'blue' as const,
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -283,5 +300,38 @@ describe('SessionRow — relative time renders non-empty text', () => {
     render(<SessionRow item={makeItem({ updatedAt: 1749284160000 })} />);
     const timeEl = screen.getByTestId('sessions-row-relative-time');
     expect(timeEl.textContent?.trim().length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. "Needs input" label visible when hasPending=true (waiting status)
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — "Needs input" label when status is waiting', () => {
+  it('renders sessions-row-meta-needs-input with text "Needs input" when hasPending=true', () => {
+    render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
+    const label = screen.getByTestId('sessions-row-meta-needs-input');
+    expect(label.textContent).toBe('Needs input');
+  });
+
+  it('does not render sessions-row-meta-needs-input when status is idle', () => {
+    render(<SessionRow item={makeItem({ hasPending: false, displayStatus: 'idle' })} />);
+    expect(screen.queryByTestId('sessions-row-meta-needs-input')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Tag dots cluster renders when custom.tags is non-empty
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — tag dots cluster when tags are present', () => {
+  it('renders sessions-row-meta-tag-dots when custom.tags has entries', () => {
+    render(<SessionRow item={makeItem({ tags: ['alpha', 'beta'] })} />);
+    expect(screen.getByTestId('sessions-row-meta-tag-dots')).toBeTruthy();
+  });
+
+  it('does not render sessions-row-meta-tag-dots when custom.tags is empty', () => {
+    render(<SessionRow item={makeItem({ tags: [] })} />);
+    expect(screen.queryByTestId('sessions-row-meta-tag-dots')).toBeNull();
   });
 });
