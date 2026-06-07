@@ -11,6 +11,7 @@
  */
 import { create } from 'zustand';
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
+import type { SortMode } from '@/features/sessions/view-model/group-sessions';
 
 const STORAGE_KEY = 'mf:filterProjectId';
 
@@ -18,9 +19,12 @@ interface SessionFiltersState {
   filterProjectId: string | null;
   selectedTags: Set<string>;
   selectedSynthetic: Set<SyntheticTag>;
+  /** Active sessions-list sort: drives arrangeSessions grouping/ordering. */
+  sortMode: SortMode;
   setFilterProjectId: (id: string | null) => void;
   toggleTag: (t: string) => void;
   toggleSynthetic: (s: SyntheticTag) => void;
+  setSortMode: (mode: SortMode) => void;
   clearFilters: () => void;
 }
 
@@ -36,11 +40,14 @@ export const useSessionFilters = create<SessionFiltersState>((set) => ({
   filterProjectId: localStorage.getItem(STORAGE_KEY),
   selectedTags: new Set<string>(),
   selectedSynthetic: new Set<SyntheticTag>(),
+  sortMode: 'recent',
 
   setFilterProjectId: (id) => {
     persistProjectId(id);
     set({ filterProjectId: id });
   },
+
+  setSortMode: (mode) => set({ sortMode: mode }),
 
   toggleTag: (t) =>
     set((state) => {

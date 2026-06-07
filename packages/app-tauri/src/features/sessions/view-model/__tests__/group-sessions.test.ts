@@ -1,18 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import type { Project } from '@qlan-ro/mainframe-types';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
-import { groupSessions } from '../group-sessions';
+import { arrangeSessions, SESSION_SORTS } from '../group-sessions';
 
 // ---------------------------------------------------------------------------
-// Fixtures
+// Fixed reference clock — 2026-06-07T12:00:00 local time.
+// All buckets are computed relative to this fixed `now` (passed explicitly so
+// the view-model stays pure and the assertions are deterministic).
 // ---------------------------------------------------------------------------
 
-function item(id: string, projectId: string, overrides: Partial<SessionCustom> = {}): SessionItem {
+const NOW = new Date(2026, 5, 7, 12, 0, 0).getTime(); // Sun Jun 7 2026 12:00 local
+const TODAY_0900 = new Date(2026, 5, 7, 9, 0, 0).getTime();
+const TODAY_1100 = new Date(2026, 5, 7, 11, 0, 0).getTime();
+const YESTERDAY_1000 = new Date(2026, 5, 6, 10, 0, 0).getTime();
+const EARLIER_MON = new Date(2026, 5, 1, 8, 0, 0).getTime();
+
+function item(id: string, overrides: Partial<SessionCustom> & { title?: string } = {}): SessionItem {
+  const { title, ...custom } = overrides;
   return {
     id,
+    title: title ?? `Session ${id}`,
     status: 'regular',
     custom: {
-      projectId,
+      projectId: 'proj-a',
       adapterId: 'claude',
       tags: [],
       pinned: false,
@@ -21,182 +30,126 @@ function item(id: string, projectId: string, overrides: Partial<SessionCustom> =
       hasPending: false,
       detectedPrs: [],
       worktreeMissing: false,
-      updatedAt: 1000,
-      ...overrides,
+      updatedAt: TODAY_1100,
+      ...custom,
     },
   };
 }
 
-const PROJECTS: Project[] = [
-  { id: 'proj-a', name: 'Alpha', path: '/a', createdAt: '', lastOpenedAt: '' },
-  { id: 'proj-b', name: 'Beta', path: '/b', createdAt: '', lastOpenedAt: '' },
-];
+function labels(groups: { label: string }[]): string[] {
+  return groups.map((g) => g.label);
+}
+
+function idsOf(groups: { label: string; items: SessionItem[] }[], label: string): string[] {
+  return (groups.find((g) => g.label === label)?.items ?? []).map((i) => i.id);
+}
 
 // ---------------------------------------------------------------------------
-// groupSessions — groups by projectId
+// SESSION_SORTS — the menu options
 // ---------------------------------------------------------------------------
 
-describe('groupSessions — groups by projectId', () => {
-  it('returns two groups when items span two projects', () => {
-    const items = [
-      item('s1', 'proj-a', { updatedAt: 1000 }),
-      item('s2', 'proj-b', { updatedAt: 1000 }),
-      item('s3', 'proj-a', { updatedAt: 1000 }),
-    ];
-    const groups = groupSessions(items, { filterProjectId: null, projects: PROJECTS });
-    expect(groups).toHaveLength(2);
+describe('SESSION_SORTS', () => {
+  it('exposes recent / name / status options in order', () => {
+    expect(SESSION_SORTS.map((s) => s.id)).toEqual(['recent', 'name', 'status']);
   });
 
-  it('group proj-a has 2 items with ids s1 and s3, and projectName Alpha', () => {
-    const items = [
-      item('s1', 'proj-a', { updatedAt: 1000 }),
-      item('s2', 'proj-b', { updatedAt: 1000 }),
-      item('s3', 'proj-a', { updatedAt: 1000 }),
-    ];
-    const groups = groupSessions(items, { filterProjectId: null, projects: PROJECTS });
-    const groupA = groups.find((g) => g.projectId === 'proj-a');
-    expect(groupA).toBeDefined();
-    expect(groupA!.projectName).toBe('Alpha');
-    expect(groupA!.items).toHaveLength(2);
-    const ids = groupA!.items.map((i) => i.id);
-    expect(ids).toContain('s1');
-    expect(ids).toContain('s3');
-  });
-
-  it('group proj-b has 1 item with id s2 and projectName Beta', () => {
-    const items = [
-      item('s1', 'proj-a', { updatedAt: 1000 }),
-      item('s2', 'proj-b', { updatedAt: 1000 }),
-      item('s3', 'proj-a', { updatedAt: 1000 }),
-    ];
-    const groups = groupSessions(items, { filterProjectId: null, projects: PROJECTS });
-    const groupB = groups.find((g) => g.projectId === 'proj-b');
-    expect(groupB).toBeDefined();
-    expect(groupB!.projectName).toBe('Beta');
-    expect(groupB!.items).toHaveLength(1);
-    expect(groupB!.items[0]?.id).toBe('s2');
+  it('labels each option', () => {
+    expect(SESSION_SORTS.map((s) => s.label)).toEqual(['Recent activity', 'Name (A–Z)', 'Status']);
   });
 });
 
 // ---------------------------------------------------------------------------
-// groupSessions — unknown project name fallback
+// mode 'recent' — Pinned + time buckets (Today / Yesterday / Earlier)
 // ---------------------------------------------------------------------------
 
-describe('groupSessions — unknown project name fallback', () => {
-  it('falls back to the projectId string when no matching project exists', () => {
-    const items = [item('s1', 'proj-unknown', { updatedAt: 1000 })];
-    const groups = groupSessions(items, { filterProjectId: null, projects: PROJECTS });
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.projectName).toBe('proj-unknown');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// groupSessions — pinned-first within a group
-// ---------------------------------------------------------------------------
-
-describe('groupSessions — pinned-first within a group', () => {
-  it('orders pinned item first, then non-pinned by updatedAt desc', () => {
+describe("arrangeSessions mode 'recent'", () => {
+  it('emits exactly Pinned, Today, Yesterday, Earlier (non-empty, in order)', () => {
     const items = [
-      item('s1', 'proj-a', { updatedAt: 2000, pinned: false }),
-      item('s2', 'proj-a', { updatedAt: 1000, pinned: true }),
-      item('s3', 'proj-a', { updatedAt: 3000, pinned: false }),
+      item('pin1', { pinned: true, updatedAt: EARLIER_MON }),
+      item('today1', { updatedAt: TODAY_1100 }),
+      item('yest1', { updatedAt: YESTERDAY_1000 }),
+      item('old1', { updatedAt: EARLIER_MON }),
     ];
-    const groups = groupSessions(items, { filterProjectId: null, projects: PROJECTS });
-    const groupA = groups.find((g) => g.projectId === 'proj-a');
-    expect(groupA).toBeDefined();
-    expect(groupA!.items.map((i) => i.id)).toEqual(['s2', 's3', 's1']);
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(labels(groups)).toEqual(['Pinned', 'Today', 'Yesterday', 'Earlier']);
+  });
+
+  it('excludes pinned items from the time buckets', () => {
+    const items = [item('pin1', { pinned: true, updatedAt: TODAY_1100 }), item('today1', { updatedAt: TODAY_1100 })];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(idsOf(groups, 'Pinned')).toEqual(['pin1']);
+    expect(idsOf(groups, 'Today')).toEqual(['today1']);
+  });
+
+  it('orders within the Today bucket by updatedAt desc', () => {
+    const items = [item('early', { updatedAt: TODAY_0900 }), item('late', { updatedAt: TODAY_1100 })];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(idsOf(groups, 'Today')).toEqual(['late', 'early']);
+  });
+
+  it('omits the Pinned group when there are no pinned items', () => {
+    const items = [item('today1', { updatedAt: TODAY_1100 })];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(labels(groups)).toEqual(['Today']);
+  });
+
+  it('omits empty time buckets', () => {
+    const items = [item('old1', { updatedAt: EARLIER_MON })];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(labels(groups)).toEqual(['Earlier']);
+  });
+
+  it('returns an empty array for no items', () => {
+    expect(arrangeSessions([], 'recent', NOW)).toEqual([]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// groupSessions — within pinned tier, sort by updatedAt desc
+// mode 'name' — Pinned + a single A–Z group
 // ---------------------------------------------------------------------------
 
-describe('groupSessions — within pinned tier, sort by updatedAt desc', () => {
-  it('sorts two pinned items by updatedAt desc: s2 (1500) before s1 (500)', () => {
+describe("arrangeSessions mode 'name'", () => {
+  it('emits Pinned then A–Z, with rest alphabetised by title', () => {
     const items = [
-      item('s1', 'proj-a', { updatedAt: 500, pinned: true }),
-      item('s2', 'proj-a', { updatedAt: 1500, pinned: true }),
+      item('p', { pinned: true, title: 'Zeta pinned' }),
+      item('c', { title: 'Charlie' }),
+      item('a', { title: 'Alpha' }),
+      item('b', { title: 'Bravo' }),
     ];
-    const groups = groupSessions(items, { filterProjectId: null, projects: PROJECTS });
-    const groupA = groups.find((g) => g.projectId === 'proj-a');
-    expect(groupA).toBeDefined();
-    expect(groupA!.items.map((i) => i.id)).toEqual(['s2', 's1']);
+    const groups = arrangeSessions(items, 'name', NOW);
+    expect(labels(groups)).toEqual(['Pinned', 'A–Z']);
+    expect(idsOf(groups, 'A–Z')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('omits the Pinned group when no items are pinned', () => {
+    const items = [item('b', { title: 'Bravo' }), item('a', { title: 'Alpha' })];
+    const groups = arrangeSessions(items, 'name', NOW);
+    expect(labels(groups)).toEqual(['A–Z']);
+    expect(idsOf(groups, 'A–Z')).toEqual(['a', 'b']);
   });
 });
 
 // ---------------------------------------------------------------------------
-// groupSessions — filterProjectId set → flat single group
+// mode 'status' — a single By status group ranked working→waiting→idle
 // ---------------------------------------------------------------------------
 
-describe('groupSessions — filterProjectId set', () => {
-  it('returns exactly one group containing only proj-a items', () => {
+describe("arrangeSessions mode 'status'", () => {
+  it('orders By status working then waiting then idle', () => {
     const items = [
-      item('s1', 'proj-a', { updatedAt: 1000 }),
-      item('s2', 'proj-b', { updatedAt: 1000 }),
-      item('s3', 'proj-a', { updatedAt: 1000 }),
+      item('idle1', { displayStatus: 'idle' }),
+      item('working1', { displayStatus: 'working' }),
+      item('waiting1', { displayStatus: 'waiting' }),
     ];
-    const groups = groupSessions(items, { filterProjectId: 'proj-a', projects: PROJECTS });
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.projectId).toBe('proj-a');
-    expect(groups[0]?.projectName).toBe('Alpha');
-    expect(groups[0]?.items).toHaveLength(2);
-    const ids = groups[0]!.items.map((i) => i.id);
-    expect(ids).toContain('s1');
-    expect(ids).toContain('s3');
-    expect(ids).not.toContain('s2');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// groupSessions — count equals items length
-// ---------------------------------------------------------------------------
-
-describe('groupSessions — count equals items length', () => {
-  it('group proj-a count is 2 for two proj-a items', () => {
-    const items = [
-      item('s1', 'proj-a', { updatedAt: 1000 }),
-      item('s2', 'proj-b', { updatedAt: 1000 }),
-      item('s3', 'proj-a', { updatedAt: 1000 }),
-    ];
-    const groups = groupSessions(items, { filterProjectId: null, projects: PROJECTS });
-    const groupA = groups.find((g) => g.projectId === 'proj-a');
-    expect(groupA!.count).toBe(2);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// groupSessions — empty items list
-// ---------------------------------------------------------------------------
-
-describe('groupSessions — empty items list', () => {
-  it('returns an empty array', () => {
-    expect(groupSessions([], { filterProjectId: null, projects: PROJECTS })).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// groupSessions — stable order across equal updatedAt
-// ---------------------------------------------------------------------------
-
-describe('groupSessions — stable order across equal updatedAt', () => {
-  it('neither item is dropped when both have the same updatedAt', () => {
-    const items = [item('s1', 'proj-a', { updatedAt: 1000 }), item('s2', 'proj-a', { updatedAt: 1000 })];
-    const groups = groupSessions(items, { filterProjectId: null, projects: PROJECTS });
-    const groupA = groups.find((g) => g.projectId === 'proj-a');
-    expect(groupA!.items).toHaveLength(2);
+    const groups = arrangeSessions(items, 'status', NOW);
+    expect(labels(groups)).toEqual(['By status']);
+    expect(idsOf(groups, 'By status')).toEqual(['working1', 'waiting1', 'idle1']);
   });
 
-  it('produces the same id order when called twice on the same items reference', () => {
-    const items = [item('s1', 'proj-a', { updatedAt: 1000 }), item('s2', 'proj-a', { updatedAt: 1000 })];
-    const opts = { filterProjectId: null as null, projects: PROJECTS };
-    const first = groupSessions(items, opts)
-      .find((g) => g.projectId === 'proj-a')!
-      .items.map((i) => i.id);
-    const second = groupSessions(items, opts)
-      .find((g) => g.projectId === 'proj-a')!
-      .items.map((i) => i.id);
-    expect(first).toEqual(second);
+  it('surfaces pinned items in a Pinned group ahead of By status', () => {
+    const items = [item('idle1', { displayStatus: 'idle' }), item('pin1', { pinned: true, displayStatus: 'idle' })];
+    const groups = arrangeSessions(items, 'status', NOW);
+    expect(labels(groups)).toEqual(['Pinned', 'By status']);
+    expect(idsOf(groups, 'Pinned')).toEqual(['pin1']);
+    expect(idsOf(groups, 'By status')).toEqual(['idle1']);
   });
 });

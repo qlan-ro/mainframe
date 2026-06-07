@@ -3,27 +3,28 @@
  *
  * Composition (matches the 02-chrome artboard Sidebar):
  *   header → "Sessions" group header (chevron + count + new/sort/more) →
- *   ProjectFilterPillBar → scrollable grouped list (flex-1) →
+ *   ProjectFilterPillBar → scrollable TIME-grouped list (flex-1) →
  *   TagFilterBar pinned at the BOTTOM (border-t, flex-shrink-0)
  *
- * The list scrolls between the pinned project pills (top) and the pinned tag
- * filter bar (bottom), per the artboard "Tag filter row … sits above bottom
- * panel" placement.
+ * Grouping is by TIME, not project (Pinned / Today / Yesterday / Earlier), with a
+ * Sort By menu (Recent / Name / Status) — per the artboard `arrangeSessions`.
+ * Project narrowing is handled by the filter pills + the per-row project chip
+ * (shown only in "All" view, i.e. when no project filter is active).
  *
  * Data:
  *   - useAssistantRuntime().threads for the native thread list (mapped via threadListStateToSessionItems)
- *   - useProjects() for the project set (filter pills + grouping)
- *   - useSessionFilters() for project/tag/synthetic filter state
+ *   - useProjects() for the project set (filter pills + per-row chip name)
+ *   - useSessionFilters() for project/tag/synthetic filter state + sortMode
  *   - useUnreadStore() for attention counts
  *   - useTagRegistry() for tag color resolution (TagFilterBar swatches)
- *   - groupSessions / applySessionFilters / attentionCount (pure VMs)
+ *   - arrangeSessions / applySessionFilters / attentionCount (pure VMs)
  */
 import { useMemo } from 'react';
 import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
-import { ChevronDownIcon, PlusIcon, ChevronsUpDownIcon, MoreHorizontalIcon } from 'lucide-react';
+import { ChevronDownIcon, PlusIcon, MoreHorizontalIcon } from 'lucide-react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
-import { groupSessions } from '../view-model/group-sessions';
+import { arrangeSessions } from '../view-model/group-sessions';
 import { attentionCount } from '../view-model/attention-counts';
 import { applySessionFilters } from '../filter/apply-session-filters';
 import { useSessionFilters } from '@/store/session-filters';
@@ -31,6 +32,7 @@ import { useUnreadStore } from '@/store/unread-store';
 import { useProjects } from '../use-projects';
 import { SessionGroup } from './SessionGroup';
 import { SessionRow } from './SessionRow';
+import { SessionSortMenu } from './SessionSortMenu';
 import { ProjectFilterPillBar } from './ProjectFilterPillBar';
 import { TagFilterBar } from '../filter/TagFilterBar';
 import { useDaemonPort } from '../runtime/daemon-port-context';
@@ -46,12 +48,12 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
 
 /**
  * SessionsGroupHeader — the sticky "SESSIONS" group header with the chevron,
- * count, and the new/sort/more icon-button cluster (artboard Sidebar
- * "Sessions group header"). The +new button is wired to the native
- * ThreadListPrimitive.New; sort/more are presentational placeholders for now
- * (popovers not yet ported) but carry stable testids.
+ * count, and the new/sort/more icon-button cluster. The +new button is wired to
+ * the native ThreadListPrimitive.New; the sort button opens SessionSortMenu;
+ * more is a presentational placeholder (popover not yet ported) with a testid.
  */
 function SessionsGroupHeader({ count }: { count: number }) {
+  const { sortMode, setSortMode } = useSessionFilters();
   const iconBtn =
     'inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
   return (
@@ -65,9 +67,7 @@ function SessionsGroupHeader({ count }: { count: number }) {
           <PlusIcon className="size-3" />
         </button>
       </ThreadListPrimitive.New>
-      <button data-testid="sessions-sort-button" type="button" title="Sort sessions" className={iconBtn}>
-        <ChevronsUpDownIcon className="size-[11px]" />
-      </button>
+      <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <button data-testid="sessions-more-button" type="button" title="More" className={iconBtn}>
         <MoreHorizontalIcon className="size-[11px]" />
       </button>
@@ -90,7 +90,7 @@ function buildAttentionMap(
 export function SessionSidebar() {
   const threadListRuntime = useAssistantRuntime().threads;
   const allItems: SessionItem[] = threadListRuntime ? threadListStateToSessionItems(threadListRuntime.getState()) : [];
-  const { filterProjectId, selectedTags, selectedSynthetic, setFilterProjectId } = useSessionFilters();
+  const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);
   const { projects } = useProjects();
   const port = useDaemonPort();
@@ -101,16 +101,21 @@ export function SessionSidebar() {
     [allItems, filterProjectId, selectedTags, selectedSynthetic],
   );
 
-  const groups = useMemo(
-    () => groupSessions(filteredItems, { filterProjectId, projects }),
-    [filteredItems, filterProjectId, projects],
-  );
+  const groups = useMemo(() => arrangeSessions(filteredItems, sortMode), [filteredItems, sortMode]);
+
+  const projectNameOf = useMemo(() => {
+    const map = new Map(projects.map((p) => [p.id, p.name]));
+    return (projectId: string): string => map.get(projectId) ?? projectId;
+  }, [projects]);
 
   const attentionCounts = useMemo(
     () => buildAttentionMap(allItems, projects, isUnread),
     [allItems, projects, isUnread],
   );
 
+  // Project chip on each row only in "All" view (no active project filter); the
+  // filter pill already narrows the list when a project is selected.
+  const showProject = filterProjectId == null;
   const hasFilters = filterProjectId != null || selectedTags.size > 0 || selectedSynthetic.size > 0;
 
   return (
@@ -133,9 +138,18 @@ export function SessionSidebar() {
         ) : (
           groups.map((group) => (
             <SessionGroup
-              key={group.projectId}
+              key={group.label}
               group={group}
-              renderItem={(item) => <SessionRow key={item.id} item={item} colorOf={registry.colorOf} />}
+              showProject={showProject}
+              renderItem={(item, flags) => (
+                <SessionRow
+                  key={item.id}
+                  item={item}
+                  colorOf={registry.colorOf}
+                  inPinnedGroup={flags.inPinnedGroup}
+                  projectName={flags.showProject ? projectNameOf(item.custom.projectId) : undefined}
+                />
+              )}
             />
           ))
         )}

@@ -10,8 +10,35 @@ beforeEach(() => {
     filterProjectId: null,
     selectedTags: new Set(),
     selectedSynthetic: new Set(),
+    sortMode: 'recent',
   });
   localStorage.removeItem('mf:filterProjectId');
+});
+
+// ---------------------------------------------------------------------------
+// session-filters — sortMode defaults to 'recent'
+// ---------------------------------------------------------------------------
+
+describe('session-filters — sortMode defaults to recent', () => {
+  it('initial sortMode is "recent"', () => {
+    expect(useSessionFilters.getState().sortMode).toBe('recent');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// session-filters — setSortMode updates sortMode
+// ---------------------------------------------------------------------------
+
+describe('session-filters — setSortMode updates the sort mode', () => {
+  it('sets sortMode to "name"', () => {
+    useSessionFilters.getState().setSortMode('name');
+    expect(useSessionFilters.getState().sortMode).toBe('name');
+  });
+
+  it('sets sortMode to "status"', () => {
+    useSessionFilters.getState().setSortMode('status');
+    expect(useSessionFilters.getState().sortMode).toBe('status');
+  });
 });
 
 // ---------------------------------------------------------------------------

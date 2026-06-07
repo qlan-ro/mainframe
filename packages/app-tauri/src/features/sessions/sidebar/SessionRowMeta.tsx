@@ -18,6 +18,8 @@ interface SessionRowMetaProps {
   status?: SessionStatus;
   tags?: string[];
   colorOf?: (name: string) => TagColor;
+  /** Shown as a leading project chip in "All" view (no active project filter). */
+  projectName?: string;
 }
 
 function worktreeBasename(path: string): string {
@@ -33,11 +35,22 @@ export function SessionRowMeta({
   status,
   tags,
   colorOf,
+  projectName,
 }: SessionRowMetaProps) {
   const visibleTags = tags != null && tags.length > 0 ? tags.slice(0, 4) : [];
 
   return (
     <div className="flex min-w-0 items-center gap-2 text-micro tracking-[-0.05px] text-mf-text-3">
+      {projectName != null && (
+        <span
+          data-testid="sessions-row-meta-project"
+          className="inline-flex max-w-[124px] flex-shrink-0 items-center gap-1 rounded-[4px] bg-mf-chip px-1.5 py-px font-semibold text-muted-foreground"
+          title={projectName}
+        >
+          <span className="size-[5px] flex-shrink-0 rounded-full bg-mf-text-3" aria-hidden="true" />
+          <span className="truncate">{projectName}</span>
+        </span>
+      )}
       <span data-testid="sessions-row-meta-adapter" className="flex-shrink-0 truncate font-mono text-mf-text-3">
         {adapterId}
       </span>

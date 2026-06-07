@@ -28,6 +28,7 @@
 import type React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { SessionCustom, SessionItem } from '../../view-model/chat-to-thread-custom';
 import type { Project, SyntheticTag } from '@qlan-ro/mainframe-types';
 
@@ -40,7 +41,9 @@ let __projects: Project[] = [];
 let __filterProjectId: string | null = null;
 let __selectedTags: Set<string> = new Set();
 const __selectedSynthetic: Set<SyntheticTag> = new Set();
+let __sortMode: 'recent' | 'name' | 'status' = 'recent';
 const setFilterProjectIdSpy = vi.fn();
+const setSortModeSpy = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Mock @assistant-ui/react
@@ -79,7 +82,9 @@ vi.mock('@/store/session-filters', () => ({
     filterProjectId: __filterProjectId,
     selectedTags: __selectedTags,
     selectedSynthetic: __selectedSynthetic,
+    sortMode: __sortMode,
     setFilterProjectId: setFilterProjectIdSpy,
+    setSortMode: setSortModeSpy,
   }),
 }));
 
@@ -99,20 +104,33 @@ vi.mock('@/store/unread-store', () => ({
 vi.mock('../SessionGroup', () => ({
   SessionGroup: ({
     group,
+    showProject,
+    renderItem,
   }: {
-    group: { projectId: string; items: SessionItem[] };
-    renderItem: (i: SessionItem) => React.ReactNode;
+    group: { label: string; items: SessionItem[] };
+    showProject: boolean;
+    renderItem: (i: SessionItem, flags: { inPinnedGroup: boolean; showProject: boolean }) => React.ReactNode;
   }) => (
-    <div data-testid={`sessions-group-${group.projectId}`}>
-      {group.items.map((item) => (
-        <div key={item.id} data-testid="sessions-row" />
-      ))}
+    <div data-testid={`sessions-group-${group.label}`}>
+      {group.items.map((item) => renderItem(item, { inPinnedGroup: group.label === 'Pinned', showProject }))}
     </div>
   ),
 }));
 
 vi.mock('../SessionRow', () => ({
-  SessionRow: ({ item }: { item: SessionItem }) => <div data-testid="sessions-row" data-id={item.id} />,
+  SessionRow: ({ item, projectName }: { item: SessionItem; projectName?: string }) => (
+    <div data-testid="sessions-row" data-id={item.id} data-project-name={projectName ?? ''} />
+  ),
+}));
+
+vi.mock('../SessionSortMenu', () => ({
+  SessionSortMenu: ({
+    mode,
+    onChange,
+  }: {
+    mode: 'recent' | 'name' | 'status';
+    onChange: (m: 'recent' | 'name' | 'status') => void;
+  }) => <button data-testid="sessions-sort-button" data-mode={mode} type="button" onClick={() => onChange('name')} />,
 }));
 
 vi.mock('../ProjectFilterPillBar', () => ({
@@ -211,7 +229,9 @@ beforeEach(() => {
   __projects = [];
   __filterProjectId = null;
   __selectedTags = new Set();
+  __sortMode = 'recent';
   setFilterProjectIdSpy.mockReset();
+  setSortModeSpy.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -252,16 +272,39 @@ describe('SessionSidebar — empty state when no threads and no projects', () =>
 });
 
 // ---------------------------------------------------------------------------
-// 4. Group present + empty state absent when one project with two threads
+// 4. Time group present + empty state absent — recent mode buckets by time, NOT
+//    project. Two threads updated "now" land in the Today group.
 // ---------------------------------------------------------------------------
 
-describe('SessionSidebar — group present and empty state absent when project has threads', () => {
-  it('renders sessions-group-p1 and no empty state when two threads belong to p1', () => {
+describe('SessionSidebar — time group present and empty state absent when threads exist', () => {
+  it('renders sessions-group-Today (NOT a project group) and no empty state for two threads updated now', () => {
     __projects = [makeProject('p1', 'mainframe')];
-    __threads = [makeThread('c1', { projectId: 'p1' }), makeThread('c2', { projectId: 'p1' })];
+    __threads = [
+      makeThread('c1', { projectId: 'p1', updatedAt: Date.now() }),
+      makeThread('c2', { projectId: 'p1', updatedAt: Date.now() }),
+    ];
     render(<SessionSidebar />);
-    expect(screen.getByTestId('sessions-group-p1')).toBeTruthy();
+    expect(screen.getByTestId('sessions-group-Today')).toBeTruthy();
+    expect(screen.queryByTestId('sessions-group-p1')).toBeNull();
     expect(screen.queryByTestId('sessions-empty-state')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4b. Pinned section: a pinned thread lands in a Pinned group, ahead of time
+//     buckets, and is excluded from them.
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — pinned thread forms a Pinned group', () => {
+  it('renders sessions-group-Pinned plus sessions-group-Today for a pinned + an unpinned thread', () => {
+    __projects = [makeProject('p1', 'mainframe')];
+    __threads = [
+      makeThread('pin1', { projectId: 'p1', pinned: true, updatedAt: Date.now() }),
+      makeThread('today1', { projectId: 'p1', updatedAt: Date.now() }),
+    ];
+    render(<SessionSidebar />);
+    expect(screen.getByTestId('sessions-group-Pinned')).toBeTruthy();
+    expect(screen.getByTestId('sessions-group-Today')).toBeTruthy();
   });
 });
 
@@ -306,6 +349,47 @@ describe('SessionSidebar — ProjectFilterPillBar is rendered', () => {
   it('renders data-testid="sessions-filter-pill-all"', () => {
     render(<SessionSidebar />);
     expect(screen.getByTestId('sessions-filter-pill-all')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Sort menu: present in the header and wired to setSortMode.
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — Sort By menu is wired to setSortMode', () => {
+  it('renders the sort button reflecting the active sortMode', () => {
+    __sortMode = 'status';
+    render(<SessionSidebar />);
+    const btn = screen.getByTestId('sessions-sort-button');
+    expect(btn.getAttribute('data-mode')).toBe('status');
+  });
+
+  it('invokes setSortMode when an option is chosen', async () => {
+    render(<SessionSidebar />);
+    await userEvent.click(screen.getByTestId('sessions-sort-button'));
+    expect(setSortModeSpy).toHaveBeenCalledWith('name');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Project chip: shown ("All" view) vs hidden (a project filter is active).
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar — per-row project chip follows the filter state', () => {
+  it('passes projectName to rows when no project filter is active (showProject)', () => {
+    __filterProjectId = null;
+    __projects = [makeProject('p1', 'mainframe')];
+    __threads = [makeThread('c1', { projectId: 'p1', updatedAt: Date.now() })];
+    render(<SessionSidebar />);
+    expect(screen.getByTestId('sessions-row').getAttribute('data-project-name')).toBe('mainframe');
+  });
+
+  it('omits projectName from rows when a project filter is active', () => {
+    __filterProjectId = 'p1';
+    __projects = [makeProject('p1', 'mainframe')];
+    __threads = [makeThread('c1', { projectId: 'p1', updatedAt: Date.now() })];
+    render(<SessionSidebar />);
+    expect(screen.getByTestId('sessions-row').getAttribute('data-project-name')).toBe('');
   });
 });
 

@@ -1,47 +1,45 @@
 /**
- * SessionGroup — one collapsible project section in the sidebar.
- * Collapse state persists via useCollapsedProjects (localStorage). SessionRow
- * children come in as a render prop so this file does not import SessionRow
- * (which needs the thread-list runtime context).
+ * SessionGroup — one labeled section in the sessions list (Pinned / Today /
+ * Yesterday / Earlier / A–Z / By status).
+ *
+ * Non-collapsible (the time groups are not collapsible per the artboard): a
+ * sticky glass header showing the label, plus a leading pin glyph on the
+ * 'Pinned' group. Rows come in through a `renderItem` render prop so this file
+ * stays free of the SessionRow runtime context; it forwards `inPinnedGroup`
+ * (label === 'Pinned') and `showProject` to each row.
  */
 import type { ReactNode } from 'react';
-import { ChevronDownIcon } from 'lucide-react';
-import { useCollapsedProjects } from '../useCollapsedProjects';
-import type { SessionGroup as SessionGroupType } from '../view-model/group-sessions';
+import { PinIcon } from 'lucide-react';
+import type { SessionGroupResult } from '../view-model/group-sessions';
+import type { SessionItem } from '../view-model/chat-to-thread-custom';
 
-interface SessionGroupProps {
-  group: SessionGroupType;
-  renderItem: (item: SessionGroupType['items'][number]) => ReactNode;
+export interface SessionGroupRenderFlags {
+  inPinnedGroup: boolean;
+  showProject: boolean;
 }
 
-export function SessionGroup({ group, renderItem }: SessionGroupProps) {
-  const { collapsed, toggle } = useCollapsedProjects();
-  const isCollapsed = collapsed.has(group.projectId);
+interface SessionGroupProps {
+  group: SessionGroupResult;
+  showProject: boolean;
+  renderItem: (item: SessionItem, flags: SessionGroupRenderFlags) => ReactNode;
+}
 
+export function SessionGroup({ group, showProject, renderItem }: SessionGroupProps) {
+  const inPinnedGroup = group.label === 'Pinned';
   return (
-    <div data-testid={`sessions-group-${group.projectId}`}>
-      <button
-        data-testid={`sessions-group-header-${group.projectId}`}
-        type="button"
-        onClick={() => toggle(group.projectId)}
-        className="sticky top-0 z-[1] flex w-full items-center gap-1 bg-mf-glass px-3 pb-1 pt-[7px] text-left backdrop-blur-[40px] backdrop-saturate-[1.8]"
+    <div data-testid={`sessions-group-${group.label}`}>
+      <div
+        data-testid={`sessions-group-header-${group.label}`}
+        className="sticky top-0 z-[1] flex items-center gap-1 bg-mf-glass px-3 pb-[3px] pt-[7px] text-micro font-bold uppercase tracking-[0.06em] text-mf-text-3 backdrop-blur-[40px] backdrop-saturate-[1.8]"
       >
-        <ChevronDownIcon
-          className={[
-            'size-2.5 flex-shrink-0 text-mf-text-3 transition-transform',
-            isCollapsed ? '-rotate-90' : '',
-          ].join(' ')}
-        />
-        <span className="flex-1 truncate text-micro font-bold uppercase tracking-[0.07em] text-mf-text-3">
-          {group.projectName}
-        </span>
-        <span className="text-micro text-mf-text-3">{group.count}</span>
-      </button>
-      {!isCollapsed && (
-        <div data-testid={`sessions-group-items-${group.projectId}`} className="pb-1">
-          {group.items.map((item) => renderItem(item))}
-        </div>
-      )}
+        {inPinnedGroup && (
+          <PinIcon data-testid="sessions-group-pin-glyph" className="size-[9px] flex-shrink-0 text-primary" />
+        )}
+        {group.label}
+      </div>
+      <div data-testid={`sessions-group-items-${group.label}`}>
+        {group.items.map((item) => renderItem(item, { inPinnedGroup, showProject }))}
+      </div>
     </div>
   );
 }

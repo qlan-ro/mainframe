@@ -117,7 +117,17 @@ function RowHoverActions({
  */
 const DEFAULT_COLOR_OF = (): TagColor => 'blue';
 
-function SessionRowInner({ item, colorOf }: { item: SessionItem; colorOf: (name: string) => TagColor }) {
+function SessionRowInner({
+  item,
+  colorOf,
+  inPinnedGroup,
+  projectName,
+}: {
+  item: SessionItem;
+  colorOf: (name: string) => TagColor;
+  inPinnedGroup: boolean;
+  projectName?: string;
+}) {
   const { custom } = item;
   const port = useDaemonPort();
   const itemRuntime = useThreadListItemRuntime();
@@ -172,7 +182,7 @@ function SessionRowInner({ item, colorOf }: { item: SessionItem; colorOf: (name:
         className="group relative flex cursor-pointer items-center gap-[9px] border-l-2 border-l-transparent py-2 pl-2.5 pr-3 transition-colors hover:bg-accent data-[active=true]:border-l-primary data-[active=true]:bg-accent"
       >
         <div className="flex flex-shrink-0 items-center gap-1.5">
-          {custom.pinned && (
+          {custom.pinned && !inPinnedGroup && (
             <PinIcon data-testid="sessions-row-pin-glyph" className="size-3 flex-shrink-0 text-primary" />
           )}
           <StatusDot status={status} />
@@ -214,6 +224,7 @@ function SessionRowInner({ item, colorOf }: { item: SessionItem; colorOf: (name:
               status={status}
               tags={custom.tags}
               colorOf={colorOf}
+              projectName={projectName}
             />
           </div>
         </div>
@@ -233,9 +244,15 @@ function SessionRowInner({ item, colorOf }: { item: SessionItem; colorOf: (name:
 export function SessionRow({
   item,
   colorOf = DEFAULT_COLOR_OF,
+  inPinnedGroup = false,
+  projectName,
 }: {
   item: SessionItem;
   colorOf?: (name: string) => TagColor;
+  /** True when this row sits inside the 'Pinned' group — suppresses the pin glyph. */
+  inPinnedGroup?: boolean;
+  /** Project chip label — passed only in "All" view (no active project filter). */
+  projectName?: string;
 }) {
   const threadListRuntime = useAssistantRuntime().threads;
   const threadItems = threadListRuntime?.getState().threadItems;
@@ -244,7 +261,7 @@ export function SessionRow({
   const itemRuntime = threadListRuntime.getItemById(item.id);
   return (
     <ThreadListItemRuntimeProvider runtime={itemRuntime}>
-      <SessionRowInner item={item} colorOf={colorOf} />
+      <SessionRowInner item={item} colorOf={colorOf} inPinnedGroup={inPinnedGroup} projectName={projectName} />
     </ThreadListItemRuntimeProvider>
   );
 }
