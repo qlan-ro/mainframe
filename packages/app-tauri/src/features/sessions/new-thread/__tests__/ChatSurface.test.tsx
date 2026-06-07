@@ -2,7 +2,7 @@
  * ChatSurface — behavior tests (TDD red phase).
  *
  * Strategy:
- *  - Mock `../../../features/chat/thread/ChatThread` → <div data-testid="chat-thread-stub" />
+ *  - Mock `../../../../features/chat/thread/ChatThread` → <div data-testid="chat-thread-stub" />
  *  - Mock `./NewThreadConfigPicker` → <div data-testid="picker-stub" data-port={p.port} />
  *  - Mock `@assistant-ui/react` → useAuiState driven per test via fakeAuiState.
  *
@@ -43,7 +43,7 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: FakeAuiState) => unknown) => sel(fakeAuiState),
 }));
 
-vi.mock('../../../features/chat/thread/ChatThread', () => ({
+vi.mock('../../../../features/chat/thread/ChatThread', () => ({
   ChatThread: () => <div data-testid="chat-thread-stub" />,
 }));
 

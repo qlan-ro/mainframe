@@ -29,8 +29,9 @@ const SELECT_CLASS =
   'rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground ' +
   'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
-export function NewThreadConfigPicker() {
-  const port = useDaemonPort();
+export function NewThreadConfigPicker({ port: portProp }: { port?: number } = {}) {
+  const contextPort = useDaemonPort();
+  const port = portProp ?? contextPort;
   const localId = useAuiState((s) => s.threadListItem.id);
   const { projects } = useProjects();
 
