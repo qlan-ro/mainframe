@@ -104,13 +104,31 @@ export interface ThreadListRecordState {
   threadItems: Readonly<Record<string, ThreadListEntry>>;
 }
 
-/** The single narrowing of the aui-boundary `custom` to our SessionCustom. */
-function narrowSessionCustom(custom: Record<string, unknown> | undefined): SessionCustom {
+/**
+ * The single narrowing of the aui-boundary `custom` to our SessionCustom.
+ * Callers filter out custom-less entries (the transient new/draft thread carries
+ * no `custom`), so a defined `Record<string, unknown>` is the only input here.
+ */
+function narrowSessionCustom(custom: Record<string, unknown>): SessionCustom {
   return custom as unknown as SessionCustom;
 }
 
+/** A thread entry that carries a materialized `custom` (i.e. a real session). */
+type SessionThreadEntry = ThreadListEntry & { custom: Record<string, unknown> };
+
+/**
+ * True only for entries backed by a daemon chat. The native thread list ALWAYS
+ * contains the transient new/draft thread (id `__LOCALID_*`, status 'new') which
+ * has no `custom` because no chat exists yet; it is not a session list row.
+ * Dropping it here is the single source that guarantees every emitted SessionItem
+ * has a real SessionCustom, so all downstream `.custom.X` accesses are safe.
+ */
+function hasSessionCustom(entry: ThreadListEntry): entry is SessionThreadEntry {
+  return entry.custom != null;
+}
+
 /** Map one aui thread-list entry to a SessionItem (status + custom narrowed once). */
-function threadEntryToSessionItem(entry: ThreadListEntry): SessionItem {
+function threadEntryToSessionItem(entry: SessionThreadEntry): SessionItem {
   return {
     id: entry.id,
     remoteId: entry.remoteId,
@@ -122,21 +140,23 @@ function threadEntryToSessionItem(entry: ThreadListEntry): SessionItem {
 
 /**
  * Project an already-ordered array of thread entries (the store-scope
- * `s.threads.threadItems`) to SessionItem[].
+ * `s.threads.threadItems`) to SessionItem[]. Drops the custom-less new/draft
+ * thread before mapping.
  */
 export function threadItemsToSessionItems(entries: readonly ThreadListEntry[]): SessionItem[] {
-  return entries.map(threadEntryToSessionItem);
+  return entries.filter(hasSessionCustom).map(threadEntryToSessionItem);
 }
 
 /**
  * Project the runtime `ThreadListState` (Record + threadIds) to an ordered
  * SessionItem[] — the source for the sidebar list. Walks `threadIds` (the
  * canonical order) and resolves each via the `threadItems` Record, skipping ids
- * without a materialized entry.
+ * without a materialized entry and the custom-less new/draft thread.
  */
 export function threadListStateToSessionItems(state: ThreadListRecordState): SessionItem[] {
   return state.threadIds
     .map((id) => state.threadItems[id])
     .filter((entry): entry is ThreadListEntry => entry != null)
+    .filter(hasSessionCustom)
     .map(threadEntryToSessionItem);
 }

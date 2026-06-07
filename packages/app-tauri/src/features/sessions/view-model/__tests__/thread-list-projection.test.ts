@@ -182,3 +182,33 @@ describe('threadItemsToSessionItems — maps an ordered array of entries', () =>
     expect(result[0]?.title).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 7. Drop the transient new/draft thread (no `custom`) — it is not a session row.
+//    The native thread list always contains a __LOCALID_* entry with status
+//    'new' and custom undefined (no daemon chat yet). Mapping it would produce a
+//    SessionItem whose custom is undefined, crashing downstream `.custom.X`
+//    selectors (e.g. `t.custom.tags`). The projection must drop it at the source.
+// ---------------------------------------------------------------------------
+
+describe('projection drops the custom-less new/draft thread', () => {
+  it('threadItemsToSessionItems returns only the real entry from a mixed array', () => {
+    const draft = makeEntry('__LOCALID_x', { status: 'new', custom: undefined });
+    const real = makeEntry('chat-real');
+
+    const result = threadItemsToSessionItems([draft, real]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('chat-real');
+  });
+
+  it('threadListStateToSessionItems returns only the real entry from a mixed state', () => {
+    const draft = makeEntry('__LOCALID_x', { status: 'new', custom: undefined });
+    const real = makeEntry('chat-real');
+
+    const result = threadListStateToSessionItems(makeState([draft, real]));
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('chat-real');
+  });
+});
