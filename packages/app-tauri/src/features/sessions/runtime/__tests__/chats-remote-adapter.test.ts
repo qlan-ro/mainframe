@@ -27,6 +27,44 @@ vi.mock('../new-thread-coordinator', () => ({
   createForLocal: vi.fn(),
 }));
 
+// Controller registry mock — initialize consults the per-thread controller so a
+// create that already happened (onNew) is not repeated, and a create it performs
+// is stamped onto the controller (so a late onNew doesn't repeat it either).
+interface FakeController {
+  hasRemoteId: () => boolean;
+  getDaemonId: () => string;
+  setRemoteId: (id: string) => void;
+  setRemoteIdCalls: string[];
+  remoteId: string | null;
+  localId: string;
+}
+const fakeControllers = new Map<string, FakeController>();
+function makeFakeController(localId: string, remoteId: string | null = null): FakeController {
+  const ctrl: FakeController = {
+    localId,
+    remoteId,
+    setRemoteIdCalls: [],
+    hasRemoteId: () => ctrl.remoteId != null,
+    getDaemonId: () => ctrl.remoteId ?? ctrl.localId,
+    setRemoteId: (id: string) => {
+      ctrl.setRemoteIdCalls.push(id);
+      ctrl.remoteId = id;
+    },
+  };
+  return ctrl;
+}
+vi.mock('../chat-controller-registry', () => ({
+  chatControllerRegistry: {
+    getOrCreate: (id: string) => {
+      const existing = fakeControllers.get(id);
+      if (existing) return existing;
+      const created = makeFakeController(id, null);
+      fakeControllers.set(id, created);
+      return created;
+    },
+  },
+}));
+
 // Import AFTER mocks so the module under test picks them up.
 import { makeChatsRemoteAdapter } from '../chats-remote-adapter';
 import { listChats, getChat, renameChat, archiveChat, unarchiveChat } from '../../../../lib/api/chats';
@@ -76,6 +114,7 @@ const FIXTURE_ARCHIVED: Chat = {
 
 afterEach(() => {
   vi.clearAllMocks();
+  fakeControllers.clear();
 });
 
 // ---------------------------------------------------------------------------
@@ -275,5 +314,38 @@ describe('chats-remote-adapter — initialize returns the coordinator remoteId',
     await adapter.initialize('__LOCALID_z');
     expect(mockCreateForLocal).toHaveBeenCalledTimes(1);
     expect(mockCreateForLocal).toHaveBeenCalledWith('__LOCALID_z', 31415);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chats-remote-adapter — initialize is idempotent against onNew (HIGH-1 race)
+//
+// Both create seams fire on first send: our onNew AND aui's initialize. onNew
+// completing first (the real DOM-driven ordering) settles the coordinator and
+// clears the draft, so a LATER initialize must NOT re-create (no second POST,
+// no "no draft" throw). It consults the per-thread controller instead.
+// ---------------------------------------------------------------------------
+
+describe('chats-remote-adapter — initialize is idempotent with onNew', () => {
+  it('returns the controller remoteId WITHOUT calling createForLocal when onNew already created it', async () => {
+    // onNew already created + adopted the chat — the controller carries the id.
+    fakeControllers.set('__LOCALID_z', makeFakeController('__LOCALID_z', 'chat-77'));
+
+    const adapter = makeChatsRemoteAdapter(31415);
+    const result = await adapter.initialize('__LOCALID_z');
+
+    expect(result).toEqual({ remoteId: 'chat-77', externalId: undefined });
+    expect(mockCreateForLocal).not.toHaveBeenCalled();
+  });
+
+  it('stamps the controller when IT performs the create (so a later onNew skips creating)', async () => {
+    // No remote id yet — initialize is the seam that creates.
+    mockCreateForLocal.mockResolvedValueOnce({ remoteId: 'chat-77' });
+
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.initialize('__LOCALID_z');
+
+    const ctrl = fakeControllers.get('__LOCALID_z');
+    expect(ctrl?.setRemoteIdCalls).toEqual(['chat-77']);
   });
 });

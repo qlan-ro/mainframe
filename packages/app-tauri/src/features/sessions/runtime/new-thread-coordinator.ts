@@ -29,6 +29,7 @@
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { createChat } from '../../../lib/api/chats';
 import { getDraftConfig, clearDraftConfig } from './draft-config';
+import { useNewThreadReady } from './new-thread-ready-store';
 
 /** In-flight (and just-settled) create promises, keyed by the local thread id. */
 const inFlight = new Map<string, Promise<{ remoteId: string }>>();
@@ -58,9 +59,12 @@ export function createForLocal(localId: string, port: number): Promise<{ remoteI
   })
     .then((chat: Chat) => {
       // Created — the draft is consumed and the cache entry can be evicted so a
-      // future recycled localId starts fresh. The resolved value still flows to
-      // every awaiter that shares this promise.
+      // future recycled localId starts fresh. The reactive ready flag is cleared
+      // too (its job — switching the surface to the composer — is done; the thread
+      // now flips to a real chat). The resolved value still flows to every awaiter
+      // that shares this promise.
       clearDraftConfig(localId);
+      useNewThreadReady.getState().clearReady(localId);
       inFlight.delete(localId);
       return { remoteId: chat.id };
     })

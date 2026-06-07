@@ -7,7 +7,7 @@
  * (`__LOCALID_*`) thread adopts its daemon id via `setRemoteId` once createChat
  * resolves.
  *
- * It composes sibling helpers: `chat-event-router` (daemon-event side effects),
+ * Composes sibling helpers: `chat-event-router` (daemon-event side effects),
  * `chat-reconcile` (optimistic send + count-aware reconcile), and
  * `permission-reply-tracker` (reply delivery verify). Queued cancel/edit forward
  * straight to the daemon REST API.
@@ -34,22 +34,19 @@ export class ChatThreadController {
   private readonly listeners = new Set<() => void>();
   private loadPromise: Promise<void> | null = null;
   private disposed = false;
-  // Permission-reply reliability: re-check delivery (#2) and suppress restoring a
+  // Permission-reply reliability: re-check delivery (#2) + suppress restoring a
   // just-answered permission while the reply is still in flight (#5).
   private readonly permissionReplies: PermissionReplyTracker;
-  // The id used for all network ops. Equals the daemon chat id for pre-existing
-  // threads; for a new (__LOCALID_*) thread it starts local and is replaced by
-  // setRemoteId() once the daemon chat is created. The WS sub never opens while
-  // this is still a __LOCALID_*.
+  // The id for all network ops: the daemon chat id for pre-existing threads; for a
+  // new (__LOCALID_*) thread it starts local and setRemoteId() swaps in the real id
+  // once createChat resolves. The WS sub never opens while this is still local.
   private daemonId: string;
   private remoteIdSet = false;
   private liveRefs = 0;
-  // The stable aui item.id (the constructor chatId). Unlike daemonId, this never
-  // changes when a __LOCALID_* thread adopts its remote id — onNew uses it as the
-  // createForLocal localId so the draft lookup keys off the same id the picker used.
+  // The stable aui item.id (constructor chatId) — never changes on adopt, so onNew
+  // uses it as the createForLocal localId (same key the picker's draft uses).
   private readonly threadId: string;
-  // WS attachment (subscribe / ack-gating / resume / reconnect refresh / restore).
-  // Constructed lazily in subscribeLive() so it always carries the current daemonId.
+  // WS attachment; constructed lazily in subscribeLive() so it carries the current daemonId.
   private wsSub: ChatWsSubscription | null = null;
 
   constructor(
@@ -81,6 +78,11 @@ export class ChatThreadController {
     return this.threadId;
   }
 
+  /** Current network id: the daemon chat id once adopted, else the local id. */
+  public getDaemonId(): string {
+    return this.daemonId;
+  }
+
   /** True once a daemon chat id is known (pre-existing thread, or after setRemoteId). */
   public hasRemoteId(): boolean {
     return this.remoteIdSet || !this.isLocalOnly();
@@ -88,8 +90,7 @@ export class ChatThreadController {
 
   /**
    * State-change subscription — ALWAYS available, never opens a WS sub. Backs
-   * useControllerState so a dormant (backgrounded) thread still re-renders from
-   * in-memory state. Does NOT keep the chat warm on the wire.
+   * useControllerState so a dormant thread still re-renders from in-memory state.
    */
   public subscribeState(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -99,10 +100,9 @@ export class ChatThreadController {
   }
 
   /**
-   * Live (wire) subscription — open the WS sub + resume loop. Call ONLY when the
-   * thread is the active (main) one. Ref-counted + idempotent (StrictMode-safe).
-   * No-op for a __LOCALID_* thread: there is no daemon chat to subscribe to yet.
-   * Returns a teardown that drops the WS sub once the last live ref releases.
+   * Live (wire) subscription — open the WS sub + resume loop; call ONLY for the
+   * active thread. Ref-counted + idempotent (StrictMode-safe). No-op for a local
+   * thread. Returns a teardown that drops the sub once the last live ref releases.
    */
   public subscribeLive(): () => void {
     if (this.isLocalOnly()) return () => {};
@@ -148,13 +148,10 @@ export class ChatThreadController {
     };
   }
 
-  // Lifecycle
-
   /**
-   * Adopt the daemon chat id for a thread created this session (S2). Set once by
-   * the new-thread coordinator after createChat; thereafter all network ops use
-   * it and subscribeLive() can open a real WS sub. No id-flip in aui — the
-   * thread's item.id stays __LOCALID_*; only this network id changes.
+   * Adopt the daemon chat id for a thread created this session (S2). Set once;
+   * thereafter all network ops use it and subscribeLive() can open a WS sub. No
+   * id-flip in aui — item.id stays __LOCALID_*; only this network id changes.
    */
   public setRemoteId(remoteId: string): void {
     if (this.remoteIdSet) {
@@ -163,6 +160,9 @@ export class ChatThreadController {
     }
     this.remoteIdSet = true;
     this.daemonId = remoteId;
+    // Now a real daemon chat — seed history once so a switch-back has the transcript.
+    // Deduped by load()'s loadPromise guard (the first send's load() won't refetch).
+    void this.load().catch((err: unknown) => console.warn('[chat-controller] post-adopt load failed', err));
   }
 
   public dispose(): void {
@@ -173,16 +173,17 @@ export class ChatThreadController {
     this.permissionReplies.dispose();
   }
 
-  // Actions
-
   public async load(force = false): Promise<void> {
+    // A __LOCALID_* thread has no daemon chat — loading it would hit REST with the
+    // synthetic id and 404 into an error state on the empty new-thread surface.
+    // Stay 'idle' until setRemoteId adopts a real id (which re-fires load()).
+    if (this.isLocalOnly()) return;
     if (this.loadPromise && !force) return this.loadPromise;
 
     this.dispatch({ type: 'history.loading' });
 
     // Seed the composer config from REST so the toolbar isn't empty before the
-    // first chat.updated; thereafter chat.updated keeps it live (the composer
-    // reads state.chatConfig — no its own fetch).
+    // first chat.updated; thereafter chat.updated keeps state.chatConfig live.
     if (!this.state.chatConfig) {
       void getChat(this.port, this.daemonId)
         .then((chat) => {
@@ -215,10 +216,9 @@ export class ChatThreadController {
 
   /**
    * Reconcile optimistic pendings against re-seeded history. A reconnect/refetch
-   * delivers the server echo via `history.loaded`, NOT `message.added`, so the
-   * live reconcile path never fires — without this the optimistic copy lingers
-   * as a duplicate. The full user-message list is fed to the same count-aware
-   * matcher the live path uses, so it is authoritative and count-correct.
+   * delivers the server echo via `history.loaded`, NOT `message.added`, so the live
+   * reconcile path never fires — without this the optimistic copy lingers as a
+   * duplicate. The full user-message list feeds the same count-aware matcher.
    */
   private reconcilePendingAgainstHistory(messages: DisplayMessage[]): void {
     const userMessages = messages.filter((m) => m.type === 'user');
@@ -232,11 +232,8 @@ export class ChatThreadController {
     if (!input) return;
     const { text, uploadItems } = input;
 
-    // Seed history against the current daemonId before the first send. A new
-    // (local→remote) thread is created, then sent into without ever mounting the
-    // load effect, so its just-created daemon chat (chat-99, not the stale
-    // __LOCALID_*) must be loaded here. Deduped: skips once a load is in flight
-    // or already settled, so repeat sends don't refetch.
+    // Seed history before the first send (belt-and-braces with setRemoteId's load).
+    // Deduped: skips once a load is in flight or settled, so repeat sends don't refetch.
     if (!this.loadPromise && this.state.loadState.type === 'idle') void this.load();
 
     const pending = buildPendingMessage(this.daemonId, text);
@@ -270,10 +267,8 @@ export class ChatThreadController {
   }
 
   public async replyToPermission(response: ControlResponse): Promise<void> {
-    // Optimistically drop the gate, but remember we answered this tool use so a
-    // racing restore (subscribe/reconnect REST read of the not-yet-cleared
-    // pending) doesn't resurrect it, and verify the answer actually landed.
-    // `response.requestId` is the request's own id — no separate arg to desync.
+    // Optimistically drop the gate, but record the answered tool use so a racing
+    // restore (subscribe/reconnect read of the stale pending) doesn't resurrect it.
     this.permissionReplies.recordReply(response.toolUseId);
     this.ws.send({ type: 'permission.respond', chatId: this.daemonId, response });
     this.dispatch({ type: 'permission.resolved', requestId: response.requestId });

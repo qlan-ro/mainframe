@@ -33,6 +33,8 @@ import userEvent from '@testing-library/user-event';
 
 const setDraftConfigSpy = vi.fn();
 const getDraftConfigMock = vi.fn().mockReturnValue(undefined);
+const markReadySpy = vi.fn();
+const clearReadySpy = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Mocks — must be registered before the component is imported
@@ -89,6 +91,15 @@ vi.mock('../../runtime/draft-config', () => ({
   getDraftConfig: (...args: unknown[]) => getDraftConfigMock(...args),
 }));
 
+vi.mock('../../runtime/new-thread-ready-store', () => ({
+  useNewThreadReady: {
+    getState: () => ({
+      markReady: (...args: unknown[]) => markReadySpy(...args),
+      clearReady: (...args: unknown[]) => clearReadySpy(...args),
+    }),
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Import component AFTER all mocks are registered
 // ---------------------------------------------------------------------------
@@ -103,6 +114,8 @@ beforeEach(() => {
   setDraftConfigSpy.mockReset();
   getDraftConfigMock.mockReset();
   getDraftConfigMock.mockReturnValue(undefined);
+  markReadySpy.mockReset();
+  clearReadySpy.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -244,5 +257,58 @@ describe('NewThreadConfigPicker — changing permission mode re-writes the draft
       adapterId: 'claude',
       permissionMode: 'acceptEdits',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. markReady is NOT called before project+adapter are both chosen
+// ---------------------------------------------------------------------------
+
+describe('NewThreadConfigPicker — does not mark ready before config is complete', () => {
+  it('markReady not called on initial render or with only a project selected', async () => {
+    await renderAndWait();
+
+    expect(markReadySpy).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
+    });
+
+    expect(markReadySpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Selecting project + adapter marks the local id ready (picker→composer switch)
+// ---------------------------------------------------------------------------
+
+describe('NewThreadConfigPicker — project + adapter marks the local id ready', () => {
+  it('calls markReady("__LOCALID_test123") once the draft is complete', async () => {
+    await renderAndWait();
+
+    await act(async () => {
+      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
+      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-adapter-select'), 'claude');
+    });
+
+    expect(markReadySpy).toHaveBeenCalledWith('__LOCALID_test123');
+  });
+
+  it('writes the draft before marking ready (draft must exist when the composer mounts)', async () => {
+    const callOrder: string[] = [];
+    setDraftConfigSpy.mockImplementation(() => callOrder.push('setDraftConfig'));
+    markReadySpy.mockImplementation(() => callOrder.push('markReady'));
+
+    await renderAndWait();
+
+    await act(async () => {
+      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
+      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-adapter-select'), 'claude');
+    });
+
+    const draftIdx = callOrder.indexOf('setDraftConfig');
+    const readyIdx = callOrder.indexOf('markReady');
+    expect(draftIdx).toBeGreaterThanOrEqual(0);
+    expect(readyIdx).toBeGreaterThan(draftIdx);
   });
 });

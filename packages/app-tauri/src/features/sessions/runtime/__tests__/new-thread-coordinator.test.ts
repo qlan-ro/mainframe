@@ -10,6 +10,14 @@ vi.mock('../../../../lib/api/chats', () => ({
   createChat: vi.fn(),
 }));
 
+// Mock the ready-store so we can assert the first-send cleanup without a real store.
+const clearReadySpy = vi.fn();
+vi.mock('../new-thread-ready-store', () => ({
+  useNewThreadReady: {
+    getState: () => ({ clearReady: (...args: unknown[]) => clearReadySpy(...args) }),
+  },
+}));
+
 // Import AFTER the mock is registered so the module under test picks up the mock.
 import { createForLocal } from '../new-thread-coordinator';
 import { createChat } from '../../../../lib/api/chats';
@@ -124,5 +132,33 @@ describe('new-thread-coordinator — missing draft rejects without calling creat
   it('does not call createChat when no draft exists', async () => {
     await expect(createForLocal('__LOCALID_missing', 31415)).rejects.toThrow(/draft/i);
     expect(mockCreateChat).not.toHaveBeenCalled();
+  });
+});
+
+describe('new-thread-coordinator — clears the new-thread-ready flag on first send', () => {
+  it('clears the ready flag for the local id on a successful create', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      permissionMode: 'default',
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-99' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(clearReadySpy).toHaveBeenCalledWith('__LOCALID_a');
+  });
+
+  it('does NOT clear the ready flag when the create fails (so retry still shows the composer)', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      permissionMode: 'default',
+    });
+    mockCreateChat.mockRejectedValueOnce(new Error('create failed'));
+
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('create failed');
+
+    expect(clearReadySpy).not.toHaveBeenCalled();
   });
 });

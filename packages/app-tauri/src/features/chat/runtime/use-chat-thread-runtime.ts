@@ -94,6 +94,8 @@ export function useChatThreadRuntime(
   const state = useControllerState(controller); // uses controller.subscribeState (always)
 
   // Seed from REST once on mount (deduped by loadPromise inside controller).
+  // A __LOCALID_* thread is a no-op here — controller.load() early-returns until
+  // setRemoteId adopts a real daemon id (which re-fires the load itself).
   useEffect(() => {
     void controller.load();
   }, [controller]);

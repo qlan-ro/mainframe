@@ -11,7 +11,13 @@
  *   would race it (invariant 4).
  * - initialize creates the daemon chat for a __LOCALID_* thread via the
  *   new-thread coordinator and returns its id (no id-flip — aui stamps remoteId
- *   on the same entry).
+ *   on the same entry). On first send BOTH create seams fire — our onNew AND this
+ *   initialize. They are made idempotent against EACH OTHER (any ordering, not
+ *   just the same-tick burst the coordinator's in-flight cache covers) via the
+ *   shared per-thread controller: if onNew already created+adopted the chat the
+ *   controller carries its remoteId, so initialize returns that and skips a second
+ *   POST; when initialize is the creating seam it stamps the controller so a late
+ *   onNew skips creating too. setRemoteId is idempotent for the same id.
  *
  * Imports ONLY RemoteThreadListAdapter and derives the rest — no other named
  * export exists at @assistant-ui/react@0.14.14.
@@ -22,6 +28,7 @@ import { listChats, getChat, renameChat, archiveChat, unarchiveChat } from '../.
 import { chatToThreadCustom } from '../view-model/chat-to-thread-custom';
 import { requestWorktreeArchiveChoice } from './archive-confirm-bridge';
 import { createForLocal } from './new-thread-coordinator';
+import { chatControllerRegistry } from './chat-controller-registry';
 
 type RemoteThreadMetadata = Awaited<ReturnType<RemoteThreadListAdapter['fetch']>>;
 type RemoteThreadListResponse = Awaited<ReturnType<RemoteThreadListAdapter['list']>>;
@@ -75,7 +82,16 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
       await unarchiveChat(port, remoteId);
     },
     async initialize(threadId: string): Promise<RemoteThreadInitializeResponse> {
+      // onNew may already have created + adopted the chat (it ran first and
+      // settled — the coordinator's draft is gone, so re-creating would throw).
+      // The controller is the durable record: reuse its id instead.
+      const controller = chatControllerRegistry.getOrCreate(threadId, port);
+      if (controller.hasRemoteId()) {
+        return { remoteId: controller.getDaemonId(), externalId: undefined };
+      }
       const { remoteId } = await createForLocal(threadId, port);
+      // Stamp the controller so a LATER onNew sees the id and skips creating.
+      controller.setRemoteId(remoteId);
       return { remoteId, externalId: undefined };
     },
     generateTitle(): Promise<ReadableStream<AssistantStreamChunk>> {

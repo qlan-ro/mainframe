@@ -7,15 +7,19 @@
  *  - Mock `@assistant-ui/react` → useAuiState driven per test via fakeAuiState.
  *
  * Behaviors covered:
- *  1. New empty local thread (__LOCALID_* / status 'new' / no messages) → picker shown,
- *     chat-thread-stub absent; picker carries data-port="31415".
+ *  1. New empty local thread (__LOCALID_* / status 'new' / no messages) and NOT ready
+ *     → picker shown, chat-thread-stub absent; picker carries data-port="31415".
  *  2. Local thread WITH messages (already sent) → chat-thread-stub shown, picker absent.
  *  3. Status 'regular' (pre-existing chat), even with no messages → chat-thread-stub shown,
  *     picker absent. An empty pre-existing chat still shows the transcript surface.
  *  4. No main thread (mainThreadId=undefined) → chat-thread-stub shown, picker absent.
+ *  5. New empty local thread that IS ready (project+adapter chosen → marked ready) →
+ *     chat-thread-stub shown (so the real composer is available), picker absent. This
+ *     is the picker→composer transition that makes a new session startable (HIGH-1).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 
 // ---------------------------------------------------------------------------
 // Controlled fakeAuiState — mutated per test before the component reads it
@@ -58,7 +62,15 @@ vi.mock('../NewThreadConfigPicker', () => ({
 const { ChatSurface } = await import('../ChatSurface');
 
 // ---------------------------------------------------------------------------
-// 1. New empty local thread → picker shown with correct port, no chat-thread
+// Reset the (real) ready store between tests so readiness never leaks across cases
+// ---------------------------------------------------------------------------
+
+beforeEach(() => {
+  useNewThreadReady.getState().clearReady('__LOCALID_x');
+});
+
+// ---------------------------------------------------------------------------
+// 1. New empty local thread (not ready) → picker shown, no chat-thread
 // ---------------------------------------------------------------------------
 
 describe('ChatSurface — new empty local thread shows picker', () => {
@@ -126,6 +138,27 @@ describe('ChatSurface — no main thread shows blank transcript surface', () => 
       threadListItem: { id: undefined, status: undefined },
       thread: { messages: [] },
     };
+
+    render(<ChatSurface port={31415} />);
+
+    expect(screen.getByTestId('chat-thread-stub')).toBeTruthy();
+    expect(screen.queryByTestId('picker-stub')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. New empty local thread that IS ready → chat thread (composer) shown, no picker
+// ---------------------------------------------------------------------------
+
+describe('ChatSurface — ready new local thread switches to the composer', () => {
+  it('renders chat-thread-stub and no picker-stub once the local id is marked ready', () => {
+    fakeAuiState = {
+      threads: { mainThreadId: '__LOCALID_x' },
+      threadListItem: { id: '__LOCALID_x', status: 'new' },
+      thread: { messages: [] },
+    };
+    // The picker marks the local id ready after project+adapter are chosen.
+    useNewThreadReady.getState().markReady('__LOCALID_x');
 
     render(<ChatSurface port={31415} />);
 

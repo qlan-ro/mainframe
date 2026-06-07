@@ -5,10 +5,11 @@
  * the daemon port from DaemonPortContext, and the option lists from useProjects()
  * + getAdapters(). On every valid project+adapter+mode change it writes the
  * draft-config side-channel (keyed by localId) the new-thread coordinator reads on
- * first send. The chat is NEVER created here (D3) — only on first send.
+ * first send, then marks the local id ready in the reactive new-thread-ready-store
+ * so ChatSurface switches this surface to the real composer. The chat is NEVER
+ * created here (D3) — only on first send.
  *
- * Exposes data-ready="true|false" on the gate root so the composer (Phase 8) can
- * disable Send until project+adapter are chosen (mode always has a default).
+ * Exposes data-ready="true|false" on the gate root for tests/affordances.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
@@ -18,6 +19,7 @@ import { getAdapters } from '../../../lib/api/adapters';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useProjects } from '../use-projects';
 import { setDraftConfig } from '../runtime/draft-config';
+import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 
 const MODE_LABELS: Record<ExecutionMode, string> = {
   default: 'Default',
@@ -58,7 +60,11 @@ export function NewThreadConfigPicker({ port: portProp }: { port?: number } = {}
 
   useEffect(() => {
     if (!isReady) return;
+    // Order matters: the draft must exist before ChatSurface swaps in the composer
+    // (whose first send reads the draft via the coordinator), so write it first,
+    // then flip the reactive ready signal.
     setDraftConfig(localId, { projectId, adapterId, permissionMode });
+    useNewThreadReady.getState().markReady(localId);
   }, [localId, projectId, adapterId, permissionMode, isReady]);
 
   return (
