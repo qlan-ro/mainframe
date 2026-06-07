@@ -30,10 +30,12 @@ import { render, screen, act } from '@testing-library/react';
 let daemonPortSeenByRuntime: number | null = null;
 
 // ---------------------------------------------------------------------------
-// Hoisted spy for useSessionListRouter — referenced in behavior 6.
+// Hoisted spy for useSessionListRouter — referenced in behavior 6. Declared
+// via vi.hoisted so it exists before the vi.mock factory (hoisted above the
+// file) reads it.
 // ---------------------------------------------------------------------------
 
-const useSessionListRouterMock = vi.fn();
+const { useSessionListRouterMock } = vi.hoisted(() => ({ useSessionListRouterMock: vi.fn() }));
 
 // ---------------------------------------------------------------------------
 // vi.mock declarations — must appear before any import of the module under test.
