@@ -12,20 +12,26 @@
  *   the daemon does NOT re-emit chat.updated, add `case 'permission.resolved':
  *   this.deps.onReload(); return;`.
  *
- * The class is dependency-injected (onReload / onMarkUnread) so it is testable
- * with no React or zustand. useSessionListRouter wires it to the live runtime,
- * unread store, and daemon WS — call it once under <AssistantRuntimeProvider>.
+ * The class is dependency-injected (onReload / onChatUpdated / onMarkUnread) so
+ * it is testable with no React or zustand. useSessionListRouter (a sibling hook)
+ * wires it to the live runtime, unread store, and daemon WS — call it once under
+ * <AssistantRuntimeProvider>.
  */
-import { useEffect } from 'react';
-import { useAssistantRuntime } from '@assistant-ui/react';
-import type { DaemonEvent } from '@qlan-ro/mainframe-types';
+import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
-import { daemonWs } from '../../../lib/daemon/ws-client';
-import { useUnreadStore } from '../../../store/unread-store';
 
 export interface SessionListRouterDeps {
   onReload: () => void;
   onMarkUnread: (chatId: string) => void;
+  /**
+   * chat.updated handler. Optional; when omitted, chat.updated falls back to
+   * onReload (the corrected contract still reloads — see the D6 deviation).
+   */
+  onChatUpdated?: (chat: Chat) => void;
+}
+
+export interface SessionListRouterHandle {
+  dispose: () => void;
 }
 
 export class SessionListRouter {
@@ -44,8 +50,15 @@ export class SessionListRouter {
     switch (event.type) {
       case 'chat.created':
       case 'chat.ended':
-      case 'chat.updated':
         this.deps.onReload();
+        return;
+
+      case 'chat.updated':
+        if (this.deps.onChatUpdated) {
+          this.deps.onChatUpdated(event.chat);
+        } else {
+          this.deps.onReload();
+        }
         return;
 
       case 'chat.notification':
@@ -68,20 +81,10 @@ export class SessionListRouter {
 }
 
 /**
- * Wire a SessionListRouter to the live thread-list runtime, unread store, and
- * the shared daemon WS. Mount ONCE under <AssistantRuntimeProvider> (Phase 8).
+ * Construct a SessionListRouter wired to a daemon WS client. Returns a small
+ * handle ({ dispose }) so the React glue (useSessionListRouter) can tear it down
+ * on unmount without depending on the concrete class shape.
  */
-export function useSessionListRouter(): void {
-  const assistantRuntime = useAssistantRuntime();
-  const markUnread = useUnreadStore((s) => s.markUnread);
-
-  useEffect(() => {
-    const router = new SessionListRouter(daemonWs, {
-      onReload: () => {
-        void assistantRuntime.threads.reload();
-      },
-      onMarkUnread: (chatId) => markUnread(chatId),
-    });
-    return () => router.dispose();
-  }, [assistantRuntime, markUnread]);
+export function createSessionListRouter(ws: DaemonWsClient, deps: SessionListRouterDeps): SessionListRouterHandle {
+  return new SessionListRouter(ws, deps);
 }
