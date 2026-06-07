@@ -38,14 +38,6 @@ export function contentKey(content: DisplayContent[]): string {
   return reconcileKey(textBlock?.text ?? '');
 }
 
-/**
- * Match optimistic pendings against confirmed server user-messages by a
- * count-aware multiset, oldest pending first. The server is authoritative:
- * each server message reconciles AT MOST one pending, so N identical-text sends
- * need N server copies — no over-clear, no empty-text wildcard, no time window.
- * The single live `message.added` and the full history re-seed are the SAME
- * call (one message vs many). Returns the clientIds to reconcile.
- */
 /** Parsed optimistic-send input: trimmed text + the daemon upload payload. */
 export interface SendInput {
   text: string;

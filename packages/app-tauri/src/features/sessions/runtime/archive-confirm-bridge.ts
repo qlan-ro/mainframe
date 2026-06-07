@@ -32,8 +32,13 @@ export const useArchivePrompt = create<ArchivePromptState>((set, get) => ({
   pending: null,
   request: (remoteId, opts) => {
     return new Promise<ArchiveChoice>((res) => {
+      // One prompt at a time: a second request displaces the first. Resolve the
+      // stranded resolver with 'cancel' so its adapter.archive throws and aui
+      // rolls back the first optimistic archive (instead of hanging forever).
+      const displaced = resolver;
       resolver = res;
       set({ pending: { remoteId, hasWorktree: opts.hasWorktree } });
+      displaced?.('cancel');
     });
   },
   resolve: (choice) => {

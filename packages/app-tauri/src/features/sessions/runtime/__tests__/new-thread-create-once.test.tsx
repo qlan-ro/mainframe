@@ -5,10 +5,11 @@
  *
  * This is the test the original BLOCKER lacked: it mocks NEITHER
  * `@assistant-ui/react` NOR the new-thread coordinator. It mounts the REAL
- * sessions runtime (`ChatRuntimeProvider` → `useSessionsThreadList` →
- * `useRemoteThreadListRuntime` → `useChatRuntimeHook` → real per-chat controller
- * + real `createForLocal`) and stubs ONLY the network boundary (`lib/api/*` +
- * `lib/daemon/ws-client`).
+ * sessions runtime — the same composition AppShell uses
+ * (`DaemonPortProvider` → `AssistantRuntimeProvider` fed by
+ * `useSessionsThreadList` → `useRemoteThreadListRuntime` → `useChatRuntimeHook`
+ * → real per-chat controller + real `createForLocal`) — and stubs ONLY the
+ * network boundary (`lib/api/*` + `lib/daemon/ws-client`).
  *
  * The bug: on first send to a `__LOCALID_*` thread BOTH create seams fire for
  * the same thread:
@@ -94,8 +95,9 @@ vi.mock('../../../../lib/daemon/ws-client', () => {
 // Imports AFTER mocks — the subject + the real coordinator/registry/draft.
 // ---------------------------------------------------------------------------
 
-import { useAssistantRuntime } from '@assistant-ui/react';
-import { ChatRuntimeProvider } from '../../../chat/runtime/ChatRuntimeProvider';
+import { AssistantRuntimeProvider, useAssistantRuntime } from '@assistant-ui/react';
+import { DaemonPortProvider } from '../daemon-port-context';
+import { useSessionsThreadList } from '../use-sessions-thread-list';
 import { setDraftConfig, clearDraftConfig } from '../draft-config';
 import { chatControllerRegistry } from '../chat-controller-registry';
 import { createChat } from '../../../../lib/api/chats';
@@ -107,12 +109,23 @@ const RuntimeCapture: FC<{ runtimeRef: { current: AssistantRuntime | null } }> =
   return null;
 };
 
+// Mounts the SAME runtime tree AppShell composes in production:
+// DaemonPortProvider → AssistantRuntimeProvider(useSessionsThreadList()).
+const SessionsRuntimeRoot: FC<{ runtimeRef: { current: AssistantRuntime | null } }> = ({ runtimeRef }) => {
+  const runtime = useSessionsThreadList();
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <RuntimeCapture runtimeRef={runtimeRef} />
+    </AssistantRuntimeProvider>
+  );
+};
+
 function mountRuntime() {
   const runtimeRef: { current: AssistantRuntime | null } = { current: null };
   const utils = render(
-    <ChatRuntimeProvider port={PORT}>
-      <RuntimeCapture runtimeRef={runtimeRef} />
-    </ChatRuntimeProvider>,
+    <DaemonPortProvider port={PORT}>
+      <SessionsRuntimeRoot runtimeRef={runtimeRef} />
+    </DaemonPortProvider>,
   );
   if (!runtimeRef.current) throw new Error('runtime not captured');
   return { runtime: runtimeRef.current, ...utils };

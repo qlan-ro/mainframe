@@ -1,11 +1,10 @@
 /**
  * App — sessions shell (step 11). The REAL application root.
  *
- * Replaces the Phase 2A dev harness (chat-id input + per-chat
- * ChatRuntimeProvider). App owns only the connection gate + the persistent
- * status badge; once a port is live it mounts AppShell, which holds the one
- * global runtime wrapped in DaemonPortProvider (so useDaemonPort resolves for
- * the whole sessions runtime layer).
+ * App owns only the connection gate + the persistent status badge; once a port
+ * is live it mounts AppShell, which holds the one global runtime wrapped in
+ * DaemonPortProvider (so useDaemonPort resolves for the whole sessions runtime
+ * layer).
  */
 import { useEffect } from 'react';
 import { useConnectionState, type ConnectionState } from './useConnectionState';

@@ -1,7 +1,6 @@
 /**
  * Global controller registry — one ChatThreadController per thread id, shared
- * across the whole app (replaces the per-provider map that lived in
- * ChatRuntimeProvider). assistant-ui keeps every visited thread's subtree
+ * across the whole app. assistant-ui keeps every visited thread's subtree
  * mounted, so the registry is the keep-warm store: controllers persist until
  * an explicit dispose() (delete/detach), never on plain switchToThread.
  *

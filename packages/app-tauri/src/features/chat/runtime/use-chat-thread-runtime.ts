@@ -135,10 +135,8 @@ export function useChatThreadRuntime(
       if (!controller.hasRemoteId()) {
         const { remoteId } = await createForLocal(controller.getThreadId(), port);
         controller.setRemoteId(remoteId);
-        await controller.sendMessage(message);
-      } else {
-        await controller.sendMessage(message);
       }
+      await controller.sendMessage(message);
     },
     [controller, port],
   );

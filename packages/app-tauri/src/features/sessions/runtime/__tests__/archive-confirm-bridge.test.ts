@@ -92,4 +92,16 @@ describe('archive-confirm-bridge — second request while first is pending overw
     expect(result).toEqual({ deleteWorktree: false });
     expect(useArchivePrompt.getState().pending).toBeNull();
   });
+
+  it('resolves the displaced first promise with "cancel" (no stranded promise)', async () => {
+    const first = requestWorktreeArchiveChoice('chat-1', { hasWorktree: true });
+    const second = requestWorktreeArchiveChoice('chat-2', { hasWorktree: false });
+
+    // The first promise must settle on its own — a second request strands it
+    // otherwise. It resolves to 'cancel' so its adapter.archive rolls back.
+    await expect(first).resolves.toBe('cancel');
+
+    useArchivePrompt.getState().resolve({ deleteWorktree: false });
+    await expect(second).resolves.toEqual({ deleteWorktree: false });
+  });
 });

@@ -3,9 +3,8 @@
  *
  * useRemoteThreadListRuntime owns per-chat runtime lifecycle via runtimeHook
  * (one subtree per alive thread) and lists/creates/archives chats via the
- * chats REST adapter. App mounts exactly one of these at the root (via
- * ChatRuntimeProvider); the sidebar and the chat surface both live under its
- * AssistantRuntimeProvider.
+ * chats REST adapter. AppShell mounts exactly one of these at the root; the
+ * sidebar and the chat surface both live under its AssistantRuntimeProvider.
  *
  * The adapter is memoized by port so a stable identity survives re-renders
  * (a fresh adapter each render would churn the remote-list machinery).

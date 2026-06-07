@@ -20,7 +20,7 @@ daemon WS/REST  →  controller (state)  →  view-model (projection)  →  runt
 | Dir | What | Key files |
 |-----|------|-----------|
 | **`controller/`** | The stateful seam: a per-chat `ChatThreadController` + a **pure reducer** + `handle-daemon-event`. Subscribes to the WS, holds the per-chat projection (no app-side cache), optimistic-send reconcile, reconnect/resume. | `chat-thread-controller.ts`, `chat-thread-state.ts`, `handle-daemon-event.ts`, `project-messages.ts` |
-| **`runtime/`** | The assistant-ui adapter: the per-chat controller registry + the `useExternalStoreRuntime` wiring, `extras`, and the convenience hooks (`useChatExtras`, `useChatPermissionFront`, …). | `ChatRuntimeProvider.tsx`, `use-chat-thread-runtime.ts` |
+| **`runtime/`** | The assistant-ui adapter: the `useExternalStoreRuntime` wiring, `extras`, and the convenience hooks (`useChatExtras`, `useChatPermissionFront`, …). | `use-chat-thread-runtime.ts` |
 | **`view-model/`** | **Pure projection** — `DisplayMessage` → native `ThreadMessage` parts (the load-bearing WS14c invariants: `\0` sentinel, `uniqueId` dedup, ≥1-part fallback). No React. | `convert-message.ts`, `map-assistant-blocks.ts`, `map-tool-result.ts`, `content.ts`, `message-meta.ts`, `tool-group-summary.ts` |
 | **`messages/`** | Per-role message components + their chrome. | `AssistantMessage`, `UserMessage`, `SystemMessage`, `QueuedUserTurn`, `MessageActionBar`, `MessageTiming/Timestamp`, `ReadMoreBubble`, `user-directives` |
 | **`parts/`** | Content-part renderers (the inside of a message). | `markdown-text`, `CodeHeader`, `syntax-highlight`, `markdown-url-transform`, `extract-text` |

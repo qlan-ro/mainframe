@@ -8,12 +8,14 @@
  * resolves.
  *
  * It composes sibling helpers: `chat-event-router` (daemon-event side effects),
- * `chat-reconcile` (optimistic send + count-aware reconcile), `chat-queued-ops`
- * (queued cancel/edit), and `permission-reply-tracker` (reply delivery verify).
+ * `chat-reconcile` (optimistic send + count-aware reconcile), and
+ * `permission-reply-tracker` (reply delivery verify). Queued cancel/edit forward
+ * straight to the daemon REST API.
  */
 import type { AppendMessage } from '@assistant-ui/react';
 import type { ControlResponse, DisplayMessage } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
+import { cancelQueuedMessage, editQueuedMessage } from '../../../lib/api/chats';
 import { getChat, getChatMessages, interruptChat } from '../../../lib/api/chats';
 import { uploadAttachments } from '../../../lib/api/attachments';
 import {
@@ -25,7 +27,6 @@ import {
 import { ChatWsSubscription, type ChatWsHost } from './chat-ws-subscription';
 import { buildPendingMessage, parseSendInput, reconcilePendings } from './chat-reconcile';
 import { PermissionReplyTracker } from './permission-reply-tracker';
-import { cancelQueued as cancelQueuedOp, editQueued as editQueuedOp } from './chat-queued-ops';
 import { routeDaemonEvent } from './chat-event-router';
 
 export class ChatThreadController {
@@ -279,11 +280,11 @@ export class ChatThreadController {
   }
 
   public async cancelQueued(messageId: string): Promise<void> {
-    await cancelQueuedOp(this.port, this.daemonId, messageId);
+    await cancelQueuedMessage(this.port, this.daemonId, messageId);
   }
 
   public async editQueued(messageId: string, content: string): Promise<void> {
-    await editQueuedOp(this.port, this.daemonId, messageId, content);
+    await editQueuedMessage(this.port, this.daemonId, messageId, content);
   }
 
   private refreshInBackground(): void {
