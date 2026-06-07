@@ -219,7 +219,7 @@ Do the chat leaves in this order; ☑ = done.
 The single source of truth for what's left. Folds in items previously living only in code comments / memory / handoffs. Sizes: **S** ≤½ day · **M** 1–3 days · **L** ~1 week · **XL** multi-week / multiple sub-leaves. Status reflects the current built state (chat + sessions surfaces complete; everything else to port).
 
 ### Recommended next steps (ordered)
-1. **Declare `zustand` as an explicit dependency** in `packages/app-tauri/package.json` (and run the clean-lockfile guard per the shadcn-add lockfile trap). *Blocking build hazard — it's a phantom dep via shamefully-hoist; a clean/strict install breaks the build. Cheapest, highest-priority merge-blocker.*
+1. ✅ **DONE (`12f39eee`) — Declared `zustand` as an explicit dependency** in `packages/app-tauri/package.json` + the lockfile importer edge (hand-edited, no full re-resolve, per the mobile-submodule lockfile trap). *Was a phantom dep via shamefully-hoist; merge-blocker now cleared.*
 2. **Finish the sessions-sidebar loose ends** — wire the group-header "more" popover (placeholder today) and complete **data-testid saturation** for the chat + sessions surfaces. *Closes the built sessions surface to true-done and is a prerequisite for the e2e harness + the stress matrix (step 12).*
 3. **Run the ADR stress matrix (build-order step 12)** — long chat · nested subagent + mid-turn permission · reconnect · optimistic dedup — and capture the **two-windows** gap as a tracked design item. *The behavioral gate that validates the runtime decisions before building more surfaces on top; also forces resolution of the restored-permission stream-closed known gap.*
 4. **Build the Tauri bridge** (`lib/tauri/` + `src-tauri/commands/`) — reveal-in-dir, open-external, app-info, updater, readFile, notifications, log, `window.confirm`→AlertDialog, drag-region. *Foundational: every non-chat surface (editor, run, settings, plugins) depends on the `window.mainframe.*` replacements.*
@@ -233,7 +233,7 @@ The single source of truth for what's left. Folds in items previously living onl
 ### Backlog by category
 
 **Infrastructure / build**
-- ☐ **S — Declare `zustand` as a real dependency** (`packages/app-tauri/package.json`). Imported in 7+ src files (`store/unread-store`, `store/session-filters`, `sessions/runtime/*`, `tags/use-tag-popover-target`) but only resolves via shamefully-hoist; not in `dependencies` → a clean install or stricter hoisting breaks the build. **Merge-blocker.**
+- ☑ **S — Declare `zustand` as a real dependency** — DONE (`12f39eee`). Added `zustand: ^5.0.14` to `packages/app-tauri/package.json` + the lockfile importer edge by hand (no full re-resolve, per the mobile-submodule lockfile trap). Was imported in 7+ src files but only resolved via shamefully-hoist.
 - ☐ **XL — Sidecar packaging** — bundle Node runtime + native deps (`better-sqlite3`, `node-pty`, `@vscode/ripgrep`, `typescript-language-server`, `pyright`), per-platform binaries, signing/notarization. *Schedule-killer risk — spike before GA.* (also tracked under Cross-cutting foundation.)
 - ☐ **M — Capabilities / CSP** — least-privilege per-command trust boundary (`src-tauri/capabilities/`); shell plugin already dropped. Needed before GA.
 - ☐ **L — Tauri bridge** (`lib/tauri/` + `src-tauri/commands/`) — replace every `window.mainframe.*`: updates, showItemInFolder, openExternal, getAppInfo/getHomedir/readFile, showNotification, log, `window.confirm`→AlertDialog, drag-region. Underpins editor/run/settings/plugins.
