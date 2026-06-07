@@ -21,10 +21,15 @@
 - ☑ **Chat seam Phase 2A** — controller/reducer + `handle-daemon-event` + projection + `extras` + refetch-on-gap; dead Phase-1 spine removed; drift/gap empirically verified (`98f43f5a`).
 - ☑ **shadcn foundation + theme + `@assistant-ui@0.14.14` bump** — 18 primitives, warm-chrome tokens, restyled ToolFallback/ToolGroup, aligned assistant-ui set (`8e18e634`, `48cfefd5`).
 - ☑ **Interactive gate cards + review-fix pass** (2026-06-06) — the 3 inline gate cards (build-order step 10) shipped + live-tested, then a thermo-nuclear + codex review pass: **judo-A** count-aware window-free reconcile (`0c7f987c`), **judo-B** server-authoritative composer config — no optimism (`538d769d`), **judo-C** response-only reply seam (`9a688642`), permission reply/resume reliability — verify-timer + connected-gated fallback + restore-stale guard (`770a6c0a`), daemon orphaned-`working` recovery (`0f8f7dfe`) + single-`UPDATE` + Zod route (`31adee85`), AskUserQuestion result-wording parser (`6bc77c21`). All tested + changesets. *(Still open from this review: ws-client `message.send` CLOSED-drop — see Critical below.)*
+- ☑ **Sessions sidebar (build-order step 11) — BUILT + design-conformed** (2026-06-07). One global `useRemoteThreadListRuntime` + native `ThreadListItemPrimitive` rows rendered in OUR custom grouped/filtered sidebar (under `features/sessions/{runtime,sidebar,tags,new-thread,view-model,ws}/`). **TIME** grouping (Pinned / Today / Yesterday / Earlier) + a **Sort By** menu — *project is a FILTER, not a group* (collapsible `ProjectFilterPillBar` pills + a per-row colored project chip). A collapsible wrapping `TagFilterBar` (+N more, no horizontal scroll), tag management (`TagPopover` + a single `TagPopoverHost` at root, cascade-mirror, validate-tag-name), a `SessionContextMenu` (Pin / Rename / Archive / Copy / Tags), the `ArchiveWorktreeDialog` archive-confirm bridge, dense rows with hover actions/pin, a warm-glass panel, and a thin auto-hide scrollbar.
+- ☑ **Boot auto-opens the most-recent session** (`56ddee9f`) — parity with desktop; the app lands on the newest session instead of an empty thread.
+- ☑ **Draft-aware new-thread flow** (`3f85617f`) — picker skipped when a project pill is active; live adapter/model/permission/plan/effort/feature selectors render *before* first send; the chat is still created on first send only (D3 preserved — no empty sessions).
 
 ---
 
 ## Review follow-ups — DEFERRED (from the 2026-06-05 thermo-nuclear + architecture + codex reviews)
+
+> **Status (2026-06-07):** every Critical / High / Medium / Low item below is **RESOLVED**. The only thread still open from this review is the **retry-resend wiring** for failed user sends (minor follow-up — `UserMessage.tsx:228-229` + controller). It's carried into the Consolidated Backlog at the bottom.
 
 Durable capture so these aren't lost (the full write-ups live in volatile `/tmp` handoffs: `handoff-architecture-review.md`, `handoff-features-chat-restructure.md`, `handoff-permissions-ask-plan-cards.md`). **Sequence: type/contract fixes → silent-failure UX → tests → restructure LAST (mechanical, moves-only).** Don't collapse the controller/reducer/projection spine — it's praised as clean.
 
@@ -56,6 +61,8 @@ Durable capture so these aren't lost (the full write-ups live in volatile `/tmp`
 ## Parity gaps — desktop→app-tauri audit (2026-06-06)
 
 A 5-area parallel sweep (messages · composer · tools · gates · runtime/parts) comparing the desktop chat surface against the app-tauri port. **Runtime/data + tool cards came back clean-or-better; most absences are the tracker-deferred items above (each verified by its tracker quote).** Below are the **UNTRACKED** gaps it surfaced — logged so they aren't silently "missed". They cluster in the composer; the data/runtime spine is solid.
+
+> **Status (2026-06-07):** every parity gap listed here is **RESOLVED** except the standing deferrals — the multi-image gallery lightbox (prev/next nav; single-image zoom IS restored via `ZoomableImage`) and the intentional read-more 4-vs-6-line divergence (kept at 4). Both are carried into the Consolidated Backlog below.
 
 **🔴 Silent failures (no user signal — fix first)**
 - ☑ **`worktreeMissing` guard gone (composer)** — desktop disables input + send and shows a "worktree was deleted" banner (`desktop ComposerCard.tsx:355-363,392,477`); app-tauri `composer/Composer.tsx` never reads `worktreeMissing`. **DONE** — `Composer.tsx` reads `chatConfig.worktreeMissing`, disables Input + Send + the attachment dropzone, and renders a `chat-composer-worktree-missing` banner (with `worktreePath`). Tested in `composer/__tests__/Composer.test.tsx`.
@@ -93,8 +100,9 @@ Do the chat leaves in this order; ☑ = done.
 8. ☑ **composer shell** — native `ComposerPrimitive.*` (Root/Input/Send/Cancel/AddAttachment/AttachmentDropzone/Attachments) restyled + Send↔Cancel swap on `thread.isRunning` + `ThreadPrimitive.ViewportFooter` (scroll-inset fix). Native `AttachmentAdapter` + shadcn attachment UI (thumb/preview/remove) + upload-on-send. Daemon-backed **queued messages** (pending cards + in-composer edit mode), NOT native `Queue` (`a660d84d`, `2059d69d`, `71f0a8ac`). Hardened by the controller-seam review fixes (`f5be810b`, `4b70efe1`). Verified live. *Deferred sub-features: `@`-mention picker, WorktreePopover (gated: git/worktree API), captures control (gated: sandbox surface), composer-drafts, rejection-toaster.*
 9. ☑ **composer config toolbar** — model · permission · plan · effort · features as stateless shadcn controls, live `isRunning` disable. **Server-authoritative, NO optimism** (judo-B `538d769d`): the controller owns the config (seeds from REST on load, mirrors every `chat.updated` into `state.chatConfig`); `useComposerTuning` reads it live and a control just PATCHes — kills the optimistic-vs-broadcast flicker (`dbf70ba9`, `4d9b14a1`, `f5be810b`). **NOTE:** config flows via **REST** (`PATCH /chats/:id/config` + `/tuning`), NOT `setRunConfig.custom` — the daemon exposes those routes (**CLAUDE.md drift corrected this session**). `@`-mention picker (native `Unstable_TriggerPopover`) + worktree/captures controls deferred (see #8).
 10. ☑ **permission/ask/plan cards** — DONE. 3 inline shadcn gate cards (`PermissionGate`/`AskUserQuestionGate` Back/Next wizard/`PlanGate` w/ exec-mode+clear-context) under `features/chat/gates/`, dispatched by `toolName` from `ChatGateMount` at the **thread tail** (decision: inline, NOT above-composer), reading queue-front via `useChatPermissionFront` (sorts `extras.permissions` by `askedAt`) + `replyToPermission`. Permission dismisses on answer; ask/plan persist via tool-result display cards. Hybrid: native inline parts + our extras reply (native `approval` gate IS usable under external-store but bypassed by choice — data is out-of-band). Plan: `docs/plans/2026-06-05-interactive-chat-gate-cards.md`. *(gates session)*
-11. ☐ **sessions sidebar (hybrid)** — one global `useRemoteThreadListRuntime` (sessions + `custom` metadata via chats-REST adapter) + native `ThreadListItemPrimitive` rows (rename/archive/delete/select/active) rendered in OUR grouped/filtered/pinned layout via `ThreadListItemRuntimeProvider`/`ByIndexProvider`. NOT flat `ThreadListPrimitive.Items`; NOT per-project runtimes.
-12. ☐ **data-testid + stress validation** — tag everything; run the ADR stress matrix (long chat · nested subagent + mid-turn permission · reconnect · optimistic dedup · two windows).
+11. ☑ **sessions sidebar (hybrid) — BUILT + design-conformed** (2026-06-07). One global `useRemoteThreadListRuntime` (sessions + `custom` metadata via chats-REST adapter) + native `ThreadListItemPrimitive` rows (rename/archive/delete/select/active) rendered in OUR grouped/filtered/pinned layout. NOT flat `ThreadListPrimitive.Items`; NOT per-project runtimes. Realized in `features/sessions/{runtime,sidebar,tags,new-thread,view-model,ws}/`: **TIME** grouping (Pinned/Today/Yesterday/Earlier) + a **Sort By** menu (`SessionSidebar`); project is a **filter not a group** (`ProjectFilterPillBar` collapsible pills +N more + per-row colored chip); a collapsible wrapping `TagFilterBar` (+N more, no horizontal scroll); tag management (`TagPopover` + single `TagPopoverHost` at root, cascade-mirror, validate-tag-name); a `SessionContextMenu` (Pin/Rename/Archive/Copy/Tags); the `ArchiveWorktreeDialog` archive-confirm bridge; dense rows w/ hover actions/pin; warm-glass panel; thin auto-hide scrollbar. **Boot auto-opens the most-recent session** (`56ddee9f`) and the **new-thread flow is draft-aware** (`3f85617f` — picker skipped when a project pill is active, composer adapter/model/permission/plan/effort/feature selectors live before first send, chat created on first send only so no empty sessions).
+   - **Deferred sidebar chrome** (logged so it's not lost — out of scope of the sessions list itself): the **surface rail** (Chat/Files/Run — gated on the Files/Run surfaces), the **bottom Context/Skills/Agents tabbed panel + resize handle**, **window chrome / traffic-lights + floating-panel-on-warm-gradient background** (needs the Tauri window-decorations decision), the ghosted/dashed **"Add project" pill** + the **add-project flow** (`ProjectFilterPillBar.tsx:10-11` — directory picker + project create/register), and the `SessionSidebar` **group-header "more" popover** (`SessionSidebar.tsx:53,71` — a presentational placeholder button w/ a testid but no popover wired). All folded into the Consolidated Backlog below.
+12. ☐ **data-testid + stress validation** — tag everything; run the ADR stress matrix (long chat · nested subagent + mid-turn permission · reconnect · optimistic dedup · two windows). *(The chat + sessions spine is feature-complete; this is the behavioral gate before more surfaces land. Folds in the **multi-window infrastructure** gap — two windows + cross-window state sync is not yet designed.)*
 
 ---
 
@@ -195,7 +203,7 @@ Do the chat leaves in this order; ☑ = done.
 - ☑ **Sessions list** — hybrid: one global `useRemoteThreadListRuntime` + native `ThreadListItemPrimitive` rows in our grouped sidebar (build-order step 11).
 - ☑ **Drift handling** — refetch-on-gap, no daemon `seq` (decided).
 - ☑ **Tool cards / permissions / composer = assistant-ui** — adoption verdicts locked (2026-06-05): tool cards + composer are native-restyle MATCHES; permissions have no native UI → custom shadcn cards via `extras`. See `app-tauri/CLAUDE.md` golden-rule pointers + the build order below.
-- ☐ **Permission card mount placement** — above-composer (queue-front, simple, matches today) vs inline-under-tool. Inline needs the daemon `control_request` to carry the originating `tool_use` id. *Default: above-composer; revisit if the daemon carries the id.*
+- ☐ **Permission card mount placement** — currently **inline at the thread tail** (the realized default, build-order step 10 `35054382`) vs inline-under-tool. Inline-under-tool needs the daemon `control_request` to carry the originating `tool_use` id. *Default: inline-at-tail; revisit if the daemon carries the id.*
 - ☑ **Part model = go native** — `GroupedParts`/`groupPartByType`/`display:'standalone'` + `part.messages` for subagents. **Preferred: do it in `convert-message`** (project the daemon's existing nested encoding → native parts); no daemon/contract change if the payload suffices, daemon flat-parts is the fallback (verify at build).
 - ☑ **Sessions list = hybrid** — one global `useRemoteThreadListRuntime` (domain data in thread `custom`) + native `ThreadListItemPrimitive` rows rendered in OUR grouped/filtered sidebar layout (not flat `Items`, not per-project runtimes).
 - ☑ **Reasoning = native, collapsed** — adopt native `Reasoning`, drop the dead `ThinkingPart`.
@@ -203,6 +211,122 @@ Do the chat leaves in this order; ☑ = done.
 - ☐ **Phase-2 Rust daemon go/no-go + sizing** — biggest unscoped workstream; decide before committing.
 - ☐ **Electron app lifecycle** — retire vs coexist (port 31415 / data-dir / prefs-origin); parity definition-of-done.
 - ☐ **Mobile-contract governance** — the WS/REST contract is co-owned; changes stay additive.
+
+---
+
+## Deferred & Next-steps backlog (consolidated, 2026-06-07)
+
+The single source of truth for what's left. Folds in items previously living only in code comments / memory / handoffs. Sizes: **S** ≤½ day · **M** 1–3 days · **L** ~1 week · **XL** multi-week / multiple sub-leaves. Status reflects the current built state (chat + sessions surfaces complete; everything else to port).
+
+### Recommended next steps (ordered)
+1. **Declare `zustand` as an explicit dependency** in `packages/app-tauri/package.json` (and run the clean-lockfile guard per the shadcn-add lockfile trap). *Blocking build hazard — it's a phantom dep via shamefully-hoist; a clean/strict install breaks the build. Cheapest, highest-priority merge-blocker.*
+2. **Finish the sessions-sidebar loose ends** — wire the group-header "more" popover (placeholder today) and complete **data-testid saturation** for the chat + sessions surfaces. *Closes the built sessions surface to true-done and is a prerequisite for the e2e harness + the stress matrix (step 12).*
+3. **Run the ADR stress matrix (build-order step 12)** — long chat · nested subagent + mid-turn permission · reconnect · optimistic dedup — and capture the **two-windows** gap as a tracked design item. *The behavioral gate that validates the runtime decisions before building more surfaces on top; also forces resolution of the restored-permission stream-closed known gap.*
+4. **Build the Tauri bridge** (`lib/tauri/` + `src-tauri/commands/`) — reveal-in-dir, open-external, app-info, updater, readFile, notifications, log, `window.confirm`→AlertDialog, drag-region. *Foundational: every non-chat surface (editor, run, settings, plugins) depends on the `window.mainframe.*` replacements.*
+5. **Stand up the typed-surface layout engine** (SurfaceHost + SurfaceRail + by-arrival + per-session layout) **and the surface-intent bus**, then mount the surface rail (Chat/Files/Run). *Replaces the dropped `zone/` system; prerequisite for the Files/Run surfaces and wiring the chat tool-card `openFile`/`revealFile` intents (log-only today). The intent bus must land with it (lint-enforced `features/** ↛ layout/**`).*
+6. **Port the editor surface** (Monaco code+diff + `setup.ts` + viewers + LSP client), then flip `chat-tool-context` `openFile`/`revealFile` from log-only to real intents. *Highest-value next surface; removes a chat-side stub. Re-solve the Monaco-in-Tauri loader story early.*
+7. **De-risk packaging early** — spike the **sidecar bundling** (Node runtime + `better-sqlite3`/`node-pty`/ripgrep/LSP servers, per-platform binaries, signing/notarization) and establish **capabilities/CSP**. *Flagged as a schedule-killer; spike now in parallel to avoid a late GA blocker.*
+8. **Resolve the standing open decisions in dependency order** — shared pure-logic package home (unblocks `convertMessage`/`model-tuning` dedup) → Phase-2 Rust-daemon go/no-go → Electron retire-vs-coexist + mobile-contract governance. *These gate cross-package structure and the terminal/sidecar architecture.*
+9. **Build the remaining standalone surfaces in parity order** — Run/terminal (Rust PTY + xterm) → Settings (modal shell + panes + RemoteAccess decompose) → overlays (SearchPalette→Command, FindInPath/DirectoryPicker/Review) → Tasks/Git → Sandbox preview → Plugins UI. *Independent leaves once bridge + layout + intent bus exist; terminal first (heaviest Rust dep), plugins last (largest god-file + webview re-platform).*
+10. **Complete the cross-cutting foundation last** — theming refactor (Tailwind v4 `@theme` + 4 themes + CSS split once Monaco lands), domain-store/pure-helper port, remaining shadcn primitive swaps, and stand up the **e2e harness** for Tauri. *Pervasive but lower-risk; the theme CSS split is partly blocked on Monaco; the harness should target stabilized surfaces.*
+
+### Backlog by category
+
+**Infrastructure / build**
+- ☐ **S — Declare `zustand` as a real dependency** (`packages/app-tauri/package.json`). Imported in 7+ src files (`store/unread-store`, `store/session-filters`, `sessions/runtime/*`, `tags/use-tag-popover-target`) but only resolves via shamefully-hoist; not in `dependencies` → a clean install or stricter hoisting breaks the build. **Merge-blocker.**
+- ☐ **XL — Sidecar packaging** — bundle Node runtime + native deps (`better-sqlite3`, `node-pty`, `@vscode/ripgrep`, `typescript-language-server`, `pyright`), per-platform binaries, signing/notarization. *Schedule-killer risk — spike before GA.* (also tracked under Cross-cutting foundation.)
+- ☐ **M — Capabilities / CSP** — least-privilege per-command trust boundary (`src-tauri/capabilities/`); shell plugin already dropped. Needed before GA.
+- ☐ **L — Tauri bridge** (`lib/tauri/` + `src-tauri/commands/`) — replace every `window.mainframe.*`: updates, showItemInFolder, openExternal, getAppInfo/getHomedir/readFile, showNotification, log, `window.confirm`→AlertDialog, drag-region. Underpins editor/run/settings/plugins.
+
+**Testing**
+- ☐ **L — data-testid saturation + ADR stress matrix (chat build-order step 12)** — tag all interactive elements (chat + sessions) + run the stress matrix (long chat, nested subagent + mid-turn permission, reconnect, optimistic dedup, two windows).
+- ☐ **XL — e2e harness + data-testids (Tauri story)** — the 130 Electron-bound specs + 301 testids have no Tauri migration story; the only behavioral safety net for the rewrite.
+- ☐ **L — Multi-window surface infrastructure** — two windows + cross-window state sync; a deferred acceptance criterion of the stress matrix, not yet designed.
+
+**Layout / sidebar chrome** *(deferred from the built sessions sidebar)*
+- ☐ **S — SessionSidebar group-header "more" popover** (`SessionSidebar.tsx:53,71`) — testid present, no popover wired (presentational placeholder); port the overflow menu.
+- ☐ **M — Ghosted/dashed "Add project" pill** (`ProjectFilterPillBar.tsx:10-11`) — dashed add-project button in the filter bar; inert without the add-project surface.
+- ☐ **M — Add-project flow** (`features/sessions/` + `lib/api/projects.ts`) — directory picker + project create/register that makes the "Add project" pill live.
+- ☐ **L — Surface rail (Chat / Files / Run vertical rail)** (`layout/` + `surfaces/{chat,files,run}/`) — gated on the Files/Run surfaces existing.
+- ☐ **M — Bottom Context/Skills/Agents tabbed panel + resize handle** (`layout/` or `features/sessions/sidebar/`) — completes artboard parity below the session list.
+- ☐ **M — Window chrome / traffic-lights + floating-panel-on-warm-gradient background** (`src/shell/TitleBar` + `src-tauri/tauri.conf.json`) — needs the Tauri window-decorations decision.
+
+**Layout engine / architecture**
+- ☐ **XL — Typed-surface layout engine** (`src/layout/`, replaces the whole desktop `zone/` system, Layout, LeftRail/RightRail, `store/layout.ts`, `tool-windows.ts`) — SurfaceHost + SurfaceRail + by-arrival placement + per-session remembered layout. Gates the Files/Run surfaces. *(◐ designed in brainstorm specs, not built.)*
+- ☐ **M — Surface-intent bus** — features emit "open file/diff/surface" intents; only `layout/` subscribes (no `getState()` reach-through), lint-enforced. Needed before editor/run wire to chat tool cards.
+
+**Shell**
+- ☐ **L — Shell & global layout refactor** (`src/app/` + `src/shell/`) — main.tsx, App.tsx + global keybinds, TitleBar, StatusBar, ConnectionOverlay, ErrorBoundary, Toaster, Tutorial. Only App.tsx boot wiring exists today.
+
+**Editor & viewers**
+- ☐ **XL — Editor & viewers** (`features/editor/` + `features/viewers/`) — Monaco code+diff editors, `setup.ts` (workers/theme/opener), LSP client, copy-reference, inferLanguage/file-types, image/svg/pdf/csv viewers. Re-solve the Monaco loader story for Tauri.
+- ☐ **S — Editor surface intents currently log-only** (`features/chat/tools/chat-tool-context.ts:32,35`) — `useOpenFile()`/`revealFile` only `console.warn`; when the surface-intent bus lands, only this hook changes.
+- ☐ **M — Inline comments** (`features/editor/inline-comments/`) — `useInlineComments`/`InlineCommentWidget`; depends on the editor surface.
+- ☐ **M — LSP-based navigation** (`features/editor/lsp/` + store) — replace regex `navigation.ts`; nav-state singletons → store.
+- ☐ **S — Drop `LineCommentPopover`** (removal when editor lands).
+
+**Terminal**
+- ☐ **L — Rust PTY backend** (`src-tauri/terminal.rs`) — replaces Electron node-pty + IPC; foundational for the Run surface.
+- ☐ **L — Terminal UI** (`features/terminal/` or `surfaces/run/terminal/`) — `TerminalInstance` (xterm) + `TerminalPanel` (tabs) + `terminal-cwd.ts` + `useTerminalStore`; drop tool-windows terminal registration.
+
+**Settings**
+- ☐ **M — Settings modal shell** (`features/settings/`) — shadcn Dialog-based chrome/sidebar/routing.
+- ☐ **L — Settings store + Provider + panes** — TuningDefaults/CodexTuning/ModelDropdown + General/Notifications/About/Sidebar; decompose the 697-line `RemoteAccess` god-file (tunnel/pairing/devices).
+- ☐ **M — Settings + remote-access API port** (`lib/api/settings.ts` + remote-access-api); drop the Keybindings placeholder pane.
+
+**Overlays / review**
+- ☐ **M — SearchPalette → shadcn Command** (`components/overlays/`) + retire the search store.
+- ☐ **L — FindInPathModal + DirectoryPickerModal + ReviewPanel** (Header/DiffView/FileTree); drop `FullviewModal`.
+
+**Sandbox / run**
+- ☐ **L — Sandbox PreviewTab → embedded Tauri webview** (`features/preview/`) — inspect/capture/console; replaces the Electron `<webview>`. iframe-vs-webview-vs-window scope TBD.
+- ☐ **L — Sandbox capture overlays + LaunchPopover/StopPopover + launch plumbing** (`features/run/`) + the capture-to-chat send path.
+
+**Tasks / Git / Tags**
+- ☐ **L — Tasks / Todos panels** (`features/tasks/`) — TodosPanel/TodoModal/QuickAdd/FilterBar/Card/Attachments/DependencyPicker + todos-api.
+- ☐ **L — Git panels** (`features/git/`) — BranchPopover/List/Submenu/NewBranch/Conflict/Rename + useBranchActions.
+- ☐ **M — Sandbox-side Tags** (`features/tags/`, run/sandbox tags) — distinct from the built **sessions** tags (Popover/Pill/store/api).
+
+**Plugins**
+- ☐ **XL — Plugins UI re-platform** (`features/plugins/`) — PluginView (779 lines), PluginIcon, PluginError, PluginGlobalComponents from Electron `<webview>` → Tauri webview + plugins store + plugins-api + usePluginShortcuts; drop the zone plugin bridge.
+
+**State & data layer**
+- ☐ **XL — State & data layer** (`src/stores/` + `src/hooks/` + `src/lib/`) — chats store + chat-actions + useChatSession + useActiveProjectId → controller; LSP client; domain stores (projects/adapters/settings/skills/tags/sandbox/terminal/background-tasks/theme/toasts/search/find-in-chat/tutorial/todos-filters) + pure helpers; replace tabs/plugins-layout stores; logger/notify/useUpdateStatus/global.d.ts → `lib/tauri`; drop layout/ui stores. *(WS client / useConnectionState / ws-event-router only partially landed — Phase 1.)*
+- ☐ **M — UI primitives completion + bespoke helpers** (`components/ui/`) — replace Radix-wrapper primitives (button/tooltip/scroll-area) + context-menu + toggle with shadcn; build the missing (Dialog/Select/Dropdown/Popover/Command/Checkbox/Label); port scroll-row/truncated-label + `utils.cn()`; drop input.tsx/tabs.tsx/zone plugin bridge. *(18 primitives exist.)*
+
+**Theming**
+- ☐ **L — Theming / tokens refactor** (`src/styles/`) — `mainframe-theme.css` → Tailwind v4 `@theme`, 4 runtime-switchable themes, split Monaco/aui-md CSS out of `index.css`, eliminate the `/opacity`-on-CSS-var traps. *(◐ in progress; CSS split partly blocked on Monaco landing.)*
+
+**Composer / config**
+- ☐ **S — Provider-tuning-defaults not fetched** (`composer/config-toolbar/{EffortPicker.tsx:42,FeaturesPopover.tsx:56,use-composer-tuning.ts:19}`) — the 3rd arg to `displayEffort`/`effectiveFeature` is `undefined`; controls resolve model-effort/feature constraints without provider inheritance. Needs a settings/provider-defaults fetch.
+- ☐ **S — Retry-resend wiring for failed user sends** (`messages/UserMessage.tsx:228-229` + controller) — "Failed to send" is visible but the retry action needs controller wiring that doesn't exist yet.
+- ☐ **M — Sandbox captures in the user message** (`messages/UserMessage.tsx` UMContextRow + view-model parse) — the raw `\0__MF_SANDBOX_CAPTURE__` sentinel leaks as `MF_SANDBOX_CAPTURE` text; port desktop's `parseSandboxCaptureBlock` to strip it + render screenshot tiles + CSS-path inspect chips. (Capture-creation webview separately gated.)
+- ☐ **M — Deferred user-message leaf states** (`messages/UserMessage.tsx:26,210-212`) — UMCodeRef (editor leaf), UMInspectChip (sandbox-capture leaf), PLAN "implementing plan" bubble (permission/plan leaf), FileAttachmentThumbs/UMContextRow chips (composer/attachments leaf). Plain markdown code blocks DO render.
+- ☐ **M — WorktreePopover in composer** (`features/chat/composer/` + git/worktree API) — deferred pending verification whether it's REST-wireable like config.
+- ☐ **S — Composer-drafts module Map → store** (`composer/composer-drafts.ts`) — no native draft persistence across chat switches today.
+- ☐ **S — Broader rejection-toaster + native `attachmentAddError` wiring** (`composer/`) — >5MB rejection toasts now; the broader rejection UX + native event-driven wiring (vs adapter throw) are deferred.
+- ☐ **M — Skills-registry subsystem** (`features/skills/` + `lib/api/skills.ts`) — full `/`-skills picker injection wiring beyond the resolved chip name + project-scoped skills state + API client; SkillsPanel out-of-band injection (`pendingInvocation`) has no app-tauri surface.
+
+**Chat / messages / parts (deferred leaves)**
+- ☐ **M — FindBar + QuoteOnSelection (find leaf) + full message parser** (`features/chat/find/` + view-model) — Cmd+F find + scroll-to-match, QuoteOnSelection (native SelectionToolbar/`MessagePrimitive.Quote` + CLI serialization glue). Inline mention highlight IS ported.
+- ☐ **M — Small message-part renderers** (`features/chat/parts/`) — SandboxCaptureContext/SelectorBreadcrumb/ImageThumbs-gallery/FileTypeIcon/ErrorPart, deferred to their leaves.
+- ☐ **S — ViewportFooter inset bug + Welcome/suggestions empty-state** (`thread/ChatThread.tsx`) — a real scroll-inset bug (tall PermissionCard overlaps the last message → move BottomCard into ViewportFooter) + the welcome screen + suggestion prompts.
+- ☐ **S — Reasoning "Thought for Ns" duration** (`features/chat/messages` + daemon contract) — shows "Reasoning" until a daemon thinking-duration field exists; needs an additive daemon field.
+- ☐ **M — Runtime-gated message actions** (`messages` MessageActionBar) — Reload/Edit-sent/BranchPicker/Feedback/Speak; CLI-resume has no branches/edit and the rest need daemon endpoints. Ships Copy + Export only; don't render disabled buttons.
+- ☐ **S — Multi-image gallery lightbox** (`features/chat/parts`, ImageLightbox keep-ours) — prev/next nav shared by SessionAttachmentsGrid + todos modals; single-image zoom IS restored (`ZoomableImage`).
+
+**Chat / sessions runtime**
+- ☐ **M — Migrate deprecated assistant-ui hooks → `useAui`/`useAuiState` selectors** (`sessions/sidebar/{SessionSidebar,SessionRow}.tsx`, `sessions/tags/TagPopoverHost.tsx`, `sessions/ws/use-session-list-router.ts`, any chat sites) — `useThreadListRuntime` isn't publicly exported (sessions use `useAssistantRuntime().threads` as the workaround); several deprecated-path hooks (`useAssistantRuntime`/`useThreadListItemRuntime`/`useThreadRuntime`/`useMessageRuntime`) are in active use.
+- ☐ **M — Restored-permission "stream closed" known gap** (`features/chat/runtime` + daemon restore path) — replying to a restored permission whose CLI died (daemon restart between Q and A) fails with "stream closed"; self-recovers on reload; plain reconnect with the CLI alive works. *Logged, not fixed.*
+- ☐ **S — Toast/badge surfacing of `queued.cancel_failed`** (`controller/chat-thread-state.ts:91`) — explicit no-op in the reducer (prevents silent fallthrough); a global `toast.error` already fires via `routeDaemonEvent`, richer per-event UX deferred.
+
+**Architecture / open decisions**
+- ☐ **M — Shared pure-logic package home** (`@qlan-ro/mainframe-types` vs new `@qlan-ro/mainframe-shared`) — where `convertMessage` + diff math + file-types + `model-tuning` live so desktop & app-tauri share one copy. Currently app-tauri-local/duplicated.
+- ☐ **S — Model-tuning dedup to a bundleable location** (`lib/model-tuning.ts:10`, TODO(dedup)) — tied to the shared-package decision.
+- ☐ **S — Permission-card mount placement decision** (`features/chat/gates`) — inline-at-tail (default) vs inline-under-tool; the latter needs the daemon `control_request` to carry the originating `tool_use` id.
+- ☐ **XL — Phase-2 Rust daemon go/no-go + sizing** (`src-tauri/` daemon) — biggest unscoped workstream; decide before committing (affects terminal/sidecar).
+- ☐ **M — Electron app lifecycle — retire vs coexist** — parallel-maintenance tax + dual-instance contention over one data dir + fixed port; defines parity DoD.
+- ☐ **S — Mobile-contract governance rule** — the WS/REST contract is co-owned by the mobile submodule; establish an explicit additive-only governance rule.
 
 ---
 
