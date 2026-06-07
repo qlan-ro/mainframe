@@ -26,13 +26,33 @@
  * unrelated New of the same recycled localId starts fresh). On failure the
  * cache entry AND the draft are left intact so the user can retry.
  */
-import type { Chat } from '@qlan-ro/mainframe-types';
-import { createChat } from '../../../lib/api/chats';
-import { getDraftConfig, clearDraftConfig } from './draft-config';
+import type { Chat, SessionTuning } from '@qlan-ro/mainframe-types';
+import { createChat, setChatConfig, setChatTuning } from '../../../lib/api/chats';
+import { getDraftConfig, clearDraftConfig, type DraftCfg } from './draft-config';
 import { useNewThreadReady } from './new-thread-ready-store';
 
 /** In-flight (and just-settled) create promises, keyed by the local thread id. */
 const inFlight = new Map<string, Promise<{ remoteId: string }>>();
+
+/**
+ * Apply the draft fields createChat does NOT accept — planMode (PATCH /config)
+ * and effort/features (PATCH /tuning) — to the freshly created chat, before the
+ * first send spawns the CLI. Best-effort: a tuning hiccup is logged, never
+ * thrown, so it can't orphan an already-created chat.
+ */
+async function applyDraftTuning(port: number, chatId: string, cfg: DraftCfg): Promise<void> {
+  const tuning: SessionTuning = {};
+  if (cfg.effort !== undefined) tuning.effort = cfg.effort;
+  if (cfg.fast != null) tuning.fast = cfg.fast;
+  if (cfg.ultracode != null) tuning.ultracode = cfg.ultracode;
+  if (cfg.adaptiveThinking != null) tuning.adaptiveThinking = cfg.adaptiveThinking;
+  try {
+    if (Object.keys(tuning).length > 0) await setChatTuning(port, chatId, tuning);
+    if (cfg.planMode != null) await setChatConfig(port, chatId, { planMode: cfg.planMode });
+  } catch (err) {
+    console.warn('[new-thread-coordinator] applyDraftTuning failed', { chatId, err });
+  }
+}
 
 /**
  * Create the daemon chat for a local thread from its stashed draft config.
@@ -57,7 +77,10 @@ export function createForLocal(localId: string, port: number): Promise<{ remoteI
     ...(cfg.worktreePath !== undefined ? { worktreePath: cfg.worktreePath } : {}),
     ...(cfg.branchName !== undefined ? { branchName: cfg.branchName } : {}),
   })
-    .then((chat: Chat) => {
+    .then(async (chat: Chat) => {
+      // Carry the draft fields createChat can't take (planMode/effort/features)
+      // onto the new chat BEFORE the first send spawns the CLI.
+      await applyDraftTuning(port, chat.id, cfg);
       // Created — the draft is consumed and the cache entry can be evicted so a
       // future recycled localId starts fresh. The reactive ready flag is cleared
       // too (its job — switching the surface to the composer — is done; the thread

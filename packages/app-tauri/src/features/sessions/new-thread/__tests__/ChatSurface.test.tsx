@@ -55,6 +55,18 @@ vi.mock('../NewThreadConfigPicker', () => ({
   NewThreadConfigPicker: (p: { port: number }) => <div data-testid="picker-stub" data-port={p.port} />,
 }));
 
+// Mock session filters — driven per test via fakeFilterProjectId.
+let fakeFilterProjectId: string | null = null;
+vi.mock('@/store/session-filters', () => ({
+  useSessionFilters: (sel: (s: { filterProjectId: string | null }) => unknown) =>
+    sel({ filterProjectId: fakeFilterProjectId }),
+}));
+
+// Mock the auto-config hook to a no-op so it doesn't fight the filter mock.
+vi.mock('../use-new-thread-auto-config', () => ({
+  useNewThreadAutoConfig: () => undefined,
+}));
+
 // ---------------------------------------------------------------------------
 // Import component AFTER all mocks are registered
 // ---------------------------------------------------------------------------
@@ -62,11 +74,12 @@ vi.mock('../NewThreadConfigPicker', () => ({
 const { ChatSurface } = await import('../ChatSurface');
 
 // ---------------------------------------------------------------------------
-// Reset the (real) ready store between tests so readiness never leaks across cases
+// Reset the (real) ready store + filter between tests
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
   useNewThreadReady.getState().clearReady('__LOCALID_x');
+  fakeFilterProjectId = null;
 });
 
 // ---------------------------------------------------------------------------
@@ -164,5 +177,48 @@ describe('ChatSurface — ready new local thread switches to the composer', () =
 
     expect(screen.getByTestId('chat-thread-stub')).toBeTruthy();
     expect(screen.queryByTestId('picker-stub')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. filterProjectId != null on a new local thread → composer shown (not picker)
+// ---------------------------------------------------------------------------
+
+describe('ChatSurface — filterProjectId active on new local thread skips the picker', () => {
+  it('renders chat-thread (not the picker surface) when a project pill is active', () => {
+    fakeAuiState = {
+      threads: { mainThreadId: '__LOCALID_x' },
+      threadListItem: { id: '__LOCALID_x', status: 'new' },
+      thread: { messages: [] },
+    };
+    // Project pill is active — the auto-config hook seeds + marks ready; the picker
+    // should be bypassed (filterProjectId != null gates it out in ChatSurface).
+    fakeFilterProjectId = 'proj-99';
+
+    render(<ChatSurface port={31415} />);
+
+    expect(screen.getByTestId('chat-thread-stub')).toBeTruthy();
+    expect(screen.queryByTestId('sessions-new-thread-surface')).toBeNull();
+    expect(screen.queryByTestId('picker-stub')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. filterProjectId is null on a new local thread (not ready) → picker shown
+// ---------------------------------------------------------------------------
+
+describe('ChatSurface — filterProjectId null on new local thread shows picker', () => {
+  it('renders the picker surface when no project pill is active and thread is not ready', () => {
+    fakeAuiState = {
+      threads: { mainThreadId: '__LOCALID_x' },
+      threadListItem: { id: '__LOCALID_x', status: 'new' },
+      thread: { messages: [] },
+    };
+    fakeFilterProjectId = null;
+
+    render(<ChatSurface port={31415} />);
+
+    expect(screen.getByTestId('sessions-new-thread-surface')).toBeTruthy();
+    expect(screen.queryByTestId('chat-thread-stub')).toBeNull();
   });
 });

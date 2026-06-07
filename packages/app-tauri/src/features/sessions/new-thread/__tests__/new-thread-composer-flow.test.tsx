@@ -203,11 +203,10 @@ describe('new-thread composer flow — startable end to end (HIGH-1)', () => {
     });
     await flush();
 
-    await waitFor(() => expect(screen.getByTestId('sessions-new-thread-adapter-select')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('sessions-new-thread-project-select')).toBeTruthy());
 
     await act(async () => {
       await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-adapter-select'), 'claude');
     });
     await flush();
 
@@ -225,10 +224,9 @@ describe('new-thread composer flow — startable end to end (HIGH-1)', () => {
     const localId = runtime.threads.getState().mainThreadId;
     expect(localId).toMatch(/^__LOCALID_/);
 
-    await waitFor(() => expect(screen.getByTestId('sessions-new-thread-adapter-select')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('sessions-new-thread-project-select')).toBeTruthy());
     await act(async () => {
       await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-adapter-select'), 'claude');
     });
     await flush();
 

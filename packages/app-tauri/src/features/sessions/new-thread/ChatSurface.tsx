@@ -17,8 +17,13 @@ import { useAuiState } from '@assistant-ui/react';
 import { ChatThread } from '../../../features/chat/thread/ChatThread';
 import { NewThreadConfigPicker } from './NewThreadConfigPicker';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
+import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
+import { useSessionFilters } from '@/store/session-filters';
 
 export function ChatSurface({ port }: { port: number }) {
+  // Seeds the draft + marks-ready when a project pill is active (skips the picker).
+  useNewThreadAutoConfig();
+
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   // s.threadListItem is the native active ThreadListItemState; its `status`
   // ('new' | 'regular' | 'archived' | 'deleted') is read directly — the
@@ -28,11 +33,15 @@ export function ChatSurface({ port }: { port: number }) {
   const messageCount = useAuiState((s) => s.thread.messages.length);
   // Reactive readiness for THIS thread — picker→composer switch trigger.
   const isReady = useNewThreadReady((s) => (mainThreadId != null ? s.readyIds.has(mainThreadId) : false));
+  // The picker is only for the "All" view (choose a project). With a project pill
+  // active the auto-config hook makes the thread ready → straight to the composer;
+  // gating on filterProjectId here avoids a one-frame picker flash before it runs.
+  const filterProjectId = useSessionFilters((s) => s.filterProjectId);
 
   const isNewLocal =
     mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
 
-  if (isNewLocal && !isReady) {
+  if (isNewLocal && !isReady && filterProjectId == null) {
     return (
       <div data-testid="sessions-new-thread-surface" className="flex h-full items-center justify-center p-6">
         <NewThreadConfigPicker port={port} />

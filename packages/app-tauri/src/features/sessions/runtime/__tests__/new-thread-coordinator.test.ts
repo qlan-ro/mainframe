@@ -3,11 +3,13 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 import { setDraftConfig, clearDraftConfig } from '../draft-config';
 
 // ---------------------------------------------------------------------------
-// Mock createChat — no HTTP calls
+// Mock createChat, setChatTuning, setChatConfig — no HTTP calls
 // ---------------------------------------------------------------------------
 
 vi.mock('../../../../lib/api/chats', () => ({
   createChat: vi.fn(),
+  setChatTuning: vi.fn().mockResolvedValue(undefined),
+  setChatConfig: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock the ready-store so we can assert the first-send cleanup without a real store.
@@ -20,9 +22,11 @@ vi.mock('../new-thread-ready-store', () => ({
 
 // Import AFTER the mock is registered so the module under test picks up the mock.
 import { createForLocal } from '../new-thread-coordinator';
-import { createChat } from '../../../../lib/api/chats';
+import { createChat, setChatTuning, setChatConfig } from '../../../../lib/api/chats';
 
 const mockCreateChat = createChat as MockedFunction<typeof createChat>;
+const mockSetChatTuning = setChatTuning as MockedFunction<typeof setChatTuning>;
+const mockSetChatConfig = setChatConfig as MockedFunction<typeof setChatConfig>;
 
 // ---------------------------------------------------------------------------
 // Reset draft-config singleton state + mock call counts between cases
@@ -160,5 +164,67 @@ describe('new-thread-coordinator — clears the new-thread-ready flag on first s
     await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('create failed');
 
     expect(clearReadySpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Draft tuning fields — applyDraftTuning called post-create
+// ---------------------------------------------------------------------------
+
+describe('new-thread-coordinator — draft with tuning calls setChatTuning and setChatConfig', () => {
+  it('calls setChatTuning with effort and setChatConfig with planMode', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      permissionMode: 'default',
+      effort: 'high',
+      fast: true,
+      planMode: true,
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-42' } as Chat);
+    mockSetChatTuning.mockResolvedValueOnce(undefined as unknown as Chat);
+    mockSetChatConfig.mockResolvedValueOnce(undefined as unknown as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(mockSetChatTuning).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', {
+      effort: 'high',
+      fast: true,
+    });
+    expect(mockSetChatConfig).toHaveBeenCalledExactlyOnceWith(31415, 'chat-42', { planMode: true });
+  });
+});
+
+describe('new-thread-coordinator — draft with no tuning fields calls neither setChatTuning nor setChatConfig', () => {
+  it('does NOT call setChatTuning or setChatConfig when the draft has only base fields', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      permissionMode: 'default',
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-43' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(mockSetChatTuning).not.toHaveBeenCalled();
+    expect(mockSetChatConfig).not.toHaveBeenCalled();
+  });
+});
+
+describe('new-thread-coordinator — setChatTuning rejection does NOT reject createForLocal', () => {
+  it('still resolves to {remoteId} even when setChatTuning rejects', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      permissionMode: 'default',
+      effort: 'medium',
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-44' } as Chat);
+    mockSetChatTuning.mockRejectedValueOnce(new Error('tuning failed'));
+
+    // The tuning hiccup is swallowed; createForLocal still resolves.
+    const result = await createForLocal('__LOCALID_a', 31415);
+
+    expect(result).toEqual({ remoteId: 'chat-44' });
   });
 });

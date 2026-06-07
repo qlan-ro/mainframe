@@ -1,38 +1,32 @@
 /**
- * NewThreadConfigPicker — behavior tests (TDD red phase).
+ * NewThreadConfigPicker — behavior tests for the project-only picker.
  *
  * Strategy:
  *  - Mock `../../use-projects` so useProjects returns a fixed project list.
- *  - Mock `../../../../lib/api/adapters` so getAdapters resolves a fixed list
- *    where claude is installed=true and gemini is installed=false.
- *  - Mock `../../runtime/daemon-port-context` so useDaemonPort returns 31415.
  *  - Mock `@assistant-ui/react` so useAuiState resolves to '__LOCALID_test123'
  *    via the threadListItem.id selector.
  *  - Mock `../../runtime/draft-config` exposing setDraftConfig as a spy.
+ *  - Mock `../../runtime/new-thread-ready-store` exposing markReady as a spy.
  *
  * Behaviors covered:
- *  1. After getAdapters resolves, all three select elements are in the document.
- *  2. Adapter select contains <option value="claude"> but NOT <option value="gemini">
- *     (gemini is installed=false and must be filtered out).
- *  3. Permission select has value 'default' on initial render and contains exactly
- *     the three ExecutionMode options: default, acceptEdits, yolo.
- *  4. Send gate has data-ready="false" before any selection; setDraftConfig not called.
- *  5. Selecting only a project keeps data-ready="false"; setDraftConfig not called.
- *  6. Selecting project + adapter sets data-ready="true" and calls setDraftConfig with
+ *  1. Only the project select is rendered (no adapter or permission selects).
+ *  2. Send gate has data-ready="false" before any selection; setDraftConfig not called.
+ *  3. Selecting a project sets data-ready="true" and calls setDraftConfig with
  *     ('__LOCALID_test123', { projectId:'p1', adapterId:'claude', permissionMode:'default' }).
- *  7. Changing permission mode after project+adapter re-calls setDraftConfig with
- *     ('__LOCALID_test123', { projectId:'p1', adapterId:'claude', permissionMode:'acceptEdits' }).
+ *  4. markReady is NOT called before a project is selected.
+ *  5. Selecting a project marks the local id ready (calls markReady once).
+ *  6. Draft is written before markReady (ordering guarantee).
+ *  7. Heading text is "Choose a project to start".
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // ---------------------------------------------------------------------------
-// Spy on setDraftConfig — declared before mocks so the factory can close over it
+// Spies — declared before mocks so factories can close over them
 // ---------------------------------------------------------------------------
 
 const setDraftConfigSpy = vi.fn();
-const getDraftConfigMock = vi.fn().mockReturnValue(undefined);
 const markReadySpy = vi.fn();
 const clearReadySpy = vi.fn();
 
@@ -55,32 +49,6 @@ vi.mock('../../use-projects', () => ({
   }),
 }));
 
-vi.mock('../../../../lib/api/adapters', () => ({
-  getAdapters: () =>
-    Promise.resolve([
-      {
-        id: 'claude',
-        name: 'Claude',
-        description: '',
-        installed: true,
-        models: [],
-        capabilities: { planMode: true },
-      },
-      {
-        id: 'gemini',
-        name: 'Gemini',
-        description: '',
-        installed: false,
-        models: [],
-        capabilities: { planMode: false },
-      },
-    ]),
-}));
-
-vi.mock('../../runtime/daemon-port-context', () => ({
-  useDaemonPort: () => 31415,
-}));
-
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (selector: (s: { threadListItem: { id: string } }) => unknown) =>
     selector({ threadListItem: { id: '__LOCALID_test123' } }),
@@ -88,7 +56,6 @@ vi.mock('@assistant-ui/react', () => ({
 
 vi.mock('../../runtime/draft-config', () => ({
   setDraftConfig: (...args: unknown[]) => setDraftConfigSpy(...args),
-  getDraftConfig: (...args: unknown[]) => getDraftConfigMock(...args),
 }));
 
 vi.mock('../../runtime/new-thread-ready-store', () => ({
@@ -112,78 +79,49 @@ const { NewThreadConfigPicker } = await import('../NewThreadConfigPicker');
 
 beforeEach(() => {
   setDraftConfigSpy.mockReset();
-  getDraftConfigMock.mockReset();
-  getDraftConfigMock.mockReturnValue(undefined);
   markReadySpy.mockReset();
   clearReadySpy.mockReset();
 });
 
 // ---------------------------------------------------------------------------
-// Helper — render and wait for getAdapters to resolve
+// 1. Only the project select is rendered — NO adapter or permission selects
 // ---------------------------------------------------------------------------
 
-async function renderAndWait() {
-  render(<NewThreadConfigPicker />);
-  await waitFor(() => {
-    expect(screen.getByTestId('sessions-new-thread-adapter-select')).toBeTruthy();
-  });
-}
-
-// ---------------------------------------------------------------------------
-// 1. All three selects are rendered after getAdapters resolves
-// ---------------------------------------------------------------------------
-
-describe('NewThreadConfigPicker — renders project, adapter, and permission selects', () => {
-  it('all three data-testid selects are in the document after adapters load', async () => {
-    await renderAndWait();
-
+describe('NewThreadConfigPicker — only the project select is rendered', () => {
+  it('renders the project select', () => {
+    render(<NewThreadConfigPicker />);
     expect(screen.getByTestId('sessions-new-thread-project-select')).toBeTruthy();
-    expect(screen.getByTestId('sessions-new-thread-adapter-select')).toBeTruthy();
-    expect(screen.getByTestId('sessions-new-thread-permission-select')).toBeTruthy();
+  });
+
+  it('does NOT render an adapter select', () => {
+    render(<NewThreadConfigPicker />);
+    expect(screen.queryByTestId('sessions-new-thread-adapter-select')).toBeNull();
+  });
+
+  it('does NOT render a permission select', () => {
+    render(<NewThreadConfigPicker />);
+    expect(screen.queryByTestId('sessions-new-thread-permission-select')).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. Only installed adapters listed — claude present, gemini absent
+// 2. Heading text
 // ---------------------------------------------------------------------------
 
-describe('NewThreadConfigPicker — only installed adapters listed', () => {
-  it('adapter select contains option value="claude" but not option value="gemini"', async () => {
-    await renderAndWait();
-
-    const adapterSelect = screen.getByTestId('sessions-new-thread-adapter-select');
-    const optionValues = Array.from(adapterSelect.querySelectorAll('option')).map(
-      (o) => (o as HTMLOptionElement).value,
-    );
-
-    expect(optionValues).toContain('claude');
-    expect(optionValues).not.toContain('gemini');
+describe('NewThreadConfigPicker — heading text', () => {
+  it('shows "Choose a project to start"', () => {
+    render(<NewThreadConfigPicker />);
+    expect(screen.getByText('Choose a project to start')).toBeTruthy();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. Permission select defaults to 'default' and contains exactly the three modes
-// ---------------------------------------------------------------------------
-
-describe('NewThreadConfigPicker — permission select default value and options', () => {
-  it('value is "default" and options are exactly [default, acceptEdits, yolo]', async () => {
-    await renderAndWait();
-
-    const permSelect = screen.getByTestId('sessions-new-thread-permission-select') as HTMLSelectElement;
-    expect(permSelect.value).toBe('default');
-
-    const optionValues = Array.from(permSelect.querySelectorAll('option')).map((o) => (o as HTMLOptionElement).value);
-    expect(optionValues).toEqual(['default', 'acceptEdits', 'yolo']);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 4. Send gate is data-ready="false" and setDraftConfig not called before selection
+// 3. Send gate is data-ready="false" and setDraftConfig not called before selection
 // ---------------------------------------------------------------------------
 
 describe('NewThreadConfigPicker — send gate is data-ready="false" before any selection', () => {
-  it('data-ready="false" and setDraftConfig not called on initial render', async () => {
-    await renderAndWait();
+  it('data-ready="false" and setDraftConfig not called on initial render', () => {
+    render(<NewThreadConfigPicker />);
 
     const gate = screen.getByTestId('sessions-new-thread-send-gate');
     expect(gate.getAttribute('data-ready')).toBe('false');
@@ -192,40 +130,29 @@ describe('NewThreadConfigPicker — send gate is data-ready="false" before any s
 });
 
 // ---------------------------------------------------------------------------
-// 5. Project only → still data-ready="false", setDraftConfig still not called
+// 4. Selecting a project → data-ready="true" and setDraftConfig called
 // ---------------------------------------------------------------------------
 
-describe('NewThreadConfigPicker — project only selected → still gated', () => {
-  it('data-ready stays "false" and setDraftConfig not called after selecting only project', async () => {
-    await renderAndWait();
+describe('NewThreadConfigPicker — selecting a project sets ready and writes the draft', () => {
+  it('data-ready becomes "true" after selecting a project', async () => {
+    render(<NewThreadConfigPicker />);
 
     await act(async () => {
       await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
-    });
-
-    const gate = screen.getByTestId('sessions-new-thread-send-gate');
-    expect(gate.getAttribute('data-ready')).toBe('false');
-    expect(setDraftConfigSpy).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. Project + adapter → data-ready="true" and setDraftConfig called with exact args
-// ---------------------------------------------------------------------------
-
-describe('NewThreadConfigPicker — project + adapter → ready and draft written', () => {
-  it('data-ready becomes "true" and setDraftConfig called with exact config', async () => {
-    await renderAndWait();
-
-    await act(async () => {
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-adapter-select'), 'claude');
     });
 
     const gate = screen.getByTestId('sessions-new-thread-send-gate');
     expect(gate.getAttribute('data-ready')).toBe('true');
+  });
 
-    expect(setDraftConfigSpy).toHaveBeenCalledWith('__LOCALID_test123', {
+  it('calls setDraftConfig with exactly {projectId, adapterId:"claude", permissionMode:"default"}', async () => {
+    render(<NewThreadConfigPicker />);
+
+    await act(async () => {
+      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
+    });
+
+    expect(setDraftConfigSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_test123', {
       projectId: 'p1',
       adapterId: 'claude',
       permissionMode: 'default',
@@ -234,76 +161,47 @@ describe('NewThreadConfigPicker — project + adapter → ready and draft writte
 });
 
 // ---------------------------------------------------------------------------
-// 7. Changing permission mode after ready re-writes the draft
+// 5. markReady is NOT called before a project is selected
 // ---------------------------------------------------------------------------
 
-describe('NewThreadConfigPicker — changing permission mode re-writes the draft', () => {
-  it('setDraftConfig called with permissionMode="acceptEdits" after mode change', async () => {
-    await renderAndWait();
-
-    await act(async () => {
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-adapter-select'), 'claude');
-    });
-
-    setDraftConfigSpy.mockReset();
-
-    await act(async () => {
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-permission-select'), 'acceptEdits');
-    });
-
-    expect(setDraftConfigSpy).toHaveBeenCalledWith('__LOCALID_test123', {
-      projectId: 'p1',
-      adapterId: 'claude',
-      permissionMode: 'acceptEdits',
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 8. markReady is NOT called before project+adapter are both chosen
-// ---------------------------------------------------------------------------
-
-describe('NewThreadConfigPicker — does not mark ready before config is complete', () => {
-  it('markReady not called on initial render or with only a project selected', async () => {
-    await renderAndWait();
-
-    expect(markReadySpy).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
-    });
+describe('NewThreadConfigPicker — markReady not called before project selection', () => {
+  it('markReady not called on initial render', () => {
+    render(<NewThreadConfigPicker />);
 
     expect(markReadySpy).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 9. Selecting project + adapter marks the local id ready (picker→composer switch)
+// 6. Selecting a project marks the local id ready
 // ---------------------------------------------------------------------------
 
-describe('NewThreadConfigPicker — project + adapter marks the local id ready', () => {
-  it('calls markReady("__LOCALID_test123") once the draft is complete', async () => {
-    await renderAndWait();
+describe('NewThreadConfigPicker — selecting a project marks the local id ready', () => {
+  it('calls markReady("__LOCALID_test123") exactly once after selecting a project', async () => {
+    render(<NewThreadConfigPicker />);
 
     await act(async () => {
       await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-adapter-select'), 'claude');
     });
 
-    expect(markReadySpy).toHaveBeenCalledWith('__LOCALID_test123');
+    expect(markReadySpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_test123');
   });
+});
 
-  it('writes the draft before marking ready (draft must exist when the composer mounts)', async () => {
+// ---------------------------------------------------------------------------
+// 7. Draft is written before markReady (composer reads draft on mount)
+// ---------------------------------------------------------------------------
+
+describe('NewThreadConfigPicker — draft written before markReady', () => {
+  it('setDraftConfig is called before markReady so the draft exists when the composer mounts', async () => {
     const callOrder: string[] = [];
     setDraftConfigSpy.mockImplementation(() => callOrder.push('setDraftConfig'));
     markReadySpy.mockImplementation(() => callOrder.push('markReady'));
 
-    await renderAndWait();
+    render(<NewThreadConfigPicker />);
 
     await act(async () => {
       await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-project-select'), 'p1');
-      await userEvent.selectOptions(screen.getByTestId('sessions-new-thread-adapter-select'), 'claude');
     });
 
     const draftIdx = callOrder.indexOf('setDraftConfig');

@@ -43,6 +43,15 @@ vi.mock('@/lib/api/adapters', () => ({
   getAdapters: vi.fn().mockResolvedValue([]),
 }));
 
+// Draft-config mock — patchDraftConfig spy + useDraftConfig stub.
+const patchDraftConfigSpy = vi.fn();
+let draftConfigStub: unknown = undefined;
+
+vi.mock('@/features/sessions/runtime/draft-config', () => ({
+  patchDraftConfig: (...args: unknown[]) => patchDraftConfigSpy(...args),
+  useDraftConfig: (_localId: string | null) => draftConfigStub,
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
@@ -52,6 +61,7 @@ import { useChatExtras } from '../../../runtime/use-chat-thread-runtime';
 import { useAuiState } from '@assistant-ui/react';
 import { setChatTuning, setChatConfig } from '@/lib/api/chats';
 import type { Chat, AdapterInfo } from '@qlan-ro/mainframe-types';
+import type { DraftCfg } from '@/features/sessions/runtime/draft-config';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -108,6 +118,8 @@ function makeFakeExtras(chat: Chat | null = makeChat()) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  patchDraftConfigSpy.mockReset();
+  draftConfigStub = undefined;
   vi.mocked(useAuiState).mockReturnValue(false);
   vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
   vi.mocked(setChatTuning).mockResolvedValue(undefined as unknown as Chat);
@@ -362,5 +374,169 @@ describe('useComposerTuning — no-op without extras', () => {
     const { result } = renderHook(() => useComposerTuning([]));
 
     expect(result.current.chat).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Draft mode — __LOCALID_* id + draft + null chatConfig
+// ---------------------------------------------------------------------------
+
+const LOCAL_DRAFT_ID = '__LOCALID_draft-test';
+const DRAFT_PORT = 9988;
+
+/** Fake extras that mimic a __LOCALID_* thread with NO daemon chat yet. */
+function makeDraftExtras() {
+  return {
+    state: { chatId: LOCAL_DRAFT_ID, chatConfig: null },
+    port: DRAFT_PORT,
+    permissions: {},
+    queued: {},
+    cancel: vi.fn(),
+    replyToPermission: vi.fn(),
+    cancelQueued: vi.fn(),
+    editQueued: vi.fn(),
+  };
+}
+
+/** Minimal draft config fixture. */
+function makeDraft(overrides?: Partial<DraftCfg>): DraftCfg {
+  return {
+    projectId: 'proj-draft',
+    adapterId: 'claude',
+    permissionMode: 'default',
+    model: 'claude-3-sonnet',
+    ...overrides,
+  };
+}
+
+describe('useComposerTuning — draft mode: chat is synthesized from the draft', () => {
+  it('chat.adapterId and chat.projectId reflect the draft when chatConfig is null', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    expect(result.current.chat?.adapterId).toBe('claude');
+    expect(result.current.chat?.projectId).toBe('proj-draft');
+  });
+
+  it('chat.model reflects the draft model', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft({ model: 'claude-3-opus' });
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    expect(result.current.chat?.model).toBe('claude-3-opus');
+  });
+});
+
+describe('useComposerTuning — draft mode: setModel calls patchDraftConfig, NOT setChatConfig', () => {
+  it('patchDraftConfig called with {model} and setChatConfig not called', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setModel('claude-3-haiku');
+    });
+
+    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { model: 'claude-3-haiku' });
+    expect(vi.mocked(setChatConfig)).not.toHaveBeenCalled();
+  });
+});
+
+describe('useComposerTuning — draft mode: setEffort calls patchDraftConfig, NOT setChatTuning', () => {
+  it('patchDraftConfig called with {effort} and setChatTuning not called', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setEffort('high');
+    });
+
+    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { effort: 'high' });
+    expect(vi.mocked(setChatTuning)).not.toHaveBeenCalled();
+  });
+});
+
+describe('useComposerTuning — draft mode: setFeature calls patchDraftConfig, NOT setChatTuning', () => {
+  it('patchDraftConfig called with {ultracode: true} and setChatTuning not called', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setFeature('ultracode', true);
+    });
+
+    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { ultracode: true });
+    expect(vi.mocked(setChatTuning)).not.toHaveBeenCalled();
+  });
+});
+
+describe('useComposerTuning — draft mode: setPermissionMode calls patchDraftConfig, NOT setChatConfig', () => {
+  it('patchDraftConfig called with {permissionMode} and setChatConfig not called', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setPermissionMode('yolo' as Parameters<typeof result.current.setPermissionMode>[0]);
+    });
+
+    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { permissionMode: 'yolo' });
+    expect(vi.mocked(setChatConfig)).not.toHaveBeenCalled();
+  });
+});
+
+describe('useComposerTuning — draft mode: setPlanMode calls patchDraftConfig, NOT setChatConfig', () => {
+  it('patchDraftConfig called with {planMode: true} and setChatConfig not called', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setPlanMode(true);
+    });
+
+    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { planMode: true });
+    expect(vi.mocked(setChatConfig)).not.toHaveBeenCalled();
+  });
+});
+
+describe('useComposerTuning — real chat: setters hit REST helpers, not patchDraftConfig', () => {
+  it('setEffort calls setChatTuning and patchDraftConfig is not called', () => {
+    // chatConfig is a real chat (non-null) → NOT draft mode.
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = undefined;
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setEffort('low');
+    });
+
+    expect(vi.mocked(setChatTuning)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, { effort: 'low' });
+    expect(patchDraftConfigSpy).not.toHaveBeenCalled();
+  });
+
+  it('setModel calls setChatConfig and patchDraftConfig is not called', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = undefined;
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setModel('claude-3-haiku');
+    });
+
+    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, { model: 'claude-3-haiku' });
+    expect(patchDraftConfigSpy).not.toHaveBeenCalled();
   });
 });

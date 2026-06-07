@@ -32,7 +32,9 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import { getAdapters } from '@/lib/api/adapters';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
+import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { synthesizeDraftChat } from './synthesize-draft-chat';
 
 // ---------------------------------------------------------------------------
 // useAdapters
@@ -100,7 +102,15 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const extras = useChatExtras();
   const chatId = extras?.state.chatId ?? null;
   const port = extras?.port ?? null;
-  const chat = extras?.state.chatConfig ?? null;
+  const realChat = extras?.state.chatConfig ?? null;
+
+  // Draft mode: a brand-new __LOCALID_* thread has no daemon chat yet. Bind the
+  // toolbar to a Chat synthesized from the in-memory draft and route every setter
+  // to patchDraftConfig — the daemon chat is still created only on first send (D3).
+  const isLocalDraft = chatId != null && chatId.startsWith('__LOCALID_') && realChat == null;
+  const draft = useDraftConfig(isLocalDraft ? chatId : null);
+  const draftMode = isLocalDraft && draft != null;
+  const chat: Chat | null = realChat ?? (chatId != null && draft != null ? synthesizeDraftChat(chatId, draft) : null);
 
   // Live run-state from the assistant-ui thread — stays accurate mid-run
   // (unlike the REST snapshot in `chat.isRunning` which is fetched once).
@@ -123,17 +133,25 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
 
   const setEffort = useCallback(
     (effort: EffortLevel) => {
+      if (draftMode && chatId) {
+        patchDraftConfig(chatId, { effort });
+        return;
+      }
       if (port == null || !chatId) return;
       const tuning: SessionTuning = { effort };
       setChatTuning(port, chatId, tuning).catch((err: unknown) =>
         console.warn('[composer/useComposerTuning] setEffort failed', { err }),
       );
     },
-    [chatId, port],
+    [draftMode, chatId, port],
   );
 
   const setFeature = useCallback(
     (key: FeatureKey, on: boolean) => {
+      if (draftMode && chatId) {
+        patchDraftConfig(chatId, { [key]: on });
+        return;
+      }
       if (port == null || !chatId) return;
       // Write ONLY the touched field — ultracode→xhigh coercion is a daemon resolver invariant.
       const patch: SessionTuning = { [key]: on };
@@ -141,10 +159,10 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         console.warn(`[composer/useComposerTuning] setFeature(${key}) failed`, { err }),
       );
     },
-    [chatId, port],
+    [draftMode, chatId, port],
   );
 
-  // adapter / model / permission / plan all go through PATCH /config.
+  // adapter / model / permission / plan all go through PATCH /config (or the draft).
   const patchConfig = useCallback(
     (patch: ChatConfigPatch, label: string) => {
       if (port == null || !chatId) return;
@@ -155,12 +173,46 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     [chatId, port],
   );
 
-  const setModel = useCallback((m: string) => patchConfig({ model: m }, 'setModel'), [patchConfig]);
-  const setAdapter = useCallback((id: string) => patchConfig({ adapterId: id }, 'setAdapter'), [patchConfig]);
-  const setPlanMode = useCallback((on: boolean) => patchConfig({ planMode: on }, 'setPlanMode'), [patchConfig]);
+  const setModel = useCallback(
+    (m: string) => {
+      if (draftMode && chatId) {
+        patchDraftConfig(chatId, { model: m });
+        return;
+      }
+      patchConfig({ model: m }, 'setModel');
+    },
+    [draftMode, chatId, patchConfig],
+  );
+  const setAdapter = useCallback(
+    (id: string) => {
+      // Switching adapter clears the model so it falls back to the new adapter's default.
+      if (draftMode && chatId) {
+        patchDraftConfig(chatId, { adapterId: id, model: undefined });
+        return;
+      }
+      patchConfig({ adapterId: id }, 'setAdapter');
+    },
+    [draftMode, chatId, patchConfig],
+  );
+  const setPlanMode = useCallback(
+    (on: boolean) => {
+      if (draftMode && chatId) {
+        patchDraftConfig(chatId, { planMode: on });
+        return;
+      }
+      patchConfig({ planMode: on }, 'setPlanMode');
+    },
+    [draftMode, chatId, patchConfig],
+  );
   const setPermissionMode = useCallback(
-    (mode: ExecutionMode) => patchConfig({ permissionMode: mode }, 'setPermissionMode'),
-    [patchConfig],
+    (mode: ExecutionMode) => {
+      if (draftMode && chatId) {
+        patchDraftConfig(chatId, { permissionMode: mode });
+        return;
+      }
+      patchConfig({ permissionMode: mode }, 'setPermissionMode');
+    },
+    [draftMode, chatId, patchConfig],
   );
 
   return {
