@@ -21,7 +21,7 @@
  */
 import { useMemo } from 'react';
 import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
-import { ChevronDownIcon, PlusIcon, MoreHorizontalIcon } from 'lucide-react';
+import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
@@ -33,6 +33,7 @@ import { useProjects } from '../use-projects';
 import { SessionGroup } from './SessionGroup';
 import { SessionRow } from './SessionRow';
 import { SessionSortMenu } from './SessionSortMenu';
+import { SessionsMoreMenu } from './SessionsMoreMenu';
 import { ProjectFilterPillBar } from './ProjectFilterPillBar';
 import { TagFilterBar } from '../filter/TagFilterBar';
 import { useDaemonPort } from '../runtime/daemon-port-context';
@@ -68,9 +69,7 @@ function SessionsGroupHeader({ count }: { count: number }) {
         </button>
       </ThreadListPrimitive.New>
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
-      <button data-testid="sessions-more-button" type="button" title="More" className={iconBtn}>
-        <MoreHorizontalIcon className="size-[11px]" />
-      </button>
+      <SessionsMoreMenu />
     </div>
   );
 }
