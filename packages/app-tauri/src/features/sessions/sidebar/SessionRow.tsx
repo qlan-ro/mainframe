@@ -53,7 +53,7 @@ function RelativeTime({ updatedAt }: { updatedAt: number }) {
   return (
     <span
       data-testid="sessions-row-relative-time"
-      className="flex-shrink-0 text-micro tabular-nums text-mf-text-3 group-hover:hidden @max-[300px]:hidden"
+      className="flex-shrink-0 text-micro tabular-nums text-mf-text-3 group-hover:hidden"
     >
       {text}
     </span>
