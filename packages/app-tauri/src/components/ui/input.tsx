@@ -3,9 +3,10 @@ import { cn } from '@/lib/utils';
 
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
-function Input({ className, type, ...props }: InputProps) {
+const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input({ className, type, ...props }, ref) {
   return (
     <input
+      ref={ref}
       type={type}
       className={cn(
         'flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1.5',
@@ -19,6 +20,7 @@ function Input({ className, type, ...props }: InputProps) {
       {...props}
     />
   );
-}
+});
+Input.displayName = 'Input';
 
 export { Input };
