@@ -2,8 +2,10 @@
  * SessionSidebar — behavior tests (TDD red phase).
  *
  * Strategy:
- *  - Mock @assistant-ui/react: useThreadListRuntime returns a controlled thread
- *    list; ThreadListPrimitive.New renders as a passthrough div.
+ *  - Mock @assistant-ui/react: useAssistantRuntime().threads returns a controlled
+ *    thread list whose getState() yields the REAL ThreadListState shape
+ *    (threadIds + threadItems), exercising the production extractThreads path;
+ *    ThreadListPrimitive.New renders as a passthrough div.
  *  - Mock ../use-projects so projects are controlled per test.
  *  - Mock @/store/session-filters so filterProjectId / selectedTags are controlled.
  *  - Mock @/store/unread-store so isUnread always returns false.
@@ -45,9 +47,15 @@ const setFilterProjectIdSpy = vi.fn();
 // ---------------------------------------------------------------------------
 
 vi.mock('@assistant-ui/react', () => ({
-  useThreadListRuntime: () => ({
-    getState: () => ({ threads: __threads, mainThreadId: null }),
-    getItemById: (_id: string) => ({ rename: vi.fn(), archive: vi.fn() }),
+  useAssistantRuntime: () => ({
+    threads: {
+      getState: () => {
+        const threadIds = __threads.map((t) => t.id);
+        const threadItems = Object.fromEntries(__threads.map((t) => [t.id, t]));
+        return { threadIds, threadItems, mainThreadId: '' };
+      },
+      getItemById: (_id: string) => ({ rename: vi.fn(), archive: vi.fn() }),
+    },
   }),
   ThreadListPrimitive: {
     New: ({ children }: { children?: React.ReactNode }) => <>{children}</>,

@@ -6,7 +6,7 @@
  */
 import type { ReactNode } from 'react';
 import { ChevronDownIcon } from 'lucide-react';
-import { useCollapsedProjects } from './useCollapsedProjects';
+import { useCollapsedProjects } from '../useCollapsedProjects';
 import type { SessionGroup as SessionGroupType } from '../view-model/group-sessions';
 
 interface SessionGroupProps {

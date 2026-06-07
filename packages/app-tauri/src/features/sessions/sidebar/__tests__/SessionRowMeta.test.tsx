@@ -76,7 +76,9 @@ describe('SessionRowMeta — PR chip', () => {
       <SessionRowMeta
         adapterId="claude"
         worktreeMissing={false}
-        detectedPrs={[{ number: 42, url: 'https://github.com/org/r/pull/42' }]}
+        detectedPrs={[
+          { number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' },
+        ]}
       />,
     );
     expect(screen.getByTestId('sessions-row-meta-pr').textContent).toBe('#42');

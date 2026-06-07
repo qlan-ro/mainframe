@@ -13,13 +13,13 @@ import { useState } from 'react';
 import {
   ThreadListItemPrimitive,
   ThreadListItemRuntimeProvider,
-  useThreadListRuntime,
+  useAssistantRuntime,
   useThreadListItemRuntime,
 } from '@assistant-ui/react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { deriveSessionStatus, type SessionStatus } from '../view-model/session-status';
 import { useUnreadStore } from '@/store/unread-store';
-import { useDaemonPort } from './runtime/daemon-port-context';
+import { useDaemonPort } from '../runtime/daemon-port-context';
 import { pinChat } from '@/lib/api/chats';
 import { SessionRowMeta } from './SessionRowMeta';
 import { SessionRowRename } from './SessionRowRename';
@@ -141,7 +141,7 @@ function SessionRowInner({ item }: { item: SessionItem }) {
 }
 
 export function SessionRow({ item }: { item: SessionItem }) {
-  const threadListRuntime = useThreadListRuntime();
+  const threadListRuntime = useAssistantRuntime().threads;
   const itemRuntime = threadListRuntime?.getItemById(item.id) ?? null;
   if (itemRuntime == null) return null;
 

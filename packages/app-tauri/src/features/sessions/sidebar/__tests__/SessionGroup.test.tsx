@@ -25,7 +25,7 @@ import type { SessionCustom, SessionItem } from '../../view-model/chat-to-thread
 let __collapsed = new Set<string>();
 const toggleSpy = vi.fn();
 
-vi.mock('../useCollapsedProjects', () => ({
+vi.mock('../../useCollapsedProjects', () => ({
   useCollapsedProjects: () => ({
     collapsed: __collapsed,
     toggle: toggleSpy,

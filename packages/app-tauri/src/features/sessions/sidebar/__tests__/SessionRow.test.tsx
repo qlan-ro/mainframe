@@ -2,14 +2,14 @@
  * SessionRow — behavior tests (TDD red phase).
  *
  * Strategy:
- *  - Mock `@assistant-ui/react` so the assistant-ui hooks (useThreadListRuntime,
+ *  - Mock `@assistant-ui/react` so the assistant-ui hooks (useAssistantRuntime,
  *    useThreadListItemRuntime, useAuiState) are fully controlled per test.
  *    ThreadListItemPrimitive.Root is stubbed to a <div> that forwards data-testid
  *    and also sets data-active="true" when the stub state reports it is active.
  *    ThreadListItemPrimitive.Trigger is stubbed to a passthrough <span>.
  *    ThreadListItemRuntimeProvider just renders children.
  *  - Mock `@/store/unread-store` so isUnread is controlled per test.
- *  - Mock `../runtime/daemon-port-context` so useDaemonPort returns 31415.
+ *  - Mock `../../runtime/daemon-port-context` so useDaemonPort returns 31415.
  *  - Mock `@/lib/api/chats` so pinChat is a spy (never hits the network).
  *
  * Behaviors covered:
@@ -56,8 +56,8 @@ const archiveSpy = vi.fn();
 //
 // ThreadListItemRuntimeProvider and ThreadListItemPrimitive.Trigger are
 // passthrough stubs; useThreadListItemRuntime returns the rename/archive spies.
-// useThreadListRuntime.getItemById returns a non-null dummy so the guard inside
-// SessionRow passes (ItemRuntimeProvider receives a truthy runtime).
+// useAssistantRuntime().threads.getItemById returns a non-null dummy so the
+// guard inside SessionRow passes (ItemRuntimeProvider receives a truthy runtime).
 // useAuiState is used by deriving contexts internally — we forward the selector
 // against a synthetic state so the component can compute mainThreadId checks.
 
@@ -86,8 +86,10 @@ vi.mock('@assistant-ui/react', () => ({
     },
   },
 
-  useThreadListRuntime: () => ({
-    getItemById: (_id: string) => ({ rename: renameSpy, archive: archiveSpy }),
+  useAssistantRuntime: () => ({
+    threads: {
+      getItemById: (_id: string) => ({ rename: renameSpy, archive: archiveSpy }),
+    },
   }),
 
   useThreadListItemRuntime: () => ({ rename: renameSpy, archive: archiveSpy }),
@@ -106,10 +108,10 @@ vi.mock('@/store/unread-store', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock ../runtime/daemon-port-context
+// Mock ../../runtime/daemon-port-context
 // ---------------------------------------------------------------------------
 
-vi.mock('../runtime/daemon-port-context', () => ({
+vi.mock('../../runtime/daemon-port-context', () => ({
   useDaemonPort: () => 31415,
 }));
 

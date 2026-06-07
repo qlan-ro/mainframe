@@ -5,14 +5,14 @@
  *   header (+ New) → ProjectFilterPillBar → scrollable grouped list → ArchiveWorktreeDialog
  *
  * Data:
- *   - useThreadListRuntime() for the native thread list (mapped via threadsToSessionItems)
+ *   - useAssistantRuntime().threads for the native thread list (mapped via threadsToSessionItems)
  *   - useProjects() for the project set (filter pills + grouping)
  *   - useSessionFilters() for project/tag/synthetic filter state
  *   - useUnreadStore() for attention counts
  *   - groupSessions / applySessionFilters / attentionCount (pure VMs)
  */
 import { useMemo } from 'react';
-import { ThreadListPrimitive, useThreadListRuntime } from '@assistant-ui/react';
+import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
 import type { ThreadListState } from '@assistant-ui/react';
 import { PlusIcon } from 'lucide-react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
@@ -35,8 +35,9 @@ import { ArchiveWorktreeDialog } from './ArchiveWorktreeDialog';
  * reactive use; we project them to a flat `threads` array here so the rest of
  * the sidebar works with a single ordered list.
  *
- * The test mock injects `threads` directly into the state object — this helper
- * handles both shapes so the component stays test-friendly without @ts-ignore.
+ * `custom` is typed as Record<string, unknown> at the aui boundary; our
+ * chatToThreadCustom projection always writes a SessionCustom into it, so we
+ * narrow it here.
  */
 interface ThreadEntry {
   id: string;
@@ -46,16 +47,23 @@ interface ThreadEntry {
   custom: SessionCustom;
 }
 
+/** Narrow the aui-boundary `custom` (Record<string, unknown>) to our SessionCustom. */
+function asSessionCustom(custom: unknown): SessionCustom {
+  return custom as SessionCustom;
+}
+
 function extractThreads(state: ThreadListState): readonly ThreadEntry[] {
-  // Test environments inject `threads` directly; production uses threadIds+threadItems.
-  const anyState = state as unknown as { threads?: readonly ThreadEntry[] };
-  if (anyState.threads !== undefined) {
-    return anyState.threads;
-  }
   const { threadIds, threadItems } = state;
   return threadIds
     .map((id) => threadItems[id])
-    .filter((t): t is NonNullable<typeof t> => t != null) as unknown as readonly ThreadEntry[];
+    .filter((t): t is NonNullable<typeof t> => t != null)
+    .map((t) => ({
+      id: t.id,
+      remoteId: t.remoteId,
+      title: t.title,
+      status: t.status,
+      custom: asSessionCustom(t.custom),
+    }));
 }
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
@@ -81,7 +89,7 @@ function buildAttentionMap(
 const EMPTY_THREADS: readonly ThreadEntry[] = [];
 
 export function SessionSidebar() {
-  const threadListRuntime = useThreadListRuntime();
+  const threadListRuntime = useAssistantRuntime().threads;
   const threads = threadListRuntime ? extractThreads(threadListRuntime.getState()) : EMPTY_THREADS;
   const { filterProjectId, selectedTags, selectedSynthetic, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);

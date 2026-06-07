@@ -3,16 +3,13 @@
  * Kept separate so SessionRow stays under 300 lines.
  */
 
-interface PrChip {
-  number: number;
-  url: string;
-}
+import type { DetectedPr } from '@qlan-ro/mainframe-types';
 
 interface SessionRowMetaProps {
   adapterId: string;
   worktreePath?: string;
   worktreeMissing: boolean;
-  detectedPrs: PrChip[];
+  detectedPrs: DetectedPr[];
 }
 
 function worktreeBasename(path: string): string {
