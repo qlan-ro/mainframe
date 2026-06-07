@@ -2,7 +2,7 @@
  * SessionSidebar — the full left panel shell.
  *
  * Composition:
- *   header (+ New) → ProjectFilterPillBar → scrollable grouped list → ArchiveWorktreeDialog
+ *   header (+ New) → ProjectFilterPillBar → scrollable grouped list
  *
  * Data:
  *   - useAssistantRuntime().threads for the native thread list (mapped via threadsToSessionItems)
@@ -27,7 +27,6 @@ import { threadsToSessionItems } from './use-session-items';
 import { SessionGroup } from './SessionGroup';
 import { SessionRow } from './SessionRow';
 import { ProjectFilterPillBar } from './ProjectFilterPillBar';
-import { ArchiveWorktreeDialog } from './ArchiveWorktreeDialog';
 
 /**
  * Internal view of the thread list state as returned by the remote thread list
@@ -153,8 +152,6 @@ export function SessionSidebar() {
           ))
         )}
       </div>
-
-      <ArchiveWorktreeDialog />
     </div>
   );
 }
