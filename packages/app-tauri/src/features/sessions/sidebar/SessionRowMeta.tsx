@@ -1,24 +1,28 @@
 /**
- * SessionRowMeta — adapter label + worktree pill + PR pill + "Needs input"
+ * SessionRowMeta — per-project chip + worktree pill + PR pill + "Needs input"
  * label + tag-dot cluster for session rows.
  *
- * Kept separate so SessionRow stays under 300 lines.
+ * Matches the artboard SessionRowDense meta row: it deliberately does NOT show
+ * the adapter (claude/codex) name. Kept separate so SessionRow stays under 300
+ * lines.
  */
 
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { DetectedPr } from '@qlan-ro/mainframe-types';
 import { TAG_DOT_STYLE } from '../tags/tag-colors';
 import type { SessionStatus } from '../view-model/session-status';
+import { projectColor } from './project-color';
 
 interface SessionRowMetaProps {
-  adapterId: string;
   worktreePath?: string;
   worktreeMissing: boolean;
   detectedPrs: DetectedPr[];
   status?: SessionStatus;
   tags?: string[];
   colorOf?: (name: string) => TagColor;
-  /** Shown as a leading project chip in "All" view (no active project filter). */
+  /** Project id — drives the chip's identity color (deterministic per project). */
+  projectId?: string;
+  /** Chip label, shown in "All" view (no active project filter). */
   projectName?: string;
 }
 
@@ -28,32 +32,38 @@ function worktreeBasename(path: string): string {
 }
 
 export function SessionRowMeta({
-  adapterId,
   worktreePath,
   worktreeMissing,
   detectedPrs,
   status,
   tags,
   colorOf,
+  projectId,
   projectName,
 }: SessionRowMetaProps) {
   const visibleTags = tags != null && tags.length > 0 ? tags.slice(0, 4) : [];
+  const chipColor = projectId != null ? projectColor(projectId) : undefined;
 
   return (
     <div className="flex min-w-0 items-center gap-2 text-micro tracking-[-0.05px] text-mf-text-3">
-      {projectName != null && (
+      {projectName != null && chipColor != null && (
         <span
           data-testid="sessions-row-meta-project"
-          className="inline-flex max-w-[124px] flex-shrink-0 items-center gap-1 rounded-[4px] bg-mf-chip px-1.5 py-px font-semibold text-muted-foreground"
+          className="inline-flex max-w-[124px] flex-shrink-0 items-center gap-1 rounded-[4px] px-1.5 py-px text-[10px] font-semibold"
+          style={{
+            backgroundColor: `color-mix(in oklch, ${chipColor} 12%, transparent)`,
+            color: chipColor,
+          }}
           title={projectName}
         >
-          <span className="size-[5px] flex-shrink-0 rounded-full bg-mf-text-3" aria-hidden="true" />
+          <span
+            className="size-[5px] flex-shrink-0 rounded-full"
+            style={{ backgroundColor: chipColor }}
+            aria-hidden="true"
+          />
           <span className="truncate">{projectName}</span>
         </span>
       )}
-      <span data-testid="sessions-row-meta-adapter" className="flex-shrink-0 truncate font-mono text-mf-text-3">
-        {adapterId}
-      </span>
       {worktreePath != null && (
         <span
           data-testid="sessions-row-meta-worktree"

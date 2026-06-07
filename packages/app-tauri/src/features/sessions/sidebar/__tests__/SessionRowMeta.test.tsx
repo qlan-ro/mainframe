@@ -2,8 +2,9 @@
  * SessionRowMeta — behavior tests (TDD red phase).
  *
  * Behaviors covered:
- *  - adapterId="claude" with no worktreePath and detectedPrs=[] → adapter label
- *    data-testid="sessions-row-meta-adapter" renders text "claude".
+ *  - The adapter (claude/codex) label is NOT rendered — the artboard meta row
+ *    omits it; data-testid="sessions-row-meta-adapter" must be absent.
+ *  - projectId + projectName → a colored project chip renders (only in "All" view).
  *  - worktreePath="/repos/mf/.git/worktrees/feat-x" and worktreeMissing=false →
  *    data-testid="sessions-row-meta-worktree" is present and contains text "feat-x".
  *  - worktreePath="/repos/mf/.git/worktrees/feat-x" and worktreeMissing=true →
@@ -17,13 +18,40 @@ import { render, screen } from '@testing-library/react';
 import { SessionRowMeta } from '../SessionRowMeta';
 
 // ---------------------------------------------------------------------------
-// 1. Adapter label renders the adapterId text
+// 1. Adapter label is removed (artboard meta row omits it)
 // ---------------------------------------------------------------------------
 
-describe('SessionRowMeta — adapter label', () => {
-  it('renders "claude" in data-testid="sessions-row-meta-adapter"', () => {
-    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} />);
-    expect(screen.getByTestId('sessions-row-meta-adapter').textContent).toBe('claude');
+describe('SessionRowMeta — adapter label removed', () => {
+  it('does not render data-testid="sessions-row-meta-adapter"', () => {
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} />);
+    expect(screen.queryByTestId('sessions-row-meta-adapter')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1b. Per-project colored chip renders for projectId + projectName ("All" view)
+// ---------------------------------------------------------------------------
+
+describe('SessionRowMeta — per-project colored chip', () => {
+  it('renders data-testid="sessions-row-meta-project" with the project name when projectId + projectName given', () => {
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} projectId="p1" projectName="mainframe" />);
+    const chip = screen.getByTestId('sessions-row-meta-project');
+    expect(chip).toBeTruthy();
+    expect(chip.textContent).toContain('mainframe');
+  });
+
+  it('tints the chip via an inline color (a deterministic per-project color is applied)', () => {
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} projectId="p1" projectName="mainframe" />);
+    const chip = screen.getByTestId('sessions-row-meta-project') as HTMLElement;
+    // The chip carries an inline color + background (color-mix) — proves the
+    // neutral-gray default was replaced by a per-project identity color.
+    expect(chip.style.color).not.toBe('');
+    expect(chip.style.backgroundColor).not.toBe('');
+  });
+
+  it('does not render the project chip when projectName is omitted (project filter active)', () => {
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} projectId="p1" />);
+    expect(screen.queryByTestId('sessions-row-meta-project')).toBeNull();
   });
 });
 
@@ -33,14 +61,7 @@ describe('SessionRowMeta — adapter label', () => {
 
 describe('SessionRowMeta — worktree pill (not missing)', () => {
   it('renders data-testid="sessions-row-meta-worktree" containing "feat-x"', () => {
-    render(
-      <SessionRowMeta
-        adapterId="claude"
-        worktreePath="/repos/mf/.git/worktrees/feat-x"
-        worktreeMissing={false}
-        detectedPrs={[]}
-      />,
-    );
+    render(<SessionRowMeta worktreePath="/repos/mf/.git/worktrees/feat-x" worktreeMissing={false} detectedPrs={[]} />);
     const pill = screen.getByTestId('sessions-row-meta-worktree');
     expect(pill).toBeTruthy();
     expect(pill.textContent).toContain('feat-x');
@@ -53,14 +74,7 @@ describe('SessionRowMeta — worktree pill (not missing)', () => {
 
 describe('SessionRowMeta — worktree missing indicator', () => {
   it('renders data-testid="sessions-row-meta-worktree-missing" when worktreeMissing=true', () => {
-    render(
-      <SessionRowMeta
-        adapterId="claude"
-        worktreePath="/repos/mf/.git/worktrees/feat-x"
-        worktreeMissing={true}
-        detectedPrs={[]}
-      />,
-    );
+    render(<SessionRowMeta worktreePath="/repos/mf/.git/worktrees/feat-x" worktreeMissing={true} detectedPrs={[]} />);
     expect(screen.getByTestId('sessions-row-meta-worktree')).toBeTruthy();
     expect(screen.getByTestId('sessions-row-meta-worktree-missing')).toBeTruthy();
   });
@@ -74,7 +88,6 @@ describe('SessionRowMeta — PR chip', () => {
   it('renders data-testid="sessions-row-meta-pr" with text "#42"', () => {
     render(
       <SessionRowMeta
-        adapterId="claude"
         worktreeMissing={false}
         detectedPrs={[
           { number: 42, url: 'https://github.com/org/r/pull/42', owner: 'org', repo: 'r', source: 'created' },
@@ -91,7 +104,7 @@ describe('SessionRowMeta — PR chip', () => {
 
 describe('SessionRowMeta — empty state', () => {
   it('does not render worktree or PR elements when detectedPrs=[] and no worktreePath', () => {
-    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} />);
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} />);
     expect(screen.queryByTestId('sessions-row-meta-worktree')).toBeNull();
     expect(screen.queryByTestId('sessions-row-meta-pr')).toBeNull();
   });
@@ -103,18 +116,18 @@ describe('SessionRowMeta — empty state', () => {
 
 describe('SessionRowMeta — Needs input label', () => {
   it('renders data-testid="sessions-row-meta-needs-input" with text "Needs input" when status="waiting"', () => {
-    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} status="waiting" />);
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} status="waiting" />);
     const label = screen.getByTestId('sessions-row-meta-needs-input');
     expect(label.textContent).toBe('Needs input');
   });
 
   it('does not render sessions-row-meta-needs-input when status is not "waiting"', () => {
-    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} status="idle" />);
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} status="idle" />);
     expect(screen.queryByTestId('sessions-row-meta-needs-input')).toBeNull();
   });
 
   it('does not render sessions-row-meta-needs-input when status is undefined', () => {
-    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} />);
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} />);
     expect(screen.queryByTestId('sessions-row-meta-needs-input')).toBeNull();
   });
 });
@@ -127,41 +140,19 @@ describe('SessionRowMeta — tag dots cluster', () => {
   const colorOf = (_name: string) => 'blue' as const;
 
   it('renders data-testid="sessions-row-meta-tag-dots" when tags=["alpha","beta"] and colorOf is provided', () => {
-    render(
-      <SessionRowMeta
-        adapterId="claude"
-        worktreeMissing={false}
-        detectedPrs={[]}
-        tags={['alpha', 'beta']}
-        colorOf={colorOf}
-      />,
-    );
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} tags={['alpha', 'beta']} colorOf={colorOf} />);
     expect(screen.getByTestId('sessions-row-meta-tag-dots')).toBeTruthy();
   });
 
   it('renders individual dot for each tag keyed by name', () => {
-    render(
-      <SessionRowMeta
-        adapterId="claude"
-        worktreeMissing={false}
-        detectedPrs={[]}
-        tags={['alpha', 'beta']}
-        colorOf={colorOf}
-      />,
-    );
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} tags={['alpha', 'beta']} colorOf={colorOf} />);
     expect(screen.getByTestId('sessions-row-meta-tag-dot-alpha')).toBeTruthy();
     expect(screen.getByTestId('sessions-row-meta-tag-dot-beta')).toBeTruthy();
   });
 
   it('slices to at most 4 dots when tags has more than 4 entries', () => {
     render(
-      <SessionRowMeta
-        adapterId="claude"
-        worktreeMissing={false}
-        detectedPrs={[]}
-        tags={['a', 'b', 'c', 'd', 'e']}
-        colorOf={colorOf}
-      />,
+      <SessionRowMeta worktreeMissing={false} detectedPrs={[]} tags={['a', 'b', 'c', 'd', 'e']} colorOf={colorOf} />,
     );
     const cluster = screen.getByTestId('sessions-row-meta-tag-dots');
     expect(cluster.children.length).toBe(4);
@@ -169,12 +160,12 @@ describe('SessionRowMeta — tag dots cluster', () => {
   });
 
   it('does not render tag-dots when tags is empty', () => {
-    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} tags={[]} colorOf={colorOf} />);
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} tags={[]} colorOf={colorOf} />);
     expect(screen.queryByTestId('sessions-row-meta-tag-dots')).toBeNull();
   });
 
   it('does not render tag-dots when colorOf is not provided', () => {
-    render(<SessionRowMeta adapterId="claude" worktreeMissing={false} detectedPrs={[]} tags={['alpha']} />);
+    render(<SessionRowMeta worktreeMissing={false} detectedPrs={[]} tags={['alpha']} />);
     expect(screen.queryByTestId('sessions-row-meta-tag-dots')).toBeNull();
   });
 });

@@ -200,7 +200,11 @@ function SessionRowInner({
                 <span
                   data-testid="sessions-row-title"
                   className={[
-                    'flex-1 truncate text-body',
+                    'flex-1 truncate text-body tracking-[-0.15px]',
+                    // Selected (native data-active) reads as semibold/foreground too, matching
+                    // the artboard `sel || unread` rule — applied via CSS so it tracks the
+                    // native selection without a JS hook.
+                    'group-data-[active=true]:font-semibold group-data-[active=true]:text-foreground',
                     isUnread || custom.pinned ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground',
                   ].join(' ')}
                 >
@@ -217,13 +221,13 @@ function SessionRowInner({
           </div>
           <div className="mt-1 @max-[220px]:hidden">
             <SessionRowMeta
-              adapterId={custom.adapterId}
               worktreePath={custom.worktreePath}
               worktreeMissing={custom.worktreeMissing}
               detectedPrs={custom.detectedPrs}
               status={status}
               tags={custom.tags}
               colorOf={colorOf}
+              projectId={projectName != null ? custom.projectId : undefined}
               projectName={projectName}
             />
           </div>

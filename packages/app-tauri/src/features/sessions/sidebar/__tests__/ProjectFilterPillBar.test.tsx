@@ -179,3 +179,102 @@ describe('ProjectFilterPillBar — clicking the active project pill deselects (c
     expect(handleSelect).toHaveBeenCalledWith(null);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 8. Collapse: with >2 projects, only the first 2 show + a "+N more" toggle that
+//    expands/collapses the rest (artboard COLLAPSE_AT = 2).
+// ---------------------------------------------------------------------------
+
+const FOUR_PROJECTS: Project[] = [
+  ...PROJECTS,
+  {
+    id: 'p3',
+    name: 'football-tracker',
+    path: '/projects/football-tracker',
+    createdAt: '2024-01-01T00:00:00Z',
+    lastOpenedAt: '2024-01-01T00:00:00Z',
+  },
+  {
+    id: 'p4',
+    name: 'docs-site',
+    path: '/projects/docs-site',
+    createdAt: '2024-01-01T00:00:00Z',
+    lastOpenedAt: '2024-01-01T00:00:00Z',
+  },
+];
+
+describe('ProjectFilterPillBar — collapsible project pills', () => {
+  it('shows only the first 2 project pills collapsed, hiding the rest behind "+N more"', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={FOUR_PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(screen.getByTestId('sessions-filter-pill-p1')).toBeTruthy();
+    expect(screen.getByTestId('sessions-filter-pill-p2')).toBeTruthy();
+    expect(screen.queryByTestId('sessions-filter-pill-p3')).toBeNull();
+    expect(screen.queryByTestId('sessions-filter-pill-p4')).toBeNull();
+  });
+
+  it('renders a "+2 more" toggle with data-testid="sessions-projects-more" when collapsed', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={FOUR_PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    const more = screen.getByTestId('sessions-projects-more');
+    expect(more.textContent).toContain('+2 more');
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('expands to reveal all project pills and switches to "Less" when the toggle is clicked', async () => {
+    render(
+      <ProjectFilterPillBar
+        projects={FOUR_PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    await userEvent.click(screen.getByTestId('sessions-projects-more'));
+    expect(screen.getByTestId('sessions-filter-pill-p3')).toBeTruthy();
+    expect(screen.getByTestId('sessions-filter-pill-p4')).toBeTruthy();
+    const more = screen.getByTestId('sessions-projects-more');
+    expect(more.textContent).toContain('Less');
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('collapses again on a second click of the toggle', async () => {
+    render(
+      <ProjectFilterPillBar
+        projects={FOUR_PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    const toggle = screen.getByTestId('sessions-projects-more');
+    await userEvent.click(toggle);
+    await userEvent.click(toggle);
+    expect(screen.queryByTestId('sessions-filter-pill-p3')).toBeNull();
+    expect(screen.getByTestId('sessions-projects-more').textContent).toContain('+2 more');
+  });
+
+  it('does not render the toggle when there are 2 or fewer projects', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(screen.queryByTestId('sessions-projects-more')).toBeNull();
+  });
+});
