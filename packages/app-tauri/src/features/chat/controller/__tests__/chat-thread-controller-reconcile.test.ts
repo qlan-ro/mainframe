@@ -208,6 +208,81 @@ describe('reconcilePendingOnAdd — no cross-contamination', () => {
 });
 
 // ---------------------------------------------------------------------------
+// (NEW) reconcilePending — live display.messages.set (first message of a chat)
+// ---------------------------------------------------------------------------
+//
+// The daemon broadcasts display.messages.set (instead of display.message.added)
+// for the FIRST message of a chat.  handle-daemon-event maps it to
+// { type: 'history.loaded' }, and the history.loaded reducer replaces the
+// message list but does NOT touch pendingUserMessages — so the optimistic
+// pending is never reconciled, leaving a duplicate user bubble.
+//
+// Tests 1 and 3 are EXPECTED TO FAIL today (TDD red).
+// Test 2 is a guard — it must stay green before and after the fix.
+// ---------------------------------------------------------------------------
+
+function setEvent(messages: DisplayMessage[]): DaemonEvent {
+  return { type: 'display.messages.set', chatId: CHAT_ID, messages };
+}
+function userMsg(id: string, text: string): DisplayMessage {
+  return { id, chatId: CHAT_ID, type: 'user', content: [{ type: 'text', text }], timestamp: new Date().toISOString() };
+}
+
+describe('reconcilePending — live display.messages.set (first message of a chat)', () => {
+  it('reconciles the optimistic pending when the user echo arrives via display.messages.set', async () => {
+    const { fakeClient, pushEvent } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    activate(ctrl);
+
+    await ctrl.sendMessage(textMsg('test message'));
+
+    // One pending with the sent text must exist before the echo.
+    const beforePending = Object.values(ctrl.getState().pendingUserMessages);
+    expect(beforePending).toHaveLength(1);
+    expect(beforePending[0]!.text).toBe('test message');
+
+    // Daemon broadcasts display.messages.set with the user echo (first-message path).
+    pushEvent(setEvent([userMsg('srv-1', 'test message')]));
+
+    // Pending must be reconciled — zero pendings, no duplicate bubble.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+  });
+
+  it('does NOT reconcile when the set carries a different user text (guard)', async () => {
+    const { fakeClient, pushEvent } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    activate(ctrl);
+
+    await ctrl.sendMessage(textMsg('test message'));
+
+    // Echo carries a different text — must not match the pending.
+    pushEvent(setEvent([userMsg('srv-2', 'different text')]));
+
+    // The pending must still be present.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
+    expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.text).toBe('test message');
+  });
+
+  it('clears both pendings when the set contains two matching user messages', async () => {
+    const { fakeClient, pushEvent } = makeFakeWs();
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    activate(ctrl);
+
+    await ctrl.sendMessage(textMsg('test message'));
+    await ctrl.sendMessage(textMsg('test message'));
+
+    // Two pendings for the same text must exist before the echo.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(2);
+
+    // Daemon broadcasts a set with two matching user echoes.
+    pushEvent(setEvent([userMsg('s1', 'test message'), userMsg('s2', 'test message')]));
+
+    // Both pendings must be reconciled — zero remaining.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // (c) Text-fingerprint match still works
 // ---------------------------------------------------------------------------
 

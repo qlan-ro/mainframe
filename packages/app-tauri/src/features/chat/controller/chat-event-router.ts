@@ -63,6 +63,20 @@ export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost
       }
     }
 
+    // A live display.messages.set routes here as history.loaded — the added-path
+    // reconcile above never sees it, so reconcile the optimistic pendings against
+    // the user messages in the set too (count-aware), or the optimistic copy
+    // lingers next to the server echo as a duplicate user bubble. This is NOT a
+    // rare path: the daemon emits a full set whenever it can't detect a pure
+    // append, and the Codex adapter regenerates every display id (nanoid) on each
+    // reconstruction, so it re-sets on essentially every turn of a live session.
+    if (result.event.type === 'history.loaded') {
+      const userMessages = result.event.messages.filter((m) => m.type === 'user');
+      for (const clientId of reconcilePendings(state.pendingUserMessages, userMessages)) {
+        host.dispatch({ type: 'local.message.reconciled', clientId });
+      }
+    }
+
     host.dispatch(result.event);
   }
 }
