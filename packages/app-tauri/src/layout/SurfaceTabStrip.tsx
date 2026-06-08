@@ -41,6 +41,7 @@ export function SurfaceTabStrip({ surface }: Props) {
 
       {/* + add button (stub) */}
       <button
+        data-testid={`${surface}-tab-strip-add`}
         type="button"
         title={surface === 'files' ? 'Open file / View changes' : 'New terminal / Open preview'}
         className={`${ACTION_BTN} ml-0.5`}

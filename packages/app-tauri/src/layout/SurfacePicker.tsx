@@ -2,15 +2,17 @@ import { ChevronRight, FileText, GitCompare, Terminal } from 'lucide-react';
 import type { SurfaceId } from '@/store/layout';
 
 interface RowProps {
+  testid: string;
   icon: React.ReactNode;
   label: string;
   hint?: string;
   chevron?: boolean;
 }
 
-function PickerRow({ icon, label, hint, chevron }: RowProps) {
+function PickerRow({ testid, icon, label, hint, chevron }: RowProps) {
   return (
     <button
+      data-testid={testid}
       type="button"
       className="flex w-full cursor-pointer items-center gap-[9px] rounded-lg border-none bg-transparent px-3 py-2 text-left text-xs text-foreground hover:bg-accent"
     >
@@ -37,11 +39,13 @@ export function SurfacePicker({ surface }: Props) {
           {surface === 'files' ? (
             <>
               <PickerRow
+                testid="files-picker-open-file"
                 icon={<FileText size={14} className="flex-shrink-0 text-[#7a4d9e]" />}
                 label="Open file…"
                 chevron
               />
               <PickerRow
+                testid="files-picker-view-changes"
                 icon={<GitCompare size={14} className="flex-shrink-0 text-[#7a4d9e]" />}
                 label="View changes…"
                 chevron
@@ -49,6 +53,7 @@ export function SurfacePicker({ surface }: Props) {
             </>
           ) : (
             <PickerRow
+              testid="run-picker-new-terminal"
               icon={<Terminal size={14} className="flex-shrink-0 text-[#1f9d4d]" />}
               label="New terminal"
               hint="zsh"
