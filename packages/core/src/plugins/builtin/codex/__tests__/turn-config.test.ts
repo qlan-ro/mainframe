@@ -16,16 +16,27 @@ describe('buildTurnConfig', () => {
     expect(cfg.summary).toBe('concise');
   });
 
-  // Trusts already-resolved inputs — it does NOT re-gate on model caps (the resolver
-  // already clamped tuning.fast; the settings UI already gated personality). The
-  // session only knows the model id, so re-checking caps here would be inert.
-  it('serviceTier follows resolved tuning.fast, not a model-cap re-check', () => {
-    expect(buildTurnConfig({ effort: 'high', fast: false, ultracode: false, adaptiveThinking: false }, {}, 'm', 'default').serviceTier).toBe('flex');
-    expect(buildTurnConfig({ effort: 'high', fast: true, ultracode: false, adaptiveThinking: false }, {}, 'm', 'default').serviceTier).toBe('fast');
+  // serviceTier is 'fast' only when tuning.fast is true; it is undefined otherwise so
+  // the caller omits service_tier entirely and the account default tier is used.
+  // The string 'flex' is never produced — sending it caused OpenAI 400 errors on gpt-5.5.
+  it('serviceTier is fast when tuning.fast is true and undefined when tuning.fast is false', () => {
+    expect(
+      buildTurnConfig({ effort: 'high', fast: false, ultracode: false, adaptiveThinking: false }, {}, 'm', 'default')
+        .serviceTier,
+    ).toBeUndefined();
+    expect(
+      buildTurnConfig({ effort: 'high', fast: true, ultracode: false, adaptiveThinking: false }, {}, 'm', 'default')
+        .serviceTier,
+    ).toBe('fast');
   });
 
   it('omits personality/summary when not provided', () => {
-    const cfg = buildTurnConfig({ effort: null, fast: false, ultracode: false, adaptiveThinking: false }, {}, 'm', 'default');
+    const cfg = buildTurnConfig(
+      { effort: null, fast: false, ultracode: false, adaptiveThinking: false },
+      {},
+      'm',
+      'default',
+    );
     expect(cfg.personality).toBeUndefined();
     expect(cfg.summary).toBeUndefined();
   });

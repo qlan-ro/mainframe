@@ -308,11 +308,19 @@ function handleTurnCompleted(params: TurnCompletedParams, sink: SessionSink, sta
   const { turn } = params;
   const isError = turn.status === 'failed' || turn.status === 'interrupted';
 
+  if (isError) {
+    log.warn(
+      { turnId: turn.id, status: turn.status, reason: turn.error?.message ?? null },
+      'codex: turn ended in error',
+    );
+  }
+
   sink.onResult({
     total_cost_usd: 0,
     usage: state.lastUsage,
     subtype: isError ? 'error_during_execution' : undefined,
     is_error: isError,
+    result: turn.error?.message,
   });
   state.lastUsage = undefined;
 }
