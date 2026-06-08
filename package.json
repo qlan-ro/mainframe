@@ -37,13 +37,13 @@
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.30.0",
     "esbuild": "^0.28.0",
-    "eslint": "^10.4.0",
+    "eslint": "^10.4.1",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.5",
+    "lint-staged": "^17.0.7",
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.3"
+    "typescript-eslint": "^8.61.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
