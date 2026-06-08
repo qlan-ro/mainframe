@@ -60,7 +60,7 @@ export function SidebarHeader() {
     <div
       data-testid="sidebar-header"
       data-tauri-drag-region
-      className="flex h-[38px] flex-shrink-0 items-center gap-2 px-2 [border-bottom:0.5px_solid_var(--border)]"
+      className="flex h-[38px] flex-shrink-0 items-center gap-2 px-2"
     >
       <TrafficLightsSpacer />
       <SurfaceRail />
