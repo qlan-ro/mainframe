@@ -14,6 +14,7 @@
  * selection state) shows the ChatThread transcript + composer directly.
  */
 import { useAuiState } from '@assistant-ui/react';
+import { ChatHeader } from '../../../layout/ChatHeader';
 import { ChatThread } from '../../../features/chat/thread/ChatThread';
 import { NewThreadConfigPicker } from './NewThreadConfigPicker';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
@@ -41,13 +42,18 @@ export function ChatSurface({ port }: { port: number }) {
   const isNewLocal =
     mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
 
-  if (isNewLocal && !isReady && filterProjectId == null) {
-    return (
-      <div data-testid="sessions-new-thread-surface" className="flex h-full items-center justify-center p-6">
-        <NewThreadConfigPicker port={port} />
+  return (
+    <div className="flex flex-1 flex-col">
+      <ChatHeader />
+      <div className="flex-1 overflow-hidden">
+        {isNewLocal && !isReady && filterProjectId == null ? (
+          <div data-testid="sessions-new-thread-surface" className="flex h-full items-center justify-center p-6">
+            <NewThreadConfigPicker port={port} />
+          </div>
+        ) : (
+          <ChatThread />
+        )}
       </div>
-    );
-  }
-
-  return <ChatThread />;
+    </div>
+  );
 }
