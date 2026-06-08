@@ -246,7 +246,7 @@ The single source of truth for what's left. Folds in items previously living onl
 - ☐ **L — Multi-window surface infrastructure** — two windows + cross-window state sync; a deferred acceptance criterion of the stress matrix, not yet designed.
 
 **Layout / sidebar chrome** *(deferred from the built sessions sidebar)*
-- ☐ **S — SessionSidebar group-header "more" popover** (`SessionSidebar.tsx:53,71`) — testid present, no popover wired (presentational placeholder); port the overflow menu.
+- ☑ **S — SessionSidebar group-header "more" popover** — DONE (was already built + tested; tracker was stale, 2026-06-08). `SessionsMoreMenu` = shadcn DropdownMenu → Archived sessions + Import external sessions, each opening its dialog (`ArchivedSessionsDialog`/`ImportSessionsDialog`); covered by `SessionsMoreMenu.test.tsx` + both dialog tests.
 - ☐ **M — Ghosted/dashed "Add project" pill** (`ProjectFilterPillBar.tsx:10-11`) — dashed add-project button in the filter bar; inert without the add-project surface.
 - ☐ **M — Add-project flow** (`features/sessions/` + `lib/api/projects.ts`) — directory picker + project create/register that makes the "Add project" pill live.
 - ☐ **L — Surface rail (Chat / Files / Run vertical rail)** (`layout/` + `surfaces/{chat,files,run}/`) — gated on the Files/Run surfaces existing.

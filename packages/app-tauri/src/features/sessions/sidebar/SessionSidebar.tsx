@@ -48,10 +48,10 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
 }
 
 /**
- * SessionsGroupHeader — the sticky "SESSIONS" group header with the chevron,
- * count, and the new/sort/more icon-button cluster. The +new button is wired to
- * the native ThreadListPrimitive.New; the sort button opens SessionSortMenu;
- * more is a presentational placeholder (popover not yet ported) with a testid.
+ * SessionsGroupHeader — the sticky "SESSIONS" group header with the count and
+ * the new/sort/more icon-button cluster. The +new button is wired to the native
+ * ThreadListPrimitive.New; the sort button opens SessionSortMenu; the more (⋯)
+ * button opens SessionsMoreMenu (Archived sessions · Import external sessions).
  */
 function SessionsGroupHeader({ count }: { count: number }) {
   const { sortMode, setSortMode } = useSessionFilters();
