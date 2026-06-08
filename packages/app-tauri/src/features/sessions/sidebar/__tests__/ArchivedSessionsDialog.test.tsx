@@ -52,9 +52,12 @@ vi.mock('@assistant-ui/react', () => ({
   useAssistantRuntime: () => ({
     threads: {
       getState: () => {
-        const threadIds = __threads.map((t) => t.id);
+        // Mirror the real assistant-ui split: regular threads in threadIds,
+        // archived threads in archivedThreadIds (separate bucket).
+        const threadIds = __threads.filter((t) => t.status !== 'archived').map((t) => t.id);
+        const archivedThreadIds = __threads.filter((t) => t.status === 'archived').map((t) => t.id);
         const threadItems = Object.fromEntries(__threads.map((t) => [t.id, t]));
-        return { threadIds, threadItems };
+        return { threadIds, archivedThreadIds, threadItems };
       },
       reload: reloadSpy,
     },

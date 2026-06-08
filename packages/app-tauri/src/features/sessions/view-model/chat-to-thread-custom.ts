@@ -101,6 +101,8 @@ export interface ThreadListEntry {
 /** Runtime-shaped state: ordered ids + a Record of entries. */
 export interface ThreadListRecordState {
   threadIds: readonly string[];
+  /** Separate bucket for archived threads — assistant-ui keeps them here, not in threadIds. */
+  archivedThreadIds?: readonly string[];
   threadItems: Readonly<Record<string, ThreadListEntry>>;
 }
 
@@ -145,6 +147,22 @@ function threadEntryToSessionItem(entry: SessionThreadEntry): SessionItem {
  */
 export function threadItemsToSessionItems(entries: readonly ThreadListEntry[]): SessionItem[] {
   return entries.filter(hasSessionCustom).map(threadEntryToSessionItem);
+}
+
+/**
+ * Project only the archived threads from the runtime ThreadListState.
+ *
+ * assistant-ui keeps archived threads in `archivedThreadIds` (a separate bucket
+ * from `threadIds` which holds only active threads). Walking `threadIds` for
+ * archived entries is always empty; this helper walks the correct bucket.
+ */
+export function archivedThreadListStateToSessionItems(state: ThreadListRecordState): SessionItem[] {
+  const ids = state.archivedThreadIds ?? [];
+  return ids
+    .map((id) => state.threadItems[id])
+    .filter((entry): entry is ThreadListEntry => entry != null)
+    .filter(hasSessionCustom)
+    .map(threadEntryToSessionItem);
 }
 
 /**

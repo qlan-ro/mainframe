@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { unarchiveChat } from '@/lib/api/chats';
-import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
+import { archivedThreadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
 import { filterArchivedSessions } from '../view-model/archived-sessions';
 import { formatRelativeTime } from '../view-model/relative-time';
 
@@ -108,7 +108,7 @@ export function ArchivedSessionsDialog({
 
   const archivedItems = useMemo(() => {
     if (!open) return [];
-    const allItems = runtime.threads ? threadListStateToSessionItems(runtime.threads.getState()) : [];
+    const allItems = runtime.threads ? archivedThreadListStateToSessionItems(runtime.threads.getState()) : [];
     return filterArchivedSessions(allItems, filterProjectId).filter((item) => !restoredIds.has(item.id));
   }, [open, runtime, filterProjectId, restoredIds]);
 
