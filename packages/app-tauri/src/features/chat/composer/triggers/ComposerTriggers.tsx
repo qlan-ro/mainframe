@@ -12,14 +12,14 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ComposerPrimitive } from '@assistant-ui/react';
+import { ComposerPrimitive, useAui } from '@assistant-ui/react';
 import type { Unstable_TriggerItem } from '@assistant-ui/react';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
 import { useChatSkills, useChatAgents } from '@/features/skills/use-chat-skills';
 import { searchFiles, getFileTree, browseFilesystem } from '@/lib/api/files';
 import { buildSkillsTriggerAdapter } from './skills-trigger-adapter';
 import { createMentionCache, buildMentionTriggerAdapter, type MentionCache } from './mention-adapter';
-import { literalDirectiveFormatter, mentionDirectiveFormatter } from './directive-formatter';
+import { literalDirectiveFormatter, mentionDirectiveFormatter, dropDirectoryClosingSpace } from './directive-formatter';
 
 // ---------------------------------------------------------------------------
 // Alias for brevity
@@ -40,7 +40,7 @@ function ItemRow({ item, testidPrefix }: { item: Unstable_TriggerItem; testidPre
                  data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
     >
       <span className="font-medium text-foreground">{item.label}</span>
-      {item.description != null && <span className="text-xs text-muted-foreground">{item.description}</span>}
+      {item.description != null && <span className="text-caption text-muted-foreground">{item.description}</span>}
     </ComposerPrimitive.Unstable_TriggerPopoverItem>
   );
 }
@@ -128,6 +128,18 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
   const slashFmt = useMemo(() => literalDirectiveFormatter('/'), []);
   const atFmt = useMemo(() => mentionDirectiveFormatter(), []);
 
+  // The native popover always appends a closing space on accept; for a DIRECTORY
+  // that ends the `@` token and breaks drill-down. After insertion, drop that
+  // trailing space so the token stays open and the popover re-lists the folder.
+  const aui = useAui();
+  const keepDirectoryTokenOpen = (item: Unstable_TriggerItem) => {
+    if (item.type !== 'directory') return;
+    const composer = aui.composer();
+    const text = composer.getState().text;
+    const next = dropDirectoryClosingSpace(text, item.id);
+    if (next !== text) composer.setText(next);
+  };
+
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>
       {/* `/` skills trigger. PopoverShell renders INSIDE the items render-prop so
@@ -149,7 +161,7 @@ export function ComposerTriggers({ children }: { children: ReactNode }) {
 
       {/* `@` mention trigger (agents + files + tree/filesystem drill-down) */}
       <TP char="@" adapter={mentionAdapter}>
-        <TP.Directive formatter={atFmt} />
+        <TP.Directive formatter={atFmt} onInserted={keepDirectoryTokenOpen} />
         <MentionDriver cache={mentionCache} />
         <ComposerPrimitive.Unstable_TriggerPopoverItems>
           {(items) =>
