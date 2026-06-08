@@ -86,7 +86,13 @@ export function FeaturesPopover({ chat, model, setFeature, disabled }: FeaturesP
         <TooltipContent side="top">Feature settings</TooltipContent>
       </Tooltip>
 
-      <PopoverContent align="start" side="top" sideOffset={6} className="w-64 p-3">
+      <PopoverContent
+        data-testid="composer-features-popover"
+        align="start"
+        side="top"
+        sideOffset={6}
+        className="w-64 p-3"
+      >
         <p className="mb-2 text-label font-semibold text-foreground">Features</p>
         <div className="divide-y divide-border">
           {features.map((f) => (

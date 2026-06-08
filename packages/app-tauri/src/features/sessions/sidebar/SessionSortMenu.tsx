@@ -32,7 +32,7 @@ export function SessionSortMenu({ mode, onChange }: SessionSortMenuProps) {
           <ChevronsUpDownIcon className="size-[11px]" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={6} className="w-44 p-1.5">
+      <PopoverContent data-testid="sessions-sort-popover" align="end" sideOffset={6} className="w-44 p-1.5">
         <div className="px-2 pb-1.5 pt-1 text-[9.5px] font-bold uppercase tracking-[0.06em] text-mf-text-3">
           Sort by
         </div>

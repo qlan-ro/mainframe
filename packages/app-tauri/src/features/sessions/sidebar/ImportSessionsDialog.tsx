@@ -156,6 +156,7 @@ function SessionList({
           <p className="text-body text-muted-foreground">{error}</p>
           <button
             type="button"
+            data-testid="sessions-import-retry"
             onClick={() => setRetryCounter((c) => c + 1)}
             className="text-caption text-foreground underline hover:no-underline"
           >
