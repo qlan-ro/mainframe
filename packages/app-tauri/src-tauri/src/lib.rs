@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use tauri::{Emitter, Manager};
 
 // Re-export commands at crate root so generate_handler! can find them.
-use commands::{get_app_info, get_auth_token, get_homedir};
+use commands::{get_app_info, get_auth_token, get_homedir, get_platform, read_file, show_item_in_folder};
 
 /// The daemon handle lives for the entire app lifetime.
 /// OnceLock ensures single-init; Drop isn't guaranteed on all platforms,
@@ -46,6 +46,9 @@ pub fn run() {
             get_homedir,
             get_daemon_port,
             get_daemon_status,
+            show_item_in_folder,
+            read_file,
+            get_platform,
         ])
         .setup(move |app| {
             // Propagate any daemon-boot error to the renderer via the window title

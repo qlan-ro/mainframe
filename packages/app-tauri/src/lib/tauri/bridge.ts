@@ -15,6 +15,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type Event, type UnlistenFn } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { sendNotification } from '@tauri-apps/plugin-notification';
 
 /** Tauri injects this global into its webview; absent in a plain browser. */
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -81,4 +82,55 @@ export function onDaemonStatus(callback: (status: string) => void): Promise<Unli
     return Promise.resolve(() => {});
   }
   return listen<string>('daemon:status', (event: Event<string>) => callback(event.payload));
+}
+
+/**
+ * Reveals `path` in the system file manager (Finder / Explorer / Nautilus).
+ * No-op in browser dev mode.
+ */
+export async function showItemInFolder(path: string): Promise<void> {
+  if (!IS_TAURI) return;
+  await invoke<void>('show_item_in_folder', { path });
+}
+
+/**
+ * Reads a text file from disk. Path must be under the user home directory.
+ * Returns null in browser dev mode or when the file is not found.
+ */
+export async function readFile(path: string): Promise<string | null> {
+  if (!IS_TAURI) return null;
+  return invoke<string | null>('read_file', { path });
+}
+
+/**
+ * Shows an OS-native notification. No-op in browser dev mode.
+ */
+export async function showNotification(title: string, body?: string): Promise<void> {
+  if (!IS_TAURI) return;
+  sendNotification({ title, body });
+}
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+/**
+ * Structured log shim. Delegates to console.* in both Tauri and browser modes
+ * — no Rust roundtrip needed for renderer logs.
+ */
+export function log(level: LogLevel, _module: string, msg: string, data?: unknown): void {
+  const fn = console[level] ?? console.log;
+  if (data !== undefined) {
+    fn(`[${_module}] ${msg}`, data);
+  } else {
+    fn(`[${_module}] ${msg}`);
+  }
+}
+
+/**
+ * Returns 'macos' | 'windows' | 'linux' | 'browser'.
+ */
+export async function getPlatform(): Promise<'macos' | 'windows' | 'linux' | 'browser'> {
+  if (!IS_TAURI) return 'browser';
+  const os = await invoke<string>('get_platform');
+  if (os === 'macos' || os === 'windows' || os === 'linux') return os;
+  return 'browser';
 }

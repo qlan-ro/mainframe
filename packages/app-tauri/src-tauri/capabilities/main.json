@@ -4,5 +4,5 @@
   "description": "Capabilities for the main Mainframe window — least-privilege.",
   "platforms": ["macOS", "windows", "linux"],
   "windows": ["main"],
-  "permissions": ["core:default", "opener:default", "notification:default"]
+  "permissions": ["core:default", "opener:default", "notification:default", "notification:allow-notify"]
 }
