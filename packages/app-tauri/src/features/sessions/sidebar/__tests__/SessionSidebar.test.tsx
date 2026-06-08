@@ -235,13 +235,13 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// 1. sessions-sidebar wrapper is in the DOM
+// 1. sessions-list-scroll is in the DOM (outer glass wrapper moved to SidebarShell)
 // ---------------------------------------------------------------------------
 
-describe('SessionSidebar — root wrapper is present on render', () => {
-  it('renders data-testid="sessions-sidebar"', () => {
+describe('SessionSidebar — list scroll area is present on render', () => {
+  it('renders data-testid="sessions-list-scroll"', () => {
     render(<SessionSidebar />);
-    expect(screen.getByTestId('sessions-sidebar')).toBeTruthy();
+    expect(screen.getByTestId('sessions-list-scroll')).toBeTruthy();
   });
 });
 

@@ -82,8 +82,12 @@ vi.mock('../../features/sessions/ws/use-session-list-router', () => ({
   useSessionListRouter: useSessionListRouterMock,
 }));
 
+vi.mock('../../layout/SidebarShell', () => ({
+  SidebarShell: () => <div data-testid="sessions-sidebar" />,
+}));
+
 vi.mock('../../features/sessions/sidebar/SessionSidebar', () => ({
-  SessionSidebar: () => <div data-testid="sessions-sidebar" />,
+  SessionSidebar: () => null,
 }));
 
 vi.mock('../../features/sessions/sidebar/ArchiveWorktreeDialog', () => ({
