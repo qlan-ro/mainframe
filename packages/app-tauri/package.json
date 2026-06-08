@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "tauri:dev": "cargo tauri dev",
+    "tauri:dev": "cargo tauri dev --config src-tauri/tauri.dev.conf.json",
     "tauri:build": "cargo tauri build",
     "preview": "vite preview"
   },

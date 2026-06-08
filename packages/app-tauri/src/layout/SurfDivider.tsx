@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface Props {
   axis: 'x' | 'y';
@@ -14,6 +14,12 @@ interface Props {
 export function SurfDivider({ axis, containerRef, onFrac }: Props) {
   const [hot, setHot] = useState(false);
   const isX = axis === 'x';
+
+  // Holds the teardown for an in-flight drag so it can run on unmount too —
+  // pointerup alone can't clean up if the divider unmounts mid-drag.
+  const dragCleanup = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => dragCleanup.current?.(), []);
 
   const onDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -33,8 +39,10 @@ export function SurfDivider({ axis, containerRef, onFrac }: Props) {
       document.body.style.userSelect = '';
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      dragCleanup.current = null;
     };
 
+    dragCleanup.current = up;
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   };
