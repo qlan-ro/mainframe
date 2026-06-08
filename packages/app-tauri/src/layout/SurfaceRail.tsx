@@ -1,6 +1,6 @@
-import { MessageSquare, FileText, Play } from 'lucide-react';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
+import { ChatGlyph, EditorGlyph, PreviewGlyph } from './surface-icons';
 
 interface SurfaceDef {
   id: SurfaceId;
@@ -10,21 +10,21 @@ interface SurfaceDef {
 }
 
 const SURFACES: SurfaceDef[] = [
-  { id: 'chat', label: 'Chat', Icon: MessageSquare, activeColor: 'text-primary' },
-  { id: 'files', label: 'Editor', Icon: FileText, activeColor: 'text-[#7a4d9e]' },
-  { id: 'run', label: 'Preview', Icon: Play, activeColor: 'text-[#1f9d4d]' },
+  { id: 'chat', label: 'Chat', Icon: ChatGlyph, activeColor: 'text-primary' },
+  { id: 'files', label: 'Editor', Icon: EditorGlyph, activeColor: 'text-[#7a4d9e]' },
+  { id: 'run', label: 'Preview', Icon: PreviewGlyph, activeColor: 'text-[#1f9d4d]' },
 ];
 
 export function SurfaceRail() {
-  const surfaces = useLayoutStore((s) => s.surfaces);
+  const layout = useLayoutStore((s) => s.layout);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
-  const activeCount = Object.values(surfaces).filter(Boolean).length;
 
   return (
     <div data-testid="surface-rail" className="flex flex-shrink-0 gap-0.5 rounded-lg bg-mf-chip p-0.5">
       {SURFACES.map(({ id, label, Icon, activeColor }) => {
-        const on = surfaces[id];
-        const isFloor = on && activeCount === 1;
+        const on = layout.top.includes(id) || layout.bottom === id;
+        // Chat is the permanent floor — its button is always lit and never toggleable.
+        const isFloor = id === 'chat';
 
         return (
           <button

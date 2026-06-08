@@ -327,11 +327,17 @@ select:not([data-noring]):focus-visible,
 /* ════════════════════════════════════════════════════════════════════════
    Base resets — warm-chrome sensible defaults.
    ════════════════════════════════════════════════════════════════════════ */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  border-color: var(--border);
+/* In @layer base so Tailwind's border-color utilities (border-l-primary,
+   border-l-transparent, …) — which live in @layer utilities — can override the
+   default. An UNLAYERED `*` rule would beat every layered utility and pin every
+   border to var(--border) (the active-row blue bar / inactive transparent bug). */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
 }
 
 body {
