@@ -168,7 +168,7 @@ export function TagPopover({
       >
         {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
         <PopoverContent data-testid="sessions-tag-popover" className="w-64 p-2" align="start">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide px-2 py-1">Tag session</div>
+          <div className="text-caption text-muted-foreground uppercase tracking-normal px-2 py-1">Tag session</div>
           <Input
             ref={searchRef}
             data-testid="sessions-tag-popover-search"
@@ -184,13 +184,13 @@ export function TagPopover({
               if (e.key === 'Enter' && showCreate) void createAndApply();
             }}
             placeholder="# Find or create..."
-            className="h-8 text-sm"
+            className="h-8 text-body"
           />
           {lower.length > 0 && nameError !== null && (
-            <div className="text-xs text-destructive px-2 py-1">{tagNameErrorMessage(nameError)}</div>
+            <div className="text-caption text-destructive px-2 py-1">{tagNameErrorMessage(nameError)}</div>
           )}
           {error && (
-            <div data-testid="sessions-tag-popover-error" className="text-xs text-destructive px-2 py-1">
+            <div data-testid="sessions-tag-popover-error" className="text-caption text-destructive px-2 py-1">
               {error}
             </div>
           )}
@@ -213,7 +213,7 @@ export function TagPopover({
                       setRenaming(null);
                     }
                   }}
-                  className="h-8 text-sm my-0.5"
+                  className="h-8 text-body my-0.5"
                 />
               ) : (
                 <TagRegistryItemMenu
@@ -232,7 +232,7 @@ export function TagPopover({
                     aria-checked={applied.has(t.name)}
                     data-tag-row={t.name}
                     onClick={() => void toggle(t.name)}
-                    className="w-full flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-accent text-sm"
+                    className="w-full flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-accent text-body"
                   >
                     <span className="flex items-center gap-2" data-testid={`sessions-tag-registry-row-${t.name}`}>
                       <span className="w-1.5 h-1.5 rounded-full" style={TAG_DOT_STYLE(t.color)} aria-hidden="true" />

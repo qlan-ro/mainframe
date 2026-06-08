@@ -10,8 +10,8 @@ interface Props {
 }
 
 const SURFACE_META = {
-  files: { Icon: FileText, colorClass: 'text-[#7a4d9e]', label: 'Files' },
-  run: { Icon: Play, colorClass: 'text-[#1f9d4d]', label: 'Run' },
+  files: { Icon: FileText, colorClass: 'text-mf-surface-files', label: 'Files' },
+  run: { Icon: Play, colorClass: 'text-mf-surface-run', label: 'Run' },
 } as const;
 
 export function SurfaceTabStrip({ surface }: Props) {

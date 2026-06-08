@@ -13,20 +13,20 @@ const SHORTCUT_MAP: Record<string, SurfaceId> = {
   '3': 'run',
 };
 
-const PANEL_CLS =
-  'flex flex-col overflow-hidden rounded-[11px] bg-background shadow-[0_0_0_0.5px_var(--border),0_1px_2px_rgba(0,0,0,0.05)]';
+const PANEL_CLS = 'flex flex-col overflow-hidden rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]';
 
-function SurfaceView({ name, port }: { name: SurfaceId; port: number }) {
-  if (name === 'chat') return <ChatSurface port={port} />;
+function SurfaceView({ mainChromeInset, name, port }: { mainChromeInset: number; name: SurfaceId; port: number }) {
+  if (name === 'chat') return <ChatSurface mainChromeInset={mainChromeInset} port={port} />;
   if (name === 'files') return <FilesSurface />;
   return <RunSurface />;
 }
 
 interface Props {
+  mainChromeInset?: number;
   port: number;
 }
 
-export function SurfaceHost({ port }: Props) {
+export function SurfaceHost({ mainChromeInset = 0, port }: Props) {
   const layout = useLayoutStore((s) => s.layout);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   const setTopFrac = useLayoutStore((s) => s.setTopFrac);
@@ -73,7 +73,7 @@ export function SurfaceHost({ port }: Props) {
         {top.map((name, i) => (
           <Fragment key={name}>
             <div style={{ flex: topFlex[name] ?? 1 }} className={`min-w-0 ${PANEL_CLS}`}>
-              <SurfaceView name={name} port={port} />
+              <SurfaceView mainChromeInset={i === 0 ? mainChromeInset : 0} name={name} port={port} />
             </div>
             {i < top.length - 1 &&
               (twoCol ? (
@@ -91,7 +91,7 @@ export function SurfaceHost({ port }: Props) {
           <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
             <div className={`min-w-0 flex-1 ${PANEL_CLS}`}>
-              <SurfaceView name={bottom} port={port} />
+              <SurfaceView mainChromeInset={0} name={bottom} port={port} />
             </div>
           </div>
         </>

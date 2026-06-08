@@ -57,7 +57,7 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
         'aui-md-inline-code',
         'bg-mf-code-bg text-mf-code-fg',
         'rounded-sm border border-border px-1.5 py-0.5',
-        'font-mono text-[0.85em]',
+        'font-mono text-caption',
         className,
       )}
       {...props}
@@ -90,7 +90,7 @@ function MarkdownThead({ children, ...props }: React.ComponentProps<'thead'>) {
 function MarkdownTh({ children, ...props }: React.ComponentProps<'th'>) {
   return (
     <th
-      className="font-mono text-label font-semibold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left"
+      className="font-mono text-label font-semibold uppercase tracking-normal text-muted-foreground px-3 py-2 text-left"
       {...props}
     >
       {children}

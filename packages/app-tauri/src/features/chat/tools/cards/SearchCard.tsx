@@ -1,7 +1,7 @@
 /**
  * SearchCard — compact collapsible card for 'Glob', 'Grep', and 'LS' tools.
  *
- * Family: Search (purple #9b59c4). One component, switches on part.toolName.
+ * Family: Search. One component, switches on part.toolName.
  * Header: family tile + tool verb + quoted pattern/glob + optional "in {path}" sub-header.
  * Body (collapsed by default): plain match-list pre or ErrorBody.
  *   - TruncatedResult → ToolResultExpand.
@@ -21,8 +21,8 @@ import { useChatId } from '../chat-tool-context';
 // Family constants
 // ---------------------------------------------------------------------------
 
-const FAMILY_COLOR = '#9b59c4';
-const FAMILY_BG = `${FAMILY_COLOR}1c`;
+const FAMILY_COLOR = 'var(--mf-tool-search)';
+const FAMILY_BG = 'var(--mf-tool-search-tint)';
 
 // ---------------------------------------------------------------------------
 // Verb by tool name

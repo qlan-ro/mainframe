@@ -215,7 +215,7 @@ export const EditFileCard: ToolCallMessagePartComponent = (part) => {
   const state = useEditCardState(args, result, isError, toolCallId);
 
   const tile = (
-    <FamilyTile color="#d97706" bg="rgba(217,119,6,0.11)">
+    <FamilyTile color="var(--mf-warning)" bg="var(--mf-warning-tint)">
       <FileDiffIcon size={13} />
     </FamilyTile>
   );

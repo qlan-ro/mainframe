@@ -26,6 +26,7 @@ import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
 import { attentionCount } from '../view-model/attention-counts';
+import { sortProjectsByRecentActivity } from '../view-model/project-activity';
 import { applySessionFilters } from '../filter/apply-session-filters';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
@@ -59,7 +60,7 @@ function SessionsGroupHeader({ count }: { count: number }) {
     'inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
   return (
     <div className="flex items-center gap-1 px-3 pb-1 pt-2">
-      <span className="text-micro font-bold uppercase tracking-[0.06em] text-muted-foreground">Sessions</span>
+      <span className="text-micro font-bold uppercase tracking-normal text-muted-foreground">Sessions</span>
       <span className="text-micro text-mf-text-3">{count}</span>
       <div className="flex-1" />
       <ThreadListPrimitive.New asChild>
@@ -111,6 +112,8 @@ export function SessionSidebar() {
     [allItems, projects, isUnread],
   );
 
+  const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
+
   // Project chip on each row only in "All" view (no active project filter); the
   // filter pill already narrows the list when a project is selected.
   const showProject = filterProjectId == null;
@@ -121,7 +124,7 @@ export function SessionSidebar() {
       <SessionsGroupHeader count={allItems.length} />
 
       <ProjectFilterPillBar
-        projects={projects}
+        projects={sortedProjects}
         filterProjectId={filterProjectId}
         attentionCounts={attentionCounts}
         onSelect={setFilterProjectId}

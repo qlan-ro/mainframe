@@ -4,7 +4,7 @@
  * CollapsibleCardShell — shared chrome for all tool cards.
  *
  * Encapsulates: the card border/radius, CollapsibleTrigger header with a
- * 22×22 family tile (icon or glyph + hex colour), a verb label, optional
+ * 22×22 family tile (icon or glyph + token colour), a verb label, optional
  * target slot (e.g. ClickableFilePath), optional trailing slot (stat pills /
  * StatusDot), and the collapsible body.
  *
@@ -24,9 +24,9 @@ import { cardStyle } from './chrome';
 // ---------------------------------------------------------------------------
 
 export interface FamilyTileProps {
-  /** Solid hex colour for the icon/glyph, e.g. '#d97706'. */
+  /** Token-backed colour for the icon/glyph. */
   color: string;
-  /** Background as a CSS color string (rgba or hex+alpha string). */
+  /** Token-backed background color string. */
   bg: string;
   /** React node rendered inside the tile (icon component or string glyph). */
   children: React.ReactNode;
@@ -39,7 +39,7 @@ export function FamilyTile({ color, bg, children }: FamilyTileProps) {
       className="w-[22px] h-[22px] rounded-sm shrink-0 flex items-center justify-center"
       style={{ backgroundColor: bg }}
     >
-      <span className="text-[11px] font-bold leading-none select-none" style={{ color }}>
+      <span className="text-caption font-bold leading-none select-none" style={{ color }}>
         {children}
       </span>
     </span>

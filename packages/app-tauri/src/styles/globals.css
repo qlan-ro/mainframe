@@ -71,6 +71,16 @@
   --mf-success: #28a745;
   --mf-success-tint: rgba(40, 167, 69, 0.10);
   --mf-border-hover: rgba(0, 0, 0, 0.14);
+  --mf-surface-files: #7a4d9e;
+  --mf-surface-run: #1f9d4d;
+  --mf-directive-skill: #7a4dd0;
+  --mf-directive-skill-tint: rgba(122, 77, 208, 0.08);
+  --mf-tool-read: #5b8def;
+  --mf-tool-read-tint: rgba(91, 141, 239, 0.11);
+  --mf-tool-search: #9b59c4;
+  --mf-tool-search-tint: rgba(155, 89, 196, 0.11);
+  --mf-tool-bash: #7a7a82;
+  --mf-tool-bash-tint: rgba(122, 122, 130, 0.11);
 
   /* Editor syntax — LIGHT */
   --mf-code-bg: #fbfaf7;
@@ -115,6 +125,11 @@
   /* Elevation + focus ring */
   --mf-shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.20), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
   --mf-shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.18);
+  --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --mf-shadow-picker: 0 12px 40px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
   --mf-focus-ring: 0 0 0 3px rgba(10, 132, 255, 0.35);
 
   /* Type + motion */
@@ -166,6 +181,16 @@
   --mf-success: #3ad06a;
   --mf-success-tint: rgba(58, 208, 106, 0.12);
   --mf-border-hover: rgba(255, 255, 255, 0.16);
+  --mf-surface-files: #b48bd8;
+  --mf-surface-run: #3ad06a;
+  --mf-directive-skill: #b48cff;
+  --mf-directive-skill-tint: rgba(180, 140, 255, 0.14);
+  --mf-tool-read: #8fb2ff;
+  --mf-tool-read-tint: rgba(143, 178, 255, 0.14);
+  --mf-tool-search: #c18ee8;
+  --mf-tool-search-tint: rgba(193, 142, 232, 0.14);
+  --mf-tool-bash: #9a958d;
+  --mf-tool-bash-tint: rgba(154, 149, 141, 0.14);
 
   /* Editor syntax — DARK */
   --mf-code-bg: #1b1814;
@@ -208,6 +233,11 @@
   /* Elevation + focus ring — DARK */
   --mf-shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
   --mf-shadow-modal: 0 28px 64px rgba(0, 0, 0, 0.66), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
+  --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
+  --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
+  --mf-shadow-picker: 0 16px 44px rgba(0, 0, 0, 0.46), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
+  --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
+  --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-focus-ring: 0 0 0 3px rgba(10, 132, 255, 0.50);
 }
 
@@ -254,6 +284,16 @@
   --color-mf-success: var(--mf-success);
   --color-mf-success-tint: var(--mf-success-tint);
   --color-mf-border-hover: var(--mf-border-hover);
+  --color-mf-surface-files: var(--mf-surface-files);
+  --color-mf-surface-run: var(--mf-surface-run);
+  --color-mf-directive-skill: var(--mf-directive-skill);
+  --color-mf-directive-skill-tint: var(--mf-directive-skill-tint);
+  --color-mf-tool-read: var(--mf-tool-read);
+  --color-mf-tool-read-tint: var(--mf-tool-read-tint);
+  --color-mf-tool-search: var(--mf-tool-search);
+  --color-mf-tool-search-tint: var(--mf-tool-search-tint);
+  --color-mf-tool-bash: var(--mf-tool-bash);
+  --color-mf-tool-bash-tint: var(--mf-tool-bash-tint);
   --color-mf-code-bg: var(--mf-code-bg);
   --color-mf-code-fg: var(--mf-code-fg);
   --color-mf-code-kw: var(--mf-code-kw);
@@ -297,6 +337,14 @@
   --text-title: 1.0625rem;   /* 17px */
   --text-display: 1.375rem;  /* 22px */
   --text-hero: 1.75rem;      /* 28px */
+
+  /* Letter spacing + line-height */
+  --tracking-tight: 0;
+  --tracking-normal: 0;
+  --tracking-wide: 0;
+  --leading-tight: 1.15;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
 
   /* Fonts + easings */
   --font-sans: var(--font-sans);
@@ -365,6 +413,36 @@ body {
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Shimmering TEXT for the running ("Thinking…") indicator: a brighter band
+   sweeps across muted text via a gradient clipped to the glyphs. */
+@keyframes mf-text-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.mf-text-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--mf-text-3) 0%,
+    var(--mf-text-3) 35%,
+    var(--foreground) 50%,
+    var(--mf-text-3) 65%,
+    var(--mf-text-3) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mf-text-shimmer 2.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-text-shimmer {
+    animation: none;
+    color: var(--mf-text-3);
+  }
 }
 
 /* Collapsible animations for tool cards */

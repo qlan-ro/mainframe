@@ -2,7 +2,7 @@
  * ProjectFilterPillBar — "All" + per-project filter pills with attention badges.
  *
  * Collapsible (artboard: COLLAPSE_AT = 2): shows "All" + the first 2 project pills,
- * then a "+N more" / "Less" toggle pill that expands/collapses the rest. View-only
+ * then a compact accent text control that expands/collapses the rest. View-only
  * (D12): selecting a pill filters but does NOT auto-activate the project's
  * most-recent chat. Attention badge = unread-or-pending count per project. Pills
  * are the shared FilterPill primitive.
@@ -11,7 +11,6 @@
  * add-project flow (not yet ported) and is intentionally deferred — out of scope.
  */
 import { useState } from 'react';
-import { ChevronDownIcon } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { FilterPill } from './FilterPill';
 
@@ -64,16 +63,9 @@ export function ProjectFilterPillBar({
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex h-[22px] shrink-0 items-center gap-1 rounded-[11px] bg-accent px-2.5 text-[11px] font-semibold tracking-[-0.05px] text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex shrink-0 items-center px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
         >
-          {expanded ? (
-            <>
-              <ChevronDownIcon className="size-[9px] flex-shrink-0 rotate-180 text-mf-text-3" />
-              Less
-            </>
-          ) : (
-            `+${hiddenCount} more`
-          )}
+          {expanded ? 'Less' : `+${hiddenCount} more`}
         </button>
       )}
     </div>

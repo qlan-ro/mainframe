@@ -22,9 +22,9 @@ const PLAN_MD_COMPONENTS: Components = {
   ul: ({ children }) => <ul className="mb-2 list-disc pl-5">{children}</ul>,
   ol: ({ children }) => <ol className="mb-2 list-decimal pl-5">{children}</ol>,
   li: ({ children }) => <li className="mb-1">{children}</li>,
-  h1: ({ children }) => <h1 className="mb-1 mt-3 text-base font-semibold text-foreground">{children}</h1>,
-  h2: ({ children }) => <h2 className="mb-1 mt-3 text-sm font-semibold text-foreground">{children}</h2>,
-  h3: ({ children }) => <h3 className="mb-1 mt-3 text-xs font-semibold text-foreground">{children}</h3>,
+  h1: ({ children }) => <h1 className="mb-1 mt-3 text-heading font-semibold text-foreground">{children}</h1>,
+  h2: ({ children }) => <h2 className="mb-1 mt-3 text-body font-semibold text-foreground">{children}</h2>,
+  h3: ({ children }) => <h3 className="mb-1 mt-3 text-caption font-semibold text-foreground">{children}</h3>,
   code: ({ children }) => <code className="rounded bg-mf-raised px-1 py-0.5 font-mono text-caption">{children}</code>,
   pre: ({ children }) => (
     <pre className="mb-2 overflow-auto rounded-md bg-mf-raised p-3 font-mono text-caption">{children}</pre>

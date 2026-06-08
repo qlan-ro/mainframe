@@ -200,7 +200,7 @@ function SessionRowInner({
                 <span
                   data-testid="sessions-row-title"
                   className={[
-                    'flex-1 truncate text-body tracking-[-0.15px]',
+                    'flex-1 truncate text-body tracking-normal',
                     // Selected (native data-active) reads as semibold/foreground too, matching
                     // the artboard `sel || unread` rule — applied via CSS so it tracks the
                     // native selection without a JS hook.

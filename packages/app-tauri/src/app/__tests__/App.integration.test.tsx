@@ -11,6 +11,7 @@
  *  7. provides the daemon port to the runtime layer — DaemonPortProvider is mounted; the
  *     useSessionsThreadList mock calls the REAL useDaemonPort and sees 31415.
  *  8. waits for daemon when port is null — app-waiting-daemon present, sessions-sidebar absent.
+ *  9. keeps top chrome controls clickable — no app-wide fixed drag region over the headers.
  *
  * Strategy:
  *  - All heavy modules mocked so the test stays a pure unit for App's wiring.
@@ -83,6 +84,10 @@ vi.mock('../../features/sessions/ws/use-session-list-router', () => ({
 }));
 
 vi.mock('../../layout/SidebarShell', () => ({
+  SIDEBAR_EXPANDED_WIDTH: 300,
+  SIDEBAR_COLLAPSED_WIDTH: 0,
+  SIDEBAR_COLLAPSE_THRESHOLD: 150,
+  clampSidebarWidth: (width: number) => Math.min(300, Math.max(0, width)),
   SidebarShell: () => <div data-testid="sessions-sidebar" />,
 }));
 
@@ -248,5 +253,17 @@ describe('App integration — waits for daemon when port is null', () => {
 
     expect(screen.getByTestId('app-waiting-daemon')).toBeDefined();
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 9 — no global drag shield over interactive chrome
+// ---------------------------------------------------------------------------
+
+describe('App integration — keeps top chrome controls clickable', () => {
+  it('does not render an app-wide fixed drag region over the header controls', async () => {
+    const { container } = render(<App />);
+
+    expect(container.querySelector('[data-tauri-drag-region].fixed')).toBeNull();
   });
 });

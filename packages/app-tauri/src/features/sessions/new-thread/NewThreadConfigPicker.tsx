@@ -18,7 +18,7 @@ import { setDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 
 const SELECT_CLASS =
-  'rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground ' +
+  'rounded-md border border-border bg-background px-2.5 py-1.5 text-body text-foreground ' +
   'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
 /** Default adapter for a new thread (matches desktop startChat); model/permission default too. */
@@ -44,10 +44,10 @@ export function NewThreadConfigPicker(_props: { port?: number } = {}) {
       data-ready={String(Boolean(projectId))}
       className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4"
     >
-      <p className="text-sm font-medium text-foreground">Choose a project to start</p>
+      <p className="text-body font-medium text-foreground">Choose a project to start</p>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="new-thread-project" className="text-xs text-muted-foreground">
+        <label htmlFor="new-thread-project" className="text-caption text-muted-foreground">
           Project
         </label>
         <select

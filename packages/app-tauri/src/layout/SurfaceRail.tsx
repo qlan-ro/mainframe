@@ -11,8 +11,8 @@ interface SurfaceDef {
 
 const SURFACES: SurfaceDef[] = [
   { id: 'chat', label: 'Chat', Icon: ChatGlyph, activeColor: 'text-primary' },
-  { id: 'files', label: 'Editor', Icon: EditorGlyph, activeColor: 'text-[#7a4d9e]' },
-  { id: 'run', label: 'Preview', Icon: PreviewGlyph, activeColor: 'text-[#1f9d4d]' },
+  { id: 'files', label: 'Editor', Icon: EditorGlyph, activeColor: 'text-mf-surface-files' },
+  { id: 'run', label: 'Preview', Icon: PreviewGlyph, activeColor: 'text-mf-surface-run' },
 ];
 
 export function SurfaceRail() {
@@ -38,7 +38,7 @@ export function SurfaceRail() {
               'inline-flex h-[21px] w-[26px] flex-shrink-0 items-center justify-center rounded-[6px] border-none p-0',
               'transition-[background,box-shadow] duration-[120ms] ease',
               on
-                ? 'bg-mf-tab-active shadow-[0_0.5px_0_var(--border),0_1px_2px_rgba(0,0,0,0.06)]'
+                ? 'bg-mf-tab-active shadow-[var(--mf-shadow-rail-active)]'
                 : 'cursor-pointer bg-transparent hover:bg-accent',
               isFloor ? 'cursor-default opacity-60' : '',
             ]

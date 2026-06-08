@@ -1,7 +1,7 @@
 /**
  * ReadFileCard — compact collapsible card for the 'Read' tool.
  *
- * Family: Explore (blue #5b8def). Collapsed by default.
+ * Family: Explore. Collapsed by default.
  * Header: file-type tile + "Read" verb + ClickableFilePath + optional "· N lines" meta.
  * Body: line-numbered code preview on bg-mf-code-bg.
  *   - Truncated results → ToolResultExpand (full fetch on demand).
@@ -27,8 +27,8 @@ import { useChatId } from '../chat-tool-context';
 // Family constants
 // ---------------------------------------------------------------------------
 
-const FAMILY_COLOR = '#5b8def';
-const FAMILY_BG = `${FAMILY_COLOR}1c`; // ~11% alpha tint
+const FAMILY_COLOR = 'var(--mf-tool-read)';
+const FAMILY_BG = 'var(--mf-tool-read-tint)';
 
 // ---------------------------------------------------------------------------
 // CodePreview — line-numbered plain text view
@@ -44,11 +44,11 @@ function CodePreview({ text, startLine }: CodePreviewProps) {
   return (
     <div
       data-testid="read-card-code-preview"
-      className="bg-mf-code-bg font-mono text-caption leading-[18px] overflow-x-auto max-h-[300px] overflow-y-auto"
+      className="bg-mf-code-bg font-mono text-caption leading-normal overflow-x-auto max-h-[300px] overflow-y-auto"
     >
       {lines.map((line, i) => (
         <div key={i} className="flex min-h-[18px] hover:bg-muted transition-colors">
-          <span className="shrink-0 w-9 text-right pr-3 select-none text-mf-text-4 text-micro leading-[18px]">
+          <span className="shrink-0 w-9 text-right pr-3 select-none text-mf-text-4 text-micro leading-normal">
             {startLine + i}
           </span>
           <span className="flex-1 whitespace-pre pr-3 text-mf-code-fg">{line}</span>

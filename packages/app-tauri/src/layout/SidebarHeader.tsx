@@ -2,13 +2,15 @@ import { useLayoutStore } from '@/store/layout';
 import { SurfaceRail } from './SurfaceRail';
 import { GearGlyph, SidebarLeftGlyph, TasksGlyph } from './surface-icons';
 
+export const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
+
 /**
  * Spacer that reserves the native macOS traffic-lights zone.
  * Width covers the ~68px cluster (3 × 12px circles + gaps + left inset)
  * so SurfaceRail never overlaps the window controls.
  */
 function TrafficLightsSpacer() {
-  return <div className="w-[72px] flex-shrink-0" />;
+  return <div className="flex-shrink-0" style={{ width: TRAFFIC_LIGHTS_SPACER_WIDTH }} />;
 }
 
 function TasksBtn() {
@@ -58,7 +60,7 @@ export function SidebarHeader() {
     <div
       data-testid="sidebar-header"
       data-tauri-drag-region
-      className="flex h-[38px] flex-shrink-0 items-center gap-2 px-2"
+      className="flex h-[38px] flex-shrink-0 items-center gap-2 px-2 [border-bottom:0.5px_solid_var(--border)]"
     >
       <TrafficLightsSpacer />
       <SurfaceRail />

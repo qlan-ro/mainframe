@@ -7,9 +7,8 @@
  * NOT disabled while the chat is running — planMode changes take effect on the
  * next user turn.
  *
- * Active styling uses bg-mf-selection (already rgba, not hex) + text-primary
- * to avoid the /opacity-on-hex trap.  --primary is #0a84ff; bg-primary/10
- * would silently fail — bg-mf-selection is the safe alias for that tint.
+ * Active styling uses bg-mf-selection + text-primary to avoid the
+ * /opacity-on-token trap.
  *
  * Built on shadcn Tooltip; never raw Radix.
  */

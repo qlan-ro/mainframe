@@ -45,7 +45,7 @@ export function GateHead({
         {icon}
       </span>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className={cn('text-micro font-bold uppercase tracking-wide', eyebrowClassName)}>{eyebrow}</span>
+        <span className={cn('text-micro font-bold uppercase tracking-normal', eyebrowClassName)}>{eyebrow}</span>
         <span className="text-body font-semibold leading-tight text-foreground">{title}</span>
       </div>
       {right}

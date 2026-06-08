@@ -84,7 +84,7 @@ export function QueuedUserTurn({
         </div>
         <div
           style={PENDING_CARD}
-          className="max-w-[470px] rounded-xl border border-dashed border-mf-um-dash px-[15px] py-[10px] text-body leading-relaxed tracking-[-0.1px] text-mf-um-ink opacity-[0.82]"
+          className="max-w-[470px] rounded-xl border border-dashed border-mf-um-dash px-[15px] py-[10px] text-body leading-relaxed tracking-normal text-mf-um-ink opacity-[0.82]"
         >
           {children}
         </div>

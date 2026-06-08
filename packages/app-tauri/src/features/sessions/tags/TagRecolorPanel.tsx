@@ -26,7 +26,7 @@ export function TagRecolorPanel({ tagName, onPick, onClose }: Props): React.Reac
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="text-xs text-muted-foreground uppercase tracking-wide px-1 pb-1">
+      <div className="text-caption text-muted-foreground uppercase tracking-normal px-1 pb-1">
         Recolor &quot;{tagName}&quot;
       </div>
       <div className="grid grid-cols-5 gap-1">

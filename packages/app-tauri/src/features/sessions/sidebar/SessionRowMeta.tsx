@@ -45,11 +45,11 @@ export function SessionRowMeta({
   const chipColor = projectId != null ? projectColor(projectId) : undefined;
 
   return (
-    <div className="flex min-w-0 items-center gap-2 text-micro tracking-[-0.05px] text-mf-text-3">
+    <div className="flex min-w-0 items-center gap-2 text-micro tracking-normal text-mf-text-3">
       {projectName != null && chipColor != null && (
         <span
           data-testid="sessions-row-meta-project"
-          className="inline-flex max-w-[124px] flex-shrink-0 items-center gap-1 rounded-[4px] px-1.5 py-px text-[10px] font-semibold"
+          className="inline-flex max-w-[124px] flex-shrink-0 items-center gap-1 rounded-[4px] px-1.5 py-px text-micro font-semibold"
           style={{
             backgroundColor: `color-mix(in oklch, ${chipColor} 12%, transparent)`,
             color: chipColor,
@@ -98,7 +98,7 @@ export function SessionRowMeta({
           href={pr.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex flex-shrink-0 items-center font-mono font-semibold text-[#1a7f37] hover:underline"
+          className="inline-flex flex-shrink-0 items-center font-mono font-semibold text-mf-success hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
           #{pr.number}

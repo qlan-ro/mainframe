@@ -119,7 +119,7 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
             !hasOutput && 'cursor-default',
           )}
         >
-          <FamilyTile color="#7a7a82" bg="rgba(122,122,130,0.11)">
+          <FamilyTile color="var(--mf-tool-bash)" bg="var(--mf-tool-bash-tint)">
             <Terminal size={13} />
           </FamilyTile>
           <Tooltip>

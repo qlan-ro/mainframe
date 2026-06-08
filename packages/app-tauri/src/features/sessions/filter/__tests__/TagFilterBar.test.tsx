@@ -262,6 +262,15 @@ describe('TagFilterBar — collapses to first 4 tags when 6 are in use', () => {
     expect(screen.getByTestId('sessions-tag-filter-more').textContent).toBe('+2 more');
   });
 
+  it('renders the collapsed overflow control as accent text, not a filled pill', () => {
+    __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
+    renderBar();
+    const more = screen.getByTestId('sessions-tag-filter-more');
+    expect(more.className).toContain('text-primary');
+    expect(more.className).not.toContain('bg-accent');
+    expect(more.className).not.toContain('rounded-[11px]');
+  });
+
   it('shows all 6 tags and button reads "Less" after clicking the toggle', () => {
     __tagsInUseResult = ['a', 'b', 'c', 'd', 'e', 'f'];
     renderBar();

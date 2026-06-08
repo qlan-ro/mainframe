@@ -80,7 +80,11 @@ function resolveLanguage(raw: string | undefined): SupportedLang | null {
 // The singleton is recreated on the next page load when the mode changes.
 
 function readVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (!value) {
+    throw new Error(`Missing design token ${name}`);
+  }
+  return value;
 }
 
 function buildWarmChromeTheme() {
@@ -88,33 +92,33 @@ function buildWarmChromeTheme() {
     name: 'mf-warm-chrome' as const,
     type: 'dark' as const,
     colors: {
-      'editor.background': readVar('--mf-code-bg') || '#1b1814',
-      'editor.foreground': readVar('--mf-code-fg') || '#e6e2da',
+      'editor.background': readVar('--mf-code-bg'),
+      'editor.foreground': readVar('--mf-code-fg'),
     },
     tokenColors: [
       {
         scope: ['keyword', 'storage', 'modifier'],
-        settings: { foreground: readVar('--mf-code-kw') || '#e592d6' },
+        settings: { foreground: readVar('--mf-code-kw') },
       },
       {
         scope: ['string', 'string.quoted', 'string.template'],
-        settings: { foreground: readVar('--mf-code-str') || '#eaa48f' },
+        settings: { foreground: readVar('--mf-code-str') },
       },
       {
         scope: ['entity.name.function', 'support.function'],
-        settings: { foreground: readVar('--mf-code-fn') || '#7fcfd6' },
+        settings: { foreground: readVar('--mf-code-fn') },
       },
       {
         scope: ['entity.name.type', 'support.type', 'entity.name.class'],
-        settings: { foreground: readVar('--mf-code-type') || '#c6a6f5' },
+        settings: { foreground: readVar('--mf-code-type') },
       },
       {
         scope: ['constant.numeric', 'constant.language'],
-        settings: { foreground: readVar('--mf-code-num') || '#9fb4ff' },
+        settings: { foreground: readVar('--mf-code-num') },
       },
       {
         scope: ['comment', 'punctuation.definition.comment'],
-        settings: { foreground: readVar('--mf-code-cmt') || '#6f7a83', fontStyle: 'italic' },
+        settings: { foreground: readVar('--mf-code-cmt'), fontStyle: 'italic' },
       },
     ],
   };

@@ -13,6 +13,7 @@ import { Composer } from '../composer/Composer';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useRotatingPhrase } from './use-rotating-phrase';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';
@@ -40,16 +41,19 @@ function LoadErrorBanner() {
   );
 }
 
+// Rotated while a run is active; each is rendered with the shimmer sweep.
+const RUNNING_PHRASES = ['Thinking…', 'Working…', 'Reasoning…', 'Crunching…', 'Composing…'] as const;
+const PHRASE_INTERVAL_MS = 2600;
+
 function GeneratingIndicator() {
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
+  const phrase = useRotatingPhrase(isRunning, RUNNING_PHRASES, PHRASE_INTERVAL_MS);
   if (!isRunning) return null;
   return (
-    <div
-      data-testid="chat-thread-running"
-      className="flex items-center gap-2 px-1 pb-1.5 text-caption text-muted-foreground"
-    >
-      <span className="size-1.5 animate-pulse rounded-full bg-mf-warning" />
-      Thinking…
+    <div data-testid="chat-thread-running" className="px-1 pb-1.5">
+      <span data-testid="chat-thread-running-text" className="mf-text-shimmer text-caption font-medium">
+        {phrase}
+      </span>
     </div>
   );
 }

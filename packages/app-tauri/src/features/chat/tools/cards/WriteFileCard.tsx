@@ -120,7 +120,7 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
   const showExpand = hasError && truncated && Boolean(chatId) && Boolean(toolCallId);
 
   const tile = (
-    <FamilyTile color="#28a745" bg="rgba(40,167,69,0.10)">
+    <FamilyTile color="var(--mf-success)" bg="var(--mf-success-tint)">
       +
     </FamilyTile>
   );

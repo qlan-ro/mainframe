@@ -233,6 +233,21 @@ describe('ProjectFilterPillBar — collapsible project pills', () => {
     expect(more).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('renders the collapsed overflow control as accent text, not a filled pill', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={FOUR_PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    const more = screen.getByTestId('sessions-projects-more');
+    expect(more.className).toContain('text-primary');
+    expect(more.className).not.toContain('bg-accent');
+    expect(more.className).not.toContain('rounded-[11px]');
+  });
+
   it('expands to reveal all project pills and switches to "Less" when the toggle is clicked', async () => {
     render(
       <ProjectFilterPillBar

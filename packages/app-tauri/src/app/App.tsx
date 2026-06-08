@@ -26,9 +26,6 @@ export function App() {
 
   return (
     <div className="flex h-screen flex-col bg-mf-window text-foreground font-sans">
-      {/* Drag region for macOS traffic lights */}
-      <div data-tauri-drag-region className="fixed inset-x-0 top-0 z-[100] h-10" />
-
       {port != null ? (
         <DaemonPortProvider port={port}>
           <AppShell port={port} />
@@ -42,7 +39,7 @@ export function App() {
         </div>
       )}
 
-      <AppStatusBar state={state} daemonStatus={daemonStatus} port={port} />
+      <AppStatusBar state={state} daemonStatus={daemonStatus} />
       <Toaster />
     </div>
   );

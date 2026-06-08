@@ -6,7 +6,11 @@ import { layoutCanSplit, useLayoutStore } from '@/store/layout';
 const HDR_BTN =
   'inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
 
-export function ChatHeader() {
+interface ChatHeaderProps {
+  leadingInset?: number;
+}
+
+export function ChatHeader({ leadingInset = 0 }: ChatHeaderProps) {
   const title = useAuiState((s) => s.threadListItem?.title) ?? 'Untitled';
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
@@ -14,11 +18,13 @@ export function ChatHeader() {
   return (
     <div
       data-testid="chat-header"
-      className="flex h-[34px] flex-shrink-0 items-center gap-[7px] bg-mf-tab-bar pl-2 pr-1.5 [border-bottom:0.5px_solid_var(--border)]"
+      data-tauri-drag-region
+      className="flex h-[38px] flex-shrink-0 items-center gap-[7px] bg-mf-tab-bar pl-2 pr-1.5 [border-bottom:0.5px_solid_var(--border)]"
+      style={leadingInset > 0 ? { paddingLeft: leadingInset } : undefined}
     >
       <GripHorizontal size={13} className="flex-shrink-0 cursor-grab text-mf-text-4" />
       <MessageSquare size={13} className="flex-shrink-0 text-primary" />
-      <span className="min-w-0 flex-1 truncate text-xs font-semibold">{title}</span>
+      <span className="min-w-0 flex-1 truncate text-caption font-semibold">{title}</span>
       {splitAvailable && (
         <>
           <button

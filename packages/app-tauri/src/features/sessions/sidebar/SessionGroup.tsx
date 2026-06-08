@@ -30,7 +30,7 @@ export function SessionGroup({ group, showProject, renderItem }: SessionGroupPro
     <div data-testid={`sessions-group-${group.label}`}>
       <div
         data-testid={`sessions-group-header-${group.label}`}
-        className="sticky top-0 z-[1] flex items-center gap-1 bg-mf-glass px-3 pb-[3px] pt-[7px] text-micro font-bold uppercase tracking-[0.06em] text-mf-text-3 backdrop-blur-[40px] backdrop-saturate-[1.8]"
+        className="sticky top-0 z-[1] flex items-center gap-1 bg-mf-glass px-3 pb-[3px] pt-[7px] text-micro font-bold uppercase tracking-normal text-mf-text-3 backdrop-blur-[40px] backdrop-saturate-[1.8]"
       >
         {inPinnedGroup && (
           <PinIcon data-testid="sessions-group-pin-glyph" className="size-[9px] flex-shrink-0 text-primary" />

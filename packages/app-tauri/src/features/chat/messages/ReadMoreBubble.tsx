@@ -51,7 +51,7 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
         data-text-part
         className={cn(
           // Base prose styles — matched to the artboard type spec
-          'text-body leading-relaxed tracking-[-0.1px]',
+          'text-body leading-relaxed tracking-normal',
           // Clamp to 4 lines when collapsed
           collapsed && 'line-clamp-4',
         )}

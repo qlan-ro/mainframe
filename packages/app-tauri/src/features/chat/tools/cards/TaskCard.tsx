@@ -42,12 +42,7 @@ interface TaskHeaderProps {
 function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isError }: TaskHeaderProps) {
   return (
     <div className="flex min-w-0 items-center gap-2 py-0.5">
-      {/* Bot tile — accent at low alpha */}
-      <span
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
-        style={{ backgroundColor: 'rgba(10,132,255,0.12)' }}
-        aria-hidden
-      >
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-mf-selection" aria-hidden>
         <Bot size={13} className="text-primary" />
       </span>
 

@@ -93,7 +93,7 @@ const userMarkdownComponents = { ...markdownComponents, p: DirectiveParagraph };
 
 const CARD_STYLE = {
   background: 'var(--mf-um-card)',
-  boxShadow: '0 1px 2px rgba(30, 50, 120, 0.05)',
+  boxShadow: 'var(--mf-shadow-user-card)',
 } as const;
 
 interface CoolCardProps {
@@ -108,7 +108,7 @@ function CoolCard({ children, className }: CoolCardProps) {
       className={cn(
         'relative max-w-[75%] rounded-xl border-[0.5px] px-[15px] py-[10px]',
         'border-mf-um-edge text-mf-um-ink',
-        'text-body leading-relaxed tracking-[-0.1px]',
+        'text-body leading-relaxed tracking-normal',
         className,
       )}
     >
@@ -128,11 +128,11 @@ interface SlashPillProps {
 
 function SlashPill({ kind, name }: SlashPillProps) {
   const Icon = kind === 'command' ? Wrench : Zap;
-  const colorClass = kind === 'command' ? 'text-primary' : 'text-[#7a4dd0]';
-  const pillBg = kind === 'command' ? 'rgba(10,132,255,0.08)' : 'rgba(122,77,208,0.08)';
+  const colorClass = kind === 'command' ? 'text-primary' : 'text-mf-directive-skill';
+  const bgClass = kind === 'command' ? 'bg-mf-selection' : 'bg-mf-directive-skill-tint';
 
   return (
-    <span className="mr-2 inline-flex items-center gap-1 rounded-md py-0.5 pl-1.5 pr-2" style={{ background: pillBg }}>
+    <span className={cn('mr-2 inline-flex items-center gap-1 rounded-md py-0.5 pl-1.5 pr-2', bgClass)}>
       <Icon size={12} className={colorClass} />
       <span className={cn('font-mono text-caption font-semibold', colorClass)}>/{name}</span>
     </span>
