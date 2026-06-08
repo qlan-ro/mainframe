@@ -21,7 +21,7 @@
  */
 import { useMemo } from 'react';
 import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
-import { ChevronDownIcon, PlusIcon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
@@ -59,7 +59,6 @@ function SessionsGroupHeader({ count }: { count: number }) {
     'inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
   return (
     <div className="flex items-center gap-1 px-3 pb-1 pt-2">
-      <ChevronDownIcon className="size-2.5 flex-shrink-0 text-mf-text-3" />
       <span className="text-micro font-bold uppercase tracking-[0.06em] text-muted-foreground">Sessions</span>
       <span className="text-micro text-mf-text-3">{count}</span>
       <div className="flex-1" />

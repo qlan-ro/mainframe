@@ -43,9 +43,11 @@ export function ChatSurface({ port }: { port: number }) {
     mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <ChatHeader />
-      <div className="flex-1 overflow-hidden">
+      {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
+          height — otherwise the sticky composer footer collapses/clips. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {isNewLocal && !isReady && filterProjectId == null ? (
           <div data-testid="sessions-new-thread-surface" className="flex h-full items-center justify-center p-6">
             <NewThreadConfigPicker port={port} />

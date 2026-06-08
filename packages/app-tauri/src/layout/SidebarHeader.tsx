@@ -1,14 +1,14 @@
-import { CheckSquare, PanelLeft, Settings2 } from 'lucide-react';
+import { useLayoutStore } from '@/store/layout';
 import { SurfaceRail } from './SurfaceRail';
+import { GearGlyph, SidebarLeftGlyph, TasksGlyph } from './surface-icons';
 
-function TrafficLights() {
-  return (
-    <div className="flex flex-shrink-0 items-center gap-2 pl-1">
-      <span className="size-3 rounded-full bg-[#ff5f57] shadow-[inset_0_0_0_0.5px_rgba(0,0,0,0.15)]" />
-      <span className="size-3 rounded-full bg-[#febc2e] shadow-[inset_0_0_0_0.5px_rgba(0,0,0,0.15)]" />
-      <span className="size-3 rounded-full bg-[#28c840] shadow-[inset_0_0_0_0.5px_rgba(0,0,0,0.15)]" />
-    </div>
-  );
+/**
+ * Spacer that reserves the native macOS traffic-lights zone.
+ * Width covers the ~68px cluster (3 × 12px circles + gaps + left inset)
+ * so SurfaceRail never overlaps the window controls.
+ */
+function TrafficLightsSpacer() {
+  return <div className="w-[72px] flex-shrink-0" />;
 }
 
 function TasksBtn() {
@@ -20,7 +20,7 @@ function TasksBtn() {
       className="inline-flex h-6 w-7 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-mf-chip"
       onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
     >
-      <CheckSquare size={14} className="text-muted-foreground" />
+      <TasksGlyph size={14} className="text-muted-foreground" />
     </button>
   );
 }
@@ -33,20 +33,22 @@ function SettingsBtn() {
       title="Settings · ⌘,"
       className="inline-flex h-[22px] w-[26px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
     >
-      <Settings2 size={15} className="text-muted-foreground" />
+      <GearGlyph size={15} className="text-muted-foreground" />
     </button>
   );
 }
 
 function HideSidebarBtn() {
+  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   return (
     <button
       data-testid="sidebar-hide-button"
       type="button"
       title="Hide sidebar"
       className="inline-flex h-[22px] w-[26px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
+      onClick={toggleSidebar}
     >
-      <PanelLeft size={14} className="text-muted-foreground" />
+      <SidebarLeftGlyph size={14} className="text-muted-foreground" />
     </button>
   );
 }
@@ -56,9 +58,9 @@ export function SidebarHeader() {
     <div
       data-testid="sidebar-header"
       data-tauri-drag-region
-      className="flex h-[38px] flex-shrink-0 items-center gap-2 px-2 [border-bottom:0.5px_solid_var(--border)]"
+      className="flex h-[38px] flex-shrink-0 items-center gap-2 px-2"
     >
-      <TrafficLights />
+      <TrafficLightsSpacer />
       <SurfaceRail />
       <div className="flex-1" />
       <div className="flex items-center gap-0.5">
