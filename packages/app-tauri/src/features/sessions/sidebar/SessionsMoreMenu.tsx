@@ -50,19 +50,20 @@ export function SessionsMoreMenu() {
           </button>
         </DropdownMenuTrigger>
 
+        {/* Order matches the 02-chrome prototype moreOpen panel: Archived, then Import. */}
         <DropdownMenuContent align="end" sideOffset={6} className="w-52">
+          <DropdownMenuItem data-testid="sessions-more-archived" onSelect={() => setArchivedOpen(true)}>
+            <ArchiveIcon className="mr-2 size-3.5 text-muted-foreground" />
+            Archived sessions
+          </DropdownMenuItem>
+
           <DropdownMenuItem
             data-testid="sessions-more-import"
             disabled={noProjects}
             onSelect={() => setImportOpen(true)}
           >
-            <DownloadIcon className="mr-2 size-3.5" />
+            <DownloadIcon className="mr-2 size-3.5 text-muted-foreground" />
             Import external sessions
-          </DropdownMenuItem>
-
-          <DropdownMenuItem data-testid="sessions-more-archived" onSelect={() => setArchivedOpen(true)}>
-            <ArchiveIcon className="mr-2 size-3.5" />
-            Archived sessions
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -8,35 +8,13 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAssistantRuntime } from '@assistant-ui/react';
-import { GitBranch, Clock, Loader2 } from 'lucide-react';
+import { Loader2, ChevronLeft } from 'lucide-react';
 import type { ExternalSession, Project } from '@qlan-ro/mainframe-types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getExternalSessions, importExternalSession } from '@/lib/api/external-sessions';
-import { formatRelativeTime } from '../view-model/relative-time';
-
-// ── pure helpers ──────────────────────────────────────────────────────────────
-
-function cleanPromptDisplay(text: string): string {
-  return text
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function worktreeLabel(cwd: string | undefined, projectPath: string | undefined): string | null {
-  if (!cwd || !projectPath) return null;
-  if (cwd === projectPath) return null;
-  const prefix = projectPath.endsWith('/') ? projectPath : `${projectPath}/`;
-  return cwd.startsWith(prefix) ? cwd.slice(prefix.length) : cwd;
-}
-
-function formatIsoRelative(iso: string): string {
-  const ts = new Date(iso).getTime();
-  if (Number.isNaN(ts)) return 'Unknown';
-  return formatRelativeTime(ts, Date.now());
-}
+import { ExternalSessionRow } from './ExternalSessionRow';
 
 // ── project picker ────────────────────────────────────────────────────────────
 
@@ -59,7 +37,7 @@ function ProjectPicker({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="px-1 pb-1.5 pt-0.5 text-[9.5px] font-bold uppercase tracking-[0.06em] text-mf-text-3">
+      <div className="px-2 pb-1.5 pt-0.5 text-[9.5px] font-bold uppercase tracking-[0.06em] text-mf-text-3">
         Select project
       </div>
       {sorted.map((project) => (
@@ -69,7 +47,7 @@ function ProjectPicker({
               type="button"
               data-testid={`sessions-import-project-${project.id}`}
               onClick={() => onSelect(project.id)}
-              className="w-full truncate rounded-md px-2 py-1.5 text-left text-body text-foreground transition-colors hover:bg-accent"
+              className="w-full truncate rounded-md px-2 py-1.5 text-left text-body font-medium text-foreground transition-colors hover:bg-accent"
             >
               {project.name}
             </button>
@@ -81,79 +59,6 @@ function ProjectPicker({
   );
 }
 
-// ── external session row ──────────────────────────────────────────────────────
-
-function ExternalSessionRow({
-  session,
-  projectPath,
-  importing,
-  onImport,
-}: {
-  session: ExternalSession;
-  projectPath: string | undefined;
-  importing: string | null;
-  onImport: (session: ExternalSession) => void;
-}) {
-  const label = worktreeLabel(session.cwd, projectPath);
-  const isThis = importing === session.sessionId;
-  const isAny = importing !== null;
-
-  return (
-    <div
-      data-testid="external-session-item"
-      className="flex items-start gap-2 rounded-md px-2 py-2 transition-colors hover:bg-accent"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-body text-foreground">
-          {session.firstPrompt ? cleanPromptDisplay(session.firstPrompt) : 'Untitled session'}
-        </div>
-        <div className="mt-0.5 flex items-center gap-1 text-caption text-mf-text-3">
-          {session.gitBranch && (
-            <>
-              <GitBranch className="size-2.5 shrink-0" />
-              <span className="max-w-[100px] truncate" data-testid="external-session-branch">
-                {session.gitBranch}
-              </span>
-              <span>·</span>
-            </>
-          )}
-          {label && (
-            <>
-              <span
-                className="max-w-[140px] truncate font-mono"
-                data-testid="external-session-worktree"
-                title={session.cwd}
-              >
-                {label}
-              </span>
-              <span>·</span>
-            </>
-          )}
-          <Clock className="size-2.5 shrink-0" />
-          <span>{formatIsoRelative(session.modifiedAt)}</span>
-        </div>
-      </div>
-      <button
-        type="button"
-        data-testid="import-session-btn"
-        disabled={isAny}
-        onClick={() => onImport(session)}
-        onPointerEnter={(e) => e.stopPropagation()}
-        className="inline-flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-caption text-foreground transition-colors hover:bg-primary hover:text-primary-foreground disabled:opacity-40"
-      >
-        {isThis ? (
-          <>
-            <Loader2 className="size-2.5 animate-spin" />
-            Importing…
-          </>
-        ) : (
-          'Import'
-        )}
-      </button>
-    </div>
-  );
-}
-
 // ── session list ──────────────────────────────────────────────────────────────
 
 function SessionList({
@@ -161,26 +66,32 @@ function SessionList({
   projectId,
   projectPath,
   onDone,
+  onBack,
 }: {
   port: number;
   projectId: string;
   projectPath: string | undefined;
   onDone: () => void;
+  onBack?: () => void;
 }) {
   const runtime = useAssistantRuntime();
   const [sessions, setSessions] = useState<ExternalSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
+  const [retryCounter, setRetryCounter] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     getExternalSessions(port, projectId)
       .then((list) => {
         if (!cancelled) setSessions(list);
       })
       .catch((e: unknown) => {
         console.warn('[ImportSessionsDialog] fetch failed', e);
+        if (!cancelled) setError('Failed to load sessions. Please try again.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -188,7 +99,7 @@ function SessionList({
     return () => {
       cancelled = true;
     };
-  }, [port, projectId]);
+  }, [port, projectId, retryCounter]);
 
   const handleImport = useCallback(
     async (session: ExternalSession) => {
@@ -212,33 +123,75 @@ function SessionList({
     [port, projectId, importing, runtime, onDone],
   );
 
+  const backButton =
+    onBack !== undefined ? (
+      <button
+        type="button"
+        data-testid="sessions-import-back"
+        onClick={onBack}
+        className="mb-2 flex items-center gap-0.5 text-caption text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronLeft className="size-3" />
+        Back
+      </button>
+    ) : null;
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-8 text-mf-text-3">
-        <Loader2 className="size-3.5 animate-spin" />
-        <span className="text-body">Loading sessions…</span>
-      </div>
+      <>
+        {backButton}
+        <div className="flex items-center justify-center gap-2 py-8 text-mf-text-3">
+          <Loader2 className="size-3.5 animate-spin" />
+          <span className="text-body">Loading sessions…</span>
+        </div>
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        {backButton}
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <p className="text-body text-muted-foreground">{error}</p>
+          <button
+            type="button"
+            onClick={() => setRetryCounter((c) => c + 1)}
+            className="text-caption text-foreground underline hover:no-underline"
+          >
+            Try again
+          </button>
+        </div>
+      </>
     );
   }
 
   if (sessions.length === 0) {
-    return <div className="py-8 text-center text-body text-muted-foreground">No importable sessions</div>;
+    return (
+      <>
+        {backButton}
+        <div className="py-8 text-center text-body text-muted-foreground">No importable sessions</div>
+      </>
+    );
   }
 
   return (
-    <ScrollArea className="max-h-[340px]">
-      <div className="flex flex-col gap-0.5 pr-2">
-        {sessions.map((session) => (
-          <ExternalSessionRow
-            key={session.sessionId}
-            session={session}
-            projectPath={projectPath}
-            importing={importing}
-            onImport={(s) => void handleImport(s)}
-          />
-        ))}
-      </div>
-    </ScrollArea>
+    <>
+      {backButton}
+      <ScrollArea className="max-h-[340px]">
+        <div className="flex flex-col gap-0.5 pr-2">
+          {sessions.map((session) => (
+            <ExternalSessionRow
+              key={session.sessionId}
+              session={session}
+              projectPath={projectPath}
+              importing={importing}
+              onImport={(s) => void handleImport(s)}
+            />
+          ))}
+        </div>
+      </ScrollArea>
+    </>
   );
 }
 
@@ -283,6 +236,7 @@ export function ImportSessionsDialog({
             projectId={selectedProjectId}
             projectPath={selectedProject?.path}
             onDone={() => onOpenChange(false)}
+            onBack={filterProjectId === null ? () => setSelectedProjectId(null) : undefined}
           />
         )}
       </DialogContent>
