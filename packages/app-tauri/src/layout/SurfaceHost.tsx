@@ -1,8 +1,9 @@
-import { useCallback, useEffect } from 'react';
+import { Fragment, useCallback, useEffect, useRef } from 'react';
 import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
 import { onSurfaceIntent } from '@/store/surface-intents';
+import { SurfDivider } from './SurfDivider';
 import { FilesSurface } from './surfaces/FilesSurface';
 import { RunSurface } from './surfaces/RunSurface';
 
@@ -12,24 +13,40 @@ const SHORTCUT_MAP: Record<string, SurfaceId> = {
   '3': 'run',
 };
 
+const PANEL_CLS =
+  'flex flex-col overflow-hidden rounded-[11px] bg-background shadow-[0_0_0_0.5px_var(--border),0_1px_2px_rgba(0,0,0,0.05)]';
+
+function SurfaceView({ name, port }: { name: SurfaceId; port: number }) {
+  if (name === 'chat') return <ChatSurface port={port} />;
+  if (name === 'files') return <FilesSurface />;
+  return <RunSurface />;
+}
+
 interface Props {
   port: number;
 }
 
 export function SurfaceHost({ port }: Props) {
-  const surfaces = useLayoutStore((s) => s.surfaces);
+  const layout = useLayoutStore((s) => s.layout);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
+  const setTopFrac = useLayoutStore((s) => s.setTopFrac);
+  const setVFrac = useLayoutStore((s) => s.setVFrac);
 
-  // Stable subscription — reads live store state inside the callback, no deps.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+
+  // Stable subscription — reads live store state inside the callback, no re-sub on toggle.
   useEffect(() => {
     return onSurfaceIntent((intent) => {
       if (intent.type !== 'activate-surface') return;
-      const { surfaces: current, toggleSurface: toggle } = useLayoutStore.getState();
-      if (!current[intent.surface]) toggle(intent.surface);
+      const state = useLayoutStore.getState();
+      const cur = state.layout;
+      const isActive = cur.top.includes(intent.surface) || cur.bottom === intent.surface;
+      if (!isActive) state.toggleSurface(intent.surface);
     });
   }, []);
 
-  // Keyboard shortcuts: Cmd/Ctrl + 1/2/3 toggle Chat/Files/Run.
+  // Cmd/Ctrl + 1/2/3 toggle Chat/Files/Run.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -46,11 +63,39 @@ export function SurfaceHost({ port }: Props) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  const { top, bottom, topFlex, vFlex } = layout;
+  const twoCol = top.length === 2;
+
   return (
-    <div data-testid="chat-thread-area" className="flex flex-1 overflow-hidden">
-      {surfaces.chat && <ChatSurface port={port} />}
-      {surfaces.files && <FilesSurface />}
-      {surfaces.run && <RunSurface />}
+    <div data-testid="chat-thread-area" ref={outerRef} className="flex flex-1 flex-col overflow-hidden">
+      {/* Top row: 1 or 2 surfaces side by side. */}
+      <div ref={topRef} style={{ flex: bottom ? vFlex.top : 1 }} className="flex min-h-0 overflow-hidden">
+        {top.map((name, i) => (
+          <Fragment key={name}>
+            <div style={{ flex: topFlex[name] ?? 1 }} className={`min-w-0 ${PANEL_CLS}`}>
+              <SurfaceView name={name} port={port} />
+            </div>
+            {i < top.length - 1 &&
+              (twoCol ? (
+                <SurfDivider axis="x" containerRef={topRef} onFrac={setTopFrac} />
+              ) : (
+                <div style={{ width: 6, flexShrink: 0 }} />
+              ))}
+          </Fragment>
+        ))}
+      </div>
+
+      {/* Vertical divider + bottom strip. */}
+      {bottom && (
+        <>
+          <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} />
+          <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
+            <div className={`min-w-0 flex-1 ${PANEL_CLS}`}>
+              <SurfaceView name={bottom} port={port} />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
