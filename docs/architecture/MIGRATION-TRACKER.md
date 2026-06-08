@@ -110,13 +110,13 @@ Do the chat leaves in this order; ☑ = done.
 
 - ☑ **shadcn `components/ui/` layer** — 18 primitives built + theme-wired to `--mf-*` (`8e18e634`).
 - ☐ **Theming / tokens** (`refactor`) — `mainframe-theme.css` → Tailwind v4 `@theme`; 4 runtime-switchable themes; split Monaco/aui-md CSS out of `index.css`; token traps (no `/opacity` on CSS vars).
-- ◐ **Typed-surface layout engine** (`replace`) — SurfaceHost + SurfaceRail + by-arrival placement + per-session remembered layout (replaces the whole `zone/` system). *(designed in the brainstorm specs)*
+- ☑ **Typed-surface layout engine** (`replace`) — SurfaceHost + SurfaceRail + toggle model + floor invariant + intent-bus sub + Cmd/Ctrl+1/2/3 (replaces the whole `zone/` system). Per-session remembered layout deferred.
 - ☑ **Login-shell env / sidecar spawn** (C1) — `src-tauri/shell_env.rs` + `sidecar.rs`.
 - ☐ **Sidecar packaging** — bundle Node runtime (Tauri ships none) + native deps (`better-sqlite3`, `node-pty`, `@vscode/ripgrep`, `typescript-language-server`, `pyright`); per-platform binaries; signing/notarization. **Schedule-killer risk — spike before GA.**
 - ☐ **Capabilities / CSP** (`replace`) — least-privilege per-command trust boundary (`src-tauri/capabilities/`). shell plugin already dropped.
 - ☐ **e2e harness + data-testids** — 130 Electron-bound specs + 301 testids have no Tauri story yet. The only behavioral safety net for the rewrite.
-- ☐ **Tauri bridge** (`lib/tauri/`) — replace every `window.mainframe.*`: updates, showItemInFolder, openExternal, getAppInfo/getHomedir/readFile, showNotification, log. (terminal = Rust PTY; preview = embedded Tauri webview.)
-- ☐ **Surface-intent bus** — features emit "open file/diff/surface" intents; only `layout/` subscribes (no `getState()` reach-through). Lint-enforce `features/** ↛ layout/**`.
+- ☑ **Tauri bridge** (`lib/tauri/`) — showItemInFolder, readFile, showNotification, log, getPlatform added. Updates/terminal/preview deferred.
+- ☑ **Surface-intent bus** — emitSurfaceIntent/onSurfaceIntent in store/surface-intents.ts; chat-tool-context wired; features emit, layout subscribes.
 
 ---
 
@@ -236,7 +236,7 @@ The single source of truth for what's left. Folds in items previously living onl
 - ☑ **S — Declare `zustand` as a real dependency** — DONE (`12f39eee`). Added `zustand: ^5.0.14` to `packages/app-tauri/package.json` + the lockfile importer edge by hand (no full re-resolve, per the mobile-submodule lockfile trap). Was imported in 7+ src files but only resolved via shamefully-hoist.
 - ☐ **XL — Sidecar packaging** — bundle Node runtime + native deps (`better-sqlite3`, `node-pty`, `@vscode/ripgrep`, `typescript-language-server`, `pyright`), per-platform binaries, signing/notarization. *Schedule-killer risk — spike before GA.* (also tracked under Cross-cutting foundation.)
 - ☐ **M — Capabilities / CSP** — least-privilege per-command trust boundary (`src-tauri/capabilities/`); shell plugin already dropped. Needed before GA.
-- ☐ **L — Tauri bridge** (`lib/tauri/` + `src-tauri/commands/`) — replace every `window.mainframe.*`: updates, showItemInFolder, openExternal, getAppInfo/getHomedir/readFile, showNotification, log, `window.confirm`→AlertDialog, drag-region. Underpins editor/run/settings/plugins.
+- ☑ **L — Tauri bridge** (`lib/tauri/` + `src-tauri/commands/`) — showItemInFolder, readFile, showNotification, log, getPlatform done. Deferred: updates, AlertDialog shim, terminal PTY.
 
 **Testing**
 - ☐ **L — data-testid saturation + ADR stress matrix (chat build-order step 12)** — tag all interactive elements (chat + sessions) + run the stress matrix (long chat, nested subagent + mid-turn permission, reconnect, optimistic dedup, two windows).
@@ -252,15 +252,15 @@ The single source of truth for what's left. Folds in items previously living onl
 - ☐ **M — Window chrome / traffic-lights + floating-panel-on-warm-gradient background** (`src/shell/TitleBar` + `src-tauri/tauri.conf.json`) — needs the Tauri window-decorations decision.
 
 **Layout engine / architecture**
-- ☐ **XL — Typed-surface layout engine** (`src/layout/`, replaces the whole desktop `zone/` system, Layout, LeftRail/RightRail, `store/layout.ts`, `tool-windows.ts`) — SurfaceHost + SurfaceRail + by-arrival placement + per-session remembered layout. Gates the Files/Run surfaces. *(◐ designed in brainstorm specs, not built.)*
-- ☐ **M — Surface-intent bus** — features emit "open file/diff/surface" intents; only `layout/` subscribes (no `getState()` reach-through), lint-enforced. Needed before editor/run wire to chat tool cards.
+- ☑ **XL — Typed-surface layout engine** (`src/layout/`) — SurfaceHost + SurfaceRail + SidebarHeader + SidebarShell + layout store (toggle+floor invariant) + FilesSurface/RunSurface stubs. Per-session remembered layout deferred.
+- ☑ **M — Surface-intent bus** — emitSurfaceIntent/onSurfaceIntent; chat tool cards wired; no features→layout import.
 
 **Shell**
 - ☐ **L — Shell & global layout refactor** (`src/app/` + `src/shell/`) — main.tsx, App.tsx + global keybinds, TitleBar, StatusBar, ConnectionOverlay, ErrorBoundary, Toaster, Tutorial. Only App.tsx boot wiring exists today.
 
 **Editor & viewers**
 - ☐ **XL — Editor & viewers** (`features/editor/` + `features/viewers/`) — Monaco code+diff editors, `setup.ts` (workers/theme/opener), LSP client, copy-reference, inferLanguage/file-types, image/svg/pdf/csv viewers. Re-solve the Monaco loader story for Tauri.
-- ☐ **S — Editor surface intents currently log-only** (`features/chat/tools/chat-tool-context.ts:32,35`) — `useOpenFile()`/`revealFile` only `console.warn`; when the surface-intent bus lands, only this hook changes.
+- ☑ **S — Editor surface intents wired** (`features/chat/tools/chat-tool-context.ts`) — `useOpenFile()`/`revealFile` now emit `emitSurfaceIntent`; console.warn stubs removed.
 - ☐ **M — Inline comments** (`features/editor/inline-comments/`) — `useInlineComments`/`InlineCommentWidget`; depends on the editor surface.
 - ☐ **M — LSP-based navigation** (`features/editor/lsp/` + store) — replace regex `navigation.ts`; nav-state singletons → store.
 - ☐ **S — Drop `LineCommentPopover`** (removal when editor lands).
