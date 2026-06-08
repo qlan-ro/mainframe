@@ -37,9 +37,16 @@ pub fn run() {
     // Locate the daemon entry point and node binary using the shell env PATH.
     let daemon_result = boot_daemon(&shell_env);
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init());
+
+    // Dev-only: MCP Bridge plugin (webview automation for the Tauri MCP server).
+    // Shadowed under debug_assertions so it's compiled out of release builds.
+    #[cfg(debug_assertions)]
+    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+
+    builder
         .invoke_handler(tauri::generate_handler![
             get_app_info,
             get_auth_token,

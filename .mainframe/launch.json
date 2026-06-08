@@ -34,6 +34,18 @@
       }
     },
     {
+      "name": "App Tauri Preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@qlan-ro/mainframe-app-tauri", "run", "dev"],
+      "port": 5174,
+      "url": "http://localhost:5174",
+      "preview": true,
+      "env": {
+        "VITE_DAEMON_PORT": "${DAEMON_PORT:-31416}",
+        "MAINFRAME_DATA_DIR": "${MAINFRAME_DATA_DIR:-~/.mainframe_dev}"
+      }
+    },
+    {
       "name": "Electron App",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@qlan-ro/mainframe-desktop", "run", "dev"],

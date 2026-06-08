@@ -29,6 +29,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dirs = "5"
 which = "6"
 
+# Dev-only: MCP Bridge plugin for the Tauri MCP server (webview screenshots,
+# DOM inspection, IPC). Only registered under debug_assertions in lib.rs.
+tauri-plugin-mcp-bridge = "0.11"
+
 [profile.dev]
 incremental = true
 

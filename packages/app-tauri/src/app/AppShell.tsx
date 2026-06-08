@@ -20,18 +20,18 @@ function RuntimeBody({ port }: { port: number }) {
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
 
   return (
-    <div className="flex flex-1 overflow-hidden bg-mf-window">
-      {/* Sidebar: pt-0 so SidebarShell is flush at y=0 — traffic lights sit inside
-          the SidebarHeader (38px) with proper vertical breathing room. */}
+    <div className="flex flex-1 gap-2 overflow-hidden bg-mf-window p-2">
+      {/* Floating panels (prototype 04-engine root: padding + gap). Both the
+          sidebar and the main surface area inset equally from the window edge;
+          the native traffic lights are positioned (trafficLightPosition) to land
+          centered inside the floating SidebarHeader. */}
       {sidebarVisible && (
-        <div className="flex flex-shrink-0 px-2 pb-2">
+        <div className="flex flex-shrink-0">
           <SidebarShell />
         </div>
       )}
 
-      {/* Main content: uniform p-2 — no extra top gap needed, traffic lights are
-          confined to the sidebar column and never overlap the surface panels. */}
-      <div className="relative flex flex-1 flex-col overflow-hidden p-2">
+      <div className="relative flex flex-1 flex-col overflow-hidden">
         {/* Show-sidebar trigger — visible only when sidebar is hidden. */}
         {!sidebarVisible && (
           <button
