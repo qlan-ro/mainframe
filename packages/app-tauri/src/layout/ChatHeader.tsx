@@ -2,8 +2,9 @@ import { useAuiState } from '@assistant-ui/react';
 import { GripHorizontal, LayoutPanelLeft, LayoutPanelTop, MessageSquare } from 'lucide-react';
 import { layoutCanSplit, useLayoutStore } from '@/store/layout';
 
-const ACTION_BTN =
-  'inline-flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
+// Chat header uses 24×24 buttons (hdrBtn in artboard), distinct from the 22×22 gActionStyle used in SurfaceTabStrip.
+const HDR_BTN =
+  'inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
 
 export function ChatHeader() {
   const title = useAuiState((s) => s.threadListItem?.title) ?? 'Untitled';
@@ -13,7 +14,7 @@ export function ChatHeader() {
   return (
     <div
       data-testid="chat-header"
-      className="flex h-[34px] flex-shrink-0 items-center gap-[7px] bg-mf-tab-bar px-2 [border-bottom:0.5px_solid_var(--border)]"
+      className="flex h-[34px] flex-shrink-0 items-center gap-[7px] bg-mf-tab-bar pl-2 pr-1.5 [border-bottom:0.5px_solid_var(--border)]"
     >
       <GripHorizontal size={13} className="flex-shrink-0 cursor-grab text-mf-text-4" />
       <MessageSquare size={13} className="flex-shrink-0 text-primary" />
@@ -25,7 +26,7 @@ export function ChatHeader() {
             type="button"
             title="Split right"
             onClick={() => splitSurface('v')}
-            className={ACTION_BTN}
+            className={HDR_BTN}
           >
             <LayoutPanelLeft size={13} className="text-mf-text-3" />
           </button>
@@ -34,7 +35,7 @@ export function ChatHeader() {
             type="button"
             title="Split down"
             onClick={() => splitSurface('h')}
-            className={ACTION_BTN}
+            className={HDR_BTN}
           >
             <LayoutPanelTop size={13} className="text-mf-text-3" />
           </button>

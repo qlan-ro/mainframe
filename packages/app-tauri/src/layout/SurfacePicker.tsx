@@ -55,6 +55,9 @@ export function SurfacePicker({ surface }: Props) {
             />
           )}
         </div>
+        <div className="border-t border-border px-3.5 py-[7px] font-mono text-[10px] text-mf-text-4">
+          {surface === 'files' ? 'opens route here automatically' : 'spawns a running surface'}
+        </div>
       </div>
     </div>
   );

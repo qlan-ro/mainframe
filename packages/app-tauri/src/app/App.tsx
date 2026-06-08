@@ -7,41 +7,12 @@
  * layer).
  */
 import { useEffect } from 'react';
-import { useConnectionState, type ConnectionState } from './useConnectionState';
-import { cn } from '@/lib/utils';
+import { useConnectionState } from './useConnectionState';
 import { daemonWs } from '../lib/daemon/ws-client';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { AppShell } from './AppShell';
+import { AppStatusBar } from '../layout/AppStatusBar';
 import { Toaster } from '@/components/ui/sonner';
-
-const STATUS_DOT: Record<ConnectionState, string> = {
-  connecting: 'bg-mf-warning',
-  connected: 'bg-mf-success',
-  disconnected: 'bg-destructive',
-};
-
-function StatusBadge({
-  state,
-  daemonStatus,
-  port,
-}: {
-  state: ConnectionState;
-  daemonStatus: string;
-  port: number | null;
-}) {
-  return (
-    <div
-      data-testid="app-status-bar"
-      className="fixed right-3 top-2 z-[200] flex items-center gap-1.5 text-caption text-muted-foreground"
-    >
-      <span data-testid="app-connection-dot" className={cn('inline-block size-2 rounded-full', STATUS_DOT[state])} />
-      <span>
-        {daemonStatus}
-        {port != null ? ` · ${port}` : ''}
-      </span>
-    </div>
-  );
-}
 
 export function App() {
   const { state, daemonStatus, port } = useConnectionState();
@@ -54,11 +25,9 @@ export function App() {
   }, [port]);
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground font-sans">
+    <div className="flex h-screen flex-col bg-mf-window text-foreground font-sans">
       {/* Drag region for macOS traffic lights */}
       <div data-tauri-drag-region className="fixed inset-x-0 top-0 z-[100] h-10" />
-
-      <StatusBadge state={state} daemonStatus={daemonStatus} port={port} />
 
       {port != null ? (
         <DaemonPortProvider port={port}>
@@ -67,12 +36,13 @@ export function App() {
       ) : (
         <div
           data-testid="app-waiting-daemon"
-          className="flex h-screen items-center justify-center bg-background text-muted-foreground"
+          className="flex flex-1 items-center justify-center bg-mf-window text-muted-foreground"
         >
           <span className="text-body">Waiting for daemon…</span>
         </div>
       )}
 
+      <AppStatusBar state={state} daemonStatus={daemonStatus} port={port} />
       <Toaster />
     </div>
   );
