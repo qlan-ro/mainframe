@@ -45,16 +45,16 @@ test.describe('§composer config selects', () => {
     await page.locator('[data-testid="composer-permission-mode-select-option-default"]').click();
   });
 
-  test('M4: adapter select is present and enabled before the first message', async () => {
+  test('M4: provider row is present and unlocked before the first message', async () => {
     const { page } = app;
-    const adapter = page.locator('[data-testid="composer-adapter-select"]');
-    await expect(adapter).toBeVisible();
-    await expect(adapter).toBeEnabled();
-    await adapter.click();
-    await expect(page.locator('[data-testid^="composer-adapter-select-option-"]').first()).toBeVisible({
-      timeout: 5_000,
-    });
-    // Close without switching (avoid selecting an unconfigured adapter).
+    // The unified picker holds both provider + model. Open it via the model trigger.
+    await page.locator('[data-testid="composer-model-select"]').click();
+    const provider = page.locator('[data-testid^="composer-adapter-select-option-"]').first();
+    await expect(provider).toBeVisible({ timeout: 5_000 });
+    // Pre-message: the provider is selectable (not locked for the session).
+    await expect(provider).toBeEnabled();
+    // No "Locked" footer before the first message.
+    await expect(page.locator('[data-testid="composer-provider-footer"]')).toHaveCount(0);
     await page.keyboard.press('Escape');
   });
 
