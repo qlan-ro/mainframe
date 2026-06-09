@@ -58,15 +58,9 @@ test.describe('§composer config selects', () => {
     await page.keyboard.press('Escape');
   });
 
-  // TODO(app-tauri): live tuning reflection is Phase-H-pending in the daemon. PATCH /tuning
-  // (effort/features) never emits `chat.updated` — core `chat-manager.syncChatFields` only does
-  // `Object.assign(active.chat, partial)` for an active CLI session and never broadcasts, and
-  // `applyTuning` is a no-op without a live session. app-tauri's composer is server-authoritative
-  // (reads state.chatConfig, no optimistic edits — features/chat/README.md), so the effort chip
-  // never updates after picking an effort / enabling ultracode (stays "Medium"). The /config path
-  // used by permission/model (M7) DOES broadcast, so those reflect. Re-enable M6/M6e once the
-  // daemon broadcasts a chat.updated on tuning changes. Not a missing testid; a known behavior gap.
-  test.fixme('M6: effort select shows dynamic levels for a capable model', async () => {
+  // Tuning writes (effort/features) now broadcast `chat.updated` (core `applyChatTuning` →
+  // `ChatManager.emitChatUpdated`), so the server-authoritative composer chip reflects them.
+  test('M6: effort select shows dynamic levels for a capable model', async () => {
     const { page } = app;
     // Switch to a model that has supportedEfforts. In mock mode the mock-cli exposes
     // claude-opus-4-5-20251001 (xhigh+max) and claude-sonnet-4-5-20251101 (no xhigh).
@@ -170,10 +164,7 @@ test.describe('§composer config selects', () => {
     await expect(page.locator('[data-testid="composer-feature-adaptiveThinking"]')).toBeVisible();
   });
 
-  // TODO(app-tauri): same Phase-H live-tuning-broadcast gap as M6 — enabling ultracode PATCHes
-  // /tuning, which never emits chat.updated, so the server-authoritative effort chip never locks
-  // to xhigh. Re-enable when the daemon broadcasts tuning changes.
-  test.fixme('M6e: enabling ultracode locks the effort chip to xhigh', async () => {
+  test('M6e: enabling ultracode locks the effort chip to xhigh', async () => {
     const { page } = app;
     // Ensure opus-level model is selected.
     await page.locator('[data-testid="composer-model-select"]').click();

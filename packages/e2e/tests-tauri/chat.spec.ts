@@ -181,7 +181,7 @@ test.describe('§plan approval', () => {
   // before sendMessage is called. Reproduces in the screenshot: "Add multiply..." message appears
   // inline in the "Add Greet Function" thread. Requires a dedicated daemon+describe per test or
   // a useSessionListRouter fix to avoid reverting active thread on reload.
-  test.fixme('plan revision: keep-planning opens feedback input, send-feedback triggers a new plan gate', async () => {
+  test('plan revision: keep-planning opens feedback input, send-feedback triggers a new plan gate', async () => {
     const { page } = app;
     // Uses plan-approval.1.ndjson (second session = index 1 within this daemon instance).
     await createTauriChat(app.page, project.projectId, 'plan');
