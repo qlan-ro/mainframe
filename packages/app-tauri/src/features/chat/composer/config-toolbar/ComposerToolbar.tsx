@@ -14,8 +14,7 @@
 
 import { useAuiState } from '@assistant-ui/react';
 import { useAdapters, useComposerTuning } from './use-composer-tuning';
-import { AdapterSelect } from './AdapterSelect';
-import { ModelSelect } from './ModelSelect';
+import { ProviderModelSelect } from './ProviderModelSelect';
 import { PermissionSelect } from './PermissionSelect';
 import { PlanModeToggle } from './PlanModeToggle';
 import { EffortPicker } from './EffortPicker';
@@ -45,8 +44,15 @@ export function ComposerToolbar() {
 
   return (
     <>
-      <AdapterSelect chat={chat} adapters={adapters} locked={hasMessages} setAdapter={setAdapter} />
-      {adapter != null && <ModelSelect chat={chat} adapter={adapter} model={model} setModel={setModel} />}
+      <ProviderModelSelect
+        chat={chat}
+        adapters={adapters}
+        adapter={adapter}
+        model={model}
+        locked={hasMessages}
+        setAdapter={setAdapter}
+        setModel={setModel}
+      />
       <PermissionSelect chat={chat} setPermissionMode={setPermissionMode} />
       {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}
       {model && <EffortPicker chat={chat} model={model} setEffort={setEffort} disabled={disabled} />}

@@ -3,7 +3,7 @@
  *
  * Before the first send a `__LOCALID_*` thread has no daemon chat, so the composer
  * toolbar has nothing to bind to. We project the in-memory draft into a `Chat` so
- * the existing controls (AdapterSelect / ModelSelect / PermissionSelect /
+ * the existing controls (ProviderModelSelect / PermissionSelect /
  * PlanModeToggle / EffortPicker / FeaturesPopover) render unchanged — they read
  * only adapterId/model/permissionMode/planMode/effort + the feature flags. The
  * non-config fields are inert placeholders the controls never read.
