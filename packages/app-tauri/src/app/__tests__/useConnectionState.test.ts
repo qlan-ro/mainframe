@@ -42,7 +42,17 @@ vi.mock('../../lib/tauri/bridge', () => ({
 }));
 
 import { getDaemonPort, getDaemonStatus, onDaemonStatus } from '../../lib/tauri/bridge';
-import { useConnectionState } from '../useConnectionState';
+import { useConnectionState, healthUrl } from '../useConnectionState';
+
+// ---------------------------------------------------------------------------
+// healthUrl unit tests (no mocks needed — pure function)
+// ---------------------------------------------------------------------------
+
+describe('healthUrl', () => {
+  it('targets the IPv4 loopback, not localhost (daemon binds 127.0.0.1 only)', () => {
+    expect(healthUrl(31416)).toBe('http://127.0.0.1:31416/health');
+  });
+});
 
 const mockGetDaemonPort = vi.mocked(getDaemonPort);
 const mockGetDaemonStatus = vi.mocked(getDaemonStatus);

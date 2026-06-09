@@ -17,6 +17,12 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 const POLL_INTERVAL_MS = 2000;
 const HEALTH_TIMEOUT_MS = 3000;
 
+/** Daemon health endpoint. IPv4 loopback — the daemon binds 127.0.0.1 only,
+ *  and `localhost` resolves to ::1 first on IPv6 hosts (poll would never succeed). */
+export function healthUrl(port: number): string {
+  return `http://127.0.0.1:${port}/health`;
+}
+
 /** Calls the unauthenticated /health liveness endpoint. */
 async function checkHealth(port: number): Promise<boolean> {
   try {
@@ -24,7 +30,8 @@ async function checkHealth(port: number): Promise<boolean> {
     const id = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
     // The daemon registers /health (not /api/health). Auth middleware
     // explicitly bypasses this path (middleware/auth.ts line 25).
-    const res = await fetch(`http://localhost:${port}/health`, {
+    // IPv4 loopback (see healthUrl) — daemon binds 127.0.0.1 only.
+    const res = await fetch(healthUrl(port), {
       signal: controller.signal,
     });
     clearTimeout(id);
