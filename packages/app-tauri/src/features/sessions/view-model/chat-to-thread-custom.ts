@@ -27,6 +27,8 @@ export interface SessionCustom {
   detectedPrs: NonNullable<Chat['detectedPrs']>;
   worktreePath?: string;
   worktreeMissing: boolean;
+  /** Worktree branch — read by the shell MainToolbar identity (additive). */
+  branchName?: string;
   updatedAt: number;
 }
 
@@ -60,6 +62,7 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
     detectedPrs: chat.detectedPrs ?? [],
     worktreePath: chat.worktreePath,
     worktreeMissing: chat.worktreeMissing ?? false,
+    branchName: chat.branchName,
     updatedAt: new Date(chat.updatedAt).getTime(),
   };
   return {

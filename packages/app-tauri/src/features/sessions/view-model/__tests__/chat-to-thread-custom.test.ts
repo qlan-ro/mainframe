@@ -227,3 +227,17 @@ describe('chatToThreadCustom — custom.updatedAt', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// custom.branchName
+// ---------------------------------------------------------------------------
+
+describe('chatToThreadCustom — custom.branchName', () => {
+  it('forwards chat.branchName when present', () => {
+    expect(chatToThreadCustom(makeChat({ branchName: 'feat/x' })).custom.branchName).toBe('feat/x');
+  });
+
+  it('is undefined when chat.branchName is absent', () => {
+    expect(chatToThreadCustom(makeChat()).custom.branchName).toBeUndefined();
+  });
+});
