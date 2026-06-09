@@ -196,7 +196,7 @@ export function ProviderModelSelect({
         <div className="px-1 pb-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
           {active?.name ?? 'Models'} models
         </div>
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-px">
           {rows.map((m) => (
             <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
           ))}
