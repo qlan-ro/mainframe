@@ -1,93 +1,104 @@
 # Main-Area Header Redesign (MainToolbar + ChatCardHeader)
 
 **Status:** Design · 2026-06-09 · branch `feat/app-tauri-wt`
-**Scope:** the first of the header-band drift fixes (the "global top bar" piece). The PR badge / review button / session-metrics bar are a separate follow-up (piece #2) that attaches to the `ChatCardHeader` built here.
+**Scope:** the "global top bar" piece of the header-band drift. PR badge / review button / session-metrics bar are a separate follow-up (piece #2) that attaches to the `ChatCardHeader` built here.
 
 ## Problem
 
-The app-tauri surface header drifts from both the prototype (`docs/design-reference/prototype/02-chrome.jsx` `MainToolbar`) and desktop (`packages/desktop/.../TitleBar.tsx`). Today `ChatHeader` shows only a drag grip + message icon + session title + split buttons. The design has **two stacked headers** in the surface panel:
+The app-tauri main surface area drifts from both the prototype (`docs/design-reference/prototype/02-chrome.jsx` + `04-engine.jsx`) and desktop (`packages/desktop/.../TitleBar.tsx`). Today the chat surface renders a single `ChatHeader` (grip + message icon + session title + split). The design has **two distinct chrome levels** in the main area:
 
-1. a **main-area toolbar** — `mainframe | ⎇ branch` on the left, find/preview/play/theme/inspector controls on the right;
-2. a **chat-card header** — the grip + message icon + session title + split buttons (and, later, the PR badge + metrics).
+1. a **shell-level `MainToolbar`** above the surface zones — `mainframe | ⎇ branch` + find/preview/play/theme/inspector;
+2. a **per-zone surface header** — for chat, the `ChatCardHeader` (grip + chat icon + session title + split).
 
-The native traffic lights stay in the sidebar (unchanged floating-panels layout), so the collapsed-sidebar drag offset stays relevant — but moves to a simpler model.
+## Surface-engine context (so the headers are modelled right)
+
+The main area is the **typed-surface engine**: Chat / Files / Run are **zones** arranged in a layout (`layout/SurfaceHost` + `SurfDivider` splits + `SurfaceRail`, already built). Each zone has a `SurfaceTabStrip`-style header with a **drag-to-reposition grip** + surface icon + content. **Chat is a surface like the others** — same reposition grip. Verified engine behavior (prototype `04-engine.jsx` + our `store/layout.ts`): chat is the **floor** (`removeSurface` re-reveals chat when the workspace would be empty) and chat can reposition top-left/top-right but **never to the bottom strip** (`repositionSurface`: `if (s==='chat') return ws` for the bottom target). Whether chat ever shows a **close** affordance is left to the future surface-engine workstream — **not asserted here**.
+
+Current realized state (verified): surfaces + `toggleSurface`/`splitSurface`/`setTopFrac` exist; **tabs, surface-reposition drag, and the surface-close model are NOT built** — every `SurfaceTabStrip` grip is "visual only." So the chat grip is likewise a **visual-only placeholder** here, and no close affordance is added; wiring real reposition/close is a separate future workstream, out of this scope.
+
+Traffic lights + a layout-preset switcher live in the **sidebar header** (unchanged). So lights stay in the sidebar, and the collapsed-sidebar offset belongs to whatever sits top-left of the surface area — now the `MainToolbar`.
+
+## Layout
+
+```
+┌ window ──────────────────────────────────────────────┐
+│ ┌ sidebar (floating) ┐ ┌ main-surface-shell ────────┐ │
+│ │ [traffic lights]   │ │ MainToolbar (shell)        │ │  ← project|branch + controls
+│ │ [preset switch]    │ │ ┌ SurfaceHost (zones) ────┐ │ │
+│ │ SESSIONS …         │ │ │ chat zone:              │ │ │
+│ │                    │ │ │  ChatCardHeader (grip + │ │ │  ← chat surface header
+│ │                    │ │ │   icon + title + split) │ │ │
+│ │                    │ │ │  thread (scrolls)       │ │ │
+│ │                    │ │ │  composer               │ │ │
+│ │                    │ │ │ [files/run zones if any]│ │ │
+│ │                    │ │ └─────────────────────────┘ │ │
+│ └────────────────────┘ └────────────────────────────┘ │
+└────────────────────────────────────────────────────────┘
+```
+
+`MainToolbar` is a fixed bar at the top of `main-surface-shell`, above `SurfaceHost`. The chat zone's `ChatCardHeader` is fixed at the top of the chat panel; thread scrolls beneath; composer pinned.
 
 ## Goals
 
-- Build the **MainToolbar** matching the prototype: wire what has backing (project name, branch label, **theme toggle**); render the rest as gated, disabled, testid'd stubs (search, launch/preview, play, branch-switch, inspector/right-sidebar).
-- Extract today's `ChatHeader` content **unchanged** into a **ChatCardHeader** component (grip + message icon + title + split), pinned below the MainToolbar.
-- Simplify the drag mechanism: move the show-sidebar button **in-flow** into the MainToolbar left; retire `COLLAPSED_CHROME_INSET` + the absolute-overlay button in favor of the plain traffic-light `leadingInset`.
+- Build the shell-level **`MainToolbar`**, matching the prototype: wire what has backing (project name, branch label, **theme toggle**); render the rest as gated, disabled, testid'd stubs (search, launch/preview, play, branch-switch, inspector/right-sidebar).
+- Recast today's `ChatHeader` content into the chat zone's **`ChatCardHeader`** — grip (visual-only reposition placeholder, like the other surfaces) + chat icon + session title + split — kept verbatim otherwise. No close affordance is added (the surface-close model is unbuilt; chat-close is deferred to that workstream).
+- Simplify the drag mechanism: the show-sidebar button moves **in-flow** into the `MainToolbar` left; `COLLAPSED_CHROME_INSET` + the absolute-overlay button retire in favor of the plain traffic-light `leadingInset` on the `MainToolbar`.
 
 ## Non-goals (deferred)
 
 - PR badge / review button / session-metrics bar (piece #2 — attaches to `ChatCardHeader`).
-- Real search/command palette, launch/sandbox subsystem, right-sidebar/inspector surface, branch-switch API. These remain gated stubs until their subsystems land.
+- Real search/command palette, launch/sandbox subsystem, right-sidebar/inspector surface, branch-switch API, and the **surface tab model + drag-to-reposition** engine. All remain gated/visual-only until their workstreams land.
 
-## Design
+## Components
 
-### Layout
+### `MainToolbar` (new — `layout/MainToolbar.tsx`)
 
-Inside the surface panel (`ChatSurface`), two **fixed** headers stack, then the scrolling thread:
+`flex` row, `h-[38px]`, `data-tauri-drag-region`, bottom hairline, left/right groups.
 
-```
-┌ surface panel ───────────────────────────┐
-│ MainToolbar   (fixed)                     │
-│ ChatCardHeader(fixed)                     │
-│ ─ message thread (scrolls) ─────────────  │
-│ … composer …                              │
-└───────────────────────────────────────────┘
-```
+- **Left:** show-sidebar button (`show-sidebar-button`, **in-flow**, only when the sidebar isn't rendered) → expands in one click (existing `expandSidebar`, relocated). Then `mainframe` project name `|` `⎇ <branch> ⌄` chip — **gated stub** (disabled, `main-toolbar-branch`). Carries the collapsed `leadingInset` to clear the traffic lights.
+- **Right:** `Search ⌘O` stub · divider · launch/preview picker stub · play stub · divider · **theme toggle (wired)** · inspector/right-sidebar stub. Every control gets a `main-toolbar-*` testid; stubs are `disabled` with an explanatory title.
 
-### MainToolbar (new — `layout/MainToolbar.tsx`)
+### `ChatCardHeader` (new — `features/chat/thread/ChatCardHeader.tsx`)
 
-`flex` row, `h-[38px]`, `data-tauri-drag-region`, `[border-bottom:0.5px_solid_var(--border)]`, left/right groups.
+Today's `ChatHeader` body, recast as the **chat zone's surface header**: `GripHorizontal` (drag-to-reposition grip, **visual-only placeholder** matching `SurfaceTabStrip`) + `MessageSquare` + session title (`useAuiState … title`) + `chat-header-split-right`/`chat-header-split-down` (`layoutCanSplit`/`splitSurface`). No close affordance is added (surface-close model unbuilt; deferred). Keeps `data-tauri-drag-region` + `h-[38px]`. PR badge + metrics attach here later (piece #2). No behavior change vs today otherwise.
 
-- **Left (identity):**
-  - Show-sidebar button (`data-testid="show-sidebar-button"`) rendered **in-flow** only when the sidebar is not rendered (collapsed or hidden). On click → expand (one click, from either collapsed state) — same `expandSidebar` behavior already built, just relocated here.
-  - `mainframe` project name (from the active chat's project) · `|` · branch chip `⎇ <branchName> ⌄` (from `chat.branchName`). The chip is a **gated stub** (disabled; no branch-switch API) — `data-testid="main-toolbar-branch"`.
-  - Carries the collapsed-state `leadingInset` so the in-flow content clears the traffic lights when the sidebar is collapsed.
-- **Right (controls), in order:** `Search ⌘O` stub · divider · launch/preview picker stub · play stub · divider · **theme toggle (wired)** · inspector/right-sidebar toggle stub. Every control gets a `main-toolbar-*` testid; stubs are `disabled` with a title explaining they're coming with their surface.
+### `useTheme` store (new — `store/theme.ts`)
 
-### ChatCardHeader (new — `features/chat/thread/ChatCardHeader.tsx`)
-
-The **current `ChatHeader` body, moved verbatim**: `GripHorizontal` (grip, in front) + `MessageSquare` + session title (`useAuiState … title`) + `chat-header-split-right` / `chat-header-split-down` buttons (`layoutCanSplit`/`splitSurface`). Keeps `data-tauri-drag-region` and `h-[38px]`. This is where the PR badge + metrics will attach (piece #2). No behavior change vs today.
-
-### Theme toggle (new — `store/theme.ts`)
-
-A tiny zustand store: `mode: 'light' | 'dark'`, `toggle()`, persisted to `localStorage('mf-theme')`, applied by toggling the `.dark` class on `document.documentElement` in an effect. Initial value: stored value, else `'light'` (system-preference detection is out of scope for v1). The MainToolbar theme button reads `mode` and renders moon/sun.
+zustand: `mode: 'light' | 'dark'`, `toggle()`, persisted to `localStorage('mf-theme')`, applied by toggling the `.dark` class on `document.documentElement` via an effect. Init: stored value, else `'light'` (system detection out of scope). The `MainToolbar` theme button reads `mode` → moon/sun.
 
 ### Drag-mechanism rework (`AppShell.tsx`, `useSidebarResize.ts`, `chrome.test.tsx`)
 
-- Remove the absolute `ShowSidebarButton` from `AppShell` and the `COLLAPSED_CHROME_INSET` / `SHOW_SIDEBAR_BUTTON_LEFT` constants; the button now lives in `MainToolbar`'s left.
-- Collapsed `mainChromeInset` reverts to the plain traffic-light clearance (`TRAFFIC_LIGHTS_SPACER_WIDTH`) since the header content (show-sidebar + identity) is in-flow after the inset — no absolute button to clear.
-- `expandSidebar` (already built) moves to where the button is rendered (MainToolbar, via props from `ChatSurface`/`AppShell`).
-- Update `chrome.test.tsx`: the collapsed-inset assertions revert to `TRAFFIC_LIGHTS_SPACER_WIDTH`; the show-sidebar-button-present / one-click-expand tests now target the in-flow button in the MainToolbar.
+- Remove the absolute `ShowSidebarButton` + `COLLAPSED_CHROME_INSET`/`SHOW_SIDEBAR_BUTTON_LEFT` from `AppShell`; the button now lives in `MainToolbar`'s left.
+- Collapsed `mainChromeInset` reverts to the plain traffic-light clearance (`TRAFFIC_LIGHTS_SPACER_WIDTH`) and feeds the `MainToolbar` `leadingInset` (in-flow content clears the lights; no absolute button to over-clear).
+- `expandSidebar` (already built) moves to where the button renders.
+- `chrome.test.tsx`: collapsed-inset assertions revert to `TRAFFIC_LIGHTS_SPACER_WIDTH`; the button-present / one-click-expand tests target the in-flow `MainToolbar` button.
 
 ### Composition
 
-`ChatSurface` renders `<MainToolbar … />` then `<ChatCardHeader />` then the thread/composer column. `mainChromeInset` flows to `MainToolbar` (it owns the collapsed leadingInset now), not `ChatCardHeader`.
+`main-surface-shell` (in `AppShell`) renders `<MainToolbar … />` then `<SurfaceHost mainChromeInset=… />`. `mainChromeInset`/`leadingInset` flows to `MainToolbar` (it owns the collapsed clearance now). Inside `SurfaceHost`, the chat panel renders `ChatSurface` = `<ChatCardHeader />` + thread/composer. `ChatHeader.tsx` retires (content → `ChatCardHeader`).
 
 ## Data sources
 
-- **Project name / branch:** the active chat's `projectId` → project name (sessions/projects data already in app-tauri); `chat.branchName` for the branch label. Read via the controller's `chatConfig` / thread-list item where available.
-- **Theme:** local only (no daemon).
+- **Project name / branch:** active chat's `projectId` → project name; `chat.branchName` for the branch label (via controller `chatConfig` / thread-list item).
+- **Theme:** local only.
 - Stubs need no data.
 
 ## Testing
 
-- `useTheme` store: unit tests (toggle flips mode + `.dark` class + persists; reads stored value on init).
-- `MainToolbar`: renders identity (project/branch), the wired theme toggle flips theme, stubs are present + disabled with testids; show-sidebar button appears only when collapsed and expands on click.
-- `ChatCardHeader`: grip + title + split present (port the existing ChatHeader assertions).
+- `useTheme`: unit (toggle flips mode + `.dark` + persists; reads stored value on init).
+- `MainToolbar`: renders identity (project/branch); theme toggle flips theme; stubs present + disabled with testids; show-sidebar button appears only when collapsed and expands on click.
+- `ChatCardHeader`: grip + chat icon + title + split present (port the existing ChatHeader assertions).
 - `chrome.test.tsx`: updated collapse/inset/expand assertions per the rework.
-- Full `pnpm --filter @qlan-ro/mainframe-app-tauri typecheck` + `test` green.
+- `pnpm --filter @qlan-ro/mainframe-app-tauri typecheck` + `test` green.
 
 ## Files
 
 - New: `layout/MainToolbar.tsx`, `features/chat/thread/ChatCardHeader.tsx`, `store/theme.ts` (+ tests).
-- Changed: `features/sessions/new-thread/ChatSurface.tsx` (compose both headers), `app/AppShell.tsx` (drop absolute button + constants), `layout/useSidebarResize.ts` (expose expand — already done), `layout/__tests__/chrome.test.tsx` (revert collapse assertions).
-- Retired: `layout/ChatHeader.tsx` (content moves to `ChatCardHeader`; delete or repurpose).
+- Changed: `app/AppShell.tsx` (mount `MainToolbar`; drop absolute button + constants), `features/sessions/new-thread/ChatSurface.tsx` (render `ChatCardHeader` instead of `ChatHeader`), `layout/__tests__/chrome.test.tsx` (revert collapse assertions).
+- Retired: `layout/ChatHeader.tsx` (content → `ChatCardHeader`).
 
 ## Resolved decisions
 
-- `ChatCardHeader` lives in `features/chat/thread/` (chat-specific, next to `ChatThread`).
-- Both `MainToolbar` and `ChatCardHeader` carry `data-tauri-drag-region` (both are natural window-drag areas); interactive children opt out as usual. The grip + title stay in `ChatCardHeader` exactly as today.
+- `ChatCardHeader` lives in `features/chat/thread/` (next to `ChatThread`).
+- `MainToolbar` and `ChatCardHeader` both carry `data-tauri-drag-region`; interactive children opt out. The grip + title stay in `ChatCardHeader` exactly as today.
+- The chat grip is a **visual-only** reposition placeholder (the surface-reposition engine is unbuilt and out of scope) — consistent with the existing Files/Run grips.
