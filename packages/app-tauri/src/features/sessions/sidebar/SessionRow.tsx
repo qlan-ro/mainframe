@@ -180,59 +180,65 @@ function SessionRowInner({
       <ThreadListItemPrimitive.Root
         data-testid="sessions-row"
         data-chat-id={item.id}
-        className="group relative flex cursor-pointer items-center gap-[9px] border-l-2 border-l-transparent py-2 pl-2.5 pr-3 transition-colors hover:bg-accent data-[active=true]:border-l-primary data-[active=true]:bg-accent"
+        className="group relative border-l-2 border-l-transparent transition-colors hover:bg-accent data-[active=true]:border-l-primary data-[active=true]:bg-accent"
       >
-        <div className="flex flex-shrink-0 items-center gap-1.5">
-          {custom.pinned && !inPinnedGroup && (
-            <PinIcon data-testid="sessions-row-pin-glyph" className="size-3 flex-shrink-0 text-primary" />
-          )}
-          <StatusDot status={status} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex h-[22px] min-w-0 items-center gap-[9px]">
-            {isRenaming ? (
-              <SessionRowRename
-                initialTitle={title}
-                onCommit={handleCommitRename}
-                onCancel={() => setIsRenaming(false)}
-              />
-            ) : (
-              <ThreadListItemPrimitive.Trigger asChild>
-                <span
-                  data-testid="sessions-row-title"
-                  className={[
-                    'flex-1 truncate text-body tracking-normal',
-                    // Selected (native data-active) reads as semibold/foreground too, matching
-                    // the artboard `sel || unread` rule — applied via CSS so it tracks the
-                    // native selection without a JS hook.
-                    'group-data-[active=true]:font-semibold group-data-[active=true]:text-foreground',
-                    isUnread || custom.pinned ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground',
-                  ].join(' ')}
-                >
-                  {title}
-                </span>
-              </ThreadListItemPrimitive.Trigger>
-            )}
-            <RelativeTime updatedAt={custom.updatedAt} />
-            <RowHoverActions
-              onTags={handleTags}
-              onRename={() => queueMicrotask(() => setIsRenaming(true))}
-              onArchive={() => void itemRuntime.archive()}
-            />
+        {/* Whole-row select target: the entire row body is the trigger, so a click
+            anywhere (title, status dot, meta row, empty space) changes the active
+            session. Interactive children (PR links, hover actions, the rename
+            input) stopPropagation, so they keep their own behavior. */}
+        <ThreadListItemPrimitive.Trigger asChild>
+          <div className="flex w-full cursor-pointer items-center gap-[9px] py-2 pl-2.5 pr-3 text-left">
+            <div className="flex flex-shrink-0 items-center gap-1.5">
+              {custom.pinned && !inPinnedGroup && (
+                <PinIcon data-testid="sessions-row-pin-glyph" className="size-3 flex-shrink-0 text-primary" />
+              )}
+              <StatusDot status={status} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex h-[22px] min-w-0 items-center gap-[9px]">
+                {isRenaming ? (
+                  <SessionRowRename
+                    initialTitle={title}
+                    onCommit={handleCommitRename}
+                    onCancel={() => setIsRenaming(false)}
+                  />
+                ) : (
+                  <span
+                    data-testid="sessions-row-title"
+                    className={[
+                      'flex-1 truncate text-body tracking-normal',
+                      // Selected (native data-active) reads as semibold/foreground too, matching
+                      // the artboard `sel || unread` rule — applied via CSS so it tracks the
+                      // native selection without a JS hook.
+                      'group-data-[active=true]:font-semibold group-data-[active=true]:text-foreground',
+                      isUnread || custom.pinned ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground',
+                    ].join(' ')}
+                  >
+                    {title}
+                  </span>
+                )}
+                <RelativeTime updatedAt={custom.updatedAt} />
+                <RowHoverActions
+                  onTags={handleTags}
+                  onRename={() => queueMicrotask(() => setIsRenaming(true))}
+                  onArchive={() => void itemRuntime.archive()}
+                />
+              </div>
+              <div className="mt-1 @max-[220px]:hidden">
+                <SessionRowMeta
+                  worktreePath={custom.worktreePath}
+                  worktreeMissing={custom.worktreeMissing}
+                  detectedPrs={custom.detectedPrs}
+                  status={status}
+                  tags={custom.tags}
+                  colorOf={colorOf}
+                  projectId={projectName != null ? custom.projectId : undefined}
+                  projectName={projectName}
+                />
+              </div>
+            </div>
           </div>
-          <div className="mt-1 @max-[220px]:hidden">
-            <SessionRowMeta
-              worktreePath={custom.worktreePath}
-              worktreeMissing={custom.worktreeMissing}
-              detectedPrs={custom.detectedPrs}
-              status={status}
-              tags={custom.tags}
-              colorOf={colorOf}
-              projectId={projectName != null ? custom.projectId : undefined}
-              projectName={projectName}
-            />
-          </div>
-        </div>
+        </ThreadListItemPrimitive.Trigger>
       </ThreadListItemPrimitive.Root>
     </SessionContextMenu>
   );
