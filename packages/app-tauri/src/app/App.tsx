@@ -12,6 +12,7 @@ import { daemonWs } from '../lib/daemon/ws-client';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { AppShell } from './AppShell';
 import { AppStatusBar } from '../layout/AppStatusBar';
+import { ThemeEffect } from './ThemeEffect';
 import { Toaster } from '@/components/ui/sonner';
 
 export function App() {
@@ -26,6 +27,7 @@ export function App() {
 
   return (
     <div className="flex h-screen flex-col bg-mf-window text-foreground font-sans">
+      <ThemeEffect />
       {port != null ? (
         <DaemonPortProvider port={port}>
           <AppShell port={port} />
