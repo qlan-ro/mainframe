@@ -21,7 +21,7 @@ import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useSessionFilters } from '@/store/session-filters';
 
-export function ChatSurface({ port }: { mainChromeInset?: number; port: number }) {
+export function ChatSurface({ port }: { port: number }) {
   // Seeds the draft + marks-ready when a project pill is active (skips the picker).
   useNewThreadAutoConfig();
 

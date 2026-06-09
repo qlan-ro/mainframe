@@ -15,18 +15,17 @@ const SHORTCUT_MAP: Record<string, SurfaceId> = {
 
 const PANEL_CLS = 'flex flex-col overflow-hidden rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]';
 
-function SurfaceView({ mainChromeInset, name, port }: { mainChromeInset: number; name: SurfaceId; port: number }) {
-  if (name === 'chat') return <ChatSurface mainChromeInset={mainChromeInset} port={port} />;
+function SurfaceView({ name, port }: { name: SurfaceId; port: number }) {
+  if (name === 'chat') return <ChatSurface port={port} />;
   if (name === 'files') return <FilesSurface />;
   return <RunSurface />;
 }
 
 interface Props {
-  mainChromeInset?: number;
   port: number;
 }
 
-export function SurfaceHost({ mainChromeInset = 0, port }: Props) {
+export function SurfaceHost({ port }: Props) {
   const layout = useLayoutStore((s) => s.layout);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   const setTopFrac = useLayoutStore((s) => s.setTopFrac);
@@ -73,7 +72,7 @@ export function SurfaceHost({ mainChromeInset = 0, port }: Props) {
         {top.map((name, i) => (
           <Fragment key={name}>
             <div style={{ flex: topFlex[name] ?? 1 }} className={`min-w-0 ${PANEL_CLS}`}>
-              <SurfaceView mainChromeInset={i === 0 ? mainChromeInset : 0} name={name} port={port} />
+              <SurfaceView name={name} port={port} />
             </div>
             {i < top.length - 1 &&
               (twoCol ? (
@@ -91,7 +90,7 @@ export function SurfaceHost({ mainChromeInset = 0, port }: Props) {
           <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
             <div className={`min-w-0 flex-1 ${PANEL_CLS}`}>
-              <SurfaceView mainChromeInset={0} name={bottom} port={port} />
+              <SurfaceView name={bottom} port={port} />
             </div>
           </div>
         </>

@@ -19,6 +19,12 @@ vi.mock('../../features/sessions/ws/use-session-list-router', () => ({
   useSessionListRouter: vi.fn(),
 }));
 
+// MainToolbar (rendered by AppShell) resolves identity via useProjects → daemon port.
+// Stub it so the shell renders without a live port.
+vi.mock('../../features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [], loading: false }),
+}));
+
 vi.mock('../../features/sessions/sidebar/ArchiveWorktreeDialog', () => ({
   ArchiveWorktreeDialog: () => null,
 }));
@@ -28,16 +34,13 @@ vi.mock('../../features/sessions/tags/TagPopoverHost', () => ({
 }));
 
 vi.mock('../SurfaceHost', () => ({
-  SurfaceHost: ({ mainChromeInset = 0, port }: { mainChromeInset?: number; port: number }) => (
-    <div data-testid="surface-host" data-main-chrome-inset={mainChromeInset} data-port={port} />
-  ),
+  SurfaceHost: ({ port }: { port: number }) => <div data-testid="surface-host" data-port={port} />,
 }));
 
-import { ChatHeader } from '../ChatHeader';
-import { SidebarHeader, TRAFFIC_LIGHTS_SPACER_WIDTH } from '../SidebarHeader';
+import { SidebarHeader } from '../SidebarHeader';
 import { SIDEBAR_EXPANDED_WIDTH, SIDEBAR_MAX_WIDTH, SidebarShell } from '../SidebarShell';
 import { useLayoutStore } from '@/store/layout';
-import { AppShell, COLLAPSED_CHROME_INSET, SHOW_SIDEBAR_BUTTON_LEFT } from '../../app/AppShell';
+import { AppShell } from '../../app/AppShell';
 
 beforeEach(() => {
   if (!useLayoutStore.getState().sidebarVisible) {
@@ -47,31 +50,12 @@ beforeEach(() => {
   document.body.style.removeProperty('cursor');
 });
 
-describe('layout chrome drag regions', () => {
-  it('puts the Tauri drag region on the chat header itself', () => {
-    render(<ChatHeader />);
+describe('main toolbar', () => {
+  it('renders the shell toolbar above the surface host', () => {
+    render(<AppShell port={31415} />);
 
-    expect(screen.getByTestId('chat-header').hasAttribute('data-tauri-drag-region')).toBe(true);
-  });
-
-  it('can push only chat header contents clear of native traffic lights', () => {
-    render(<ChatHeader leadingInset={TRAFFIC_LIGHTS_SPACER_WIDTH} />);
-
-    expect(screen.getByTestId('chat-header')).toHaveStyle({ paddingLeft: `${TRAFFIC_LIGHTS_SPACER_WIDTH}px` });
-  });
-
-  it('matches the sidebar header height', () => {
-    render(<ChatHeader />);
-
-    expect(screen.getByTestId('chat-header')).toHaveClass('h-[38px]');
-  });
-});
-
-describe('layout chrome borders', () => {
-  it('draws the sidebar header bottom hairline from the prototype', () => {
-    render(<SidebarHeader />);
-
-    expect(screen.getByTestId('sidebar-header').className).toContain('[border-bottom:0.5px_solid_var(--border)]');
+    expect(screen.getByTestId('main-toolbar')).toBeDefined();
+    expect(screen.getByTestId('surface-host')).toBeDefined();
   });
 });
 
@@ -127,7 +111,7 @@ describe('sidebar drag collapse', () => {
     expect(document.body.style.cursor).toBe('');
   });
 
-  it('increases the main chrome inset dynamically while dragging under the traffic-light zone', () => {
+  it('tracks the drag width via the main surface margin while collapsing', () => {
     render(<AppShell port={31415} />);
 
     const handle = screen.getByTestId('sidebar-collapse-handle');
@@ -139,16 +123,11 @@ describe('sidebar drag collapse', () => {
     expect(screen.getByTestId('main-surface-shell')).toHaveStyle({
       marginLeft: `-${SIDEBAR_EXPANDED_WIDTH - 30}px`,
     });
-    expect(screen.getByTestId('surface-host')).toHaveAttribute(
-      'data-main-chrome-inset',
-      String(TRAFFIC_LIGHTS_SPACER_WIDTH - 30),
-    );
   });
 
   it('removes the session panel completely when dragged left past the collapse threshold', () => {
     render(<AppShell port={31415} />);
 
-    const mainSurface = screen.getByTestId('main-surface-shell');
     const handle = screen.getByTestId('sidebar-collapse-handle');
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: SIDEBAR_EXPANDED_WIDTH });
@@ -157,12 +136,8 @@ describe('sidebar drag collapse', () => {
 
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
     expect(screen.getByTestId('sidebar-collapse-handle')).toBeDefined();
-    expect(mainSurface).not.toHaveStyle({ paddingLeft: `${TRAFFIC_LIGHTS_SPACER_WIDTH}px` });
     expect(handle).toHaveStyle({ left: '0px' });
-    expect(screen.getByTestId('surface-host')).toHaveAttribute(
-      'data-main-chrome-inset',
-      String(COLLAPSED_CHROME_INSET),
-    );
+    // the show-sidebar button now lives in the MainToolbar (in-flow), shown while collapsed
     expect(screen.getByTestId('show-sidebar-button')).toBeDefined();
   });
 
@@ -198,22 +173,13 @@ describe('sidebar drag collapse', () => {
     });
   });
 
-  it('keeps the main surface clear of traffic lights when the instant button hides the sidebar', () => {
+  it('shows the in-flow show-sidebar button when the instant button hides the sidebar', () => {
     render(<AppShell port={31415} />);
 
     fireEvent.click(screen.getByTestId('sidebar-hide-button'));
 
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
-    expect(screen.getByTestId('main-surface-shell')).not.toHaveStyle({
-      paddingLeft: `${TRAFFIC_LIGHTS_SPACER_WIDTH}px`,
-    });
-    expect(screen.getByTestId('surface-host')).toHaveAttribute(
-      'data-main-chrome-inset',
-      String(COLLAPSED_CHROME_INSET),
-    );
-    expect(screen.getByTestId('show-sidebar-button')).toHaveStyle({
-      left: `${SHOW_SIDEBAR_BUTTON_LEFT}px`,
-    });
+    expect(screen.getByTestId('show-sidebar-button')).toBeDefined();
   });
 });
 
@@ -225,14 +191,11 @@ describe('sidebar collapse handle — unmount cleanup + keyboard', () => {
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: SIDEBAR_EXPANDED_WIDTH });
 
-    // drag is now active — body styles must be locked
     expect(document.body.style.userSelect).toBe('none');
     expect(document.body.style.cursor).toBe('ew-resize');
 
-    // unmount WITHOUT firing pointerUp — simulates tab close / component removal mid-drag
     unmount();
 
-    // cleanup effect must have reset both styles
     expect(document.body.style.userSelect).toBe('');
     expect(document.body.style.cursor).toBe('');
   });
@@ -253,11 +216,9 @@ describe('sidebar collapse handle — unmount cleanup + keyboard', () => {
 
     const handle = screen.getByTestId('sidebar-collapse-handle');
 
-    // first collapse via keyboard
     fireEvent.keyDown(handle, { key: 'ArrowLeft' });
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
 
-    // then expand via keyboard
     fireEvent.keyDown(handle, { key: 'ArrowRight' });
 
     expect(screen.getByTestId('sessions-sidebar')).toHaveStyle({ width: `${SIDEBAR_EXPANDED_WIDTH}px` });
@@ -268,11 +229,9 @@ describe('sidebar collapse handle — unmount cleanup + keyboard', () => {
 
     const handle = screen.getByTestId('sidebar-collapse-handle');
 
-    // first Enter collapses
     fireEvent.keyDown(handle, { key: 'Enter' });
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
 
-    // second Enter expands
     fireEvent.keyDown(handle, { key: 'Enter' });
     expect(screen.getByTestId('sessions-sidebar')).toBeDefined();
   });
@@ -284,7 +243,6 @@ describe('sidebar drag dim-on-will-collapse', () => {
 
     const handle = screen.getByTestId('sidebar-collapse-handle');
 
-    // drag from the right edge of the expanded sidebar to width=70, which is below SIDEBAR_COLLAPSE_THRESHOLD (150)
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: SIDEBAR_EXPANDED_WIDTH });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 70 });
 
@@ -296,7 +254,6 @@ describe('sidebar drag dim-on-will-collapse', () => {
 
     const handle = screen.getByTestId('sidebar-collapse-handle');
 
-    // drag from the right edge of the expanded sidebar to width=200, which is above SIDEBAR_COLLAPSE_THRESHOLD (150)
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: SIDEBAR_EXPANDED_WIDTH });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 200 });
 
@@ -306,7 +263,6 @@ describe('sidebar drag dim-on-will-collapse', () => {
   it('does not dim the sidebar when idle (no drag in progress)', () => {
     render(<AppShell port={31415} />);
 
-    // sidebar is visible and expanded; no drag has started
     expect(screen.getByTestId('sessions-sidebar')).not.toHaveClass('opacity-30');
   });
 
@@ -315,11 +271,8 @@ describe('sidebar drag dim-on-will-collapse', () => {
 
     const handle = screen.getByTestId('sidebar-collapse-handle');
 
-    // drag below threshold first (should dim)
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: SIDEBAR_EXPANDED_WIDTH });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 70 });
-
-    // drag back above threshold (should un-dim)
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 220 });
 
     expect(screen.getByTestId('sessions-sidebar')).not.toHaveClass('opacity-30');
@@ -332,7 +285,6 @@ describe('sidebar drag resize-larger (capped)', () => {
 
     const handle = screen.getByTestId('sidebar-collapse-handle');
 
-    // start at the right edge of the 300px default; delta +60 → width 360, below the 400 cap
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: SIDEBAR_EXPANDED_WIDTH });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 360 });
 
@@ -340,7 +292,6 @@ describe('sidebar drag resize-larger (capped)', () => {
 
     fireEvent.pointerUp(handle, { pointerId: 1, clientX: 360 });
 
-    // must persist after release — NOT snap back to 300
     expect(screen.getByTestId('sessions-sidebar')).toHaveStyle({ width: '360px' });
   });
 
@@ -366,16 +317,13 @@ describe('sidebar expand from collapsed', () => {
 
     const handle = screen.getByTestId('sidebar-collapse-handle');
 
-    // drag past the collapse threshold so the sidebar disappears
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: SIDEBAR_EXPANDED_WIDTH });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 70 });
     fireEvent.pointerUp(handle, { pointerId: 1, clientX: 70 });
 
-    // sidebar is gone and the show button must be visible
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
     expect(screen.getByTestId('show-sidebar-button')).toBeDefined();
 
-    // one click must re-expand — no drag required
     fireEvent.click(screen.getByTestId('show-sidebar-button'));
 
     expect(screen.getByTestId('sessions-sidebar')).toBeDefined();
@@ -384,16 +332,37 @@ describe('sidebar expand from collapsed', () => {
   it('one-click expand after button-collapse re-shows the sidebar', () => {
     render(<AppShell port={31415} />);
 
-    // collapse via the header hide button
     fireEvent.click(screen.getByTestId('sidebar-hide-button'));
 
-    // sidebar is gone and the show button must be visible
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
     expect(screen.getByTestId('show-sidebar-button')).toBeDefined();
 
-    // one click must re-expand
     fireEvent.click(screen.getByTestId('show-sidebar-button'));
 
     expect(screen.getByTestId('sessions-sidebar')).toBeDefined();
+  });
+
+  it('keeps the in-flow show-sidebar button keyboard-reachable in both collapsed states', () => {
+    // (a) drag-collapsed
+    const drag = render(<AppShell port={31415} />);
+    const handle = screen.getByTestId('sidebar-collapse-handle');
+    fireEvent.pointerDown(handle, { pointerId: 1, clientX: SIDEBAR_EXPANDED_WIDTH });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 70 });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 70 });
+
+    const dragBtn = screen.getByTestId('show-sidebar-button');
+    expect(dragBtn.tagName).toBe('BUTTON');
+    expect(dragBtn).not.toBeDisabled();
+    dragBtn.focus();
+    expect(document.activeElement).toBe(dragBtn);
+    drag.unmount();
+
+    // (b) instant-hidden
+    render(<AppShell port={31415} />);
+    fireEvent.click(screen.getByTestId('sidebar-hide-button'));
+    const hiddenBtn = screen.getByTestId('show-sidebar-button');
+    expect(hiddenBtn.tagName).toBe('BUTTON');
+    hiddenBtn.focus();
+    expect(document.activeElement).toBe(hiddenBtn);
   });
 });

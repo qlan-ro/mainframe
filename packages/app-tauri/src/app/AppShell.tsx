@@ -5,44 +5,23 @@
  * useSessionListRouter() runs INSIDE the provider (needs the live thread list).
  */
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
-import { PanelLeft } from 'lucide-react';
 import { ArchiveWorktreeDialog } from '../features/sessions/sidebar/ArchiveWorktreeDialog';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
+import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useLayoutStore } from '../store/layout';
+import { MainToolbar } from '../layout/MainToolbar';
 import { SidebarCollapseHandle } from '../layout/SidebarCollapseHandle';
 import { SIDEBAR_EXPANDED_WIDTH, SidebarShell } from '../layout/SidebarShell';
 import { SurfaceHost } from '../layout/SurfaceHost';
 import { TRAFFIC_LIGHTS_SPACER_WIDTH } from '../layout/SidebarHeader';
 import { useSidebarResize } from '../layout/useSidebarResize';
 
-function ShowSidebarButton({ left, onClick }: { left: number; onClick: () => void }) {
-  return (
-    <button
-      data-testid="show-sidebar-button"
-      type="button"
-      title="Show sidebar"
-      onClick={onClick}
-      className="absolute top-2 z-10 inline-flex h-[22px] w-[26px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
-      style={{ left }}
-    >
-      <PanelLeft size={14} className="text-muted-foreground" />
-    </button>
-  );
-}
-
-// Collapsed-state chrome geometry. When the sidebar isn't rendered, the
-// show-sidebar button lives in the surface's leading inset, just past the native
-// traffic lights — so the surface chrome must clear BOTH the lights and the
-// button (otherwise the header content lands on top of them). Tunable: bump the
-// +12 gap for more breathing room between the lights and the button.
-export const SHOW_SIDEBAR_BUTTON_LEFT = TRAFFIC_LIGHTS_SPACER_WIDTH + 12;
-const SHOW_SIDEBAR_BUTTON_WIDTH = 26;
-export const COLLAPSED_CHROME_INSET = SHOW_SIDEBAR_BUTTON_LEFT + SHOW_SIDEBAR_BUTTON_WIDTH + 8;
-
-function getMainChromeInset(sidebarRendered: boolean, sidebarWidth: number): number {
-  if (!sidebarRendered) return COLLAPSED_CHROME_INSET;
+/** While the sidebar is collapsed, the surface area's top-left sits under the
+ *  native traffic lights, so the MainToolbar's left group insets to clear them. */
+function getLeadingInset(sidebarRendered: boolean, sidebarWidth: number): number {
+  if (!sidebarRendered) return TRAFFIC_LIGHTS_SPACER_WIDTH;
   return Math.max(0, TRAFFIC_LIGHTS_SPACER_WIDTH - sidebarWidth);
 }
 
@@ -55,6 +34,7 @@ function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
+  const { projectName, branchName } = useActiveIdentity();
   const {
     dragCollapsed,
     dragging,
@@ -75,15 +55,14 @@ function RuntimeBody({ port }: { port: number }) {
     if (sidebarVisible) expand();
     else toggleSidebar();
   };
-  const mainChromeInset = getMainChromeInset(sidebarRendered, sidebarWidth);
+  const leadingInset = getLeadingInset(sidebarRendered, sidebarWidth);
   const mainOverlap = getMainOverlap(sidebarRendered, sidebarWidth);
 
   return (
     <div className="flex flex-1 gap-2 overflow-hidden bg-mf-window p-2">
-      {/* Floating panels (prototype 04-engine root: padding + gap). Both the
-          sidebar and the main surface area inset equally from the window edge;
-          the native traffic lights are positioned (trafficLightPosition) to land
-          centered inside the floating SidebarHeader. */}
+      {/* Floating panels (prototype 04-engine root: padding + gap). The native
+          traffic lights stay over the sidebar header; when collapsed, the
+          MainToolbar's left group insets to clear them. */}
       {sidebarRendered && (
         <div className="flex flex-shrink-0">
           <SidebarShell
@@ -111,10 +90,14 @@ function RuntimeBody({ port }: { port: number }) {
             width={sidebarWidth}
           />
         )}
-        {/* Show-sidebar trigger — shown whenever the sidebar isn't rendered,
-            i.e. both button-hidden AND drag-collapsed. */}
-        {!sidebarRendered && <ShowSidebarButton left={SHOW_SIDEBAR_BUTTON_LEFT} onClick={expandSidebar} />}
-        <SurfaceHost mainChromeInset={mainChromeInset} port={port} />
+        <MainToolbar
+          leadingInset={leadingInset}
+          sidebarRendered={sidebarRendered}
+          onExpandSidebar={expandSidebar}
+          projectName={projectName}
+          branchName={branchName}
+        />
+        <SurfaceHost port={port} />
       </div>
 
       {/* Single app-wide outlets driven by their bridges/stores */}

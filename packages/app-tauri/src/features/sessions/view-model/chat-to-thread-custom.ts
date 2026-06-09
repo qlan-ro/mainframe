@@ -118,6 +118,15 @@ function narrowSessionCustom(custom: Record<string, unknown>): SessionCustom {
   return custom as unknown as SessionCustom;
 }
 
+/**
+ * Narrow the active thread-list item's boundary `custom` to SessionCustom, or
+ * undefined for the custom-less new/draft thread. The single safe read of an
+ * active item's custom (e.g. the shell identity), keeping the narrowing here.
+ */
+export function sessionCustomOf(custom: Record<string, unknown> | undefined): SessionCustom | undefined {
+  return custom == null ? undefined : narrowSessionCustom(custom);
+}
+
 /** A thread entry that carries a materialized `custom` (i.e. a real session). */
 type SessionThreadEntry = ThreadListEntry & { custom: Record<string, unknown> };
 

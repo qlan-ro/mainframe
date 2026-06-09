@@ -83,6 +83,13 @@ vi.mock('../../features/sessions/ws/use-session-list-router', () => ({
   useSessionListRouter: useSessionListRouterMock,
 }));
 
+// MainToolbar resolves identity via useAuiState + useProjects; with the runtime
+// provider stubbed to a passthrough there is no AuiProvider context, so stub the
+// identity hook directly.
+vi.mock('../../features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectName: 'mainframe', branchName: undefined }),
+}));
+
 vi.mock('../../layout/SidebarShell', () => ({
   SIDEBAR_EXPANDED_WIDTH: 300,
   SIDEBAR_COLLAPSED_WIDTH: 0,
