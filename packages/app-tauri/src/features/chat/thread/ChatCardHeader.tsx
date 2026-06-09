@@ -1,6 +1,15 @@
 import { useAuiState } from '@assistant-ui/react';
-import { GripHorizontal, LayoutPanelLeft, LayoutPanelTop, MessageSquare } from 'lucide-react';
+import {
+  ClipboardCheck,
+  GitPullRequest,
+  GripHorizontal,
+  LayoutPanelLeft,
+  LayoutPanelTop,
+  MessageSquare,
+} from 'lucide-react';
 import { layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { sessionCustomOf } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { openExternal } from '@/lib/tauri/bridge';
 
 // 24×24 header buttons (hdrBtn in artboard), distinct from the 22×22 SurfaceTabStrip actions.
 const HDR_BTN =
@@ -9,11 +18,13 @@ const HDR_BTN =
 /**
  * The chat zone's surface header (the `SurfaceTabStrip` equivalent for chat):
  * drag-to-reposition grip (visual-only placeholder), chat icon, session title,
- * and the split controls. No traffic-light inset — the shell `MainToolbar` above
- * owns the collapsed clearance. PR badge + session metrics attach here later.
+ * detected-PR links, a (gated) Review button, and the split controls. No
+ * traffic-light inset — the shell `MainToolbar` above owns the collapsed clearance.
  */
 export function ChatCardHeader() {
   const title = useAuiState((s) => s.threadListItem?.title) ?? 'Untitled';
+  const custom = useAuiState((s) => sessionCustomOf(s.threadListItem?.custom));
+  const prs = custom?.detectedPrs ?? [];
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
 
@@ -26,6 +37,28 @@ export function ChatCardHeader() {
       <GripHorizontal size={13} className="flex-shrink-0 cursor-grab text-mf-text-4" />
       <MessageSquare size={13} className="flex-shrink-0 text-primary" />
       <span className="min-w-0 flex-1 truncate text-caption font-semibold">{title}</span>
+      {prs.map((pr) => (
+        <button
+          key={`${pr.owner}/${pr.repo}/${pr.number}`}
+          data-testid={`chat-header-pr-${pr.number}`}
+          type="button"
+          title={`${pr.owner}/${pr.repo} #${pr.number}`}
+          onClick={() => void openExternal(pr.url)}
+          className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-caption font-semibold text-mf-success hover:underline"
+        >
+          <GitPullRequest size={12} className="flex-shrink-0" />#{pr.number}
+        </button>
+      ))}
+      <button
+        data-testid="chat-header-review"
+        type="button"
+        title="Review changes — coming with the review surface"
+        disabled
+        className="inline-flex h-6 flex-shrink-0 cursor-not-allowed items-center gap-1.5 rounded-[6px] border-none bg-transparent px-2 text-caption text-muted-foreground opacity-50"
+      >
+        <ClipboardCheck size={13} />
+        Review
+      </button>
       {splitAvailable && (
         <>
           <button

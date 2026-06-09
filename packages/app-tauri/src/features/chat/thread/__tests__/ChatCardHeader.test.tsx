@@ -1,12 +1,16 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+let fakeState: any = { threadListItem: { title: 'Fixture Chat', custom: { detectedPrs: [] } } };
 vi.mock('@assistant-ui/react', () => ({
-  useAuiState: vi.fn(() => 'Fixture Chat'),
+  useAuiState: (sel: (s: any) => unknown) => sel(fakeState),
 }));
+
+vi.mock('@/lib/tauri/bridge', () => ({ openExternal: vi.fn() }));
 
 import { ChatCardHeader } from '../ChatCardHeader';
 import { layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { openExternal } from '@/lib/tauri/bridge';
 
 // Reset the layout store to a fresh chat-only state before each test so
 // mutation from one test does not bleed into the next.
@@ -14,6 +18,8 @@ beforeEach(() => {
   useLayoutStore.setState({
     layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
   });
+  fakeState = { threadListItem: { title: 'Fixture Chat', custom: { detectedPrs: [] } } };
+  vi.mocked(openExternal).mockClear();
 });
 
 describe('ChatCardHeader — structure', () => {
@@ -80,12 +86,55 @@ describe('ChatCardHeader — split buttons', () => {
 });
 
 describe('ChatCardHeader — fallback title', () => {
-  it('shows "Untitled" when useAuiState returns null for the title', async () => {
-    const { useAuiState } = await import('@assistant-ui/react');
-    vi.mocked(useAuiState).mockReturnValueOnce(null);
+  it('shows "Untitled" when threadListItem title is null', () => {
+    fakeState = { threadListItem: { title: null, custom: { detectedPrs: [] } } };
 
     render(<ChatCardHeader />);
 
     expect(screen.getByText('Untitled')).toBeDefined();
+  });
+});
+
+describe('ChatCardHeader — PRs + review', () => {
+  it('renders a PR link per detectedPr', () => {
+    fakeState.threadListItem.custom.detectedPrs = [
+      { url: 'https://github.com/o/r/pull/249', owner: 'o', repo: 'r', number: 249, source: 'created' },
+      { url: 'https://github.com/o/r/pull/250', owner: 'o', repo: 'r', number: 250, source: 'mentioned' },
+    ];
+
+    render(<ChatCardHeader />);
+
+    const pr249 = screen.getByTestId('chat-header-pr-249');
+    const pr250 = screen.getByTestId('chat-header-pr-250');
+    expect(pr249).toBeDefined();
+    expect(pr250).toBeDefined();
+    expect(pr249.textContent).toContain('#249');
+    expect(pr250.textContent).toContain('#250');
+  });
+
+  it('clicking a PR link opens it externally', () => {
+    fakeState.threadListItem.custom.detectedPrs = [
+      { url: 'https://github.com/o/r/pull/249', owner: 'o', repo: 'r', number: 249, source: 'created' },
+    ];
+
+    render(<ChatCardHeader />);
+    fireEvent.click(screen.getByTestId('chat-header-pr-249'));
+
+    expect(openExternal).toHaveBeenCalledOnce();
+    expect(openExternal).toHaveBeenCalledWith('https://github.com/o/r/pull/249');
+  });
+
+  it('no PR links when detectedPrs is empty', () => {
+    // fakeState already has detectedPrs: [] from beforeEach reset
+    render(<ChatCardHeader />);
+
+    expect(screen.queryByTestId('chat-header-pr-249')).toBeNull();
+    expect(document.querySelector('[data-testid^="chat-header-pr-"]')).toBeNull();
+  });
+
+  it('renders a disabled Review button', () => {
+    render(<ChatCardHeader />);
+
+    expect(screen.getByTestId('chat-header-review')).toBeDisabled();
   });
 });
