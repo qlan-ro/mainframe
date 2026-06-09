@@ -13,7 +13,9 @@ const SHORTCUT_MAP: Record<string, SurfaceId> = {
   '3': 'run',
 };
 
-const PANEL_CLS = 'flex flex-col overflow-hidden rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]';
+// Surfaces are flat panels inside the rounded main-surface-shell card (which owns
+// the rounded corners + shadow, so the MainToolbar reads as the card's top).
+const PANEL_CLS = 'flex flex-col overflow-hidden bg-background';
 
 function SurfaceView({ name, port }: { name: SurfaceId; port: number }) {
   if (name === 'chat') return <ChatSurface port={port} />;

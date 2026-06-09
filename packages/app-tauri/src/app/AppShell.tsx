@@ -75,7 +75,7 @@ function RuntimeBody({ port }: { port: number }) {
 
       <div
         data-testid="main-surface-shell"
-        className="relative flex flex-1 flex-col overflow-hidden"
+        className="relative flex flex-1 flex-col overflow-hidden rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]"
         style={{ marginLeft: mainOverlap > 0 ? -mainOverlap : undefined }}
       >
         {sidebarVisible && (
