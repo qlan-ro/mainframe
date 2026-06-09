@@ -520,6 +520,18 @@ export class ChatManager {
     }
   }
 
+  /**
+   * Broadcast `chat.updated` for a chat whose fields were persisted out-of-band
+   * (e.g. the tuning PATCH writes effort/features straight to the DB). Without
+   * this, a server-authoritative client never learns of the change until the
+   * next unrelated `chat.updated` — the composer effort/feature chip would stay
+   * stale. Mirrors `notifyWorktreeDeleted`'s enriched re-emit.
+   */
+  emitChatUpdated(chatId: string): void {
+    const chat = this.getChat(chatId);
+    if (chat) this.emitEvent({ type: 'chat.updated', chat });
+  }
+
   getChat(chatId: string): Chat | null {
     const active = this.activeChats.get(chatId);
     const chat = active ? active.chat : this.db.chats.get(chatId);

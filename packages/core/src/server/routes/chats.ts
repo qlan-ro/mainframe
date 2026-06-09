@@ -155,7 +155,10 @@ export function chatRoutes(ctx: RouteContext): Router {
     const chat = ctx.db.chats.get(chatId);
     if (!chat) return null;
     ctx.chats?.syncChatFields?.(chatId, partial);
-    void ctx.chats?.applyTuning?.(chatId); // live apply re-reads + resolves (Phase H); no-op if no method yet
+    void ctx.chats?.applyTuning?.(chatId); // live apply re-reads + resolves; no-op if no live session
+    // Broadcast so server-authoritative clients reflect the new tuning immediately
+    // (the composer effort/feature chip mirrors `chat.updated`, not the PATCH response).
+    ctx.chats?.emitChatUpdated?.(chatId);
     return chat;
   }
 

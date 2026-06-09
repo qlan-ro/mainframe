@@ -23,6 +23,9 @@ function createMockContext(): RouteContext {
       getMessagesFromDisk: vi.fn(),
       getDisplayMessages: vi.fn(),
       getPendingPermission: vi.fn(),
+      syncChatFields: vi.fn(),
+      applyTuning: vi.fn(),
+      emitChatUpdated: vi.fn(),
       on: vi.fn(),
     } as any,
     adapters: { get: vi.fn(), list: vi.fn() } as any,
@@ -382,6 +385,20 @@ describe('chatRoutes', () => {
       handler({ params: { id: 'unknown' }, query: {}, body: { fast: true } }, res, vi.fn());
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('calls emitChatUpdated so server-authoritative clients receive the change', () => {
+      const updatedChat = { id: 'c1', projectId: 'p1', adapterId: 'claude', effort: 'high' };
+      (ctx.db.chats.update as any).mockImplementation(() => {});
+      (ctx.db.chats.get as any).mockReturnValue(updatedChat);
+
+      const router = chatRoutes(ctx);
+      const handler = extractHandler(router, 'patch', '/api/chats/:id/tuning');
+      const res = mockRes();
+
+      handler({ params: { id: 'c1' }, query: {}, body: { effort: 'high' } }, res, vi.fn());
+
+      expect(ctx.chats.emitChatUpdated).toHaveBeenCalledWith('c1');
     });
   });
 
