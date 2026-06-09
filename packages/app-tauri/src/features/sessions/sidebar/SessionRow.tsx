@@ -179,6 +179,7 @@ function SessionRowInner({
     >
       <ThreadListItemPrimitive.Root
         data-testid="sessions-row"
+        data-chat-id={item.id}
         className="group relative flex cursor-pointer items-center gap-[9px] border-l-2 border-l-transparent py-2 pl-2.5 pr-3 transition-colors hover:bg-accent data-[active=true]:border-l-primary data-[active=true]:bg-accent"
       >
         <div className="flex flex-shrink-0 items-center gap-1.5">

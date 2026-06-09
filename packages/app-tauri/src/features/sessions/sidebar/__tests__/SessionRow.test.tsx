@@ -347,6 +347,17 @@ describe('SessionRow — pin calls runtime.threads.reload() on success', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 13. data-chat-id on the row for deterministic e2e selection
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — exposes data-chat-id on the row', () => {
+  it('exposes the chat id on the row for deterministic e2e selection', () => {
+    render(<SessionRow item={makeItem()} />);
+    expect(screen.getByTestId('sessions-row')).toHaveAttribute('data-chat-id', 'chat-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 12. Unpin triggers runtime.threads.reload() (MED-3/4)
 // ---------------------------------------------------------------------------
 
