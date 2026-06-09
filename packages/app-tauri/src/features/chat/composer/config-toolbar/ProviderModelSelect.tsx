@@ -106,14 +106,16 @@ function ModelRow({ option, active, onSelect }: ModelRowProps) {
       data-testid={`composer-model-select-option-${option.id}`}
       onClick={() => onSelect(option.id)}
       className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
+        'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
         'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none',
         active && 'bg-accent text-accent-foreground',
       )}
     >
-      <Check size={14} className={cn('flex-shrink-0 text-primary', !active && 'invisible')} />
-      <span className="flex-1 text-label font-medium text-foreground">{option.label}</span>
-      {desc && <span className="text-caption text-muted-foreground">{desc}</span>}
+      <Check size={14} className={cn('mt-0.5 flex-shrink-0 text-primary', !active && 'invisible')} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-label font-medium text-foreground">{option.label}</span>
+        {desc && <span className="block text-caption leading-snug text-muted-foreground">{desc}</span>}
+      </span>
     </button>
   );
 }
