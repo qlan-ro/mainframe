@@ -10,7 +10,7 @@ The new **Tauri 2 + React** desktop UI — a *parallel* rebuild of `packages/des
 
 For **any chat / thread / thread-list / message / tool-card / permission / composer component**, follow this process — never skip it:
 
-1. **Research** what assistant-ui provides for it (check the *installed source*, not just the docs — they drift).
+1. **Research** what assistant-ui provides for it. Check the **latest published release** — not just our pinned/installed version — because the API moves fast and a newer component may justify a bump; **and** check the *installed source* for what we actually have today (docs drift from both). Look in the package exports AND the shadcn **registry** (`@assistant-ui/react-ui` / `npx shadcn add` components like `model-selector`), which ship components into our repo rather than as imports. For each candidate, confirm whether its runtime wiring (e.g. `ModelContext`, `useAssistantInstructions`) is **inert under our `useExternalStoreRuntime`** — if so it's a presentational shell only and we keep our own daemon write path.
 2. **Compare** it to our warm-chrome prototype design (the relevant artboard).
 3. **If it matches** → use the assistant-ui component, **restyled** to the design. Do not rebuild what it provides.
 4. **If it does NOT match** → **STOP. Build neither version yet.** Present a concise **side-by-side summary — our design vs the native assistant-ui component** (what each offers, where they diverge, the cost of each direction) and **ask for a decision.**
