@@ -396,6 +396,22 @@ body {
   font-size: 0.8125rem; /* 13px — chrome density */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* App-shell chrome (sidebar, headers, labels, buttons, pills) is NOT
+     selectable — like a native desktop app. Content opts back in below. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Re-enable text selection for actual content: rendered markdown (chat
+   messages — also what select-to-quote selects), form fields, and code. */
+.aui-md,
+input,
+textarea,
+[contenteditable],
+pre,
+code {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Shimmer animation for running tool states */
