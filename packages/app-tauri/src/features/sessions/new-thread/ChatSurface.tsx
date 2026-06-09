@@ -14,14 +14,14 @@
  * selection state) shows the ChatThread transcript + composer directly.
  */
 import { useAuiState } from '@assistant-ui/react';
-import { ChatHeader } from '../../../layout/ChatHeader';
+import { ChatCardHeader } from '../../../features/chat/thread/ChatCardHeader';
 import { ChatThread } from '../../../features/chat/thread/ChatThread';
 import { NewThreadConfigPicker } from './NewThreadConfigPicker';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useSessionFilters } from '@/store/session-filters';
 
-export function ChatSurface({ mainChromeInset = 0, port }: { mainChromeInset?: number; port: number }) {
+export function ChatSurface({ port }: { mainChromeInset?: number; port: number }) {
   // Seeds the draft + marks-ready when a project pill is active (skips the picker).
   useNewThreadAutoConfig();
 
@@ -44,7 +44,7 @@ export function ChatSurface({ mainChromeInset = 0, port }: { mainChromeInset?: n
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ChatHeader leadingInset={mainChromeInset} />
+      <ChatCardHeader />
       {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
           height — otherwise the sticky composer footer collapses/clips. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
