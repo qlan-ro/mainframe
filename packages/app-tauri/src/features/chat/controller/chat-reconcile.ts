@@ -49,10 +49,31 @@ export interface SendInput {
  * null for a non-user message or an empty send (no text and no attachments), so
  * the controller can early-return without dispatching anything.
  */
+/**
+ * Reads the select-to-quote text off an aui AppendMessage. The native Quote
+ * action stores it at `metadata.custom.quote` ({ text, messageId }). We can't use
+ * the AI-SDK `injectQuoteContext` (inert under our external-store runtime), so we
+ * prepend the quote as a markdown blockquote to the message text — the same shape
+ * the CLI/LLM receives from the canonical path.
+ */
+function quoteText(message: AppendMessage): string | null {
+  const custom = message.metadata?.custom as Record<string, unknown> | undefined;
+  const quote = custom?.['quote'] as { text?: unknown } | undefined;
+  const text = typeof quote?.text === 'string' ? quote.text.trim() : '';
+  return text.length > 0 ? text : null;
+}
+
 export function parseSendInput(message: AppendMessage): SendInput | null {
   if (message.role !== 'user') return null;
   const textPart = message.content.find((p) => p.type === 'text');
-  const text = textPart?.type === 'text' ? textPart.text.trim() : '';
+  const body = textPart?.type === 'text' ? textPart.text.trim() : '';
+  const quote = quoteText(message);
+  const text = quote
+    ? `${quote
+        .split('\n')
+        .map((line) => `> ${line}`)
+        .join('\n')}\n\n${body}`.trim()
+    : body;
   const uploadItems = toUploadItems(message.attachments);
   if (!text && uploadItems.length === 0) return null;
   return { text, uploadItems };

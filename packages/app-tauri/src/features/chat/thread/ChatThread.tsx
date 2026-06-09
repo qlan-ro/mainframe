@@ -10,6 +10,7 @@ import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
 import { boundedMessageComponents } from '../messages/bounded-messages';
 import { Composer } from '../composer/Composer';
+import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
@@ -96,6 +97,9 @@ export function ChatThread() {
               </div>
             </ThreadPrimitive.ViewportFooter>
           </ThreadPrimitive.Viewport>
+
+          {/* Floating "Quote" button on text selection inside a message (portals to body). */}
+          <SelectionToolbar />
         </ThreadPrimitive.Root>
       </SkillsProvider>
     </ComposerEditProvider>

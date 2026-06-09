@@ -19,6 +19,7 @@ import { ComposerToolbar } from './config-toolbar/ComposerToolbar';
 import { ComposerEditMode } from './edit/ComposerEditMode';
 import { useComposerEdit } from './edit/composer-edit-context';
 import { ComposerAttachments, ComposerAddAttachment } from '@/components/ui/assistant-ui/attachment';
+import { ComposerQuotePreview } from '@/components/ui/assistant-ui/quote';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
 
@@ -118,6 +119,9 @@ export function Composer() {
           )}
         >
           {worktreeMissing && <WorktreeMissingBanner worktreePath={chat?.worktreePath} />}
+
+          {/* Quote pill — renders only when a quote is set (select-to-quote). */}
+          <ComposerQuotePreview />
 
           {/* Attachment tiles — renders nothing (empty:hidden) when no attachments pending */}
           <div data-testid="composer-attachments" className="px-4 pt-3 empty:hidden">
