@@ -46,9 +46,31 @@ export function useSessionListRouter(): void {
 
   // Static WS → list wiring; created once, disposed on unmount.
   useEffect(() => {
+    // Coalesce reload bursts. `chat.updated` fires on cost/token churn during a
+    // run (and now on every tuning PATCH), and reload() re-runs the WHOLE thread
+    // list — so an undebounced per-event call is an O(events) refetch storm.
+    // Leading-edge: the first event reloads immediately (a new/ended chat shows
+    // up at once), then a trailing window collapses the burst into one reload.
+    let cooling: ReturnType<typeof setTimeout> | null = null;
+    let trailing = false;
+    const scheduleReload = (): void => {
+      if (cooling != null) {
+        trailing = true;
+        return;
+      }
+      void runtime.threads.reload();
+      cooling = setTimeout(() => {
+        cooling = null;
+        if (trailing) {
+          trailing = false;
+          scheduleReload();
+        }
+      }, 200);
+    };
+
     const router = createSessionListRouter(daemonWs, {
-      onReload: () => void runtime.threads.reload(),
-      onChatUpdated: (_chat: Chat) => void runtime.threads.reload(),
+      onReload: scheduleReload,
+      onChatUpdated: (_chat: Chat) => scheduleReload(),
       onMarkUnread: (id) => {
         // Skip marking unread when the notification is for the active thread —
         // the active-thread effect already clears unread on focus, so marking
@@ -57,7 +79,10 @@ export function useSessionListRouter(): void {
         useUnreadStore.getState().markUnread(id);
       },
     });
-    return () => router.dispose();
+    return () => {
+      if (cooling != null) clearTimeout(cooling);
+      router.dispose();
+    };
   }, [runtime]);
 
   // Active-thread side-effects: unread clear, cross-project filter clear,
