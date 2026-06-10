@@ -14,6 +14,53 @@ interface PendingRequest {
   timer: ReturnType<typeof setTimeout>;
 }
 
+function findJsonObjectEnd(input: string): number | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return i + 1;
+    } else if (depth === 0 && !/\s/.test(ch)) {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function parseJsonRpcMessages(line: string): Record<string, unknown>[] {
+  const messages: Record<string, unknown>[] = [];
+  let rest = line.trim();
+
+  while (rest) {
+    try {
+      messages.push(JSON.parse(rest) as Record<string, unknown>);
+      return messages;
+    } catch {
+      const end = findJsonObjectEnd(rest);
+      if (end === null) throw new Error('No complete JSON object found');
+      messages.push(JSON.parse(rest.slice(0, end)) as Record<string, unknown>);
+      rest = rest.slice(end).trim();
+      if (!rest.startsWith('{')) return messages;
+    }
+  }
+
+  return messages;
+}
+
 export interface JsonRpcHandlers {
   onNotification: (method: string, params: unknown) => void;
   onRequest: (method: string, params: unknown, id: RequestId) => void;
@@ -110,8 +157,9 @@ export class JsonRpcClient {
       if (!line.trim()) continue;
       log.trace({ line }, 'jsonrpc recv');
       try {
-        const msg = JSON.parse(line.trim()) as Record<string, unknown>;
-        this.dispatch(msg);
+        for (const msg of parseJsonRpcMessages(line)) {
+          this.dispatch(msg);
+        }
       } catch {
         log.warn({ line: line.slice(0, 200) }, 'jsonrpc: malformed JSON line');
       }
