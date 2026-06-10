@@ -11,8 +11,9 @@
  *
  * On every active-thread change it also: clears the active chat's unread,
  * clears the project filter when the activated chat crosses projects, and
- * falls back to the first non-archived thread when the active chat was archived
- * out from under us (blank surface if none remain).
+ * falls back to the most-recently-updated non-archived thread (desktop parity,
+ * preferring the active project filter's sessions) when the active chat was
+ * archived out from under us (blank surface if none remain).
  *
  * On boot it auto-opens the most-recently-updated session ONCE (desktop parity,
  * renderer `useAppInit`), so the app never starts on the empty new-thread picker
@@ -93,8 +94,16 @@ export function useSessionListRouter(): void {
     const active = items.find((t) => t.id === mainThreadId);
 
     if (active != null && active.status === 'archived') {
-      const fallback = items.find((t) => t.id !== mainThreadId && t.status !== 'archived');
-      if (fallback != null) runtime.threads.switchToThread(fallback.id);
+      // Desktop parity: fall back to the most recently USED session, not the
+      // first in list order. pickInitialSession ranks by custom.updatedAt and
+      // skips archived items (including this one), so it can't re-pick the active.
+      // Respect the active project filter: prefer the newest session within the
+      // filtered project; only when that project has none left widen to all
+      // sessions (the cross-project effect below then clears the empty filter).
+      const { filterProjectId } = useSessionFilters.getState();
+      const inProject = filterProjectId != null ? items.filter((t) => t.custom.projectId === filterProjectId) : items;
+      const fallback = pickInitialSession(inProject) ?? pickInitialSession(items);
+      if (fallback != null) runtime.threads.switchToThread(fallback);
       return;
     }
 

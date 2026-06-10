@@ -12,7 +12,7 @@
  *  - cross-project activate → calls setFilterProjectId(null)
  *  - same-project activate → does NOT call setFilterProjectId
  *  - null filter → does NOT call setFilterProjectId
- *  - archived-active → calls switchToThread with first non-archived thread id
+ *  - archived-active → calls switchToThread with most-recently-updated non-archived thread id
  *  - archived-active with no other thread → does NOT call switchToThread
  *  - unmount → calls router.dispose() exactly once
  */
@@ -254,21 +254,62 @@ describe('useSessionListRouter — null filter never calls setFilterProjectId', 
 });
 
 // ---------------------------------------------------------------------------
-// 9. archived-active → switchToThread(firstNonArchivedId)
+// 9. archived-active → switchToThread(most-recently-updated non-archived)
 // ---------------------------------------------------------------------------
 
 describe('useSessionListRouter — archived active thread triggers fallback', () => {
-  it('calls switchSpy with "chat-B" (first non-archived thread) when active is archived', () => {
+  it('calls switchSpy with the most-recently-updated non-archived thread (not list order)', () => {
     mainThreadIdValue = 'chat-A';
+    // chat-B comes FIRST in list order but chat-C has the newer updatedAt —
+    // the fallback must match desktop and pick the most recently used session.
     fakeThreadItems = [
-      { id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1' } },
-      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1' } },
+      { id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 1000 } },
+      { id: 'chat-C', remoteId: 'chat-C', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-C');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9b. archived-active under a project filter → fallback stays in the project
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — archived-active fallback respects the project filter', () => {
+  it('picks the most-recent session IN the filtered project even when another project has a newer one', () => {
+    filterProjectIdValue = 'p1';
+    mainThreadIdValue = 'chat-A';
+    // chat-OTHER (p2) is the newest overall, but the filter is on p1 —
+    // the fallback must pick chat-B (newest within p1).
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1', updatedAt: 4000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 1000 } },
+      { id: 'chat-OTHER', remoteId: 'chat-OTHER', status: 'regular', custom: { projectId: 'p2', updatedAt: 9000 } },
     ];
 
     renderHook(() => useSessionListRouter());
 
     expect(switchSpy).toHaveBeenCalledTimes(1);
     expect(switchSpy).toHaveBeenCalledWith('chat-B');
+  });
+
+  it('falls back to the most-recent session overall when the filtered project has none left', () => {
+    filterProjectIdValue = 'p1';
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1', updatedAt: 4000 } },
+      { id: 'chat-X', remoteId: 'chat-X', status: 'regular', custom: { projectId: 'p2', updatedAt: 1000 } },
+      { id: 'chat-Y', remoteId: 'chat-Y', status: 'regular', custom: { projectId: 'p3', updatedAt: 2000 } },
+    ];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-Y');
   });
 });
 
