@@ -63,6 +63,14 @@ export interface ChatThreadState {
    * agent exiting plan mode), instead of a stale one-shot REST snapshot.
    */
   readonly chatConfig: Chat | null;
+  /**
+   * CLI-reported context-window usage (daemon `chat.contextUsage`). Null until
+   * the first report; the session bar falls back to a token estimate from
+   * chatConfig when null.
+   */
+  readonly contextUsage: { percentage: number; totalTokens: number; maxTokens: number } | null;
+  /** True between `chat.compacting` and `chat.compactDone` — session-bar status. */
+  readonly compacting: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +101,10 @@ export type ChatStateEvent =
   | { type: 'local.message.queued'; pending: PendingUserMessage }
   | { type: 'local.message.reconciled'; clientId: string }
   | { type: 'local.message.failed'; clientId: string; error: unknown }
-  | { type: 'chat.config.updated'; chat: Chat };
+  | { type: 'chat.config.updated'; chat: Chat }
+  | { type: 'context.usage'; percentage: number; totalTokens: number; maxTokens: number }
+  | { type: 'compact.started' }
+  | { type: 'compact.done' };
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -112,6 +123,8 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     },
     pendingUserMessages: {} as Readonly<Record<string, PendingUserMessage>>,
     chatConfig: null,
+    contextUsage: null,
+    compacting: false,
   };
 }
 
@@ -144,7 +157,8 @@ function sameComposerConfig(a: Chat | null, b: Chat): boolean {
     a.effort === b.effort &&
     a.fast === b.fast &&
     a.ultracode === b.ultracode &&
-    a.adaptiveThinking === b.adaptiveThinking
+    a.adaptiveThinking === b.adaptiveThinking &&
+    a.worktreeMissing === b.worktreeMissing
   );
 }
 
@@ -277,6 +291,22 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
       // The cancel failed — the item remains queued. State is unchanged; this
       // case is explicit so it is handled rather than silently dropped.
       return state;
+
+    case 'context.usage':
+      return {
+        ...state,
+        contextUsage: {
+          percentage: event.percentage,
+          totalTokens: event.totalTokens,
+          maxTokens: event.maxTokens,
+        },
+      };
+
+    case 'compact.started':
+      return state.compacting ? state : { ...state, compacting: true };
+
+    case 'compact.done':
+      return state.compacting ? { ...state, compacting: false } : state;
 
     case 'local.message.queued':
       return {

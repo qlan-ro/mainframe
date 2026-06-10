@@ -37,14 +37,15 @@ export interface ProviderModelSelectProps {
   setModel: (model: string) => void;
 }
 
-/** A small dot color per known provider; neutral fallback for anything else. */
+/** A small dot color per known provider; neutral fallback for anything else.
+ *  Exported for ChatSessionBar so the bar and the picker always agree. */
 const PROVIDER_DOT: Record<string, string> = {
   claude: 'bg-orange-500',
   codex: 'bg-emerald-500',
   gemini: 'bg-blue-500',
   opencode: 'bg-violet-500',
 };
-function providerDot(id: string): string {
+export function providerDot(id: string): string {
   return PROVIDER_DOT[id] ?? 'bg-muted-foreground';
 }
 

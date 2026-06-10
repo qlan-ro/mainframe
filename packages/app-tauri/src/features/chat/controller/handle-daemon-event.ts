@@ -96,6 +96,26 @@ export function handleDaemonEvent(
       if (event.chatId !== chatId) return { kind: 'noop' };
       return { kind: 'event', event: { type: 'queued.cancel_failed', uuid: event.uuid } };
 
+    case 'chat.contextUsage':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return {
+        kind: 'event',
+        event: {
+          type: 'context.usage',
+          percentage: event.percentage,
+          totalTokens: event.totalTokens,
+          maxTokens: event.maxTokens,
+        },
+      };
+
+    case 'chat.compacting':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'compact.started' } };
+
+    case 'chat.compactDone':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'compact.done' } };
+
     case 'error':
       // chatId is optional on error events. Ignore only when explicitly
       // targeting a different chat; a missing chatId means it is global and

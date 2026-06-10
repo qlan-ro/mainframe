@@ -15,6 +15,7 @@
  */
 import { useAuiState } from '@assistant-ui/react';
 import { ChatCardHeader } from '../../../features/chat/thread/ChatCardHeader';
+import { ChatSessionBar } from '../../../features/chat/thread/ChatSessionBar';
 import { ChatThread } from '../../../features/chat/thread/ChatThread';
 import { NewThreadConfigPicker } from './NewThreadConfigPicker';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
@@ -45,6 +46,8 @@ export function ChatSurface({ port }: { port: number }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ChatCardHeader />
+      {/* Renders nothing until the chat config loads (drafts / blank surface). */}
+      <ChatSessionBar />
       {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
           height — otherwise the sticky composer footer collapses/clips. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
