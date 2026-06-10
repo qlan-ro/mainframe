@@ -7,23 +7,7 @@
  */
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import { useMainframeMeta } from '../view-model/message-meta';
-
-const EXT_META: Record<string, { color: string; label: string }> = {
-  ts: { color: '#2f74c0', label: 'TypeScript' },
-  tsx: { color: '#2f74c0', label: 'TypeScript' },
-  js: { color: '#c79a16', label: 'JavaScript' },
-  json: { color: '#c2851a', label: 'JSON' },
-  log: { color: '#7a7a82', label: 'Log file' },
-  md: { color: '#6b5bd0', label: 'Markdown' },
-  css: { color: '#2f9d8a', label: 'Stylesheet' },
-  png: { color: '#1f9d6b', label: 'Image' },
-};
-const FALLBACK_META = { color: '#7a7a82', label: 'File' };
-
-function fileMeta(name: string): { ext: string; color: string; label: string } {
-  const ext = (name.split('.').pop() ?? '').toLowerCase();
-  return { ext, ...(EXT_META[ext] ?? FALLBACK_META) };
-}
+import { extTint, fileExtMeta } from './file-ext-colors';
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -35,7 +19,7 @@ function FilePill() {
   const name = useAuiState((s) => s.attachment.name);
   const meta = useMainframeMeta();
   const sizeBytes = meta.attachmentPreviews?.find((p) => p.name === name)?.sizeBytes;
-  const m = fileMeta(name);
+  const m = fileExtMeta(name);
   const subline = sizeBytes != null ? `${m.label} · ${formatSize(sizeBytes)}` : m.label;
 
   return (
@@ -45,7 +29,7 @@ function FilePill() {
     >
       <span
         className="inline-flex size-9 flex-shrink-0 items-center justify-center rounded-lg"
-        style={{ background: `${m.color}16` }}
+        style={{ background: extTint(m.color) }}
       >
         <span className="font-mono text-micro font-bold" style={{ color: m.color }}>
           .{m.ext}

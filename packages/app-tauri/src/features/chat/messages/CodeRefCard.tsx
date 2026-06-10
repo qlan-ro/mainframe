@@ -38,7 +38,9 @@ export function CodeRefCard({ codeRef }: { codeRef: CodeRef }) {
       <div className="relative">
         <div className={expanded ? 'max-h-60 overflow-y-auto py-1.5' : 'py-1.5'}>
           {shown.map((line, i) => (
-            <div key={i} className="flex min-h-[18px] font-mono text-caption leading-[18px]">
+            // 18px line-height pins the line-number gutter alignment — a fixed
+            // layout metric (matches the prototype), not a typography token.
+            <div key={i} className="flex min-h-[18px] font-mono text-caption" style={{ lineHeight: '18px' }}>
               <span className="w-10 flex-shrink-0 select-none pr-3 text-right text-micro text-mf-text-4">
                 {codeRef.range.start + i}
               </span>
