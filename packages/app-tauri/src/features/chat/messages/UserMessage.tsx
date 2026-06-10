@@ -235,30 +235,40 @@ function UserMessageImpl() {
   // wiring that doesn't exist yet (follow-up TODO).
   const sendError = meta.error;
 
+  // Capture context + attachments + image thumbs. For a queued turn these ride
+  // INSIDE QueuedUserTurn (above its meta footer, with the ghost treatment —
+  // artboard "Queued + attachment"); for a sent turn they stack as siblings
+  // below the cool-card. Built once so both paths share the exact same content.
+  const extras = (
+    <>
+      {captureRow}
+      <UserAttachments />
+      <InlineImageThumbs parts={imageParts} />
+    </>
+  );
+
   return (
     <MessagePrimitive.Root data-testid="chat-user-message" className="flex flex-col items-end gap-2 pt-2">
       {codeRefCard}
 
       {isQueued ? (
         body && (
-          <QueuedUserTurn messageId={messageId} content={cleanText}>
+          <QueuedUserTurn messageId={messageId} content={cleanText} extrasSlot={extras}>
             {body}
           </QueuedUserTurn>
         )
-      ) : body ? (
-        <CoolCard>{body}</CoolCard>
-      ) : null}
-
-      {captureRow}
+      ) : (
+        <>
+          {body && <CoolCard>{body}</CoolCard>}
+          {extras}
+        </>
+      )}
 
       {sendError != null && (
         <p data-testid="chat-user-message-send-failed" className="text-caption text-destructive">
           Failed to send
         </p>
       )}
-
-      <UserAttachments />
-      <InlineImageThumbs parts={imageParts} />
     </MessagePrimitive.Root>
   );
 }

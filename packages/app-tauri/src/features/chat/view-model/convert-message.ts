@@ -61,6 +61,7 @@ function coerceUserMeta(metadata: unknown): MainframeMessageMeta {
           name: e.name,
           kind: e.kind,
           ...(typeof e.sizeBytes === 'number' && { sizeBytes: e.sizeBytes }),
+          ...(typeof e.mediaType === 'string' && { mediaType: e.mediaType }),
         },
       ];
     });
@@ -110,8 +111,14 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
       });
 
       // Native attachments: kind==='file' previews + replay-parsed attachedFiles
-      // (name-only), deduped by name. Images stay native image parts.
-      const previews = (mf.attachmentPreviews ?? []) as ReadonlyArray<{ name: string; kind: string }>;
+      // (name-only), deduped by name. Images stay native image parts. contentType
+      // rides from the preview's mediaType (replay files have none → octet-stream).
+      const previews = (mf.attachmentPreviews ?? []) as ReadonlyArray<{
+        name: string;
+        kind: string;
+        mediaType?: string;
+      }>;
+      const mediaTypeByName = new Map(previews.map((p) => [p.name, p.mediaType]));
       const rawMeta = message.metadata as Record<string, unknown> | undefined;
       const replayFiles = Array.isArray(rawMeta?.attachedFiles)
         ? (rawMeta.attachedFiles as Array<{ name?: unknown }>).flatMap((f) =>
@@ -125,6 +132,7 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
         id: name,
         type: 'file' as const,
         name,
+        contentType: mediaTypeByName.get(name) ?? 'application/octet-stream',
         content: [],
         status: { type: 'complete' as const },
       }));

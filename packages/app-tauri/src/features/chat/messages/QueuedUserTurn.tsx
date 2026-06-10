@@ -58,10 +58,14 @@ export function QueuedUserTurn({
   messageId,
   content,
   children,
+  extrasSlot,
 }: {
   messageId: string;
   content: string;
   children: ReactNode;
+  /** Attachments / capture context rows — rendered with the bubble, above the
+   *  "Queued · sends after…" meta footer (artboard "Queued + attachment"). */
+  extrasSlot?: ReactNode;
 }) {
   const extras = useChatExtras();
   const { startEdit } = useComposerEdit();
@@ -89,6 +93,7 @@ export function QueuedUserTurn({
           {children}
         </div>
       </div>
+      {extrasSlot && <div className="flex flex-col items-end gap-2 opacity-[0.9]">{extrasSlot}</div>}
       <QueuedMeta />
     </div>
   );

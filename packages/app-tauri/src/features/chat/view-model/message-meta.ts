@@ -35,6 +35,7 @@ export interface MainframeMessageMeta {
     readonly name: string;
     readonly kind: 'image' | 'file';
     readonly sizeBytes?: number;
+    readonly mediaType?: string;
   }>;
   /** Sandbox-capture rows parsed from the \0__MF_SANDBOX_CAPTURE__ block. */
   readonly captures?: ReadonlyArray<CaptureRow>;

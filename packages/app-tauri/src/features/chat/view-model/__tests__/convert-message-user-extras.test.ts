@@ -117,6 +117,7 @@ describe('convertMessage USER — native file attachments', () => {
       id: 'seed.json',
       type: 'file',
       name: 'seed.json',
+      contentType: 'application/octet-stream',
       content: [],
       status: { type: 'complete' },
     });
@@ -124,6 +125,21 @@ describe('convertMessage USER — native file attachments', () => {
     expect(r.metadata?.custom?.mainframe?.attachmentPreviews).toEqual([
       { name: 'seed.json', kind: 'file', sizeBytes: 2100 },
       { name: 'shot.png', kind: 'image' },
+    ]);
+  });
+
+  it('sets contentType from the preview mediaType, falling back to octet-stream for replay files', () => {
+    const msg = user([{ type: 'text', text: 'x' }], {
+      attachments: [{ name: 'doc.pdf', kind: 'file', sizeBytes: 9000, mediaType: 'application/pdf' }],
+      attachedFiles: [{ name: 'extra.log' }],
+    });
+    const r = result(msg);
+
+    const byName = Object.fromEntries((r.attachments ?? []).map((a) => [a.name, a.contentType]));
+    expect(byName['doc.pdf']).toBe('application/pdf');
+    expect(byName['extra.log']).toBe('application/octet-stream');
+    expect(r.metadata?.custom?.mainframe?.attachmentPreviews).toEqual([
+      { name: 'doc.pdf', kind: 'file', sizeBytes: 9000, mediaType: 'application/pdf' },
     ]);
   });
 
