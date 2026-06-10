@@ -14,9 +14,9 @@
  *   - Plain text    → CoolCard + ReadMoreBubble + markdown + @mention chips
  *   - /command|skill → CoolCard + leading pill badge (metadata-driven) + user text
  *   - Queued badge  → quiet animated footer badge above the card
- *   - Inline images → thumbnail row
- *   - File attachments → UserAttachments (native message.attachments)
- *   - Sandbox captures → CaptureContextRow (sentinel parsed in the projection)
+ *   - Inline images → thumbnail row (regular image parts)
+ *   - Attachments   → UserAttachments: file pills + clickable capture-image
+ *     tiles with their selector context (native message.attachments)
  *   - Code review   → CodeRefCard (render-only; producer lands with the editor)
  *
  * @mention inline rendering uses the native `createDirectiveText` pattern from
@@ -46,7 +46,6 @@ import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text
 import { mainframeUserFormatter } from './user-directives';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
 import { UserAttachments } from './UserAttachments';
-import { CaptureContextRow } from './CaptureContextRow';
 import { CodeRefCard } from './CodeRefCard';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,8 +191,8 @@ function UserMessageImpl() {
       content.filter((p): p is { type: 'image'; image: string } => p.type === 'image' && typeof p.image === 'string'),
     [content],
   );
-  const imageSrcs = useMemo(() => imageParts.map((p) => p.image), [imageParts]);
-  // Native file attachments live on message.attachments (built in convert-message).
+  // Native attachments (file pills + capture image tiles) live on
+  // message.attachments (built in convert-message).
   const attachmentCount = useAuiState((s) => s.message.attachments?.length ?? 0);
 
   const cleanText = meta.cleanText ?? rawText;
@@ -213,10 +212,6 @@ function UserMessageImpl() {
 
   // TODO(leaf): PLAN_PREFIX card ("Implementing plan") — deferred to plan-card leaf
 
-  const captureRow =
-    meta.captures && meta.captures.length > 0 ? (
-      <CaptureContextRow rows={meta.captures} imageSrcs={imageSrcs} previews={meta.attachmentPreviews} />
-    ) : null;
   const codeRefCard = meta.codeRef ? <CodeRefCard codeRef={meta.codeRef} /> : null;
 
   const body = slashProps ? (
@@ -243,14 +238,13 @@ function UserMessageImpl() {
   // below the cool-card. Built once so both paths share the exact same content.
   const extras = (
     <>
-      {captureRow}
       <UserAttachments />
       <InlineImageThumbs parts={imageParts} />
     </>
   );
   // Render the queued shell when there is a text body OR meaningful extras, so an
   // attachment/image/capture-only queued send is never dropped (codex review).
-  const hasExtras = captureRow != null || imageParts.length > 0 || attachmentCount > 0;
+  const hasExtras = imageParts.length > 0 || attachmentCount > 0;
 
   return (
     <MessagePrimitive.Root data-testid="chat-user-message" className="flex flex-col items-end gap-2 pt-2">

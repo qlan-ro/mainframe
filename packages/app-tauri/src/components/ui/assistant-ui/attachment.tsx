@@ -30,7 +30,7 @@ const useFileSrc = (file: File | undefined) => {
 };
 
 // ── Resolve the image src from the attachment context ────────────────────────
-const useAttachmentSrc = () => {
+export const useAttachmentSrc = () => {
   const { file, src } = useAuiState(
     useShallow((s): { file?: File; src?: string } => {
       if (s.attachment.type !== 'image') return {};
@@ -59,7 +59,7 @@ const AttachmentPreview: FC<AttachmentPreviewProps> = ({ src }) => {
 };
 
 // ── Dialog that wraps the tile; skipped for non-image attachments ─────────────
-const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
+export const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
   const src = useAttachmentSrc();
   if (!src) return <>{children}</>;
 

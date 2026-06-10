@@ -210,6 +210,99 @@ describe('convertMessage USER — native file attachments', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 10. Capture message — image content block becomes a native image attachment
+// ---------------------------------------------------------------------------
+
+describe('convertMessage USER — capture image attachments', () => {
+  it('routes the image block into a native image attachment (not a content part) when the text starts with the capture sentinel', () => {
+    const text = SANDBOX_CAPTURE_SENTINEL + '\n> **Preview captures**\n> - `element1` — selector `nav > .x`';
+    const msg = user([
+      { type: 'text', text },
+      { type: 'image', mediaType: 'image/png', data: 'AAAA' },
+    ]);
+    const r = result(msg);
+
+    // The capture image must appear as a native attachment, not as an image content part.
+    const imageParts = contentParts(msg).filter((p) => p.type === 'image');
+    expect(imageParts).toHaveLength(0);
+
+    expect(r.attachments).toHaveLength(1);
+    expect(r.attachments![0]).toEqual({
+      id: 'element1.png',
+      type: 'image',
+      name: 'element1.png',
+      contentType: 'image/png',
+      content: [{ type: 'image', image: 'data:image/png;base64,AAAA' }],
+      status: { type: 'complete' },
+    });
+
+    // capture row is also reflected in metadata.
+    expect(r.metadata?.custom?.mainframe?.captures).toEqual([
+      { label: 'element1', imageName: 'element1.png', selector: 'nav > .x' },
+    ]);
+  });
+
+  it('maps two capture rows to two image attachments in order with correct data URLs', () => {
+    const text =
+      SANDBOX_CAPTURE_SENTINEL + '\n> **Preview captures**\n> - `element1` — selector `nav > .x`\n> - `screenshot1`';
+    const msg = user([
+      { type: 'text', text },
+      { type: 'image', mediaType: 'image/png', data: 'AAAA' },
+      { type: 'image', mediaType: 'image/jpeg', data: 'BBBB' },
+    ]);
+    const r = result(msg);
+
+    expect(r.attachments).toHaveLength(2);
+    expect(r.attachments![0]).toEqual({
+      id: 'element1.png',
+      type: 'image',
+      name: 'element1.png',
+      contentType: 'image/png',
+      content: [{ type: 'image', image: 'data:image/png;base64,AAAA' }],
+      status: { type: 'complete' },
+    });
+    expect(r.attachments![1]).toEqual({
+      id: 'screenshot1.png',
+      type: 'image',
+      name: 'screenshot1.png',
+      contentType: 'image/jpeg',
+      content: [{ type: 'image', image: 'data:image/jpeg;base64,BBBB' }],
+      status: { type: 'complete' },
+    });
+  });
+
+  it('keeps an image block as a plain image content part (not an attachment) when there is no capture sentinel', () => {
+    const msg = user([
+      { type: 'text', text: 'hi' },
+      { type: 'image', mediaType: 'image/png', data: 'AAAA' },
+    ]);
+    const r = result(msg);
+
+    const imageParts = (r.content as Array<{ type: string; image?: string }>).filter((p) => p.type === 'image');
+    expect(imageParts).toHaveLength(1);
+    expect(imageParts[0]!.image).toBe('data:image/png;base64,AAAA');
+
+    // No image attachments added.
+    const imageAttachments = (r.attachments ?? []).filter((a) => a.type === 'image');
+    expect(imageAttachments).toHaveLength(0);
+  });
+
+  it('falls back to capture-N.png name when there are more images than capture rows', () => {
+    const text = SANDBOX_CAPTURE_SENTINEL + '\n> **Preview captures**\n> - `element1` — selector `nav > .x`';
+    const msg = user([
+      { type: 'text', text },
+      { type: 'image', mediaType: 'image/png', data: 'AAAA' },
+      { type: 'image', mediaType: 'image/png', data: 'BBBB' },
+    ]);
+    const r = result(msg);
+
+    expect(r.attachments).toHaveLength(2);
+    expect(r.attachments![0]!.name).toBe('element1.png');
+    expect(r.attachments![1]!.name).toBe('capture-2.png');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 7. codeRef — valid shape is forwarded intact
 // ---------------------------------------------------------------------------
 

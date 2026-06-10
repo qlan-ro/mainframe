@@ -16,7 +16,7 @@ import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 import { mapAssistantBlocks, PERMISSION_PLACEHOLDER, buildAssistantMainframeMeta } from './map-assistant-blocks';
 import { type ContentPart, ensureNonEmpty } from './content';
 import type { MainframeMessageMeta } from './message-meta';
-import { parseSandboxCaptureBlock } from './parse-captures';
+import { parseSandboxCaptureBlock, type CaptureRow } from './parse-captures';
 
 export { PERMISSION_PLACEHOLDER };
 
@@ -95,24 +95,69 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
     case 'user': {
       const mf: Record<string, unknown> = { ...coerceUserMeta(message.metadata) };
 
-      // Sandbox captures: strip the sentinel block from the text part; rows
-      // ride meta, the remaining text becomes the bubble body.
-      const parts: ContentPart[] = message.content.flatMap((c): ContentPart[] => {
+      // The capture sentinel decides image routing, and it always rides the
+      // message's (first) text block — parse it up front so images that follow
+      // become context-carrying native attachments instead of plain parts.
+      const captureRows: CaptureRow[] | null = (() => {
+        for (const c of message.content) {
+          if (c.type === 'text' && c.text) {
+            const sandbox = parseSandboxCaptureBlock(c.text);
+            if (sandbox) return sandbox.rows;
+          }
+        }
+        return null;
+      })();
+      if (captureRows) mf.captures = captureRows;
+
+      // Build content parts (text rest + non-capture images) and, for a capture
+      // message, the capture images as NATIVE image attachments. Captures render
+      // through assistant-ui's clickable attachment tile (with their selector
+      // context); regular images stay plain image parts (InlineImageThumbs).
+      const parts: ContentPart[] = [];
+      type AttachmentImagePart = { type: 'image'; image: string };
+      const captureImageAttachments: Array<{
+        id: string;
+        type: 'image';
+        name: string;
+        contentType: string;
+        content: AttachmentImagePart[];
+        status: { type: 'complete' };
+      }> = [];
+      let captureImageIndex = 0;
+      for (const c of message.content) {
         if (c.type === 'text' && c.text) {
           const sandbox = parseSandboxCaptureBlock(c.text);
           if (sandbox) {
-            mf.captures = sandbox.rows;
-            return sandbox.rest ? [{ type: 'text', text: sandbox.rest }] : [];
+            if (sandbox.rest) parts.push({ type: 'text', text: sandbox.rest });
+          } else {
+            parts.push({ type: 'text', text: c.text });
           }
-          return [{ type: 'text', text: c.text }];
+          continue;
         }
-        if (c.type === 'image') return [{ type: 'image', image: `data:${c.mediaType};base64,${c.data}` }];
-        return [];
-      });
+        if (c.type === 'image') {
+          const dataUrl = `data:${c.mediaType};base64,${c.data}`;
+          if (captureRows) {
+            // Name from the matching capture row (by order); the renderer looks
+            // up the selector/annotation from mf.captures by this name.
+            const name = captureRows[captureImageIndex]?.imageName ?? `capture-${captureImageIndex + 1}.png`;
+            captureImageIndex += 1;
+            captureImageAttachments.push({
+              id: name,
+              type: 'image',
+              name,
+              contentType: c.mediaType,
+              content: [{ type: 'image', image: dataUrl }],
+              status: { type: 'complete' },
+            });
+          } else {
+            parts.push({ type: 'image', image: dataUrl });
+          }
+        }
+      }
 
-      // Native attachments: kind==='file' previews + replay-parsed attachedFiles
-      // (name-only), deduped by name. Images stay native image parts. contentType
-      // rides from the preview's mediaType (replay files have none → octet-stream).
+      // Native FILE attachments: kind==='file' previews + replay-parsed
+      // attachedFiles (name-only), deduped by name. contentType rides from the
+      // preview's mediaType (replay files have none → octet-stream).
       const previews = (mf.attachmentPreviews ?? []) as ReadonlyArray<{
         name: string;
         kind: string;
@@ -128,14 +173,16 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
       const fileNames = [...previews.filter((p) => p.kind === 'file').map((p) => p.name), ...replayFiles].filter(
         (name, i, arr) => arr.indexOf(name) === i,
       );
-      const attachments = fileNames.map((name) => ({
+      const fileAttachments = fileNames.map((name) => ({
         id: name,
         type: 'file' as const,
         name,
         contentType: mediaTypeByName.get(name) ?? 'application/octet-stream',
-        content: [],
+        content: [] as AttachmentImagePart[],
         status: { type: 'complete' as const },
       }));
+
+      const attachments = [...fileAttachments, ...captureImageAttachments];
 
       return {
         role: 'user',

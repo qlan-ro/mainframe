@@ -106,10 +106,6 @@ vi.mock('../UserAttachments', () => ({
   UserAttachments: () => <div data-testid="chat-user-attachments" />,
 }));
 
-vi.mock('../CaptureContextRow', () => ({
-  CaptureContextRow: () => <div data-testid="chat-user-capture-row" />,
-}));
-
 vi.mock('../CodeRefCard', () => ({
   CodeRefCard: () => <div data-testid="chat-user-code-ref" />,
 }));
@@ -303,7 +299,9 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
     __skillsFixture = [];
   });
 
-  it('renders CaptureContextRow when captures array is non-empty, alongside bubble text', () => {
+  it('renders the bubble text of a capture message (captures themselves ride the attachment row)', () => {
+    // Captures now project into message.attachments + render via UserAttachments
+    // (mocked here to a marker); the bubble carries only the rest text.
     __messageFixture = makeFixture({
       content: [{ type: 'text', text: 'fix it' }],
       mainframe: {
@@ -311,11 +309,11 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
       },
     });
     renderUserMessage();
-    expect(screen.getByTestId('chat-user-capture-row')).toBeInTheDocument();
     expect(screen.getByText('fix it')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-user-attachments')).toBeInTheDocument();
   });
 
-  it('renders CaptureContextRow with no cleanText and no text part — no crash', () => {
+  it('renders a capture message with no bubble text without crashing', () => {
     __messageFixture = makeFixture({
       content: [],
       mainframe: {
@@ -323,7 +321,7 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
       },
     });
     renderUserMessage();
-    expect(screen.getByTestId('chat-user-capture-row')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-user-attachments')).toBeInTheDocument();
   });
 
   it('renders CodeRefCard when codeRef is present in metadata', () => {
