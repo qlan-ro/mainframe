@@ -134,11 +134,14 @@ async function main(): Promise<void> {
     backgroundTasks,
   });
 
-  await reconcileBackgroundTasks({ tracker: backgroundTasks, db });
   const livenessScheduler = startLivenessScheduler({ tracker: backgroundTasks });
 
   await server.start(config.port);
   broadcastEvent = (event) => server.broadcastEvent(event);
+
+  reconcileBackgroundTasks({ tracker: backgroundTasks, db }).catch((err) => {
+    logger.warn({ err }, 'Background task reconciliation failed');
+  });
 
   // Probe adapters for dynamic model lists (non-blocking)
   adapters

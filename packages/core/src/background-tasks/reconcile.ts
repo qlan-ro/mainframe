@@ -95,7 +95,7 @@ async function reconcileInner(deps: ReconcileDeps, spoolRoot: string): Promise<v
       }
 
       const writers = await lsofWriters(fp);
-      deps.tracker.adopt(chat.id, buildRecoveredSnapshot(taskId, fp, st, writers));
+      deps.tracker.adopt(chat.id, buildRecoveredSnapshot(taskId, fp, st, writers), { emit: true });
       if (writers.length > 0) deps.tracker.setPid(chat.id, taskId, writers[0]!);
     },
   });

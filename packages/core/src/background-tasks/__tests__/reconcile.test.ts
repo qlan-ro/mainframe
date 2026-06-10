@@ -76,6 +76,26 @@ describe('reconcileBackgroundTasks', () => {
     expect(t.summary).toBe('recovered after daemon restart');
   });
 
+  it('emits events for recovered tasks so live clients update after async reconciliation', async () => {
+    const db = makeDb([makeChat('sess-running'), makeChat('sess-stopped')], { p1: '/Users/x/proj' });
+    (readdir as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(['-Users-x-proj'])
+      .mockResolvedValueOnce(['sess-running', 'sess-stopped'])
+      .mockResolvedValueOnce(['run001.output'])
+      .mockResolvedValueOnce(['stop01.output']);
+    vi.spyOn(lsofMod, 'lsofWriters').mockResolvedValueOnce([777]).mockResolvedValueOnce([]);
+    const events: Array<{ kind: string; chatId: string; taskId: string }> = [];
+    tracker.on('background_task.started', (chatId, task) => events.push({ kind: 'started', chatId, taskId: task.id }));
+    tracker.on('background_task.ended', (chatId, task) => events.push({ kind: 'ended', chatId, taskId: task.id }));
+
+    await reconcileBackgroundTasks({ tracker, db, spoolRoot: '/tmp/claude-501', validator: ALWAYS_VALID });
+
+    expect(events).toEqual([
+      { kind: 'started', chatId: 'chat-sess-running', taskId: 'run001' },
+      { kind: 'ended', chatId: 'chat-sess-stopped', taskId: 'stop01' },
+    ]);
+  });
+
   it('skips unknown claudeSessionId', async () => {
     const db = makeDb([makeChat('sess-known')], { p1: '/Users/x/proj' });
     (readdir as ReturnType<typeof vi.fn>)
