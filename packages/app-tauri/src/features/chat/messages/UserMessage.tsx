@@ -193,6 +193,8 @@ function UserMessageImpl() {
     [content],
   );
   const imageSrcs = useMemo(() => imageParts.map((p) => p.image), [imageParts]);
+  // Native file attachments live on message.attachments (built in convert-message).
+  const attachmentCount = useAuiState((s) => s.message.attachments?.length ?? 0);
 
   const cleanText = meta.cleanText ?? rawText;
 
@@ -246,13 +248,16 @@ function UserMessageImpl() {
       <InlineImageThumbs parts={imageParts} />
     </>
   );
+  // Render the queued shell when there is a text body OR meaningful extras, so an
+  // attachment/image/capture-only queued send is never dropped (codex review).
+  const hasExtras = captureRow != null || imageParts.length > 0 || attachmentCount > 0;
 
   return (
     <MessagePrimitive.Root data-testid="chat-user-message" className="flex flex-col items-end gap-2 pt-2">
       {codeRefCard}
 
       {isQueued ? (
-        body && (
+        (body || hasExtras) && (
           <QueuedUserTurn messageId={messageId} content={cleanText} extrasSlot={extras}>
             {body}
           </QueuedUserTurn>

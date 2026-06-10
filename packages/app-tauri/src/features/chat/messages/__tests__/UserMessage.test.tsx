@@ -114,6 +114,17 @@ vi.mock('../CodeRefCard', () => ({
   CodeRefCard: () => <div data-testid="chat-user-code-ref" />,
 }));
 
+// QueuedUserTurn renders for real children + the extrasSlot, so a no-body
+// queued send still mounts its attachments/captures.
+vi.mock('../QueuedUserTurn', () => ({
+  QueuedUserTurn: ({ children, extrasSlot }: { children?: React.ReactNode; extrasSlot?: React.ReactNode }) => (
+    <div data-testid="chat-queued-message">
+      {children}
+      {extrasSlot}
+    </div>
+  ),
+}));
+
 // ---------------------------------------------------------------------------
 // Mock @/features/skills/use-chat-skills
 // ---------------------------------------------------------------------------
@@ -334,5 +345,26 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
     expect(screen.queryByTestId('chat-user-capture-row')).not.toBeInTheDocument();
     expect(screen.queryByTestId('chat-user-code-ref')).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-user-attachments')).toBeInTheDocument();
+  });
+
+  it('mounts the queued shell + extras for an image-only queued send (no text body)', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'image', image: 'data:image/png;base64,AAAA' }],
+      mainframe: { queued: true },
+    });
+    renderUserMessage();
+    // The queued shell renders even with no text body, and the extras
+    // (UserAttachments) mount inside its slot — the codex-flagged edge.
+    expect(screen.getByTestId('chat-queued-message')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-user-attachments')).toBeInTheDocument();
+  });
+
+  it('renders nothing-bearing queued message as empty (no body, no extras → no shell)', () => {
+    __messageFixture = makeFixture({
+      content: [],
+      mainframe: { queued: true },
+    });
+    renderUserMessage();
+    expect(screen.queryByTestId('chat-queued-message')).not.toBeInTheDocument();
   });
 });

@@ -83,15 +83,20 @@ export function QueuedUserTurn({
     <div data-testid="chat-queued-message" className="group/queued flex w-full flex-col items-end gap-1">
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/queued:opacity-100 group-focus-within/queued:opacity-100">
-          <QueuedAction icon={PencilIcon} label="Edit" onClick={handleEdit} testid="chat-queued-edit" />
+          {/* Edit loads the text into the composer — only meaningful when there is text. */}
+          {content && <QueuedAction icon={PencilIcon} label="Edit" onClick={handleEdit} testid="chat-queued-edit" />}
           <QueuedAction icon={XIcon} label="Cancel" onClick={handleCancel} danger testid="chat-queued-cancel" />
         </div>
-        <div
-          style={PENDING_CARD}
-          className="max-w-[470px] rounded-xl border border-dashed border-mf-um-dash px-[15px] py-[10px] text-body leading-relaxed tracking-normal text-mf-um-ink opacity-[0.82]"
-        >
-          {children}
-        </div>
+        {/* Skip the dashed bubble entirely for an attachment/image/capture-only
+            queued message — otherwise it renders as an empty box. */}
+        {children && (
+          <div
+            style={PENDING_CARD}
+            className="max-w-[470px] rounded-xl border border-dashed border-mf-um-dash px-[15px] py-[10px] text-body leading-relaxed tracking-normal text-mf-um-ink opacity-[0.82]"
+          >
+            {children}
+          </div>
+        )}
       </div>
       {extrasSlot && <div className="flex flex-col items-end gap-2 opacity-[0.9]">{extrasSlot}</div>}
       <QueuedMeta />
