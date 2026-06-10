@@ -119,7 +119,7 @@ Do the chat leaves in this order; ☑ = done.
 
 - ☑ **shadcn `components/ui/` layer** — 18 primitives built + theme-wired to `--mf-*` (`8e18e634`).
 - ☐ **Theming / tokens** (`refactor`) — `mainframe-theme.css` → Tailwind v4 `@theme`; 4 runtime-switchable themes; split Monaco/aui-md CSS out of `index.css`; token traps (no `/opacity` on CSS vars).
-- ☑ **Typed-surface layout engine** (`replace`) — SurfaceHost + SurfaceRail + toggle model + floor invariant + intent-bus sub + Cmd/Ctrl+1/2/3 (replaces the whole `zone/` system). Per-session remembered layout deferred.
+- ◐ **Typed-surface layout engine** (`replace`) — SurfaceHost + SurfaceRail + toggle model + floor invariant + intent-bus sub + Cmd/Ctrl+1/2/3 (replaces the whole `zone/` system) + split buttons + divider resize. **Deferred (designed in `04-engine.jsx`, not built):** surface drag-reposition (`beginSurfaceDrag` → top-left/top-right/bottom with ghost + drop-highlight), tab drag-and-drop (`beginTabDrag` — Files tab onto Run: center=join-as-tab, edge=split-into-pane), the Run multi-pane model (`run.panes[]` — our store has no pane concept), per-session remembered layout.
 - ☑ **Login-shell env / sidecar spawn** (C1) — `src-tauri/shell_env.rs` + `sidecar.rs`.
 - ☐ **Sidecar packaging** — bundle Node runtime (Tauri ships none) + native deps (`better-sqlite3`, `node-pty`, `@vscode/ripgrep`, `typescript-language-server`, `pyright`); per-platform binaries; signing/notarization. **Schedule-killer risk — spike before GA.**
 - ☐ **Capabilities / CSP** (`replace`) — least-privilege per-command trust boundary (`src-tauri/capabilities/`). shell plugin already dropped.
@@ -261,7 +261,7 @@ The single source of truth for what's left. Folds in items previously living onl
 - ◐ **M — Window chrome / traffic-lights + floating-panel** — traffic lights (`trafficLightPosition {x:20,y:30}`) + **floating panels** (`AppShell` `p-2 gap-2`) DONE (2026-06-08). *Remaining:* the warm-gradient **window background** behind the floating panels (today it's flat `bg-mf-window`, not the prototype's radial gradient).
 
 **Layout engine / architecture**
-- ☑ **XL — Typed-surface layout engine** (`src/layout/`) — SurfaceHost + SurfaceRail + SidebarHeader + SidebarShell + layout store (toggle+floor invariant) + FilesSurface/RunSurface stubs. Per-session remembered layout deferred.
+- ◐ **XL — Typed-surface layout engine** (`src/layout/`) — SurfaceHost + SurfaceRail + SidebarHeader + SidebarShell + layout store (toggle+floor invariant) + split buttons + divider resize + FilesSurface/RunSurface stubs. **Deferred interactive layer (see the duplicate entry under Layout engine / architecture for the full list):** surface drag-reposition, tab drag-and-drop with edge-split, Run multi-pane model, per-session remembered layout. Best built alongside the editor/run surfaces (real tabs to drag).
 - ☑ **M — Surface-intent bus** — emitSurfaceIntent/onSurfaceIntent; chat tool cards wired; no features→layout import.
 
 **Shell**
