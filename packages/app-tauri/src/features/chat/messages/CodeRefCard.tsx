@@ -6,6 +6,7 @@
  */
 import { useState } from 'react';
 import { ChevronDownIcon, ChevronUpIcon, CodeIcon, QuoteIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { MainframeMessageMeta } from '../view-model/message-meta';
 
 const COLLAPSED_LINES = 7;
@@ -36,7 +37,9 @@ export function CodeRefCard({ codeRef }: { codeRef: CodeRef }) {
         <QuoteIcon size={11} className="flex-shrink-0 text-mf-text-4" />
       </div>
       <div className="relative">
-        <div className={expanded ? 'max-h-60 overflow-y-auto py-1.5' : 'py-1.5'}>
+        {/* select-text: code content is copyable despite the chrome-wide
+            user-select:none; the line-number gutter stays select-none. */}
+        <div className={cn('select-text', expanded ? 'max-h-60 overflow-y-auto py-1.5' : 'py-1.5')}>
           {shown.map((line, i) => (
             // 18px line-height pins the line-number gutter alignment — a fixed
             // layout metric (matches the prototype), not a typography token.

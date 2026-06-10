@@ -50,6 +50,9 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
         data-clamp={needsToggle ? '' : undefined}
         data-text-part
         className={cn(
+          // aui-md re-enables text selection (chrome sets user-select:none on
+          // body) — desktop parity: user-bubble text is selectable/copyable.
+          'aui-md',
           // Base prose styles — matched to the artboard type spec
           'text-body leading-relaxed tracking-normal',
           // Clamp to 4 lines when collapsed
