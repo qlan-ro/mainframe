@@ -1,6 +1,7 @@
 /**
- * UserMessage — behavior tests for H5 (send-failure visibility) and H6
- * (sound message hook path).
+ * UserMessage — behavior tests for H5 (send-failure visibility), H6
+ * (message id + content), T10 (skill chip), and the metadata-dispatch
+ * tests for captures / codeRef / attachments.
  *
  * Strategy:
  *  - Mock `@assistant-ui/react` so `useAuiState` receives a synthetic
@@ -9,6 +10,9 @@
  *  - `MessagePrimitive.Root` is stubbed to a plain `<div>` so the component
  *    tree renders without a full AssistantRuntime.
  *  - `ReadMoreBubble` and `QueuedUserTurn` render their children unchanged.
+ *  - Child components `UserAttachments`, `CaptureContextRow`, and
+ *    `CodeRefCard` are mocked to simple marker divs so these tests verify
+ *    dispatch (conditional rendering) only — not the children's internals.
  *  - All assertions are against hardcoded values; no component logic is
  *    recomputed here.
  *
@@ -17,6 +21,11 @@
  *        `[data-testid="chat-user-message-send-failed"]` with "Failed to send".
  *  H5 — a normal message (no error) does NOT render that element.
  *  H6 — message id and content are read correctly (renders expected text).
+ *  MD — captures array (length > 0) → CaptureContextRow rendered below bubble.
+ *  MD — captures with no cleanText → CaptureContextRow renders; no crash.
+ *  MD — codeRef object → CodeRefCard rendered above bubble.
+ *  MD — plain message (no captures, no codeRef) → neither conditional child
+ *       rendered; UserAttachments always present.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -35,23 +44,41 @@ import { render, screen } from '@testing-library/react';
 // We store a mutable `__messageFixture` so each test can set its own shape
 // before rendering.
 
+interface SyntheticMainframeMeta {
+  pending?: boolean;
+  clientId?: string;
+  error?: string;
+  queued?: boolean;
+  cleanText?: string;
+  command?: {
+    name: string;
+    userText?: string;
+    source?: 'commands' | (string & {});
+  };
+  captures?: Array<{
+    label: string;
+    imageName: string;
+    selector?: string;
+    annotation?: string;
+  }>;
+  codeRef?: {
+    file: string;
+    range: { start: number; end?: number };
+    code: string;
+  };
+  attachmentPreviews?: Array<{
+    name: string;
+    kind: 'image' | 'file';
+    sizeBytes?: number;
+  }>;
+}
+
 interface SyntheticMessageState {
   id: string;
   content: Array<{ type: string; text?: string; image?: string }>;
   metadata: {
     custom: {
-      mainframe?: {
-        pending?: boolean;
-        clientId?: string;
-        error?: string;
-        queued?: boolean;
-        cleanText?: string;
-        command?: {
-          name: string;
-          userText?: string;
-          source?: 'commands' | (string & {});
-        };
-      };
+      mainframe?: SyntheticMainframeMeta;
     };
   };
 }
@@ -68,6 +95,23 @@ vi.mock('@assistant-ui/react', () => ({
   MessagePrimitive: {
     Root: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
   },
+}));
+
+// ---------------------------------------------------------------------------
+// Mock child components — verify dispatch only, not their internals.
+// The test file is in messages/__tests__/, so paths are ../ComponentName.
+// ---------------------------------------------------------------------------
+
+vi.mock('../UserAttachments', () => ({
+  UserAttachments: () => <div data-testid="chat-user-attachments" />,
+}));
+
+vi.mock('../CaptureContextRow', () => ({
+  CaptureContextRow: () => <div data-testid="chat-user-capture-row" />,
+}));
+
+vi.mock('../CodeRefCard', () => ({
+  CodeRefCard: () => <div data-testid="chat-user-code-ref" />,
 }));
 
 // ---------------------------------------------------------------------------
@@ -235,5 +279,60 @@ describe('UserMessage — T10: skill chip name resolution', () => {
     renderUserMessage();
     // Custom commands skip resolveSkillName — the raw name is used as-is.
     expect(screen.getByText('/my-skill')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — MD: metadata-driven child dispatch
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — MD: metadata-driven child dispatch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __skillsFixture = [];
+  });
+
+  it('renders CaptureContextRow when captures array is non-empty, alongside bubble text', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'fix it' }],
+      mainframe: {
+        captures: [{ label: 'element1', imageName: 'element1.png', selector: '.x' }],
+      },
+    });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-user-capture-row')).toBeInTheDocument();
+    expect(screen.getByText('fix it')).toBeInTheDocument();
+  });
+
+  it('renders CaptureContextRow with no cleanText and no text part — no crash', () => {
+    __messageFixture = makeFixture({
+      content: [],
+      mainframe: {
+        captures: [{ label: 'element1', imageName: 'element1.png' }],
+      },
+    });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-user-capture-row')).toBeInTheDocument();
+  });
+
+  it('renders CodeRefCard when codeRef is present in metadata', () => {
+    __messageFixture = makeFixture({
+      mainframe: {
+        codeRef: { file: 'Layout.tsx', range: { start: 42, end: 46 }, code: 'a\nb' },
+      },
+    });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-user-code-ref')).toBeInTheDocument();
+  });
+
+  it('renders neither CaptureContextRow nor CodeRefCard for a plain message, but always renders UserAttachments', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'hello' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    expect(screen.queryByTestId('chat-user-capture-row')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chat-user-code-ref')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-user-attachments')).toBeInTheDocument();
   });
 });

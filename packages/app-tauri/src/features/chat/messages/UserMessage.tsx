@@ -15,6 +15,9 @@
  *   - /command|skill → CoolCard + leading pill badge (metadata-driven) + user text
  *   - Queued badge  → quiet animated footer badge above the card
  *   - Inline images → thumbnail row
+ *   - File attachments → UserAttachments (native message.attachments)
+ *   - Sandbox captures → CaptureContextRow (sentinel parsed in the projection)
+ *   - Code review   → CodeRefCard (render-only; producer lands with the editor)
  *
  * @mention inline rendering uses the native `createDirectiveText` pattern from
  * @assistant-ui/react via our `mainframeUserFormatter` (see user-directives.ts).
@@ -24,12 +27,7 @@
  * chip — so both paths produce a chip, just at different levels.
  *
  * Deferred (TODO-leaf — do NOT build here):
- *   - Sandbox capture context row (SandboxCaptureContext)
  *   - PLAN_PREFIX "Implementing plan" card
- *   - File attachment chips (FileAttachmentThumbs)
- *   - Context-sent chips (UMContextRow)
- *   - UMCodeRef (editor code-reference card)
- *   - UMInspectChip (CSS-selector capture chips)
  */
 import { memo, useMemo, type ReactNode } from 'react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
@@ -47,6 +45,9 @@ import { ZoomableImage } from '../parts/ZoomableImage';
 import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text';
 import { mainframeUserFormatter } from './user-directives';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
+import { UserAttachments } from './UserAttachments';
+import { CaptureContextRow } from './CaptureContextRow';
+import { CodeRefCard } from './CodeRefCard';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Remark plugin set (stable reference — never define inline)
@@ -191,6 +192,7 @@ function UserMessageImpl() {
       content.filter((p): p is { type: 'image'; image: string } => p.type === 'image' && typeof p.image === 'string'),
     [content],
   );
+  const imageSrcs = useMemo(() => imageParts.map((p) => p.image), [imageParts]);
 
   const cleanText = meta.cleanText ?? rawText;
 
@@ -208,8 +210,12 @@ function UserMessageImpl() {
   }
 
   // TODO(leaf): PLAN_PREFIX card ("Implementing plan") — deferred to plan-card leaf
-  // TODO(leaf): SandboxCaptureContext — deferred to sandbox-capture leaf
-  // TODO(leaf): FileAttachmentThumbs — deferred to attachment-chips leaf
+
+  const captureRow =
+    meta.captures && meta.captures.length > 0 ? (
+      <CaptureContextRow rows={meta.captures} imageSrcs={imageSrcs} previews={meta.attachmentPreviews} />
+    ) : null;
+  const codeRefCard = meta.codeRef ? <CodeRefCard codeRef={meta.codeRef} /> : null;
 
   const body = slashProps ? (
     <ReadMoreBubble>
@@ -231,6 +237,8 @@ function UserMessageImpl() {
 
   return (
     <MessagePrimitive.Root data-testid="chat-user-message" className="flex flex-col items-end gap-2 pt-2">
+      {codeRefCard}
+
       {isQueued ? (
         body && (
           <QueuedUserTurn messageId={messageId} content={cleanText}>
@@ -241,12 +249,15 @@ function UserMessageImpl() {
         <CoolCard>{body}</CoolCard>
       ) : null}
 
+      {captureRow}
+
       {sendError != null && (
         <p data-testid="chat-user-message-send-failed" className="text-caption text-destructive">
           Failed to send
         </p>
       )}
 
+      <UserAttachments />
       <InlineImageThumbs parts={imageParts} />
     </MessagePrimitive.Root>
   );
