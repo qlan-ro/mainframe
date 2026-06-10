@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Project } from '@qlan-ro/mainframe-types';
-import { getProjects } from '../projects';
+import { getProjects, removeProject } from '../projects';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -116,5 +116,21 @@ describe('getProjects', () => {
     );
 
     await expect(getProjects(31415)).rejects.toThrow('internal server error');
+  });
+});
+
+describe('removeProject', () => {
+  it('calls DELETE http://127.0.0.1:<port>/api/projects/<id> with the given port and project id', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+      }),
+    );
+
+    await removeProject(31415, 'proj-1');
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/projects/proj-1', { method: 'DELETE' });
   });
 });

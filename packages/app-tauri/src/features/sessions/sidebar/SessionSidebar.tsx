@@ -19,9 +19,10 @@
  *   - useTagRegistry() for tag color resolution (TagFilterBar swatches)
  *   - arrangeSessions / applySessionFilters / attentionCount (pure VMs)
  */
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
 import { PlusIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
@@ -39,6 +40,7 @@ import { ProjectFilterPillBar } from './ProjectFilterPillBar';
 import { TagFilterBar } from '../filter/TagFilterBar';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
+import { removeProject } from '@/lib/api/projects';
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
@@ -91,7 +93,7 @@ export function SessionSidebar() {
   const allItems: SessionItem[] = threadListRuntime ? threadListStateToSessionItems(threadListRuntime.getState()) : [];
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);
-  const { projects } = useProjects();
+  const { projects, removeProjectFromList } = useProjects();
   const port = useDaemonPort();
   const registry = useTagRegistry(port);
 
@@ -114,6 +116,28 @@ export function SessionSidebar() {
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
 
+  const handleRemoveProject = useCallback(
+    async (project: { id: string; name: string }) => {
+      const confirmed = window.confirm(
+        `Remove project "${project.name}"?\n\nThis will stop all its sessions and remove the project from the database. Files on disk are NOT affected.\n\nThis cannot be undone.`,
+      );
+      if (!confirmed) return;
+
+      try {
+        await removeProject(port, project.id);
+        removeProjectFromList(project.id);
+        if (filterProjectId === project.id) setFilterProjectId(null);
+        toast.success('Project removed', { description: project.name });
+      } catch (error) {
+        console.warn('[sessions] remove project failed', error);
+        toast.error('Failed to remove project', {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [filterProjectId, port, removeProjectFromList, setFilterProjectId],
+  );
+
   // Project chip on each row only in "All" view (no active project filter); the
   // filter pill already narrows the list when a project is selected.
   const showProject = filterProjectId == null;
@@ -128,6 +152,7 @@ export function SessionSidebar() {
         filterProjectId={filterProjectId}
         attentionCounts={attentionCounts}
         onSelect={setFilterProjectId}
+        onRemoveProject={(project) => void handleRemoveProject(project)}
       />
 
       <div

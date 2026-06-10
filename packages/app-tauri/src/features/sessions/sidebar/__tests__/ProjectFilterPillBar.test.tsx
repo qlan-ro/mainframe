@@ -12,7 +12,7 @@
  *  - Clicking the currently-active project pill calls onSelect(null) (deselect → All).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { ProjectFilterPillBar } from '../ProjectFilterPillBar';
@@ -291,5 +291,108 @@ describe('ProjectFilterPillBar — collapsible project pills', () => {
       />,
     );
     expect(screen.queryByTestId('sessions-projects-more')).toBeNull();
+  });
+});
+
+describe('ProjectFilterPillBar — project action menu affordance', () => {
+  it('renders project pills larger than the plain All filter pill', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onRemoveProject={() => undefined}
+      />,
+    );
+
+    expect(screen.getByTestId('sessions-filter-pill-p1-wrap').className).toContain('h-[24px]');
+    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('w-6');
+    expect(screen.getByTestId('sessions-filter-pill-all').className).toContain('h-[22px]');
+  });
+
+  it('keeps the project pill menu affordance hidden until hover, focus, or open', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onRemoveProject={() => undefined}
+      />,
+    );
+
+    expect(screen.getByTestId('sessions-filter-pill-p1-wrap').className).toContain('group');
+    expect(screen.getByTestId('sessions-filter-pill-p1-wrap').className).toContain('relative');
+    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('opacity-0');
+    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('absolute');
+    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('right-0');
+    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('group-hover:opacity-100');
+    expect(screen.getByTestId('sessions-filter-pill-menu-p1').className).toContain('group-focus-within:opacity-100');
+    expect(screen.getByTestId('sessions-filter-pill-p1').className).toContain('pr-2');
+    expect(screen.getByTestId('sessions-filter-pill-p1').className).toContain('group-hover:pr-8');
+    expect(screen.getByTestId('sessions-filter-pill-p1').className).toContain('group-focus-within:pr-8');
+  });
+
+  it('renders a dedicated menu trigger on project pills but not on the All pill', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onRemoveProject={() => undefined}
+      />,
+    );
+
+    expect(screen.getByTestId('sessions-filter-pill-menu-p1')).toBeTruthy();
+    expect(screen.getByTestId('sessions-filter-pill-menu-p2')).toBeTruthy();
+    expect(screen.queryByTestId('sessions-filter-pill-menu-all')).toBeNull();
+  });
+
+  it('opens Remove Project from the project pill right-click menu', async () => {
+    const handleRemove = vi.fn();
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onRemoveProject={handleRemove}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByTestId('sessions-filter-pill-p1-wrap'));
+    expect(screen.getByTestId('sessions-project-rename-p1').textContent).toContain('Rename Project');
+    expect(screen.getByTestId('sessions-project-rename-p1')).toHaveAttribute('data-disabled');
+    expect(screen.getByTestId('sessions-project-rename-p1').className).toContain('text-caption');
+    expect(screen.getByTestId('sessions-project-remove-p1').className).toContain('text-caption');
+    await userEvent.click(screen.getByTestId('sessions-project-remove-p1'));
+
+    expect(handleRemove).toHaveBeenCalledTimes(1);
+    expect(handleRemove).toHaveBeenCalledWith(PROJECTS[0]);
+  });
+
+  it('opens Remove Project from the visible project pill menu trigger', async () => {
+    const handleRemove = vi.fn();
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onRemoveProject={handleRemove}
+      />,
+    );
+
+    await userEvent.click(screen.getByTestId('sessions-filter-pill-menu-p2'));
+    expect(screen.getByTestId('sessions-project-rename-p2').textContent).toContain('Rename Project');
+    expect(screen.getByTestId('sessions-project-rename-p2')).toHaveAttribute('data-disabled');
+    expect(screen.getByTestId('sessions-project-rename-p2').className).toContain('text-caption');
+    expect(screen.getByTestId('sessions-project-remove-p2').className).toContain('text-caption');
+    await userEvent.click(screen.getByTestId('sessions-project-remove-p2'));
+
+    expect(handleRemove).toHaveBeenCalledTimes(1);
+    expect(handleRemove).toHaveBeenCalledWith(PROJECTS[1]);
   });
 });

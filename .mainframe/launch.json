@@ -42,7 +42,7 @@
       "preview": true,
       "env": {
         "VITE_PORT": "${VITE_PORT:-5175}",
-        "VITE_DAEMON_PORT": "${DAEMON_PORT:-31416}",
+        "VITE_DAEMON_PORT": "${DAEMON_PORT:-31500}",
         "MAINFRAME_DATA_DIR": "${MAINFRAME_DATA_DIR:-~/.mainframe_dev}"
       }
     },

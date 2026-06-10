@@ -10,7 +10,7 @@
  *    (no unhandled rejection).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { DaemonPortProvider } from '../runtime/daemon-port-context';
 
@@ -98,6 +98,49 @@ describe('useProjects — after getProjects resolves with one project', () => {
 
     expect(result.current.projects).toHaveLength(1);
     expect(result.current.projects[0]?.id).toBe('p1');
+  });
+});
+
+describe('useProjects — removeProjectFromList removes one project locally', () => {
+  it('removes the matching project id without refetching', async () => {
+    mockGetProjects.mockResolvedValue([
+      { id: 'p1', name: 'mainframe', path: '/r/mf', createdAt: '', lastOpenedAt: '' },
+      { id: 'p2', name: 'docs', path: '/r/docs', createdAt: '', lastOpenedAt: '' },
+    ]);
+
+    const { result } = renderHook(() => useProjects(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    act(() => {
+      result.current.removeProjectFromList('p1');
+    });
+
+    expect(result.current.projects.map((p) => p.id)).toEqual(['p2']);
+    expect(mockGetProjects).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useProjects — reloadProjects refreshes the project list', () => {
+  it('loads the latest project list from the daemon', async () => {
+    mockGetProjects
+      .mockResolvedValueOnce([{ id: 'p1', name: 'mainframe', path: '/r/mf', createdAt: '', lastOpenedAt: '' }])
+      .mockResolvedValueOnce([{ id: 'p2', name: 'docs', path: '/r/docs', createdAt: '', lastOpenedAt: '' }]);
+
+    const { result } = renderHook(() => useProjects(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.reloadProjects();
+    });
+
+    expect(result.current.projects.map((p) => p.id)).toEqual(['p2']);
+    expect(mockGetProjects).toHaveBeenCalledTimes(2);
   });
 });
 

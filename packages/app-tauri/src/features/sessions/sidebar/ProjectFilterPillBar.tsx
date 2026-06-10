@@ -13,6 +13,7 @@
 import { useState } from 'react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { FilterPill } from './FilterPill';
+import { ProjectPillContextMenu } from './ProjectPillContextMenu';
 
 const COLLAPSE_AT = 2;
 
@@ -21,6 +22,7 @@ interface ProjectFilterPillBarProps {
   filterProjectId: string | null;
   attentionCounts: Record<string, number>;
   onSelect: (projectId: string | null) => void;
+  onRemoveProject?: (project: Project) => void;
 }
 
 export function ProjectFilterPillBar({
@@ -28,6 +30,7 @@ export function ProjectFilterPillBar({
   filterProjectId,
   attentionCounts,
   onSelect,
+  onRemoveProject,
 }: ProjectFilterPillBarProps) {
   const [expanded, setExpanded] = useState(false);
   const totalAttn = Object.values(attentionCounts).reduce((a, b) => a + b, 0);
@@ -46,17 +49,34 @@ export function ProjectFilterPillBar({
         badgeTestId="sessions-filter-pill-attn-all"
         onClick={() => onSelect(null)}
       />
-      {shownProjects.map((p) => (
-        <FilterPill
-          key={p.id}
-          label={p.name}
-          active={filterProjectId === p.id}
-          testId={`sessions-filter-pill-${p.id}`}
-          badgeCount={attentionCounts[p.id] ?? 0}
-          badgeTestId={`sessions-filter-pill-attn-${p.id}`}
-          onClick={() => onSelect(filterProjectId === p.id ? null : p.id)}
-        />
-      ))}
+      {shownProjects.map((p) => {
+        const active = filterProjectId === p.id;
+        const selectProject = () => onSelect(active ? null : p.id);
+        if (onRemoveProject != null) {
+          return (
+            <ProjectPillContextMenu
+              key={p.id}
+              project={p}
+              active={active}
+              badgeCount={attentionCounts[p.id] ?? 0}
+              badgeTestId={`sessions-filter-pill-attn-${p.id}`}
+              onSelect={selectProject}
+              onRemoveProject={onRemoveProject}
+            />
+          );
+        }
+        return (
+          <FilterPill
+            key={p.id}
+            label={p.name}
+            active={active}
+            testId={`sessions-filter-pill-${p.id}`}
+            badgeCount={attentionCounts[p.id] ?? 0}
+            badgeTestId={`sessions-filter-pill-attn-${p.id}`}
+            onClick={selectProject}
+          />
+        );
+      })}
       {collapsible && (
         <button
           data-testid="sessions-projects-more"
