@@ -20,7 +20,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent, PopoverTrigger } from '../../../components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from '../../../components/ui/popover';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { setChatTags } from '../../../lib/api/tags';
@@ -42,6 +42,9 @@ interface Props {
   threads: ThreadTagSnapshot[];
   onCascade: (updates: TagCascadeUpdate[]) => void;
   onReload?: () => void;
+  /** Viewport rect of the trigger button — used to anchor the Radix popover when
+   *  the host is mounted away from the trigger (no PopoverTrigger child). */
+  anchorRect?: DOMRect | null;
   children?: React.ReactNode;
 }
 
@@ -55,6 +58,7 @@ export function TagPopover({
   threads,
   onCascade,
   onReload,
+  anchorRect,
   children,
 }: Props): React.ReactElement {
   const [query, setQuery] = useState('');
@@ -166,6 +170,18 @@ export function TagPopover({
           if (!o && confirmDelete === null) onClose();
         }}
       >
+        {anchorRect && (
+          <PopoverAnchor
+            style={{
+              position: 'fixed',
+              left: anchorRect.left,
+              top: anchorRect.bottom,
+              width: anchorRect.width,
+              height: 0,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
         {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
         <PopoverContent data-testid="sessions-tag-popover" className="w-64 p-2" align="start">
           <div className="text-caption text-muted-foreground uppercase tracking-normal px-2 py-1">Tag session</div>

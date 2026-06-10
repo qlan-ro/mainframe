@@ -71,7 +71,7 @@ function RowHoverActions({
   onRename,
   onArchive,
 }: {
-  onTags: () => void;
+  onTags: (rect: DOMRect) => void;
   onRename: () => void;
   onArchive: () => void;
 }) {
@@ -84,7 +84,17 @@ function RowHoverActions({
   };
   return (
     <div className="hidden flex-shrink-0 items-center group-hover:flex">
-      <button data-testid="sessions-row-action-tags" type="button" title="Tags" className={btn} onClick={stop(onTags)}>
+      <button
+        data-testid="sessions-row-action-tags"
+        type="button"
+        title="Tags"
+        className={btn}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onTags(e.currentTarget.getBoundingClientRect());
+        }}
+      >
         <TagIcon className="size-[11px]" />
       </button>
       <button
@@ -159,10 +169,10 @@ function SessionRowInner({
       });
   }
 
-  function handleTags() {
+  function handleTags(anchorRect: DOMRect | null = null) {
     const chatId = item.remoteId ?? item.id;
     const currentTags = custom.tags ?? [];
-    useTagPopoverTarget.getState().open(chatId, currentTags);
+    useTagPopoverTarget.getState().open(chatId, currentTags, anchorRect);
   }
 
   return (
@@ -219,7 +229,7 @@ function SessionRowInner({
                 )}
                 <RelativeTime updatedAt={custom.updatedAt} />
                 <RowHoverActions
-                  onTags={handleTags}
+                  onTags={(rect) => handleTags(rect)}
                   onRename={() => queueMicrotask(() => setIsRenaming(true))}
                   onArchive={() => void itemRuntime.archive()}
                 />

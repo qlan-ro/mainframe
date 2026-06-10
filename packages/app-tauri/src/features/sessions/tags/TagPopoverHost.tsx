@@ -44,6 +44,7 @@ export function TagPopoverHost({ port }: { port: number }) {
       chatId={target?.chatId ?? ''}
       port={port}
       currentTags={target?.currentTags ?? []}
+      anchorRect={target?.anchorRect ?? null}
       registry={registry}
       threads={threads}
       onCascade={(updates) => void applyCascade(updates)}

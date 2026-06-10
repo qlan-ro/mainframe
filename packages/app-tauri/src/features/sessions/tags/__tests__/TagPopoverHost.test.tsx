@@ -135,7 +135,7 @@ describe('TagPopoverHost — opens for a target', () => {
     render(<TagPopoverHost port={31415} />);
 
     act(() => {
-      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta']);
+      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta'], null);
     });
 
     expect(screen.getByTestId('sessions-tag-popover-stub')).toBeTruthy();
@@ -155,7 +155,7 @@ describe('TagPopoverHost — threads prop is a snapshot of live thread items', (
     render(<TagPopoverHost port={31415} />);
 
     act(() => {
-      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta']);
+      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta'], null);
     });
 
     expect(capturedProps?.threads).toEqual([
@@ -174,7 +174,7 @@ describe('TagPopoverHost — onClose clears the target', () => {
     render(<TagPopoverHost port={31415} />);
 
     act(() => {
-      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta']);
+      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta'], null);
     });
 
     expect(screen.getByTestId('sessions-tag-popover-stub')).toBeTruthy();
@@ -197,7 +197,7 @@ describe('TagPopoverHost — onCascade calls setChatTags per update then reload'
     render(<TagPopoverHost port={31415} />);
 
     act(() => {
-      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta']);
+      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta'], null);
     });
 
     act(() => {
@@ -224,7 +224,7 @@ describe('TagPopoverHost — onCascade with empty list does nothing', () => {
     render(<TagPopoverHost port={31415} />);
 
     act(() => {
-      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta']);
+      useTagPopoverTarget.getState().open('t1', ['alpha', 'beta'], null);
     });
 
     act(() => {
