@@ -176,6 +176,22 @@ describe('JsonRpcClient', () => {
     expect(onNotification).toHaveBeenCalledOnce();
   });
 
+  it('dispatches a valid JSON-RPC object before trailing stdout noise on the same line', () => {
+    const onNotification = vi.fn();
+    const proc = createMockProcess();
+    createClient(proc, { onNotification });
+
+    const notification = JSON.stringify({
+      method: 'thread/tokenUsage/updated',
+      params: { tokenUsage: { total: { totalTokens: 20805, inputTokens: 20000, outputTokens: 805 } } },
+    });
+    proc.stdout!.emit('data', Buffer.from(`${notification}progress: still running\n`));
+
+    expect(onNotification).toHaveBeenCalledWith('thread/tokenUsage/updated', {
+      tokenUsage: { total: { totalTokens: 20805, inputTokens: 20000, outputTokens: 805 } },
+    });
+  });
+
   it('calls onExit when process closes', () => {
     const onExit = vi.fn();
     const proc = createMockProcess();
