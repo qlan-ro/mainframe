@@ -16,6 +16,7 @@ import type { DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
 import { mapAssistantBlocks, PERMISSION_PLACEHOLDER, buildAssistantMainframeMeta } from './map-assistant-blocks';
 import { type ContentPart, ensureNonEmpty } from './content';
 import type { MainframeMessageMeta } from './message-meta';
+import { parseSandboxCaptureBlock } from './parse-captures';
 
 export { PERMISSION_PLACEHOLDER };
 
@@ -49,6 +50,40 @@ function coerceUserMeta(metadata: unknown): MainframeMessageMeta {
   ) {
     out.command = m.command;
   }
+  // Attachment previews: keep only well-formed entries (name + valid kind).
+  if (Array.isArray(m.attachments)) {
+    const previews = m.attachments.flatMap((a: unknown) => {
+      if (typeof a !== 'object' || a === null) return [];
+      const e = a as Record<string, unknown>;
+      if (typeof e.name !== 'string' || (e.kind !== 'image' && e.kind !== 'file')) return [];
+      return [
+        {
+          name: e.name,
+          kind: e.kind,
+          ...(typeof e.sizeBytes === 'number' && { sizeBytes: e.sizeBytes }),
+        },
+      ];
+    });
+    if (previews.length > 0) out.attachmentPreviews = previews;
+  }
+  // codeRef: structural validation — bad shape is silently ignored (render-only contract).
+  if (typeof m.codeRef === 'object' && m.codeRef !== null) {
+    const c = m.codeRef as Record<string, unknown>;
+    const range = c.range as Record<string, unknown> | undefined;
+    if (
+      typeof c.file === 'string' &&
+      typeof c.code === 'string' &&
+      typeof range === 'object' &&
+      range !== null &&
+      typeof range.start === 'number'
+    ) {
+      out.codeRef = {
+        file: c.file,
+        code: c.code,
+        range: { start: range.start, ...(typeof range.end === 'number' && { end: range.end }) },
+      };
+    }
+  }
   return out as MainframeMessageMeta;
 }
 
@@ -57,17 +92,49 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
 
   switch (message.type) {
     case 'user': {
+      const mf: Record<string, unknown> = { ...coerceUserMeta(message.metadata) };
+
+      // Sandbox captures: strip the sentinel block from the text part; rows
+      // ride meta, the remaining text becomes the bubble body.
       const parts: ContentPart[] = message.content.flatMap((c): ContentPart[] => {
-        if (c.type === 'text' && c.text) return [{ type: 'text', text: c.text }];
+        if (c.type === 'text' && c.text) {
+          const sandbox = parseSandboxCaptureBlock(c.text);
+          if (sandbox) {
+            mf.captures = sandbox.rows;
+            return sandbox.rest ? [{ type: 'text', text: sandbox.rest }] : [];
+          }
+          return [{ type: 'text', text: c.text }];
+        }
         if (c.type === 'image') return [{ type: 'image', image: `data:${c.mediaType};base64,${c.data}` }];
         return [];
       });
-      const mf = coerceUserMeta(message.metadata);
+
+      // Native attachments: kind==='file' previews + replay-parsed attachedFiles
+      // (name-only), deduped by name. Images stay native image parts.
+      const previews = (mf.attachmentPreviews ?? []) as ReadonlyArray<{ name: string; kind: string }>;
+      const rawMeta = message.metadata as Record<string, unknown> | undefined;
+      const replayFiles = Array.isArray(rawMeta?.attachedFiles)
+        ? (rawMeta.attachedFiles as Array<{ name?: unknown }>).flatMap((f) =>
+            typeof f?.name === 'string' ? [f.name] : [],
+          )
+        : [];
+      const fileNames = [...previews.filter((p) => p.kind === 'file').map((p) => p.name), ...replayFiles].filter(
+        (name, i, arr) => arr.indexOf(name) === i,
+      );
+      const attachments = fileNames.map((name) => ({
+        id: name,
+        type: 'file' as const,
+        name,
+        content: [],
+        status: { type: 'complete' as const },
+      }));
+
       return {
         role: 'user',
         content: ensureNonEmpty(parts),
         ...base,
-        ...(Object.keys(mf).length > 0 && withMainframe({}, mf)),
+        ...(attachments.length > 0 && { attachments }),
+        ...(Object.keys(mf).length > 0 && withMainframe({}, mf as MainframeMessageMeta)),
       };
     }
 

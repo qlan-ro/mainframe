@@ -13,6 +13,7 @@
  * own shape, not ours.)
  */
 import { useAuiState } from '@assistant-ui/react';
+import type { CaptureRow } from './parse-captures';
 
 export interface MainframeMessageMeta {
   // assistant turn
@@ -26,6 +27,22 @@ export interface MainframeMessageMeta {
     readonly name: string;
     readonly userText?: string;
     readonly source?: 'commands' | (string & {});
+  };
+  /** Daemon attachment previews (name/kind/sizeBytes) — feeds the file-pill
+   *  size subline AND the capture-chip image lookup (kind==='image' names
+   *  align positionally with the message's image parts, by daemon construction). */
+  readonly attachmentPreviews?: ReadonlyArray<{
+    readonly name: string;
+    readonly kind: 'image' | 'file';
+    readonly sizeBytes?: number;
+  }>;
+  /** Sandbox-capture rows parsed from the \0__MF_SANDBOX_CAPTURE__ block. */
+  readonly captures?: ReadonlyArray<CaptureRow>;
+  /** Code-reference (review-from-editor) — render-only contract; no producer yet. */
+  readonly codeRef?: {
+    readonly file: string;
+    readonly range: { readonly start: number; readonly end?: number };
+    readonly code: string;
   };
   // optimistic pending (written by projectPendingMessage in project-messages.ts)
   readonly pending?: boolean;
