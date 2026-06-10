@@ -47,6 +47,7 @@ import { mainframeUserFormatter } from './user-directives';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
 import { UserAttachments } from './UserAttachments';
 import { CodeRefCard } from './CodeRefCard';
+import { ReviewCommentCard } from './ReviewCommentCard';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Remark plugin set (stable reference — never define inline)
@@ -213,6 +214,9 @@ function UserMessageImpl() {
   // TODO(leaf): PLAN_PREFIX card ("Implementing plan") — deferred to plan-card leaf
 
   const codeRefCard = meta.codeRef ? <CodeRefCard codeRef={meta.codeRef} /> : null;
+  // Diff-review sends: the file card IS the message (the projection dropped the
+  // raw text), so it takes the bubble's place rather than stacking beside one.
+  const reviewCard = meta.reviewComment ? <ReviewCommentCard review={meta.reviewComment} /> : null;
 
   const body = slashProps ? (
     <ReadMoreBubble>
@@ -249,6 +253,7 @@ function UserMessageImpl() {
   return (
     <MessagePrimitive.Root data-testid="chat-user-message" className="flex flex-col items-end gap-2 pt-2">
       {codeRefCard}
+      {reviewCard}
 
       {isQueued ? (
         (body || hasExtras) && (

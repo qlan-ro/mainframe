@@ -303,6 +303,36 @@ describe('convertMessage USER — capture image attachments', () => {
 });
 
 // ---------------------------------------------------------------------------
+// RC1. Review comment — parsed text becomes mainframe.reviewComment; text part dropped
+// ---------------------------------------------------------------------------
+
+describe('convertMessage USER — reviewComment projection', () => {
+  it('sets mainframe.reviewComment when text matches the review-comment format', () => {
+    const text = 'Diff of `app/globals.css`\n\nAt line 43:\n```\n--mf-app-bg: #f4f4f2;\n```\ntoo bright';
+    const msg = user([{ type: 'text', text }]);
+
+    expect(mainframe(msg)?.reviewComment).toEqual({
+      file: 'app/globals.css',
+      comments: [{ start: 43, code: '--mf-app-bg: #f4f4f2;', body: 'too bright' }],
+    });
+  });
+
+  it('drops the raw "Diff of" text part from content when a reviewComment is parsed', () => {
+    const text = 'Diff of `app/globals.css`\n\nAt line 43:\n```\n--mf-app-bg: #f4f4f2;\n```\ntoo bright';
+    const msg = user([{ type: 'text', text }]);
+
+    const textParts = contentParts(msg).filter((p): p is Part & { type: 'text'; text: string } => p.type === 'text');
+    const hasRawDiffText = textParts.some((p) => p.text.includes('Diff of'));
+    expect(hasRawDiffText).toBe(false);
+  });
+
+  it('does NOT set reviewComment for a plain text message', () => {
+    const msg = user([{ type: 'text', text: 'hello' }]);
+    expect(mainframe(msg)?.reviewComment).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 7. codeRef — valid shape is forwarded intact
 // ---------------------------------------------------------------------------
 

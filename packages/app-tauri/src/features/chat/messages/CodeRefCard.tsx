@@ -13,8 +13,27 @@ const COLLAPSED_LINES = 7;
 
 type CodeRef = NonNullable<MainframeMessageMeta['codeRef']>;
 
-function rangeLabel(range: CodeRef['range']): string {
+/** `L42–46` / `L42` — shared with ReviewCommentCard. */
+export function rangeLabel(range: CodeRef['range']): string {
   return range.end != null && range.end !== range.start ? `L${range.start}–${range.end}` : `L${range.start}`;
+}
+
+/** Numbered mono snippet rows (line numbers from `start`) — shared with
+ *  ReviewCommentCard. select-text keeps the code copyable despite the
+ *  chrome-wide user-select:none; the gutter stays select-none. */
+export function SnippetLines({ lines, start }: { lines: readonly string[]; start: number }) {
+  return (
+    <>
+      {lines.map((line, i) => (
+        // 18px line-height pins the line-number gutter alignment — a fixed
+        // layout metric (matches the prototype), not a typography token.
+        <div key={i} className="flex min-h-[18px] font-mono text-caption" style={{ lineHeight: '18px' }}>
+          <span className="w-10 flex-shrink-0 select-none pr-3 text-right text-micro text-mf-text-4">{start + i}</span>
+          <span className="flex-1 whitespace-pre pr-3 text-foreground">{line}</span>
+        </div>
+      ))}
+    </>
+  );
 }
 
 export function CodeRefCard({ codeRef }: { codeRef: CodeRef }) {
@@ -40,16 +59,7 @@ export function CodeRefCard({ codeRef }: { codeRef: CodeRef }) {
         {/* select-text: code content is copyable despite the chrome-wide
             user-select:none; the line-number gutter stays select-none. */}
         <div className={cn('select-text', expanded ? 'max-h-60 overflow-y-auto py-1.5' : 'py-1.5')}>
-          {shown.map((line, i) => (
-            // 18px line-height pins the line-number gutter alignment — a fixed
-            // layout metric (matches the prototype), not a typography token.
-            <div key={i} className="flex min-h-[18px] font-mono text-caption" style={{ lineHeight: '18px' }}>
-              <span className="w-10 flex-shrink-0 select-none pr-3 text-right text-micro text-mf-text-4">
-                {codeRef.range.start + i}
-              </span>
-              <span className="flex-1 whitespace-pre pr-3 text-foreground">{line}</span>
-            </div>
-          ))}
+          <SnippetLines lines={shown} start={codeRef.range.start} />
         </div>
         {big && !expanded && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7 bg-gradient-to-b from-transparent to-mf-content2" />

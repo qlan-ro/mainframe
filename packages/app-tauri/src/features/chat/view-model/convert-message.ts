@@ -17,6 +17,7 @@ import { mapAssistantBlocks, PERMISSION_PLACEHOLDER, buildAssistantMainframeMeta
 import { type ContentPart, ensureNonEmpty } from './content';
 import type { MainframeMessageMeta } from './message-meta';
 import { parseSandboxCaptureBlock, type CaptureRow } from './parse-captures';
+import { parseReviewComment } from './parse-review-comment';
 
 export { PERMISSION_PLACEHOLDER };
 
@@ -129,9 +130,17 @@ export function convertMessage(message: DisplayMessage): ThreadMessageLike {
           const sandbox = parseSandboxCaptureBlock(c.text);
           if (sandbox) {
             if (sandbox.rest) parts.push({ type: 'text', text: sandbox.rest });
-          } else {
-            parts.push({ type: 'text', text: c.text });
+            continue;
           }
+          // Diff-review comments ("Diff of `file` … At line N: …"): the
+          // ReviewCommentCard renders the whole message, so the raw text part
+          // is dropped. Strict parse — a non-matching shape stays plain text.
+          const review = parseReviewComment(c.text);
+          if (review) {
+            mf.reviewComment = review;
+            continue;
+          }
+          parts.push({ type: 'text', text: c.text });
           continue;
         }
         if (c.type === 'image') {

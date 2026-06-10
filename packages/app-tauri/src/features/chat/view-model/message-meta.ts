@@ -14,6 +14,7 @@
  */
 import { useAuiState } from '@assistant-ui/react';
 import type { CaptureRow } from './parse-captures';
+import type { ReviewComment } from './parse-review-comment';
 
 export interface MainframeMessageMeta {
   // assistant turn
@@ -45,6 +46,8 @@ export interface MainframeMessageMeta {
     readonly range: { readonly start: number; readonly end?: number };
     readonly code: string;
   };
+  /** Diff-review comments parsed from the desktop "Diff of `file`" text shape. */
+  readonly reviewComment?: ReviewComment;
   // optimistic pending (written by projectPendingMessage in project-messages.ts)
   readonly pending?: boolean;
   readonly clientId?: string;
