@@ -17,6 +17,7 @@ import { useEditorStore } from '@/store/editor';
 import { useTabsStore } from '@/store/tabs';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
 import { CmEditor } from './CmEditor';
+import { MarkdownEditorTab } from './MarkdownEditorTab';
 
 interface EditorTabProps {
   tabId: string;
@@ -91,9 +92,19 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
     <div data-testid="editor-tab" className="flex h-full flex-col overflow-hidden">
       <ViewerRouter
         path={path}
-        renderCode={() => (
-          <CmEditor value={loadState.value} language={language} readOnly={false} onChange={handleChange} path={path} />
-        )}
+        renderCode={() =>
+          language === 'markdown' ? (
+            <MarkdownEditorTab value={loadState.value} path={path} onChange={handleChange} />
+          ) : (
+            <CmEditor
+              value={loadState.value}
+              language={language}
+              readOnly={false}
+              onChange={handleChange}
+              path={path}
+            />
+          )
+        }
       />
     </div>
   );
