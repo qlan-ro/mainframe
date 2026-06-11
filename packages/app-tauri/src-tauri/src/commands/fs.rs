@@ -53,8 +53,10 @@ pub fn show_item_in_folder(path: String) -> Result<(), String> {
 
 /// Read a text file from disk. Path must canonicalize under the home directory.
 /// Returns `None` if the file doesn't exist or is outside home.
+// `async` so Tauri runs these on the async runtime instead of the main/UI
+// thread — a multi-MB read won't stall the webview.
 #[tauri::command]
-pub fn read_file(path: String) -> Result<Option<String>, String> {
+pub async fn read_file(path: String) -> Result<Option<String>, String> {
     let canonical = match validate_under_home(&path) {
         Ok(p) => p,
         Err(_) => return Ok(None), // doesn't exist or outside home → safe None
@@ -71,7 +73,7 @@ pub fn read_file(path: String) -> Result<Option<String>, String> {
 /// Returns `None` if the file doesn't exist or is outside home.
 /// Used by the image and PDF viewers which cannot use the text `read_file`.
 #[tauri::command]
-pub fn read_file_base64(path: String) -> Result<Option<String>, String> {
+pub async fn read_file_base64(path: String) -> Result<Option<String>, String> {
     let canonical = match validate_under_home(&path) {
         Ok(p) => p,
         Err(_) => return Ok(None),

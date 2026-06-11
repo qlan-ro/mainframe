@@ -117,7 +117,8 @@ function buildHoverExtension(providers: LspProviders, opts: LspExtensionOptions)
 function buildGoToDefExtension(providers: LspProviders, opts: LspExtensionOptions): Extension {
   return EditorView.domEventHandlers({
     mousedown(event: MouseEvent, view: EditorView) {
-      if (!event.metaKey) return false;
+      // ⌘-click on macOS, Ctrl-click elsewhere.
+      if (!event.metaKey && !event.ctrlKey) return false;
       if (!opts.lspReady) return false;
 
       // Capture the current position before the async call.
@@ -206,14 +207,18 @@ function buildDiagnosticsExtension(diagnosticsProvider: DiagnosticsProvider, opt
       return [];
     }
 
+    const lineCount = view.state.doc.lines;
+    // Clamp line numbers to [1, lineCount]: a stale diagnostic past EOF would
+    // make doc.line(...) throw a RangeError.
+    const clampLine = (n: number) => Math.max(1, Math.min(n + 1, lineCount));
     return items.map((d): Diagnostic => {
-      const startLine = view.state.doc.line(d.line + 1);
-      const endLine = view.state.doc.line(d.endLine + 1);
-      const from = startLine.from + d.character;
-      const to = endLine.from + d.endCharacter;
+      const startLine = view.state.doc.line(clampLine(d.line));
+      const endLine = view.state.doc.line(clampLine(d.endLine));
+      const from = Math.min(startLine.from + d.character, startLine.to);
+      const to = Math.min(endLine.from + d.endCharacter, endLine.to);
       return {
         from: Math.min(from, view.state.doc.length),
-        to: Math.min(to, view.state.doc.length),
+        to: Math.min(Math.max(to, from), view.state.doc.length),
         severity: mapSeverity(d.severity),
         message: d.message,
       };

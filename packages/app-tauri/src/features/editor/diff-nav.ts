@@ -18,9 +18,22 @@ import { MergeView } from '@codemirror/merge';
 
 let activeMergeView: MergeView | null = null;
 
-/** Register (or clear) the active MergeView for global navigation. */
+/**
+ * Register (or force-clear with `null`) the active MergeView for global
+ * navigation. Single global ref → last-mount-wins (only one diff drives the nav
+ * controls at a time). Production unmount should use `clearActiveMergeView`.
+ */
 export function setActiveMergeView(mv: MergeView | null): void {
   activeMergeView = mv;
+}
+
+/**
+ * Clear the active MergeView on unmount — but ONLY if `mv` is the one currently
+ * registered, so a later-mounted diff isn't clobbered by an earlier one's
+ * teardown. A second concurrent diff would need a per-view registry.
+ */
+export function clearActiveMergeView(mv: MergeView): void {
+  if (activeMergeView === mv) activeMergeView = null;
 }
 
 // ── Navigation helpers ───────────────────────────────────────────────────────

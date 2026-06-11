@@ -117,14 +117,29 @@ function reduceOpenTab(
   target: OpenTabTarget,
   opts: OpenTabOptions,
 ): [EditorTabModel[], string] {
-  // (1) Already open — focus it (and promote if mode=permanent).
+  // (1) Already open — focus it (and promote if mode=permanent). For a diff,
+  // refresh original/modified so re-opening never shows a stale diff.
   const existing = tabs.find((t) => t.path === target.path && t.kind === target.kind);
   if (existing) {
-    const promoted = opts.mode === 'permanent' && existing.mode === 'preview';
-    if (promoted) {
-      return [tabs.map((t) => (t.id === existing.id ? { ...t, mode: 'permanent' } : t)), existing.id];
-    }
-    return [tabs, existing.id];
+    const nextMode = opts.mode === 'permanent' && existing.mode === 'preview' ? 'permanent' : existing.mode;
+    const isDiff = target.kind === 'diff' && existing.kind === 'diff';
+    const changed =
+      nextMode !== existing.mode ||
+      (isDiff &&
+        ((existing as DiffTabModel).original !== target.original ||
+          (existing as DiffTabModel).modified !== target.modified ||
+          existing.title !== target.title));
+    if (!changed) return [tabs, existing.id];
+    return [
+      tabs.map((t) =>
+        t.id === existing.id
+          ? isDiff
+            ? { ...t, mode: nextMode, title: target.title, original: target.original, modified: target.modified }
+            : { ...t, mode: nextMode }
+          : t,
+      ),
+      existing.id,
+    ];
   }
 
   // (2) Preview mode: replace the existing preview slot if one exists.

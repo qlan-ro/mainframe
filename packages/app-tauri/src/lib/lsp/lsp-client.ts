@@ -114,6 +114,8 @@ interface LspClientEntry {
   >;
   /** True only after the `initialized` notification has been sent. */
   ready: boolean;
+  /** URIs this client has already sent didOpen for (per-client, not global). */
+  openedUris: Set<string>;
 }
 
 function makeKey(projectId: string, language: string): string {
@@ -158,7 +160,6 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 export class LspClientManager implements LspProviders {
   private readonly clients = new Map<string, LspClientEntry>();
   private readonly connecting = new Map<string, Promise<void>>();
-  private readonly openedUris = new Set<string>();
   private readonly port: number;
   private readonly requestTimeoutMs: number;
 
@@ -220,7 +221,14 @@ export class LspClientManager implements LspProviders {
 
     // Build the entry WITHOUT registering it in `this.clients` yet.
     // The entry is registered only after initialize+initialized succeeds (#13a).
-    const entry: LspClientEntry = { ws, projectPath, requestId: 1, pending: new Map(), ready: false };
+    const entry: LspClientEntry = {
+      ws,
+      projectPath,
+      requestId: 1,
+      pending: new Map(),
+      ready: false,
+      openedUris: new Set(),
+    };
 
     // Attach message/close/error handlers now so we don't miss server→client
     // requests that arrive during initialization.
@@ -340,8 +348,8 @@ export class LspClientManager implements LspProviders {
     if (!entry) return;
 
     const uri = this.toLspUri(entry, doc.filePath);
-    if (this.openedUris.has(uri)) return;
-    this.openedUris.add(uri);
+    if (entry.openedUris.has(uri)) return;
+    entry.openedUris.add(uri);
 
     this.sendNotification(entry, 'textDocument/didOpen', {
       textDocument: {
@@ -362,8 +370,8 @@ export class LspClientManager implements LspProviders {
     if (!entry) return;
 
     const uri = `file://${projectPath}/${filePath}`;
-    if (this.openedUris.has(uri)) return;
-    this.openedUris.add(uri);
+    if (entry.openedUris.has(uri)) return;
+    entry.openedUris.add(uri);
 
     const base = `http://127.0.0.1:${this.port}`;
     fetch(`${base}/api/projects/${projectId}/files?path=${encodeURIComponent(filePath)}`)
@@ -390,7 +398,6 @@ export class LspClientManager implements LspProviders {
     for (const key of [...this.clients.keys()]) {
       this.removeEntry(key);
     }
-    this.openedUris.clear();
   }
 
   // ---------------------------------------------------------------------------
@@ -523,12 +530,9 @@ export class LspClientManager implements LspProviders {
       handler.reject(new Error(`[lsp] client disposed (key=${key}, pending id=${id})`));
     }
     entry.pending.clear();
-
-    // Clear tracked URIs for this project to prevent unbounded growth.
-    const prefix = `file://${entry.projectPath}`;
-    for (const uri of this.openedUris) {
-      if (uri.startsWith(prefix)) this.openedUris.delete(uri);
-    }
+    // The entry's openedUris set is discarded with the entry — no shared
+    // global state to prune (each client tracks only its own opened docs).
+    entry.openedUris.clear();
 
     try {
       if (entry.ws.readyState === WebSocket.OPEN) entry.ws.close();

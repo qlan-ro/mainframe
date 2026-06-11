@@ -30,8 +30,16 @@ function parseRow(text: string, start: number): [string[], number] {
     const isRowEnd =
       pos === len || text[pos] === '\n' || (isCR && text[pos + 1] === '\n') || (isCR && text[pos + 1] !== '\n');
     if (isRowEnd) {
-      // Push empty field if row ended with a trailing comma
-      if (fields.length === 0) fields.push('');
+      // Push empty field for:
+      //   (a) a fully-empty row (no fields at all), OR
+      //   (b) a trailing comma — the last separator had no following value.
+      // We detect (b) by checking whether the character immediately before
+      // `pos` was a comma. `pos > start` guards against the empty-input edge.
+      if (fields.length === 0) {
+        fields.push('');
+      } else if (pos > start && text[pos - 1] === ',') {
+        fields.push('');
+      }
       const advance =
         pos < len
           ? isCR && text[pos + 1] === '\n'

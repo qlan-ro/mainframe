@@ -173,7 +173,8 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
     setActiveSession(sessionId) {
       const { sessions } = get();
       const existing = sessions.get(sessionId);
-      const ws: SessionWorkspace = existing ?? { layout: { ...INITIAL_LAYOUT }, run: null };
+      // structuredClone so per-session seeds don't share nested topFlex/vFlex refs.
+      const ws: SessionWorkspace = existing ?? { layout: structuredClone(INITIAL_LAYOUT), run: null };
       const nextSessions = existing ? sessions : new Map(sessions).set(sessionId, ws);
       set({ activeSessionId: sessionId, layout: ws.layout, run: ws.run, sessions: nextSessions });
     },

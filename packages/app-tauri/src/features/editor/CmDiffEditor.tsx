@@ -20,7 +20,7 @@ import { EditorView } from '@codemirror/view';
 import { MergeView } from '@codemirror/merge';
 import type { LangPackId } from '@/lib/editor/file-types';
 import { buildBaseExtensions, createEditorCompartments, resolveLanguage } from './cm-setup';
-import { setActiveMergeView } from './diff-nav';
+import { setActiveMergeView, clearActiveMergeView } from './diff-nav';
 
 // ── Warm-chrome diff theme overlay ──────────────────────────────────────────
 //
@@ -111,7 +111,7 @@ export function CmDiffEditor({ original, modified, language, readOnly = false }:
     setActiveMergeView(mv);
 
     return () => {
-      setActiveMergeView(null);
+      clearActiveMergeView(mv);
       mv.destroy();
       mergeViewRef.current = null;
     };
