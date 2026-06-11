@@ -4,12 +4,14 @@
  * Composes three concerns:
  *   1. useInlineComments — comment data model (add/edit/delete/query)
  *   2. buildCommentGutter — CM6 gutter extension with click-to-add / click-to-open
- *   3. Per-comment portal — a DOM node injected after each commented line,
- *      hosting <InlineCommentWidget> via createPortal.
+ *   3. Per-comment portal — rendered into stable host <div>s that CM6 block
+ *      widget decorations inject below each commented line.
  *
- * The portal host DOM nodes are created imperatively and appended after the
- * CM6 line element using a MutationObserver that watches the scroller for
- * inserted lines. This mirrors the pattern desktop used for Monaco view-zones.
+ * Block widgets (not hand-inserted DOM) are used so CM6 owns widget
+ * placement and lifecycle.  The widget's toDOM() returns a stable host element;
+ * this component portals InlineCommentWidget into it.  When a widget is
+ * removed (deleteCommentEffect) its WidgetType.destroy() fires and the portal
+ * is cleaned up.
  *
  * Props extend CmEditorProps (minus extraExtensions/onViewReady which are
  * managed here) with an optional `enableComments` flag (default true).
@@ -20,7 +22,13 @@ import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import type { CmEditorProps } from '../CmEditor';
 import { CmEditor } from '../CmEditor';
-import { addCommentEffect, deleteCommentEffect, buildCommentGutter } from './comment-gutter';
+import {
+  addCommentEffect,
+  deleteCommentEffect,
+  buildCommentGutter,
+  commentField,
+  type CommentBlockWidget,
+} from './comment-gutter';
 import { useInlineComments } from './use-inline-comments';
 import { InlineCommentWidget } from './InlineCommentWidget';
 
@@ -30,10 +38,10 @@ type CmEditorWithCommentsProps = Omit<CmEditorProps, 'extraExtensions' | 'onView
   enableComments?: boolean;
 };
 
-/** Per-open-widget portal descriptor. */
+/** Portal descriptor: the comment id + the host element from the block widget. */
 interface WidgetPortal {
   commentId: string;
-  domNode: HTMLDivElement;
+  hostElement: HTMLDivElement;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -41,41 +49,35 @@ interface WidgetPortal {
 export function CmEditorWithComments({ enableComments = true, ...editorProps }: CmEditorWithCommentsProps) {
   const viewRef = useRef<EditorView | null>(null);
   const { comments, addComment, editComment, deleteComment } = useInlineComments();
+
+  // Active portals: each entry corresponds to an open (visible) comment widget.
   const [portals, setPortals] = useState<WidgetPortal[]>([]);
-  // Mirror of portals in a ref so openWidgetForComment can read the current
-  // list synchronously without relying on a stale setState closure.
   const portalsRef = useRef<WidgetPortal[]>([]);
 
-  // ── Open widget ──────────────────────────────────────────────────────────
+  // Per-portal draft text state.
+  const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
 
-  const openWidgetForComment = useCallback((commentId: string, line: number) => {
-    const view = viewRef.current;
-    if (!view) return;
+  // ── Portal management helpers ────────────────────────────────────────────
 
-    // Bail if a portal already exists for this comment (read from ref to avoid stale closure).
+  /** Open a portal into the block widget host for `commentId` (if not already open). */
+  const openPortalForWidget = useCallback((commentId: string, widget: CommentBlockWidget) => {
     if (portalsRef.current.some((p) => p.commentId === commentId)) return;
 
-    // Find the CM6 line DOM element for the given line number.
-    const docLine = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines)));
-    const lineBlock = view.lineBlockAt(docLine.from);
-    const lineEl = view.domAtPos(lineBlock.from).node.parentElement;
+    // Register a destroy callback on the widget so we clean up if CM6 removes it.
+    widget.setDestroyCallback(() => {
+      portalsRef.current = portalsRef.current.filter((p) => p.commentId !== commentId);
+      setPortals((prev) => prev.filter((p) => p.commentId !== commentId));
+    });
 
-    if (!lineEl) {
-      console.warn('[CmEditorWithComments] could not locate line DOM node for line', line);
-      return;
-    }
-
-    // Create and insert the host node BEFORE calling setPortals so the DOM
-    // mutation never runs inside a setState updater (which React may call twice
-    // in Strict Mode).
-    const host = document.createElement('div');
-    host.className = 'cm-comment-widget-host';
-    host.style.width = '100%';
-    lineEl.after(host);
-
-    const entry: WidgetPortal = { commentId, domNode: host };
+    const entry: WidgetPortal = { commentId, hostElement: widget.hostElement };
     portalsRef.current = [...portalsRef.current, entry];
     setPortals((prev) => [...prev, entry]);
+  }, []);
+
+  /** Close (unmount) a portal without deleting the comment data. */
+  const closePortal = useCallback((commentId: string) => {
+    portalsRef.current = portalsRef.current.filter((p) => p.commentId !== commentId);
+    setPortals((prev) => prev.filter((p) => p.commentId !== commentId));
   }, []);
 
   // ── Gutter callbacks ─────────────────────────────────────────────────────
@@ -85,32 +87,39 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
       const view = viewRef.current;
       if (!view) return;
 
-      // Read line content from the CM6 doc.
-      const docLine = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines)));
+      const totalLines = view.state.doc.lines;
+      const safeLine = Math.max(1, Math.min(line, totalLines));
+      const docLine = view.state.doc.line(safeLine);
       const lineContent = docLine.text;
 
       const id = addComment({ startLine: line, endLine: line, lineContent });
 
-      // Sync into CM6 state so the gutter marker appears.
+      // Dispatch the CM6 effect so commentField creates the block widget decoration.
       view.dispatch({ effects: [addCommentEffect.of({ id, line, text: '' })] });
 
-      openWidgetForComment(id, line);
+      // Open the portal using the widget that was just created.
+      const widget = view.state.field(commentField).widgets.get(id);
+      if (widget) {
+        openPortalForWidget(id, widget);
+      }
     },
-    [addComment, openWidgetForComment],
+    [addComment, openPortalForWidget],
   );
 
   const onOpenComment = useCallback(
     (id: string) => {
-      const comment = comments.find((c) => c.id === id);
-      if (!comment) return;
-      openWidgetForComment(id, comment.startLine);
+      const view = viewRef.current;
+      if (!view) return;
+      const widget = view.state.field(commentField).widgets.get(id);
+      if (widget) {
+        openPortalForWidget(id, widget);
+      }
     },
-    [comments, openWidgetForComment],
+    [openPortalForWidget],
   );
 
   // ── Gutter extension (stable reference) ─────────────────────────────────
 
-  // Wrap callbacks in refs so the memoized extension doesn't stale-close.
   const onAddRef = useRef(onAddComment);
   onAddRef.current = onAddComment;
   const onOpenRef = useRef(onOpenComment);
@@ -126,28 +135,7 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
     ];
   }, [enableComments]);
 
-  // ── Cleanup portals on unmount ───────────────────────────────────────────
-
-  useEffect(() => {
-    return () => {
-      // Detach DOM nodes directly via the ref — avoids calling setPortals on
-      // an unmounted component (which is a no-op in React 18 but noisy and
-      // incorrect in principle).
-      for (const p of portalsRef.current) {
-        p.domNode.remove();
-      }
-      portalsRef.current = [];
-    };
-  }, []);
-
-  // ── Widget handlers ──────────────────────────────────────────────────────
-
-  const closePortal = useCallback((commentId: string) => {
-    const portal = portalsRef.current.find((p) => p.commentId === commentId);
-    portal?.domNode.remove();
-    portalsRef.current = portalsRef.current.filter((p) => p.commentId !== commentId);
-    setPortals((prev) => prev.filter((p) => p.commentId !== commentId));
-  }, []);
+  // ── Widget save / delete handlers ────────────────────────────────────────
 
   const handleSave = useCallback(
     (commentId: string, text: string) => {
@@ -169,16 +157,19 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
     [deleteComment, closePortal],
   );
 
-  // ── Per-portal text state ────────────────────────────────────────────────
-  // Track draft text per open portal so the widget is controlled.
-
-  const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
-
   const handleTextChange = useCallback((commentId: string, text: string) => {
     setDraftTexts((prev) => ({ ...prev, [commentId]: text }));
   }, []);
 
-  // ── View ready callback (stable) ────────────────────────────────────────
+  // ── Cleanup portals on unmount ───────────────────────────────────────────
+
+  useEffect(() => {
+    return () => {
+      portalsRef.current = [];
+    };
+  }, []);
+
+  // ── View ready callback ──────────────────────────────────────────────────
 
   const handleViewReady = useCallback((view: EditorView) => {
     viewRef.current = view;
@@ -202,7 +193,7 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
             onClose={() => closePortal(portal.commentId)}
             onDelete={() => handleDelete(portal.commentId)}
           />,
-          portal.domNode,
+          portal.hostElement,
         );
       })}
     </>
