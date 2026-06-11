@@ -12,6 +12,9 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { readFile } from '@/lib/tauri/bridge';
+import { getProjectFile } from '@/lib/api/files';
+import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { inferLanguage } from '@/lib/editor/file-types';
 import { useEditorStore } from '@/store/editor';
 import { useTabsStore } from '@/store/tabs';
@@ -31,8 +34,13 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
   const setBuffer = useEditorStore((s) => s.setBuffer);
   const cachedBuffer = useEditorStore((s) => s.getBuffer(path));
   const promoteTab = useTabsStore((s) => s.promoteTab);
+  const port = useDaemonPort();
+  const { projectId, chatId } = useActiveIdentity();
 
-  // Load file content — use the in-memory buffer if already cached.
+  // Load file content — use the in-memory buffer if already cached. Project
+  // files load via the daemon (worktree-aware; resolves repo-relative tree
+  // paths AND absolute chat-card paths). Falls back to the Tauri bridge only
+  // when there's no active project (absolute path, no worktree context).
   useEffect(() => {
     if (cachedBuffer) {
       setLoadState({ status: 'ready', value: cachedBuffer.value });
@@ -42,7 +50,8 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
     let cancelled = false;
     setLoadState({ status: 'loading' });
 
-    readFile(path)
+    const load = projectId ? getProjectFile(port, projectId, path, chatId) : readFile(path);
+    load
       .then((content) => {
         if (cancelled) return;
         const value = content ?? '';
@@ -59,7 +68,7 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
     return () => {
       cancelled = true;
     };
-  }, [path, cachedBuffer, setBuffer]);
+  }, [path, cachedBuffer, setBuffer, port, projectId, chatId]);
 
   const handleChange = useCallback(
     (value: string) => {

@@ -31,6 +31,26 @@ export const getFileTree = (port: number, projectId: string, dir = '.', chatId?:
   return request<FileTreeEntry[]>('GET', `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/tree?${qs}`);
 };
 
+interface FileContentResponse {
+  path: string;
+  content: string;
+}
+
+/**
+ * Read a project file's UTF-8 content via the daemon (worktree-aware). Accepts
+ * a repo-relative path (file tree) OR an absolute path under the project
+ * (chat tool-cards) — the daemon resolves both against the worktree base.
+ */
+export async function getProjectFile(port: number, projectId: string, path: string, chatId?: string): Promise<string> {
+  const qs = new URLSearchParams({ path });
+  if (chatId) qs.set('chatId', chatId);
+  const data = await request<FileContentResponse>(
+    'GET',
+    `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/files?${qs}`,
+  );
+  return data.content;
+}
+
 interface BrowseOpts {
   includeFiles?: boolean;
   includeHidden?: boolean;

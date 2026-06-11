@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { FileResult, FileTreeEntry } from '../files';
-import { searchFiles, getFileTree, browseFilesystem } from '../files';
+import { searchFiles, getFileTree, browseFilesystem, getProjectFile } from '../files';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -60,6 +60,30 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 // searchFiles
 // ---------------------------------------------------------------------------
+
+describe('getProjectFile', () => {
+  it('GETs /files with the path and returns the content (relative tree path)', async () => {
+    mockFetchOk({ path: 'src/a.ts', content: 'export const x = 1\n' });
+
+    const content = await getProjectFile(31415, 'proj-1', 'src/a.ts', 'chat-abc');
+
+    expect(content).toBe('export const x = 1\n');
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('/api/projects/proj-1/files?');
+    expect(url).toContain('path=src%2Fa.ts');
+    expect(url).toContain('chatId=chat-abc');
+  });
+
+  it('passes an absolute path through unchanged (chat tool-card path)', async () => {
+    mockFetchOk({ path: '/repo/src/a.ts', content: 'abs' });
+
+    await getProjectFile(31415, 'proj-1', '/repo/src/a.ts');
+
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('path=%2Frepo%2Fsrc%2Fa.ts');
+    expect(url).not.toContain('chatId');
+  });
+});
 
 describe('searchFiles', () => {
   it('calls GET /api/projects/<projectId>/search/files with q and limit=30', async () => {
