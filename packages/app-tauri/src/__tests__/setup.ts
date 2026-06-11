@@ -4,6 +4,10 @@
  * Mirrors packages/desktop/src/__tests__/setup.ts: a localStorage shim, the
  * React act environment flag, jest-dom matchers, and a ResizeObserver stub for
  * Radix-based primitives (scroll-area, collapsible).
+ *
+ * Also stubs DOM Range methods required by CodeMirror 6: CM6 measures text
+ * via Range.getClientRects / getBoundingClientRect which jsdom doesn't
+ * implement. Zero-rect stubs satisfy the calls without crashing.
  */
 const store = new Map<string, string>();
 
@@ -40,3 +44,32 @@ class ResizeObserverStub {
   disconnect() {}
 }
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub;
+
+// ── CodeMirror 6 DOM stubs ───────────────────────────────────────────────────
+// CM6 measures text via Range client rects; jsdom returns undefined for these.
+// Zero-rect stubs prevent "Cannot read properties of undefined" crashes.
+
+const zeroRect: DOMRect = {
+  x: 0,
+  y: 0,
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  width: 0,
+  height: 0,
+  toJSON: () => ({}),
+};
+
+function zeroRectList(): DOMRectList {
+  return {
+    length: 0,
+    item: () => null,
+    [Symbol.iterator]: function* () {
+      /* jsdom measurement stub */
+    },
+  } as unknown as DOMRectList;
+}
+
+Range.prototype.getClientRects = zeroRectList;
+Range.prototype.getBoundingClientRect = () => zeroRect;
