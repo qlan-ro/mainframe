@@ -4,6 +4,7 @@
  * DaemonPortProvider → AssistantRuntimeProvider feed the sidebar + surface host.
  * useSessionListRouter() runs INSIDE the provider (needs the live thread list).
  */
+import { useEffect } from 'react';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { ArchiveWorktreeDialog } from '../features/sessions/sidebar/ArchiveWorktreeDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
@@ -11,7 +12,7 @@ import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
-import { useActiveBases } from '../features/sessions/use-active-bases';
+import { useActiveBasesStore } from '../store/active-bases-store';
 import { useLayoutStore } from '../store/layout';
 import { MainToolbar } from '../layout/MainToolbar';
 import { SidebarCollapseHandle } from '../layout/SidebarCollapseHandle';
@@ -34,13 +35,18 @@ function getMainOverlap(sidebarRendered: boolean, sidebarWidth: number): number 
 
 function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
-  // Sync active worktreePath + projectPath into the active-bases store so the
-  // intent subscriber can normalize open-file paths (F1 fix).
-  useActiveBases();
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
-  const { projectName, branchName } = useActiveIdentity();
+  const { projectName, branchName, worktreePath, projectPath } = useActiveIdentity();
+
+  // Sync the active bases into the store so the intent subscriber (outside React)
+  // can normalize open-file path flavors to a canonical relative key (F1 fix).
+  const setActiveBases = useActiveBasesStore((s) => s.setActiveBases);
+  useEffect(() => {
+    setActiveBases({ worktreePath, projectPath });
+  }, [worktreePath, projectPath, setActiveBases]);
+
   const {
     dragCollapsed,
     dragging,

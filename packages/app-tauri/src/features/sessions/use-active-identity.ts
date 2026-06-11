@@ -3,6 +3,9 @@
  * shell MainToolbar. Reads the active thread-list item's `custom` (narrowed once
  * via sessionCustomOf) for projectId + branchName, and resolves the project name
  * from the loaded project list. Runs inside the assistant-ui runtime provider.
+ *
+ * Also exposes `worktreePath` and `projectPath` so callers (AppShell) can push
+ * the canonical bases into `useActiveBasesStore` for the intent subscriber (F1 fix).
  */
 import { useAuiState } from '@assistant-ui/react';
 import { useProjects } from './use-projects';
@@ -15,6 +18,10 @@ export interface ActiveIdentity {
   projectId?: string;
   /** Active session's remote chat id (worktree-correct path resolution). */
   chatId?: string;
+  /** Absolute path to the active chat's worktree (for path normalization). */
+  worktreePath?: string;
+  /** Absolute path to the active project root (for path normalization). */
+  projectPath?: string;
 }
 
 export function useActiveIdentity(): ActiveIdentity {
@@ -27,5 +34,7 @@ export function useActiveIdentity(): ActiveIdentity {
     branchName: custom?.branchName,
     projectId: custom?.projectId,
     chatId,
+    worktreePath: custom?.worktreePath,
+    projectPath: project?.path,
   };
 }

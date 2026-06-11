@@ -103,22 +103,12 @@ function normalizeSeparators(p: string): string {
 
 /**
  * Decode a `file://` URI to an absolute POSIX path.
- * Handles percent-encoded characters. Strips the `file://` prefix and
- * any authority component (empty or `localhost`).
+ * `new URL` handles percent-encoding and authority stripping correctly in all
+ * browser/webview environments (V8, JSC). The pathname is always the POSIX
+ * path after the optional `//localhost` or empty authority.
  */
 function decodeFileUri(uri: string): string {
-  // Strip "file://" prefix; on POSIX the path starts immediately after.
-  const withoutScheme = uri.slice('file://'.length);
-  // Decoded via URL so percent-encoding is handled.
-  try {
-    const url = new URL(uri);
-    return decodeURIComponent(url.pathname);
-  } catch {
-    // Fallback: manual strip — remove any authority (up to next slash).
-    const slashIdx = withoutScheme.indexOf('/');
-    const path = slashIdx >= 0 ? withoutScheme.slice(slashIdx) : withoutScheme;
-    return decodeURIComponent(path);
-  }
+  return decodeURIComponent(new URL(uri).pathname);
 }
 
 /**
