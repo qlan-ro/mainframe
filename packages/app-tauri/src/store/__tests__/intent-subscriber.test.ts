@@ -6,13 +6,18 @@
  *  - on open-file: calls openTab + activates the Files surface
  *  - on open-file with position: also stashes a reveal target in the editor store
  *  - on reveal-file: activates the Files surface (tree reveal is a TODO)
+ *  - normalizes mixed path flavors to a canonical relative key (F1 fix)
  */
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import { emitSurfaceIntent } from '../surface-intents';
 import { useLayoutStore } from '../layout';
 import { useTabsStore } from '../tabs';
 import { useEditorStore } from '../editor';
+import { useActiveBasesStore } from '../active-bases-store';
 import { subscribeToFileIntents } from '../intent-subscriber';
+
+const WORKTREE = '/Users/dev/myapp/.worktrees/feat-wt';
+const PROJECT = '/Users/dev/myapp';
 
 function isFilesActive() {
   const { layout } = useLayoutStore.getState();
@@ -24,6 +29,8 @@ beforeEach(() => {
   useTabsStore.setState({ tabs: [], activeTabId: null });
   // Clear any stashed reveal targets between tests.
   useEditorStore.setState({ revealTargets: new Map() });
+  // Reset bases to empty by default (tests that need bases set them explicitly).
+  useActiveBasesStore.setState({ bases: {} });
 });
 
 afterEach(() => {
@@ -157,6 +164,88 @@ describe('reveal-file intent subscriber', () => {
     // reveal-file does NOT open a tab — it only activates the surface.
     const { tabs } = useTabsStore.getState();
     expect(tabs).toHaveLength(0);
+
+    unsub();
+  });
+});
+
+// ── F1 regression: path-flavor normalization ──────────────────────────────────
+
+describe('F1 regression: path-flavor normalization prevents duplicate tabs', () => {
+  it('absolute tool-card path and tree-relative path open the SAME tab', () => {
+    useActiveBasesStore.setState({ bases: { worktreePath: WORKTREE, projectPath: PROJECT } });
+    const unsub = subscribeToFileIntents();
+
+    // Simulate a chat tool-card emitting an absolute path.
+    emitSurfaceIntent({ type: 'open-file', path: `${WORKTREE}/src/a.ts` });
+    const afterFirst = useTabsStore.getState().tabs;
+    expect(afterFirst).toHaveLength(1);
+    expect(afterFirst[0]!.path).toBe('src/a.ts');
+
+    // Simulate the file-tree emitting the relative path — must NOT create a new tab.
+    emitSurfaceIntent({ type: 'open-file', path: 'src/a.ts' });
+    const afterSecond = useTabsStore.getState().tabs;
+    expect(afterSecond).toHaveLength(1);
+    expect(afterSecond[0]!.path).toBe('src/a.ts');
+
+    unsub();
+  });
+
+  it('file:// URI and tree-relative path open the SAME tab', () => {
+    useActiveBasesStore.setState({ bases: { worktreePath: WORKTREE, projectPath: PROJECT } });
+    const unsub = subscribeToFileIntents();
+
+    // Simulate LSP go-to-def emitting a file:// URI.
+    emitSurfaceIntent({ type: 'open-file', path: `file://${WORKTREE}/src/b.ts` });
+    const afterFirst = useTabsStore.getState().tabs;
+    expect(afterFirst).toHaveLength(1);
+    expect(afterFirst[0]!.path).toBe('src/b.ts');
+
+    // Same file from file-tree — must NOT create a second tab.
+    emitSurfaceIntent({ type: 'open-file', path: 'src/b.ts' });
+    const afterSecond = useTabsStore.getState().tabs;
+    expect(afterSecond).toHaveLength(1);
+
+    unsub();
+  });
+
+  it('absolute path under project base (no worktree) normalizes correctly', () => {
+    useActiveBasesStore.setState({ bases: { projectPath: PROJECT } });
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: `${PROJECT}/lib/util.ts` });
+    const tabs = useTabsStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]!.path).toBe('lib/util.ts');
+
+    // Relative form is the same tab.
+    emitSurfaceIntent({ type: 'open-file', path: 'lib/util.ts' });
+    expect(useTabsStore.getState().tabs).toHaveLength(1);
+
+    unsub();
+  });
+
+  it('external path (no base match) uses the absolute path as the tab key', () => {
+    useActiveBasesStore.setState({ bases: { worktreePath: WORKTREE, projectPath: PROJECT } });
+    const unsub = subscribeToFileIntents();
+
+    const extPath = '/usr/local/share/system.ts';
+    emitSurfaceIntent({ type: 'open-file', path: extPath });
+    const tabs = useTabsStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]!.path).toBe(extPath);
+
+    unsub();
+  });
+
+  it('without active bases, relative paths still work as tab keys', () => {
+    // bases = {} — no normalization context but shouldn't crash.
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: 'src/c.ts' });
+    const tabs = useTabsStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]!.path).toBe('src/c.ts');
 
     unsub();
   });

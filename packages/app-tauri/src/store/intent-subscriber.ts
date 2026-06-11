@@ -9,6 +9,12 @@
  * re-subscribed on state changes — the callbacks capture live store state via
  * `getState()` calls, not via closure.
  *
+ * Path normalization (F1 fix): before opening a tab the raw intent path is
+ * normalized via `toFileRef` against the active bases (worktreePath /
+ * projectPath, pushed into `useActiveBasesStore` by `useActiveBases`). This
+ * gives all flavors — absolute tool-card paths, base-relative tree paths,
+ * file:// LSP URIs — the same canonical relative key in the tabs store.
+ *
  * Behaviour mirrored from 04-engine.jsx openTargetWS:
  *  - open-file: openTab(path, {mode:'preview'}) + ensure Files surface is active.
  *    When the intent carries a `line`/`character` position, also stashes a
@@ -17,10 +23,12 @@
  *    tree component doesn't exist yet; we at minimum surface the panel).
  */
 import { pickViewerKind } from '@/features/viewers/viewer-router';
+import { toFileRef } from '@/lib/files/file-ref';
 import { onSurfaceIntent } from './surface-intents';
 import { useLayoutStore } from './layout';
 import { useTabsStore } from './tabs';
 import { useEditorStore } from './editor';
+import { useActiveBasesStore } from './active-bases-store';
 import type { OpenTabTarget } from './tabs';
 
 /** Ensure the Files surface is visible in the layout. Pure store call. */
@@ -49,7 +57,13 @@ function kindForPath(path: string): OpenTabTarget['kind'] {
 export function subscribeToFileIntents(): () => void {
   return onSurfaceIntent((intent) => {
     if (intent.type === 'open-file') {
-      const { path, line, character } = intent;
+      const { path: rawPath, line, character } = intent;
+
+      // Normalize to canonical base-relative path (F1 fix).
+      const bases = useActiveBasesStore.getState().bases;
+      const ref = toFileRef(rawPath, bases);
+      const path = ref.relative;
+
       const title = path.split('/').pop() ?? path;
       const kind = kindForPath(path);
 

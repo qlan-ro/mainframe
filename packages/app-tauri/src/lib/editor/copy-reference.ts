@@ -91,13 +91,23 @@ export function buildReference(
 /**
  * Build a reference string for a CM6 cursor position.
  *
- * @param filePath  Absolute file path from the CmEditor `path` prop.
- * @param line      0-based line number from CM6 (will be converted to 1-based).
- * @param word      Optional word under the cursor (CM6 word-at-pos).
+ * @param filePath        Path prop from the CmEditor (may be absolute or relative).
+ * @param line            0-based line number from CM6 (converted to 1-based).
+ * @param word            Optional word under the cursor (CM6 word-at-pos).
+ * @param canonicalPath   Optional override — the canonical base-relative path
+ *                        from `toFileRef`. When provided it replaces `filePath`
+ *                        so copy-reference output is always deterministic and
+ *                        project/worktree-relative regardless of how the tab
+ *                        was opened (F1 fix).
  */
-export function buildReferenceForCm(filePath: string | undefined, line: number, word?: string): string {
+export function buildReferenceForCm(
+  filePath: string | undefined,
+  line: number,
+  word?: string,
+  canonicalPath?: string,
+): string {
   // CM6 uses 0-based lines; buildReference expects 1-based.
-  return buildReference(filePath, line + 1, undefined, word);
+  return buildReference(canonicalPath ?? filePath, line + 1, undefined, word);
 }
 
 // ---------------------------------------------------------------------------

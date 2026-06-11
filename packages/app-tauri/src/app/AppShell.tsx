@@ -11,6 +11,7 @@ import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
+import { useActiveBases } from '../features/sessions/use-active-bases';
 import { useLayoutStore } from '../store/layout';
 import { MainToolbar } from '../layout/MainToolbar';
 import { SidebarCollapseHandle } from '../layout/SidebarCollapseHandle';
@@ -33,6 +34,9 @@ function getMainOverlap(sidebarRendered: boolean, sidebarWidth: number): number 
 
 function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
+  // Sync active worktreePath + projectPath into the active-bases store so the
+  // intent subscriber can normalize open-file paths (F1 fix).
+  useActiveBases();
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
