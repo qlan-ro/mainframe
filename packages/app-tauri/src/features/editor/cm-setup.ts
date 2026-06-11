@@ -6,8 +6,18 @@
  *     warm-chrome theme, syntax highlight style.
  *   - Two reconfigurable Compartments so CmEditor can hot-swap language packs
  *     and toggle read-only without destroying the view.
+ *   - resolveLanguage() — maps a LangPackId to the matching @codemirror/lang-*
+ *     Extension; shared by CmEditor and CmDiffEditor.
  */
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { javascript } from '@codemirror/lang-javascript';
+import { css } from '@codemirror/lang-css';
+import { html } from '@codemirror/lang-html';
+import { json } from '@codemirror/lang-json';
+import { markdown } from '@codemirror/lang-markdown';
+import { python } from '@codemirror/lang-python';
+import { rust } from '@codemirror/lang-rust';
+import type { LangPackId } from '@/lib/editor/file-types';
 import {
   EditorView,
   lineNumbers,
@@ -145,4 +155,34 @@ export function buildBaseExtensions(): Extension[] {
     warmTheme,
     syntaxHighlighting(warmHighlight, { fallback: true }),
   ];
+}
+
+// ── Language pack resolver (shared) ─────────────────────────────────────────
+
+/**
+ * Map a LangPackId to its @codemirror/lang-* Extension.
+ * Returns an empty extension array for 'plaintext' (no grammar needed).
+ * Used by both CmEditor and CmDiffEditor so the mapping stays in one place.
+ */
+export function resolveLanguage(lang: LangPackId): Extension {
+  switch (lang) {
+    case 'typescript':
+      return javascript({ typescript: true, jsx: true });
+    case 'javascript':
+      return javascript({ jsx: true });
+    case 'css':
+      return css();
+    case 'html':
+      return html();
+    case 'json':
+      return json();
+    case 'markdown':
+      return markdown();
+    case 'python':
+      return python();
+    case 'rust':
+      return rust();
+    default:
+      return [];
+  }
 }

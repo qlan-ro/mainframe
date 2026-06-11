@@ -1,0 +1,50 @@
+/**
+ * diff-nav — next/prev change chunk navigation for CmDiffEditor.
+ *
+ * Maintains a singleton ref to the currently active MergeView so that external
+ * controls (header buttons, keyboard shortcuts) can navigate without needing a
+ * prop callback chain.
+ *
+ * Port of the desktop `diff-nav.ts`; adapted for @codemirror/merge's Chunk API
+ * instead of Monaco's `getLineChanges()`.
+ *
+ * Navigation dispatches selection + scrollIntoView transactions to the b
+ * (modified) EditorView. Chunks are read from `mv.chunks` at call time so
+ * there is no need to re-register when the diff recomputes.
+ */
+import { MergeView } from '@codemirror/merge';
+
+// ── Singleton ref ────────────────────────────────────────────────────────────
+
+let activeMergeView: MergeView | null = null;
+
+/** Register (or clear) the active MergeView for global navigation. */
+export function setActiveMergeView(mv: MergeView | null): void {
+  activeMergeView = mv;
+}
+
+// ── Navigation helpers ───────────────────────────────────────────────────────
+
+/** Navigate to the next diff chunk; wraps to the first if past the last. */
+export function nextChange(): void {
+  if (!activeMergeView) return;
+  const { b, chunks } = activeMergeView;
+  if (!chunks.length) return;
+
+  const pos = b.state.selection.main.anchor;
+  const next = chunks.find((c) => c.fromB > pos);
+  const target = next ?? chunks[0]!;
+  b.dispatch({ selection: { anchor: target.fromB, head: target.fromB }, scrollIntoView: true });
+}
+
+/** Navigate to the previous diff chunk; wraps to the last if before the first. */
+export function prevChange(): void {
+  if (!activeMergeView) return;
+  const { b, chunks } = activeMergeView;
+  if (!chunks.length) return;
+
+  const pos = b.state.selection.main.anchor;
+  const prev = [...chunks].reverse().find((c) => c.fromB < pos);
+  const target = prev ?? chunks[chunks.length - 1]!;
+  b.dispatch({ selection: { anchor: target.fromB, head: target.fromB }, scrollIntoView: true });
+}

@@ -14,43 +14,10 @@
 import { useEffect, useRef } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { javascript } from '@codemirror/lang-javascript';
-import { css } from '@codemirror/lang-css';
-import { html } from '@codemirror/lang-html';
-import { json } from '@codemirror/lang-json';
-import { markdown } from '@codemirror/lang-markdown';
-import { python } from '@codemirror/lang-python';
-import { rust } from '@codemirror/lang-rust';
-import type { Extension } from '@codemirror/state';
 import type { LangPackId } from '@/lib/editor/file-types';
 import { applyValueUpdate } from '@/lib/editor/apply-value-update';
 import { useEditorStore } from '@/store/editor';
-import { buildBaseExtensions, createEditorCompartments } from './cm-setup';
-
-// ── Language pack resolver ───────────────────────────────────────────────────
-
-function resolveLanguage(lang: LangPackId): Extension {
-  switch (lang) {
-    case 'typescript':
-      return javascript({ typescript: true, jsx: true });
-    case 'javascript':
-      return javascript({ jsx: true });
-    case 'css':
-      return css();
-    case 'html':
-      return html();
-    case 'json':
-      return json();
-    case 'markdown':
-      return markdown();
-    case 'python':
-      return python();
-    case 'rust':
-      return rust();
-    default:
-      return [];
-  }
-}
+import { buildBaseExtensions, createEditorCompartments, resolveLanguage } from './cm-setup';
 
 // ── Component ────────────────────────────────────────────────────────────────
 
