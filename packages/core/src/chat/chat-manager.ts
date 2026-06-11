@@ -578,10 +578,23 @@ export class ChatManager {
     }
   }
 
+  /**
+   * Returns the working directory for `chatId`:
+   * - the chat's worktree path when it has one and the directory still exists;
+   * - the project root otherwise.
+   *
+   * Returns `null` when the chat is unknown, the project is unknown, or the
+   * chat's worktree has been deleted (`worktreeMissing === true`).
+   * Callers that need to distinguish "worktree missing" from "chat not found"
+   * should check `getChat(chatId)?.worktreeMissing` after receiving `null`.
+   */
   getEffectivePath(chatId: string): string | null {
     const chat = this.getChat(chatId);
     if (!chat) return null;
-    if (chat.worktreePath) return chat.worktreePath;
+    if (chat.worktreePath) {
+      if (chat.worktreeMissing) return null;
+      return chat.worktreePath;
+    }
     const project = this.db.projects.get(chat.projectId);
     return project?.path ?? null;
   }
