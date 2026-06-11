@@ -87,10 +87,10 @@ export function CsvViewer({ content }: CsvViewerProps) {
           placeholder="Filter rows…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="h-6 flex-1 rounded border border-border bg-card px-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="h-6 flex-1 rounded border border-border bg-card px-2 text-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
         {parsed && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-label text-muted-foreground">
             {displayRows.length} / {parsed.rows.length} rows
           </span>
         )}
@@ -98,12 +98,12 @@ export function CsvViewer({ content }: CsvViewerProps) {
 
       {/* Table */}
       {content === null ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
+        <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
       ) : !parsed || parsed.headers.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">No data</div>
+        <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">No data</div>
       ) : (
         <div className="flex-1 overflow-auto">
-          <table className="w-full border-collapse text-xs">
+          <table className="w-full border-collapse text-label">
             <thead className="sticky top-0 bg-background">
               <tr>
                 {/* Row-number gutter */}

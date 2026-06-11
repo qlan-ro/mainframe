@@ -87,7 +87,7 @@ class CommentGutterMarker extends GutterMarker {
     el.style.cursor = 'pointer';
     el.style.fontSize = '11px';
     el.style.lineHeight = '1';
-    el.style.color = 'var(--primary, #0a84ff)';
+    el.style.color = 'var(--primary)';
     el.style.userSelect = 'none';
     el.textContent = '●';
     el.addEventListener('click', (e) => {

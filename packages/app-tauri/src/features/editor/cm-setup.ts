@@ -83,26 +83,26 @@ export const warmTheme = EditorView.theme(
       color: 'var(--mf-code-fg)',
     },
     '.cm-activeLine': {
-      backgroundColor: 'rgba(255,255,255,0.04)',
+      backgroundColor: 'var(--mf-cm-active-line)',
     },
     '.cm-cursor': {
       borderLeftColor: 'var(--mf-code-fg)',
     },
     '.cm-selectionBackground, ::selection': {
-      backgroundColor: 'rgba(59,130,246,0.3)',
+      backgroundColor: 'var(--mf-cm-selection)',
     },
     '&.cm-focused .cm-selectionBackground': {
-      backgroundColor: 'rgba(59,130,246,0.4)',
+      backgroundColor: 'var(--mf-cm-selection-focused)',
     },
     '.cm-searchMatch': {
-      backgroundColor: 'rgba(251,191,36,0.2)',
-      outline: '1px solid rgba(251,191,36,0.4)',
+      backgroundColor: 'var(--mf-cm-match)',
+      outline: '1px solid var(--mf-cm-match-border)',
     },
     '.cm-searchMatch.cm-searchMatch-selected': {
-      backgroundColor: 'rgba(251,191,36,0.4)',
+      backgroundColor: 'var(--mf-cm-match-selected)',
     },
     '.cm-selectionMatch': {
-      backgroundColor: 'rgba(59,130,246,0.15)',
+      backgroundColor: 'var(--mf-cm-sel-match)',
     },
     '.cm-scroller': {
       overflow: 'auto',

@@ -65,7 +65,7 @@ export function DiffTab({ path, original, modified }: DiffTabProps) {
 
   if (loadState.status === 'loading') {
     return (
-      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
         Loading diff…
       </div>
     );
@@ -73,7 +73,7 @@ export function DiffTab({ path, original, modified }: DiffTabProps) {
 
   if (loadState.status === 'error') {
     return (
-      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-sm text-destructive">
+      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-destructive">
         {loadState.message}
       </div>
     );

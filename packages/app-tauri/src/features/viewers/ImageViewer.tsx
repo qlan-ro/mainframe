@@ -26,11 +26,12 @@ export function ImageViewer({ src, alt = '' }: ImageViewerProps) {
       data-testid="viewer-image"
       className="relative flex h-full w-full flex-col items-center justify-center overflow-auto"
       style={{
-        background: 'var(--mf-checkerboard, repeating-conic-gradient(#e5e7eb 0% 25%, #f9fafb 0% 50%) 0 0 / 16px 16px)',
+        background:
+          'repeating-conic-gradient(var(--mf-checker-dark) 0% 25%, var(--mf-checker-light) 0% 50%) 0 0 / 16px 16px',
       }}
     >
       {src === null ? (
-        <span className="text-sm text-muted-foreground">Loading image…</span>
+        <span className="text-body text-muted-foreground">Loading image…</span>
       ) : (
         <ZoomableImage src={src} alt={alt} className="max-h-[80vh] max-w-full rounded object-contain" />
       )}

@@ -68,7 +68,7 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
       {/* Title — italic when preview */}
       <span
         className={[
-          'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-none tracking-[-0.05em]',
+          'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-caption leading-none',
           tab.mode === 'preview' ? 'italic' : '',
         ].join(' ')}
       >

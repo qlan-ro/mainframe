@@ -121,6 +121,17 @@
   --mf-viewer-matte: #e6e2da;
   --mf-viewer-check-a: #efece6;
   --mf-viewer-check-b: #dcd8d0;
+  /* Checkerboard transparency pattern — image/SVG preview backdrop */
+  --mf-checker-light: #f9fafb;
+  --mf-checker-dark: #e5e7eb;
+  /* CM6 editor UI states — tokenised so the theme var is in CSS, not JS */
+  --mf-cm-active-line: rgba(255,255,255,0.04);
+  --mf-cm-selection: rgba(59,130,246,0.3);
+  --mf-cm-selection-focused: rgba(59,130,246,0.4);
+  --mf-cm-match: rgba(251,191,36,0.2);
+  --mf-cm-match-border: rgba(251,191,36,0.4);
+  --mf-cm-match-selected: rgba(251,191,36,0.4);
+  --mf-cm-sel-match: rgba(59,130,246,0.15);
 
   /* Elevation + focus ring */
   --mf-shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.20), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
@@ -229,6 +240,17 @@
   --mf-viewer-matte: #16140f;
   --mf-viewer-check-a: #1c1a16;
   --mf-viewer-check-b: #26231d;
+  /* Checkerboard transparency pattern — image/SVG preview backdrop */
+  --mf-checker-light: #26231d;
+  --mf-checker-dark: #1c1a16;
+  /* CM6 editor UI states — DARK (same opacities, dark base blends differently) */
+  --mf-cm-active-line: rgba(255,255,255,0.04);
+  --mf-cm-selection: rgba(59,130,246,0.3);
+  --mf-cm-selection-focused: rgba(59,130,246,0.4);
+  --mf-cm-match: rgba(251,191,36,0.2);
+  --mf-cm-match-border: rgba(251,191,36,0.4);
+  --mf-cm-match-selected: rgba(251,191,36,0.4);
+  --mf-cm-sel-match: rgba(59,130,246,0.15);
 
   /* Elevation + focus ring — DARK */
   --mf-shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.10);

@@ -129,11 +129,11 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   }, [path]);
 
   if (state.status === 'idle' || state.status === 'loading') {
-    return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>;
+    return <div className="flex h-full items-center justify-center text-body text-muted-foreground">Loading…</div>;
   }
 
   if (state.status === 'error') {
-    return <div className="flex h-full items-center justify-center text-sm text-destructive">{state.message}</div>;
+    return <div className="flex h-full items-center justify-center text-body text-destructive">{state.message}</div>;
   }
 
   const { kind, content } = state;
@@ -142,7 +142,7 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
     return renderCode ? (
       <>{renderCode(path)}</>
     ) : (
-      <pre className="h-full overflow-auto p-4 text-xs font-mono text-foreground">{path}</pre>
+      <pre className="h-full overflow-auto p-4 text-label font-mono text-foreground">{path}</pre>
     );
   }
 

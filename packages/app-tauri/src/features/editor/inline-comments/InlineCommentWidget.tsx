@@ -71,7 +71,7 @@ export function InlineCommentWidget({
           onChange={(e) => onTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Add context about this line..."
-          className="w-full h-full resize-none bg-transparent p-0 border-0 text-[13px] leading-[1.45] font-mono text-foreground outline-none focus:outline-none focus-visible:outline-none"
+          className="w-full h-full resize-none bg-transparent p-0 border-0 text-body font-mono text-foreground outline-none focus:outline-none focus-visible:outline-none"
           style={{
             whiteSpace: 'pre-wrap',
             overflowX: 'hidden',

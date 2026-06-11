@@ -53,7 +53,7 @@ export function SvgViewer({ content }: SvgViewerProps) {
           aria-pressed={mode === 'preview'}
           onClick={() => setMode('preview')}
           className={[
-            'rounded px-2 py-0.5 text-xs font-medium transition-colors',
+            'rounded px-2 py-0.5 text-label font-medium transition-colors',
             mode === 'preview' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
           ].join(' ')}
         >
@@ -65,7 +65,7 @@ export function SvgViewer({ content }: SvgViewerProps) {
           aria-pressed={mode === 'source'}
           onClick={() => setMode('source')}
           className={[
-            'rounded px-2 py-0.5 text-xs font-medium transition-colors',
+            'rounded px-2 py-0.5 text-label font-medium transition-colors',
             mode === 'source' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
           ].join(' ')}
         >
@@ -76,13 +76,13 @@ export function SvgViewer({ content }: SvgViewerProps) {
       {/* Body */}
       <div className="flex flex-1 overflow-auto">
         {content === null ? (
-          <span className="m-auto text-sm text-muted-foreground">Loading…</span>
+          <span className="m-auto text-body text-muted-foreground">Loading…</span>
         ) : mode === 'preview' ? (
           <div
             className="flex flex-1 items-center justify-center p-4"
             style={{
               background:
-                'var(--mf-checkerboard, repeating-conic-gradient(#e5e7eb 0% 25%, #f9fafb 0% 50%) 0 0 / 16px 16px)',
+                'repeating-conic-gradient(var(--mf-checker-dark) 0% 25%, var(--mf-checker-light) 0% 50%) 0 0 / 16px 16px',
             }}
           >
             {objectUrl && <img src={objectUrl} alt="SVG preview" className="max-h-full max-w-full object-contain" />}
@@ -90,7 +90,7 @@ export function SvgViewer({ content }: SvgViewerProps) {
         ) : (
           <pre
             data-testid="viewer-svg-source"
-            className="mf-editor-selectable flex-1 overflow-auto p-4 text-xs font-mono text-foreground"
+            className="mf-editor-selectable flex-1 overflow-auto p-4 text-label font-mono text-foreground"
           >
             {content}
           </pre>

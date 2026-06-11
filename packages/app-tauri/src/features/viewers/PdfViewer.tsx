@@ -75,20 +75,20 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
     <div data-testid="viewer-pdf" className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-2 [border-bottom:0.5px_solid_var(--border)] px-3 py-1.5">
-        <span className="flex-1 truncate text-xs text-muted-foreground">{path ? path.split('/').pop() : 'PDF'}</span>
+        <span className="flex-1 truncate text-label text-muted-foreground">{path ? path.split('/').pop() : 'PDF'}</span>
         {path && (
           <button
             type="button"
             data-testid="viewer-pdf-fallback"
             onClick={() => void handleOpenExternal()}
-            className="rounded px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="rounded px-2 py-0.5 text-label font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             Open externally
           </button>
         )}
         {!path && (
           /* Always render the fallback testid even without a path, so tests can find it */
-          <span data-testid="viewer-pdf-fallback" className="text-xs text-muted-foreground">
+          <span data-testid="viewer-pdf-fallback" className="text-label text-muted-foreground">
             Open externally
           </span>
         )}
@@ -96,11 +96,11 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
 
       {/* Body */}
       {base64 === null ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
+        <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
       ) : objectUrl ? (
         <embed src={objectUrl} type={mimeType} className="w-full flex-1" title="PDF viewer" />
       ) : (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
+        <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
       )}
     </div>
   );

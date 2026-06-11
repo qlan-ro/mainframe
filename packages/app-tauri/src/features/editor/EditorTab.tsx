@@ -71,7 +71,7 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
 
   if (loadState.status === 'loading') {
     return (
-      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
         Loading…
       </div>
     );
@@ -79,7 +79,7 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
 
   if (loadState.status === 'error') {
     return (
-      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-sm text-destructive">
+      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-body text-destructive">
         {loadState.message}
       </div>
     );

@@ -69,7 +69,7 @@ export function SkillEditorTab({ tabId, path }: SkillEditorTabProps) {
     return (
       <div
         data-testid="skill-editor-tab"
-        className="flex h-full items-center justify-center text-sm text-muted-foreground"
+        className="flex h-full items-center justify-center text-body text-muted-foreground"
       >
         Loading skill…
       </div>
@@ -78,7 +78,10 @@ export function SkillEditorTab({ tabId, path }: SkillEditorTabProps) {
 
   if (loadState.status === 'error') {
     return (
-      <div data-testid="skill-editor-tab" className="flex h-full items-center justify-center text-sm text-destructive">
+      <div
+        data-testid="skill-editor-tab"
+        className="flex h-full items-center justify-center text-body text-destructive"
+      >
         {loadState.message}
       </div>
     );

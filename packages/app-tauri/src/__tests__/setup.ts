@@ -71,5 +71,9 @@ function zeroRectList(): DOMRectList {
   } as unknown as DOMRectList;
 }
 
-Range.prototype.getClientRects = zeroRectList;
-Range.prototype.getBoundingClientRect = () => zeroRect;
+// Guard: this global setup file is also loaded by `@vitest-environment node`
+// test files, where `Range` (a DOM global) is undefined.
+if (typeof Range !== 'undefined') {
+  Range.prototype.getClientRects = zeroRectList;
+  Range.prototype.getBoundingClientRect = () => zeroRect;
+}
