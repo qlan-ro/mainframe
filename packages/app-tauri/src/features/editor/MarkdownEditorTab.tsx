@@ -24,13 +24,13 @@ export function MarkdownEditorTab({ value, path, onChange }: MarkdownEditorTabPr
     <div className="flex h-full flex-col overflow-hidden">
       {/* Edit / Preview segmented toggle. */}
       <div className="flex h-[30px] flex-shrink-0 items-center gap-1 bg-mf-tab-bar px-2 [border-bottom:0.5px_solid_var(--border)]">
-        <div className="flex items-center gap-0.5 rounded-[7px] bg-mf-chip-bg p-0.5">
+        <div className="flex items-center gap-0.5 rounded-[7px] bg-mf-chip p-0.5">
           <button
             data-testid="markdown-mode-edit"
             type="button"
             onClick={() => setMode('edit')}
             aria-pressed={mode === 'edit'}
-            className={`${SEG_BTN} ${mode === 'edit' ? 'bg-mf-tab-bar-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`${SEG_BTN} ${mode === 'edit' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             Edit
           </button>
@@ -39,7 +39,7 @@ export function MarkdownEditorTab({ value, path, onChange }: MarkdownEditorTabPr
             type="button"
             onClick={() => setMode('preview')}
             aria-pressed={mode === 'preview'}
-            className={`${SEG_BTN} ${mode === 'preview' ? 'bg-mf-tab-bar-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`${SEG_BTN} ${mode === 'preview' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             Preview
           </button>

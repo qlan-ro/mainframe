@@ -121,7 +121,7 @@ export function MainToolbar({
           title="Toggle inspector"
           aria-pressed={inspectorVisible}
           onClick={toggleInspector}
-          className={`${ICON_BTN} ${inspectorVisible ? 'bg-mf-chip-bg text-foreground' : ''}`}
+          className={`${ICON_BTN} ${inspectorVisible ? 'bg-mf-chip text-foreground' : ''}`}
         >
           <PanelRight size={14} />
         </button>

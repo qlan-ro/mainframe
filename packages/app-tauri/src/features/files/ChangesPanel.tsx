@@ -10,7 +10,7 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 /** Short status code → a tint class (added/modified/deleted). */
 function statusClass(code: string): string {
   if (code.includes('A') || code === '??') return 'text-mf-diff-add-border';
-  if (code.includes('D')) return 'text-mf-destructive';
+  if (code.includes('D')) return 'text-destructive';
   return 'text-mf-surface-files';
 }
 

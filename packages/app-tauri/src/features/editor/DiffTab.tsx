@@ -1,80 +1,31 @@
 /**
  * DiffTab — renders a side-by-side diff for a 'diff' kind tab.
  *
- * The original and modified strings can be passed directly from the tab model
- * (e.g. when the diff is opened programmatically by a chat tool card) OR loaded
- * from disk (original = HEAD content, modified = working-tree content) when only
- * the path is available.
+ * Diffs are opened with both sides pre-resolved (a chat tool card passes
+ * `original`/`modified`). A path-only diff (no HEAD-vs-working endpoint yet)
+ * renders an "unavailable" state rather than diffing the file against itself.
  *
- * Phase 4 (CmDiffEditor) provides the MergeView; this is the integration wrapper
- * that resolves content, then hands off rendering.
+ * Content is derived directly from props (no local state) so re-opening a diff
+ * with new content can never show stale sides.
  *
  * data-testid: "diff-tab" on root.
  */
-import { useEffect, useState } from 'react';
-import { readFile } from '@/lib/tauri/bridge';
 import { inferLanguage } from '@/lib/editor/file-types';
 import { CmDiffEditor } from './CmDiffEditor';
 
 interface DiffTabProps {
   path: string;
-  /** Pre-resolved original (base) text. If omitted, we fall back to disk. */
+  /** Pre-resolved original (base) text. */
   original?: string;
-  /** Pre-resolved modified (changed) text. If omitted, we fall back to disk. */
+  /** Pre-resolved modified (changed) text. */
   modified?: string;
 }
 
-type LoadState =
-  | { status: 'loading' }
-  | { status: 'ready'; original: string; modified: string }
-  | { status: 'error'; message: string };
-
 export function DiffTab({ path, original, modified }: DiffTabProps) {
-  const [loadState, setLoadState] = useState<LoadState>(() => {
-    // If both sides are already available, skip async load.
-    if (original !== undefined && modified !== undefined) {
-      return { status: 'ready', original, modified };
-    }
-    return { status: 'loading' };
-  });
-
-  useEffect(() => {
-    // If the caller already provided both sides, nothing to load.
-    if (original !== undefined && modified !== undefined) return;
-
-    let cancelled = false;
-    setLoadState({ status: 'loading' });
-
-    readFile(path)
-      .then((content) => {
-        if (cancelled) return;
-        const text = content ?? '';
-        setLoadState({ status: 'ready', original: text, modified: text });
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn('[DiffTab] failed to load file', path, message);
-        setLoadState({ status: 'error', message });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [path, original, modified]);
-
-  if (loadState.status === 'loading') {
+  if (original === undefined || modified === undefined) {
     return (
       <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
-        Loading diff…
-      </div>
-    );
-  }
-
-  if (loadState.status === 'error') {
-    return (
-      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-destructive">
-        {loadState.message}
+        Diff unavailable — open this file from a chat diff card.
       </div>
     );
   }
@@ -83,7 +34,7 @@ export function DiffTab({ path, original, modified }: DiffTabProps) {
 
   return (
     <div data-testid="diff-tab" className="flex h-full flex-col overflow-hidden">
-      <CmDiffEditor original={loadState.original} modified={loadState.modified} language={language} path={path} />
+      <CmDiffEditor original={original} modified={modified} language={language} path={path} />
     </div>
   );
 }

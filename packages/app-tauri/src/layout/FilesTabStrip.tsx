@@ -44,7 +44,7 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
       className={[
         'group flex h-full flex-shrink-0 cursor-pointer select-none items-center gap-1 px-2',
         'rounded-[6px] transition-colors duration-[120ms]',
-        isActive ? 'bg-mf-tab-bar-active text-foreground' : 'text-mf-text-3 hover:bg-accent hover:text-foreground',
+        isActive ? 'bg-mf-tab-active text-foreground' : 'text-mf-text-3 hover:bg-accent hover:text-foreground',
         'max-w-[160px] min-w-0',
       ].join(' ')}
       onClick={() => onActivate(tab.id)}

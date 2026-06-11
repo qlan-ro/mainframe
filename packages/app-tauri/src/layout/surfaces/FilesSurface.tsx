@@ -25,7 +25,7 @@ export function FilesSurface() {
 
       {activeTab ? (
         <div className="min-h-0 flex-1 overflow-hidden">
-          <EditorTabBody tab={activeTab} />
+          <EditorTabBody key={activeTab.id} tab={activeTab} />
         </div>
       ) : (
         <SurfacePicker surface="files" />

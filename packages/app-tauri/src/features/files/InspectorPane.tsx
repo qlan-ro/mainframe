@@ -25,13 +25,13 @@ export function InspectorPane({ port }: { port: number }) {
     >
       {/* Files / Changes tabs */}
       <div className="flex-shrink-0 p-2.5 pb-2">
-        <div className="flex items-center gap-0.5 rounded-[8px] bg-mf-chip-bg p-0.5">
+        <div className="flex items-center gap-0.5 rounded-[8px] bg-mf-chip p-0.5">
           <button
             data-testid="inspector-tab-files"
             type="button"
             onClick={() => setTab('files')}
             aria-pressed={tab === 'files'}
-            className={`${SEG} ${tab === 'files' ? 'bg-mf-tab-bar-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`${SEG} ${tab === 'files' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <FileText size={11} />
             Files
@@ -41,7 +41,7 @@ export function InspectorPane({ port }: { port: number }) {
             type="button"
             onClick={() => setTab('changes')}
             aria-pressed={tab === 'changes'}
-            className={`${SEG} ${tab === 'changes' ? 'bg-mf-tab-bar-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`${SEG} ${tab === 'changes' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <GitCompare size={11} />
             Changes

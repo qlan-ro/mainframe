@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
+import { useLayoutStore } from '@/store/layout';
 import { MainToolbar } from '../MainToolbar';
 
 beforeEach(() => {
   localStorage.clear();
   useTheme.getState().setMode('light');
+  useLayoutStore.setState({ inspectorVisible: false });
 });
 
 describe('MainToolbar — root element', () => {
@@ -78,13 +80,28 @@ describe('MainToolbar — show-sidebar button', () => {
 });
 
 describe('MainToolbar — stub buttons', () => {
-  it('renders search, launch, play, and inspector stub buttons all disabled', () => {
+  it('renders search, launch, and play stub buttons all disabled', () => {
     render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
 
     expect(screen.getByTestId('main-toolbar-search')).toBeDisabled();
     expect(screen.getByTestId('main-toolbar-launch')).toBeDisabled();
     expect(screen.getByTestId('main-toolbar-play')).toBeDisabled();
-    expect(screen.getByTestId('main-toolbar-inspector')).toBeDisabled();
+  });
+});
+
+describe('MainToolbar — inspector toggle', () => {
+  it('inspector button is live (not disabled) and toggles the layout inspectorVisible flag', () => {
+    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
+
+    const btn = screen.getByTestId('main-toolbar-inspector');
+    expect(btn).not.toBeDisabled();
+    expect(useLayoutStore.getState().inspectorVisible).toBe(false);
+
+    fireEvent.click(btn);
+    expect(useLayoutStore.getState().inspectorVisible).toBe(true);
+
+    fireEvent.click(btn);
+    expect(useLayoutStore.getState().inspectorVisible).toBe(false);
   });
 });
 
