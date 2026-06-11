@@ -59,11 +59,11 @@ export function InlineCommentWidget({
   return (
     <div data-testid="editor-comment-widget" className="pt-2 pb-4 px-1">
       {lineContent && (
-        <div className="mb-1.5 px-2 py-1 rounded bg-mf-hover text-mf-small font-mono text-mf-text-secondary truncate">
+        <div className="mb-1.5 px-2 py-1 rounded bg-accent text-caption font-mono text-muted-foreground truncate">
           {lineContent}
         </div>
       )}
-      <div className="w-full h-[64px] bg-mf-input-bg border border-mf-divider rounded-md px-3.5 py-3 box-border focus-within:border-mf-accent">
+      <div className="w-full h-[64px] bg-card border border-border rounded-md px-3.5 py-3 box-border focus-within:ring-1 focus-within:ring-ring">
         <textarea
           data-testid="editor-comment-widget-input"
           ref={ref}
@@ -71,7 +71,7 @@ export function InlineCommentWidget({
           onChange={(e) => onTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Add context about this line..."
-          className="w-full h-full resize-none bg-transparent p-0 border-0 text-[13px] leading-[1.45] font-mono text-mf-text-primary outline-none focus:outline-none focus-visible:outline-none"
+          className="w-full h-full resize-none bg-transparent p-0 border-0 text-[13px] leading-[1.45] font-mono text-foreground outline-none focus:outline-none focus-visible:outline-none"
           style={{
             whiteSpace: 'pre-wrap',
             overflowX: 'hidden',
@@ -85,7 +85,7 @@ export function InlineCommentWidget({
           <button
             data-testid="editor-comment-widget-delete"
             onClick={onDelete}
-            className="px-2 py-0.5 rounded text-mf-small text-mf-destructive hover:bg-mf-hover transition-colors"
+            className="px-2 py-0.5 rounded text-caption text-destructive hover:bg-mf-destructive-tint transition-colors"
             title="Delete comment"
           >
             <Trash2 size={11} />
@@ -94,7 +94,7 @@ export function InlineCommentWidget({
         <button
           data-testid="editor-comment-widget-cancel"
           onClick={onClose}
-          className="px-2 py-0.5 rounded text-mf-small text-mf-text-secondary hover:bg-mf-hover transition-colors"
+          className="px-2 py-0.5 rounded text-caption text-muted-foreground hover:bg-accent transition-colors"
         >
           Cancel
         </button>
@@ -102,7 +102,7 @@ export function InlineCommentWidget({
           data-testid="editor-comment-widget-save"
           onClick={handleSave}
           disabled={!text.trim()}
-          className="flex items-center gap-1 px-2 py-0.5 rounded text-mf-small text-mf-accent hover:bg-mf-hover disabled:opacity-30 transition-colors"
+          className="flex items-center gap-1 px-2 py-0.5 rounded text-caption text-primary hover:bg-accent disabled:opacity-30 transition-colors"
         >
           <Send size={11} />
           Save

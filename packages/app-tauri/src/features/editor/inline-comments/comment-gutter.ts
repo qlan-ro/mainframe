@@ -53,6 +53,14 @@ export const commentField = StateField.define<InlineCommentState[]>({
 
 // ── Helper ───────────────────────────────────────────────────────────────────
 
+/**
+ * Read comment state from any EditorState that includes commentField.
+ *
+ * NOTE: `commentField` is already bundled inside `buildCommentGutter`. Do NOT
+ * add it again to the extension list — registering the same StateField twice
+ * causes a CM6 "duplicate field" error. This export exists only for unit tests
+ * that build a minimal EditorState without the full gutter.
+ */
 export function getCommentsFromState(state: {
   field: (f: typeof commentField) => InlineCommentState[];
 }): InlineCommentState[] {
@@ -79,7 +87,7 @@ class CommentGutterMarker extends GutterMarker {
     el.style.cursor = 'pointer';
     el.style.fontSize = '11px';
     el.style.lineHeight = '1';
-    el.style.color = 'var(--mf-accent, #6366f1)';
+    el.style.color = 'var(--primary, #0a84ff)';
     el.style.userSelect = 'none';
     el.textContent = '●';
     el.addEventListener('click', (e) => {
@@ -145,7 +153,7 @@ export function buildCommentGutter(callbacks: CommentGutterCallbacks): Extension
     EditorView.theme({
       '.cm-comment-gutter': {
         width: '18px',
-        borderRight: '1px solid var(--mf-divider, rgba(255,255,255,0.08))',
+        borderRight: '1px solid var(--border)',
       },
       '.cm-comment-gutter .cm-gutterElement': {
         display: 'flex',

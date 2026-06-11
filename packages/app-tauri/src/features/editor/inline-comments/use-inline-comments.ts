@@ -14,8 +14,6 @@
  */
 import { useCallback, useState } from 'react';
 
-let nextId = 0;
-
 export interface CommentEntry {
   id: string;
   startLine: number;
@@ -50,7 +48,7 @@ export function useInlineComments(): UseInlineCommentsResult {
   const [comments, setComments] = useState<CommentEntry[]>([]);
 
   const addComment = useCallback((params: AddCommentParams): string => {
-    const id = `comment-${++nextId}`;
+    const id = `comment-${crypto.randomUUID()}`;
     const entry: CommentEntry = { id, text: '', ...params };
     setComments((prev) => [...prev, entry]);
     return id;

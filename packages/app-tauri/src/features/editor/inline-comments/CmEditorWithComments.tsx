@@ -42,6 +42,9 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
   const viewRef = useRef<EditorView | null>(null);
   const { comments, addComment, editComment, deleteComment } = useInlineComments();
   const [portals, setPortals] = useState<WidgetPortal[]>([]);
+  // Mirror of portals in a ref so openWidgetForComment can read the current
+  // list synchronously without relying on a stale setState closure.
+  const portalsRef = useRef<WidgetPortal[]>([]);
 
   // ── Open widget ──────────────────────────────────────────────────────────
 
@@ -49,27 +52,30 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
     const view = viewRef.current;
     if (!view) return;
 
-    // Bail if a portal already exists for this comment.
-    setPortals((prev) => {
-      if (prev.some((p) => p.commentId === commentId)) return prev;
+    // Bail if a portal already exists for this comment (read from ref to avoid stale closure).
+    if (portalsRef.current.some((p) => p.commentId === commentId)) return;
 
-      // Find the CM6 line DOM element for the given line number.
-      const docLine = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines)));
-      const lineBlock = view.lineBlockAt(docLine.from);
-      const lineEl = view.domAtPos(lineBlock.from).node.parentElement;
+    // Find the CM6 line DOM element for the given line number.
+    const docLine = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines)));
+    const lineBlock = view.lineBlockAt(docLine.from);
+    const lineEl = view.domAtPos(lineBlock.from).node.parentElement;
 
-      if (!lineEl) {
-        console.warn('[CmEditorWithComments] could not locate line DOM node for line', line);
-        return prev;
-      }
+    if (!lineEl) {
+      console.warn('[CmEditorWithComments] could not locate line DOM node for line', line);
+      return;
+    }
 
-      const host = document.createElement('div');
-      host.className = 'cm-comment-widget-host';
-      host.style.width = '100%';
-      lineEl.after(host);
+    // Create and insert the host node BEFORE calling setPortals so the DOM
+    // mutation never runs inside a setState updater (which React may call twice
+    // in Strict Mode).
+    const host = document.createElement('div');
+    host.className = 'cm-comment-widget-host';
+    host.style.width = '100%';
+    lineEl.after(host);
 
-      return [...prev, { commentId, domNode: host }];
-    });
+    const entry: WidgetPortal = { commentId, domNode: host };
+    portalsRef.current = [...portalsRef.current, entry];
+    setPortals((prev) => [...prev, entry]);
   }, []);
 
   // ── Gutter callbacks ─────────────────────────────────────────────────────
@@ -124,24 +130,23 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
 
   useEffect(() => {
     return () => {
-      // Detach all portal host nodes on unmount.
-      setPortals((prev) => {
-        for (const p of prev) {
-          p.domNode.remove();
-        }
-        return [];
-      });
+      // Detach DOM nodes directly via the ref — avoids calling setPortals on
+      // an unmounted component (which is a no-op in React 18 but noisy and
+      // incorrect in principle).
+      for (const p of portalsRef.current) {
+        p.domNode.remove();
+      }
+      portalsRef.current = [];
     };
   }, []);
 
   // ── Widget handlers ──────────────────────────────────────────────────────
 
   const closePortal = useCallback((commentId: string) => {
-    setPortals((prev) => {
-      const portal = prev.find((p) => p.commentId === commentId);
-      portal?.domNode.remove();
-      return prev.filter((p) => p.commentId !== commentId);
-    });
+    const portal = portalsRef.current.find((p) => p.commentId === commentId);
+    portal?.domNode.remove();
+    portalsRef.current = portalsRef.current.filter((p) => p.commentId !== commentId);
+    setPortals((prev) => prev.filter((p) => p.commentId !== commentId));
   }, []);
 
   const handleSave = useCallback(
@@ -173,17 +178,17 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
     setDraftTexts((prev) => ({ ...prev, [commentId]: text }));
   }, []);
 
+  // ── View ready callback (stable) ────────────────────────────────────────
+
+  const handleViewReady = useCallback((view: EditorView) => {
+    viewRef.current = view;
+  }, []);
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <>
-      <CmEditor
-        {...editorProps}
-        extraExtensions={commentExtensions}
-        onViewReady={(view) => {
-          viewRef.current = view;
-        }}
-      />
+      <CmEditor {...editorProps} extraExtensions={commentExtensions} onViewReady={handleViewReady} />
       {portals.map((portal) => {
         const comment = comments.find((c) => c.id === portal.commentId);
         const text = draftTexts[portal.commentId] ?? comment?.text ?? '';
