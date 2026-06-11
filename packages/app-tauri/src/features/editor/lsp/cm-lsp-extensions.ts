@@ -146,12 +146,15 @@ function buildGoToDefExtension(providers: LspProviders, opts: LspExtensionOption
         const target = locations[0];
         if (!target) return;
 
-        // Push the from-position onto the jump history before navigating.
+        // Push BOTH the from-position and the destination onto the jump history
+        // so back() returns A and forward() returns B (standard editor semantics).
         jumpHistory.push(fromEntry);
-
         const targetPath = target.uri.startsWith('file://') ? target.uri.slice('file://'.length) : target.uri;
+        const targetLine = target.range.start.line;
+        const targetCharacter = target.range.start.character;
+        jumpHistory.push({ path: targetPath, line: targetLine, character: targetCharacter });
 
-        emitSurfaceIntent({ type: 'open-file', path: targetPath });
+        emitSurfaceIntent({ type: 'open-file', path: targetPath, line: targetLine, character: targetCharacter });
       })();
 
       // Prevent the default text selection on meta-click.

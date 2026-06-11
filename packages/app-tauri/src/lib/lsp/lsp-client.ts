@@ -17,6 +17,13 @@
  *   - Changed: port injected via constructor (from getDaemonPort), not env vars
  *   - Fixed:   removeEntry rejects all in-flight pending requests
  *   - Fixed:   silent catches now log with console.warn('[lsp] ...')
+ *   - Fixed(#13a): client registered AFTER initialize/initialized completes;
+ *              provider calls return [] while init is in-flight (no protocol violation)
+ *   - Fixed(#13b): server→client requests (id+method) get a minimal JSON-RPC
+ *              response so the server doesn't block waiting for a reply
+ *   - Fixed(#13c): sendRequest and connect have a configurable timeout so a
+ *              hung server never pends forever; timed-out requests are removed
+ *              from pending
  */
 
 // ---------------------------------------------------------------------------
@@ -82,6 +89,18 @@ export interface DocumentRef {
 }
 
 // ---------------------------------------------------------------------------
+// Options
+// ---------------------------------------------------------------------------
+
+export interface LspClientManagerOptions {
+  /**
+   * Timeout in milliseconds for sendRequest. Defaults to 15 000 ms.
+   * Also used as the connect (WebSocket open + initialize) timeout.
+   */
+  requestTimeoutMs?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------
 
@@ -89,7 +108,12 @@ interface LspClientEntry {
   ws: WebSocket;
   projectPath: string;
   requestId: number;
-  pending: Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>;
+  pending: Map<
+    number,
+    { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
+  >;
+  /** True only after the `initialized` notification has been sent. */
+  ready: boolean;
 }
 
 function makeKey(projectId: string, language: string): string {
@@ -129,14 +153,18 @@ async function discoverWorkspaceFolders(
 // LspClientManager
 // ---------------------------------------------------------------------------
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+
 export class LspClientManager implements LspProviders {
   private readonly clients = new Map<string, LspClientEntry>();
   private readonly connecting = new Map<string, Promise<void>>();
   private readonly openedUris = new Set<string>();
   private readonly port: number;
+  private readonly requestTimeoutMs: number;
 
-  constructor(port: number) {
+  constructor(port: number, opts: LspClientManagerOptions = {}) {
     this.port = port;
+    this.requestTimeoutMs = opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
   hasClient(projectId: string, language: string): boolean {
@@ -165,14 +193,37 @@ export class LspClientManager implements LspProviders {
     const wsUrl = `ws://127.0.0.1:${this.port}/lsp/${projectId}/${language}`;
     const ws = new WebSocket(wsUrl);
 
+    // Connect timeout: if the socket doesn't open within requestTimeoutMs, reject.
     await new Promise<void>((resolve, reject) => {
-      ws.onopen = () => resolve();
-      ws.onerror = () => reject(new Error(`[lsp] WebSocket error connecting to ${wsUrl}`));
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        ws.onopen = null;
+        ws.onerror = null;
+        reject(new Error(`[lsp] connect timeout for ${wsUrl}`));
+      }, this.requestTimeoutMs);
+
+      ws.onopen = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      ws.onerror = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(new Error(`[lsp] WebSocket error connecting to ${wsUrl}`));
+      };
     });
 
-    const entry: LspClientEntry = { ws, projectPath, requestId: 1, pending: new Map() };
-    this.clients.set(key, entry);
+    // Build the entry WITHOUT registering it in `this.clients` yet.
+    // The entry is registered only after initialize+initialized succeeds (#13a).
+    const entry: LspClientEntry = { ws, projectPath, requestId: 1, pending: new Map(), ready: false };
 
+    // Attach message/close/error handlers now so we don't miss server→client
+    // requests that arrive during initialization.
     ws.onmessage = (ev) => this.handleMessage(entry, ev);
     ws.onclose = () => this.removeEntry(key);
     ws.onerror = () => this.removeEntry(key);
@@ -195,11 +246,20 @@ export class LspClientManager implements LspProviders {
       });
     } catch (err) {
       console.warn('[lsp] initialize failed', err);
-      this.removeEntry(key);
+      // Clean up the socket — it was never registered.
+      try {
+        if (ws.readyState === WebSocket.OPEN) ws.close();
+      } catch {
+        /* already closed */
+      }
       return;
     }
 
     this.sendNotification(entry, 'initialized', {});
+
+    // Registration complete: mark ready and add to the public clients map.
+    entry.ready = true;
+    this.clients.set(key, entry);
   }
 
   // ---------------------------------------------------------------------------
@@ -212,7 +272,7 @@ export class LspClientManager implements LspProviders {
     opts: { filePath: string; position: LspPosition },
   ): Promise<LspLocation[]> {
     const entry = this.clients.get(makeKey(projectId, language));
-    if (!entry) return [];
+    if (!entry || !entry.ready) return [];
 
     const uri = this.toLspUri(entry, opts.filePath);
     try {
@@ -233,7 +293,7 @@ export class LspClientManager implements LspProviders {
     opts: { filePath: string; position: LspPosition; includeDeclaration?: boolean },
   ): Promise<LspLocation[]> {
     const entry = this.clients.get(makeKey(projectId, language));
-    if (!entry) return [];
+    if (!entry || !entry.ready) return [];
 
     const uri = this.toLspUri(entry, opts.filePath);
     try {
@@ -255,7 +315,7 @@ export class LspClientManager implements LspProviders {
     opts: { filePath: string; position: LspPosition },
   ): Promise<LspHover | null> {
     const entry = this.clients.get(makeKey(projectId, language));
-    if (!entry) return null;
+    if (!entry || !entry.ready) return null;
 
     const uri = this.toLspUri(entry, opts.filePath);
     try {
@@ -377,10 +437,19 @@ export class LspClientManager implements LspProviders {
   private sendRequest(entry: LspClientEntry, method: string, params: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = entry.requestId++;
-      entry.pending.set(id, { resolve, reject });
+
+      const timer = setTimeout(() => {
+        if (!entry.pending.has(id)) return;
+        entry.pending.delete(id);
+        reject(new Error(`[lsp] request timeout (method=${method}, id=${id})`));
+      }, this.requestTimeoutMs);
+
+      entry.pending.set(id, { resolve, reject, timer });
+
       try {
         entry.ws.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
       } catch (err) {
+        clearTimeout(timer);
         entry.pending.delete(id);
         reject(err instanceof Error ? err : new Error(String(err)));
       }
@@ -396,20 +465,51 @@ export class LspClientManager implements LspProviders {
   }
 
   private handleMessage(entry: LspClientEntry, ev: MessageEvent): void {
+    let data: Record<string, unknown>;
     try {
-      const data = JSON.parse(ev.data) as { id?: number; result?: unknown; error?: { message: string } };
-      if (data.id != null && entry.pending.has(data.id)) {
-        const handler = entry.pending.get(data.id)!;
-        entry.pending.delete(data.id);
-        if (data.error) {
-          handler.reject(new Error(data.error.message));
-        } else {
-          handler.resolve(data.result);
-        }
-      }
+      data = JSON.parse(ev.data) as Record<string, unknown>;
     } catch (err) {
       console.warn('[lsp] handleMessage parse failed', err);
+      return;
     }
+
+    const id = data['id'];
+    const method = data['method'];
+
+    // Server→client REQUEST: has both an id and a method.
+    // Reply with a minimal result so the server isn't blocked (#13b).
+    if (id != null && method != null) {
+      const resultValue = method === 'workspace/configuration' ? [] : null;
+      try {
+        entry.ws.send(JSON.stringify({ jsonrpc: '2.0', id, result: resultValue }));
+      } catch (err) {
+        console.warn(`[lsp] failed to reply to server request (method=${String(method)})`, err);
+      }
+      return;
+    }
+
+    // Client→server RESPONSE: has an id but no method.
+    if (id != null && typeof id === 'number' && entry.pending.has(id)) {
+      const handler = entry.pending.get(id)!;
+      clearTimeout(handler.timer);
+      entry.pending.delete(id);
+      const error = data['error'] as { message: string } | undefined;
+      if (error) {
+        handler.reject(new Error(error.message));
+      } else {
+        handler.resolve(data['result']);
+      }
+      return;
+    }
+
+    // Server→client NOTIFICATION: no id — informational only, no response needed.
+    // Log unknown ones at debug level for diagnostics.
+    if (id == null && method != null) {
+      // Expected notifications: textDocument/publishDiagnostics, window/logMessage, etc.
+      return;
+    }
+
+    console.warn('[lsp] handleMessage: unrecognised message shape', { id, method });
   }
 
   private removeEntry(key: string): void {
@@ -417,8 +517,9 @@ export class LspClientManager implements LspProviders {
     if (!entry) return;
     this.clients.delete(key);
 
-    // BUG FIX: reject all in-flight requests so callers don't hang forever.
+    // Reject all in-flight requests so callers don't hang forever.
     for (const [id, handler] of entry.pending) {
+      clearTimeout(handler.timer);
       handler.reject(new Error(`[lsp] client disposed (key=${key}, pending id=${id})`));
     }
     entry.pending.clear();

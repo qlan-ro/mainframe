@@ -1,5 +1,5 @@
 export type SurfaceIntent =
-  | { type: 'open-file'; path: string }
+  | { type: 'open-file'; path: string; line?: number; character?: number }
   | { type: 'reveal-file'; path: string }
   | { type: 'activate-surface'; surface: 'chat' | 'files' | 'run' };
 

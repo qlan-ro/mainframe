@@ -115,14 +115,14 @@ export async function findReferences(
 function navigateBack(): boolean {
   const entry = jumpHistory.back();
   if (!entry) return false;
-  emitSurfaceIntent({ type: 'open-file', path: entry.path });
+  emitSurfaceIntent({ type: 'open-file', path: entry.path, line: entry.line, character: entry.character });
   return true;
 }
 
 function navigateForward(): boolean {
   const entry = jumpHistory.forward();
   if (!entry) return false;
-  emitSurfaceIntent({ type: 'open-file', path: entry.path });
+  emitSurfaceIntent({ type: 'open-file', path: entry.path, line: entry.line, character: entry.character });
   return true;
 }
 

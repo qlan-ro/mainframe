@@ -19,6 +19,22 @@ import { applyValueUpdate } from '@/lib/editor/apply-value-update';
 import { useEditorStore } from '@/store/editor';
 import { buildBaseExtensions, createEditorCompartments, resolveLanguage } from './cm-setup';
 
+/** Scroll a line/character position into view and place the cursor there. */
+function revealPosition(view: EditorView, line: number, character: number): void {
+  try {
+    // CM6 lines are 1-based; LSP lines are 0-based.
+    const docLine = view.state.doc.line(line + 1);
+    const pos = Math.min(docLine.from + character, docLine.to);
+    view.dispatch({
+      selection: { anchor: pos, head: pos },
+      effects: EditorView.scrollIntoView(pos, { y: 'center' }),
+    });
+  } catch (err) {
+    // Out-of-range line numbers on a freshly loaded doc — expected on edge cases.
+    console.warn('[CmEditor] revealPosition skipped:', err);
+  }
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export interface CmEditorProps {
@@ -114,8 +130,13 @@ export function CmEditor({
     viewRef.current = view;
     onViewReady?.(view);
 
-    // Restore view state if we have one saved for this path.
-    if (savedState) {
+    // A reveal target (from a go-to-def jump) takes priority over saved view state.
+    // consumeRevealTarget reads and clears the target so it fires exactly once.
+    const revealTarget = useEditorStore.getState().consumeRevealTarget(path);
+    if (revealTarget) {
+      revealPosition(view, revealTarget.line, revealTarget.character);
+    } else if (savedState) {
+      // Restore view state if we have one saved for this path.
       const { selectionAnchor, selectionHead, scrollTop } = savedState;
       const docLen = view.state.doc.length;
       try {

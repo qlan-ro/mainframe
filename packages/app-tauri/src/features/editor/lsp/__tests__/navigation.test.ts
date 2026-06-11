@@ -84,6 +84,58 @@ describe('createJumpHistory', () => {
     }
     expect(h.size).toBe(100);
   });
+
+  // --- review #7: both endpoints recorded ---
+
+  it('jump A→B: back() returns A, forward() returns B', () => {
+    const h = createJumpHistory();
+    const a = { path: '/a.ts', line: 1, character: 0 };
+    const b = { path: '/b.ts', line: 5, character: 3 };
+    // Caller pushes both "from" and "to" when recording a jump.
+    h.push(a);
+    h.push(b);
+    // Cursor now points at B (index 1).
+    expect(h.cursor).toBe(1);
+    // back() → A
+    expect(h.back()).toEqual(a);
+    expect(h.cursor).toBe(0);
+    // forward() → B
+    expect(h.forward()).toEqual(b);
+    expect(h.cursor).toBe(1);
+  });
+
+  it('two sequential jumps then two backs returns intermediate then origin', () => {
+    const h = createJumpHistory();
+    const a = { path: '/a.ts', line: 0, character: 0 };
+    const b = { path: '/b.ts', line: 10, character: 0 };
+    const c = { path: '/c.ts', line: 20, character: 0 };
+    // First jump: A → B (push A, then B)
+    h.push(a);
+    h.push(b);
+    // Second jump: B → C (push C; B is already last entry so no double-push)
+    h.push(c);
+    // cursor=2, stack=[A,B,C]
+    expect(h.cursor).toBe(2);
+    expect(h.size).toBe(3);
+    // first back() → B
+    expect(h.back()).toEqual(b);
+    // second back() → A
+    expect(h.back()).toEqual(a);
+    // back at origin
+    expect(h.back()).toBeNull();
+  });
+
+  it('first back() after a single jump returns the origin (not null)', () => {
+    const h = createJumpHistory();
+    const origin = { path: '/origin.ts', line: 0, character: 0 };
+    const dest = { path: '/dest.ts', line: 42, character: 0 };
+    h.push(origin);
+    h.push(dest);
+    // First back should give us the origin, not null.
+    const result = h.back();
+    expect(result).toEqual(origin);
+    expect(result).not.toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

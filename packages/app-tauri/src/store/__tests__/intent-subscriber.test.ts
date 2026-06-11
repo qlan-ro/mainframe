@@ -4,12 +4,14 @@
  *
  * The subscriber:
  *  - on open-file: calls openTab + activates the Files surface
+ *  - on open-file with position: also stashes a reveal target in the editor store
  *  - on reveal-file: activates the Files surface (tree reveal is a TODO)
  */
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import { emitSurfaceIntent } from '../surface-intents';
 import { useLayoutStore } from '../layout';
 import { useTabsStore } from '../tabs';
+import { useEditorStore } from '../editor';
 import { subscribeToFileIntents } from '../intent-subscriber';
 
 function isFilesActive() {
@@ -20,6 +22,8 @@ function isFilesActive() {
 beforeEach(() => {
   useLayoutStore.setState({ layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } } });
   useTabsStore.setState({ tabs: [], activeTabId: null });
+  // Clear any stashed reveal targets between tests.
+  useEditorStore.setState({ revealTargets: new Map() });
 });
 
 afterEach(() => {
@@ -78,6 +82,57 @@ describe('open-file intent subscriber', () => {
     emitSurfaceIntent({ type: 'open-file', path: '/b.ts' });
 
     expect(isFilesActive()).toBe(true);
+
+    unsub();
+  });
+
+  // --- review #8: reveal target ---
+
+  it('open-file WITHOUT position does NOT stash a reveal target', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: '/src/main.ts' });
+
+    const target = useEditorStore.getState().getRevealTarget('/src/main.ts');
+    expect(target).toBeUndefined();
+
+    unsub();
+  });
+
+  it('open-file WITH line+character stashes a reveal target in the editor store', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: '/src/lib.ts', line: 42, character: 7 });
+
+    const target = useEditorStore.getState().getRevealTarget('/src/lib.ts');
+    expect(target).toEqual({ line: 42, character: 7 });
+
+    unsub();
+  });
+
+  it('open-file with position still opens the tab + activates Files', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: '/src/lib.ts', line: 10, character: 0 });
+
+    const { tabs } = useTabsStore.getState();
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]!.path).toBe('/src/lib.ts');
+    expect(isFilesActive()).toBe(true);
+
+    unsub();
+  });
+
+  it('open-file with only line (no character) does not stash (character required)', () => {
+    const unsub = subscribeToFileIntents();
+
+    // TypeScript ensures character is also required when line is present.
+    // The subscriber only stashes when BOTH line and character are defined numbers.
+    emitSurfaceIntent({ type: 'open-file', path: '/src/lib.ts', line: 5 });
+
+    // No reveal target because character is undefined.
+    const target = useEditorStore.getState().getRevealTarget('/src/lib.ts');
+    expect(target).toBeUndefined();
 
     unsub();
   });

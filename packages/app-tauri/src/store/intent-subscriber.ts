@@ -11,6 +11,8 @@
  *
  * Behaviour mirrored from 04-engine.jsx openTargetWS:
  *  - open-file: openTab(path, {mode:'preview'}) + ensure Files surface is active.
+ *    When the intent carries a `line`/`character` position, also stashes a
+ *    reveal target in useEditorStore so CmEditor can scroll to it on mount.
  *  - reveal-file: ensure Files surface is active (tree-reveal is a TODO — the
  *    tree component doesn't exist yet; we at minimum surface the panel).
  */
@@ -18,6 +20,7 @@ import { pickViewerKind } from '@/features/viewers/viewer-router';
 import { onSurfaceIntent } from './surface-intents';
 import { useLayoutStore } from './layout';
 import { useTabsStore } from './tabs';
+import { useEditorStore } from './editor';
 import type { OpenTabTarget } from './tabs';
 
 /** Ensure the Files surface is visible in the layout. Pure store call. */
@@ -46,12 +49,17 @@ function kindForPath(path: string): OpenTabTarget['kind'] {
 export function subscribeToFileIntents(): () => void {
   return onSurfaceIntent((intent) => {
     if (intent.type === 'open-file') {
-      const path = intent.path;
+      const { path, line, character } = intent;
       const title = path.split('/').pop() ?? path;
       const kind = kindForPath(path);
 
       useTabsStore.getState().openTab({ kind, path, title }, { mode: 'preview' });
       ensureFilesActive();
+
+      // Stash a reveal target if both line and character are provided.
+      if (typeof line === 'number' && typeof character === 'number') {
+        useEditorStore.getState().setRevealTarget(path, { line, character });
+      }
       return;
     }
 

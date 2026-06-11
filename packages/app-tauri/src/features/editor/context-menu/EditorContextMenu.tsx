@@ -153,9 +153,14 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
     const target = locations[0];
     if (!target) return;
 
+    // Push BOTH the from-position and the destination onto the jump history
+    // so back() returns origin and forward() returns destination.
     jumpHistory.push(fromEntry);
     const targetPath = target.uri.startsWith('file://') ? target.uri.slice('file://'.length) : target.uri;
-    emitSurfaceIntent({ type: 'open-file', path: targetPath });
+    const targetLine = target.range.start.line;
+    const targetCharacter = target.range.start.character;
+    jumpHistory.push({ path: targetPath, line: targetLine, character: targetCharacter });
+    emitSurfaceIntent({ type: 'open-file', path: targetPath, line: targetLine, character: targetCharacter });
   }, [filePath, providers, lspConfig]);
 
   // ── Find All References ───────────────────────────────────────────────────

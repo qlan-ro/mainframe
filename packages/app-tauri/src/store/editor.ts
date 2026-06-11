@@ -24,6 +24,19 @@ export interface EditorBufferState {
   dirty: boolean;
 }
 
+/**
+ * Target position to reveal when an editor for a given path first mounts (or
+ * when the reveal target changes). Stashed by intent-subscriber when an
+ * `open-file` intent includes a `line`/`character` position. Consumed
+ * (and cleared) by CmEditor on mount to scroll to the target line.
+ */
+export interface RevealTarget {
+  /** 0-based line number. */
+  line: number;
+  /** 0-based character offset within the line. */
+  character: number;
+}
+
 /** Maximum number of entries kept in the buffers and viewStates caches. */
 const CACHE_CAP = 50;
 
@@ -44,6 +57,12 @@ interface EditorStore {
   viewStates: Map<string, EditorViewState>;
   /** in-memory value cache per absolute path */
   buffers: Map<string, EditorBufferState>;
+  /**
+   * Pending reveal targets keyed by absolute path. Set by intent-subscriber
+   * when an `open-file` intent carries a position. Consumed and cleared by
+   * CmEditor on mount so the scroll fires exactly once.
+   */
+  revealTargets: Map<string, RevealTarget>;
 
   saveViewState: (path: string, state: EditorViewState) => void;
   getViewState: (path: string) => EditorViewState | undefined;
@@ -51,11 +70,19 @@ interface EditorStore {
   setBuffer: (path: string, value: string, dirty?: boolean) => void;
   getBuffer: (path: string) => EditorBufferState | undefined;
   clearBuffer: (path: string) => void;
+
+  /** Stash a reveal target for the given path (called by intent-subscriber). */
+  setRevealTarget: (path: string, target: RevealTarget) => void;
+  /** Read (but do not clear) the reveal target for a path. */
+  getRevealTarget: (path: string) => RevealTarget | undefined;
+  /** Consume (read + clear) the reveal target for a path. */
+  consumeRevealTarget: (path: string) => RevealTarget | undefined;
 }
 
 export const useEditorStore = create<EditorStore>()((set, get) => ({
   viewStates: new Map(),
   buffers: new Map(),
+  revealTargets: new Map(),
 
   saveViewState(path, state) {
     set((prev) => {
@@ -87,5 +114,28 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
       next.delete(path);
       return { buffers: next };
     });
+  },
+
+  setRevealTarget(path, target) {
+    set((prev) => {
+      const next = new Map(prev.revealTargets);
+      next.set(path, target);
+      return { revealTargets: next };
+    });
+  },
+
+  getRevealTarget(path) {
+    return get().revealTargets.get(path);
+  },
+
+  consumeRevealTarget(path) {
+    const target = get().revealTargets.get(path);
+    if (target === undefined) return undefined;
+    set((prev) => {
+      const next = new Map(prev.revealTargets);
+      next.delete(path);
+      return { revealTargets: next };
+    });
+    return target;
   },
 }));

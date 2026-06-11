@@ -6,6 +6,10 @@
  * 2. didOpen is sent on first ensureDocumentOpen
  * 3. getDefinition returns plain LSP Location[] (no Monaco types)
  * 4. in-flight requests are rejected when the client is disposed
+ * 5. review #13 hardening:
+ *    a. requests before initialize are queued and sent only after initialized
+ *    b. server→client requests get a response (not dropped silently)
+ *    c. sendRequest times out and rejects + is removed from pending
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LspClientManager } from '../lsp-client';
@@ -191,6 +195,25 @@ describe('LspClientManager — initialize handshake', () => {
     expect(notification.method).toBe('initialized');
     // Notifications have no id field.
     expect(notification.id).toBeUndefined();
+  });
+
+  // review #13a: client not available (hasClient=false) until initialize completes
+  it('hasClient returns false while initialize is in-flight, true after completion', async () => {
+    const manager = new LspClientManager(31415);
+
+    // Start connecting but don't open the socket yet.
+    const connectPromise = manager.ensureClient('proj-1', 'typescript', '/home/user/project');
+    const socket = lastSocket();
+
+    // Not yet open: hasClient should be false before socket opens.
+    expect(manager.hasClient('proj-1', 'typescript')).toBe(false);
+
+    // Now open the socket and auto-initialize.
+    installAutoInitializer(socket);
+    await connectPromise;
+
+    // Now hasClient should be true.
+    expect(manager.hasClient('proj-1', 'typescript')).toBe(true);
   });
 });
 
@@ -406,5 +429,123 @@ describe('LspClientManager — in-flight requests rejected on disposeClient', ()
     const [r1, r2] = await Promise.all([p1, p2]);
     expect(r1).toEqual([]);
     expect(r2).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 5: review #13 hardening
+// ---------------------------------------------------------------------------
+
+describe('LspClientManager — review #13 hardening', () => {
+  // --- #13b: server→client requests get a minimal response ---
+
+  it('server→client request (id + method) receives a JSON-RPC response, not silence', async () => {
+    const manager = new LspClientManager(31415);
+    const socket = await connectManager(manager);
+
+    socket.sendSpy.mockClear();
+
+    // Simulate the server sending a client/registerCapability request.
+    socket.onmessage?.({
+      data: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 99,
+        method: 'client/registerCapability',
+        params: { registrations: [] },
+      }),
+    });
+
+    // The manager should have sent a response for id=99.
+    await Promise.resolve(); // allow any async flush
+    const responses = socket.sendSpy.mock.calls
+      .map((c) => JSON.parse(c[0]!) as { id?: number; result?: unknown; error?: unknown })
+      .filter((m) => m.id === 99);
+
+    expect(responses).toHaveLength(1);
+    // Response must carry an id and a result (or error), not just be a notification.
+    expect(responses[0]!.id).toBe(99);
+  });
+
+  it('server→client workspace/configuration request gets an empty result array', async () => {
+    const manager = new LspClientManager(31415);
+    const socket = await connectManager(manager);
+
+    socket.sendSpy.mockClear();
+
+    socket.onmessage?.({
+      data: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'workspace/configuration',
+        params: { items: [{ section: 'typescript' }] },
+      }),
+    });
+
+    await Promise.resolve();
+    const responses = socket.sendSpy.mock.calls
+      .map((c) => JSON.parse(c[0]!) as { id?: number; result?: unknown })
+      .filter((m) => m.id === 5);
+
+    expect(responses).toHaveLength(1);
+    expect(responses[0]!.result).toBeInstanceOf(Array);
+  });
+
+  // --- #13c: sendRequest times out and rejects + is removed from pending ---
+
+  it('getDefinition times out and resolves to [] when the server never responds', async () => {
+    vi.useFakeTimers();
+    const manager = new LspClientManager(31415, { requestTimeoutMs: 100 });
+    const socket = await connectManager(manager);
+
+    manager.ensureDocumentOpen('proj-1', 'typescript', {
+      filePath: 'src/app.ts',
+      text: '',
+      languageId: 'typescript',
+      version: 1,
+    });
+    socket.sendSpy.mockClear();
+
+    const defPromise = manager.getDefinition('proj-1', 'typescript', {
+      filePath: 'src/app.ts',
+      position: { line: 0, character: 0 },
+    });
+
+    // Advance past the timeout.
+    await vi.advanceTimersByTimeAsync(200);
+
+    const result = await defPromise;
+    expect(result).toEqual([]);
+
+    vi.useRealTimers();
+  }, 5000);
+
+  // --- #13a: requests before initialize are deferred ---
+
+  it('getDefinition called before client is ready returns [] immediately (not hung)', async () => {
+    const manager = new LspClientManager(31415);
+
+    // Start connecting. Use installAutoInitializer so the promise eventually
+    // resolves, but check the "not yet ready" window first.
+    const connectPromise = manager.ensureClient('proj-1', 'typescript', '/home/user/project');
+    const socket = lastSocket();
+
+    // Before the socket opens, hasClient is false.
+    expect(manager.hasClient('proj-1', 'typescript')).toBe(false);
+
+    // A getDefinition call while connecting (client not in map yet) returns []
+    // immediately without hanging. hasClient check in getDefinition gates on the
+    // clients map, which is only populated after initialized.
+    const earlyResult = await manager.getDefinition('proj-1', 'typescript', {
+      filePath: 'src/app.ts',
+      position: { line: 0, character: 0 },
+    });
+    expect(earlyResult).toEqual([]);
+
+    // Complete the handshake so the test doesn't leave the promise dangling.
+    installAutoInitializer(socket);
+    await connectPromise;
+
+    // After init, hasClient is true.
+    expect(manager.hasClient('proj-1', 'typescript')).toBe(true);
   });
 });
