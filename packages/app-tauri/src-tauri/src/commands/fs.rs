@@ -77,12 +77,7 @@ pub fn read_file_base64(path: String) -> Result<Option<String>, String> {
         Err(_) => return Ok(None),
     };
     match std::fs::read(&canonical) {
-        Ok(bytes) => {
-            use std::io::Write;
-            // Use the base64 alphabet shipped with the standard library via
-            // std::io::Write on a Vec — no extra crate needed; encode manually.
-            Ok(Some(base64_encode(&bytes)))
-        }
+        Ok(bytes) => Ok(Some(base64_encode(&bytes))),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(format!("read_file_base64 '{}': {e}", path)),
     }
