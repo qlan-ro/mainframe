@@ -96,10 +96,15 @@ export function closePane(run: RunState, paneId: string): RunState | null {
  * Drop a guest tab onto the Run region. `center` joins the first pane as a tab;
  * an edge splits Run into a second pane with the guest beside what's running.
  * Caps at MAX_PANES — an edge drop while already split joins as a tab instead.
+ *
+ * Edge case: when `run` is null OR every existing pane is empty, treat the drop
+ * as a `center` (join/create) regardless of `edge`. Never create a second empty
+ * pane alongside an already-empty one.
  */
 export function moveTabToRun(run: RunState | null, guest: RunTab, edge: RunDropEdge): RunState {
   const base = run ?? emptyRun();
-  const splitting = edge !== 'center' && base.panes.length < MAX_PANES;
+  const hasExistingTabs = base.panes.some((p) => p.tabs.length > 0);
+  const splitting = edge !== 'center' && base.panes.length < MAX_PANES && hasExistingTabs;
   if (!splitting) return addRunTab(base, guest);
 
   const dir: 'v' | 'h' = edge === 'left' || edge === 'right' ? 'v' : 'h';

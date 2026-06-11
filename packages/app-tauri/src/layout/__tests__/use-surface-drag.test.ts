@@ -77,4 +77,38 @@ describe('useSurfaceDragStore', () => {
     expect(useSurfaceDragStore.getState().kind).toBeNull();
     expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
   });
+
+  it('commit with <4px movement is a no-op (jitter threshold)', () => {
+    useLayoutStore.getState().toggleSurface('files');
+    const drag = useSurfaceDragStore.getState();
+    // Begin at (100, 100), move only 3px diagonally — below the 4px threshold.
+    drag.beginSurfaceDrag('files', { clientX: 100, clientY: 100 });
+    drag.setPointer(102, 102, { surface: 'files', edge: 'bottom' });
+    drag.commit();
+    // Layout must be unchanged — files stays in top, not bottom.
+    const { layout } = useLayoutStore.getState();
+    expect(layout.bottom).toBeNull();
+    expect(layout.top).toContain('files');
+    expect(useSurfaceDragStore.getState().kind).toBeNull();
+  });
+
+  it('commit with ≥4px movement commits the reposition', () => {
+    useLayoutStore.getState().toggleSurface('files');
+    const drag = useSurfaceDragStore.getState();
+    drag.beginSurfaceDrag('files', { clientX: 0, clientY: 0 });
+    drag.setPointer(0, 95, { surface: 'files', edge: 'bottom' });
+    drag.commit();
+    expect(useLayoutStore.getState().layout.bottom).toBe('files');
+  });
+
+  it('self-center surface drop is a no-op', () => {
+    useLayoutStore.getState().toggleSurface('files');
+    const before = useLayoutStore.getState().layout;
+    const drag = useSurfaceDragStore.getState();
+    drag.beginSurfaceDrag('files', { clientX: 0, clientY: 0 });
+    drag.setPointer(10, 10, { surface: 'files', edge: 'center' });
+    drag.commit();
+    expect(useLayoutStore.getState().layout).toEqual(before);
+    expect(useSurfaceDragStore.getState().kind).toBeNull();
+  });
 });

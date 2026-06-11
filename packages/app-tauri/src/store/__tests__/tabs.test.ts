@@ -161,34 +161,6 @@ describe('activateTab', () => {
   });
 });
 
-// ── reorderTabs ──────────────────────────────────────────────────────────────
-
-describe('reorderTabs', () => {
-  it('moves a tab from one position to another', () => {
-    store().openTab({ path: '/a.ts', title: 'a.ts', kind: 'code' }, { mode: 'permanent' });
-    store().openTab({ path: '/b.ts', title: 'b.ts', kind: 'code' }, { mode: 'permanent' });
-    store().openTab({ path: '/c.ts', title: 'c.ts', kind: 'code' }, { mode: 'permanent' });
-
-    const idA = tabs()[0]!.id;
-    const idB = tabs()[1]!.id;
-    const idC = tabs()[2]!.id;
-
-    // Move A (index 0) to index 2 (after C).
-    store().reorderTabs(0, 2);
-
-    expect(tabs()[0]!.id).toBe(idB);
-    expect(tabs()[1]!.id).toBe(idC);
-    expect(tabs()[2]!.id).toBe(idA);
-  });
-
-  it('reordering with same source and destination is a no-op', () => {
-    store().openTab({ path: '/a.ts', title: 'a.ts', kind: 'code' }, { mode: 'permanent' });
-    const before = [...tabs()];
-    store().reorderTabs(0, 0);
-    expect(tabs()).toEqual(before);
-  });
-});
-
 // ── diff / skill / viewer kinds ──────────────────────────────────────────────
 
 describe('tab kinds', () => {

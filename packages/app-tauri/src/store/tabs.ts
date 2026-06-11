@@ -81,12 +81,6 @@ interface TabsStore {
 
   /** Activate a tab by id. */
   activateTab: (id: string) => void;
-
-  /**
-   * Reorder tabs: move the tab at `fromIndex` to `toIndex`.
-   * No-op when fromIndex === toIndex.
-   */
-  reorderTabs: (fromIndex: number, toIndex: number) => void;
 }
 
 // ── ID generator ─────────────────────────────────────────────────────────────
@@ -171,19 +165,6 @@ function reduceCloseTab(
   return [next, nextActive];
 }
 
-/** Pure reorder reducer — moves tab from fromIndex to toIndex. */
-function reduceReorder(tabs: EditorTabModel[], fromIndex: number, toIndex: number): EditorTabModel[] {
-  if (fromIndex === toIndex) return tabs;
-  if (fromIndex < 0 || fromIndex >= tabs.length) return tabs;
-  if (toIndex < 0 || toIndex >= tabs.length) return tabs;
-
-  const next = [...tabs];
-  const [moved] = next.splice(fromIndex, 1);
-  if (!moved) return tabs;
-  next.splice(toIndex, 0, moved);
-  return next;
-}
-
 // ── Store instance ────────────────────────────────────────────────────────────
 
 export const useTabsStore = create<TabsStore>()((set, get) => ({
@@ -210,9 +191,5 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 
   activateTab(id) {
     set({ activeTabId: id });
-  },
-
-  reorderTabs(fromIndex, toIndex) {
-    set((prev) => ({ tabs: reduceReorder(prev.tabs, fromIndex, toIndex) }));
   },
 }));

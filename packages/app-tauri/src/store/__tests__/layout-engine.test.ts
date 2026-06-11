@@ -57,6 +57,21 @@ describe('run-pane reducers', () => {
     expect(three.panes[0]!.tabs.map((t) => t.id)).toEqual(['a', 'c']);
   });
 
+  it('edge-drop onto empty Run places the guest into the single pane (no split)', () => {
+    // Run is null — no existing panes with tabs.
+    const run = moveTabToRun(null, guest('a'), 'right');
+    expect(run.panes).toHaveLength(1);
+    expect(run.panes[0]!.tabs.map((t) => t.id)).toEqual(['a']);
+  });
+
+  it('edge-drop onto a Run with one empty pane still places guest into that pane', () => {
+    // emptyRun() has 1 pane with 0 tabs.
+    const base = emptyRun();
+    const run = moveTabToRun(base, guest('a'), 'left');
+    expect(run.panes).toHaveLength(1);
+    expect(run.panes[0]!.tabs.map((t) => t.id)).toEqual(['a']);
+  });
+
   it('closePane returns null when the last pane is removed', () => {
     const run = addRunTab(null, guest('a'));
     expect(closePane(run, run.panes[0]!.id)).toBeNull();

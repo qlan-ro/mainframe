@@ -37,14 +37,30 @@ function RunTabPill({ paneId, tab, active }: { paneId: string; tab: RunPane['tab
   );
 }
 
-function RunPaneView({ pane }: { pane: RunPane }) {
+interface RunPaneViewProps {
+  pane: RunPane;
+  showClosePane: boolean;
+}
+
+function RunPaneView({ pane, showClosePane }: RunPaneViewProps) {
   const activeTab = pane.tabs.find((t) => t.id === pane.active);
+  const closePane = useLayoutStore((s) => s.closePane);
   return (
     <div data-testid={`run-pane-${pane.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex h-[34px] flex-shrink-0 items-center gap-0.5 overflow-x-auto bg-mf-tab-bar px-1 [border-bottom:0.5px_solid_var(--border)] [scrollbar-width:none]">
         {pane.tabs.map((t) => (
           <RunTabPill key={t.id} paneId={pane.id} tab={t} active={t.id === pane.active} />
         ))}
+        {showClosePane && (
+          <button
+            data-testid={`run-pane-close-${pane.id}`}
+            onClick={() => closePane(pane.id)}
+            className="ml-auto grid h-5 w-5 flex-shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Close pane"
+          >
+            <X size={10} />
+          </button>
+        )}
       </div>
       <div className="grid min-h-0 flex-1 place-items-center text-caption text-muted-foreground">
         {activeTab ? `${activeTab.kind}: ${activeTab.title}` : 'Empty pane'}
@@ -56,6 +72,7 @@ function RunPaneView({ pane }: { pane: RunPane }) {
 export function RunSurface() {
   const run = useLayoutStore((s) => s.run);
   const hasContent = run && run.panes.some((p) => p.tabs.length > 0);
+  const multiPane = run ? run.panes.length >= 2 : false;
 
   return (
     <div data-testid="run-surface" className="flex h-full flex-col">
@@ -72,7 +89,7 @@ export function RunSurface() {
                   : ''
               }`}
             >
-              <RunPaneView pane={pane} />
+              <RunPaneView pane={pane} showClosePane={multiPane} />
             </div>
           ))}
         </div>
