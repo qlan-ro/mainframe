@@ -4,6 +4,7 @@ import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
+import { SurfaceDragLayer } from './SurfaceDragLayer';
 import { SurfDivider } from './SurfDivider';
 import { FilesSurface } from './surfaces/FilesSurface';
 import { RunSurface } from './surfaces/RunSurface';
@@ -80,7 +81,7 @@ export function SurfaceHost({ port }: Props) {
       <div ref={topRef} style={{ flex: bottom ? vFlex.top : 1 }} className="flex min-h-0 overflow-hidden">
         {top.map((name, i) => (
           <Fragment key={name}>
-            <div style={{ flex: topFlex[name] ?? 1 }} className={`min-w-0 ${PANEL_CLS}`}>
+            <div data-drop-surface={name} style={{ flex: topFlex[name] ?? 1 }} className={`min-w-0 ${PANEL_CLS}`}>
               <SurfaceView name={name} port={port} />
             </div>
             {i < top.length - 1 &&
@@ -98,12 +99,13 @@ export function SurfaceHost({ port }: Props) {
         <>
           <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
-            <div className={`min-w-0 flex-1 ${PANEL_CLS}`}>
+            <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${PANEL_CLS}`}>
               <SurfaceView name={bottom} port={port} />
             </div>
           </div>
         </>
       )}
+      <SurfaceDragLayer />
     </div>
   );
 }

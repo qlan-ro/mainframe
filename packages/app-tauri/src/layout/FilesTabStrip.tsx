@@ -16,6 +16,7 @@
  *   files-tab-close-<id> — close button
  */
 import { FileText, GripHorizontal, GripVertical, LayoutPanelLeft, LayoutPanelTop, Plus, X } from 'lucide-react';
+import { useSurfaceDragStore } from './use-surface-drag';
 import { useTabsStore } from '@/store/tabs';
 import { layoutCanSplit, useLayoutStore } from '@/store/layout';
 import type { EditorTabModel } from '@/store/tabs';
@@ -34,6 +35,7 @@ interface TabPillProps {
 }
 
 function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps) {
+  const beginTabDrag = useSurfaceDragStore((s) => s.beginTabDrag);
   return (
     <div
       data-testid={`files-tab-${tab.id}`}
@@ -48,8 +50,15 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
       onClick={() => onActivate(tab.id)}
       onDoubleClick={() => onPromote(tab.id)}
     >
-      {/* Drag handle stub — Phase 8 wires real DnD */}
-      <span className="flex-shrink-0 opacity-0 group-hover:opacity-100">
+      {/* Drag handle — begins a Files-tab drag onto the Run region. */}
+      <span
+        data-testid={`files-tab-drag-${tab.id}`}
+        className="flex-shrink-0 cursor-grab opacity-0 group-hover:opacity-100"
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          beginTabDrag(tab.id, { clientX: e.clientX, clientY: e.clientY });
+        }}
+      >
         <GripVertical size={10} className="text-mf-text-4" />
       </span>
 
@@ -95,14 +104,19 @@ export function FilesTabStrip() {
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
+  const beginSurfaceDrag = useSurfaceDragStore((s) => s.beginSurfaceDrag);
 
   return (
     <div
       data-testid="files-tab-strip"
       className="flex h-[34px] flex-shrink-0 items-center bg-mf-tab-bar [border-bottom:0.5px_solid_var(--border)]"
     >
-      {/* Drag grip — visual only for surface drag (Phase 8) */}
-      <div className="grid h-full w-5 flex-shrink-0 cursor-grab place-items-center pl-1">
+      {/* Drag grip — repositions the whole Files surface. */}
+      <div
+        data-testid="files-surface-drag"
+        className="grid h-full w-5 flex-shrink-0 cursor-grab place-items-center pl-1"
+        onPointerDown={(e) => beginSurfaceDrag('files', { clientX: e.clientX, clientY: e.clientY })}
+      >
         <GripHorizontal size={13} className="text-mf-text-4" />
       </div>
 
