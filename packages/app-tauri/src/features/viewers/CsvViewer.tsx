@@ -80,17 +80,17 @@ export function CsvViewer({ content }: CsvViewerProps) {
   return (
     <div data-testid="viewer-csv" className="flex h-full flex-col">
       {/* Filter bar */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-mf-border px-3 py-1.5">
+      <div className="flex shrink-0 items-center gap-2 [border-bottom:0.5px_solid_var(--border)] px-3 py-1.5">
         <input
           type="text"
           data-testid="viewer-csv-filter"
           placeholder="Filter rows…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="h-6 flex-1 rounded border border-mf-border bg-mf-input-bg px-2 text-xs text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none focus:ring-1 focus:ring-ring"
+          className="h-6 flex-1 rounded border border-border bg-card px-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
         {parsed && (
-          <span className="text-xs text-mf-text-secondary">
+          <span className="text-xs text-muted-foreground">
             {displayRows.length} / {parsed.rows.length} rows
           </span>
         )}
@@ -98,16 +98,16 @@ export function CsvViewer({ content }: CsvViewerProps) {
 
       {/* Table */}
       {content === null ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-mf-text-secondary">Loading…</div>
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
       ) : !parsed || parsed.headers.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-mf-text-secondary">No data</div>
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">No data</div>
       ) : (
         <div className="flex-1 overflow-auto">
           <table className="w-full border-collapse text-xs">
-            <thead className="sticky top-0 bg-mf-panel-bg">
+            <thead className="sticky top-0 bg-background">
               <tr>
                 {/* Row-number gutter */}
-                <th className="w-10 border-b border-r border-mf-border px-2 py-1.5 text-right text-mf-text-secondary select-none">
+                <th className="w-10 [border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-2 py-1.5 text-right text-muted-foreground select-none">
                   #
                 </th>
                 {parsed.headers.map((header, i) => {
@@ -119,10 +119,10 @@ export function CsvViewer({ content }: CsvViewerProps) {
                       data-testid={`viewer-csv-header-${header}`}
                       onClick={() => handleHeaderClick(i)}
                       className={[
-                        'cursor-pointer border-b border-mf-border px-2 py-1.5 font-medium select-none',
-                        'hover:bg-mf-hover',
+                        'cursor-pointer [border-bottom:0.5px_solid_var(--border)] px-2 py-1.5 font-medium select-none',
+                        'hover:bg-accent',
                         isNum ? 'text-right' : 'text-left',
-                        isActive ? 'text-mf-text-primary' : 'text-mf-text-secondary',
+                        isActive ? 'text-foreground' : 'text-muted-foreground',
                       ].join(' ')}
                     >
                       {header}
@@ -135,8 +135,8 @@ export function CsvViewer({ content }: CsvViewerProps) {
             </thead>
             <tbody>
               {displayRows.map((row, rowIdx) => (
-                <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-mf-app-bg' : 'bg-mf-panel-bg'}>
-                  <td className="border-r border-mf-border px-2 py-1 text-right text-mf-text-secondary tabular-nums">
+                <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-card'}>
+                  <td className="[border-right:0.5px_solid_var(--border)] px-2 py-1 text-right text-muted-foreground tabular-nums">
                     {rowIdx + 1}
                   </td>
                   {parsed.headers.map((header, colIdx) => (
@@ -145,7 +145,7 @@ export function CsvViewer({ content }: CsvViewerProps) {
                       className={[
                         'px-2 py-1',
                         numericCols.has(colIdx) ? 'text-right tabular-nums' : 'text-left',
-                        'text-mf-text-primary',
+                        'text-foreground',
                       ].join(' ')}
                     >
                       {row[colIdx] ?? ''}

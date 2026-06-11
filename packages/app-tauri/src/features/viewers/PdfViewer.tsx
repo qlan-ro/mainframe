@@ -24,7 +24,7 @@
  * data-testid="viewer-pdf" on the root.
  * data-testid="viewer-pdf-fallback" on the open-externally button.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { openExternal } from '@/lib/tauri/bridge';
 
 interface PdfViewerProps {
@@ -44,7 +44,6 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
 }
 
 export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
-  const objectUrlRef = useRef<string | null>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,12 +55,10 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
     const buf = base64ToArrayBuffer(base64);
     const blob = new Blob([buf], { type: mimeType });
     const url = URL.createObjectURL(blob);
-    objectUrlRef.current = url;
     setObjectUrl(url);
 
     return () => {
       URL.revokeObjectURL(url);
-      objectUrlRef.current = null;
     };
   }, [base64, mimeType]);
 
@@ -77,21 +74,21 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
   return (
     <div data-testid="viewer-pdf" className="flex h-full flex-col">
       {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-mf-border px-3 py-1.5">
-        <span className="flex-1 text-xs text-mf-text-secondary truncate">{path ? path.split('/').pop() : 'PDF'}</span>
+      <div className="flex shrink-0 items-center gap-2 [border-bottom:0.5px_solid_var(--border)] px-3 py-1.5">
+        <span className="flex-1 truncate text-xs text-muted-foreground">{path ? path.split('/').pop() : 'PDF'}</span>
         {path && (
           <button
             type="button"
             data-testid="viewer-pdf-fallback"
             onClick={() => void handleOpenExternal()}
-            className="rounded px-2 py-0.5 text-xs font-medium text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary transition-colors"
+            className="rounded px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             Open externally
           </button>
         )}
         {!path && (
           /* Always render the fallback testid even without a path, so tests can find it */
-          <span data-testid="viewer-pdf-fallback" className="text-xs text-mf-text-secondary">
+          <span data-testid="viewer-pdf-fallback" className="text-xs text-muted-foreground">
             Open externally
           </span>
         )}
@@ -99,11 +96,11 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
 
       {/* Body */}
       {base64 === null ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-mf-text-secondary">Loading…</div>
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
       ) : objectUrl ? (
-        <embed src={objectUrl} type={mimeType} className="flex-1 w-full" title="PDF viewer" />
+        <embed src={objectUrl} type={mimeType} className="w-full flex-1" title="PDF viewer" />
       ) : (
-        <div className="flex flex-1 items-center justify-center text-sm text-mf-text-secondary">Loading…</div>
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
       )}
     </div>
   );

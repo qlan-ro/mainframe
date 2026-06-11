@@ -24,11 +24,20 @@ function parseRow(text: string, start: number): [string[], number] {
   const len = text.length;
 
   while (pos <= len) {
-    // End of input or newline → row is complete
-    if (pos === len || text[pos] === '\n' || (text[pos] === '\r' && text[pos + 1] === '\n')) {
+    // End of input or newline → row is complete.
+    // Handles LF, CRLF, and bare CR (the latter is treated as LF per RFC 4180 §2).
+    const isCR = text[pos] === '\r';
+    const isRowEnd =
+      pos === len || text[pos] === '\n' || (isCR && text[pos + 1] === '\n') || (isCR && text[pos + 1] !== '\n');
+    if (isRowEnd) {
       // Push empty field if row ended with a trailing comma
       if (fields.length === 0) fields.push('');
-      const advance = pos < len && text[pos] === '\r' ? 2 : pos < len ? 1 : 0;
+      const advance =
+        pos < len
+          ? isCR && text[pos + 1] === '\n'
+            ? 2 // CRLF
+            : 1 // LF or bare CR
+          : 0; // EOF
       return [fields, pos + advance];
     }
 
@@ -55,12 +64,13 @@ function parseRow(text: string, start: number): [string[], number] {
       // Skip comma separator
       if (pos < len && text[pos] === ',') pos++;
     } else {
-      // Unquoted field — read until comma or newline
+      // Unquoted field — read until comma, LF, or CR (bare or CRLF start)
       let field = '';
       while (pos < len && text[pos] !== ',' && text[pos] !== '\n' && text[pos] !== '\r') {
         field += text[pos++];
       }
       fields.push(field);
+      // Advance past comma separator; leave newlines for the row-end check above
       if (pos < len && text[pos] === ',') pos++;
     }
   }
@@ -79,7 +89,9 @@ export function parseCsv(text: string): ParsedCsv {
   while (pos < normalized.length) {
     const [row, next] = parseRow(normalized, pos);
     allRows.push(row);
-    pos = next;
+    // Safety: if the parser returns the same position, advance by one to
+    // prevent an infinite loop on malformed input.
+    pos = next > pos ? next : pos + 1;
   }
 
   const [headers = [], ...rows] = allRows;

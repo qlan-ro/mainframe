@@ -15,7 +15,7 @@
  *
  * data-testid="viewer-svg" on the root; toggle buttons carry their own testids.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface SvgViewerProps {
   content: string | null;
@@ -25,11 +25,10 @@ type SvgMode = 'preview' | 'source';
 
 export function SvgViewer({ content }: SvgViewerProps) {
   const [mode, setMode] = useState<SvgMode>('preview');
-  const objectUrlRef = useRef<string | null>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
   // Create an object URL whenever the SVG content changes.
-  // Revoke the previous one to avoid memory leaks.
+  // Revoke the previous one via effect cleanup to avoid memory leaks.
   useEffect(() => {
     if (content === null) {
       setObjectUrl(null);
@@ -37,19 +36,17 @@ export function SvgViewer({ content }: SvgViewerProps) {
     }
     const blob = new Blob([content], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
-    objectUrlRef.current = url;
     setObjectUrl(url);
 
     return () => {
       URL.revokeObjectURL(url);
-      objectUrlRef.current = null;
     };
   }, [content]);
 
   return (
     <div data-testid="viewer-svg" className="flex h-full flex-col">
       {/* Header bar */}
-      <div className="flex shrink-0 items-center gap-1 border-b border-mf-border px-3 py-1.5">
+      <div className="flex shrink-0 items-center gap-1 [border-bottom:0.5px_solid_var(--border)] px-3 py-1.5">
         <button
           type="button"
           data-testid="viewer-svg-preview-toggle"
@@ -57,9 +54,7 @@ export function SvgViewer({ content }: SvgViewerProps) {
           onClick={() => setMode('preview')}
           className={[
             'rounded px-2 py-0.5 text-xs font-medium transition-colors',
-            mode === 'preview'
-              ? 'bg-mf-hover text-mf-text-primary'
-              : 'text-mf-text-secondary hover:text-mf-text-primary',
+            mode === 'preview' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
           ].join(' ')}
         >
           Preview
@@ -71,9 +66,7 @@ export function SvgViewer({ content }: SvgViewerProps) {
           onClick={() => setMode('source')}
           className={[
             'rounded px-2 py-0.5 text-xs font-medium transition-colors',
-            mode === 'source'
-              ? 'bg-mf-hover text-mf-text-primary'
-              : 'text-mf-text-secondary hover:text-mf-text-primary',
+            mode === 'source' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
           ].join(' ')}
         >
           Source
@@ -83,7 +76,7 @@ export function SvgViewer({ content }: SvgViewerProps) {
       {/* Body */}
       <div className="flex flex-1 overflow-auto">
         {content === null ? (
-          <span className="m-auto text-sm text-mf-text-secondary">Loading…</span>
+          <span className="m-auto text-sm text-muted-foreground">Loading…</span>
         ) : mode === 'preview' ? (
           <div
             className="flex flex-1 items-center justify-center p-4"
@@ -97,7 +90,7 @@ export function SvgViewer({ content }: SvgViewerProps) {
         ) : (
           <pre
             data-testid="viewer-svg-source"
-            className="mf-editor-selectable flex-1 overflow-auto p-4 text-xs font-mono text-mf-text-primary"
+            className="mf-editor-selectable flex-1 overflow-auto p-4 text-xs font-mono text-foreground"
           >
             {content}
           </pre>

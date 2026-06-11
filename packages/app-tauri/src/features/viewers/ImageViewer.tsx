@@ -30,7 +30,7 @@ export function ImageViewer({ src, alt = '' }: ImageViewerProps) {
       }}
     >
       {src === null ? (
-        <span className="text-sm text-mf-text-secondary">Loading image…</span>
+        <span className="text-sm text-muted-foreground">Loading image…</span>
       ) : (
         <ZoomableImage src={src} alt={alt} className="max-h-[80vh] max-w-full rounded object-contain" />
       )}
