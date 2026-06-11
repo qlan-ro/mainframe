@@ -51,6 +51,26 @@ export async function getProjectFile(port: number, projectId: string, path: stri
   return data.content;
 }
 
+/**
+ * Read a project file's content as a base64 string via the daemon
+ * (worktree-aware). Same path resolution as `getProjectFile` but appends
+ * `encoding=base64` — suitable for binary files (images, PDFs).
+ */
+export async function getProjectFileBase64(
+  port: number,
+  projectId: string,
+  path: string,
+  chatId?: string,
+): Promise<string> {
+  const qs = new URLSearchParams({ path, encoding: 'base64' });
+  if (chatId) qs.set('chatId', chatId);
+  const data = await request<FileContentResponse>(
+    'GET',
+    `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/files?${qs}`,
+  );
+  return data.content;
+}
+
 interface BrowseOpts {
   includeFiles?: boolean;
   includeHidden?: boolean;

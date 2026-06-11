@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { FileResult, FileTreeEntry } from '../files';
-import { searchFiles, getFileTree, browseFilesystem, getProjectFile } from '../files';
+import { searchFiles, getFileTree, browseFilesystem, getProjectFile, getProjectFileBase64 } from '../files';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -82,6 +82,46 @@ describe('getProjectFile', () => {
     const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
     expect(url).toContain('path=%2Frepo%2Fsrc%2Fa.ts');
     expect(url).not.toContain('chatId');
+  });
+});
+
+describe('getProjectFileBase64', () => {
+  it('GETs /files with encoding=base64 and returns the content', async () => {
+    mockFetchOk({ path: 'assets/logo.png', content: 'aGVsbG8=' });
+
+    const content = await getProjectFileBase64(31415, 'proj-1', 'assets/logo.png', 'chat-abc');
+
+    expect(content).toBe('aGVsbG8=');
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('/api/projects/proj-1/files?');
+    expect(url).toContain('encoding=base64');
+    expect(url).toContain('path=assets%2Flogo.png');
+    expect(url).toContain('chatId=chat-abc');
+  });
+
+  it('omits chatId when not passed', async () => {
+    mockFetchOk({ path: 'assets/logo.png', content: 'aGVsbG8=' });
+
+    await getProjectFileBase64(31415, 'proj-1', 'assets/logo.png');
+
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('encoding=base64');
+    expect(url).not.toContain('chatId');
+  });
+
+  it('URL-encodes the projectId', async () => {
+    mockFetchOk({ path: 'img.png', content: 'abc' });
+
+    await getProjectFileBase64(31415, 'my project/1', 'img.png');
+
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('/api/projects/my%20project%2F1/files');
+  });
+
+  it('throws when success is false', async () => {
+    mockFetchApiError('file not found');
+
+    await expect(getProjectFileBase64(31415, 'proj-1', 'missing.png')).rejects.toThrow('file not found');
   });
 });
 

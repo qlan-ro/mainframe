@@ -10,12 +10,15 @@
  *   pdf    → PdfViewer     (.pdf)
  *   code   → CmEditor      (everything else; caller must wire Phase 7)
  *
- * The routing component (`ViewerRouter`) reads the file via the Tauri bridge
- * and passes the content to the correct viewer. Code files fall through via a
- * render prop so Phase 7 can mount `CmEditor` without a circular import.
+ * File loading is daemon-first (worktree-aware): project files are fetched via
+ * the daemon REST API. The Tauri bridge is the fallback only when there is no
+ * active project context (absolute path, no worktree).
  */
 import { type ReactNode, useEffect, useState } from 'react';
 import { readFile, readFileBase64 } from '@/lib/tauri/bridge';
+import { getProjectFile, getProjectFileBase64 } from '@/lib/api/files';
+import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { ImageViewer } from './ImageViewer';
 import { SvgViewer } from './SvgViewer';
 import { CsvViewer } from './CsvViewer';
@@ -66,7 +69,7 @@ function imageDataUrl(ext: string, base64: string): string {
 // ── ViewerRouter component ───────────────────────────────────────────────────
 
 interface ViewerRouterProps {
-  /** Absolute file path to display. */
+  /** Absolute or repo-relative file path to display. */
   path: string;
   /**
    * Render prop called when the path resolves to a `"code"` kind.
@@ -84,6 +87,8 @@ type LoadState =
 
 export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   const [state, setState] = useState<LoadState>({ status: 'idle' });
+  const port = useDaemonPort();
+  const { projectId, chatId } = useActiveIdentity();
 
   useEffect(() => {
     if (!path) return;
@@ -101,13 +106,26 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
           return;
         }
 
-        // Binary kinds (image, pdf) use base64; text kinds use readFile.
+        // Binary kinds (image, pdf) need base64; text kinds need UTF-8.
         const isBinary = kind === 'image' || kind === 'pdf';
-        const content = isBinary ? await readFileBase64(path) : await readFile(path);
+
+        let raw: string | null;
+        if (isBinary) {
+          raw = projectId ? await getProjectFileBase64(port, projectId, path, chatId) : await readFileBase64(path);
+        } else {
+          raw = projectId ? await getProjectFile(port, projectId, path, chatId) : await readFile(path);
+        }
 
         if (cancelled) return;
 
-        if (kind === 'image' && content !== null) {
+        if (raw == null) {
+          setState({ status: 'error', message: 'File not found or unreadable' });
+          return;
+        }
+
+        const content = raw;
+
+        if (kind === 'image') {
           const ext = (path.split('.').pop() ?? '').toLowerCase();
           setState({ status: 'ready', kind, content: imageDataUrl(ext, content) });
         } else {
@@ -126,7 +144,7 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
     return () => {
       cancelled = true;
     };
-  }, [path]);
+  }, [path, port, projectId, chatId]);
 
   if (state.status === 'idle' || state.status === 'loading') {
     return <div className="flex h-full items-center justify-center text-body text-muted-foreground">Loading…</div>;

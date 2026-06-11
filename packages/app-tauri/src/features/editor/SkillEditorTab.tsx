@@ -5,13 +5,22 @@
  * from the tab model). They are edited with the plain CmEditor using the
  * 'markdown' language pack.
  *
- * If a dedicated skill-loading API lands later, this wrapper is the right place
- * to hook it in. For now it reads the file via the Tauri bridge like EditorTab.
+ * Load path mirrors EditorTab: project files via the daemon (worktree-aware),
+ * fallback to the Tauri bridge for absolute paths without a project context.
+ *
+ * Null/undefined content is treated as a load error — it is NOT cached as an
+ * empty buffer (which would mask real content after a fix).
+ *
+ * The cache is read once inside the effect via getState() to avoid re-running
+ * on every keystroke (setBuffer → new buffer object).
  *
  * data-testid: "skill-editor-tab" on root.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { readFile } from '@/lib/tauri/bridge';
+import { getProjectFile } from '@/lib/api/files';
+import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useEditorStore } from '@/store/editor';
 import { useTabsStore } from '@/store/tabs';
 import { CmEditor } from './CmEditor';
@@ -26,24 +35,33 @@ type LoadState = { status: 'loading' } | { status: 'ready'; value: string } | { 
 export function SkillEditorTab({ tabId, path }: SkillEditorTabProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const setBuffer = useEditorStore((s) => s.setBuffer);
-  const cachedBuffer = useEditorStore((s) => s.getBuffer(path));
   const promoteTab = useTabsStore((s) => s.promoteTab);
+  const port = useDaemonPort();
+  const { projectId, chatId } = useActiveIdentity();
 
+  // Read the cache once inside the effect (not subscribed) so keystrokes don't
+  // re-trigger loads. Project files load via the daemon; fallback to Tauri for
+  // absolute paths with no project context.
   useEffect(() => {
-    if (cachedBuffer) {
-      setLoadState({ status: 'ready', value: cachedBuffer.value });
+    const cached = useEditorStore.getState().getBuffer(path);
+    if (cached) {
+      setLoadState({ status: 'ready', value: cached.value });
       return;
     }
 
     let cancelled = false;
     setLoadState({ status: 'loading' });
 
-    readFile(path)
+    const load = projectId ? getProjectFile(port, projectId, path, chatId) : readFile(path);
+    load
       .then((content) => {
         if (cancelled) return;
-        const value = content ?? '';
-        setBuffer(path, value, false);
-        setLoadState({ status: 'ready', value });
+        if (content == null) {
+          setLoadState({ status: 'error', message: 'File not found or unreadable' });
+          return;
+        }
+        setBuffer(path, content, false);
+        setLoadState({ status: 'ready', value: content });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -55,7 +73,7 @@ export function SkillEditorTab({ tabId, path }: SkillEditorTabProps) {
     return () => {
       cancelled = true;
     };
-  }, [path, cachedBuffer, setBuffer]);
+  }, [path, setBuffer, port, projectId, chatId]);
 
   const handleChange = useCallback(
     (value: string) => {

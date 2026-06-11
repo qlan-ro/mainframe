@@ -32,18 +32,19 @@ type LoadState = { status: 'loading' } | { status: 'ready'; value: string } | { 
 export function EditorTab({ tabId, path }: EditorTabProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const setBuffer = useEditorStore((s) => s.setBuffer);
-  const cachedBuffer = useEditorStore((s) => s.getBuffer(path));
   const promoteTab = useTabsStore((s) => s.promoteTab);
   const port = useDaemonPort();
   const { projectId, chatId } = useActiveIdentity();
 
-  // Load file content — use the in-memory buffer if already cached. Project
-  // files load via the daemon (worktree-aware; resolves repo-relative tree
-  // paths AND absolute chat-card paths). Falls back to the Tauri bridge only
-  // when there's no active project (absolute path, no worktree context).
+  // Load file content — read the cache ONCE inside the effect (not subscribed)
+  // so that keystrokes (setBuffer → new buffer object) do not re-run this
+  // effect. Project files load via the daemon (worktree-aware; resolves
+  // repo-relative tree paths AND absolute chat-card paths). Falls back to the
+  // Tauri bridge only when there is no active project.
   useEffect(() => {
-    if (cachedBuffer) {
-      setLoadState({ status: 'ready', value: cachedBuffer.value });
+    const cached = useEditorStore.getState().getBuffer(path);
+    if (cached) {
+      setLoadState({ status: 'ready', value: cached.value });
       return;
     }
 
@@ -54,9 +55,12 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
     load
       .then((content) => {
         if (cancelled) return;
-        const value = content ?? '';
-        setBuffer(path, value, false);
-        setLoadState({ status: 'ready', value });
+        if (content == null) {
+          setLoadState({ status: 'error', message: 'File not found or unreadable' });
+          return;
+        }
+        setBuffer(path, content, false);
+        setLoadState({ status: 'ready', value: content });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -68,7 +72,7 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
     return () => {
       cancelled = true;
     };
-  }, [path, cachedBuffer, setBuffer, port, projectId, chatId]);
+  }, [path, setBuffer, port, projectId, chatId]);
 
   const handleChange = useCallback(
     (value: string) => {
