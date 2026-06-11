@@ -1,0 +1,53 @@
+/**
+ * LSP client singleton for app-tauri.
+ *
+ * Port of packages/desktop/src/renderer/lib/lsp/index.ts
+ * Changes:
+ *   - Port comes from getDaemonPort() (Tauri bridge), not env-var build-time
+ *   - auto-connect import deferred to Phase 7 (initAutoConnect export)
+ *   - Singleton persisted across HMR reloads to avoid reconnection cascades
+ */
+export { getLspLanguage, hasLspSupport } from './language-detection';
+export { LspClientManager } from './lsp-client';
+export type { LspProviders, LspLocation, LspRange, LspPosition, LspHover, DocumentRef } from './lsp-client';
+export { initAutoConnect } from './auto-connect';
+
+import { LspClientManager } from './lsp-client';
+import { getDaemonPort } from '@/lib/tauri/bridge';
+
+// Extend the window type for HMR persistence only in this module.
+type LspWindow = Window & {
+  __lspClientManager?: LspClientManager;
+  __lspPortInitialized?: boolean;
+};
+
+const win = window as unknown as LspWindow;
+
+/**
+ * Singleton LSP client manager shared across the renderer.
+ * The manager is constructed with port=0 initially; `initLspPort` must be
+ * called once (by App.tsx / DaemonPortProvider) before any LSP operations.
+ */
+export const lspClientManager: LspClientManager = win.__lspClientManager ?? new LspClientManager(0);
+
+win.__lspClientManager = lspClientManager;
+
+/**
+ * Resolve the daemon port and hand it to the singleton manager.
+ * Called once at app startup (after getDaemonPort() resolves).
+ * Safe to call multiple times — subsequent calls are no-ops.
+ */
+export async function initLspPort(): Promise<void> {
+  if (win.__lspPortInitialized) return;
+  win.__lspPortInitialized = true;
+  try {
+    const port = await getDaemonPort();
+    // Reinitialize the singleton with the real port (replaces the 0-port instance).
+    const realManager = new LspClientManager(port);
+    // Swap the singleton in place so all existing references see the new port.
+    Object.assign(lspClientManager, realManager);
+    win.__lspClientManager = lspClientManager;
+  } catch (err) {
+    console.warn('[lsp] initLspPort failed — LSP unavailable', err);
+  }
+}
