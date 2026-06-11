@@ -1,5 +1,6 @@
 import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Play, Search, Sun } from 'lucide-react';
 import { useTheme } from '@/store/theme';
+import { useLayoutStore } from '@/store/layout';
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -46,6 +47,8 @@ export function MainToolbar({
   const mode = useTheme((s) => s.mode);
   const toggleTheme = useTheme((s) => s.toggle);
   const isDark = mode === 'dark';
+  const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
+  const toggleInspector = useLayoutStore((s) => s.toggleInspector);
 
   return (
     <div
@@ -112,9 +115,16 @@ export function MainToolbar({
         >
           {isDark ? <Sun size={15} /> : <Moon size={15} />}
         </button>
-        <StubButton testid="main-toolbar-inspector" title="Toggle inspector">
+        <button
+          data-testid="main-toolbar-inspector"
+          type="button"
+          title="Toggle inspector"
+          aria-pressed={inspectorVisible}
+          onClick={toggleInspector}
+          className={`${ICON_BTN} ${inspectorVisible ? 'bg-mf-chip-bg text-foreground' : ''}`}
+        >
           <PanelRight size={14} />
-        </StubButton>
+        </button>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@
  */
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { ArchiveWorktreeDialog } from '../features/sessions/sidebar/ArchiveWorktreeDialog';
+import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
@@ -34,6 +35,7 @@ function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
+  const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
   const { projectName, branchName } = useActiveIdentity();
   const {
     dragCollapsed,
@@ -99,6 +101,9 @@ function RuntimeBody({ port }: { port: number }) {
         />
         <SurfaceHost port={port} />
       </div>
+
+      {/* Right Inspector pane (Files tree / Changes), toggled from the toolbar. */}
+      {inspectorVisible && <InspectorPane port={port} />}
 
       {/* Single app-wide outlets driven by their bridges/stores */}
       <ArchiveWorktreeDialog />

@@ -119,6 +119,8 @@ interface LayoutStore {
   layout: WorkspaceLayout;
   run: RunState | null;
   sidebarVisible: boolean;
+  /** Right-side Inspector pane (Files tree / Changes). Off by default. */
+  inspectorVisible: boolean;
   /** Per-session remembered workspaces. */
   sessions: Map<string, SessionWorkspace>;
   activeSessionId: string | null;
@@ -128,6 +130,7 @@ interface LayoutStore {
 
   toggleSurface: (surface: SurfaceId) => void;
   toggleSidebar: () => void;
+  toggleInspector: () => void;
   /** Called by the horizontal SurfDivider; frac = fraction of the top-row width. */
   setTopFrac: (frac: number) => void;
   /** Called by the vertical SurfDivider; frac = fraction of the total height. */
@@ -163,6 +166,7 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
     layout: INITIAL_LAYOUT,
     run: null,
     sidebarVisible: true,
+    inspectorVisible: false,
     sessions: new Map(),
     activeSessionId: null,
 
@@ -186,6 +190,10 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
 
     toggleSidebar() {
       set((s) => ({ sidebarVisible: !s.sidebarVisible }));
+    },
+
+    toggleInspector() {
+      set((s) => ({ inspectorVisible: !s.inspectorVisible }));
     },
 
     setTopFrac(frac) {
