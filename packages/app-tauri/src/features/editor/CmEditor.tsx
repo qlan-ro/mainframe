@@ -12,7 +12,7 @@
  * restored on remount with the same path.
  */
 import { useEffect, useRef } from 'react';
-import { EditorState } from '@codemirror/state';
+import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import type { LangPackId } from '@/lib/editor/file-types';
 import { applyValueUpdate } from '@/lib/editor/apply-value-update';
@@ -27,9 +27,19 @@ export interface CmEditorProps {
   readOnly: boolean;
   onChange: (value: string) => void;
   path: string;
+  /**
+   * Optional extra extensions to inject at mount time (e.g. the comment gutter).
+   * These are static — they are not reconfigured on prop changes.
+   */
+  extraExtensions?: Extension[];
+  /**
+   * Ref callback for callers that need direct EditorView access (e.g. to
+   * dispatch addCommentEffect from outside the CM6 extension system).
+   */
+  onViewReady?: (view: EditorView) => void;
 }
 
-export function CmEditor({ value, language, readOnly, onChange, path }: CmEditorProps) {
+export function CmEditor({ value, language, readOnly, onChange, path, extraExtensions, onViewReady }: CmEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -63,11 +73,13 @@ export function CmEditor({ value, language, readOnly, onChange, path }: CmEditor
             onChangeRef.current(update.state.doc.toString());
           }
         }),
+        ...(extraExtensions ?? []),
       ],
     });
 
     const view = new EditorView({ state: startState, parent: hostRef.current });
     viewRef.current = view;
+    onViewReady?.(view);
 
     // Restore view state if we have one saved for this path.
     if (savedState) {
