@@ -3,6 +3,7 @@ import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
 import { onSurfaceIntent } from '@/store/surface-intents';
+import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { SurfDivider } from './SurfDivider';
 import { FilesSurface } from './surfaces/FilesSurface';
 import { RunSurface } from './surfaces/RunSurface';
@@ -45,6 +46,12 @@ export function SurfaceHost({ port }: Props) {
       const isActive = cur.top.includes(intent.surface) || cur.bottom === intent.surface;
       if (!isActive) state.toggleSurface(intent.surface);
     });
+  }, []);
+
+  // Subscribe to open-file / reveal-file intents — opens tabs + activates Files surface.
+  // One stable subscription; no re-sub on layout change.
+  useEffect(() => {
+    return subscribeToFileIntents();
   }, []);
 
   // Cmd/Ctrl + 1/2/3 toggle Chat/Files/Run.
