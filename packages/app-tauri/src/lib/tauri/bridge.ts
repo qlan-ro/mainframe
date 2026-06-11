@@ -119,6 +119,17 @@ export async function readFile(path: string): Promise<string | null> {
 }
 
 /**
+ * Reads a binary file from disk and returns its contents as a base64 string.
+ * Path must be under the user home directory.
+ * Returns null in browser dev mode or when the file is not found.
+ * Used by image and PDF viewers which cannot work with UTF-8 text.
+ */
+export async function readFileBase64(path: string): Promise<string | null> {
+  if (!IS_TAURI) return null;
+  return invoke<string | null>('read_file_base64', { path });
+}
+
+/**
  * Shows an OS-native notification. No-op in browser dev mode.
  */
 export async function showNotification(title: string, body?: string): Promise<void> {

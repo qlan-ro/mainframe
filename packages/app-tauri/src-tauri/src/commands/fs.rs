@@ -66,6 +66,45 @@ pub fn read_file(path: String) -> Result<Option<String>, String> {
     }
 }
 
+/// Read a binary file from disk and return its contents as a base64-encoded
+/// string. Path must canonicalize under the home directory.
+/// Returns `None` if the file doesn't exist or is outside home.
+/// Used by the image and PDF viewers which cannot use the text `read_file`.
+#[tauri::command]
+pub fn read_file_base64(path: String) -> Result<Option<String>, String> {
+    let canonical = match validate_under_home(&path) {
+        Ok(p) => p,
+        Err(_) => return Ok(None),
+    };
+    match std::fs::read(&canonical) {
+        Ok(bytes) => {
+            use std::io::Write;
+            // Use the base64 alphabet shipped with the standard library via
+            // std::io::Write on a Vec — no extra crate needed; encode manually.
+            Ok(Some(base64_encode(&bytes)))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("read_file_base64 '{}': {e}", path)),
+    }
+}
+
+/// Minimal base64 encoder (RFC 4648, no line wrapping). Avoids adding a crate.
+fn base64_encode(input: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = Vec::with_capacity((input.len() + 2) / 3 * 4);
+    for chunk in input.chunks(3) {
+        let b0 = chunk[0] as usize;
+        let b1 = if chunk.len() > 1 { chunk[1] as usize } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as usize } else { 0 };
+        out.push(CHARS[(b0 >> 2) & 0x3f]);
+        out.push(CHARS[((b0 << 4) | (b1 >> 4)) & 0x3f]);
+        out.push(if chunk.len() > 1 { CHARS[((b1 << 2) | (b2 >> 6)) & 0x3f] } else { b'=' });
+        out.push(if chunk.len() > 2 { CHARS[b2 & 0x3f] } else { b'=' });
+    }
+    // SAFETY: only ASCII chars from CHARS table
+    unsafe { String::from_utf8_unchecked(out) }
+}
+
 /// Returns the current OS: "macos", "windows", or "linux".
 #[tauri::command]
 pub fn get_platform() -> String {

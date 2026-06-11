@@ -1,0 +1,162 @@
+'use client';
+
+/**
+ * CsvViewer.tsx
+ *
+ * Renders a CSV file as a sortable, filterable table.
+ * Features (per artboard spec):
+ *   - Sticky header row with sort (asc → desc → off) per column.
+ *   - Row-number gutter column.
+ *   - Right-aligned numeric columns (auto-detected).
+ *   - Live filter input that narrows rows.
+ *   - Zebra striping via odd/even row classes.
+ *
+ * No external CSV dep — uses the hand-rolled `csv-parser.ts`.
+ * data-testid="viewer-csv" on the root.
+ */
+import { useMemo, useState } from 'react';
+import { parseCsv, isNumericColumn } from './csv-parser';
+
+interface CsvViewerProps {
+  content: string | null;
+}
+
+type SortDir = 'asc' | 'desc' | null;
+
+interface SortState {
+  colIndex: number;
+  dir: SortDir;
+}
+
+function nextSortDir(current: SortDir): SortDir {
+  if (current === null) return 'asc';
+  if (current === 'asc') return 'desc';
+  return null;
+}
+
+export function CsvViewer({ content }: CsvViewerProps) {
+  const [filter, setFilter] = useState('');
+  const [sort, setSort] = useState<SortState>({ colIndex: -1, dir: null });
+
+  const parsed = useMemo(() => (content !== null ? parseCsv(content) : null), [content]);
+
+  const numericCols = useMemo(() => {
+    if (!parsed) return new Set<number>();
+    return new Set(parsed.headers.map((_, i) => i).filter((i) => isNumericColumn(parsed.rows, i)));
+  }, [parsed]);
+
+  const displayRows = useMemo(() => {
+    if (!parsed) return [];
+    let rows = parsed.rows;
+
+    if (filter.trim()) {
+      const term = filter.toLowerCase();
+      rows = rows.filter((row) => row.some((cell) => cell.toLowerCase().includes(term)));
+    }
+
+    if (sort.colIndex >= 0 && sort.dir !== null) {
+      const { colIndex, dir } = sort;
+      const isNum = numericCols.has(colIndex);
+      rows = [...rows].sort((a, b) => {
+        const av = a[colIndex] ?? '';
+        const bv = b[colIndex] ?? '';
+        const cmp = isNum ? Number(av) - Number(bv) : av.localeCompare(bv);
+        return dir === 'asc' ? cmp : -cmp;
+      });
+    }
+
+    return rows;
+  }, [parsed, filter, sort, numericCols]);
+
+  function handleHeaderClick(colIndex: number) {
+    setSort((prev) => {
+      if (prev.colIndex === colIndex) {
+        return { colIndex, dir: nextSortDir(prev.dir) };
+      }
+      return { colIndex, dir: 'asc' };
+    });
+  }
+
+  return (
+    <div data-testid="viewer-csv" className="flex h-full flex-col">
+      {/* Filter bar */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-mf-border px-3 py-1.5">
+        <input
+          type="text"
+          data-testid="viewer-csv-filter"
+          placeholder="Filter rows…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="h-6 flex-1 rounded border border-mf-border bg-mf-input-bg px-2 text-xs text-mf-text-primary placeholder:text-mf-text-secondary focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        {parsed && (
+          <span className="text-xs text-mf-text-secondary">
+            {displayRows.length} / {parsed.rows.length} rows
+          </span>
+        )}
+      </div>
+
+      {/* Table */}
+      {content === null ? (
+        <div className="flex flex-1 items-center justify-center text-sm text-mf-text-secondary">Loading…</div>
+      ) : !parsed || parsed.headers.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center text-sm text-mf-text-secondary">No data</div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          <table className="w-full border-collapse text-xs">
+            <thead className="sticky top-0 bg-mf-panel-bg">
+              <tr>
+                {/* Row-number gutter */}
+                <th className="w-10 border-b border-r border-mf-border px-2 py-1.5 text-right text-mf-text-secondary select-none">
+                  #
+                </th>
+                {parsed.headers.map((header, i) => {
+                  const isActive = sort.colIndex === i;
+                  const isNum = numericCols.has(i);
+                  return (
+                    <th
+                      key={header}
+                      data-testid={`viewer-csv-header-${header}`}
+                      onClick={() => handleHeaderClick(i)}
+                      className={[
+                        'cursor-pointer border-b border-mf-border px-2 py-1.5 font-medium select-none',
+                        'hover:bg-mf-hover',
+                        isNum ? 'text-right' : 'text-left',
+                        isActive ? 'text-mf-text-primary' : 'text-mf-text-secondary',
+                      ].join(' ')}
+                    >
+                      {header}
+                      {isActive && sort.dir === 'asc' && ' ↑'}
+                      {isActive && sort.dir === 'desc' && ' ↓'}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {displayRows.map((row, rowIdx) => (
+                <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-mf-app-bg' : 'bg-mf-panel-bg'}>
+                  <td className="border-r border-mf-border px-2 py-1 text-right text-mf-text-secondary tabular-nums">
+                    {rowIdx + 1}
+                  </td>
+                  {parsed.headers.map((header, colIdx) => (
+                    <td
+                      key={header}
+                      className={[
+                        'px-2 py-1',
+                        numericCols.has(colIdx) ? 'text-right tabular-nums' : 'text-left',
+                        'text-mf-text-primary',
+                      ].join(' ')}
+                    >
+                      {row[colIdx] ?? ''}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
