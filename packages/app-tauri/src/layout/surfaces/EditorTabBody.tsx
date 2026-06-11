@@ -8,7 +8,6 @@
 import type { EditorTabModel, DiffTabModel } from '@/store/tabs';
 import { EditorTab } from '@/features/editor/EditorTab';
 import { DiffTab } from '@/features/editor/DiffTab';
-import { SkillEditorTab } from '@/features/editor/SkillEditorTab';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
 
 interface EditorTabBodyProps {
@@ -21,14 +20,11 @@ export function EditorTabBody({ tab }: EditorTabBodyProps) {
     return <DiffTab path={tab.path} original={diffTab.original} modified={diffTab.modified} />;
   }
 
-  if (tab.kind === 'skill') {
-    return <SkillEditorTab tabId={tab.id} path={tab.path} />;
-  }
-
   if (tab.kind === 'viewer') {
     return <ViewerRouter path={tab.path} />;
   }
 
-  // kind === 'code'
+  // kind === 'code' — a skill file is just a code/markdown file at a different
+  // path; it opens through the normal editor (no dedicated skill tab).
   return <EditorTab tabId={tab.id} path={tab.path} />;
 }

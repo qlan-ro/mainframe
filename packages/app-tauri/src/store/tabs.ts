@@ -16,7 +16,7 @@ import { create } from 'zustand';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type TabKind = 'code' | 'diff' | 'skill' | 'viewer';
+export type TabKind = 'code' | 'diff' | 'viewer';
 export type TabMode = 'preview' | 'permanent';
 
 /** Disc fields shared by all kinds. */
@@ -40,7 +40,7 @@ export type EditorTabModel = TabBase | DiffTabModel;
 // ── Open-target descriptor (what the caller provides) ─────────────────────────
 
 export interface OpenCodeTarget {
-  kind: 'code' | 'skill' | 'viewer';
+  kind: 'code' | 'viewer';
   path: string;
   title: string;
 }

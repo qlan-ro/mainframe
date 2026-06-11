@@ -200,11 +200,6 @@ describe('tab kinds', () => {
     expect(tabs()[0]!.kind).toBe('diff');
   });
 
-  it('opens a skill tab', () => {
-    store().openTab({ path: '/skill.md', title: 'my-skill', kind: 'skill' }, { mode: 'permanent' });
-    expect(tabs()[0]!.kind).toBe('skill');
-  });
-
   it('opens a viewer tab', () => {
     store().openTab({ path: '/image.png', title: 'image.png', kind: 'viewer' }, { mode: 'permanent' });
     expect(tabs()[0]!.kind).toBe('viewer');
