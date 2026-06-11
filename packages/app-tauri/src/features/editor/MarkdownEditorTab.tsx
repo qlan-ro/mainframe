@@ -13,11 +13,12 @@ interface MarkdownEditorTabProps {
   value: string;
   path: string;
   onChange: (value: string) => void;
+  onSave?: (value: string) => void;
 }
 
 const SEG_BTN = 'h-[22px] rounded-[6px] px-2.5 text-caption transition-colors';
 
-export function MarkdownEditorTab({ value, path, onChange }: MarkdownEditorTabProps) {
+export function MarkdownEditorTab({ value, path, onChange, onSave }: MarkdownEditorTabProps) {
   const [mode, setMode] = useState<Mode>('edit');
 
   return (
@@ -48,7 +49,14 @@ export function MarkdownEditorTab({ value, path, onChange }: MarkdownEditorTabPr
 
       <div className="min-h-0 flex-1">
         {mode === 'edit' ? (
-          <CmEditor value={value} language="markdown" readOnly={false} onChange={onChange} path={path} />
+          <CmEditor
+            value={value}
+            language="markdown"
+            readOnly={false}
+            onChange={onChange}
+            onSave={onSave}
+            path={path}
+          />
         ) : (
           <MarkdownPreview value={value} />
         )}

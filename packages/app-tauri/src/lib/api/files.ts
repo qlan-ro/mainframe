@@ -71,6 +71,27 @@ export async function getProjectFileBase64(
   return data.content;
 }
 
+interface WriteFileResponse {
+  path: string;
+}
+
+/**
+ * Write a project file's UTF-8 content via the daemon (worktree-aware).
+ * Calls PUT /api/projects/:id/files with a JSON body `{ path, content, chatId? }`.
+ * The daemon validates and writes the file, returning `{ path }` on success.
+ */
+export async function saveProjectFile(
+  port: number,
+  projectId: string,
+  path: string,
+  content: string,
+  chatId?: string,
+): Promise<void> {
+  const body: { path: string; content: string; chatId?: string } = { path, content };
+  if (chatId) body.chatId = chatId;
+  await request<WriteFileResponse>('PUT', `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/files`, body);
+}
+
 interface BrowseOpts {
   includeFiles?: boolean;
   includeHidden?: boolean;

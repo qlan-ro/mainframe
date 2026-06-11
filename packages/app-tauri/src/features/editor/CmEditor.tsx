@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
 import type { LangPackId } from '@/lib/editor/file-types';
 import { applyValueUpdate } from '@/lib/editor/apply-value-update';
 import { useEditorStore } from '@/store/editor';
@@ -37,9 +37,24 @@ export interface CmEditorProps {
    * dispatch addCommentEffect from outside the CM6 extension system).
    */
   onViewReady?: (view: EditorView) => void;
+  /**
+   * Called when the user presses Cmd/Ctrl+S. The editor passes the current
+   * document value; the parent should persist it and clear dirty state.
+   * When provided, the browser default (page save dialog) is suppressed.
+   */
+  onSave?: (value: string) => void;
 }
 
-export function CmEditor({ value, language, readOnly, onChange, path, extraExtensions, onViewReady }: CmEditorProps) {
+export function CmEditor({
+  value,
+  language,
+  readOnly,
+  onChange,
+  path,
+  extraExtensions,
+  onViewReady,
+  onSave,
+}: CmEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -52,6 +67,9 @@ export function CmEditor({ value, language, readOnly, onChange, path, extraExten
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
   const pathRef = useRef(path);
   pathRef.current = path;
 
@@ -61,6 +79,20 @@ export function CmEditor({ value, language, readOnly, onChange, path, extraExten
     if (!hostRef.current) return;
     const { lang, readOnly: roComp } = compartmentsRef.current;
     const savedState = useEditorStore.getState().getViewState(path);
+
+    const saveKeymap = keymap.of([
+      {
+        key: 'Mod-s',
+        run(view) {
+          const cb = onSaveRef.current;
+          if (cb) {
+            cb(view.state.doc.toString());
+            return true; // prevent browser save dialog
+          }
+          return false;
+        },
+      },
+    ]);
 
     const startState = EditorState.create({
       doc: value,
@@ -73,6 +105,7 @@ export function CmEditor({ value, language, readOnly, onChange, path, extraExten
             onChangeRef.current(update.state.doc.toString());
           }
         }),
+        saveKeymap,
         ...(extraExtensions ?? []),
       ],
     });

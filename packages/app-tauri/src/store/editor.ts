@@ -24,6 +24,21 @@ export interface EditorBufferState {
   dirty: boolean;
 }
 
+/** Maximum number of entries kept in the buffers and viewStates caches. */
+const CACHE_CAP = 50;
+
+/**
+ * Evict the oldest (first-inserted) entry from a Map when its size exceeds
+ * CACHE_CAP. Uses insertion-order iteration — Map guarantees this.
+ */
+function evictOldest<K, V>(map: Map<K, V>): Map<K, V> {
+  if (map.size <= CACHE_CAP) return map;
+  const firstKey = map.keys().next().value as K;
+  const next = new Map(map);
+  next.delete(firstKey);
+  return next;
+}
+
 interface EditorStore {
   /** view-state (selection + scroll) per absolute path */
   viewStates: Map<string, EditorViewState>;
@@ -44,9 +59,9 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
 
   saveViewState(path, state) {
     set((prev) => {
-      const next = new Map(prev.viewStates);
-      next.set(path, state);
-      return { viewStates: next };
+      const draft = new Map(prev.viewStates);
+      draft.set(path, state);
+      return { viewStates: evictOldest(draft) };
     });
   },
 
@@ -56,9 +71,9 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
 
   setBuffer(path, value, dirty = false) {
     set((prev) => {
-      const next = new Map(prev.buffers);
-      next.set(path, { value, dirty });
-      return { buffers: next };
+      const draft = new Map(prev.buffers);
+      draft.set(path, { value, dirty });
+      return { buffers: evictOldest(draft) };
     });
   },
 

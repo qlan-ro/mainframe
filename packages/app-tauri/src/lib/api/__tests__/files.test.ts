@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { FileResult, FileTreeEntry } from '../files';
-import { searchFiles, getFileTree, browseFilesystem, getProjectFile, getProjectFileBase64 } from '../files';
+import {
+  searchFiles,
+  getFileTree,
+  browseFilesystem,
+  getProjectFile,
+  getProjectFileBase64,
+  saveProjectFile,
+} from '../files';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -122,6 +129,83 @@ describe('getProjectFileBase64', () => {
     mockFetchApiError('file not found');
 
     await expect(getProjectFileBase64(31415, 'proj-1', 'missing.png')).rejects.toThrow('file not found');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// saveProjectFile
+// ---------------------------------------------------------------------------
+
+describe('saveProjectFile', () => {
+  it('PUTs /api/projects/:id/files with path and content in the JSON body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, data: { path: 'src/a.ts' } }),
+      }),
+    );
+
+    await saveProjectFile(31415, 'proj-1', 'src/a.ts', 'const x = 1\n');
+
+    expect(fetch).toHaveBeenCalledOnce();
+    const [url, opts] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://127.0.0.1:31415/api/projects/proj-1/files');
+    expect(opts.method).toBe('PUT');
+    const body = JSON.parse(opts.body as string) as Record<string, string>;
+    expect(body.path).toBe('src/a.ts');
+    expect(body.content).toBe('const x = 1\n');
+    expect(body.chatId).toBeUndefined();
+  });
+
+  it('includes chatId in the body when provided', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, data: { path: 'src/a.ts' } }),
+      }),
+    );
+
+    await saveProjectFile(31415, 'proj-1', 'src/a.ts', 'hello', 'chat-abc');
+
+    const [, opts] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(opts.body as string) as Record<string, string>;
+    expect(body.chatId).toBe('chat-abc');
+  });
+
+  it('URL-encodes the projectId', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, data: { path: 'a.ts' } }),
+      }),
+    );
+
+    await saveProjectFile(31415, 'my project/1', 'a.ts', 'x');
+
+    const [url] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/projects/my%20project%2F1/files');
+  });
+
+  it('throws when success is false', async () => {
+    mockFetchApiError('Path outside project');
+
+    await expect(saveProjectFile(31415, 'proj-1', '../etc/passwd', 'x')).rejects.toThrow('Path outside project');
+  });
+
+  it('throws when the HTTP response is not ok', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: 'write failed' }),
+      }),
+    );
+
+    await expect(saveProjectFile(31415, 'proj-1', 'a.ts', 'x')).rejects.toThrow('write failed');
   });
 });
 
