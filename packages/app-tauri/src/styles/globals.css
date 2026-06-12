@@ -49,7 +49,7 @@
   --accent-foreground: #1c1c1e;
   --destructive: #dc3545;
   --destructive-foreground: #ffffff;
-  /* Opaque error tint — --destructive is hex, so bg-destructive/N silently fails. */
+  /* hex color vars; /opacity compiles to color-mix() under Tailwind v4 (works). */
   --mf-destructive-tint: rgba(220, 53, 69, 0.08);
   --border: rgba(0, 0, 0, 0.08);
   --input: rgba(0, 0, 0, 0.08);
@@ -125,7 +125,7 @@
   --mf-checker-light: #f9fafb;
   --mf-checker-dark: #e5e7eb;
   /* CM6 editor UI states — tokenised so the theme var is in CSS, not JS */
-  --mf-cm-active-line: rgba(255,255,255,0.04);
+  --mf-cm-active-line: rgba(0,0,0,0.04);
   --mf-cm-selection: rgba(59,130,246,0.3);
   --mf-cm-selection-focused: rgba(59,130,246,0.4);
   --mf-cm-match: rgba(251,191,36,0.2);
