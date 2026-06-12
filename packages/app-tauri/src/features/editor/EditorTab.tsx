@@ -25,11 +25,13 @@ import { MarkdownEditorTab } from './MarkdownEditorTab';
 interface EditorTabProps {
   tabId: string;
   path: string;
+  /** When true, the editor is opened in read-only mode and a visual indicator is shown. */
+  readOnly?: boolean;
 }
 
 type LoadState = { status: 'loading' } | { status: 'ready'; value: string } | { status: 'error'; message: string };
 
-export function EditorTab({ tabId, path }: EditorTabProps) {
+export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [saveError, setSaveError] = useState<string | null>(null);
   const setBuffer = useEditorStore((s) => s.setBuffer);
@@ -136,10 +138,18 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
 
   return (
     <div data-testid="editor-tab" className="flex h-full flex-col overflow-hidden">
+      {readOnly && (
+        <div
+          data-testid="editor-tab-readonly"
+          className="flex-shrink-0 bg-mf-tab-bar px-3 py-0.5 text-caption text-mf-text-3"
+        >
+          Read-only
+        </div>
+      )}
       {saveError !== null && (
         <div
           data-testid="editor-tab-save-error"
-          className="flex-shrink-0 bg-destructive/10 px-3 py-1 text-caption text-destructive"
+          className="flex-shrink-0 bg-mf-destructive-tint px-3 py-1 text-caption text-destructive"
         >
           Save failed: {saveError}
         </div>
@@ -153,7 +163,7 @@ export function EditorTab({ tabId, path }: EditorTabProps) {
             <CmEditor
               value={loadState.value}
               language={language}
-              readOnly={false}
+              readOnly={readOnly}
               onChange={handleChange}
               onSave={handleSave}
               path={path}
