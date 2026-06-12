@@ -37,6 +37,7 @@ let daemonPortSeenByRuntime: number | null = null;
 // ---------------------------------------------------------------------------
 
 const { useSessionListRouterMock } = vi.hoisted(() => ({ useSessionListRouterMock: vi.fn() }));
+const { initLspPortMock } = vi.hoisted(() => ({ initLspPortMock: vi.fn(() => Promise.resolve()) }));
 
 // ---------------------------------------------------------------------------
 // vi.mock declarations — must appear before any import of the module under test.
@@ -78,6 +79,14 @@ vi.mock('../../features/sessions/runtime/use-sessions-thread-list', async () => 
     },
   };
 });
+
+vi.mock('../../lib/lsp', () => ({
+  initLspPort: initLspPortMock,
+  lspClientManager: { hasClient: vi.fn(() => false), ensureClient: vi.fn(() => Promise.resolve()) },
+  getLspLanguage: vi.fn(() => null),
+  hasLspSupport: vi.fn(() => false),
+  initAutoConnect: vi.fn(() => () => undefined),
+}));
 
 vi.mock('../../features/sessions/ws/use-session-list-router', () => ({
   useSessionListRouter: useSessionListRouterMock,
@@ -260,6 +269,36 @@ describe('App integration — waits for daemon when port is null', () => {
 
     expect(screen.getByTestId('app-waiting-daemon')).toBeDefined();
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 10 — LSP port initialization
+// ---------------------------------------------------------------------------
+
+describe('App integration — initializes the LSP port once connected', () => {
+  it('calls initLspPort when a port is live', async () => {
+    initLspPortMock.mockClear();
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(initLspPortMock).toHaveBeenCalled();
+  });
+
+  it('does not call initLspPort while waiting for the daemon', async () => {
+    initLspPortMock.mockClear();
+    vi.mocked(useConnectionState).mockReturnValueOnce({
+      state: 'connecting',
+      daemonStatus: 'initializing',
+      port: null,
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(initLspPortMock).not.toHaveBeenCalled();
   });
 });
 

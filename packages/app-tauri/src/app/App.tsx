@@ -9,6 +9,7 @@
 import { useEffect } from 'react';
 import { useConnectionState } from './useConnectionState';
 import { daemonWs } from '../lib/daemon/ws-client';
+import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { AppShell } from './AppShell';
 import { AppStatusBar } from '../layout/AppStatusBar';
@@ -23,6 +24,9 @@ export function App() {
     if (port == null) return;
     daemonWs.setPort(port);
     daemonWs.connect();
+    // Hand the daemon port to the LSP singleton (constructed with port=0);
+    // without this every ensureClient targets ws://127.0.0.1:0 and fails.
+    void initLspPort();
   }, [port]);
 
   return (

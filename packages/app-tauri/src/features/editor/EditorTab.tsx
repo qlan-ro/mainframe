@@ -152,6 +152,20 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
     };
   }, [projectId, lspLanguage, projectPath, chatId]);
 
+  // Open the document on the LSP server once the client is ready. Hover /
+  // go-to-def return empty results until the server has seen a didOpen with
+  // the file content. ensureDocumentOpen dedups per URI, so re-runs are no-ops.
+  const loadedValue = loadState.status === 'ready' ? loadState.value : null;
+  useEffect(() => {
+    if (!lspReady || !projectId || !lspLanguage || loadedValue == null) return;
+    lspClientManager.ensureDocumentOpen(projectId, lspLanguage, {
+      filePath: path,
+      languageId: lspLanguage,
+      version: 1,
+      text: loadedValue,
+    });
+  }, [lspReady, projectId, lspLanguage, path, loadedValue]);
+
   // Build LSP CM6 extensions when a project + supported language is present.
   const extraExtensions = useMemo(() => {
     if (!projectId || !lspLanguage) return undefined;

@@ -153,6 +153,7 @@ vi.mock('@/lib/lsp', () => ({
   lspClientManager: {
     hasClient: (projectId: string, language: string) => mockHasClient && Boolean(projectId) && Boolean(language),
     ensureClient: vi.fn().mockResolvedValue(undefined),
+    ensureDocumentOpen: vi.fn(),
     preloadDocument: vi.fn(),
     getHover: vi.fn(),
     getDefinition: vi.fn(),
@@ -281,6 +282,38 @@ describe('EditorTab — LSP extensions wiring (A2)', () => {
     const ext = lastProps?.extraExtensions;
     // Either undefined or an empty array is acceptable — no LSP loaded.
     expect(!ext || (Array.isArray(ext) && ext.length === 0)).toBe(true);
+  });
+});
+
+describe('EditorTab — LSP document open (A2b)', () => {
+  it('sends ensureDocumentOpen with the loaded content once lspReady', async () => {
+    activeIdentityState.projectId = 'proj-1';
+    activeIdentityState.chatId = 'chat-1';
+    activeIdentityState.projectPath = '/projects/myproject';
+    mockHasClient = true;
+
+    const { lspClientManager } = await import('@/lib/lsp');
+    vi.mocked(lspClientManager.ensureDocumentOpen).mockClear();
+
+    render(<EditorTab tabId="tab-a2b" path="/project/src/index.ts" />);
+    await screen.findByTestId('cm-editor-mock');
+
+    expect(lspClientManager.ensureDocumentOpen).toHaveBeenCalledWith('proj-1', 'typescript', {
+      filePath: '/project/src/index.ts',
+      languageId: 'typescript',
+      version: 1,
+      text: 'content',
+    });
+  });
+
+  it('does not send ensureDocumentOpen when there is no LSP language/project', async () => {
+    const { lspClientManager } = await import('@/lib/lsp');
+    vi.mocked(lspClientManager.ensureDocumentOpen).mockClear();
+
+    render(<EditorTab tabId="tab-a2b-none" path="/project/src/index.ts" />);
+    await screen.findByTestId('cm-editor-mock');
+
+    expect(lspClientManager.ensureDocumentOpen).not.toHaveBeenCalled();
   });
 });
 
