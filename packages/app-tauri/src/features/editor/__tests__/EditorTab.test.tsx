@@ -1,5 +1,6 @@
 /**
  * EditorTab tests — B4: read-only prop threading + indicator.
+ *                    A1: EditorContextMenu mount.
  *
  * Strategy:
  *  - Mock all external deps (tauri bridge, api files, hooks, CmEditor, ViewerRouter)
@@ -7,6 +8,7 @@
  *  - Assert that `readOnly={true}` propagates to CmEditor's props.
  *  - Assert the `data-testid="editor-tab-readonly"` indicator renders when readOnly.
  *  - Assert the indicator is absent when readOnly is false (default).
+ *  - Assert `data-testid="editor-context-menu"` is present for a code file.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -65,6 +67,14 @@ vi.mock('../MarkdownEditorTab', () => ({
   MarkdownEditorTab: () => <div data-testid="markdown-editor-mock" />,
 }));
 
+// EditorContextMenu: render a real-looking trigger div so data-testid is present,
+// plus pass children through so CmEditor still renders and can be queried.
+vi.mock('../context-menu/EditorContextMenu', () => ({
+  EditorContextMenu: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="editor-context-menu">{children}</div>
+  ),
+}));
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 import { EditorTab } from '../EditorTab';
@@ -99,5 +109,14 @@ describe('EditorTab — read-only state (B4)', () => {
     await screen.findByTestId('cm-editor-mock');
     const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
     expect(lastProps?.readOnly).toBe(false);
+  });
+});
+
+describe('EditorTab — context menu mount (A1)', () => {
+  it('renders data-testid="editor-context-menu" around the code editor', async () => {
+    render(<EditorTab tabId="tab-a1" path="/project/src/app.ts" />);
+    // Wait for the async load to resolve (getProjectFile is mocked to resolve immediately).
+    await screen.findByTestId('cm-editor-mock');
+    expect(screen.getByTestId('editor-context-menu')).toBeTruthy();
   });
 });

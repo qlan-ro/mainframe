@@ -11,6 +11,7 @@
  * data-testid: "editor-tab" on the root wrapper.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { EditorView } from '@codemirror/view';
 import { readFile } from '@/lib/tauri/bridge';
 import { getProjectFile, saveProjectFile } from '@/lib/api/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -20,6 +21,7 @@ import { useEditorStore } from '@/store/editor';
 import { useTabsStore } from '@/store/tabs';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
 import { CmEditor } from './CmEditor';
+import { EditorContextMenu } from './context-menu/EditorContextMenu';
 import { MarkdownEditorTab } from './MarkdownEditorTab';
 
 interface EditorTabProps {
@@ -41,6 +43,8 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   // Stable ref for path so the unmount effect always sees the current path.
   const pathRef = useRef(path);
   pathRef.current = path;
+  // Ref to the live EditorView — populated via CmEditor's onViewReady seam.
+  const viewRef = useRef<EditorView | null>(null);
 
   // Load file content — read the cache ONCE inside the effect (not subscribed)
   // so that keystrokes (setBuffer → new buffer object) do not re-run this
@@ -160,14 +164,19 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
           language === 'markdown' ? (
             <MarkdownEditorTab value={loadState.value} path={path} onChange={handleChange} onSave={handleSave} />
           ) : (
-            <CmEditor
-              value={loadState.value}
-              language={language}
-              readOnly={readOnly}
-              onChange={handleChange}
-              onSave={handleSave}
-              path={path}
-            />
+            <EditorContextMenu filePath={path} viewRef={viewRef}>
+              <CmEditor
+                value={loadState.value}
+                language={language}
+                readOnly={readOnly}
+                onChange={handleChange}
+                onSave={handleSave}
+                path={path}
+                onViewReady={(v) => {
+                  viewRef.current = v;
+                }}
+              />
+            </EditorContextMenu>
           )
         }
       />
