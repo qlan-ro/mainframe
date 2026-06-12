@@ -1,148 +1,19 @@
 /**
  * Shiki-based syntax highlighter for code blocks in the markdown renderer.
  *
- * Uses a module-level singleton so the WASM grammar engine initialises once per
- * session. Renders tokens as React spans — no dangerouslySetInnerHTML.
+ * Uses the shared singleton engine from `@/lib/shiki-highlighter` so the WASM
+ * grammar engine initialises once per session. Renders tokens as React spans —
+ * no dangerouslySetInnerHTML.
  *
- * Fits the `SyntaxHighlighterProps` slot from @assistant-ui/react-markdown so it
- * can be passed as `SyntaxHighlighter` in the markdownComponents map.
+ * Fits the `SyntaxHighlighterProps` slot from @assistant-ui/react-markdown so
+ * it can be passed as `SyntaxHighlighter` in the markdownComponents map.
  */
 import { useState, useEffect, useRef, type FC } from 'react';
 import type { SyntaxHighlighterProps } from '@assistant-ui/react-markdown';
-import { getSingletonHighlighter, type BundledLanguage, type ThemedToken } from 'shiki';
+import type { ThemedToken } from 'shiki';
+import type { BundledLanguage } from 'shiki';
 import { cn } from '@/lib/utils';
-
-// ── Language support ──────────────────────────────────────────────────────────
-
-type SupportedLang =
-  | 'typescript'
-  | 'javascript'
-  | 'jsx'
-  | 'tsx'
-  | 'python'
-  | 'rust'
-  | 'go'
-  | 'java'
-  | 'json'
-  | 'yaml'
-  | 'toml'
-  | 'xml'
-  | 'bash'
-  | 'css'
-  | 'html'
-  | 'sql'
-  | 'markdown'
-  | 'diff';
-
-const SUPPORTED_SET = new Set<string>([
-  'typescript',
-  'javascript',
-  'jsx',
-  'tsx',
-  'python',
-  'rust',
-  'go',
-  'java',
-  'json',
-  'yaml',
-  'toml',
-  'xml',
-  'bash',
-  'css',
-  'html',
-  'sql',
-  'markdown',
-  'diff',
-]);
-
-const LANG_ALIASES: Record<string, string> = {
-  ts: 'typescript',
-  js: 'javascript',
-  py: 'python',
-  sh: 'bash',
-  shell: 'bash',
-  zsh: 'bash',
-  yml: 'yaml',
-  md: 'markdown',
-  rs: 'rust',
-};
-
-/** Returns a BundledLanguage-compatible string, or null for plain text. */
-function resolveLanguage(raw: string | undefined): SupportedLang | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  const mapped = LANG_ALIASES[lower] ?? lower;
-  return SUPPORTED_SET.has(mapped) ? (mapped as SupportedLang) : null;
-}
-
-// ── Warm-chrome shiki theme ───────────────────────────────────────────────────
-// Reads CSS vars at first init so the palette follows the active light/dark mode.
-// The singleton is recreated on the next page load when the mode changes.
-
-function readVar(name: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  if (!value) {
-    throw new Error(`Missing design token ${name}`);
-  }
-  return value;
-}
-
-function buildWarmChromeTheme() {
-  return {
-    name: 'mf-warm-chrome' as const,
-    type: 'dark' as const,
-    colors: {
-      'editor.background': readVar('--mf-code-bg'),
-      'editor.foreground': readVar('--mf-code-fg'),
-    },
-    tokenColors: [
-      {
-        scope: ['keyword', 'storage', 'modifier'],
-        settings: { foreground: readVar('--mf-code-kw') },
-      },
-      {
-        scope: ['string', 'string.quoted', 'string.template'],
-        settings: { foreground: readVar('--mf-code-str') },
-      },
-      {
-        scope: ['entity.name.function', 'support.function'],
-        settings: { foreground: readVar('--mf-code-fn') },
-      },
-      {
-        scope: ['entity.name.type', 'support.type', 'entity.name.class'],
-        settings: { foreground: readVar('--mf-code-type') },
-      },
-      {
-        scope: ['constant.numeric', 'constant.language'],
-        settings: { foreground: readVar('--mf-code-num') },
-      },
-      {
-        scope: ['comment', 'punctuation.definition.comment'],
-        settings: { foreground: readVar('--mf-code-cmt'), fontStyle: 'italic' },
-      },
-    ],
-  };
-}
-
-// ── Singleton init ────────────────────────────────────────────────────────────
-
-type HighlighterInstance = Awaited<ReturnType<typeof getSingletonHighlighter>>;
-
-let highlighterPromise: Promise<HighlighterInstance> | null = null;
-
-function getHighlighter(): Promise<HighlighterInstance> {
-  if (!highlighterPromise) {
-    highlighterPromise = getSingletonHighlighter({
-      themes: [buildWarmChromeTheme()],
-      langs: SUPPORTED_SET as unknown as BundledLanguage[],
-    }).catch((err) => {
-      console.warn('[syntax-highlight] shiki init failed', err);
-      highlighterPromise = null;
-      throw err;
-    });
-  }
-  return highlighterPromise;
-}
+import { getShikiHighlighter, resolveLanguage } from '@/lib/shiki-highlighter';
 
 // ── Token rendering ───────────────────────────────────────────────────────────
 
@@ -179,7 +50,7 @@ export const SyntaxHighlighter: FC<SyntaxHighlighterProps> = ({ code, language }
       return;
     }
 
-    getHighlighter()
+    getShikiHighlighter()
       .then((h) => {
         if (!mountedRef.current) return;
         try {

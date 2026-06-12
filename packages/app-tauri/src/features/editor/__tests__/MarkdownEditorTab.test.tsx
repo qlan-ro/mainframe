@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { MarkdownEditorTab } from '../MarkdownEditorTab';
 import { MarkdownPreview } from '../MarkdownPreview';
@@ -10,6 +10,73 @@ const MD = '# Title\n\nSome **bold** text.\n\n- one\n- two\n';
 vi.mock('@/store/surface-intents', () => ({
   emitSurfaceIntent: vi.fn(),
 }));
+
+// ---------------------------------------------------------------------------
+// Mock for shiki to avoid loading WASM in jsdom.
+// Returns fake colored tokens so we can assert the highlighted output.
+// ---------------------------------------------------------------------------
+
+vi.mock('@/lib/shiki-highlighter', () => {
+  type FakeToken = { color?: string; content: string };
+  type FakeResult = { tokens: FakeToken[][] };
+
+  const SUPPORTED = new Set([
+    'typescript',
+    'javascript',
+    'jsx',
+    'tsx',
+    'python',
+    'rust',
+    'go',
+    'java',
+    'json',
+    'yaml',
+    'toml',
+    'xml',
+    'bash',
+    'css',
+    'html',
+    'sql',
+    'markdown',
+    'diff',
+  ]);
+
+  const ALIASES: Record<string, string> = {
+    ts: 'typescript',
+    js: 'javascript',
+    py: 'python',
+    sh: 'bash',
+    shell: 'bash',
+    zsh: 'bash',
+    yml: 'yaml',
+    md: 'markdown',
+    rs: 'rust',
+  };
+
+  function resolveLanguage(raw: string | undefined): string | null {
+    if (!raw) return null;
+    const lower = raw.toLowerCase();
+    const mapped = ALIASES[lower] ?? lower;
+    return SUPPORTED.has(mapped) ? mapped : null;
+  }
+
+  const fakeHighlighter = {
+    codeToTokens: (code: string, { lang }: { lang: string }): FakeResult => {
+      if (lang === 'javascript') {
+        return {
+          tokens: [[{ color: '#c792ea', content: 'const' }, { content: ' x = 1' }]],
+        };
+      }
+      // Other languages: single plain line (no color)
+      return { tokens: [[{ content: code }]] };
+    },
+  };
+
+  return {
+    resolveLanguage,
+    getShikiHighlighter: () => Promise.resolve(fakeHighlighter),
+  };
+});
 
 // Capture props passed to CmEditor to assert readOnly forwarding.
 type CmEditorProps = ComponentProps<typeof import('../CmEditor').CmEditor>;
@@ -28,6 +95,39 @@ describe('MarkdownPreview', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Title');
     expect(screen.getByText('bold').tagName).toBe('STRONG');
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('renders a fenced JS code block as a plain pre initially', () => {
+    const md = '```javascript\nconst x = 1\n```';
+    render(<MarkdownPreview value={md} />);
+    // Before shiki resolves, the code block is a plain pre with the raw code.
+    const pre = screen.getByRole('code');
+    expect(pre).toBeInTheDocument();
+  });
+
+  it('swaps in shiki-highlighted spans after the highlighter resolves', async () => {
+    const md = '```javascript\nconst x = 1\n```';
+    render(<MarkdownPreview value={md} />);
+    // After the async highlighter resolves, colored spans appear inside the pre.
+    await waitFor(() => {
+      const colored = document.querySelector('span[style*="color"]');
+      expect(colored).not.toBeNull();
+    });
+  });
+
+  it('falls back to plain pre for unknown languages', async () => {
+    const md = '```unknownlang\nsome code\n```';
+    render(<MarkdownPreview value={md} />);
+    // Wait a tick to let any async work settle.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // The code block should still render — just unstyled.
+    const pre = screen.getAllByRole('code');
+    expect(pre.length).toBeGreaterThan(0);
+    // No colored spans should appear for an unsupported language.
+    const colored = document.querySelector('span[style*="color"]');
+    expect(colored).toBeNull();
   });
 });
 
