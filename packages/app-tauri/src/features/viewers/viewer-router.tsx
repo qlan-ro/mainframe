@@ -165,7 +165,7 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   }
 
   if (kind === 'image') {
-    return <ImageViewer src={content} />;
+    return <ImageViewer src={content} path={path} />;
   }
 
   if (kind === 'svg') {
