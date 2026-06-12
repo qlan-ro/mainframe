@@ -50,6 +50,14 @@ export function nextChange(): void {
   b.dispatch({ selection: { anchor: target.fromB, head: target.fromB }, scrollIntoView: true });
 }
 
+/**
+ * Return the number of diff chunks in the currently-active MergeView.
+ * Returns 0 when no MergeView is registered (safe to call unconditionally).
+ */
+export function getActiveChangeCount(): number {
+  return activeMergeView?.chunks.length ?? 0;
+}
+
 /** Navigate to the previous diff chunk; wraps to the last if before the first. */
 export function prevChange(): void {
   if (!activeMergeView) return;
