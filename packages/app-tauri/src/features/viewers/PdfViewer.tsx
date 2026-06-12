@@ -19,18 +19,25 @@
  * Props:
  *   base64   — base64-encoded PDF bytes; null while loading.
  *   mimeType — MIME type string, typically "application/pdf".
- *   path     — original file path, used for the "open externally" label.
+ *   path     — original file path, used for breadcrumb + "open externally" label.
  *
  * data-testid="viewer-pdf" on the root.
  * data-testid="viewer-pdf-fallback" on the open-externally button.
  */
 import { useEffect, useState } from 'react';
 import { openExternal } from '@/lib/tauri/bridge';
+import { ViewerShell } from './ViewerShell';
+import { formatBytes } from './viewer-status';
 
 interface PdfViewerProps {
   base64: string | null;
   mimeType: string;
-  path?: string;
+  path: string;
+}
+
+function base64ByteLength(b64: string): number {
+  const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+  return Math.floor((b64.length * 3) / 4) - padding;
 }
 
 function base64ToArrayBuffer(b64: string): ArrayBuffer {
@@ -71,12 +78,15 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
     }
   }
 
+  const bytes = base64 ? base64ByteLength(base64) : 0;
+  const status = base64 ? `PDF · ${formatBytes(bytes)}` : 'PDF · Loading…';
+
   return (
-    <div data-testid="viewer-pdf" className="flex h-full flex-col">
-      {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-2 [border-bottom:0.5px_solid_var(--border)] px-3 py-1.5">
-        <span className="flex-1 truncate text-label text-muted-foreground">{path ? path.split('/').pop() : 'PDF'}</span>
-        {path && (
+    <ViewerShell path={path} status={status}>
+      <div data-testid="viewer-pdf" className="flex h-full flex-col">
+        {/* Toolbar */}
+        <div className="flex shrink-0 items-center gap-2 [border-bottom:0.5px_solid_var(--border)] px-3 py-1.5">
+          <span className="flex-1 truncate text-label text-muted-foreground">{path.split('/').pop()}</span>
           <button
             type="button"
             data-testid="viewer-pdf-fallback"
@@ -85,23 +95,17 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
           >
             Open externally
           </button>
-        )}
-        {!path && (
-          /* Always render the fallback testid even without a path, so tests can find it */
-          <span data-testid="viewer-pdf-fallback" className="text-label text-muted-foreground">
-            Open externally
-          </span>
+        </div>
+
+        {/* Body */}
+        {base64 === null ? (
+          <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
+        ) : objectUrl ? (
+          <embed src={objectUrl} type={mimeType} className="w-full flex-1" title="PDF viewer" />
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
         )}
       </div>
-
-      {/* Body */}
-      {base64 === null ? (
-        <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
-      ) : objectUrl ? (
-        <embed src={objectUrl} type={mimeType} className="w-full flex-1" title="PDF viewer" />
-      ) : (
-        <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
-      )}
-    </div>
+    </ViewerShell>
   );
 }

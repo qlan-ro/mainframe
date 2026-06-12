@@ -11,6 +11,8 @@
  *     so users can escape if the in-app render fails).
  *  4. In non-Tauri (browser dev) mode, renders the graceful "open externally"
  *     fallback with data-testid="viewer-pdf-fallback".
+ *  5. Renders inside ViewerShell (viewer-shell present).
+ *  6. Footer status (viewer-shell-status) shows PDF metadata.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -31,14 +33,24 @@ afterAll(() => {
   vi.unstubAllGlobals();
 });
 
+// Mock surface-intents so ViewerShell's reveal button doesn't crash.
+vi.mock('@/store/surface-intents', () => ({
+  emitSurfaceIntent: vi.fn(),
+}));
+
+// Mock the tauri bridge (openExternal).
+vi.mock('@/lib/tauri/bridge', () => ({
+  openExternal: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('PdfViewer', () => {
   it('renders with data-testid="viewer-pdf"', () => {
-    render(<PdfViewer base64={FAKE_PDF_B64} mimeType="application/pdf" />);
+    render(<PdfViewer base64={FAKE_PDF_B64} mimeType="application/pdf" path="/docs/spec.pdf" />);
     expect(screen.getByTestId('viewer-pdf')).toBeInTheDocument();
   });
 
   it('shows a loading placeholder when base64 is null', () => {
-    render(<PdfViewer base64={null} mimeType="application/pdf" />);
+    render(<PdfViewer base64={null} mimeType="application/pdf" path="/docs/spec.pdf" />);
     const root = screen.getByTestId('viewer-pdf');
     expect(root.querySelector('embed')).toBeNull();
     expect(root.textContent).toBeTruthy();
@@ -50,10 +62,21 @@ describe('PdfViewer', () => {
   });
 
   it('shows the PDF embed when base64 is provided', () => {
-    render(<PdfViewer base64={FAKE_PDF_B64} mimeType="application/pdf" />);
+    render(<PdfViewer base64={FAKE_PDF_B64} mimeType="application/pdf" path="/docs/spec.pdf" />);
     const root = screen.getByTestId('viewer-pdf');
     // The embed element is rendered for inline display
     const embed = root.querySelector('embed');
     expect(embed).not.toBeNull();
+  });
+
+  it('renders inside ViewerShell (viewer-shell present)', () => {
+    render(<PdfViewer base64={FAKE_PDF_B64} mimeType="application/pdf" path="/docs/spec.pdf" />);
+    expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
+  });
+
+  it('shows PDF status in the viewer-shell-status footer', () => {
+    render(<PdfViewer base64={FAKE_PDF_B64} mimeType="application/pdf" path="/docs/spec.pdf" />);
+    const status = screen.getByTestId('viewer-shell-status');
+    expect(status.textContent).toMatch(/PDF/);
   });
 });
