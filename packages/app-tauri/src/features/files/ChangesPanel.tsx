@@ -9,9 +9,10 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 
 /** Short status code → a tint class (added/modified/deleted). */
 function statusClass(code: string): string {
-  if (code.includes('A') || code === '??') return 'text-mf-diff-add-border';
-  if (code.includes('D')) return 'text-destructive';
-  return 'text-mf-surface-files';
+  if (code.includes('A') || code === '??') return 'text-mf-diff-add-text';
+  if (code.includes('D')) return 'text-mf-diff-del-text';
+  if (code.includes('M')) return 'text-mf-warning';
+  return 'text-mf-warning';
 }
 
 function basename(path: string): string {
@@ -62,7 +63,10 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
           onClick={() => emitSurfaceIntent({ type: 'open-file', path: f.path })}
           className="flex h-[22px] w-full items-center gap-2 border-none bg-transparent px-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground"
         >
-          <span className={`w-3 flex-shrink-0 text-center font-mono text-micro ${statusClass(f.status)}`}>
+          <span
+            data-testid={`changes-status-${f.path}`}
+            className={`w-3 flex-shrink-0 text-center font-mono text-micro ${statusClass(f.status)}`}
+          >
             {f.status.trim().charAt(0) || '•'}
           </span>
           <span className="truncate text-foreground">{basename(f.path)}</span>
