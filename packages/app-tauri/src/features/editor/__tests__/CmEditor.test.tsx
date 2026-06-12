@@ -123,6 +123,20 @@ describe('CmEditor', () => {
     expect(root.querySelector('.cm-editor')).toBeTruthy();
   });
 
+  it('renders a fold gutter (.cm-foldGutter) for multi-line foldable code', () => {
+    render(
+      <CmEditor
+        value="function foo() {\n  const x = 1;\n  return x;\n}"
+        language="javascript"
+        readOnly={false}
+        onChange={() => undefined}
+        path="/test/fold.ts"
+      />,
+    );
+    const root = screen.getByTestId('editor-code');
+    expect(root.querySelector('.cm-foldGutter')).toBeTruthy();
+  });
+
   it('restores selection from store on remount with same path', () => {
     const path = '/test/restore-sel.ts';
     // Prime the store with a saved selection at position 3

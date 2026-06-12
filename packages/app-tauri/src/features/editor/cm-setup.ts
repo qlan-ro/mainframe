@@ -31,7 +31,7 @@ import {
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, foldGutter, codeFolding } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 
 // ── Warm-chrome highlight style from --mf-code-* tokens ─────────────────────
@@ -107,6 +107,9 @@ export const warmTheme = EditorView.theme(
     '.cm-scroller': {
       overflow: 'auto',
     },
+    '.cm-foldGutter': {
+      color: 'var(--mf-code-cmt)',
+    },
   },
   { dark: true },
 );
@@ -142,6 +145,8 @@ export function createEditorCompartments() {
 export function buildBaseExtensions(): Extension[] {
   return [
     lineNumbers(),
+    foldGutter(),
+    codeFolding(),
     highlightActiveLineGutter(),
     highlightActiveLine(),
     drawSelection(),
