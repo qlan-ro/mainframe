@@ -25,6 +25,7 @@
     "@codemirror/lang-python": "6.2.1",
     "@codemirror/lang-rust": "6.0.2",
     "@codemirror/language": "6.12.3",
+    "@codemirror/legacy-modes": "6.5.3",
     "@codemirror/lint": "6.9.7",
     "@codemirror/merge": "6.12.2",
     "@codemirror/search": "6.7.0",

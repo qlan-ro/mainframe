@@ -31,8 +31,14 @@ import {
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { syntaxHighlighting, HighlightStyle, foldGutter, codeFolding } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, foldGutter, codeFolding, StreamLanguage } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
+import { yaml } from '@codemirror/legacy-modes/mode/yaml';
+import { toml } from '@codemirror/legacy-modes/mode/toml';
+import { go } from '@codemirror/legacy-modes/mode/go';
+import { standardSQL } from '@codemirror/legacy-modes/mode/sql';
+import { shell } from '@codemirror/legacy-modes/mode/shell';
+import { java, scala } from '@codemirror/legacy-modes/mode/clike';
 
 // ── Warm-chrome highlight style from --mf-code-* tokens ─────────────────────
 //
@@ -187,6 +193,20 @@ export function resolveLanguage(lang: LangPackId): Extension {
       return python();
     case 'rust':
       return rust();
+    case 'yaml':
+      return StreamLanguage.define(yaml);
+    case 'toml':
+      return StreamLanguage.define(toml);
+    case 'go':
+      return StreamLanguage.define(go);
+    case 'sql':
+      return StreamLanguage.define(standardSQL);
+    case 'shell':
+      return StreamLanguage.define(shell);
+    case 'scala':
+      return StreamLanguage.define(scala);
+    case 'java':
+      return StreamLanguage.define(java);
     default:
       return [];
   }

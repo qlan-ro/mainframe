@@ -42,17 +42,40 @@ describe('inferLanguage', () => {
     expect(inferLanguage('main.rs')).toBe('rust');
   });
 
-  it('maps .yaml to yaml (plaintext fallback)', () => {
-    // yaml has no installed @codemirror/lang-yaml, falls back to plaintext
-    expect(inferLanguage('config.yaml')).toBe('plaintext');
+  it('maps .yaml to yaml', () => {
+    expect(inferLanguage('config.yaml')).toBe('yaml');
   });
 
-  it('maps .yml to yaml (plaintext fallback)', () => {
-    expect(inferLanguage('config.yml')).toBe('plaintext');
+  it('maps .yml to yaml', () => {
+    expect(inferLanguage('config.yml')).toBe('yaml');
   });
 
-  it('maps .toml to plaintext (no lang pack)', () => {
-    expect(inferLanguage('Cargo.toml')).toBe('plaintext');
+  it('maps .toml to toml', () => {
+    expect(inferLanguage('Cargo.toml')).toBe('toml');
+  });
+
+  it('maps .go to go', () => {
+    expect(inferLanguage('main.go')).toBe('go');
+  });
+
+  it('maps .sql to sql', () => {
+    expect(inferLanguage('schema.sql')).toBe('sql');
+  });
+
+  it('maps .sh to shell', () => {
+    expect(inferLanguage('script.sh')).toBe('shell');
+  });
+
+  it('maps .bash to shell', () => {
+    expect(inferLanguage('install.bash')).toBe('shell');
+  });
+
+  it('maps .scala to scala', () => {
+    expect(inferLanguage('App.scala')).toBe('scala');
+  });
+
+  it('maps .java to java', () => {
+    expect(inferLanguage('Main.java')).toBe('java');
   });
 
   it('returns plaintext for unknown extensions', () => {

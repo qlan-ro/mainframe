@@ -11,10 +11,7 @@
  *   @codemirror/lang-markdown    →  'markdown'
  *   @codemirror/lang-python      →  'python'
  *   @codemirror/lang-rust        →  'rust'
- *
- * Not installed (no lang pack added): yaml, toml, go, java, sql, shell, scala
- * → all fall back to 'plaintext'. Use @codemirror/legacy-modes if any of these
- * become high-priority — but stop and report rather than editing the lockfile.
+ *   @codemirror/legacy-modes     →  'yaml' | 'toml' | 'go' | 'sql' | 'shell' | 'scala' | 'java'
  */
 
 export type LangPackId =
@@ -26,6 +23,13 @@ export type LangPackId =
   | 'markdown'
   | 'python'
   | 'rust'
+  | 'yaml'
+  | 'toml'
+  | 'go'
+  | 'sql'
+  | 'shell'
+  | 'scala'
+  | 'java'
   | 'plaintext';
 
 const EXT_TO_LANG: Record<string, LangPackId> = {
@@ -50,6 +54,15 @@ const EXT_TO_LANG: Record<string, LangPackId> = {
   py: 'python',
   pyw: 'python',
   rs: 'rust',
+  yaml: 'yaml',
+  yml: 'yaml',
+  toml: 'toml',
+  go: 'go',
+  sql: 'sql',
+  sh: 'shell',
+  bash: 'shell',
+  scala: 'scala',
+  java: 'java',
 };
 
 /** Icon glyphs keyed by lang-pack id. Values are simple text labels / emoji-free. */
@@ -62,6 +75,13 @@ const LANG_ICONS: Record<LangPackId | 'default', string> = {
   markdown: 'MD',
   python: 'PY',
   rust: 'RS',
+  yaml: 'YAML',
+  toml: 'TOML',
+  go: 'GO',
+  sql: 'SQL',
+  shell: 'SH',
+  scala: 'SC',
+  java: 'JAVA',
   plaintext: 'TXT',
   default: 'FILE',
 };
