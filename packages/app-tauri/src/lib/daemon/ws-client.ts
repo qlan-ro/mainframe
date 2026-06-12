@@ -10,6 +10,7 @@ import type { ClientEvent, DaemonEvent } from '@qlan-ro/mainframe-types';
 
 type EventHandler = (event: DaemonEvent) => void;
 type ConnectionListener = () => void;
+type FileChangeListener = () => void;
 
 export class DaemonWsClient {
   private ws: WebSocket | null = null;
@@ -20,6 +21,10 @@ export class DaemonWsClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private intentionalClose = false;
+  /** Maps requestedPath → resolvedPath, populated from subscribe:file:ack */
+  private filePathMap = new Map<string, string>();
+  /** Maps requestedPath → set of listeners */
+  private fileListeners = new Map<string, Set<FileChangeListener>>();
 
   /** Call once before connect() — the port comes from getDaemonPort() in the Tauri bridge. */
   setPort(port: number): void {
@@ -66,6 +71,7 @@ export class DaemonWsClient {
       }
       const data = parsed as DaemonEvent;
       this.handlers.forEach((h) => h(data));
+      this.handleFileWatchEvent(data);
     };
 
     socket.onclose = () => {
@@ -127,6 +133,57 @@ export class DaemonWsClient {
 
   unsubscribe(chatId: string): void {
     this.send({ type: 'unsubscribe', chatId });
+  }
+
+  subscribeFile(path: string): void {
+    this.send({ type: 'subscribe:file', path });
+  }
+
+  unsubscribeFile(path: string): void {
+    this.send({ type: 'unsubscribe:file', path });
+  }
+
+  /**
+   * Register a listener for changes to `path`. Returns an unsubscribe fn.
+   *
+   * The daemon REALPATHs the subscribed path; `file:changed` carries the
+   * resolved path. An ack (`subscribe:file:ack`) maps requestedPath →
+   * resolvedPath so we can route the resolved path back to listeners keyed
+   * by the original requested path.
+   */
+  onFileChange(path: string, listener: FileChangeListener): () => void {
+    let listeners = this.fileListeners.get(path);
+    if (!listeners) {
+      listeners = new Set();
+      this.fileListeners.set(path, listeners);
+    }
+    listeners.add(listener);
+    return () => {
+      const set = this.fileListeners.get(path);
+      if (set) {
+        set.delete(listener);
+        if (set.size === 0) this.fileListeners.delete(path);
+      }
+    };
+  }
+
+  private handleFileWatchEvent(data: DaemonEvent): void {
+    if (data.type === 'subscribe:file:ack') {
+      this.filePathMap.set(data.requestedPath, data.resolvedPath);
+      return;
+    }
+    if (data.type === 'file:changed') {
+      const resolvedPath = data.path;
+      // Find all requested paths that resolved to this path and invoke listeners.
+      for (const [requestedPath, mapped] of this.filePathMap) {
+        if (mapped === resolvedPath) {
+          const listeners = this.fileListeners.get(requestedPath);
+          if (listeners) {
+            listeners.forEach((fn) => fn());
+          }
+        }
+      }
+    }
   }
 
   private flushPending(): void {

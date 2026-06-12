@@ -198,3 +198,102 @@ describe('DaemonWsClient — H4: envelope guard on receive', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// H5 — file-watch: subscribeFile / unsubscribeFile / onFileChange
+// ---------------------------------------------------------------------------
+
+describe('DaemonWsClient — H5: file-watch API', () => {
+  function setupConnectedClient(): {
+    client: DaemonWsClient;
+    socket: FakeWebSocket;
+  } {
+    const client = new DaemonWsClient();
+    client.setPort(31415);
+    client.connect();
+    const socket = lastSocket();
+    openSocket(socket);
+    socket.sendSpy.mockClear();
+    return { client, socket };
+  }
+
+  it('subscribeFile sends {type:"subscribe:file", path}', () => {
+    const { client, socket } = setupConnectedClient();
+    client.subscribeFile('/home/user/project/foo.ts');
+    expect(socket.sendSpy).toHaveBeenCalledOnce();
+    expect(socket.sendSpy).toHaveBeenCalledWith(
+      JSON.stringify({ type: 'subscribe:file', path: '/home/user/project/foo.ts' }),
+    );
+  });
+
+  it('unsubscribeFile sends {type:"unsubscribe:file", path}', () => {
+    const { client, socket } = setupConnectedClient();
+    client.unsubscribeFile('/home/user/project/foo.ts');
+    expect(socket.sendSpy).toHaveBeenCalledOnce();
+    expect(socket.sendSpy).toHaveBeenCalledWith(
+      JSON.stringify({ type: 'unsubscribe:file', path: '/home/user/project/foo.ts' }),
+    );
+  });
+
+  it('invokes onFileChange listener using the resolved path from the ack', () => {
+    const { client, socket } = setupConnectedClient();
+    const requestedPath = '/home/user/project/foo.ts';
+    const resolvedPath = '/private/home/user/project/foo.ts';
+
+    const listener = vi.fn();
+    client.onFileChange(requestedPath, listener);
+
+    // Simulate the daemon ack that records the path mapping.
+    socket.onmessage?.({
+      data: JSON.stringify({ type: 'subscribe:file:ack', requestedPath, resolvedPath }),
+    });
+
+    // Simulate a file:changed arriving with the RESOLVED path.
+    socket.onmessage?.({
+      data: JSON.stringify({ type: 'file:changed', path: resolvedPath }),
+    });
+
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it('does NOT invoke the listener when file:changed carries an unrelated path', () => {
+    const { client, socket } = setupConnectedClient();
+    const requestedPath = '/home/user/project/foo.ts';
+    const resolvedPath = '/private/home/user/project/foo.ts';
+
+    const listener = vi.fn();
+    client.onFileChange(requestedPath, listener);
+
+    socket.onmessage?.({
+      data: JSON.stringify({ type: 'subscribe:file:ack', requestedPath, resolvedPath }),
+    });
+
+    socket.onmessage?.({
+      data: JSON.stringify({ type: 'file:changed', path: '/some/other/file.ts' }),
+    });
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('the returned unsubscribe fn stops further listener calls', () => {
+    const { client, socket } = setupConnectedClient();
+    const requestedPath = '/home/user/project/bar.ts';
+    const resolvedPath = '/private/home/user/project/bar.ts';
+
+    const listener = vi.fn();
+    const unsubscribe = client.onFileChange(requestedPath, listener);
+
+    socket.onmessage?.({
+      data: JSON.stringify({ type: 'subscribe:file:ack', requestedPath, resolvedPath }),
+    });
+
+    // First fire — listener should run.
+    socket.onmessage?.({ data: JSON.stringify({ type: 'file:changed', path: resolvedPath }) });
+    expect(listener).toHaveBeenCalledOnce();
+
+    // Unregister, then fire again — listener must NOT run.
+    unsubscribe();
+    socket.onmessage?.({ data: JSON.stringify({ type: 'file:changed', path: resolvedPath }) });
+    expect(listener).toHaveBeenCalledOnce(); // still just once
+  });
+});
