@@ -2,7 +2,11 @@ export type SurfaceIntent =
   | { type: 'open-file'; path: string; line?: number; character?: number }
   | { type: 'open-diff'; path: string }
   | { type: 'reveal-file'; path: string }
-  | { type: 'activate-surface'; surface: 'chat' | 'files' | 'run' };
+  | { type: 'activate-surface'; surface: 'chat' | 'files' | 'run' }
+  /** Trigger the file-open picker / command palette in the Files surface. */
+  | { type: 'open-file-picker' }
+  /** Switch the InspectorPane to the specified tab. */
+  | { type: 'inspector-tab'; tab: 'files' | 'changes' };
 
 type Listener = (intent: SurfaceIntent) => void;
 

@@ -1,5 +1,6 @@
 import { ChevronRight, FileText, GitCompare, Terminal } from 'lucide-react';
 import type { SurfaceId } from '@/store/layout';
+import { emitSurfaceIntent } from '@/store/surface-intents';
 
 interface RowProps {
   testid: string;
@@ -7,14 +8,20 @@ interface RowProps {
   label: string;
   hint?: string;
   chevron?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+  title?: string;
 }
 
-function PickerRow({ testid, icon, label, hint, chevron }: RowProps) {
+function PickerRow({ testid, icon, label, hint, chevron, onClick, disabled, title }: RowProps) {
   return (
     <button
       data-testid={testid}
       type="button"
-      className="flex w-full cursor-pointer items-center gap-[9px] rounded-lg border-none bg-transparent px-3 py-2 text-left text-caption text-foreground hover:bg-accent"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="flex w-full cursor-pointer items-center gap-[9px] rounded-lg border-none bg-transparent px-3 py-2 text-left text-caption text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
     >
       {icon}
       <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
@@ -43,12 +50,14 @@ export function SurfacePicker({ surface }: Props) {
                 icon={<FileText size={14} className="flex-shrink-0 text-mf-surface-files" />}
                 label="Open file…"
                 chevron
+                onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
               />
               <PickerRow
                 testid="files-picker-view-changes"
                 icon={<GitCompare size={14} className="flex-shrink-0 text-mf-surface-files" />}
                 label="View changes…"
                 chevron
+                onClick={() => emitSurfaceIntent({ type: 'inspector-tab', tab: 'changes' })}
               />
             </>
           ) : (
@@ -57,6 +66,8 @@ export function SurfacePicker({ surface }: Props) {
               icon={<Terminal size={14} className="flex-shrink-0 text-mf-surface-run" />}
               label="New terminal"
               hint="zsh"
+              disabled
+              title="Terminal coming soon"
             />
           )}
         </div>

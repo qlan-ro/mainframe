@@ -4,9 +4,10 @@
  * session's project. Toggled from the MainToolbar (`inspectorVisible`).
  * The bottom Tasks drawer is deferred until the todos plugin is ported.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, GitCompare } from 'lucide-react';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { onSurfaceIntent } from '@/store/surface-intents';
 import { ChangesPanel } from './ChangesPanel';
 import { FileTree } from './FileTree';
 
@@ -17,6 +18,16 @@ const SEG = 'flex h-[22px] flex-1 items-center justify-center gap-1.5 rounded-[6
 export function InspectorPane({ port }: { port: number }) {
   const { projectId, chatId } = useActiveIdentity();
   const [tab, setTab] = useState<Tab>('files');
+
+  // Subscribe to inspector-tab intents so external triggers (e.g. the
+  // SurfacePicker "View changes" button) can switch the active tab.
+  useEffect(() => {
+    return onSurfaceIntent((intent) => {
+      if (intent.type === 'inspector-tab') {
+        setTab(intent.tab);
+      }
+    });
+  }, []);
 
   return (
     <aside

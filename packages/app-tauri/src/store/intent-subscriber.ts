@@ -101,5 +101,15 @@ export function subscribeToFileIntents(): () => void {
       // TODO(Phase 8): emit a secondary intent or call a tree-scroll action here.
       return;
     }
+
+    if (intent.type === 'open-file-picker') {
+      // Focus the Files surface as a sane stub — a real file-open/command-palette
+      // picker UI is a follow-up task (no picker component exists yet).
+      ensureFilesActive();
+      return;
+    }
+
+    // 'inspector-tab' intents are consumed directly by InspectorPane via its
+    // own onSurfaceIntent subscription — no action needed here.
   });
 }
