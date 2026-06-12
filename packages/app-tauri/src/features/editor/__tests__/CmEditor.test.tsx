@@ -8,8 +8,11 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { runScopeHandlers } from '@codemirror/view';
 import { CmEditor } from '../CmEditor';
 import { useEditorStore } from '@/store/editor';
+import { jumpHistory } from '../lsp/navigation';
+import * as surfaceIntents from '@/store/surface-intents';
 
 const zeroRect: DOMRect = {
   x: 0,
@@ -154,5 +157,124 @@ describe('CmEditor', () => {
     );
     const root = screen.getByTestId('editor-code');
     expect(root.querySelector('.cm-editor')).toBeTruthy();
+  });
+
+  describe('back/forward navigation keybindings (⌘⌥← / ⌘⌥→)', () => {
+    // jsdom sets navigator.platform = "" so CM6 treats Mod as Ctrl (not Meta).
+    // Tests use runScopeHandlers from @codemirror/view which bypasses DOM event
+    // routing and processes the keymap directly.
+
+    it('Mod-Alt-ArrowLeft fires emitSurfaceIntent(open-file) with the prior jump entry', () => {
+      const emitSpy = vi.spyOn(surfaceIntents, 'emitSurfaceIntent');
+      let capturedView: import('@codemirror/view').EditorView | null = null;
+
+      // Prime jumpHistory with two entries (origin → destination).
+      act(() => {
+        jumpHistory.push({ path: '/origin.ts', line: 0, character: 0 });
+        jumpHistory.push({ path: '/dest.ts', line: 42, character: 5 });
+        // cursor is now at index 1 (dest); back() should return origin
+      });
+
+      render(
+        <CmEditor
+          value="const x = 1"
+          language="javascript"
+          readOnly={false}
+          onChange={() => undefined}
+          path="/dest.ts"
+          onViewReady={(v) => {
+            capturedView = v;
+          }}
+        />,
+      );
+
+      expect(capturedView).not.toBeNull();
+
+      act(() => {
+        // jsdom: navigator.platform="" → Mod = Ctrl; altKey for Alt modifier
+        runScopeHandlers(
+          capturedView!,
+          new KeyboardEvent('keydown', { key: 'ArrowLeft', keyCode: 37, ctrlKey: true, altKey: true }),
+          'editor',
+        );
+      });
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'open-file', path: '/origin.ts', line: 0, character: 0 }),
+      );
+
+      emitSpy.mockRestore();
+    });
+
+    it('Mod-Alt-ArrowRight fires emitSurfaceIntent(open-file) with the next jump entry after going back', () => {
+      const emitSpy = vi.spyOn(surfaceIntents, 'emitSurfaceIntent');
+      let capturedView: import('@codemirror/view').EditorView | null = null;
+
+      act(() => {
+        jumpHistory.push({ path: '/a.ts', line: 1, character: 0 });
+        jumpHistory.push({ path: '/b.ts', line: 10, character: 3 });
+        // go back so there is a forward entry
+        jumpHistory.back();
+      });
+
+      render(
+        <CmEditor
+          value="hello"
+          language="javascript"
+          readOnly={false}
+          onChange={() => undefined}
+          path="/a.ts"
+          onViewReady={(v) => {
+            capturedView = v;
+          }}
+        />,
+      );
+
+      expect(capturedView).not.toBeNull();
+
+      act(() => {
+        // jsdom: Mod = Ctrl
+        runScopeHandlers(
+          capturedView!,
+          new KeyboardEvent('keydown', { key: 'ArrowRight', keyCode: 39, ctrlKey: true, altKey: true }),
+          'editor',
+        );
+      });
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'open-file', path: '/b.ts', line: 10, character: 3 }),
+      );
+
+      emitSpy.mockRestore();
+    });
+  });
+
+  describe('reveal-on-open regression (consumeRevealTarget → revealPosition)', () => {
+    it('reveals the stored target position on mount when a revealTarget is set for the path', () => {
+      const path = '/test/reveal-regression.ts';
+
+      // Set a reveal target in the store (simulates intent-subscriber setting it before mount)
+      act(() => {
+        useEditorStore.getState().setRevealTarget(path, { line: 2, character: 4 });
+      });
+
+      // Mount the editor — the reveal target should be consumed without crashing
+      render(
+        <CmEditor
+          value="line0\nline1\nline2 with some content\nline3"
+          language="javascript"
+          readOnly={false}
+          onChange={() => undefined}
+          path={path}
+        />,
+      );
+
+      const root = screen.getByTestId('editor-code');
+      expect(root.querySelector('.cm-editor')).toBeTruthy();
+
+      // After mount, the reveal target should have been consumed (no longer in the store)
+      const remaining = useEditorStore.getState().consumeRevealTarget(path);
+      expect(remaining).toBeUndefined();
+    });
   });
 });

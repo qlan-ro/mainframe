@@ -18,6 +18,7 @@ import type { LangPackId } from '@/lib/editor/file-types';
 import { applyValueUpdate } from '@/lib/editor/apply-value-update';
 import { useEditorStore } from '@/store/editor';
 import { buildBaseExtensions, createEditorCompartments, resolveLanguage } from './cm-setup';
+import { createNavigationKeymap } from './lsp/navigation';
 
 /** Scroll a line/character position into view and place the cursor there. */
 function revealPosition(view: EditorView, line: number, character: number): void {
@@ -141,6 +142,7 @@ export function CmEditor({
           }
         }),
         saveKeymap,
+        createNavigationKeymap(),
         ...(extraExtensions ?? []),
       ],
     });

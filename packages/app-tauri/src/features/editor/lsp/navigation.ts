@@ -131,20 +131,20 @@ function navigateForward(): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the CM6 keymap extension that binds ⌘< / ⌘> to jump-history
- * navigation. Add this to the editor's extension list alongside
- * `createLspExtensions(...)`.
+ * Returns the CM6 keymap extension that binds ⌘⌥← / ⌘⌥→ to jump-history
+ * navigation (matches the desktop Monaco back/forward shortcut).
+ * Add this to the editor's extension list.
  */
 export function createNavigationKeymap(): Extension {
   return keymap.of([
     {
-      key: 'Mod-<',
+      key: 'Mod-Alt-ArrowLeft',
       run(): boolean {
         return navigateBack();
       },
     },
     {
-      key: 'Mod->',
+      key: 'Mod-Alt-ArrowRight',
       run(): boolean {
         return navigateForward();
       },
