@@ -1,7 +1,7 @@
 # ADR-001 — Editor: Monaco today, CodeMirror 6 as a possible migration
 
-- **Status:** Accepted (Monaco stays for now). CM6 documented as a reversible option — **and, scoped to the feature set in §"Scoped decision", a viable bounded migration.**
-- **Date:** 2026-06
+- **Status:** ⚠️ **SUPERSEDED (2026-06-11) — CodeMirror 6 adopted.** The app-tauri editor surface was built on CM6 (not Monaco), executing the §"Scoped decision" bounded-migration path below (peek-definition stayed out of scope). See `docs/superpowers/plans/2026-06-11-editor-cm6-and-layout-engine.md` and the editor entry in `MIGRATION-TRACKER.md`. The Monaco analysis below is retained for context. *(Original status: Accepted — Monaco stays for now; CM6 a reversible option.)*
+- **Date:** 2026-06 (superseded 2026-06-11)
 - **Context owners:** see `desktop/src/renderer/components/editor/` and `desktop/src/renderer/lib/lsp/`
 
 ---
