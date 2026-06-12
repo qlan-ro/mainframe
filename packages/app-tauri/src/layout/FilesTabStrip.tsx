@@ -17,6 +17,7 @@
  */
 import { FileText, GripHorizontal, GripVertical, LayoutPanelLeft, LayoutPanelTop, Plus, X } from 'lucide-react';
 import { useSurfaceDragStore } from './use-surface-drag';
+import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useTabsStore } from '@/store/tabs';
 import { layoutCanSplit, useLayoutStore } from '@/store/layout';
 import type { EditorTabModel } from '@/store/tabs';
@@ -139,11 +140,12 @@ export function FilesTabStrip() {
         ))}
       </div>
 
-      {/* + add button (stub) */}
+      {/* + add button — opens the file-open command palette */}
       <button
         data-testid="files-tab-strip-add"
         type="button"
-        title="Open file / View changes"
+        title="Open file"
+        onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
         className={`${ACTION_BTN} ml-0.5`}
       >
         <Plus size={11} className="text-mf-text-3" />
