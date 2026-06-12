@@ -201,7 +201,13 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
         path={path}
         renderCode={() =>
           language === 'markdown' ? (
-            <MarkdownEditorTab value={loadState.value} path={path} onChange={handleChange} onSave={handleSave} />
+            <MarkdownEditorTab
+              value={loadState.value}
+              path={path}
+              onChange={handleChange}
+              onSave={handleSave}
+              readOnly={readOnly}
+            />
           ) : (
             <EditorContextMenu
               filePath={path}
