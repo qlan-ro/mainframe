@@ -28,7 +28,8 @@ interface UnsupportedViewerProps {
 }
 
 export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
-  const ext = path.split('.').pop()?.toLowerCase() ?? '';
+  const basename = path.split('/').pop() ?? path;
+  const ext = basename.includes('.') ? (basename.split('.').pop() ?? '') : '';
   const status = ext ? `${ext.toUpperCase()} · No preview` : 'No preview';
 
   async function handleOpenExternal() {
