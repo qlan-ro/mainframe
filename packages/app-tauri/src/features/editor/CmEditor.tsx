@@ -59,6 +59,12 @@ export interface CmEditorProps {
    * When provided, the browser default (page save dialog) is suppressed.
    */
   onSave?: (value: string) => void;
+  /**
+   * Called whenever the cursor position changes (selection change). Arguments
+   * are 1-based line and column numbers. Used by EditorTab to drive the
+   * Ln/Col status display in ViewerShell.
+   */
+  onCursorChange?: (line: number, col: number) => void;
 }
 
 export function CmEditor({
@@ -70,6 +76,7 @@ export function CmEditor({
   extraExtensions,
   onViewReady,
   onSave,
+  onCursorChange,
 }: CmEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -85,6 +92,9 @@ export function CmEditor({
 
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+
+  const onCursorChangeRef = useRef(onCursorChange);
+  onCursorChangeRef.current = onCursorChange;
 
   const pathRef = useRef(path);
   pathRef.current = path;
@@ -119,6 +129,15 @@ export function CmEditor({
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             onChangeRef.current(update.state.doc.toString());
+          }
+          if (update.selectionSet || update.docChanged) {
+            const cb = onCursorChangeRef.current;
+            if (cb) {
+              const pos = update.state.selection.main.head;
+              const docLine = update.state.doc.lineAt(pos);
+              // 1-based line; column = offset within the line, also 1-based.
+              cb(docLine.number, pos - docLine.from + 1);
+            }
           }
         }),
         saveKeymap,

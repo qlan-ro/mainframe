@@ -11,6 +11,7 @@
  * data-testid: "editor-tab" on the root wrapper.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ViewerShell } from '@/features/viewers/ViewerShell';
 import type { EditorView } from '@codemirror/view';
 import { readFile } from '@/lib/tauri/bridge';
 import { getProjectFile, saveProjectFile } from '@/lib/api/files';
@@ -38,6 +39,7 @@ type LoadState = { status: 'loading' } | { status: 'ready'; value: string } | { 
 export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [cursorPos, setCursorPos] = useState<{ ln: number; col: number }>({ ln: 1, col: 1 });
   const [lspReady, setLspReady] = useState(false);
   const setBuffer = useEditorStore((s) => s.setBuffer);
   const promoteTab = useTabsStore((s) => s.promoteTab);
@@ -143,6 +145,10 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
     [path, setBuffer, promoteTab, tabId],
   );
 
+  const handleCursorChange = useCallback((line: number, col: number) => {
+    setCursorPos({ ln: line, col });
+  }, []);
+
   const handleSave = useCallback(
     (value: string) => {
       if (readOnly) return;
@@ -181,22 +187,6 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   return (
     <div data-testid="editor-tab" className="flex h-full flex-col overflow-hidden">
-      {readOnly && (
-        <div
-          data-testid="editor-tab-readonly"
-          className="flex-shrink-0 bg-mf-tab-bar px-3 py-0.5 text-caption text-mf-text-3"
-        >
-          Read-only
-        </div>
-      )}
-      {saveError !== null && (
-        <div
-          data-testid="editor-tab-save-error"
-          className="flex-shrink-0 bg-mf-destructive-tint px-3 py-1 text-caption text-destructive"
-        >
-          Save failed: {saveError}
-        </div>
-      )}
       <ViewerRouter
         path={path}
         renderCode={() =>
@@ -209,25 +199,44 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
               readOnly={readOnly}
             />
           ) : (
-            <EditorContextMenu
-              filePath={path}
-              viewRef={viewRef}
-              providers={projectId && lspLanguage ? lspClientManager : undefined}
-              lspConfig={projectId && lspLanguage ? { projectId, language: lspLanguage, lspReady } : undefined}
-            >
-              <CmEditorWithComments
-                value={loadState.value}
-                language={language}
-                readOnly={readOnly}
-                onChange={handleChange}
-                onSave={handleSave}
-                path={path}
-                extraExtensions={extraExtensions}
-                onViewReady={(v) => {
-                  viewRef.current = v;
-                }}
-              />
-            </EditorContextMenu>
+            <ViewerShell path={path} status={`Ln ${cursorPos.ln}, Col ${cursorPos.col}`}>
+              {readOnly && (
+                <div
+                  data-testid="editor-tab-readonly"
+                  className="flex-shrink-0 bg-mf-tab-bar px-3 py-0.5 text-caption text-mf-text-3"
+                >
+                  Read-only
+                </div>
+              )}
+              {saveError !== null && (
+                <div
+                  data-testid="editor-tab-save-error"
+                  className="flex-shrink-0 bg-mf-destructive-tint px-3 py-1 text-caption text-destructive"
+                >
+                  Save failed: {saveError}
+                </div>
+              )}
+              <EditorContextMenu
+                filePath={path}
+                viewRef={viewRef}
+                providers={projectId && lspLanguage ? lspClientManager : undefined}
+                lspConfig={projectId && lspLanguage ? { projectId, language: lspLanguage, lspReady } : undefined}
+              >
+                <CmEditorWithComments
+                  value={loadState.value}
+                  language={language}
+                  readOnly={readOnly}
+                  onChange={handleChange}
+                  onSave={handleSave}
+                  onCursorChange={handleCursorChange}
+                  path={path}
+                  extraExtensions={extraExtensions}
+                  onViewReady={(v) => {
+                    viewRef.current = v;
+                  }}
+                />
+              </EditorContextMenu>
+            </ViewerShell>
           )
         }
       />

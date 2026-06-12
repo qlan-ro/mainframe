@@ -4,6 +4,7 @@
  *                    A2: LSP extensions wiring.
  *                    A3: CmEditorWithComments mount + extraExtensions/onViewReady passthroughs
  *                        + handleSave read-only guard.
+ *                    C5: ViewerShell chrome (breadcrumb + Ln/Col status).
  *
  * Strategy:
  *  - Mock all external deps (tauri bridge, api files, hooks, CmEditorWithComments, ViewerRouter)
@@ -14,6 +15,7 @@
  *  - Assert `data-testid="editor-context-menu"` is present for a code file.
  *  - Assert CmEditorWithComments receives extraExtensions and onViewReady (A3).
  *  - Assert saveProjectFile is NOT called when readOnly=true (A3 read-only guard).
+ *  - Assert the code editor renders inside viewer-shell with a Ln/Col status footer (C5).
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
@@ -129,6 +131,22 @@ vi.mock('../context-menu/EditorContextMenu', () => ({
   EditorContextMenu: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="editor-context-menu">{children}</div>
   ),
+}));
+
+// ViewerShell mock: renders the shell with viewer-shell testid + status footer.
+// Passes children and path through so the breadcrumb (basename) and body are testable.
+vi.mock('@/features/viewers/ViewerShell', () => ({
+  ViewerShell: ({ path, status, children }: { path: string; status: string; children: React.ReactNode }) => {
+    const parts = path.split('/').filter(Boolean);
+    const basename = parts.length > 0 ? (parts[parts.length - 1] ?? path) : path;
+    return (
+      <div data-testid="viewer-shell">
+        <span data-testid="viewer-shell-basename">{basename}</span>
+        {children}
+        <span data-testid="viewer-shell-status">{status}</span>
+      </div>
+    );
+  },
 }));
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -263,5 +281,35 @@ describe('EditorTab — inline comments mount (A3)', () => {
 
     // saveProjectFile must NOT be called for a read-only editor.
     expect(vi.mocked(saveProjectFile)).not.toHaveBeenCalled();
+  });
+});
+
+describe('EditorTab — ViewerShell chrome (C5)', () => {
+  it('renders the code editor inside viewer-shell', async () => {
+    render(<EditorTab tabId="tab-c5-1" path="/project/src/app.js" />);
+    await screen.findByTestId('cm-editor-mock');
+    expect(screen.getByTestId('viewer-shell')).toBeTruthy();
+  });
+
+  it('renders a Ln/Col status in viewer-shell-status matching /^Ln \\d+, Col \\d+$/', async () => {
+    render(<EditorTab tabId="tab-c5-2" path="/project/src/app.js" />);
+    await screen.findByTestId('cm-editor-mock');
+    const statusEl = screen.getByTestId('viewer-shell-status');
+    expect(statusEl.textContent).toMatch(/^Ln \d+, Col \d+$/);
+  });
+
+  it('shows the filename in the breadcrumb (viewer-shell-basename)', async () => {
+    render(<EditorTab tabId="tab-c5-3" path="/project/src/app.js" />);
+    await screen.findByTestId('cm-editor-mock');
+    const basename = screen.getByTestId('viewer-shell-basename');
+    expect(basename.textContent).toBe('app.js');
+  });
+
+  it('onCursorChange callback is forwarded to CmEditorWithComments', async () => {
+    render(<EditorTab tabId="tab-c5-4" path="/project/src/utils.js" />);
+    await screen.findByTestId('cm-editor-mock');
+    const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    // onCursorChange must be a function so the status bar can update on cursor moves.
+    expect(typeof lastProps?.onCursorChange).toBe('function');
   });
 });
