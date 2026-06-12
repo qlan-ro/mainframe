@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://localhost:31500 ws://localhost:31500; script-src 'self'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:31500 ws://localhost:31500; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; object-src blob:"
     },
     "macOSPrivateApi": true
   },

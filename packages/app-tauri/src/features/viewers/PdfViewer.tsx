@@ -5,16 +5,9 @@
  *
  * Renders a PDF file via <embed> using an object URL built from base64 bytes.
  *
- * SECURITY NOTE: The <embed> element requires the Tauri asset-scope capability
- * to load blob: URIs in the webview security policy when running inside Tauri.
- *
- * TODO(tauri-shell-engineer): asset-scope capability for local PDF blob: URIs.
- * The Tauri CSP currently blocks blob: in the <embed> src attribute in
- * production builds. Add the following to src-tauri/capabilities/*.json:
- *   { "permissions": ["core:asset:allow-fetch-asset"] }
- * And update src-tauri/tauri.conf.json's CSP to include "blob:" in the
- * default-src directive. Until then, the <embed> renders in dev mode only;
- * production falls back to the "open externally" button.
+ * The <embed> element uses a blob: URL (createObjectURL) built from base64
+ * bytes returned by the daemon. The Tauri CSP must allow blob: in object-src;
+ * this is set in src-tauri/tauri.conf.json (object-src blob:).
  *
  * Props:
  *   base64   — base64-encoded PDF bytes; null while loading.
