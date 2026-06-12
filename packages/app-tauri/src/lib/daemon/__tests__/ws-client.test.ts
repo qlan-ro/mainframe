@@ -226,12 +226,36 @@ describe('DaemonWsClient — H5: file-watch API', () => {
     );
   });
 
+  it('subscribeFile includes projectId and chatId when provided', () => {
+    const { client, socket } = setupConnectedClient();
+    client.subscribeFile('src/index.ts', { projectId: 'proj-1', chatId: 'chat-1' });
+    expect(socket.sendSpy).toHaveBeenCalledWith(
+      JSON.stringify({ type: 'subscribe:file', path: 'src/index.ts', projectId: 'proj-1', chatId: 'chat-1' }),
+    );
+  });
+
+  it('subscribeFile includes only projectId when chatId is omitted', () => {
+    const { client, socket } = setupConnectedClient();
+    client.subscribeFile('src/index.ts', { projectId: 'proj-1' });
+    expect(socket.sendSpy).toHaveBeenCalledWith(
+      JSON.stringify({ type: 'subscribe:file', path: 'src/index.ts', projectId: 'proj-1' }),
+    );
+  });
+
   it('unsubscribeFile sends {type:"unsubscribe:file", path}', () => {
     const { client, socket } = setupConnectedClient();
     client.unsubscribeFile('/home/user/project/foo.ts');
     expect(socket.sendSpy).toHaveBeenCalledOnce();
     expect(socket.sendSpy).toHaveBeenCalledWith(
       JSON.stringify({ type: 'unsubscribe:file', path: '/home/user/project/foo.ts' }),
+    );
+  });
+
+  it('unsubscribeFile includes projectId and chatId when provided', () => {
+    const { client, socket } = setupConnectedClient();
+    client.unsubscribeFile('src/index.ts', { projectId: 'proj-1', chatId: 'chat-1' });
+    expect(socket.sendSpy).toHaveBeenCalledWith(
+      JSON.stringify({ type: 'unsubscribe:file', path: 'src/index.ts', projectId: 'proj-1', chatId: 'chat-1' }),
     );
   });
 

@@ -94,5 +94,5 @@ export type ClientEvent =
   | { type: 'permission.respond'; chatId: string; response: import('./adapter.js').ControlResponse }
   | { type: 'subscribe'; chatId: string }
   | { type: 'unsubscribe'; chatId: string }
-  | { type: 'subscribe:file'; path: string }
-  | { type: 'unsubscribe:file'; path: string };
+  | { type: 'subscribe:file'; path: string; projectId?: string; chatId?: string }
+  | { type: 'unsubscribe:file'; path: string; projectId?: string; chatId?: string };

@@ -599,6 +599,11 @@ export class ChatManager {
     return project?.path ?? null;
   }
 
+  /** Returns the root path for a project, or null if the project is not found. */
+  getProjectPath(projectId: string): string | null {
+    return this.db.projects.get(projectId)?.path ?? null;
+  }
+
   async getMessages(chatId: string): Promise<ChatMessage[]> {
     const inflight = this.lifecycle.getLoadingChats().get(chatId);
     if (inflight) {

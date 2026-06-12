@@ -135,12 +135,12 @@ export class DaemonWsClient {
     this.send({ type: 'unsubscribe', chatId });
   }
 
-  subscribeFile(path: string): void {
-    this.send({ type: 'subscribe:file', path });
+  subscribeFile(path: string, context?: { projectId?: string; chatId?: string }): void {
+    this.send({ type: 'subscribe:file', path, ...context });
   }
 
-  unsubscribeFile(path: string): void {
-    this.send({ type: 'unsubscribe:file', path });
+  unsubscribeFile(path: string, context?: { projectId?: string; chatId?: string }): void {
+    this.send({ type: 'unsubscribe:file', path, ...context });
   }
 
   /**

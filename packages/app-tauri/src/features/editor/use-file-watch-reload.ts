@@ -62,7 +62,8 @@ export function useFileWatchReload({
   useEffect(() => {
     if (!enabled || !path) return;
 
-    daemonWs.subscribeFile(path);
+    const fileContext = projectId ? { projectId, chatId } : undefined;
+    daemonWs.subscribeFile(path, fileContext);
 
     const unregister = daemonWs.onFileChange(path, () => {
       if (!projectId) return;
@@ -88,7 +89,7 @@ export function useFileWatchReload({
 
     return () => {
       unregister();
-      daemonWs.unsubscribeFile(path);
+      daemonWs.unsubscribeFile(path, fileContext);
     };
   }, [path, enabled, port, projectId, chatId, viewRef, onSilentReload]);
 

@@ -1,5 +1,4 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import { realpath, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 import type { ChatManager } from '../chat/index.js';
@@ -10,6 +9,7 @@ import { validateAuthedToken } from '../auth/validate-authed-token.js';
 import type { DevicesRepository } from '../db/devices.js';
 import { LspConnectionHandler, parseLspUpgradePath } from '../lsp/index.js';
 import type { FileWatcherService } from '../files/file-watcher.js';
+import { WsFileWatch, resolveSubscribePath } from './ws-file-watch.js';
 
 const log = createChildLogger('ws');
 
@@ -25,8 +25,7 @@ interface ClientConnection {
   /** Stable per-connection id; sent to the client and stamped on origin-sensitive broadcasts. */
   id: string;
   subscriptions: Set<string>;
-  /** Absolute file paths this client has subscribed to. */
-  fileSubscriptions: Set<string>;
+  fileWatch: WsFileWatch;
 }
 
 export class WebSocketManager {
@@ -93,7 +92,7 @@ export class WebSocketManager {
         ws,
         id: randomUUID(),
         subscriptions: new Set(),
-        fileSubscriptions: new Set(),
+        fileWatch: new WsFileWatch(),
       };
       this.clients.set(ws, client);
 
@@ -118,11 +117,8 @@ export class WebSocketManager {
       });
 
       ws.on('close', () => {
-        // Clean up file subscriptions for this client on disconnect
         if (this.fileWatcher) {
-          for (const path of client.fileSubscriptions) {
-            this.fileWatcher.unsubscribe(path);
-          }
+          client.fileWatch.unsubscribeAll(this.fileWatcher);
         }
         this.clients.delete(ws);
       });
@@ -155,12 +151,19 @@ export class WebSocketManager {
       }
 
       case 'subscribe:file': {
-        await this.handleFileSubscribe(client, event.path);
+        if (this.fileWatcher) {
+          const absolutePath = resolveSubscribePath(this.chats, event.path, event.projectId, event.chatId);
+          if (absolutePath) {
+            await client.fileWatch.subscribe(event.path, absolutePath, this.fileWatcher, client.ws);
+          }
+        }
         break;
       }
 
       case 'unsubscribe:file': {
-        this.handleFileUnsubscribe(client, event.path);
+        if (this.fileWatcher) {
+          client.fileWatch.unsubscribe(event.path, this.fileWatcher);
+        }
         break;
       }
 
@@ -181,59 +184,6 @@ export class WebSocketManager {
         break;
       }
     }
-  }
-
-  private async handleFileSubscribe(client: ClientConnection, requestedPath: string): Promise<void> {
-    if (!this.fileWatcher) return;
-    // Only absolute paths are accepted for file watching.
-    if (!requestedPath.startsWith('/')) {
-      log.warn({ path: requestedPath }, 'subscribe:file rejected: path must be absolute');
-      return;
-    }
-    let resolvedPath: string;
-    try {
-      resolvedPath = await realpath(requestedPath);
-    } catch {
-      log.warn({ path: requestedPath }, 'subscribe:file rejected: realpath failed (file may not exist)');
-      return;
-    }
-    try {
-      const s = await stat(resolvedPath);
-      if (!s.isFile()) {
-        log.warn({ path: resolvedPath }, 'subscribe:file rejected: not a regular file');
-        return;
-      }
-    } catch (err) {
-      log.warn({ err, path: resolvedPath }, 'subscribe:file rejected: stat failed');
-      return;
-    }
-
-    if (!client.fileSubscriptions.has(resolvedPath)) {
-      client.fileSubscriptions.add(resolvedPath);
-      this.fileWatcher.subscribe(resolvedPath);
-      log.debug({ path: resolvedPath }, 'client subscribed to file');
-    }
-    // Tell the requesting client what path the daemon actually resolved to —
-    // realpath may collapse symlinks (/tmp → /private/tmp on macOS), and the
-    // renderer's `file:changed` filter needs to match the resolved path the
-    // daemon broadcasts.
-    if (client.ws.readyState === WebSocket.OPEN) {
-      const ack: DaemonEvent = { type: 'subscribe:file:ack', requestedPath, resolvedPath };
-      client.ws.send(JSON.stringify(ack));
-    }
-  }
-
-  private handleFileUnsubscribe(client: ClientConnection, requestedPath: string): void {
-    if (!this.fileWatcher) return;
-    // Try exact match first; also handle the case where the renderer sends the
-    // original path before symlink resolution.
-    const toRemove = client.fileSubscriptions.has(requestedPath)
-      ? requestedPath
-      : [...client.fileSubscriptions].find((p) => p === requestedPath);
-    if (!toRemove) return;
-    client.fileSubscriptions.delete(toRemove);
-    this.fileWatcher.unsubscribe(toRemove);
-    log.debug({ path: toRemove }, 'client unsubscribed from file');
   }
 
   broadcastEvent(event: DaemonEvent): void {

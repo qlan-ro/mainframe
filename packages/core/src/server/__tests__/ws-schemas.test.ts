@@ -31,13 +31,42 @@ describe('ClientEventSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('parses subscribe:file', () => {
+  it('parses subscribe:file with absolute path (no context)', () => {
     const result = ClientEventSchema.safeParse({ type: 'subscribe:file', path: '/some/file.ts' });
     expect(result.success).toBe(true);
   });
 
-  it('parses unsubscribe:file', () => {
+  it('parses subscribe:file with relative path + projectId + chatId', () => {
+    const result = ClientEventSchema.safeParse({
+      type: 'subscribe:file',
+      path: 'packages/core/src/server/websocket.ts',
+      projectId: 'proj-1',
+      chatId: 'chat-1',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('parses subscribe:file with relative path + projectId (no chatId)', () => {
+    const result = ClientEventSchema.safeParse({
+      type: 'subscribe:file',
+      path: 'src/index.ts',
+      projectId: 'proj-1',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('parses unsubscribe:file with absolute path (no context)', () => {
     const result = ClientEventSchema.safeParse({ type: 'unsubscribe:file', path: '/some/file.ts' });
+    expect(result.success).toBe(true);
+  });
+
+  it('parses unsubscribe:file with relative path + projectId + chatId', () => {
+    const result = ClientEventSchema.safeParse({
+      type: 'unsubscribe:file',
+      path: 'src/index.ts',
+      projectId: 'proj-1',
+      chatId: 'chat-1',
+    });
     expect(result.success).toBe(true);
   });
 
