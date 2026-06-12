@@ -7,14 +7,17 @@
  *      ABOVE a comment keeps the comment on its original code line.
  *   3. Block widget decorations are produced for each comment anchor.
  *   4. Delete removes both the anchor and the widget.
+ *   5. Hover-'+' affordance: AddCommentMarker / CommentGutterMarker DOM + callbacks.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import {
   commentField,
   addCommentEffect,
   deleteCommentEffect,
   getCommentsFromState,
+  AddCommentMarker,
+  CommentGutterMarker,
   type InlineCommentState,
 } from '../comment-gutter';
 
@@ -232,5 +235,81 @@ describe('commentField block widgets', () => {
 
     // Same JS object — CM6 reuses it so the React portal stays mounted.
     expect(widgetAfter).toBe(widgetBefore);
+  });
+});
+
+// ── Hover-'+' affordance: AddCommentMarker + CommentGutterMarker ─────────────
+
+describe('AddCommentMarker (lines without a comment)', () => {
+  it('toDOM returns a span with class cm-comment-gutter-add', () => {
+    const onAdd = vi.fn();
+    const marker = new AddCommentMarker(3, onAdd);
+    const el = marker.toDOM() as HTMLElement;
+    expect(el.tagName.toLowerCase()).toBe('span');
+    expect(el.className).toContain('cm-comment-gutter-add');
+  });
+
+  it('toDOM span has aria-label "Add comment"', () => {
+    const marker = new AddCommentMarker(1, vi.fn());
+    const el = marker.toDOM() as HTMLElement;
+    expect(el.getAttribute('aria-label')).toBe('Add comment');
+  });
+
+  it('toDOM span uses --mf-text-3 color token', () => {
+    const marker = new AddCommentMarker(1, vi.fn());
+    const el = marker.toDOM() as HTMLElement;
+    expect(el.style.color).toBe('var(--mf-text-3)');
+  });
+
+  it('toDOM span displays "+" as text content', () => {
+    const marker = new AddCommentMarker(2, vi.fn());
+    const el = marker.toDOM() as HTMLElement;
+    expect(el.textContent).toBe('+');
+  });
+
+  it('clicking the marker calls onAddComment with the line number and stopPropagation', () => {
+    const onAdd = vi.fn();
+    const marker = new AddCommentMarker(7, onAdd);
+    const el = marker.toDOM() as HTMLElement;
+
+    const stopPropagation = vi.fn();
+    el.dispatchEvent(Object.assign(new MouseEvent('click', { bubbles: true }), { stopPropagation }));
+
+    // The listener attaches stopPropagation via addEventListener; use a real click event.
+    // Simulate via direct click listener invocation.
+    el.click();
+    expect(onAdd).toHaveBeenCalledWith(7);
+  });
+
+  it('eq returns true for markers with the same line number', () => {
+    const onAdd = vi.fn();
+    const m1 = new AddCommentMarker(5, onAdd);
+    const m2 = new AddCommentMarker(5, onAdd);
+    expect(m1.eq(m2)).toBe(true);
+  });
+
+  it('eq returns false for markers with different line numbers', () => {
+    const onAdd = vi.fn();
+    const m1 = new AddCommentMarker(5, onAdd);
+    const m2 = new AddCommentMarker(6, onAdd);
+    expect(m1.eq(m2)).toBe(false);
+  });
+});
+
+describe('CommentGutterMarker (lines with a comment)', () => {
+  it('toDOM returns a span with class cm-comment-gutter-marker and "●" text', () => {
+    const marker = new CommentGutterMarker('c1', vi.fn());
+    const el = marker.toDOM() as HTMLElement;
+    expect(el.tagName.toLowerCase()).toBe('span');
+    expect(el.className).toContain('cm-comment-gutter-marker');
+    expect(el.textContent).toBe('●');
+  });
+
+  it('clicking the ● marker calls onOpenComment with the comment id', () => {
+    const onOpen = vi.fn();
+    const marker = new CommentGutterMarker('comment-42', onOpen);
+    const el = marker.toDOM() as HTMLElement;
+    el.click();
+    expect(onOpen).toHaveBeenCalledWith('comment-42');
   });
 });

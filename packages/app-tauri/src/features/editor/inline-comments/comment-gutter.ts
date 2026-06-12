@@ -236,9 +236,9 @@ export function getCommentWidget(
   return state.field(commentField).widgets.get(commentId);
 }
 
-// ── GutterMarker for commented lines ────────────────────────────────────────
+// ── GutterMarker for lines WITH a comment (●) ───────────────────────────────
 
-class CommentGutterMarker extends GutterMarker {
+export class CommentGutterMarker extends GutterMarker {
   private readonly commentId: string;
   private readonly onOpen: (id: string) => void;
 
@@ -271,6 +271,40 @@ class CommentGutterMarker extends GutterMarker {
   }
 }
 
+// ── GutterMarker for lines WITHOUT a comment (+) ─────────────────────────────
+
+export class AddCommentMarker extends GutterMarker {
+  private readonly line: number;
+  private readonly onAdd: (line: number) => void;
+
+  constructor(line: number, onAdd: (line: number) => void) {
+    super();
+    this.line = line;
+    this.onAdd = onAdd;
+  }
+
+  toDOM(): Text | Element {
+    const el = document.createElement('span');
+    el.className = 'cm-comment-gutter-add';
+    el.setAttribute('aria-label', 'Add comment');
+    el.style.cursor = 'pointer';
+    el.style.fontSize = '14px';
+    el.style.lineHeight = '1';
+    el.style.color = 'var(--mf-text-3)';
+    el.style.userSelect = 'none';
+    el.textContent = '+';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.onAdd(this.line);
+    });
+    return el;
+  }
+
+  eq(other: GutterMarker): boolean {
+    return other instanceof AddCommentMarker && other.line === this.line;
+  }
+}
+
 // ── Extension factory ────────────────────────────────────────────────────────
 
 export interface CommentGutterCallbacks {
@@ -300,30 +334,17 @@ export function buildCommentGutter(callbacks: CommentGutterCallbacks): Extension
       class: 'cm-comment-gutter',
       lineMarker(view, line) {
         const { anchors } = view.state.field(commentField);
-        // Find a comment whose position falls on this line.
         const lineInfo = view.state.doc.lineAt(line.from);
         const hit = anchors.find((a) => {
           const commentLine = view.state.doc.lineAt(a.pos);
           return commentLine.number === lineInfo.number;
         });
         if (hit) {
+          // Line has a comment — show the ● open-marker.
           return new CommentGutterMarker(hit.id, onOpenComment);
         }
-        return null;
-      },
-      domEventHandlers: {
-        click(view, line) {
-          const lineNum = view.state.doc.lineAt(line.from).number;
-          const { anchors } = view.state.field(commentField);
-          const existing = anchors.find((a) => {
-            const commentLine = view.state.doc.lineAt(a.pos);
-            return commentLine.number === lineNum;
-          });
-          if (!existing) {
-            onAddComment(lineNum);
-          }
-          return true;
-        },
+        // Line has no comment — show the hover-'+' add-marker.
+        return new AddCommentMarker(lineInfo.number, onAddComment);
       },
     }),
     EditorView.theme({
@@ -335,7 +356,17 @@ export function buildCommentGutter(callbacks: CommentGutterCallbacks): Extension
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        cursor: 'pointer',
+      },
+      // Hide the '+' add-marker by default; reveal it on row hover.
+      '.cm-comment-gutter .cm-gutterElement .cm-comment-gutter-add': {
+        opacity: '0',
+        transition: 'opacity 0.1s',
+      },
+      '.cm-line:hover ~ .cm-comment-gutter .cm-gutterElement .cm-comment-gutter-add': {
+        opacity: '1',
+      },
+      '.cm-comment-gutter .cm-gutterElement:hover .cm-comment-gutter-add': {
+        opacity: '1',
       },
     }),
   ];
