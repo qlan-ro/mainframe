@@ -28,6 +28,7 @@ import { onSurfaceIntent } from './surface-intents';
 import { useLayoutStore } from './layout';
 import { useTabsStore } from './tabs';
 import { useEditorStore } from './editor';
+import { useFilesStore } from './files';
 import { useActiveBasesStore } from './active-bases-store';
 import type { OpenTabTarget } from './tabs';
 
@@ -96,9 +97,11 @@ export function subscribeToFileIntents(): () => void {
 
     if (intent.type === 'reveal-file') {
       // Activate Files surface so the user can see the tree.
-      // Full tree-scroll/select reveal requires a file-tree component (Phase 8+).
       ensureFilesActive();
-      // TODO(Phase 8): emit a secondary intent or call a tree-scroll action here.
+      // Normalize the path (same logic as open-file) and stash it for the tree.
+      const bases = useActiveBasesStore.getState().bases;
+      const ref = toFileRef(intent.path, bases);
+      useFilesStore.getState().setRevealTarget(ref.relative);
       return;
     }
 

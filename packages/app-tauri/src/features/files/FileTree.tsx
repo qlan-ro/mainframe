@@ -5,11 +5,17 @@
  * (the daemon returns a single level per call). Clicking a file emits the
  * `open-file` surface intent — the same path the chat tool-cards use — so the
  * Files surface activates and the file opens as a tab. No `layout/` import.
+ *
+ * Reveal support: when the files store has a `revealTarget`, the tree
+ * auto-expands ancestor directories, scrolls the target row into view, and
+ * transiently highlights it. The target is consumed (cleared) on mount so a
+ * subsequent remount does not re-trigger the reveal.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, FileText, Folder } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { useFilesStore } from '@/store/files';
 
 /** Directories first, then files, each alphabetical. */
 function sortEntries(entries: FileTreeEntry[]): FileTreeEntry[] {
@@ -19,44 +25,80 @@ function sortEntries(entries: FileTreeEntry[]): FileTreeEntry[] {
   });
 }
 
+/** True when `candidatePath` is a strict ancestor of `targetPath`. */
+function isAncestorOf(candidatePath: string, targetPath: string): boolean {
+  return targetPath.startsWith(candidatePath + '/');
+}
+
 interface NodeProps {
   entry: FileTreeEntry;
   depth: number;
   port: number;
   projectId: string;
   chatId?: string;
+  /** Normalized relative path to reveal, or null when no reveal is pending. */
+  revealPath: string | null;
 }
 
-function TreeNode({ entry, depth, port, projectId, chatId }: NodeProps) {
+function TreeNode({ entry, depth, port, projectId, chatId, revealPath }: NodeProps) {
   const [open, setOpen] = useState(false);
   const [children, setChildren] = useState<FileTreeEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
   const indent = 8 + depth * 12;
 
+  const isRevealTarget = revealPath !== null && entry.path === revealPath;
+  const isRevealAncestor = entry.type === 'directory' && revealPath !== null && isAncestorOf(entry.path, revealPath);
+
+  const rowRef = useRef<HTMLButtonElement>(null);
+
+  const fetchChildren = useCallback(async () => {
+    if (children !== null || loading) return;
+    setLoading(true);
+    try {
+      setChildren(await getFileTree(port, projectId, entry.path, chatId));
+    } catch (err) {
+      console.warn('[FileTree] failed to load', entry.path, err);
+      setChildren([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [children, loading, port, projectId, entry.path, chatId]);
+
   const toggle = useCallback(async () => {
     const next = !open;
     setOpen(next);
-    if (next && children === null && !loading) {
-      setLoading(true);
-      try {
-        setChildren(await getFileTree(port, projectId, entry.path, chatId));
-      } catch (err) {
-        console.warn('[FileTree] failed to load', entry.path, err);
-        setChildren([]);
-      } finally {
-        setLoading(false);
-      }
+    if (next) {
+      await fetchChildren();
     }
-  }, [open, children, loading, port, projectId, entry.path, chatId]);
+  }, [open, fetchChildren]);
+
+  // Auto-expand ancestor directories to reach the reveal target.
+  useEffect(() => {
+    if (!isRevealAncestor || open) return;
+    setOpen(true);
+    fetchChildren().catch((err: unknown) => {
+      console.warn('[FileTree] reveal auto-expand failed', entry.path, err);
+    });
+  }, [isRevealAncestor, open, fetchChildren, entry.path]);
+
+  // Scroll and highlight the target row once it's mounted in the DOM.
+  useEffect(() => {
+    if (!isRevealTarget || rowRef.current === null) return;
+    rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [isRevealTarget]);
 
   if (entry.type === 'file') {
     return (
       <button
+        ref={rowRef}
         data-testid={`file-tree-row-${entry.path}`}
+        data-highlighted={isRevealTarget ? 'true' : undefined}
         type="button"
         onClick={() => emitSurfaceIntent({ type: 'open-file', path: entry.path })}
         style={{ paddingLeft: indent }}
-        className="flex h-[22px] w-full items-center gap-1.5 border-none bg-transparent pr-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground"
+        className={`flex h-[22px] w-full items-center gap-1.5 border-none pr-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground ${
+          isRevealTarget ? 'bg-accent/60 text-foreground' : 'bg-transparent'
+        }`}
       >
         <span className="w-[9px] flex-shrink-0" />
         <FileText size={11} className="flex-shrink-0 text-mf-text-3" />
@@ -91,6 +133,7 @@ function TreeNode({ entry, depth, port, projectId, chatId }: NodeProps) {
             port={port}
             projectId={projectId}
             chatId={chatId}
+            revealPath={revealPath}
           />
         ))}
     </>
@@ -106,6 +149,19 @@ interface FileTreeProps {
 export function FileTree({ port, projectId, chatId }: FileTreeProps) {
   const [roots, setRoots] = useState<FileTreeEntry[] | null>(null);
   const [error, setError] = useState(false);
+
+  // Subscribe reactively so reveals fired while this component is already
+  // mounted (e.g. the ViewerShell "Reveal" button) are picked up live.
+  // The effect mirrors the store value into local state and clears the store
+  // entry immediately, preventing a subsequent remount from re-triggering.
+  const storeTarget = useFilesStore((s) => s.revealTarget);
+  const [revealPath, setRevealPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (storeTarget === null) return;
+    setRevealPath(storeTarget);
+    useFilesStore.getState().consumeRevealTarget();
+  }, [storeTarget]);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,7 +182,7 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
   }, [port, projectId, chatId]);
 
   if (error) {
-    return <div className="px-3 py-4 text-caption text-muted-foreground">Couldn’t load files.</div>;
+    return <div className="px-3 py-4 text-caption text-muted-foreground">Couldn't load files.</div>;
   }
   if (roots === null) {
     return <div className="px-3 py-4 text-caption text-muted-foreground">Loading…</div>;
@@ -138,7 +194,15 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
   return (
     <div data-testid="file-tree" className="py-1">
       {sortEntries(roots).map((entry) => (
-        <TreeNode key={entry.path} entry={entry} depth={0} port={port} projectId={projectId} chatId={chatId} />
+        <TreeNode
+          key={entry.path}
+          entry={entry}
+          depth={0}
+          port={port}
+          projectId={projectId}
+          chatId={chatId}
+          revealPath={revealPath}
+        />
       ))}
     </div>
   );

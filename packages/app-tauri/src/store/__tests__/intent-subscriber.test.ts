@@ -13,6 +13,7 @@ import { emitSurfaceIntent } from '../surface-intents';
 import { useLayoutStore } from '../layout';
 import { useTabsStore } from '../tabs';
 import { useEditorStore } from '../editor';
+import { useFilesStore } from '../files';
 import { useActiveBasesStore } from '../active-bases-store';
 import { subscribeToFileIntents } from '../intent-subscriber';
 
@@ -29,6 +30,7 @@ beforeEach(() => {
   useTabsStore.setState({ tabs: [], activeTabId: null });
   // Clear any stashed reveal targets between tests.
   useEditorStore.setState({ revealTargets: new Map() });
+  useFilesStore.setState({ revealTarget: null });
   // Reset bases to empty by default (tests that need bases set them explicitly).
   useActiveBasesStore.setState({ bases: {} });
 });
@@ -164,6 +166,28 @@ describe('reveal-file intent subscriber', () => {
     // reveal-file does NOT open a tab — it only activates the surface.
     const { tabs } = useTabsStore.getState();
     expect(tabs).toHaveLength(0);
+
+    unsub();
+  });
+
+  it('reveal-file stashes a reveal target in the files store', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'reveal-file', path: 'src/lib/util.ts' });
+
+    expect(useFilesStore.getState().revealTarget).toBe('src/lib/util.ts');
+
+    unsub();
+  });
+
+  it('reveal-file normalizes path via active bases before stashing', () => {
+    useActiveBasesStore.setState({ bases: { projectPath: '/Users/dev/myapp' } });
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'reveal-file', path: '/Users/dev/myapp/src/index.ts' });
+
+    // Should normalize to the base-relative path, same as open-file.
+    expect(useFilesStore.getState().revealTarget).toBe('src/index.ts');
 
     unsub();
   });
