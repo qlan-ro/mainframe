@@ -77,6 +77,23 @@ export function subscribeToFileIntents(): () => void {
       return;
     }
 
+    if (intent.type === 'open-diff') {
+      const { path: rawPath } = intent;
+
+      // Normalize to canonical base-relative path (same as open-file).
+      const bases = useActiveBasesStore.getState().bases;
+      const ref = toFileRef(rawPath, bases);
+      const path = ref.relative;
+
+      const title = path.split('/').pop() ?? path;
+
+      // Open a diff tab; DiffTab will fetch HEAD-vs-working when original/modified
+      // are absent, so we don't need to pass them here.
+      useTabsStore.getState().openTab({ kind: 'diff', path, title }, { mode: 'preview' });
+      ensureFilesActive();
+      return;
+    }
+
     if (intent.type === 'reveal-file') {
       // Activate Files surface so the user can see the tree.
       // Full tree-scroll/select reveal requires a file-tree component (Phase 8+).

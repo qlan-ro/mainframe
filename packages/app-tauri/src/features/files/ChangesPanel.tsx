@@ -1,7 +1,6 @@
 /**
  * ChangesPanel — the Inspector's Changes tab: working-tree git status.
- * Clicking a changed file opens it in the editor (via the open-file intent).
- * A HEAD-vs-working diff view is a follow-up (needs the git/diff plumbing).
+ * Clicking a changed file opens a HEAD-vs-working diff tab (via the open-diff intent).
  */
 import { useEffect, useState } from 'react';
 import { getGitStatus, type GitStatusFile } from '@/lib/api/git';
@@ -60,7 +59,7 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
           data-testid={`changes-row-${f.path}`}
           type="button"
           title={f.path}
-          onClick={() => emitSurfaceIntent({ type: 'open-file', path: f.path })}
+          onClick={() => emitSurfaceIntent({ type: 'open-diff', path: f.path })}
           className="flex h-[22px] w-full items-center gap-2 border-none bg-transparent px-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <span

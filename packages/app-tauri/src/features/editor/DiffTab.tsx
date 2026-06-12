@@ -1,31 +1,78 @@
 /**
  * DiffTab — renders a side-by-side diff for a 'diff' kind tab.
  *
- * Diffs are opened with both sides pre-resolved (a chat tool card passes
- * `original`/`modified`). A path-only diff (no HEAD-vs-working endpoint yet)
- * renders an "unavailable" state rather than diffing the file against itself.
+ * Two modes:
+ *  1. Pre-resolved: caller passes `original`/`modified` directly (e.g. chat tool card).
+ *  2. Path-only: no sides provided → fetches HEAD-vs-working via getWorkingDiff.
+ *     Empty both sides (untracked/clean file) → "Diff unavailable".
  *
- * Content is derived directly from props (no local state) so re-opening a diff
- * with new content can never show stale sides.
+ * Content is derived from state so re-opening a diff with new content can never
+ * show stale sides.
  *
  * data-testid: "diff-tab" on root.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { inferLanguage } from '@/lib/editor/file-types';
+import { getWorkingDiff } from '@/lib/api/git';
+import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { CmDiffEditor } from './CmDiffEditor';
 import { DiffHeader } from './DiffHeader';
 import { nextChange, prevChange } from './diff-nav';
 
 interface DiffTabProps {
   path: string;
-  /** Pre-resolved original (base) text. */
+  /** Pre-resolved original (base) text. When omitted, fetches HEAD-vs-working. */
   original?: string;
-  /** Pre-resolved modified (changed) text. */
+  /** Pre-resolved modified (changed) text. When omitted, fetches HEAD-vs-working. */
   modified?: string;
 }
 
-export function DiffTab({ path, original, modified }: DiffTabProps) {
+type FetchState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; original: string; modified: string }
+  | { status: 'unavailable' };
+
+export function DiffTab({ path, original: origProp, modified: modProp }: DiffTabProps) {
+  const port = useDaemonPort();
+  const { projectId, chatId } = useActiveIdentity();
   const [changeCount, setChangeCount] = useState(0);
+
+  // When both sides are pre-resolved, skip the fetch entirely.
+  const hasPreResolved = origProp !== undefined && modProp !== undefined;
+
+  const [fetchState, setFetchState] = useState<FetchState>(() =>
+    hasPreResolved ? { status: 'ready', original: origProp!, modified: modProp! } : { status: 'idle' },
+  );
+
+  useEffect(() => {
+    if (hasPreResolved) return;
+    if (!projectId) {
+      setFetchState({ status: 'unavailable' });
+      return;
+    }
+
+    let cancelled = false;
+    setFetchState({ status: 'loading' });
+
+    getWorkingDiff(port, projectId, path, { chatId })
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.original && !result.modified) {
+          setFetchState({ status: 'unavailable' });
+        } else {
+          setFetchState({ status: 'ready', original: result.original, modified: result.modified });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setFetchState({ status: 'unavailable' });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasPreResolved, port, projectId, path, chatId]);
 
   // CmDiffEditor reports the chunk count synchronously after its MergeView
   // mounts so the header stays correct without polling a global singleton.
@@ -33,7 +80,7 @@ export function DiffTab({ path, original, modified }: DiffTabProps) {
     setChangeCount(count);
   }, []);
 
-  if (original === undefined || modified === undefined) {
+  if (fetchState.status === 'unavailable') {
     return (
       <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
         Diff unavailable — open this file from a chat diff card.
@@ -41,6 +88,15 @@ export function DiffTab({ path, original, modified }: DiffTabProps) {
     );
   }
 
+  if (fetchState.status === 'idle' || fetchState.status === 'loading') {
+    return (
+      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
+        Loading diff…
+      </div>
+    );
+  }
+
+  const { original, modified } = fetchState;
   const language = inferLanguage(path);
   const fileName = path.split('/').pop() ?? path;
 
