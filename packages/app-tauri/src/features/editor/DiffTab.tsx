@@ -4,7 +4,7 @@
  * Two modes:
  *  1. Pre-resolved: caller passes `original`/`modified` directly (e.g. chat tool card).
  *  2. Path-only: no sides provided → fetches HEAD-vs-working via getWorkingDiff.
- *     Empty both sides (untracked/clean file) → "Diff unavailable".
+ *     Empty both sides (untracked/clean file) → "No diff available".
  *
  * Content is derived from state so re-opening a diff with new content can never
  * show stale sides.
@@ -29,7 +29,6 @@ interface DiffTabProps {
 }
 
 type FetchState =
-  | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'ready'; original: string; modified: string }
   | { status: 'unavailable' };
@@ -42,9 +41,12 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
   // When both sides are pre-resolved, skip the fetch entirely.
   const hasPreResolved = origProp !== undefined && modProp !== undefined;
 
-  const [fetchState, setFetchState] = useState<FetchState>(() =>
-    hasPreResolved ? { status: 'ready', original: origProp!, modified: modProp! } : { status: 'idle' },
-  );
+  const [fetchState, setFetchState] = useState<FetchState>(() => {
+    if (origProp !== undefined && modProp !== undefined) {
+      return { status: 'ready', original: origProp, modified: modProp };
+    }
+    return { status: 'loading' };
+  });
 
   useEffect(() => {
     if (hasPreResolved) return;
@@ -65,8 +67,10 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
           setFetchState({ status: 'ready', original: result.original, modified: result.modified });
         }
       })
-      .catch(() => {
-        if (!cancelled) setFetchState({ status: 'unavailable' });
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.warn('[DiffTab] working-diff fetch failed', path, err);
+        setFetchState({ status: 'unavailable' });
       });
 
     return () => {
@@ -83,12 +87,12 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
   if (fetchState.status === 'unavailable') {
     return (
       <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
-        Diff unavailable — open this file from a chat diff card.
+        No diff available — this file has no uncommitted changes.
       </div>
     );
   }
 
-  if (fetchState.status === 'idle' || fetchState.status === 'loading') {
+  if (fetchState.status === 'loading') {
     return (
       <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
         Loading diff…

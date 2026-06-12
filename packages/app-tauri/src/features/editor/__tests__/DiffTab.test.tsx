@@ -30,7 +30,6 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 
 // ── Mock getWorkingDiff ───────────────────────────────────────────────────────
 vi.mock('@/lib/api/git', () => ({
-  getGitStatus: vi.fn(),
   getWorkingDiff: vi.fn(),
 }));
 
@@ -59,9 +58,6 @@ vi.mock('../DiffHeader', () => ({
 vi.mock('../diff-nav', () => ({
   nextChange: vi.fn(),
   prevChange: vi.fn(),
-  setActiveMergeView: vi.fn(),
-  clearActiveMergeView: vi.fn(),
-  getActiveChangeCount: vi.fn(() => 0),
 }));
 
 // ── Import subject under test ─────────────────────────────────────────────────
@@ -112,7 +108,7 @@ describe('DiffTab — path-only diff (D2)', () => {
       expect(last?.modified).toBe('const x = 2;');
     });
 
-    expect(screen.queryByText(/Diff unavailable/)).toBeNull();
+    expect(screen.queryByText(/No diff available/)).toBeNull();
   });
 
   it('shows "Diff unavailable" when getWorkingDiff returns empty strings for both sides', async () => {
@@ -125,7 +121,7 @@ describe('DiffTab — path-only diff (D2)', () => {
 
     render(<DiffTab path="src/clean.ts" />);
 
-    await screen.findByText(/Diff unavailable/);
+    await screen.findByText(/No diff available/);
     expect(capturedDiffProps.length).toBe(0);
   });
 
@@ -134,7 +130,7 @@ describe('DiffTab — path-only diff (D2)', () => {
 
     render(<DiffTab path="src/broken.ts" />);
 
-    await screen.findByText(/Diff unavailable/);
+    await screen.findByText(/No diff available/);
     expect(capturedDiffProps.length).toBe(0);
   });
 });
@@ -150,6 +146,6 @@ describe('DiffTab — pre-resolved sides (existing behaviour)', () => {
     });
 
     expect(mockGetWorkingDiff).not.toHaveBeenCalled();
-    expect(screen.queryByText(/Diff unavailable/)).toBeNull();
+    expect(screen.queryByText(/No diff available/)).toBeNull();
   });
 });
