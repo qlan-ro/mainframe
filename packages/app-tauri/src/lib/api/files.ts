@@ -92,6 +92,42 @@ export async function saveProjectFile(
   await request<WriteFileResponse>('PUT', `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/files`, body);
 }
 
+/** Shape returned by GET /api/projects/:id/paths/resolve */
+export interface ResolvePathResult {
+  /** Path relative to the effective base (project root or worktree). */
+  relative: string;
+  /** Realpath-resolved absolute path on the host filesystem. */
+  absolute: string;
+  /** Whether the base is the project root or a live worktree. */
+  baseKind: 'project' | 'worktree';
+  /** The effective base directory (realpath-resolved). */
+  basePath: string;
+  /** True when absolute is strictly inside basePath; false for external paths. */
+  contained: boolean;
+}
+
+/**
+ * Resolve a path through the daemon's validated resolver (worktree-aware).
+ * Accepts relative or absolute paths; returns the canonical absolute, relative,
+ * baseKind, basePath, and containment flag.
+ *
+ * Use this whenever a feature needs the HOST absolute path — never reconstruct
+ * it client-side by concatenating basePath + relative.
+ */
+export async function resolvePath(
+  port: number,
+  projectId: string,
+  filePath: string,
+  chatId?: string,
+): Promise<ResolvePathResult> {
+  const qs = new URLSearchParams({ path: filePath });
+  if (chatId) qs.set('chatId', chatId);
+  return request<ResolvePathResult>(
+    'GET',
+    `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/paths/resolve?${qs}`,
+  );
+}
+
 interface BrowseOpts {
   includeFiles?: boolean;
   includeHidden?: boolean;

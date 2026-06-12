@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { FileResult, FileTreeEntry } from '../files';
+import type { FileResult, FileTreeEntry, ResolvePathResult } from '../files';
 import {
   searchFiles,
   getFileTree,
@@ -7,6 +7,7 @@ import {
   getProjectFile,
   getProjectFileBase64,
   saveProjectFile,
+  resolvePath,
 } from '../files';
 
 // ---------------------------------------------------------------------------
@@ -418,5 +419,94 @@ describe('browseFilesystem', () => {
     );
 
     await expect(browseFilesystem(31415, '/Users/me')).rejects.toThrow('server error');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolvePath
+// ---------------------------------------------------------------------------
+
+const RESOLVE_FIXTURE: ResolvePathResult = {
+  relative: 'src/index.ts',
+  absolute: '/home/user/project/src/index.ts',
+  baseKind: 'project',
+  basePath: '/home/user/project',
+  contained: true,
+};
+
+describe('resolvePath', () => {
+  it('GETs /paths/resolve with the path param and returns the parsed object', async () => {
+    mockFetchOk(RESOLVE_FIXTURE);
+
+    const result = await resolvePath(31415, 'proj-1', 'src/index.ts');
+
+    expect(result).toEqual(RESOLVE_FIXTURE);
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('/api/projects/proj-1/paths/resolve?');
+    expect(url).toContain('path=src%2Findex.ts');
+    expect(url).not.toContain('chatId');
+  });
+
+  it('includes chatId in the query string when provided', async () => {
+    mockFetchOk(RESOLVE_FIXTURE);
+
+    await resolvePath(31415, 'proj-1', 'src/index.ts', 'chat-abc');
+
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('chatId=chat-abc');
+    expect(url).toContain('path=src%2Findex.ts');
+  });
+
+  it('omits chatId from the query string when not provided', async () => {
+    mockFetchOk(RESOLVE_FIXTURE);
+
+    await resolvePath(31415, 'proj-1', 'src/index.ts');
+
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).not.toContain('chatId');
+  });
+
+  it('URL-encodes the projectId', async () => {
+    mockFetchOk(RESOLVE_FIXTURE);
+
+    await resolvePath(31415, 'my project/1', 'src/index.ts');
+
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('/api/projects/my%20project%2F1/paths/resolve');
+  });
+
+  it('returns contained:false result when the daemon reports an external path', async () => {
+    const externalFixture: ResolvePathResult = {
+      relative: '../other/file.ts',
+      absolute: '/other/file.ts',
+      baseKind: 'project',
+      basePath: '/home/user/project',
+      contained: false,
+    };
+    mockFetchOk(externalFixture);
+
+    const result = await resolvePath(31415, 'proj-1', '/other/file.ts');
+
+    expect(result.contained).toBe(false);
+    expect(result.absolute).toBe('/other/file.ts');
+  });
+
+  it('throws when success is false (e.g. project not found)', async () => {
+    mockFetchApiError('Project not found');
+
+    await expect(resolvePath(31415, 'no-such-project', 'a.ts')).rejects.toThrow('Project not found');
+  });
+
+  it('throws when the HTTP response is not ok', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({ error: 'Worktree missing' }),
+      }),
+    );
+
+    await expect(resolvePath(31415, 'proj-1', 'a.ts', 'chat-gone')).rejects.toThrow('Worktree missing');
   });
 });
