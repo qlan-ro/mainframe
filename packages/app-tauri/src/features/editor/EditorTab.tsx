@@ -246,20 +246,20 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
               {diskConflict !== null && (
                 <div
                   data-testid="editor-tab-disk-conflict"
-                  className="flex flex-shrink-0 items-center gap-2 bg-mf-warning/10 px-3 py-1 text-caption text-mf-warning"
+                  className="flex flex-shrink-0 items-center gap-2 bg-mf-warning-tint px-3 py-1 text-caption text-mf-warning"
                 >
                   <span className="flex-1">File changed on disk</span>
                   <button
                     data-testid="editor-tab-reload"
                     onClick={reloadFromDisk}
-                    className="rounded px-2 py-0.5 hover:bg-mf-warning/20"
+                    className="rounded px-2 py-0.5 hover:opacity-80"
                   >
                     Reload
                   </button>
                   <button
                     data-testid="editor-tab-keep-mine"
                     onClick={keepMine}
-                    className="rounded px-2 py-0.5 hover:bg-mf-warning/20"
+                    className="rounded px-2 py-0.5 hover:opacity-80"
                   >
                     Keep mine
                   </button>
