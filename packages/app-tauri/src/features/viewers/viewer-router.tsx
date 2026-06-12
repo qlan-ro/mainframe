@@ -169,7 +169,7 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   }
 
   if (kind === 'svg') {
-    return <SvgViewer content={content} />;
+    return <SvgViewer content={content} path={path} />;
   }
 
   if (kind === 'csv') {

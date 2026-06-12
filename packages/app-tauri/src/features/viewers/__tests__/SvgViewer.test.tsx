@@ -9,6 +9,9 @@
  *  2. Renders an <img> (or <object>) tag pointing at the object URL.
  *  3. Shows a loading placeholder when content is null.
  *  4. Preview/Source toggle switches views.
+ *  5. Renders inside ViewerShell (viewer-shell present).
+ *  6. Footer status (viewer-shell-status) contains SVG metadata.
+ *  7. Active toggle uses bg-mf-tab-active class (not bg-accent).
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -28,21 +31,26 @@ afterAll(() => {
   vi.unstubAllGlobals();
 });
 
+// Mock surface-intents so ViewerShell's reveal button doesn't crash.
+vi.mock('@/store/surface-intents', () => ({
+  emitSurfaceIntent: vi.fn(),
+}));
+
 describe('SvgViewer', () => {
   it('renders with data-testid="viewer-svg"', () => {
-    render(<SvgViewer content={SAMPLE_SVG} />);
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
     expect(screen.getByTestId('viewer-svg')).toBeInTheDocument();
   });
 
   it('shows a loading placeholder when content is null', () => {
-    render(<SvgViewer content={null} />);
+    render(<SvgViewer content={null} path="/a/b/icon.svg" />);
     const root = screen.getByTestId('viewer-svg');
     expect(root.querySelector('img')).toBeNull();
     expect(root.textContent).toBeTruthy();
   });
 
   it('renders an img element in Preview mode', () => {
-    render(<SvgViewer content={SAMPLE_SVG} />);
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
     const root = screen.getByTestId('viewer-svg');
     // In preview mode the viewer renders an <img> with the object URL
     const img = root.querySelector('img');
@@ -50,7 +58,7 @@ describe('SvgViewer', () => {
   });
 
   it('switches to source (code) view on Source toggle click', () => {
-    render(<SvgViewer content={SAMPLE_SVG} />);
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
     // Find the Source toggle button
     const sourceBtn = screen.getByTestId('viewer-svg-source-toggle');
     fireEvent.click(sourceBtn);
@@ -59,7 +67,7 @@ describe('SvgViewer', () => {
   });
 
   it('switches back to preview on Preview toggle click', () => {
-    render(<SvgViewer content={SAMPLE_SVG} />);
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
     const sourceBtn = screen.getByTestId('viewer-svg-source-toggle');
     fireEvent.click(sourceBtn);
     const previewBtn = screen.getByTestId('viewer-svg-preview-toggle');
@@ -67,5 +75,23 @@ describe('SvgViewer', () => {
     // Back in preview mode — img is visible again
     const root = screen.getByTestId('viewer-svg');
     expect(root.querySelector('img')).not.toBeNull();
+  });
+
+  it('renders inside ViewerShell (viewer-shell present)', () => {
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
+    expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
+  });
+
+  it('shows SVG status in the viewer-shell-status footer', () => {
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
+    const status = screen.getByTestId('viewer-shell-status');
+    expect(status.textContent).toMatch(/SVG/);
+  });
+
+  it('active toggle uses bg-mf-tab-active, not bg-accent', () => {
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
+    const previewBtn = screen.getByTestId('viewer-svg-preview-toggle');
+    expect(previewBtn.className).toContain('bg-mf-tab-active');
+    expect(previewBtn.className).not.toContain('bg-accent');
   });
 });
