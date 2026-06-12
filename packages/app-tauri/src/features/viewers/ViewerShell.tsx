@@ -5,32 +5,37 @@
  * ViewerShell in docs/design-reference/prototype/15-viewers.jsx.
  *
  * Layout:
- *   Header (24px, bg-mf-tab-bar) — breadcrumb dir + basename, optional
- *     actions slot, Reveal in file tree button.
- *   Body (flex-1, overflow-auto) — viewer content via `children`.
- *   Footer (20px, bg-mf-tab-bar) — mono status string.
+ *   Header (24px, bg-mf-tab-bar) — folder icon, breadcrumb dir segments with
+ *     chevron separators, bold basename; optional actions slot; separator;
+ *     Reveal in file tree button.
+ *   Body (flex-1 overflow-hidden) — viewer content via `children`.
+ *   Footer (20px, bg-mf-tab-bar) — mono 10px status string; optional
+ *     right-aligned statusRight slot.
  *
  * Props:
- *   path     — absolute or relative file path used to build the breadcrumb.
- *   status   — mono status line rendered in the footer.
- *   actions  — optional React node inserted before the Reveal button.
- *   children — viewer body content.
+ *   path         — absolute or relative file path used to build the breadcrumb.
+ *   status       — mono status string rendered left-aligned in the footer.
+ *   statusRight  — optional right-aligned footer content (word count, etc.).
+ *   actions      — optional React node inserted before the separator + Reveal
+ *                  button in the header.
+ *   children     — viewer body content.
  */
 import React from 'react';
+import { ChevronRight, Crosshair, Folder } from 'lucide-react';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 interface ViewerShellProps {
   path: string;
   status: string;
+  statusRight?: React.ReactNode;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function ViewerShell({ path, status, actions, children }: ViewerShellProps) {
+export function ViewerShell({ path, status, statusRight, actions, children }: ViewerShellProps) {
   const parts = path.split('/').filter(Boolean);
-  const basename = parts[parts.length - 1] ?? path;
+  const basename = parts.length > 0 ? (parts[parts.length - 1] ?? path) : path;
   const dirParts = parts.slice(0, -1);
-  const dir = dirParts.join('/');
 
   function handleReveal() {
     emitSurfaceIntent({ type: 'reveal-file', path });
@@ -39,43 +44,49 @@ export function ViewerShell({ path, status, actions, children }: ViewerShellProp
   return (
     <div data-testid="viewer-shell" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header / breadcrumb */}
-      <div className="flex h-6 shrink-0 items-center gap-1 border-b border-[color:var(--mf-hairline)] bg-mf-tab-bar px-3 text-[11px]">
-        {dir && <span className="text-mf-text-4">{dir}/</span>}
+      <div className="flex h-6 shrink-0 items-center gap-1 border-b border-border bg-mf-tab-bar px-3 text-[11px]">
+        <Folder size={10} className="shrink-0 text-mf-text-3" aria-hidden />
+
+        {dirParts.map((segment, i) => (
+          <React.Fragment key={i}>
+            <span className="text-mf-text-3">{segment}</span>
+            <ChevronRight size={8} className="shrink-0 text-mf-text-4" aria-hidden />
+          </React.Fragment>
+        ))}
+
         <span className="font-semibold text-foreground">{basename}</span>
 
         <div className="flex-1" />
 
         {actions}
 
-        {actions && <div className="mx-0.5 h-[13px] w-px bg-border" />}
+        <div className="mx-0.5 h-[13px] w-px bg-border" />
 
         <button
           data-testid="viewer-shell-reveal"
           title="Reveal in file tree"
-          className="inline-flex h-5 w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent transition-colors hover:bg-mf-hover"
+          className="inline-flex h-5 w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent"
           onClick={handleReveal}
           type="button"
         >
-          {/* locate icon — simple target circle representation */}
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1" className="text-mf-text-4" />
-            <circle cx="6" cy="6" r="1.5" fill="currentColor" className="text-mf-text-4" />
-            <line x1="6" y1="0" x2="6" y2="2" stroke="currentColor" strokeWidth="1" className="text-mf-text-4" />
-            <line x1="6" y1="10" x2="6" y2="12" stroke="currentColor" strokeWidth="1" className="text-mf-text-4" />
-            <line x1="0" y1="6" x2="2" y2="6" stroke="currentColor" strokeWidth="1" className="text-mf-text-4" />
-            <line x1="10" y1="6" x2="12" y2="6" stroke="currentColor" strokeWidth="1" className="text-mf-text-4" />
-          </svg>
+          <Crosshair size={12} aria-hidden />
         </button>
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 flex-col overflow-auto">{children}</div>
+      <div className="flex flex-1 flex-col overflow-hidden">{children}</div>
 
       {/* Footer / status */}
-      <div className="flex h-5 shrink-0 items-center border-t border-[color:var(--mf-hairline)] bg-mf-tab-bar px-2.5">
-        <span data-testid="viewer-shell-status" className="text-caption font-mono text-mf-text-4">
+      <div className="flex h-5 shrink-0 items-center border-t border-border bg-mf-tab-bar px-2.5">
+        <span data-testid="viewer-shell-status" className="text-micro font-mono text-mf-text-4">
           {status}
         </span>
+        {statusRight && (
+          <>
+            <div className="flex-1" />
+            <span className="text-micro font-mono text-mf-text-4">{statusRight}</span>
+          </>
+        )}
       </div>
     </div>
   );
