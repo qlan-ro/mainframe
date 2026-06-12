@@ -24,8 +24,15 @@ vi.mock('@/lib/api/files', () => ({
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
   useDaemonPort: () => 31415,
 }));
+// Override this per test-suite using vi.mocked().mockReturnValue or a module-level variable.
+const activeIdentityState = {
+  projectId: undefined as string | undefined,
+  chatId: undefined as string | undefined,
+  projectPath: undefined as string | undefined,
+};
+
 vi.mock('@/features/sessions/use-active-identity', () => ({
-  useActiveIdentity: () => ({ projectId: undefined, chatId: undefined }),
+  useActiveIdentity: () => activeIdentityState,
 }));
 vi.mock('@/lib/editor/file-types', () => ({
   inferLanguage: () => 'javascript',
@@ -67,6 +74,33 @@ vi.mock('../MarkdownEditorTab', () => ({
   MarkdownEditorTab: () => <div data-testid="markdown-editor-mock" />,
 }));
 
+// ── LSP mocks (A2) ────────────────────────────────────────────────────────────
+
+// Mutable flag so tests can toggle lspClientManager.hasClient.
+let mockHasClient = false;
+
+vi.mock('@/lib/lsp', () => ({
+  lspClientManager: {
+    hasClient: (projectId: string, language: string) => mockHasClient && Boolean(projectId) && Boolean(language),
+    ensureClient: vi.fn().mockResolvedValue(undefined),
+    preloadDocument: vi.fn(),
+    getHover: vi.fn(),
+    getDefinition: vi.fn(),
+    getReferences: vi.fn(),
+  },
+  getLspLanguage: (filePath: string) => (filePath.endsWith('.ts') ? 'typescript' : null),
+  hasLspSupport: (_lang: string) => true,
+  initAutoConnect: vi.fn().mockReturnValue(() => undefined),
+}));
+
+// Inline sentinel — vi.mock factory is hoisted, so FAKE_LSP_EXTENSION is defined
+// here as a module-level const AFTER the hoisted vi.mock calls. Use a local
+// object reference inside the factory itself instead.
+vi.mock('../lsp/cm-lsp-extensions', () => ({
+  // Returns a non-empty array so tests can assert extensions.length > 0.
+  createLspExtensions: vi.fn(() => [{ _fakeLspMarker: true }]),
+}));
+
 // EditorContextMenu: render a real-looking trigger div so data-testid is present,
 // plus pass children through so CmEditor still renders and can be queried.
 vi.mock('../context-menu/EditorContextMenu', () => ({
@@ -81,6 +115,11 @@ import { EditorTab } from '../EditorTab';
 
 beforeEach(() => {
   capturedCmEditorProps.length = 0;
+  // Reset identity to no-project default so existing tests are unaffected.
+  activeIdentityState.projectId = undefined;
+  activeIdentityState.chatId = undefined;
+  activeIdentityState.projectPath = undefined;
+  mockHasClient = false;
 });
 
 describe('EditorTab — read-only state (B4)', () => {
@@ -118,5 +157,33 @@ describe('EditorTab — context menu mount (A1)', () => {
     // Wait for the async load to resolve (getProjectFile is mocked to resolve immediately).
     await screen.findByTestId('cm-editor-mock');
     expect(screen.getByTestId('editor-context-menu')).toBeTruthy();
+  });
+});
+
+describe('EditorTab — LSP extensions wiring (A2)', () => {
+  it('passes a non-empty extraExtensions to CmEditor when projectId is set and lspReady=true', async () => {
+    activeIdentityState.projectId = 'proj-1';
+    activeIdentityState.chatId = 'chat-1';
+    activeIdentityState.projectPath = '/projects/myproject';
+    mockHasClient = true;
+
+    render(<EditorTab tabId="tab-a2-lsp" path="/project/src/index.ts" />);
+    await screen.findByTestId('cm-editor-mock');
+
+    const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    expect(lastProps?.extraExtensions).toBeDefined();
+    expect(Array.isArray(lastProps?.extraExtensions)).toBe(true);
+    expect((lastProps?.extraExtensions as unknown[]).length).toBeGreaterThan(0);
+  });
+
+  it('passes empty/undefined extraExtensions to CmEditor when no projectId', async () => {
+    // activeIdentityState defaults to undefined projectId (reset in beforeEach)
+    render(<EditorTab tabId="tab-a2-nolsp" path="/project/src/index.ts" />);
+    await screen.findByTestId('cm-editor-mock');
+
+    const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    const ext = lastProps?.extraExtensions;
+    // Either undefined or an empty array is acceptable — no LSP loaded.
+    expect(!ext || (Array.isArray(ext) && ext.length === 0)).toBe(true);
   });
 });

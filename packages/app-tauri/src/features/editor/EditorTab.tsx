@@ -10,7 +10,7 @@
  *
  * data-testid: "editor-tab" on the root wrapper.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { readFile } from '@/lib/tauri/bridge';
 import { getProjectFile, saveProjectFile } from '@/lib/api/files';
@@ -20,6 +20,8 @@ import { inferLanguage } from '@/lib/editor/file-types';
 import { useEditorStore } from '@/store/editor';
 import { useTabsStore } from '@/store/tabs';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
+import { lspClientManager, getLspLanguage } from '@/lib/lsp';
+import { createLspExtensions } from './lsp/cm-lsp-extensions';
 import { CmEditor } from './CmEditor';
 import { EditorContextMenu } from './context-menu/EditorContextMenu';
 import { MarkdownEditorTab } from './MarkdownEditorTab';
@@ -36,10 +38,11 @@ type LoadState = { status: 'loading' } | { status: 'ready'; value: string } | { 
 export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [lspReady, setLspReady] = useState(false);
   const setBuffer = useEditorStore((s) => s.setBuffer);
   const promoteTab = useTabsStore((s) => s.promoteTab);
   const port = useDaemonPort();
-  const { projectId, chatId } = useActiveIdentity();
+  const { projectId, chatId, projectPath } = useActiveIdentity();
   // Stable ref for path so the unmount effect always sees the current path.
   const pathRef = useRef(path);
   pathRef.current = path;
@@ -95,6 +98,41 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
       }
     };
   }, []);
+
+  // Ensure the LSP client is connected when a project is active and the file
+  // has a supported language. Sets lspReady once ensureClient resolves.
+  const lspLanguage = projectId ? getLspLanguage(path) : null;
+  useEffect(() => {
+    if (!projectId || !lspLanguage || !projectPath) return;
+    // Already connected — mark ready immediately and skip.
+    if (lspClientManager.hasClient(projectId, lspLanguage)) {
+      setLspReady(true);
+      return;
+    }
+    let cancelled = false;
+    lspClientManager
+      .ensureClient(projectId, lspLanguage, projectPath, chatId)
+      .then(() => {
+        if (!cancelled) setLspReady(true);
+      })
+      .catch((err: unknown) => {
+        console.warn('[EditorTab] LSP ensureClient failed', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, lspLanguage, projectPath, chatId]);
+
+  // Build LSP CM6 extensions when a project + supported language is present.
+  const extraExtensions = useMemo(() => {
+    if (!projectId || !lspLanguage) return undefined;
+    return createLspExtensions(lspClientManager, {
+      projectId,
+      language: lspLanguage,
+      filePath: path,
+      lspReady,
+    });
+  }, [projectId, lspLanguage, path, lspReady]);
 
   const handleChange = useCallback(
     (value: string) => {
@@ -164,7 +202,12 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
           language === 'markdown' ? (
             <MarkdownEditorTab value={loadState.value} path={path} onChange={handleChange} onSave={handleSave} />
           ) : (
-            <EditorContextMenu filePath={path} viewRef={viewRef}>
+            <EditorContextMenu
+              filePath={path}
+              viewRef={viewRef}
+              providers={projectId && lspLanguage ? lspClientManager : undefined}
+              lspConfig={projectId && lspLanguage ? { projectId, language: lspLanguage, lspReady } : undefined}
+            >
               <CmEditor
                 value={loadState.value}
                 language={language}
@@ -172,6 +215,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
                 onChange={handleChange}
                 onSave={handleSave}
                 path={path}
+                extraExtensions={extraExtensions}
                 onViewReady={(v) => {
                   viewRef.current = v;
                 }}
