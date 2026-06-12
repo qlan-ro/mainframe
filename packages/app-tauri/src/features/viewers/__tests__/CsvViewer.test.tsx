@@ -13,6 +13,8 @@
  *  7. Sorts ascending/descending on header click.
  *  8. No duplicate-key React warnings on duplicate column headers.
  *  9. Row identity is stable under sort (keyed off parsed-row index, not sorted index).
+ * 10. Renders inside ViewerShell (viewer-shell present).
+ * 11. Footer status (viewer-shell-status) contains CSV row/col metadata.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -37,21 +39,26 @@ afterEach(() => {
   consoleErrorSpy.mockRestore();
 });
 
+// Mock surface-intents so ViewerShell's reveal button doesn't crash.
+vi.mock('@/store/surface-intents', () => ({
+  emitSurfaceIntent: vi.fn(),
+}));
+
 describe('CsvViewer', () => {
   it('renders with data-testid="viewer-csv"', () => {
-    render(<CsvViewer content={SIMPLE_CSV} />);
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
     expect(screen.getByTestId('viewer-csv')).toBeInTheDocument();
   });
 
   it('shows a loading placeholder when content is null', () => {
-    render(<CsvViewer content={null} />);
+    render(<CsvViewer content={null} path="/data/table.csv" />);
     const root = screen.getByTestId('viewer-csv');
     expect(root.querySelector('table')).toBeNull();
     expect(root.textContent).toBeTruthy();
   });
 
   it('renders headers in <th> elements', () => {
-    render(<CsvViewer content={SIMPLE_CSV} />);
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
     expect(screen.getByText('name')).toBeInTheDocument();
     expect(screen.getByText('age')).toBeInTheDocument();
     expect(screen.getByText('city')).toBeInTheDocument();
@@ -61,7 +68,7 @@ describe('CsvViewer', () => {
   });
 
   it('renders body rows with the correct cell values', () => {
-    render(<CsvViewer content={SIMPLE_CSV} />);
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
     expect(screen.getByText('London')).toBeInTheDocument();
@@ -71,13 +78,13 @@ describe('CsvViewer', () => {
 
   it('handles quoted fields containing commas', () => {
     const csv = 'label,value\n"hello, world",42\n"foo",7';
-    render(<CsvViewer content={csv} />);
+    render(<CsvViewer content={csv} path="/data/table.csv" />);
     expect(screen.getByText('hello, world')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
   });
 
   it('filters rows live when the search input changes', () => {
-    render(<CsvViewer content={SIMPLE_CSV} />);
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
     const filter = screen.getByTestId('viewer-csv-filter');
     fireEvent.change(filter, { target: { value: 'Alice' } });
     expect(screen.getByText('Alice')).toBeInTheDocument();
@@ -87,7 +94,7 @@ describe('CsvViewer', () => {
   });
 
   it('sorts ascending on first header click, descending on second', () => {
-    render(<CsvViewer content={SIMPLE_CSV} />);
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
     // Click the "name" column header
     const nameHeader = screen.getByTestId('viewer-csv-header-name');
     fireEvent.click(nameHeader);
@@ -99,7 +106,7 @@ describe('CsvViewer', () => {
   });
 
   it('does not emit a React duplicate-key warning for headers with the same name', () => {
-    render(<CsvViewer content={DUPLICATE_HEADER_CSV} />);
+    render(<CsvViewer content={DUPLICATE_HEADER_CSV} path="/data/table.csv" />);
     const duplicateKeyWarnings = consoleErrorSpy.mock.calls.filter(
       (args: unknown[]) => typeof args[0] === 'string' && args[0].includes('same key'),
     );
@@ -107,7 +114,7 @@ describe('CsvViewer', () => {
   });
 
   it('does not emit a React duplicate-key warning for rows with same header names after sort', () => {
-    render(<CsvViewer content={DUPLICATE_HEADER_CSV} />);
+    render(<CsvViewer content={DUPLICATE_HEADER_CSV} path="/data/table.csv" />);
     // Click to sort on first "value" column
     const headers = document.querySelectorAll('th');
     // headers[0] is the row-number gutter; headers[1] is the first "value" column
@@ -119,7 +126,7 @@ describe('CsvViewer', () => {
   });
 
   it('preserves row identity after sorting (stable parsed-row index keys)', () => {
-    render(<CsvViewer content={SORT_CSV} />);
+    render(<CsvViewer content={SORT_CSV} path="/data/table.csv" />);
     // Before sort: Zoe is row 1, Abe is row 2
     const tbody = document.querySelector('tbody')!;
     const rowsBefore = Array.from(tbody.querySelectorAll('tr'));
@@ -139,5 +146,19 @@ describe('CsvViewer', () => {
       (args: unknown[]) => typeof args[0] === 'string' && args[0].includes('same key'),
     );
     expect(keyWarnings).toHaveLength(0);
+  });
+
+  it('renders inside ViewerShell (viewer-shell present)', () => {
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
+    expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
+  });
+
+  it('shows CSV row/col metadata in the viewer-shell-status footer', () => {
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
+    const status = screen.getByTestId('viewer-shell-status');
+    // SIMPLE_CSV has 3 data rows and 3 columns
+    expect(status.textContent).toMatch(/CSV/);
+    expect(status.textContent).toMatch(/3 rows/);
+    expect(status.textContent).toMatch(/3 cols/);
   });
 });

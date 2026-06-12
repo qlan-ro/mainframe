@@ -173,7 +173,7 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   }
 
   if (kind === 'csv') {
-    return <CsvViewer content={content} />;
+    return <CsvViewer content={content} path={path} />;
   }
 
   // kind === 'pdf'
