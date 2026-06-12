@@ -15,7 +15,7 @@
  * data-testid="viewer-csv" on the root.
  */
 import { useMemo, useState } from 'react';
-import { parseCsv, isNumericColumn } from './csv-parser';
+import { parseCsv, isNumericColumn, type CsvRow } from './csv-parser';
 
 interface CsvViewerProps {
   content: string | null;
@@ -45,21 +45,21 @@ export function CsvViewer({ content }: CsvViewerProps) {
     return new Set(parsed.headers.map((_, i) => i).filter((i) => isNumericColumn(parsed.rows, i)));
   }, [parsed]);
 
-  const displayRows = useMemo(() => {
+  const displayRows = useMemo((): CsvRow[] => {
     if (!parsed) return [];
     let rows = parsed.rows;
 
     if (filter.trim()) {
       const term = filter.toLowerCase();
-      rows = rows.filter((row) => row.some((cell) => cell.toLowerCase().includes(term)));
+      rows = rows.filter((row) => row.cells.some((cell) => cell.toLowerCase().includes(term)));
     }
 
     if (sort.colIndex >= 0 && sort.dir !== null) {
       const { colIndex, dir } = sort;
       const isNum = numericCols.has(colIndex);
       rows = [...rows].sort((a, b) => {
-        const av = a[colIndex] ?? '';
-        const bv = b[colIndex] ?? '';
+        const av = a.cells[colIndex] ?? '';
+        const bv = b.cells[colIndex] ?? '';
         const cmp = isNum ? Number(av) - Number(bv) : av.localeCompare(bv);
         return dir === 'asc' ? cmp : -cmp;
       });
@@ -115,7 +115,7 @@ export function CsvViewer({ content }: CsvViewerProps) {
                   const isNum = numericCols.has(i);
                   return (
                     <th
-                      key={header}
+                      key={i}
                       data-testid={`viewer-csv-header-${header}`}
                       onClick={() => handleHeaderClick(i)}
                       className={[
@@ -135,20 +135,20 @@ export function CsvViewer({ content }: CsvViewerProps) {
             </thead>
             <tbody>
               {displayRows.map((row, rowIdx) => (
-                <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-card'}>
+                <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-card'}>
                   <td className="[border-right:0.5px_solid_var(--border)] px-2 py-1 text-right text-muted-foreground tabular-nums">
                     {rowIdx + 1}
                   </td>
-                  {parsed.headers.map((header, colIdx) => (
+                  {parsed.headers.map((_header, colIdx) => (
                     <td
-                      key={header}
+                      key={colIdx}
                       className={[
                         'px-2 py-1',
                         numericCols.has(colIdx) ? 'text-right tabular-nums' : 'text-left',
                         'text-foreground',
                       ].join(' ')}
                     >
-                      {row[colIdx] ?? ''}
+                      {row.cells[colIdx] ?? ''}
                     </td>
                   ))}
                 </tr>

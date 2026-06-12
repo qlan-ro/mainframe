@@ -11,12 +11,31 @@
  *  5. Shows a loading placeholder when content is null.
  *  6. Filters rows live when the search input changes.
  *  7. Sorts ascending/descending on header click.
+ *  8. No duplicate-key React warnings on duplicate column headers.
+ *  9. Row identity is stable under sort (keyed off parsed-row index, not sorted index).
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CsvViewer } from '../CsvViewer';
 
 const SIMPLE_CSV = 'name,age,city\nAlice,30,London\nBob,25,Paris\nCarol,35,Berlin';
+
+// CSV with two identical column headers — triggers duplicate-key bug on <th key={header}>
+const DUPLICATE_HEADER_CSV = 'value,value,value\n1,2,3\n4,5,6';
+
+// CSV for stable-key sort test
+const SORT_CSV = 'name,score\nZoe,10\nAbe,20';
+
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+  // Spy on console.error to catch React duplicate-key warnings
+  consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  consoleErrorSpy.mockRestore();
+});
 
 describe('CsvViewer', () => {
   it('renders with data-testid="viewer-csv"', () => {
@@ -77,5 +96,48 @@ describe('CsvViewer', () => {
     // Click again — descending
     fireEvent.click(nameHeader);
     expect(screen.getByText('Carol')).toBeInTheDocument();
+  });
+
+  it('does not emit a React duplicate-key warning for headers with the same name', () => {
+    render(<CsvViewer content={DUPLICATE_HEADER_CSV} />);
+    const duplicateKeyWarnings = consoleErrorSpy.mock.calls.filter(
+      (args: unknown[]) => typeof args[0] === 'string' && args[0].includes('same key'),
+    );
+    expect(duplicateKeyWarnings).toHaveLength(0);
+  });
+
+  it('does not emit a React duplicate-key warning for rows with same header names after sort', () => {
+    render(<CsvViewer content={DUPLICATE_HEADER_CSV} />);
+    // Click to sort on first "value" column
+    const headers = document.querySelectorAll('th');
+    // headers[0] is the row-number gutter; headers[1] is the first "value" column
+    fireEvent.click(headers[1]!);
+    const duplicateKeyWarnings = consoleErrorSpy.mock.calls.filter(
+      (args: unknown[]) => typeof args[0] === 'string' && args[0].includes('same key'),
+    );
+    expect(duplicateKeyWarnings).toHaveLength(0);
+  });
+
+  it('preserves row identity after sorting (stable parsed-row index keys)', () => {
+    render(<CsvViewer content={SORT_CSV} />);
+    // Before sort: Zoe is row 1, Abe is row 2
+    const tbody = document.querySelector('tbody')!;
+    const rowsBefore = Array.from(tbody.querySelectorAll('tr'));
+    expect(rowsBefore[0]!.textContent).toContain('Zoe');
+    expect(rowsBefore[1]!.textContent).toContain('Abe');
+
+    // Click "name" header to sort ascending — Abe should come first
+    const nameHeader = screen.getByTestId('viewer-csv-header-name');
+    fireEvent.click(nameHeader);
+
+    const rowsAfter = Array.from(tbody.querySelectorAll('tr'));
+    expect(rowsAfter[0]!.textContent).toContain('Abe');
+    expect(rowsAfter[1]!.textContent).toContain('Zoe');
+
+    // No duplicate-key warnings
+    const keyWarnings = consoleErrorSpy.mock.calls.filter(
+      (args: unknown[]) => typeof args[0] === 'string' && args[0].includes('same key'),
+    );
+    expect(keyWarnings).toHaveLength(0);
   });
 });

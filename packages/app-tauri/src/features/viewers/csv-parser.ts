@@ -12,9 +12,17 @@
  * @pure — no side effects.
  */
 
+/** A parsed row with its original source-order index preserved. */
+export interface CsvRow {
+  /** The cell values for this row. */
+  cells: string[];
+  /** Stable index from the original parse order (survives sort/filter). */
+  _index: number;
+}
+
 export interface ParsedCsv {
   headers: string[];
-  rows: string[][];
+  rows: CsvRow[];
 }
 
 /** Parse a single row of CSV text starting at `pos`, return [fields, nextPos]. */
@@ -102,13 +110,14 @@ export function parseCsv(text: string): ParsedCsv {
     pos = next > pos ? next : pos + 1;
   }
 
-  const [headers = [], ...rows] = allRows;
+  const [headers = [], ...rawRows] = allRows;
+  const rows: CsvRow[] = rawRows.map((cells, index) => ({ cells, _index: index }));
   return { headers, rows };
 }
 
 /** Return true if every non-empty value in the column parses as a finite number. */
-export function isNumericColumn(rows: string[][], colIndex: number): boolean {
-  const values = rows.map((r) => r[colIndex] ?? '').filter(Boolean);
+export function isNumericColumn(rows: CsvRow[], colIndex: number): boolean {
+  const values = rows.map((r) => r.cells[colIndex] ?? '').filter(Boolean);
   if (values.length === 0) return false;
   return values.every((v) => isFinite(Number(v)));
 }
