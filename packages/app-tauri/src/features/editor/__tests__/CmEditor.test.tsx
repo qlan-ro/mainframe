@@ -9,6 +9,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { runScopeHandlers } from '@codemirror/view';
+import { EditorView } from '@codemirror/view';
 import { CmEditor } from '../CmEditor';
 import { useEditorStore } from '@/store/editor';
 import { jumpHistory } from '../lsp/navigation';
@@ -275,6 +276,47 @@ describe('CmEditor', () => {
       // After mount, the reveal target should have been consumed (no longer in the store)
       const remaining = useEditorStore.getState().consumeRevealTarget(path);
       expect(remaining).toBeUndefined();
+    });
+  });
+
+  describe('extraExtensions compartment reconfiguration', () => {
+    it('applies a new extraExtensions array when the prop changes after mount', () => {
+      // Build an observable extension: editorAttributes adds a class to the CM6 root.
+      // We use this as a proxy to confirm the compartment was reconfigured.
+      const marker = EditorView.editorAttributes.of({ class: 'test-extra-marker' });
+
+      const { rerender } = render(
+        <CmEditor
+          value="hello"
+          language="javascript"
+          readOnly={false}
+          onChange={() => undefined}
+          path="/test/extra-ext.ts"
+          extraExtensions={undefined}
+        />,
+      );
+
+      const root = screen.getByTestId('editor-code');
+      const cmRoot = root.querySelector('.cm-editor') as HTMLElement;
+      expect(cmRoot).toBeTruthy();
+
+      // Before reconfigure: the marker class must NOT be present.
+      expect(cmRoot.classList.contains('test-extra-marker')).toBe(false);
+
+      // Rerender with a new extensions array containing the marker.
+      rerender(
+        <CmEditor
+          value="hello"
+          language="javascript"
+          readOnly={false}
+          onChange={() => undefined}
+          path="/test/extra-ext.ts"
+          extraExtensions={[marker]}
+        />,
+      );
+
+      // After reconfigure: the marker class MUST be present on the CM6 editor root.
+      expect(cmRoot.classList.contains('test-extra-marker')).toBe(true);
     });
   });
 });

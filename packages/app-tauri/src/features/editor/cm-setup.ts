@@ -136,6 +136,8 @@ export function createEditorCompartments() {
     lang: new Compartment(),
     /** Toggle read-only at runtime via `.reconfigure`. */
     readOnly: new Compartment(),
+    /** Reconfigurable slot for caller-supplied extra extensions (e.g. LSP). */
+    extra: new Compartment(),
   };
 }
 

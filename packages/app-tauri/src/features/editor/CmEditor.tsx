@@ -45,8 +45,9 @@ export interface CmEditorProps {
   onChange: (value: string) => void;
   path: string;
   /**
-   * Optional extra extensions to inject at mount time (e.g. the comment gutter).
-   * These are static — they are not reconfigured on prop changes.
+   * Optional extra extensions (e.g. LSP hover/diagnostics, comment gutter).
+   * Reconfigured via a Compartment whenever the prop identity changes, so LSP
+   * extensions built after `lspReady` flips true are applied to the live view.
    */
   extraExtensions?: Extension[];
   /**
@@ -104,7 +105,7 @@ export function CmEditor({
 
   useEffect(() => {
     if (!hostRef.current) return;
-    const { lang, readOnly: roComp } = compartmentsRef.current;
+    const { lang, readOnly: roComp, extra } = compartmentsRef.current;
     const savedState = useEditorStore.getState().getViewState(path);
 
     const saveKeymap = keymap.of([
@@ -143,7 +144,7 @@ export function CmEditor({
         }),
         saveKeymap,
         createNavigationKeymap(),
-        ...(extraExtensions ?? []),
+        extra.of(extraExtensions ?? []),
       ],
     });
 
@@ -218,6 +219,16 @@ export function CmEditor({
       effects: roComp.reconfigure(EditorState.readOnly.of(readOnly)),
     });
   }, [readOnly]);
+
+  // ── Sync extraExtensions changes ─────────────────────────────────────────
+  // Triggered by prop identity change (e.g. lspReady flip rebuilds the array).
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const { extra } = compartmentsRef.current;
+    view.dispatch({ effects: extra.reconfigure(extraExtensions ?? []) });
+  }, [extraExtensions]);
 
   return <div ref={hostRef} data-testid="editor-code" className="mf-editor-selectable h-full" />;
 }
