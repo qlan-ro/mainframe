@@ -26,6 +26,7 @@ import { createLspExtensions } from './lsp/cm-lsp-extensions';
 import { EditorContextMenu } from './context-menu/EditorContextMenu';
 import { CmEditorWithComments } from './inline-comments/CmEditorWithComments';
 import { MarkdownEditorTab } from './MarkdownEditorTab';
+import { useFileWatchReload } from './use-file-watch-reload';
 
 interface EditorTabProps {
   tabId: string;
@@ -50,6 +51,32 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   pathRef.current = path;
   // Ref to the live EditorView — populated via CmEditor's onViewReady seam.
   const viewRef = useRef<EditorView | null>(null);
+
+  // Callback for silent reload (disk change with clean buffer): updates loadState
+  // value so React reflects the new content even without an EditorView.
+  const handleSilentReload = useCallback(
+    (content: string) => {
+      setBuffer(path, content, false);
+      setLoadState({ status: 'ready', value: content });
+    },
+    [path, setBuffer],
+  );
+
+  // File-watch live reload (D4): subscribe to disk changes and apply them
+  // silently (clean buffer) or via the conflict banner (dirty buffer).
+  const {
+    diskConflict,
+    reload: reloadFromDisk,
+    keepMine,
+  } = useFileWatchReload({
+    path,
+    enabled: !!projectId,
+    port,
+    projectId,
+    chatId,
+    viewRef,
+    onSilentReload: handleSilentReload,
+  });
 
   // Load file content — read the cache ONCE inside the effect (not subscribed)
   // so that keystrokes (setBuffer → new buffer object) do not re-run this
@@ -214,6 +241,28 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
                   className="flex-shrink-0 bg-mf-destructive-tint px-3 py-1 text-caption text-destructive"
                 >
                   Save failed: {saveError}
+                </div>
+              )}
+              {diskConflict !== null && (
+                <div
+                  data-testid="editor-tab-disk-conflict"
+                  className="flex flex-shrink-0 items-center gap-2 bg-mf-warning/10 px-3 py-1 text-caption text-mf-warning"
+                >
+                  <span className="flex-1">File changed on disk</span>
+                  <button
+                    data-testid="editor-tab-reload"
+                    onClick={reloadFromDisk}
+                    className="rounded px-2 py-0.5 hover:bg-mf-warning/20"
+                  >
+                    Reload
+                  </button>
+                  <button
+                    data-testid="editor-tab-keep-mine"
+                    onClick={keepMine}
+                    className="rounded px-2 py-0.5 hover:bg-mf-warning/20"
+                  >
+                    Keep mine
+                  </button>
                 </div>
               )}
               <EditorContextMenu

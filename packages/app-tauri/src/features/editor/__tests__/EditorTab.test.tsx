@@ -5,6 +5,8 @@
  *                    A3: CmEditorWithComments mount + extraExtensions/onViewReady passthroughs
  *                        + handleSave read-only guard.
  *                    C5: ViewerShell chrome (breadcrumb + Ln/Col status).
+ *                    D4: live disk-change reload (clean buffer → silent reload;
+ *                        dirty buffer → conflict banner with Reload/Keep-mine).
  *
  * Strategy:
  *  - Mock all external deps (tauri bridge, api files, hooks, CmEditorWithComments, ViewerRouter)
@@ -16,9 +18,12 @@
  *  - Assert CmEditorWithComments receives extraExtensions and onViewReady (A3).
  *  - Assert saveProjectFile is NOT called when readOnly=true (A3 read-only guard).
  *  - Assert the code editor renders inside viewer-shell with a Ln/Col status footer (C5).
+ *  - Assert clean buffer + file-change event → silently reloads the content (D4).
+ *  - Assert dirty buffer + file-change event → "File changed on disk" banner appears (D4).
+ *  - Assert Reload button applies disk content; Keep mine dismisses the banner (D4).
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 
 // ── Mock external deps ────────────────────────────────────────────────────────
@@ -45,9 +50,12 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 vi.mock('@/lib/editor/file-types', () => ({
   inferLanguage: () => 'javascript',
 }));
+// Controls whether getBuffer returns a dirty buffer (for D4 dirty-buffer tests).
+let mockBufferDirty = false;
+
 const editorState = {
   setBuffer: vi.fn(),
-  getBuffer: () => null,
+  getBuffer: (_path: string) => (mockBufferDirty ? { value: 'dirty content', dirty: true } : null),
   clearBuffer: vi.fn(),
 };
 
@@ -96,6 +104,44 @@ vi.mock('../CmEditor', () => ({
 
 vi.mock('../MarkdownEditorTab', () => ({
   MarkdownEditorTab: () => <div data-testid="markdown-editor-mock" />,
+}));
+
+// ── WS client mock (D4) ──────────────────────────────────────────────────────
+// Stores the latest onFileChange listener registered for a path so tests can
+// fire it to simulate a disk-change event.
+const fileChangeListeners = new Map<string, (() => void)[]>();
+const mockSubscribeFile = vi.fn((_path: string) => undefined);
+const mockUnsubscribeFile = vi.fn((_path: string) => undefined);
+const mockOnFileChange = vi.fn((path: string, listener: () => void) => {
+  const listeners = fileChangeListeners.get(path) ?? [];
+  listeners.push(listener);
+  fileChangeListeners.set(path, listeners);
+  // Return an unsubscribe function.
+  return () => {
+    const arr = fileChangeListeners.get(path) ?? [];
+    const idx = arr.indexOf(listener);
+    if (idx !== -1) arr.splice(idx, 1);
+  };
+});
+
+vi.mock('@/lib/daemon/ws-client', () => ({
+  daemonWs: {
+    subscribeFile: (path: string) => mockSubscribeFile(path),
+    unsubscribeFile: (path: string) => mockUnsubscribeFile(path),
+    onFileChange: (path: string, listener: () => void) => mockOnFileChange(path, listener),
+  },
+}));
+
+// Helper: fire the registered file-change listener for `path`.
+function fireFileChange(path: string): void {
+  const listeners = fileChangeListeners.get(path) ?? [];
+  listeners.forEach((fn) => fn());
+}
+
+// ── apply-value-update mock (D4) ─────────────────────────────────────────────
+const mockApplyValueUpdate = vi.fn();
+vi.mock('@/lib/editor/apply-value-update', () => ({
+  applyValueUpdate: (...args: unknown[]) => mockApplyValueUpdate(...args),
 }));
 
 // ── LSP mocks (A2) ────────────────────────────────────────────────────────────
@@ -152,7 +198,7 @@ vi.mock('@/features/viewers/ViewerShell', () => ({
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 import { EditorTab } from '../EditorTab';
-import { saveProjectFile } from '@/lib/api/files';
+import { saveProjectFile, getProjectFile } from '@/lib/api/files';
 
 beforeEach(() => {
   capturedCmEditorProps.length = 0;
@@ -162,6 +208,14 @@ beforeEach(() => {
   activeIdentityState.chatId = undefined;
   activeIdentityState.projectPath = undefined;
   mockHasClient = false;
+  // Reset D4 mocks.
+  mockBufferDirty = false;
+  fileChangeListeners.clear();
+  mockSubscribeFile.mockClear();
+  mockUnsubscribeFile.mockClear();
+  mockOnFileChange.mockClear();
+  mockApplyValueUpdate.mockClear();
+  vi.mocked(getProjectFile).mockResolvedValue('content');
 });
 
 describe('EditorTab — read-only state (B4)', () => {
@@ -311,5 +365,122 @@ describe('EditorTab — ViewerShell chrome (C5)', () => {
     const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
     // onCursorChange must be a function so the status bar can update on cursor moves.
     expect(typeof lastProps?.onCursorChange).toBe('function');
+  });
+});
+
+describe('EditorTab — live disk-change reload (D4)', () => {
+  const TEST_PATH = '/project/src/index.ts';
+
+  it('registers onFileChange for the path on mount (projectId present)', async () => {
+    activeIdentityState.projectId = 'proj-d4';
+    activeIdentityState.chatId = 'chat-d4';
+    activeIdentityState.projectPath = '/project';
+
+    render(<EditorTab tabId="tab-d4-1" path={TEST_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+
+    // subscribeFile and onFileChange must have been called with the path.
+    expect(mockSubscribeFile).toHaveBeenCalledWith(TEST_PATH);
+    expect(mockOnFileChange).toHaveBeenCalledWith(TEST_PATH, expect.any(Function));
+  });
+
+  it('CLEAN buffer + file-change event → silently reloads new content', async () => {
+    activeIdentityState.projectId = 'proj-d4-clean';
+    activeIdentityState.chatId = 'chat-d4-clean';
+    activeIdentityState.projectPath = '/project';
+    mockBufferDirty = false;
+    vi.mocked(getProjectFile).mockResolvedValue('disk content v2');
+
+    render(<EditorTab tabId="tab-d4-clean" path={TEST_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+
+    // Simulate a disk change.
+    await act(async () => {
+      fireFileChange(TEST_PATH);
+      // Let the getProjectFile re-fetch promise resolve.
+      await Promise.resolve();
+    });
+
+    // No conflict banner should appear.
+    expect(screen.queryByTestId('editor-tab-reload')).toBeNull();
+    expect(screen.queryByTestId('editor-tab-keep-mine')).toBeNull();
+  });
+
+  it('DIRTY buffer + file-change event → conflict banner appears with Reload and Keep-mine', async () => {
+    activeIdentityState.projectId = 'proj-d4-dirty';
+    activeIdentityState.chatId = 'chat-d4-dirty';
+    activeIdentityState.projectPath = '/project';
+    mockBufferDirty = true;
+    vi.mocked(getProjectFile).mockResolvedValue('disk content v2');
+
+    render(<EditorTab tabId="tab-d4-dirty" path={TEST_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+
+    // Simulate a disk change.
+    await act(async () => {
+      fireFileChange(TEST_PATH);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Conflict banner must be visible.
+    expect(screen.getByTestId('editor-tab-reload')).toBeTruthy();
+    expect(screen.getByTestId('editor-tab-keep-mine')).toBeTruthy();
+  });
+
+  it('Reload button applies disk content and dismisses the banner', async () => {
+    activeIdentityState.projectId = 'proj-d4-reload';
+    activeIdentityState.chatId = 'chat-d4-reload';
+    activeIdentityState.projectPath = '/project';
+    mockBufferDirty = true;
+    vi.mocked(getProjectFile).mockResolvedValue('disk content v2');
+
+    render(<EditorTab tabId="tab-d4-reload" path={TEST_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+
+    // Simulate a disk change.
+    await act(async () => {
+      fireFileChange(TEST_PATH);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const reloadBtn = screen.getByTestId('editor-tab-reload');
+    await act(async () => {
+      fireEvent.click(reloadBtn);
+    });
+
+    // Banner should be dismissed.
+    expect(screen.queryByTestId('editor-tab-reload')).toBeNull();
+    expect(screen.queryByTestId('editor-tab-keep-mine')).toBeNull();
+  });
+
+  it('Keep-mine button dismisses the banner without applying disk content', async () => {
+    activeIdentityState.projectId = 'proj-d4-keep';
+    activeIdentityState.chatId = 'chat-d4-keep';
+    activeIdentityState.projectPath = '/project';
+    mockBufferDirty = true;
+    vi.mocked(getProjectFile).mockResolvedValue('disk content v2');
+
+    render(<EditorTab tabId="tab-d4-keep" path={TEST_PATH} />);
+    await screen.findByTestId('cm-editor-mock');
+
+    // Simulate a disk change.
+    await act(async () => {
+      fireFileChange(TEST_PATH);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const keepBtn = screen.getByTestId('editor-tab-keep-mine');
+    const applyCallsBefore = mockApplyValueUpdate.mock.calls.length;
+    await act(async () => {
+      fireEvent.click(keepBtn);
+    });
+
+    // Banner should be dismissed.
+    expect(screen.queryByTestId('editor-tab-reload')).toBeNull();
+    // applyValueUpdate should NOT have been called by Keep-mine.
+    expect(mockApplyValueUpdate.mock.calls.length).toBe(applyCallsBefore);
   });
 });
