@@ -59,9 +59,15 @@ export interface CmDiffEditorProps {
   /** Reserved: file path for future view-state caching. */
   path: string;
   readOnly?: boolean;
+  /**
+   * Called after the MergeView mounts with the initial chunk count.
+   * Allows parent controls (e.g. DiffHeader) to show an accurate change count
+   * without polling the global singleton.
+   */
+  onChunksChange?: (count: number) => void;
 }
 
-export function CmDiffEditor({ original, modified, language, readOnly = false }: CmDiffEditorProps) {
+export function CmDiffEditor({ original, modified, language, readOnly = false, onChunksChange }: CmDiffEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mergeViewRef = useRef<MergeView | null>(null);
 
@@ -109,6 +115,10 @@ export function CmDiffEditor({ original, modified, language, readOnly = false }:
     // The mv object itself is long-lived; diff-nav reads mv.chunks at call time,
     // so registering once at mount is sufficient.
     setActiveMergeView(mv);
+    // Report the initial chunk count synchronously after construction so that
+    // parent controls (DiffHeader) can display an accurate count without
+    // polling the global singleton or using a timer.
+    onChunksChange?.(mv.chunks.length);
 
     return () => {
       clearActiveMergeView(mv);

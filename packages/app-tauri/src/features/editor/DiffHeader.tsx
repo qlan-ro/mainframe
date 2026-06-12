@@ -24,7 +24,11 @@ export function DiffHeader({ fileName, changeCount, onPrev, onNext }: DiffHeader
   const disabled = changeCount === 0;
 
   return (
-    <div className="flex h-[34px] shrink-0 items-center gap-2 px-3 bg-mf-tab-bar" aria-label="Diff navigation">
+    <div
+      role="toolbar"
+      aria-label="Diff navigation"
+      className="flex h-[34px] shrink-0 items-center gap-2 border-b border-border px-3 bg-mf-tab-bar"
+    >
       {/* Filename */}
       <span className="flex-1 truncate text-caption text-mf-text-3">{fileName}</span>
 

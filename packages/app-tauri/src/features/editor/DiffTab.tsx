@@ -10,11 +10,11 @@
  *
  * data-testid: "diff-tab" on root.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { inferLanguage } from '@/lib/editor/file-types';
 import { CmDiffEditor } from './CmDiffEditor';
 import { DiffHeader } from './DiffHeader';
-import { nextChange, prevChange, getActiveChangeCount } from './diff-nav';
+import { nextChange, prevChange } from './diff-nav';
 
 interface DiffTabProps {
   path: string;
@@ -27,17 +27,11 @@ interface DiffTabProps {
 export function DiffTab({ path, original, modified }: DiffTabProps) {
   const [changeCount, setChangeCount] = useState(0);
 
-  // Read the chunk count after the MergeView mounts (setActiveMergeView is
-  // called synchronously inside CmDiffEditor's useEffect on mount).
-  useEffect(() => {
-    if (original === undefined || modified === undefined) return;
-    // A short defer lets CmDiffEditor's own useEffect run first so the
-    // MergeView is registered before we sample getActiveChangeCount().
-    const id = setTimeout(() => {
-      setChangeCount(getActiveChangeCount());
-    }, 0);
-    return () => clearTimeout(id);
-  }, [original, modified]);
+  // CmDiffEditor reports the chunk count synchronously after its MergeView
+  // mounts so the header stays correct without polling a global singleton.
+  const handleChunksChange = useCallback((count: number) => {
+    setChangeCount(count);
+  }, []);
 
   if (original === undefined || modified === undefined) {
     return (
@@ -53,7 +47,13 @@ export function DiffTab({ path, original, modified }: DiffTabProps) {
   return (
     <div data-testid="diff-tab" className="flex h-full flex-col overflow-hidden">
       <DiffHeader fileName={fileName} changeCount={changeCount} onPrev={prevChange} onNext={nextChange} />
-      <CmDiffEditor original={original} modified={modified} language={language} path={path} />
+      <CmDiffEditor
+        original={original}
+        modified={modified}
+        language={language}
+        path={path}
+        onChunksChange={handleChunksChange}
+      />
     </div>
   );
 }

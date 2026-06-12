@@ -7,7 +7,7 @@
  * navigation without mounting a real MergeView.
  */
 import { describe, expect, it, beforeEach } from 'vitest';
-import { setActiveMergeView, nextChange, prevChange } from '../diff-nav';
+import { setActiveMergeView, nextChange, prevChange, getActiveChangeCount } from '../diff-nav';
 import { EditorState } from '@codemirror/state';
 import type { MergeView, Chunk } from '@codemirror/merge';
 
@@ -56,6 +56,25 @@ function makeMergeViewStub(
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
+
+describe('getActiveChangeCount', () => {
+  beforeEach(() => {
+    setActiveMergeView(null);
+  });
+
+  it('returns 0 when no MergeView is registered', () => {
+    expect(getActiveChangeCount()).toBe(0);
+  });
+
+  it('returns the number of chunks from the registered MergeView', () => {
+    const mv = makeMergeViewStub('aaa\nbbb\n', [
+      { fromA: 0, toA: 3, fromB: 0, toB: 3 },
+      { fromA: 4, toA: 7, fromB: 4, toB: 7 },
+    ]);
+    setActiveMergeView(mv);
+    expect(getActiveChangeCount()).toBe(2);
+  });
+});
 
 describe('setActiveMergeView / nextChange / prevChange', () => {
   beforeEach(() => {
