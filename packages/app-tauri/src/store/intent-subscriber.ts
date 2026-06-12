@@ -106,9 +106,9 @@ export function subscribeToFileIntents(): () => void {
     }
 
     if (intent.type === 'open-file-picker') {
-      // Focus the Files surface as a sane stub — a real file-open/command-palette
-      // picker UI is a follow-up task (no picker component exists yet).
-      ensureFilesActive();
+      // Open the file-picker dialog. FilePickerDialog subscribes to this flag
+      // via useFilesStore and renders the command-palette UI.
+      useFilesStore.getState().setPickerOpen(true);
       return;
     }
 

@@ -29,6 +29,10 @@ vi.mock('../../features/sessions/sidebar/ArchiveWorktreeDialog', () => ({
   ArchiveWorktreeDialog: () => null,
 }));
 
+vi.mock('../../features/files/FilePickerDialog', () => ({
+  FilePickerDialog: () => null,
+}));
+
 vi.mock('../../features/sessions/tags/TagPopoverHost', () => ({
   TagPopoverHost: () => null,
 }));

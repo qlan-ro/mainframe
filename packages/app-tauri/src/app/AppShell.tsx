@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { ArchiveWorktreeDialog } from '../features/sessions/sidebar/ArchiveWorktreeDialog';
+import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
@@ -117,6 +118,7 @@ function RuntimeBody({ port }: { port: number }) {
 
       {/* Single app-wide outlets driven by their bridges/stores */}
       <ArchiveWorktreeDialog />
+      <FilePickerDialog />
       <TagPopoverHost port={port} />
     </div>
   );

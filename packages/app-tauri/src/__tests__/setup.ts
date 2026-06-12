@@ -77,3 +77,12 @@ if (typeof Range !== 'undefined') {
   Range.prototype.getClientRects = zeroRectList;
   Range.prototype.getBoundingClientRect = () => zeroRect;
 }
+
+// ── scrollIntoView stub ──────────────────────────────────────────────────────
+// jsdom does not implement Element.scrollIntoView — it throws "not a function".
+// Stub it globally so keyboard-navigation tests (ArrowUp/Down) don't crash.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {
+    /* jsdom stub */
+  };
+}
