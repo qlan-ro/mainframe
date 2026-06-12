@@ -22,8 +22,8 @@ import { useTabsStore } from '@/store/tabs';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
 import { lspClientManager, getLspLanguage } from '@/lib/lsp';
 import { createLspExtensions } from './lsp/cm-lsp-extensions';
-import { CmEditor } from './CmEditor';
 import { EditorContextMenu } from './context-menu/EditorContextMenu';
+import { CmEditorWithComments } from './inline-comments/CmEditorWithComments';
 import { MarkdownEditorTab } from './MarkdownEditorTab';
 
 interface EditorTabProps {
@@ -145,6 +145,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   const handleSave = useCallback(
     (value: string) => {
+      if (readOnly) return;
       if (!projectId) return;
       saveProjectFile(port, projectId, path, value, chatId)
         .then(() => {
@@ -208,7 +209,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
               providers={projectId && lspLanguage ? lspClientManager : undefined}
               lspConfig={projectId && lspLanguage ? { projectId, language: lspLanguage, lspReady } : undefined}
             >
-              <CmEditor
+              <CmEditorWithComments
                 value={loadState.value}
                 language={language}
                 readOnly={readOnly}

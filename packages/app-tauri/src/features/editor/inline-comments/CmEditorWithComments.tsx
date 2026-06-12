@@ -13,8 +13,12 @@
  * removed (deleteCommentEffect) its WidgetType.destroy() fires and the portal
  * is cleaned up.
  *
- * Props extend CmEditorProps (minus extraExtensions/onViewReady which are
- * managed here) with an optional `enableComments` flag (default true).
+ * Props extend CmEditorProps (re-adding extraExtensions and onViewReady as
+ * passthroughs) with an optional `enableComments` flag (default true).
+ * - extraExtensions: merged with the comment-gutter extensions so LSP and the
+ *   gutter coexist in one editor (required by A3).
+ * - onViewReady: forwarded alongside the internal viewRef assignment so the
+ *   parent context-menu can resolve the live EditorView (required by A1/A3).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -36,6 +40,10 @@ import { InlineCommentWidget } from './InlineCommentWidget';
 
 type CmEditorWithCommentsProps = Omit<CmEditorProps, 'extraExtensions' | 'onViewReady'> & {
   enableComments?: boolean;
+  /** Additional CM6 extensions merged with the comment-gutter extensions (e.g. LSP). */
+  extraExtensions?: Extension[];
+  /** Called with the live EditorView once mounted; forwarded to parent for context-menu use. */
+  onViewReady?: (view: EditorView) => void;
 };
 
 /** Portal descriptor: the comment id + the host element from the block widget. */
@@ -46,7 +54,12 @@ interface WidgetPortal {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function CmEditorWithComments({ enableComments = true, ...editorProps }: CmEditorWithCommentsProps) {
+export function CmEditorWithComments({
+  enableComments = true,
+  extraExtensions,
+  onViewReady,
+  ...editorProps
+}: CmEditorWithCommentsProps) {
   const viewRef = useRef<EditorView | null>(null);
   const { comments, addComment, editComment, deleteComment } = useInlineComments();
 
@@ -125,15 +138,20 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
   const onOpenRef = useRef(onOpenComment);
   onOpenRef.current = onOpenComment;
 
+  // Merge caller-provided extensions (e.g. LSP) with the comment gutter so
+  // both coexist in one editor. extraExtensions comes first so the gutter
+  // appears after other gutters in left-to-right order.
   const commentExtensions = useMemo<Extension[]>(() => {
-    if (!enableComments) return [];
-    return [
-      buildCommentGutter({
-        onAddComment: (line) => onAddRef.current(line),
-        onOpenComment: (id) => onOpenRef.current(id),
-      }),
-    ];
-  }, [enableComments]);
+    const gutterExt = enableComments
+      ? [
+          buildCommentGutter({
+            onAddComment: (line) => onAddRef.current(line),
+            onOpenComment: (id) => onOpenRef.current(id),
+          }),
+        ]
+      : [];
+    return [...(extraExtensions ?? []), ...gutterExt];
+  }, [enableComments, extraExtensions]);
 
   // ── Widget save / delete handlers ────────────────────────────────────────
 
@@ -171,8 +189,15 @@ export function CmEditorWithComments({ enableComments = true, ...editorProps }: 
 
   // ── View ready callback ──────────────────────────────────────────────────
 
+  // Stable ref so the onViewReady passthrough is always up-to-date without
+  // re-creating handleViewReady (which would re-mount the editor).
+  const onViewReadyRef = useRef(onViewReady);
+  onViewReadyRef.current = onViewReady;
+
   const handleViewReady = useCallback((view: EditorView) => {
     viewRef.current = view;
+    // Forward to the parent so the EditorContextMenu's viewRef resolves.
+    onViewReadyRef.current?.(view);
   }, []);
 
   // ── Render ───────────────────────────────────────────────────────────────

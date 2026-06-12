@@ -1,22 +1,28 @@
 /**
  * EditorTab tests — B4: read-only prop threading + indicator.
  *                    A1: EditorContextMenu mount.
+ *                    A2: LSP extensions wiring.
+ *                    A3: CmEditorWithComments mount + extraExtensions/onViewReady passthroughs
+ *                        + handleSave read-only guard.
  *
  * Strategy:
- *  - Mock all external deps (tauri bridge, api files, hooks, CmEditor, ViewerRouter)
+ *  - Mock all external deps (tauri bridge, api files, hooks, CmEditorWithComments, ViewerRouter)
  *    so the test is isolation-pure and does not touch the DOM or the CM6 runtime.
- *  - Assert that `readOnly={true}` propagates to CmEditor's props.
+ *  - Assert that `readOnly={true}` propagates to CmEditorWithComments's props.
  *  - Assert the `data-testid="editor-tab-readonly"` indicator renders when readOnly.
  *  - Assert the indicator is absent when readOnly is false (default).
  *  - Assert `data-testid="editor-context-menu"` is present for a code file.
+ *  - Assert CmEditorWithComments receives extraExtensions and onViewReady (A3).
+ *  - Assert saveProjectFile is NOT called when readOnly=true (A3 read-only guard).
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 
 // ── Mock external deps ────────────────────────────────────────────────────────
 
 vi.mock('@/lib/tauri/bridge', () => ({ readFile: vi.fn().mockResolvedValue('content') }));
+
 vi.mock('@/lib/api/files', () => ({
   getProjectFile: vi.fn().mockResolvedValue('content'),
   saveProjectFile: vi.fn().mockResolvedValue(undefined),
@@ -60,14 +66,30 @@ vi.mock('@/features/viewers/viewer-router', () => ({
   ViewerRouter: ({ renderCode }: { path: string; renderCode: () => React.ReactNode }) => <>{renderCode()}</>,
 }));
 
-// Capture the props passed to CmEditor so we can assert on them.
-const capturedCmEditorProps: ComponentProps<typeof import('../CmEditor').CmEditor>[] = [];
+// Capture the props passed to CmEditorWithComments so we can assert on them.
+// This is the primary capture target after the A3 swap (EditorTab now renders
+// CmEditorWithComments, not CmEditor directly).
+type CmEditorWithCommentsProps = ComponentProps<
+  typeof import('../inline-comments/CmEditorWithComments').CmEditorWithComments
+>;
+const capturedCmEditorProps: CmEditorWithCommentsProps[] = [];
 
-vi.mock('../CmEditor', () => ({
-  CmEditor: (props: ComponentProps<typeof import('../CmEditor').CmEditor>) => {
+vi.mock('../inline-comments/CmEditorWithComments', () => ({
+  CmEditorWithComments: (props: CmEditorWithCommentsProps) => {
     capturedCmEditorProps.push(props);
+    // Fire onViewReady with a fake view so viewRef gets populated.
+    if (props.onViewReady) {
+      props.onViewReady({} as import('@codemirror/view').EditorView);
+    }
     return <div data-testid="cm-editor-mock" />;
   },
+}));
+
+// CmEditor mock kept so CmEditorWithComments's internal usage does not crash
+// in the rare case it leaks through. EditorTab itself no longer imports CmEditor
+// directly after the A3 swap.
+vi.mock('../CmEditor', () => ({
+  CmEditor: () => <div data-testid="cm-editor-inner-mock" />,
 }));
 
 vi.mock('../MarkdownEditorTab', () => ({
@@ -102,7 +124,7 @@ vi.mock('../lsp/cm-lsp-extensions', () => ({
 }));
 
 // EditorContextMenu: render a real-looking trigger div so data-testid is present,
-// plus pass children through so CmEditor still renders and can be queried.
+// plus pass children through so CmEditorWithComments still renders and can be queried.
 vi.mock('../context-menu/EditorContextMenu', () => ({
   EditorContextMenu: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="editor-context-menu">{children}</div>
@@ -112,9 +134,11 @@ vi.mock('../context-menu/EditorContextMenu', () => ({
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 import { EditorTab } from '../EditorTab';
+import { saveProjectFile } from '@/lib/api/files';
 
 beforeEach(() => {
   capturedCmEditorProps.length = 0;
+  vi.mocked(saveProjectFile).mockClear();
   // Reset identity to no-project default so existing tests are unaffected.
   activeIdentityState.projectId = undefined;
   activeIdentityState.chatId = undefined;
@@ -123,7 +147,7 @@ beforeEach(() => {
 });
 
 describe('EditorTab — read-only state (B4)', () => {
-  it('passes readOnly={true} to CmEditor when the prop is set', async () => {
+  it('passes readOnly={true} to CmEditorWithComments when the prop is set', async () => {
     render(<EditorTab tabId="tab-1" path="/project/src/index.ts" readOnly />);
     // Wait for async load to complete (getProjectFile resolves immediately).
     await screen.findByTestId('cm-editor-mock');
@@ -143,7 +167,7 @@ describe('EditorTab — read-only state (B4)', () => {
     expect(screen.queryByTestId('editor-tab-readonly')).toBeNull();
   });
 
-  it('passes readOnly={false} to CmEditor by default', async () => {
+  it('passes readOnly={false} to CmEditorWithComments by default', async () => {
     render(<EditorTab tabId="tab-4" path="/project/src/index.ts" />);
     await screen.findByTestId('cm-editor-mock');
     const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
@@ -161,7 +185,7 @@ describe('EditorTab — context menu mount (A1)', () => {
 });
 
 describe('EditorTab — LSP extensions wiring (A2)', () => {
-  it('passes a non-empty extraExtensions to CmEditor when projectId is set and lspReady=true', async () => {
+  it('passes a non-empty extraExtensions to CmEditorWithComments when projectId is set and lspReady=true', async () => {
     activeIdentityState.projectId = 'proj-1';
     activeIdentityState.chatId = 'chat-1';
     activeIdentityState.projectPath = '/projects/myproject';
@@ -176,7 +200,7 @@ describe('EditorTab — LSP extensions wiring (A2)', () => {
     expect((lastProps?.extraExtensions as unknown[]).length).toBeGreaterThan(0);
   });
 
-  it('passes empty/undefined extraExtensions to CmEditor when no projectId', async () => {
+  it('passes empty/undefined extraExtensions to CmEditorWithComments when no projectId', async () => {
     // activeIdentityState defaults to undefined projectId (reset in beforeEach)
     render(<EditorTab tabId="tab-a2-nolsp" path="/project/src/index.ts" />);
     await screen.findByTestId('cm-editor-mock');
@@ -185,5 +209,59 @@ describe('EditorTab — LSP extensions wiring (A2)', () => {
     const ext = lastProps?.extraExtensions;
     // Either undefined or an empty array is acceptable — no LSP loaded.
     expect(!ext || (Array.isArray(ext) && ext.length === 0)).toBe(true);
+  });
+});
+
+describe('EditorTab — inline comments mount (A3)', () => {
+  it('renders CmEditorWithComments (not a plain CmEditor) for a non-markdown code file', async () => {
+    render(<EditorTab tabId="tab-a3-1" path="/project/src/app.js" />);
+    await screen.findByTestId('cm-editor-mock');
+    // capturedCmEditorProps is populated by the CmEditorWithComments mock,
+    // confirming the component rendered is CmEditorWithComments.
+    expect(capturedCmEditorProps.length).toBeGreaterThan(0);
+  });
+
+  it('forwards extraExtensions to CmEditorWithComments (LSP + gutter coexist)', async () => {
+    activeIdentityState.projectId = 'proj-a3';
+    activeIdentityState.chatId = 'chat-a3';
+    activeIdentityState.projectPath = '/projects/a3project';
+    mockHasClient = true;
+
+    render(<EditorTab tabId="tab-a3-ext" path="/project/src/index.ts" />);
+    await screen.findByTestId('cm-editor-mock');
+
+    const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    // CmEditorWithComments must receive extraExtensions so LSP + comment gutter coexist.
+    expect(lastProps?.extraExtensions).toBeDefined();
+    expect(Array.isArray(lastProps?.extraExtensions)).toBe(true);
+    expect((lastProps?.extraExtensions as unknown[]).length).toBeGreaterThan(0);
+  });
+
+  it('forwards onViewReady to CmEditorWithComments so the context-menu viewRef is populated', async () => {
+    render(<EditorTab tabId="tab-a3-vr" path="/project/src/app.js" />);
+    await screen.findByTestId('cm-editor-mock');
+
+    const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    // onViewReady must be a function (not undefined) so the viewRef resolves.
+    expect(typeof lastProps?.onViewReady).toBe('function');
+  });
+
+  it('does NOT call saveProjectFile when readOnly=true (read-only guard)', async () => {
+    activeIdentityState.projectId = 'proj-a3-ro';
+    activeIdentityState.chatId = 'chat-a3-ro';
+    activeIdentityState.projectPath = '/projects/ro-project';
+
+    render(<EditorTab tabId="tab-a3-ro" path="/project/src/app.js" readOnly />);
+    await screen.findByTestId('cm-editor-mock');
+
+    const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    // Simulate a save by calling onSave directly (the prop passed to the editor).
+    expect(lastProps?.onSave).toBeDefined();
+    await act(async () => {
+      lastProps?.onSave?.('new content');
+    });
+
+    // saveProjectFile must NOT be called for a read-only editor.
+    expect(vi.mocked(saveProjectFile)).not.toHaveBeenCalled();
   });
 });
