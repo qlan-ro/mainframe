@@ -23,6 +23,7 @@ import { ImageViewer } from './ImageViewer';
 import { SvgViewer } from './SvgViewer';
 import { CsvViewer } from './CsvViewer';
 import { PdfViewer } from './PdfViewer';
+import { UnsupportedViewer } from './UnsupportedViewer';
 
 // ── Viewer kind discriminant ─────────────────────────────────────────────────
 
@@ -157,11 +158,7 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   const { kind, content } = state;
 
   if (kind === 'code') {
-    return renderCode ? (
-      <>{renderCode(path)}</>
-    ) : (
-      <pre className="h-full overflow-auto p-4 text-label font-mono text-foreground">{path}</pre>
-    );
+    return renderCode ? <>{renderCode(path)}</> : <UnsupportedViewer path={path} />;
   }
 
   if (kind === 'image') {
