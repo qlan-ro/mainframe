@@ -111,11 +111,33 @@ beforeEach(() => {
       }),
     ),
   );
+
+  // Default: resolvePath returns the project root as the resolved base.
+  mockResolvePath.mockResolvedValue({
+    relative: '.',
+    absolute: '/home/user/project',
+    baseKind: 'project',
+    basePath: '/home/user/project',
+    contained: true,
+  });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
+
+// ---------------------------------------------------------------------------
+// Mock resolvePath — module-level so tests can configure the resolved base.
+// ---------------------------------------------------------------------------
+
+import { resolvePath as resolvePathFn } from '../../api/files';
+
+vi.mock('../../api/files', () => ({
+  resolvePath: vi.fn(),
+}));
+
+const mockResolvePath = vi.mocked(resolvePathFn);
 
 // ---------------------------------------------------------------------------
 // Helper: connect a manager and wait for initialization to complete.
@@ -127,8 +149,9 @@ async function connectManager(
   language = 'typescript',
   projectPath = '/home/user/project',
   capabilities: Record<string, unknown> = {},
+  chatId?: string,
 ): Promise<FakeWebSocket> {
-  const promise = manager.ensureClient(projectId, language, projectPath);
+  const promise = manager.ensureClient(projectId, language, projectPath, chatId);
   const socket = lastSocket();
   installAutoInitializer(socket, capabilities);
   await promise;
@@ -547,5 +570,92 @@ describe('LspClientManager — review #13 hardening', () => {
 
     // After init, hasClient is true.
     expect(manager.hasClient('proj-1', 'typescript')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R4: worktree-aware LSP client
+// ---------------------------------------------------------------------------
+
+describe('LspClientManager — worktree-aware (R4)', () => {
+  it('includes chatId in the WebSocket URL when provided', async () => {
+    const manager = new LspClientManager(31415);
+    const socket = await connectManager(manager, 'proj-1', 'typescript', '/home/user/project', {}, 'chat-42');
+    expect(socket.url).toBe('ws://127.0.0.1:31415/lsp/proj-1/typescript?chatId=chat-42');
+  });
+
+  it('omits chatId from WebSocket URL when not provided', async () => {
+    const manager = new LspClientManager(31415);
+    const socket = await connectManager(manager, 'proj-1', 'typescript', '/home/user/project');
+    expect(socket.url).toBe('ws://127.0.0.1:31415/lsp/proj-1/typescript');
+  });
+
+  it('passes chatId to discoverWorkspaceFolders (search/files endpoint)', async () => {
+    const fetchSpy = vi.fn(() => Promise.resolve({ json: () => Promise.resolve({ success: false }), ok: true }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const manager = new LspClientManager(31415);
+    await connectManager(manager, 'proj-1', 'typescript', '/home/user/project', {}, 'chat-wt-99');
+
+    // At least one fetch should contain chatId=chat-wt-99 in the search/files URL.
+    const allCalls = fetchSpy.mock.calls as unknown as [string][];
+    const searchCalls = allCalls.filter(([url]) => url.includes('search/files'));
+    expect(searchCalls.length).toBeGreaterThan(0);
+    expect(searchCalls[0]![0]).toContain('chatId=chat-wt-99');
+  });
+
+  it('uses resolved worktree base from resolvePath for file:// URIs', async () => {
+    // When the chat has a worktree, resolvePath returns the worktree absolute base.
+    mockResolvePath.mockResolvedValue({
+      relative: '.',
+      absolute: '/project/worktrees/feat-branch',
+      baseKind: 'worktree',
+      basePath: '/project/worktrees/feat-branch',
+      contained: true,
+    });
+
+    const manager = new LspClientManager(31415);
+    const socket = await connectManager(manager, 'proj-1', 'typescript', '/home/user/project', {}, 'chat-wt-1');
+
+    socket.sendSpy.mockClear();
+    manager.ensureDocumentOpen('proj-1', 'typescript', {
+      filePath: 'src/index.ts',
+      text: 'const x = 1;',
+      languageId: 'typescript',
+      version: 1,
+    });
+
+    const raw = socket.sendSpy.mock.calls[0]?.[0];
+    expect(raw).toBeDefined();
+    const notification = JSON.parse(raw!) as {
+      method: string;
+      params: { textDocument: { uri: string } };
+    };
+    // URI must use the worktree path, NOT the original projectPath.
+    expect(notification.params.textDocument.uri).toBe('file:///project/worktrees/feat-branch/src/index.ts');
+  });
+
+  it('passes chatId in the /files preload fetch URL', async () => {
+    const fetchSpy = vi.fn(() =>
+      Promise.resolve({
+        json: () => Promise.resolve({ success: true, data: { content: 'export {}' } }),
+        ok: true,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const manager = new LspClientManager(31415);
+    await connectManager(manager, 'proj-1', 'typescript', '/home/user/project', {}, 'chat-preload-1');
+
+    manager.preloadDocument('proj-1', 'typescript', 'src/lib.ts');
+
+    // Allow the async fetch to fire.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const allCalls = fetchSpy.mock.calls as unknown as [string][];
+    const preloadCalls = allCalls.filter(([url]) => url.includes('/files?') && url.includes('path='));
+    expect(preloadCalls.length).toBeGreaterThan(0);
+    expect(preloadCalls[0]![0]).toContain('chatId=chat-preload-1');
   });
 });

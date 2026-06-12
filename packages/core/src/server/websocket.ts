@@ -72,10 +72,12 @@ export class WebSocketManager {
 
       const lspParsed = parseLspUpgradePath(request.url ?? '');
       if (lspParsed && this.lspHandler) {
-        this.lspHandler.handleUpgrade(lspParsed.projectId, lspParsed.language, request, socket, head).catch((err) => {
-          log.error({ err }, 'LSP upgrade error');
-          socket.destroy();
-        });
+        this.lspHandler
+          .handleUpgrade(lspParsed.projectId, lspParsed.language, lspParsed.chatId, request, socket, head)
+          .catch((err) => {
+            log.error({ err }, 'LSP upgrade error');
+            socket.destroy();
+          });
         return;
       }
 

@@ -17,6 +17,7 @@ export type OpenFileEvent = {
   filePath: string;
   projectId: string;
   projectPath: string;
+  chatId?: string;
 };
 
 /**
@@ -37,9 +38,9 @@ export function initAutoConnect(subscribe: (handler: (event: OpenFileEvent) => v
       if (!lspLanguage) return;
 
       lspClientManager
-        .ensureClient(event.projectId, lspLanguage, event.projectPath)
+        .ensureClient(event.projectId, lspLanguage, event.projectPath, event.chatId)
         .then(() => {
-          lspClientManager.preloadDocument(event.projectId, lspLanguage, event.projectPath, event.filePath);
+          lspClientManager.preloadDocument(event.projectId, lspLanguage, event.filePath);
         })
         .catch((err: unknown) => console.warn('[lsp] auto-connect ensureClient failed', err));
     }, 500);

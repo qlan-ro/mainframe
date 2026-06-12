@@ -2,7 +2,7 @@
  * Editor-agnostic LSP client for app-tauri.
  *
  * Transport: raw WebSocket + JSON-RPC 2.0 to the daemon's LSP proxy at
- * `ws://127.0.0.1:<port>/lsp/<projectId>/<language>`.
+ * `ws://127.0.0.1:<port>/lsp/<projectId>/<language>[?chatId=…]`.
  *
  * This module has ZERO Monaco / editor imports. Phase 2/3 wire the CM6 adapters
  * on top of the `LspProviders` interface exposed here.
@@ -24,7 +24,12 @@
  *   - Fixed(#13c): sendRequest and connect have a configurable timeout so a
  *              hung server never pends forever; timed-out requests are removed
  *              from pending
+ *   - Fixed(R4): worktree-aware — chatId threaded through WS URL + HTTP calls;
+ *              file:// URI base resolved from daemon (resolvePath) not a
+ *              client-supplied projectPath prop.
  */
+
+import { resolvePath } from '../api/files';
 
 // ---------------------------------------------------------------------------
 // Plain LSP types (no editor dependency)
@@ -106,7 +111,10 @@ export interface LspClientManagerOptions {
 
 interface LspClientEntry {
   ws: WebSocket;
-  projectPath: string;
+  /** Worktree-or-project absolute base resolved via daemon's paths/resolve endpoint. */
+  resolvedBase: string;
+  /** Optional chatId — carried in HTTP calls for worktree-scoped content. */
+  chatId: string | undefined;
   requestId: number;
   pending: Map<
     number,
@@ -124,12 +132,15 @@ function makeKey(projectId: string, language: string): string {
 
 async function discoverWorkspaceFolders(
   projectId: string,
-  projectPath: string,
+  resolvedBase: string,
   port: number,
+  chatId: string | undefined,
 ): Promise<{ uri: string; name: string }[]> {
   const base = `http://127.0.0.1:${port}`;
+  const qs = new URLSearchParams({ q: 'tsconfig.json', limit: '20' });
+  if (chatId) qs.set('chatId', chatId);
   try {
-    const res = await fetch(`${base}/api/projects/${projectId}/search/files?q=tsconfig.json&limit=20`);
+    const res = await fetch(`${base}/api/projects/${projectId}/search/files?${qs}`);
     const envelope = (await res.json()) as {
       success: boolean;
       data?: { path: string; type: string }[];
@@ -142,12 +153,12 @@ async function discoverWorkspaceFolders(
       if (dir) dirs.add(dir);
     }
     if (dirs.size === 0) {
-      return [{ uri: `file://${projectPath}`, name: projectPath.split('/').pop() ?? '' }];
+      return [{ uri: `file://${resolvedBase}`, name: resolvedBase.split('/').pop() ?? '' }];
     }
-    return [...dirs].map((d) => ({ uri: `file://${projectPath}/${d}`, name: d.split('/').pop() ?? d }));
+    return [...dirs].map((d) => ({ uri: `file://${resolvedBase}/${d}`, name: d.split('/').pop() ?? d }));
   } catch (err) {
     console.warn('[lsp] discoverWorkspaceFolders failed', err);
-    return [{ uri: `file://${projectPath}`, name: projectPath.split('/').pop() ?? '' }];
+    return [{ uri: `file://${resolvedBase}`, name: resolvedBase.split('/').pop() ?? '' }];
   }
 }
 
@@ -172,14 +183,14 @@ export class LspClientManager implements LspProviders {
     return this.clients.has(makeKey(projectId, language));
   }
 
-  async ensureClient(projectId: string, language: string, projectPath: string): Promise<void> {
+  async ensureClient(projectId: string, language: string, projectPath: string, chatId?: string): Promise<void> {
     const key = makeKey(projectId, language);
     if (this.clients.has(key)) return;
 
     const inflight = this.connecting.get(key);
     if (inflight) return inflight;
 
-    const promise = this.startClient(key, language, projectId, projectPath);
+    const promise = this.startClient(key, language, projectId, projectPath, chatId);
     this.connecting.set(key, promise);
     try {
       await promise;
@@ -188,10 +199,17 @@ export class LspClientManager implements LspProviders {
     }
   }
 
-  private async startClient(key: string, language: string, projectId: string, projectPath: string): Promise<void> {
+  private async startClient(
+    key: string,
+    language: string,
+    projectId: string,
+    projectPath: string,
+    chatId?: string,
+  ): Promise<void> {
     if (this.clients.has(key)) return;
 
-    const wsUrl = `ws://127.0.0.1:${this.port}/lsp/${projectId}/${language}`;
+    const wsQs = chatId ? `?chatId=${encodeURIComponent(chatId)}` : '';
+    const wsUrl = `ws://127.0.0.1:${this.port}/lsp/${projectId}/${language}${wsQs}`;
     const ws = new WebSocket(wsUrl);
 
     // Connect timeout: if the socket doesn't open within requestTimeoutMs, reject.
@@ -219,11 +237,23 @@ export class LspClientManager implements LspProviders {
       };
     });
 
+    // Resolve the effective base path from the daemon (worktree-aware).
+    // Falls back to the caller-supplied projectPath if the call fails so a
+    // network hiccup doesn't prevent LSP from starting at all.
+    let resolvedBase = projectPath;
+    try {
+      const resolved = await resolvePath(this.port, projectId, '.', chatId);
+      resolvedBase = resolved.absolute;
+    } catch (err) {
+      console.warn('[lsp] resolvePath failed, falling back to projectPath', err);
+    }
+
     // Build the entry WITHOUT registering it in `this.clients` yet.
     // The entry is registered only after initialize+initialized succeeds (#13a).
     const entry: LspClientEntry = {
       ws,
-      projectPath,
+      resolvedBase,
+      chatId,
       requestId: 1,
       pending: new Map(),
       ready: false,
@@ -236,7 +266,7 @@ export class LspClientManager implements LspProviders {
     ws.onclose = () => this.removeEntry(key);
     ws.onerror = () => this.removeEntry(key);
 
-    const workspaceFolders = await discoverWorkspaceFolders(projectId, projectPath, this.port);
+    const workspaceFolders = await discoverWorkspaceFolders(projectId, resolvedBase, this.port, chatId);
 
     try {
       await this.sendRequest(entry, 'initialize', {
@@ -249,7 +279,7 @@ export class LspClientManager implements LspProviders {
           },
           workspace: { workspaceFolders: true },
         },
-        rootUri: `file://${projectPath}`,
+        rootUri: `file://${resolvedBase}`,
         workspaceFolders,
       });
     } catch (err) {
@@ -364,17 +394,21 @@ export class LspClientManager implements LspProviders {
   /**
    * Eagerly open a document by fetching its content from the daemon.
    * This primes tsserver before the user tries Go To Definition.
+   * The URI base and chatId are taken from the entry (set at connect time) so
+   * this call is worktree-aware without extra parameters.
    */
-  preloadDocument(projectId: string, language: string, projectPath: string, filePath: string): void {
+  preloadDocument(projectId: string, language: string, filePath: string): void {
     const entry = this.clients.get(makeKey(projectId, language));
     if (!entry) return;
 
-    const uri = `file://${projectPath}/${filePath}`;
+    const uri = this.toLspUri(entry, filePath);
     if (entry.openedUris.has(uri)) return;
     entry.openedUris.add(uri);
 
     const base = `http://127.0.0.1:${this.port}`;
-    fetch(`${base}/api/projects/${projectId}/files?path=${encodeURIComponent(filePath)}`)
+    const qs = new URLSearchParams({ path: filePath });
+    if (entry.chatId) qs.set('chatId', entry.chatId);
+    fetch(`${base}/api/projects/${projectId}/files?${qs}`)
       .then((r) => r.json())
       .then((envelope: unknown) => {
         const env = envelope as { success: boolean; data?: { content: string } };
@@ -407,9 +441,9 @@ export class LspClientManager implements LspProviders {
   private toLspUri(entry: LspClientEntry, filePath: string): string {
     // Already an absolute file:// URI
     if (filePath.startsWith('file://')) return filePath;
-    // Relative path — prefix with the project root
+    // Relative path — prefix with the worktree-or-project resolved base
     const rel = filePath.startsWith('/') ? filePath.slice(1) : filePath;
-    return `file://${entry.projectPath}/${rel}`;
+    return `file://${entry.resolvedBase}/${rel}`;
   }
 
   private toLspLocations(result: unknown): LspLocation[] {
