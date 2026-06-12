@@ -1,4 +1,13 @@
 import type { EditorView } from '@codemirror/view';
+import { Annotation } from '@codemirror/state';
+
+/**
+ * Marks transactions dispatched by applyValueUpdate (external/programmatic
+ * content replacement). CmEditor's update listener skips onChange for these —
+ * otherwise a disk-change reload would re-mark the buffer dirty and a second
+ * watcher event would raise a false conflict banner.
+ */
+export const externalValueUpdate = Annotation.define<boolean>();
 
 /**
  * Apply a new value to a CM6 EditorView while preserving the cursor position
@@ -32,6 +41,7 @@ export function applyValueUpdate(view: EditorView, nextValue: string): void {
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: nextValue },
     selection: { anchor: safeAnchor, head: safeHead },
+    annotations: externalValueUpdate.of(true),
   });
 
   // Restore scroll as a DOM side-effect after the transaction is committed.

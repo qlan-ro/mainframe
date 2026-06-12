@@ -15,7 +15,7 @@ import { useEffect, useRef } from 'react';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import type { LangPackId } from '@/lib/editor/file-types';
-import { applyValueUpdate } from '@/lib/editor/apply-value-update';
+import { applyValueUpdate, externalValueUpdate } from '@/lib/editor/apply-value-update';
 import { useEditorStore } from '@/store/editor';
 import { buildBaseExtensions, createEditorCompartments, resolveLanguage } from './cm-setup';
 import { createNavigationKeymap } from './lsp/navigation';
@@ -129,7 +129,10 @@ export function CmEditor({
         lang.of(resolveLanguage(language)),
         roComp.of(EditorState.readOnly.of(readOnly)),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
+          // Skip onChange for programmatic replacements (disk reload / value
+          // sync) — only user edits may mark the buffer dirty.
+          const isExternal = update.transactions.some((tr) => tr.annotation(externalValueUpdate));
+          if (update.docChanged && !isExternal) {
             onChangeRef.current(update.state.doc.toString());
           }
           if (update.selectionSet || update.docChanged) {

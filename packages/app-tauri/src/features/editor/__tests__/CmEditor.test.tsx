@@ -82,6 +82,23 @@ describe('CmEditor', () => {
     expect(onChange).toHaveBeenCalled();
   });
 
+  it('does NOT emit onChange for programmatic value-prop updates (external reload)', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <CmEditor value="original" language="javascript" readOnly={false} onChange={onChange} path="/test/ext.ts" />,
+    );
+    rerender(
+      <CmEditor
+        value="changed on disk"
+        language="javascript"
+        readOnly={false}
+        onChange={onChange}
+        path="/test/ext.ts"
+      />,
+    );
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('respects readOnly — the editor sets aria-readonly on the content node', () => {
     render(
       <CmEditor
