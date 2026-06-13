@@ -25,7 +25,7 @@ describe('run-pane reducers', () => {
   });
 
   it('addRunTab appends to the first pane and focuses it', () => {
-    const run = addRunTab(null, guest('a'));
+    const run = addRunTab(null, guest('a'))!;
     expect(run.panes[0]!.tabs.map((t) => t.id)).toEqual(['a']);
     expect(run.panes[0]!.active).toBe('a');
   });
@@ -73,12 +73,12 @@ describe('run-pane reducers', () => {
   });
 
   it('closePane returns null when the last pane is removed', () => {
-    const run = addRunTab(null, guest('a'));
+    const run = addRunTab(null, guest('a'))!;
     expect(closePane(run, run.panes[0]!.id)).toBeNull();
   });
 
   it('closeRunTab drops an emptied pane and returns null when Run is empty', () => {
-    const run = addRunTab(null, guest('a'));
+    const run = addRunTab(null, guest('a'))!;
     expect(closeRunTab(run, run.panes[0]!.id, 'a')).toBeNull();
   });
 });

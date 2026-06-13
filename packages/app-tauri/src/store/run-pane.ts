@@ -49,13 +49,29 @@ export function emptyRun(): RunState {
   return { dir: 'v', flex: [1, 1], panes: [{ id: genId('pane'), tabs: [], active: null }] };
 }
 
-/** Append a tab to the first pane and focus it. Creates the Run state if absent. */
-export function addRunTab(run: RunState | null, tab: RunTab): RunState {
+/**
+ * Append a tab to a pane and focus it. With no `paneId`, targets the first pane
+ * (back-compat) and creates the Run state if absent. Returns a new `RunState` on
+ * success. Returns `null` to signal an explicit no-op — the given `paneId` no
+ * longer exists — so the caller disposes the orphan terminal; never silently
+ * falls back to pane 0 (M6). `null` is the unambiguous no-op signal: it does not
+ * rely on reference equality, which a fresh `emptyRun()` would defeat when `run`
+ * was `null` and the target pane was missing.
+ */
+export function addRunTab(run: RunState | null, tab: RunTab, paneId?: string): RunState | null {
   const base = run ?? emptyRun();
-  const [first, ...rest] = base.panes;
-  if (!first) return base;
-  const nextFirst: RunPane = { ...first, tabs: [...first.tabs, tab], active: tab.id };
-  return { ...base, panes: [nextFirst, ...rest] };
+  let idx: number;
+  if (paneId) {
+    idx = base.panes.findIndex((p) => p.id === paneId);
+    if (idx < 0) return null; // explicit target gone → no-op
+  } else {
+    idx = 0;
+  }
+  const target = base.panes[idx];
+  if (!target) return null; // no pane to append to → no-op
+  const nextPane: RunPane = { ...target, tabs: [...target.tabs, tab], active: tab.id };
+  const panes = base.panes.map((p, i) => (i === idx ? nextPane : p));
+  return { ...base, panes };
 }
 
 /** Focus a tab in a pane. */
@@ -92,6 +108,20 @@ export function closePane(run: RunState, paneId: string): RunState | null {
   return { ...run, panes, flex: [1, 1] };
 }
 
+/** Every terminal tab id in the run state (across all panes). */
+export function terminalIdsInRun(run: RunState | null): string[] {
+  if (!run) return [];
+  return run.panes.flatMap((p) => p.tabs.filter((t) => t.kind === 'terminal').map((t) => t.id));
+}
+
+/** Terminal tab ids in a single pane. */
+export function terminalIdsInPane(run: RunState | null, paneId: string): string[] {
+  if (!run) return [];
+  const pane = run.panes.find((p) => p.id === paneId);
+  if (!pane) return [];
+  return pane.tabs.filter((t) => t.kind === 'terminal').map((t) => t.id);
+}
+
 /**
  * Drop a guest tab onto the Run region. `center` joins the first pane as a tab;
  * an edge splits Run into a second pane with the guest beside what's running.
@@ -105,7 +135,11 @@ export function moveTabToRun(run: RunState | null, guest: RunTab, edge: RunDropE
   const base = run ?? emptyRun();
   const hasExistingTabs = base.panes.some((p) => p.tabs.length > 0);
   const splitting = edge !== 'center' && base.panes.length < MAX_PANES && hasExistingTabs;
-  if (!splitting) return addRunTab(base, guest);
+  // No paneId given — always succeeds (non-null). The assertion is safe:
+  // addRunTab returns null only for an explicit missing paneId, never for the
+  // first-pane default path used here.
+
+  if (!splitting) return addRunTab(base, guest)!;
 
   const dir: 'v' | 'h' = edge === 'left' || edge === 'right' ? 'v' : 'h';
   const newPane: RunPane = { id: genId('pane'), tabs: [guest], active: guest.id };

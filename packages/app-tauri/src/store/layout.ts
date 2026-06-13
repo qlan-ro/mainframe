@@ -142,8 +142,12 @@ interface LayoutStore {
   repositionSurface: (surface: SurfaceId, target: RepositionTarget) => void;
   /** Drag a Files tab onto Run (center = join, edge = split). */
   moveFilesTabToRun: (tabId: string, edge: RunDropEdge) => void;
-  /** Append a tab to Run's first pane (terminal/preview launches). */
-  addRunTab: (tab: RunTab) => void;
+  /**
+   * Append a tab to Run (terminal/preview launches). Returns true when the tab
+   * was added, false when an explicit `paneId` was given but that pane no longer
+   * exists (M6 — the caller must dispose the orphaned terminal).
+   */
+  addRunTab: (tab: RunTab, paneId?: string) => boolean;
   activateRunTab: (paneId: string, tabId: string) => void;
   closeRunTab: (paneId: string, tabId: string) => void;
   closePane: (paneId: string) => void;
@@ -238,9 +242,15 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
       writeWorkspace({ layout: placeInLayout(layout, 'run'), run: nextRun });
     },
 
-    addRunTab(tab) {
+    addRunTab(tab, paneId) {
       const { layout, run } = get();
-      writeWorkspace({ layout: placeInLayout(layout, 'run'), run: addRunTabReducer(run, tab) });
+      const nextRun = addRunTabReducer(run, tab, paneId);
+      // The reducer returns null to signal a no-op (explicit paneId gone). Report
+      // false so the subscriber disposes the orphaned terminal (Task 10). On
+      // success it returns a real RunState; commit it and place Run in the layout.
+      if (nextRun === null) return false;
+      writeWorkspace({ layout: placeInLayout(layout, 'run'), run: nextRun });
+      return true;
     },
 
     activateRunTab(paneId, tabId) {
