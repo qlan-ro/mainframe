@@ -1,23 +1,23 @@
 /**
  * Pure badge-state derivation from SessionCustom + client unread flag.
  *
- * Precedence (highest → lowest):
- *   worktree-missing > working > waiting > unread > idle
- *
- * 'working' and 'waiting' are mutually exclusive in practice (displayStatus
- * can only hold one value), so the precedence order is a safety belt only.
- *
- * unread is NOT a field of SessionCustom; callers inject it from the
- * client-side unread store.
+ * `base` is the dominant lifecycle status (precedence: worktree-missing >
+ * working > waiting > idle). `unread` is a MODIFIER carried alongside it — the
+ * row tints idle / adds the answer-ready treatment to waiting based on it.
+ * unread is NOT a field of SessionCustom; callers inject it from the client store.
  */
 import type { SessionCustom } from './chat-to-thread-custom';
 
-export type SessionStatus = 'worktree-missing' | 'working' | 'waiting' | 'unread' | 'idle';
+export type SessionBase = 'worktree-missing' | 'working' | 'waiting' | 'idle';
 
-export function deriveSessionStatus(custom: SessionCustom, unread: boolean): SessionStatus {
-  if (custom.worktreeMissing) return 'worktree-missing';
-  if (custom.displayStatus === 'working') return 'working';
-  if (custom.hasPending) return 'waiting';
-  if (unread) return 'unread';
-  return 'idle';
+export interface SessionBadge {
+  base: SessionBase;
+  unread: boolean;
+}
+
+export function deriveSessionBadge(custom: SessionCustom, unread: boolean): SessionBadge {
+  if (custom.worktreeMissing) return { base: 'worktree-missing', unread };
+  if (custom.displayStatus === 'working') return { base: 'working', unread };
+  if (custom.hasPending) return { base: 'waiting', unread };
+  return { base: 'idle', unread };
 }

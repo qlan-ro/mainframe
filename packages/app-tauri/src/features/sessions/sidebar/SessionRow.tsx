@@ -6,7 +6,7 @@
  * Active highlight is fully native — ThreadListItemPrimitive.Root sets data-active/
  * aria-current when mainThreadId === threadListItem.id; we only style data-[active=true].
  * Actions (rename/archive) come from the item RUNTIME (useThreadListItemRuntime),
- * not the item STATE (useThreadListItem). Status dot via deriveSessionStatus + unread.
+ * not the item STATE (useThreadListItem). Status dot via deriveSessionBadge + unread.
  * Responsive: @max-[300px] hides time; @max-[220px] hides meta row.
  */
 import type { MouseEvent } from 'react';
@@ -20,7 +20,7 @@ import {
 import { ArchiveIcon, PencilIcon, PinIcon, TagIcon } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
-import { deriveSessionStatus, type SessionStatus } from '../view-model/session-status';
+import { deriveSessionBadge, type SessionBadge } from '../view-model/session-status';
 import { formatRelativeTime } from '../view-model/relative-time';
 import { useUnreadStore } from '@/store/unread-store';
 import { useDaemonPort } from '../runtime/daemon-port-context';
@@ -30,21 +30,47 @@ import { SessionRowRename } from './SessionRowRename';
 import { SessionContextMenu } from './SessionContextMenu';
 import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
 
-const DOT_CLASS: Record<SessionStatus, string> = {
-  'worktree-missing': 'size-1.5 bg-destructive',
-  working: 'size-2 border-[1.5px] border-primary border-t-transparent animate-spin',
-  waiting: 'size-2 border-[1.5px] border-primary border-t-transparent animate-spin',
-  unread: 'size-1.5 bg-primary',
-  idle: 'size-1.5 bg-mf-text-4 opacity-50',
-};
+function dotClass(badge: SessionBadge): string {
+  switch (badge.base) {
+    case 'worktree-missing':
+      return 'size-1.5 bg-destructive';
+    case 'working':
+      return 'size-2 border-[1.5px] border-primary border-t-transparent animate-spin';
+    case 'waiting':
+      return badge.unread
+        ? 'size-2 bg-mf-warning shadow-[0_0_0_3px_color-mix(in_srgb,var(--mf-warning)_35%,transparent)] animate-pulse'
+        : 'size-2 bg-mf-warning';
+    case 'idle':
+      return badge.unread ? 'size-1.5 bg-primary' : 'size-1.5 bg-mf-text-4 opacity-50';
+  }
+}
 
-function StatusDot({ status }: { status: SessionStatus }) {
+export function StatusDot({ badge }: { badge: SessionBadge }) {
   return (
     <span
       data-testid="sessions-row-status-dot"
-      aria-label={status}
-      className={`inline-block flex-shrink-0 rounded-full ${DOT_CLASS[status]}`}
+      aria-label={badge.base}
+      className={`inline-block flex-shrink-0 rounded-full ${dotClass(badge)}`}
     />
+  );
+}
+
+export function AnswerPill({ badge }: { badge: SessionBadge }) {
+  if (badge.base !== 'waiting') return null;
+  return badge.unread ? (
+    <span
+      data-testid="sessions-row-answer-pill"
+      className="rounded-full bg-mf-warning/15 px-1.5 py-px text-micro font-medium text-mf-warning"
+    >
+      Answer ready
+    </span>
+  ) : (
+    <span
+      data-testid="sessions-row-answer-pill"
+      className="rounded-full px-1.5 py-px text-micro font-medium text-muted-foreground [border:0.5px_solid_var(--border)]"
+    >
+      Your turn
+    </span>
   );
 }
 
@@ -143,7 +169,7 @@ function SessionRowInner({
   const itemRuntime = useThreadListItemRuntime();
   const assistantRuntime = useAssistantRuntime();
   const isUnread = useUnreadStore((s) => s.isUnread(item.id));
-  const status = deriveSessionStatus(custom, isUnread);
+  const badge = deriveSessionBadge(custom, isUnread);
   const [isRenaming, setIsRenaming] = useState(false);
 
   const title = item.title ?? 'Untitled session';
@@ -202,7 +228,7 @@ function SessionRowInner({
               {custom.pinned && !inPinnedGroup && (
                 <PinIcon data-testid="sessions-row-pin-glyph" className="size-3 flex-shrink-0 text-primary" />
               )}
-              <StatusDot status={status} />
+              <StatusDot badge={badge} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex h-[22px] min-w-0 items-center gap-[9px]">
@@ -239,7 +265,7 @@ function SessionRowInner({
                   worktreePath={custom.worktreePath}
                   worktreeMissing={custom.worktreeMissing}
                   detectedPrs={custom.detectedPrs}
-                  status={status}
+                  badge={badge}
                   tags={custom.tags}
                   colorOf={colorOf}
                   projectId={projectName != null ? custom.projectId : undefined}

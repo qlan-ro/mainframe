@@ -6,7 +6,7 @@
  * from this file. No other file re-declares them.
  *
  * unread is NOT a field of SessionCustom. It is client-only store state
- * injected at call sites (e.g. deriveSessionStatus, attentionCount). This
+ * injected at call sites (e.g. deriveSessionBadge, attentionCount). This
  * keeps the mapper side-effect-free.
  *
  * The return type satisfies RemoteThreadMetadata (from @assistant-ui/react)

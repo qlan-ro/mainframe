@@ -24,6 +24,7 @@
  *     committing new title calls itemRuntime.rename spy once with "New name".
  *  7. Right-click → click sessions-ctx-archive → itemRuntime.archive spy called once.
  *  8. sessions-row-relative-time renders non-empty text for updatedAt=1749284160000.
+ *  9. (replaced) StatusDot/AnswerPill badge presentation tests.
  */
 import { isValidElement } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -134,7 +135,7 @@ vi.mock('@/lib/api/chats', () => ({
 // Import the component AFTER all mocks are registered
 // ---------------------------------------------------------------------------
 
-const { SessionRow } = await import('../SessionRow');
+const { SessionRow, StatusDot, AnswerPill } = await import('../SessionRow');
 
 // ---------------------------------------------------------------------------
 // Shared fixture builder
@@ -294,19 +295,59 @@ describe('SessionRow — relative time renders non-empty text', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. "Needs input" label visible when hasPending=true (waiting status)
+// 9. Badge presentation — StatusDot + AnswerPill standalone unit tests
 // ---------------------------------------------------------------------------
 
-describe('SessionRow — "Needs input" label when status is waiting', () => {
-  it('renders sessions-row-meta-needs-input with text "Needs input" when hasPending=true', () => {
+describe('session row badge presentation', () => {
+  it('waiting + unread → amber pip + Answer ready pill', () => {
+    render(
+      <>
+        <StatusDot badge={{ base: 'waiting', unread: true }} />
+        <AnswerPill badge={{ base: 'waiting', unread: true }} />
+      </>,
+    );
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    expect(dot.className).toContain('bg-mf-warning');
+    expect(screen.getByText('Answer ready')).toBeTruthy();
+  });
+  it('waiting + seen → Your turn pill', () => {
+    render(<AnswerPill badge={{ base: 'waiting', unread: false }} />);
+    expect(screen.getByText('Your turn')).toBeTruthy();
+  });
+  it('idle + unread → accent-tinted dot, no pill', () => {
+    render(
+      <>
+        <StatusDot badge={{ base: 'idle', unread: true }} />
+        <AnswerPill badge={{ base: 'idle', unread: true }} />
+      </>,
+    );
+    expect(screen.getByTestId('sessions-row-status-dot').className).toContain('bg-primary');
+    expect(screen.queryByText('Answer ready')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9b. AnswerPill visible in full row render when hasPending=true (via SessionRowMeta)
+// ---------------------------------------------------------------------------
+
+describe('SessionRow — answer pill visible when hasPending=true', () => {
+  it('renders sessions-row-answer-pill with text "Your turn" when hasPending=true and not unread', () => {
+    __isUnread = false;
     render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
-    const label = screen.getByTestId('sessions-row-meta-needs-input');
-    expect(label.textContent).toBe('Needs input');
+    const pill = screen.getByTestId('sessions-row-answer-pill');
+    expect(pill.textContent).toBe('Your turn');
   });
 
-  it('does not render sessions-row-meta-needs-input when status is idle', () => {
+  it('renders sessions-row-answer-pill with text "Answer ready" when hasPending=true and unread', () => {
+    __isUnread = true;
+    render(<SessionRow item={makeItem({ hasPending: true, displayStatus: 'idle' })} />);
+    const pill = screen.getByTestId('sessions-row-answer-pill');
+    expect(pill.textContent).toBe('Answer ready');
+  });
+
+  it('does not render sessions-row-answer-pill when status is idle', () => {
     render(<SessionRow item={makeItem({ hasPending: false, displayStatus: 'idle' })} />);
-    expect(screen.queryByTestId('sessions-row-meta-needs-input')).toBeNull();
+    expect(screen.queryByTestId('sessions-row-answer-pill')).toBeNull();
   });
 });
 
