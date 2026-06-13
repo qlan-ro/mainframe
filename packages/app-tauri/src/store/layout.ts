@@ -5,11 +5,14 @@ import {
   closePane as closePaneReducer,
   closeRunTab as closeRunTabReducer,
   moveTabToRun as moveTabToRunReducer,
+  terminalIdsInPane,
+  terminalIdsInRun,
   type RunDropEdge,
   type RunState,
   type RunTab,
 } from './run-pane';
 import { useTabsStore } from './tabs';
+import { killAndDisposeCachedTerminals } from './terminal-cleanup';
 
 export type SurfaceId = 'chat' | 'files' | 'run';
 
@@ -189,7 +192,10 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
       const { layout, run } = get();
       const isActive = layout.top.includes(surface) || layout.bottom === surface;
       const nextLayout = isActive ? removeSurface(layout, surface) : placeInLayout(layout, surface);
-      // Toggling Run off discards its panes.
+      // Toggling Run off kills any live PTYs before discarding the panes.
+      if (surface === 'run' && isActive) {
+        killAndDisposeCachedTerminals(terminalIdsInRun(run));
+      }
       writeWorkspace({ layout: nextLayout, run: surface === 'run' && isActive ? null : run });
     },
 
@@ -262,6 +268,8 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
     closeRunTab(paneId, tabId) {
       const { layout, run } = get();
       if (!run) return;
+      const tab = run.panes.find((p) => p.id === paneId)?.tabs.find((t) => t.id === tabId);
+      if (tab?.kind === 'terminal') killAndDisposeCachedTerminals([tabId]);
       const nextRun = closeRunTabReducer(run, paneId, tabId);
       writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
     },
@@ -269,6 +277,7 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
     closePane(paneId) {
       const { layout, run } = get();
       if (!run) return;
+      killAndDisposeCachedTerminals(terminalIdsInPane(run, paneId));
       const nextRun = closePaneReducer(run, paneId);
       writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
     },
