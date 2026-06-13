@@ -154,7 +154,14 @@ export class WebSocketManager {
         if (this.fileWatcher) {
           const absolutePath = resolveSubscribePath(this.chats, event.path, event.projectId, event.chatId);
           if (absolutePath) {
-            await client.fileWatch.subscribe(event.path, absolutePath, this.fileWatcher, client.ws);
+            await client.fileWatch.subscribe(
+              event.path,
+              absolutePath,
+              this.fileWatcher,
+              client.ws,
+              event.projectId,
+              event.chatId,
+            );
           }
         }
         break;
@@ -162,7 +169,7 @@ export class WebSocketManager {
 
       case 'unsubscribe:file': {
         if (this.fileWatcher) {
-          client.fileWatch.unsubscribe(event.path, this.fileWatcher);
+          client.fileWatch.unsubscribe(event.path, this.fileWatcher, event.projectId, event.chatId);
         }
         break;
       }

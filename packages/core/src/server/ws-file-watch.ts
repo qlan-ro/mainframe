@@ -8,9 +8,17 @@ import { createChildLogger } from '../logger.js';
 
 const log = createChildLogger('ws-file-watch');
 
+/** Build a composite map key so the same relative path under different projects/chats never collides. */
+export function compositeKey(requestedPath: string, projectId?: string, chatId?: string): string {
+  return `${projectId ?? ''}|${chatId ?? ''}|${requestedPath}`;
+}
+
 /**
  * Resolve a client-supplied path to an absolute, containment-validated path.
  * Absolute paths pass through; relative paths require a projectId.
+ *
+ * When both projectId and chatId are supplied, validates that the chat belongs
+ * to the claimed project — rejects on mismatch to prevent cross-project traversal.
  */
 export function resolveSubscribePath(
   chats: ChatManager,
@@ -24,6 +32,16 @@ export function resolveSubscribePath(
   if (!projectId) {
     log.warn({ path: requestedPath }, 'subscribe:file rejected: relative path requires projectId');
     return null;
+  }
+  if (chatId) {
+    const chatProjectId = chats.getChatProjectId(chatId);
+    if (chatProjectId !== null && chatProjectId !== projectId) {
+      log.warn(
+        { path: requestedPath, projectId, chatId, chatProjectId },
+        'subscribe:file rejected: chat does not belong to claimed projectId',
+      );
+      return null;
+    }
   }
   const basePath = chatId ? chats.getEffectivePath(chatId) : chats.getProjectPath(projectId);
   if (!basePath) {
@@ -40,12 +58,13 @@ export function resolveSubscribePath(
 
 /**
  * Per-client file-watch state.
- * Tracks which absolute paths this client is subscribed to and maps the
- * originally-requested path back to the resolved path so unsubscribe with
- * a relative path finds the correct watch entry.
+ * Tracks which absolute paths this client is subscribed to and maps a
+ * composite key (projectId|chatId|requestedPath) → resolvedPath so
+ * the same relative filename under two different projects never collides.
  */
 export class WsFileWatch {
   readonly fileSubscriptions = new Set<string>();
+  /** composite(projectId|chatId|requestedPath) → resolvedPath */
   readonly requestedToResolved = new Map<string, string>();
 
   async subscribe(
@@ -53,6 +72,8 @@ export class WsFileWatch {
     absolutePath: string,
     fileWatcher: FileWatcherService,
     ws: WebSocket,
+    projectId?: string,
+    chatId?: string,
   ): Promise<void> {
     let resolvedPath: string;
     try {
@@ -77,7 +98,7 @@ export class WsFileWatch {
       fileWatcher.subscribe(resolvedPath);
       log.debug({ path: resolvedPath }, 'client subscribed to file');
     }
-    this.requestedToResolved.set(requestedPath, resolvedPath);
+    this.requestedToResolved.set(compositeKey(requestedPath, projectId, chatId), resolvedPath);
 
     if (ws.readyState === WebSocket.OPEN) {
       const ack: DaemonEvent = { type: 'subscribe:file:ack', requestedPath, resolvedPath };
@@ -85,12 +106,11 @@ export class WsFileWatch {
     }
   }
 
-  unsubscribe(requestedPath: string, fileWatcher: FileWatcherService): void {
-    const resolvedPath =
-      this.requestedToResolved.get(requestedPath) ??
-      (this.fileSubscriptions.has(requestedPath) ? requestedPath : undefined);
+  unsubscribe(requestedPath: string, fileWatcher: FileWatcherService, projectId?: string, chatId?: string): void {
+    const key = compositeKey(requestedPath, projectId, chatId);
+    const resolvedPath = this.requestedToResolved.get(key);
     if (!resolvedPath) return;
-    this.requestedToResolved.delete(requestedPath);
+    this.requestedToResolved.delete(key);
     this.fileSubscriptions.delete(resolvedPath);
     fileWatcher.unsubscribe(resolvedPath);
     log.debug({ path: resolvedPath }, 'client unsubscribed from file');

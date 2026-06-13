@@ -604,6 +604,11 @@ export class ChatManager {
     return this.db.projects.get(projectId)?.path ?? null;
   }
 
+  /** Returns the projectId that owns the given chat, or null if the chat is not found. */
+  getChatProjectId(chatId: string): string | null {
+    return this.getChat(chatId)?.projectId ?? null;
+  }
+
   async getMessages(chatId: string): Promise<ChatMessage[]> {
     const inflight = this.lifecycle.getLoadingChats().get(chatId);
     if (inflight) {

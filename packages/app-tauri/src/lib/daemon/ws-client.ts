@@ -140,6 +140,7 @@ export class DaemonWsClient {
   }
 
   unsubscribeFile(path: string, context?: { projectId?: string; chatId?: string }): void {
+    this.filePathMap.delete(path);
     this.send({ type: 'unsubscribe:file', path, ...context });
   }
 

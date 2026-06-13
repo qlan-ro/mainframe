@@ -320,4 +320,31 @@ describe('DaemonWsClient — H5: file-watch API', () => {
     socket.onmessage?.({ data: JSON.stringify({ type: 'file:changed', path: resolvedPath }) });
     expect(listener).toHaveBeenCalledOnce(); // still just once
   });
+
+  // Fix 4: unsubscribeFile must clean up filePathMap to prevent stale routing
+  it('unsubscribeFile removes the requestedPath entry from the internal path map', () => {
+    const { client, socket } = setupConnectedClient();
+    const requestedPath = '/home/user/project/stale.ts';
+    const resolvedPath = '/private/home/user/project/stale.ts';
+
+    const listener = vi.fn();
+    client.onFileChange(requestedPath, listener);
+
+    // Simulate ack — this populates filePathMap
+    socket.onmessage?.({
+      data: JSON.stringify({ type: 'subscribe:file:ack', requestedPath, resolvedPath }),
+    });
+
+    // Fire once — listener should run
+    socket.onmessage?.({ data: JSON.stringify({ type: 'file:changed', path: resolvedPath }) });
+    expect(listener).toHaveBeenCalledOnce();
+
+    // Unsubscribe at the WS level — clears the map entry
+    client.unsubscribeFile(requestedPath);
+
+    // file:changed arrives again — must NOT route to the listener because the
+    // mapping was removed (the filePathMap entry no longer exists)
+    socket.onmessage?.({ data: JSON.stringify({ type: 'file:changed', path: resolvedPath }) });
+    expect(listener).toHaveBeenCalledOnce(); // still just once
+  });
 });
