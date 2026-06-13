@@ -2,6 +2,7 @@ import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Play, Search, Sun 
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useLayoutStore } from '@/store/layout';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
+import { SurfaceRail } from './SurfaceRail';
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -99,6 +100,8 @@ export function MainToolbar({
 
       {/* Right: controls */}
       <div className="flex flex-shrink-0 items-center gap-1">
+        <SurfaceRail />
+        <span className="mx-0.5 h-4 w-px bg-border" />
         <StubButton testid="main-toolbar-search" title="Search (⌘O)">
           <Search size={14} />
         </StubButton>

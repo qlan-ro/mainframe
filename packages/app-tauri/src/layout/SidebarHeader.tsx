@@ -1,5 +1,4 @@
 import { useLayoutStore } from '@/store/layout';
-import { SurfaceRail } from './SurfaceRail';
 import { GearGlyph, SidebarLeftGlyph, TasksGlyph } from './surface-icons';
 
 export const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
@@ -63,7 +62,6 @@ export function SidebarHeader() {
       className="flex h-[38px] flex-shrink-0 items-center gap-2 px-2"
     >
       <TrafficLightsSpacer />
-      <SurfaceRail />
       <div className="flex-1" />
       <div className="flex items-center gap-0.5">
         <TasksBtn />
