@@ -108,6 +108,61 @@ fn reader_forwards_output_then_signals_exit() {
     assert!(erx.recv_timeout(Duration::from_secs(5)).is_ok());
 }
 
+/// validate_cwd now returns the canonicalized PathBuf, not just ().
+/// --- Canonicalization tests ---
+
+/// Accepting a real directory returns its canonical PathBuf.
+#[test]
+fn validate_cwd_returns_canonical_path_for_real_dir() {
+    let d = std::env::temp_dir();
+    let canonical = std::fs::canonicalize(&d).unwrap();
+    let result = validate_cwd(d.to_str().unwrap());
+    assert!(result.is_ok(), "expected Ok for real dir, got {:?}", result.err());
+    assert_eq!(result.unwrap(), canonical);
+}
+
+/// A symlink pointing at a real directory resolves and is accepted;
+/// the returned path is the target (canonical), not the symlink itself.
+#[test]
+#[cfg(unix)]
+fn validate_cwd_accepts_symlink_to_dir_and_resolves_it() {
+    let base = std::env::temp_dir().join(format!("mf_symlink_test_{}", std::process::id()));
+    std::fs::create_dir_all(&base).unwrap();
+    let target = base.join("real_dir");
+    std::fs::create_dir_all(&target).unwrap();
+    let link = base.join("link_to_dir");
+    // Clean up any leftover from a previous run.
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    let result = validate_cwd(link.to_str().unwrap());
+
+    // Capture the canonical path of the target BEFORE cleanup so it is still resolvable.
+    let canonical = std::fs::canonicalize(&target).unwrap_or_else(|_| target.clone());
+
+    // Cleanup after capturing the canonical path.
+    let _ = std::fs::remove_dir_all(&base);
+
+    assert!(result.is_ok(), "expected symlink to dir to be accepted, got {:?}", result.err());
+    assert_eq!(result.unwrap(), canonical);
+}
+
+/// A path containing `..` components is resolved to the canonical form.
+#[test]
+fn validate_cwd_resolves_dotdot_components() {
+    let tmp = std::env::temp_dir();
+    // Build a path like /tmp/subdir/../ which exists but isn't normalized.
+    let sub = tmp.join("mf_dotdot_test");
+    std::fs::create_dir_all(&sub).unwrap();
+    let dotdot_path = format!("{}/mf_dotdot_test/..", tmp.to_str().unwrap());
+    let result = validate_cwd(&dotdot_path);
+    let _ = std::fs::remove_dir_all(&sub);
+
+    assert!(result.is_ok(), "expected dotdot path to be accepted, got {:?}", result.err());
+    let canonical_tmp = std::fs::canonicalize(&tmp).unwrap();
+    assert_eq!(result.unwrap(), canonical_tmp);
+}
+
 fn test_env() -> HashMap<String, String> {
     let mut e = HashMap::new();
     e.insert("SHELL".to_string(), "/bin/zsh".to_string());

@@ -34,13 +34,18 @@ pub struct TerminalManager {
     reap_rx: Mutex<Receiver<String>>,
 }
 
-/// Validate that `cwd` is an existing directory.
-pub fn validate_cwd(cwd: &str) -> Result<(), String> {
-    let meta = std::fs::metadata(cwd).map_err(|e| format!("invalid cwd {cwd}: {e}"))?;
-    if !meta.is_dir() {
+/// Canonicalize `cwd` and verify it is an existing directory.
+///
+/// Resolves symlinks and `..` components so the caller always spawns in
+/// the real filesystem location. Returns `Err` if the path does not exist,
+/// is not resolvable, or is not a directory.
+pub fn validate_cwd(cwd: &str) -> Result<std::path::PathBuf, String> {
+    let canonical = std::fs::canonicalize(cwd)
+        .map_err(|_| format!("invalid terminal cwd: {cwd}"))?;
+    if !canonical.is_dir() {
         return Err(format!("not a directory: {cwd}"));
     }
-    Ok(())
+    Ok(canonical)
 }
 
 fn resolve_shell(env: &HashMap<String, String>) -> String {
@@ -106,7 +111,7 @@ impl TerminalManager {
         E: Fn(Option<i32>) + Send + 'static,
     {
         self.drain_reaped();
-        validate_cwd(cwd)?;
+        let canonical_cwd = validate_cwd(cwd)?;
 
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -115,7 +120,7 @@ impl TerminalManager {
 
         let shell = resolve_shell(&self.shell_env);
         let mut cmd = CommandBuilder::new(&shell);
-        cmd.cwd(cwd);
+        cmd.cwd(&canonical_cwd);
         for (k, v) in &self.shell_env {
             cmd.env(k, v);
         }
