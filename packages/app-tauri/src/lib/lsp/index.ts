@@ -18,7 +18,7 @@ import { getDaemonPort } from '@/lib/tauri/bridge';
 // Extend the window type for HMR persistence only in this module.
 type LspWindow = Window & {
   __lspClientManager?: LspClientManager;
-  __lspPortInitialized?: boolean;
+  __lspPortInitPromise?: Promise<void>;
 };
 
 const win = window as unknown as LspWindow;
@@ -37,17 +37,20 @@ win.__lspClientManager = lspClientManager;
  * Called once at app startup (after getDaemonPort() resolves).
  * Safe to call multiple times — subsequent calls are no-ops.
  */
-export async function initLspPort(): Promise<void> {
-  if (win.__lspPortInitialized) return;
-  win.__lspPortInitialized = true;
-  try {
-    const port = await getDaemonPort();
-    // Reinitialize the singleton with the real port (replaces the 0-port instance).
-    const realManager = new LspClientManager(port);
-    // Swap the singleton in place so all existing references see the new port.
-    Object.assign(lspClientManager, realManager);
-    win.__lspClientManager = lspClientManager;
-  } catch (err) {
-    console.warn('[lsp] initLspPort failed — LSP unavailable', err);
-  }
+export function initLspPort(): Promise<void> {
+  // Cache the in-flight promise (not a boolean): concurrent callers must wait
+  // for the port swap to complete, or the second caller proceeds on port 0.
+  win.__lspPortInitPromise ??= (async () => {
+    try {
+      const port = await getDaemonPort();
+      // Reinitialize the singleton with the real port (replaces the 0-port instance).
+      const realManager = new LspClientManager(port);
+      // Swap the singleton in place so all existing references see the new port.
+      Object.assign(lspClientManager, realManager);
+      win.__lspClientManager = lspClientManager;
+    } catch (err) {
+      console.warn('[lsp] initLspPort failed — LSP unavailable', err);
+    }
+  })();
+  return win.__lspPortInitPromise;
 }

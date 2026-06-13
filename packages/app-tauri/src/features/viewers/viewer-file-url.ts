@@ -20,5 +20,7 @@
 export function toFileUrl(path: string, projectPath: string | undefined): string | null {
   const absPath = path.startsWith('/') ? path : projectPath ? `${projectPath}/${path}` : null;
   if (absPath === null) return null;
-  return `file://${absPath}`;
+  // Percent-encode each segment (spaces, '#', '?') while keeping '/' separators.
+  const encoded = absPath.split('/').map(encodeURIComponent).join('/');
+  return `file://${encoded}`;
 }
