@@ -4,6 +4,8 @@ interface Props {
   axis: 'x' | 'y';
   containerRef: React.RefObject<HTMLDivElement | null>;
   onFrac: (frac: number) => void;
+  /** Permanent hairline class: `bg-border` for split, `bg-transparent` for glass/unified. */
+  lineClass?: string;
 }
 
 /**
@@ -11,7 +13,7 @@ interface Props {
  * On hover: a 2px accent line appears (matches 04-engine.jsx SurfDivider).
  * On drag: calls onFrac(0.18–0.82) so the caller can update flex weights.
  */
-export function SurfDivider({ axis, containerRef, onFrac }: Props) {
+export function SurfDivider({ axis, containerRef, onFrac, lineClass = 'bg-transparent' }: Props) {
   const [hot, setHot] = useState(false);
   const isX = axis === 'x';
 
@@ -56,8 +58,12 @@ export function SurfDivider({ axis, containerRef, onFrac }: Props) {
       style={{ flexShrink: 0, [isX ? 'width' : 'height']: 6 }}
       className={`relative z-[6] flex items-center justify-center self-stretch ${isX ? 'cursor-col-resize' : 'cursor-row-resize'}`}
     >
+      {/* Permanent hairline: visible only for split (bg-border); transparent for glass/unified. */}
+      <div style={{ [isX ? 'width' : 'height']: 1, [isX ? 'height' : 'width']: '100%' }} className={lineClass} />
+      {/* Hover accent: 2px primary line that fades in on hover/drag. */}
       <div
         style={{
+          position: 'absolute',
           [isX ? 'width' : 'height']: hot ? 2 : 0,
           [isX ? 'height' : 'width']: '100%',
           transition: 'all 0.12s',

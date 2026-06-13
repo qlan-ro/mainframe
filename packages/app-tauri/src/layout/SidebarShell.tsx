@@ -1,5 +1,7 @@
 import { SessionSidebar } from '@/features/sessions/sidebar/SessionSidebar';
 import { cn } from '@/lib/utils';
+import type { WindowStyle } from '@/store/theme';
+import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { SidebarHeader } from './SidebarHeader';
 
 export const SIDEBAR_EXPANDED_WIDTH = 300;
@@ -16,15 +18,23 @@ interface SidebarShellProps {
   dimmed?: boolean;
   dragging?: boolean;
   width?: number;
+  windowStyle?: WindowStyle;
 }
 
 /** Glass-panel sidebar: chrome header + scrollable sessions content. */
-export function SidebarShell({ dimmed = false, dragging = false, width = SIDEBAR_EXPANDED_WIDTH }: SidebarShellProps) {
+export function SidebarShell({
+  dimmed = false,
+  dragging = false,
+  width = SIDEBAR_EXPANDED_WIDTH,
+  windowStyle = 'glass',
+}: SidebarShellProps) {
+  const geo = windowStyleGeometry(windowStyle);
   return (
     <div
       data-testid="sessions-sidebar"
       className={cn(
-        'relative flex h-full flex-shrink-0 flex-col overflow-hidden rounded-[13px] bg-mf-glass font-sans text-foreground shadow-[var(--mf-shadow-panel-soft)] backdrop-blur-[40px] backdrop-saturate-[1.8]',
+        'relative flex h-full flex-shrink-0 flex-col overflow-hidden font-sans text-foreground',
+        geo.sidebar,
         dragging ? 'select-none transition-opacity duration-150' : 'transition-[width,opacity] duration-200 ease-out',
         // Dim while a release would collapse the panel — a "let go to close" cue.
         dimmed && 'opacity-30',

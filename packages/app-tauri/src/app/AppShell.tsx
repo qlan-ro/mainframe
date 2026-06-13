@@ -15,6 +15,8 @@ import { useSessionListRouter } from '../features/sessions/ws/use-session-list-r
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
 import { useLayoutStore } from '../store/layout';
+import { useTheme } from '../store/theme';
+import { windowStyleGeometry } from '../lib/appearance/window-style';
 import { MainToolbar } from '../layout/MainToolbar';
 import { SidebarCollapseHandle } from '../layout/SidebarCollapseHandle';
 import { SIDEBAR_EXPANDED_WIDTH, SidebarShell } from '../layout/SidebarShell';
@@ -48,6 +50,9 @@ function RuntimeBody({ port }: { port: number }) {
     setActiveBases({ worktreePath, projectPath });
   }, [worktreePath, projectPath, setActiveBases]);
 
+  const windowStyle = useTheme((s) => s.windowStyle);
+  const geo = windowStyleGeometry(windowStyle);
+
   const {
     dragCollapsed,
     dragging,
@@ -72,7 +77,7 @@ function RuntimeBody({ port }: { port: number }) {
   const mainOverlap = getMainOverlap(sidebarRendered, sidebarWidth);
 
   return (
-    <div className="flex flex-1 gap-2 overflow-hidden bg-mf-window p-2">
+    <div data-window-style={windowStyle} className={`flex flex-1 overflow-hidden ${geo.windowRoot}`}>
       {/* Floating panels (prototype 04-engine root: padding + gap). The native
           traffic lights stay over the sidebar header; when collapsed, the
           MainToolbar's left group insets to clear them. */}
@@ -82,13 +87,14 @@ function RuntimeBody({ port }: { port: number }) {
             dimmed={willCollapse}
             dragging={dragging}
             width={Math.max(SIDEBAR_EXPANDED_WIDTH, sidebarWidth)}
+            windowStyle={windowStyle}
           />
         </div>
       )}
 
       <div
         data-testid="main-surface-shell"
-        className="relative flex flex-1 flex-col overflow-hidden rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]"
+        className={`relative flex flex-1 flex-col overflow-hidden ${geo.pane}`}
         style={{ marginLeft: mainOverlap > 0 ? -mainOverlap : undefined }}
       >
         {sidebarVisible && (
@@ -109,6 +115,7 @@ function RuntimeBody({ port }: { port: number }) {
           onExpandSidebar={expandSidebar}
           projectName={projectName}
           branchName={branchName}
+          windowStyle={windowStyle}
         />
         <SurfaceHost port={port} />
       </div>

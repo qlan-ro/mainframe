@@ -12,7 +12,15 @@ beforeEach(() => {
 
 describe('MainToolbar — root element', () => {
   it('renders the main-toolbar root with a drag region', () => {
-    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
 
     const toolbar = screen.getByTestId('main-toolbar');
     expect(toolbar).toBeDefined();
@@ -22,7 +30,15 @@ describe('MainToolbar — root element', () => {
 
 describe('MainToolbar — project name', () => {
   it('renders the project name text', () => {
-    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
 
     expect(screen.getByText('mainframe')).toBeDefined();
   });
@@ -37,6 +53,7 @@ describe('MainToolbar — branch chip', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         branchName="feat/x"
+        windowStyle="glass"
       />,
     );
 
@@ -46,7 +63,15 @@ describe('MainToolbar — branch chip', () => {
   });
 
   it('does not render main-toolbar-branch when branchName is absent', () => {
-    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
 
     expect(screen.queryByTestId('main-toolbar-branch')).toBeNull();
   });
@@ -61,6 +86,7 @@ describe('MainToolbar — show-sidebar button', () => {
         sidebarRendered={false}
         onExpandSidebar={onExpandSidebar}
         projectName="mainframe"
+        windowStyle="glass"
       />,
     );
 
@@ -73,7 +99,15 @@ describe('MainToolbar — show-sidebar button', () => {
   });
 
   it('does not render show-sidebar-button when sidebarRendered is true', () => {
-    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
 
     expect(screen.queryByTestId('show-sidebar-button')).toBeNull();
   });
@@ -81,7 +115,15 @@ describe('MainToolbar — show-sidebar button', () => {
 
 describe('MainToolbar — stub buttons', () => {
   it('renders search, launch, and play stub buttons all disabled', () => {
-    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
 
     expect(screen.getByTestId('main-toolbar-search')).toBeDisabled();
     expect(screen.getByTestId('main-toolbar-launch')).toBeDisabled();
@@ -91,7 +133,15 @@ describe('MainToolbar — stub buttons', () => {
 
 describe('MainToolbar — inspector toggle', () => {
   it('inspector button is live (not disabled) and toggles the layout inspectorVisible flag', () => {
-    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
 
     const btn = screen.getByTestId('main-toolbar-inspector');
     expect(btn).not.toBeDisabled();
@@ -107,7 +157,15 @@ describe('MainToolbar — inspector toggle', () => {
 
 describe('MainToolbar — theme toggle', () => {
   it('clicking main-toolbar-theme flips the theme mode from light to dark', () => {
-    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
 
     expect(useTheme.getState().mode).toBe('light');
 
@@ -117,7 +175,15 @@ describe('MainToolbar — theme toggle', () => {
   });
 
   it('main-toolbar-theme is not disabled', () => {
-    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectName="mainframe" />);
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
 
     expect(screen.getByTestId('main-toolbar-theme')).not.toBeDisabled();
   });

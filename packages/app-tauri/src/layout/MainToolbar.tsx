@@ -1,6 +1,7 @@
 import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Play, Search, Sun } from 'lucide-react';
-import { useTheme } from '@/store/theme';
+import { useTheme, type WindowStyle } from '@/store/theme';
 import { useLayoutStore } from '@/store/layout';
+import { windowStyleGeometry } from '@/lib/appearance/window-style';
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -11,6 +12,7 @@ interface MainToolbarProps {
   onExpandSidebar: () => void;
   projectName: string;
   branchName?: string;
+  windowStyle: WindowStyle;
 }
 
 const ICON_BTN =
@@ -43,18 +45,20 @@ export function MainToolbar({
   onExpandSidebar,
   projectName,
   branchName,
+  windowStyle,
 }: MainToolbarProps) {
   const mode = useTheme((s) => s.mode);
   const toggleTheme = useTheme((s) => s.toggle);
   const isDark = mode === 'dark';
   const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
   const toggleInspector = useLayoutStore((s) => s.toggleInspector);
+  const geo = windowStyleGeometry(windowStyle);
 
   return (
     <div
       data-testid="main-toolbar"
       data-tauri-drag-region
-      className="flex h-[38px] flex-shrink-0 items-center justify-between gap-2 bg-mf-tab-bar pr-1.5 [border-bottom:0.5px_solid_var(--border)]"
+      className={`flex h-[38px] flex-shrink-0 items-center justify-between gap-2 pr-1.5 ${geo.toolbar}`}
     >
       {/* Left: identity */}
       <div

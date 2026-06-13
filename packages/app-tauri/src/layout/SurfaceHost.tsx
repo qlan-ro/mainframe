@@ -2,6 +2,8 @@ import { Fragment, useCallback, useEffect, useRef } from 'react';
 import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
+import { useTheme } from '@/store/theme';
+import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
@@ -35,6 +37,8 @@ export function SurfaceHost({ port }: Props) {
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   const setTopFrac = useLayoutStore((s) => s.setTopFrac);
   const setVFrac = useLayoutStore((s) => s.setVFrac);
+  const windowStyle = useTheme((s) => s.windowStyle);
+  const geo = windowStyleGeometry(windowStyle);
 
   const outerRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
@@ -93,7 +97,7 @@ export function SurfaceHost({ port }: Props) {
             </div>
             {i < top.length - 1 &&
               (twoCol ? (
-                <SurfDivider axis="x" containerRef={topRef} onFrac={setTopFrac} />
+                <SurfDivider axis="x" containerRef={topRef} onFrac={setTopFrac} lineClass={geo.divider} />
               ) : (
                 <div style={{ width: 6, flexShrink: 0 }} />
               ))}
@@ -104,7 +108,7 @@ export function SurfaceHost({ port }: Props) {
       {/* Vertical divider + bottom strip. */}
       {bottom && (
         <>
-          <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} />
+          <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} lineClass={geo.divider} />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
             <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${PANEL_CLS}`}>
               <SurfaceView name={bottom} port={port} />
