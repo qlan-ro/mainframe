@@ -4,6 +4,7 @@ import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
+import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
 import { SurfaceDragLayer } from './SurfaceDragLayer';
 import { SurfDivider } from './SurfDivider';
 import { FilesSurface } from './surfaces/FilesSurface';
@@ -53,6 +54,12 @@ export function SurfaceHost({ port }: Props) {
   // One stable subscription; no re-sub on layout change.
   useEffect(() => {
     return subscribeToFileIntents();
+  }, []);
+
+  // Subscribe to new-terminal intents — resolves cwd, creates PTY+xterm, adds RunTab.
+  // One stable subscription; no re-sub on layout change.
+  useEffect(() => {
+    return subscribeToTerminalIntents();
   }, []);
 
   // Cmd/Ctrl + 1/2/3 toggle Chat/Files/Run.

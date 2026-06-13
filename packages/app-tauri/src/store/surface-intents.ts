@@ -6,7 +6,9 @@ export type SurfaceIntent =
   /** Trigger the file-open picker / command palette in the Files surface. */
   | { type: 'open-file-picker' }
   /** Switch the InspectorPane to the specified tab. */
-  | { type: 'inspector-tab'; tab: 'files' | 'changes' };
+  | { type: 'inspector-tab'; tab: 'files' | 'changes' }
+  /** Spawn a new terminal in the Run surface (optionally targeting a pane). */
+  | { type: 'new-terminal'; paneId?: string };
 
 type Listener = (intent: SurfaceIntent) => void;
 
