@@ -96,6 +96,14 @@ vi.mock('@/components/ui/assistant-ui/attachment', () => ({
   ComposerAddAttachment: () => null,
 }));
 
+// ComposerQuotePreview renders ComposerPrimitive.Quote/QuoteText/QuoteDismiss,
+// none of which the @assistant-ui/react stub above provides — they're irrelevant
+// to the worktree-guard + Enter-to-queue behaviors under test. Stub the quote
+// module to a no-op, matching the toolbar/attachment/triggers stubs.
+vi.mock('@/components/ui/assistant-ui/quote', () => ({
+  ComposerQuotePreview: () => null,
+}));
+
 // ComposerTriggers pulls in Unstable_TriggerPopover* primitives, useChatSkills,
 // and searchFiles — stub it to a passthrough so Composer.test doesn't exercise
 // the native trigger machinery (the triggers have their own unit tests).
