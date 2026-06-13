@@ -2,14 +2,21 @@ import { useEffect } from 'react';
 import { useTheme } from '@/store/theme';
 
 /**
- * Applies the active theme to the document root by toggling the `.dark` class
- * (the globals.css token contract switches on it). Mounted once at the app root;
- * runs on mount and whenever the mode changes. Renders nothing.
+ * Maintains the GLOBAL appearance axes on <html> for runtime changes:
+ *   - mode  → toggles the `.dark` class
+ *   - scheme → sets/removes `data-scheme`
+ * Initial paint is handled by applyStoredTheme() in main.tsx (FOUC guard); this
+ * effect only reacts to subsequent store changes. Window style is shell-scoped
+ * (see AppShell), not handled here. Renders nothing.
  */
 export function ThemeEffect() {
   const mode = useTheme((s) => s.mode);
+  const scheme = useTheme((s) => s.scheme);
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', mode === 'dark');
-  }, [mode]);
+    const root = document.documentElement;
+    root.classList.toggle('dark', mode === 'dark');
+    if (scheme === 'classic') root.removeAttribute('data-scheme');
+    else root.setAttribute('data-scheme', scheme);
+  }, [mode, scheme]);
   return null;
 }
