@@ -187,10 +187,11 @@ Do the chat leaves in this order; ☑ = done.
 - ☑ **Follow-ups (all closed 2026-06-13, see "Editor leftovers" above):** LSP mounted + live-working in `EditorTab`; SurfacePicker "Open file…" and tab-strip "+" open the real `FilePickerDialog`; PDF/SVG packaged-build CSP (`blob:`); `@codemirror/legacy-modes`; shiki in the markdown preview; HEAD-vs-working diff live from ChangesPanel. Still open: the 11 pre-existing `Composer.test.tsx` reds (quote component); daemon-boot race — initial REST loads (thread list/projects/tags) fail-fast without retry if the sidecar isn't listening yet (reload recovers).
 
 ### Terminal → `surfaces/run/terminal/` + `src-tauri/terminal.rs`
-- ☐ `replace` **PTY backend → Rust PTY** (was Electron node-pty + IPC)
-- ☐ `refactor` TerminalInstance (xterm) · TerminalPanel (tabs)
-- ☐ `port` terminal-cwd.ts · useTerminalStore
-- ☐ `drop` tool-windows terminal registration
+- ☑ `replace` **PTY backend → Rust PTY** (`portable-pty` `TerminalManager` managed state, login-shell env, reader thread, `ExitEvent`; `terminal_create`/`terminal_write`/`terminal_resize`/`terminal_close` Tauri commands; raw `Channel` output + typed `Channel<ExitEvent>` exit; mutex-poison-safe)
+- ☑ `refactor` TerminalInstance (xterm + `@xterm/addon-fit`, ResizeObserver, double-RAF fit, `data-testid`) · RunSurface renders terminal panes, pane `+` button, RunPicker "New Terminal" action
+- ☑ `port` terminal-cwd.ts (`resolveCwd` with homedir fallback) · **`useTerminalStore` DROPPED** — superseded by the Run pane model (`RunTab{kind:'terminal'}` in `store/layout.ts`)
+- ☑ `drop` tool-windows terminal registration (never ported — not present in app-tauri)
+- **Completion note (2026-06-13):** design `docs/architecture/2026-06-13-run-terminal-design.md` · plan `docs/plans/2026-06-13-run-terminal-plan.md` · live-verified (real PTY spawn + bidirectional I/O + xterm render + pane `+` + close/toggle cleanup; zero panics; 12 cargo tests pass). Open v1 gaps: orphan-PTY reap on session delete/archive (documented deferred); release-build PTY packaging verification (sidecar spike).
 
 ### Settings → `features/settings/`
 - ☐ `replace` SettingsModal shell (chrome/sidebar/routing on shadcn Dialog)
@@ -252,7 +253,7 @@ The single source of truth for what's left. Folds in items previously living onl
 6. ✅ **DONE (2026-06-11) — editor surface on CodeMirror 6** (ADR-001 overridden), with diff/viewers/LSP/inline-comments/markdown-preview, and `chat-tool-context` `openFile`/`revealFile` are now LIVE (the intent subscriber opens a Files tab). *Remaining follow-up: thread `projectId` into `EditorTab` so the LSP adapters mount in the open editor.*
 7. **De-risk packaging early** — spike the **sidecar bundling** (Node runtime + `better-sqlite3`/`node-pty`/ripgrep/LSP servers, per-platform binaries, signing/notarization) and establish **capabilities/CSP**. *Flagged as a schedule-killer; spike now in parallel to avoid a late GA blocker.*
 8. **Resolve the standing open decisions in dependency order** — shared pure-logic package home (unblocks `convertMessage`/`model-tuning` dedup) → Phase-2 Rust-daemon go/no-go → Electron retire-vs-coexist + mobile-contract governance. *These gate cross-package structure and the terminal/sidecar architecture.*
-9. **Build the remaining standalone surfaces in parity order** — Run/terminal (Rust PTY + xterm) → Settings (modal shell + panes + RemoteAccess decompose) → overlays (SearchPalette→Command, FindInPath/DirectoryPicker/Review) → Tasks/Git → Sandbox preview → Plugins UI. *Independent leaves once bridge + layout + intent bus exist; terminal first (heaviest Rust dep), plugins last (largest god-file + webview re-platform).*
+9. ✅ **DONE (terminal portion, 2026-06-13) — Build the remaining standalone surfaces in parity order** — ~~Run/terminal (Rust PTY + xterm)~~ ✅ → Settings (modal shell + panes + RemoteAccess decompose) → overlays (SearchPalette→Command, FindInPath/DirectoryPicker/Review) → Tasks/Git → Sandbox preview → Plugins UI. *Independent leaves once bridge + layout + intent bus exist; plugins last (largest god-file + webview re-platform).*
 10. **Complete the cross-cutting foundation last** — theming refactor (Tailwind v4 `@theme` + 4 themes + CSS split once Monaco lands), domain-store/pure-helper port, remaining shadcn primitive swaps, and grow the **e2e harness** (built 2026-06-09 — browser-mode Playwright; 3 specs ported) to cover new surfaces as they land. *Pervasive but lower-risk; the theme CSS split is partly blocked on Monaco.*
 
 ### Backlog by category
@@ -291,8 +292,8 @@ The single source of truth for what's left. Folds in items previously living onl
 - ☐ **S — Drop `LineCommentPopover`** (removal when editor lands).
 
 **Terminal**
-- ☐ **L — Rust PTY backend** (`src-tauri/terminal.rs`) — replaces Electron node-pty + IPC; foundational for the Run surface.
-- ☐ **L — Terminal UI** (`features/terminal/` or `surfaces/run/terminal/`) — `TerminalInstance` (xterm) + `TerminalPanel` (tabs) + `terminal-cwd.ts` + `useTerminalStore`; drop tool-windows terminal registration.
+- ☑ **L — Rust PTY backend** (`src-tauri/terminal.rs`) — DONE (2026-06-13). `TerminalManager` Tauri-managed state; `terminal_create`/`terminal_write`/`terminal_resize`/`terminal_close` commands; raw `Channel` for output bytes + typed `Channel<ExitEvent>` for exit; mutex-poison-safe; `kill_all` on `WindowEvent::Destroyed`. 12 cargo tests pass.
+- ☑ **L — Terminal UI** (`features/terminal/` + `surfaces/run/`) — DONE (2026-06-13). `TerminalInstance` (xterm + fit addon, ResizeObserver) + `create-terminal` orchestrator + `terminal-cache` + `resolveCwd` + `new-terminal` surface intent subscriber; `RunSurface` renders terminal panes with a pane `+` button and a RunPicker "New Terminal" entry. `useTerminalStore` dropped (superseded by Run pane model). tool-windows registration not ported.
 
 **Settings**
 - ☐ **M — Settings modal shell** (`features/settings/`) — shadcn Dialog-based chrome/sidebar/routing.
