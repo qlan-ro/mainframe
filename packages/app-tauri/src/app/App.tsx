@@ -12,7 +12,7 @@ import { daemonWs } from '../lib/daemon/ws-client';
 import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { AppShell } from './AppShell';
-import { AppStatusBar } from '../layout/AppStatusBar';
+import { ConnectionStatusProvider } from './ConnectionStatusContext';
 import { ThemeEffect } from './ThemeEffect';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -32,24 +32,24 @@ export function App() {
   return (
     <div className="flex h-screen flex-col bg-mf-window text-foreground font-sans">
       <ThemeEffect />
-      {/* Gate the data shell on `ready` (first successful /health), not merely
-          on a known port — the sidecar opens its port before it accepts
-          requests, so mounting on port-known alone races the initial REST
-          loads. `ready` latches, so a later blip won't unmount the shell. */}
-      {ready && port != null ? (
-        <DaemonPortProvider port={port}>
-          <AppShell port={port} />
-        </DaemonPortProvider>
-      ) : (
-        <div
-          data-testid="app-waiting-daemon"
-          className="flex flex-1 items-center justify-center bg-mf-window text-muted-foreground"
-        >
-          <span className="text-body">Waiting for daemon…</span>
-        </div>
-      )}
-
-      <AppStatusBar state={state} daemonStatus={daemonStatus} />
+      <ConnectionStatusProvider value={{ state, daemonStatus }}>
+        {/* Gate the data shell on `ready` (first successful /health), not merely
+            on a known port — the sidecar opens its port before it accepts
+            requests, so mounting on port-known alone races the initial REST
+            loads. `ready` latches, so a later blip won't unmount the shell. */}
+        {ready && port != null ? (
+          <DaemonPortProvider port={port}>
+            <AppShell port={port} />
+          </DaemonPortProvider>
+        ) : (
+          <div
+            data-testid="app-waiting-daemon"
+            className="flex flex-1 items-center justify-center bg-mf-window text-muted-foreground"
+          >
+            <span className="text-body">Waiting for daemon…</span>
+          </div>
+        )}
+      </ConnectionStatusProvider>
       <Toaster />
     </div>
   );

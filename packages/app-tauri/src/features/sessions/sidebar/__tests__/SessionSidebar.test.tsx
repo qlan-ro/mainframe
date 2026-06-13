@@ -92,9 +92,20 @@ vi.mock('@/store/session-filters', () => ({
 // Mock @/store/unread-store
 // ---------------------------------------------------------------------------
 
+const __unreadState = {
+  unread: new Set<string>(),
+  isUnread: (_id: string) => false,
+};
 vi.mock('@/store/unread-store', () => ({
-  useUnreadStore: (selector: (s: { isUnread: (id: string) => boolean }) => unknown) =>
-    selector({ isUnread: (_id: string) => false }),
+  useUnreadStore: (selector: (s: typeof __unreadState) => unknown) => selector(__unreadState),
+}));
+
+// ---------------------------------------------------------------------------
+// Mock SidebarFooter — avoids pulling in ConnectionStatusContext for sidebar tests
+// ---------------------------------------------------------------------------
+
+vi.mock('@/layout/SidebarFooter', () => ({
+  SidebarFooter: () => <div data-testid="sidebar-footer-stub" />,
 }));
 
 // ---------------------------------------------------------------------------

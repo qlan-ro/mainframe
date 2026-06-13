@@ -6,7 +6,7 @@
  *  2. renders chat surface — chat-thread-area present, chat-surface-stub present inside it.
  *  3. mounts the single archive dialog outlet — sessions-archive-confirm-dialog present, exactly 1.
  *  4. mounts the tag popover host — tag-popover-host-stub present.
- *  5. connection dot present — app-connection-dot present.
+ *  5. status bar retired — app-status-bar absent; sidebar-footer present (via SessionSidebar mock stub).
  *  6. runs the session-list router under the runtime — useSessionListRouter mock was called.
  *  7. provides the daemon port to the runtime layer — DaemonPortProvider is mounted; the
  *     useSessionsThreadList mock calls the REAL useDaemonPort and sees 31415.
@@ -105,7 +105,11 @@ vi.mock('../../layout/SidebarShell', () => ({
   SIDEBAR_COLLAPSED_WIDTH: 0,
   SIDEBAR_COLLAPSE_THRESHOLD: 150,
   clampSidebarWidth: (width: number) => Math.min(300, Math.max(0, width)),
-  SidebarShell: () => <div data-testid="sessions-sidebar" />,
+  SidebarShell: () => (
+    <div data-testid="sessions-sidebar">
+      <div data-testid="sidebar-footer" />
+    </div>
+  ),
 }));
 
 vi.mock('../../features/sessions/sidebar/SessionSidebar', () => ({
@@ -210,16 +214,17 @@ describe('App integration — mounts the tag popover host', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Behavior 5 — connection dot present
+// Behavior 5 — status bar retired; sidebar footer present
 // ---------------------------------------------------------------------------
 
-describe('App integration — connection dot present', () => {
-  it('app-connection-dot is defined', async () => {
+describe('App integration — status bar retired; sidebar footer present', () => {
+  it('app-status-bar is absent and sidebar-footer is present', async () => {
     await act(async () => {
       render(<App />);
     });
 
-    expect(screen.getByTestId('app-connection-dot')).toBeDefined();
+    expect(screen.queryByTestId('app-status-bar')).toBeNull();
+    expect(screen.getByTestId('sidebar-footer')).toBeDefined();
   });
 });
 
