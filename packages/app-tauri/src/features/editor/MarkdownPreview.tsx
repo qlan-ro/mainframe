@@ -4,20 +4,17 @@
  * MarkdownTextPrimitive is bound to assistant-ui message parts and can't render
  * an arbitrary buffer).
  *
- * Code blocks use the shared shiki engine (`@/lib/shiki-highlighter`). They
- * render plain until the async highlighter resolves, then swap in colored token
- * spans — no layout jank because the pre/code wrapper dimensions are stable.
+ * Code blocks use the shared shiki engine via `ShikiCode` from `@/lib/shiki-tokens`.
+ * They render plain until the async highlighter resolves, then swap in colored
+ * token spans — no layout jank because the pre/code wrapper dimensions are stable.
  */
 import type { ComponentPropsWithoutRef, JSX } from 'react';
-import { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
-import type { ThemedToken } from 'shiki';
-import type { BundledLanguage } from 'shiki';
 import { openExternal } from '@/lib/tauri/bridge';
 import { urlTransform } from '@/features/chat/parts/markdown-url-transform';
-import { getShikiHighlighter, resolveLanguage } from '@/lib/shiki-highlighter';
+import { ShikiCode } from '@/lib/shiki-tokens';
 
 type ElProps<T extends keyof JSX.IntrinsicElements> = ComponentPropsWithoutRef<T>;
 
@@ -42,23 +39,13 @@ function Anchor({ href, children, ...props }: ElProps<'a'>) {
 
 // ── Shiki code block ──────────────────────────────────────────────────────────
 
-function TokenLine({ tokens, addNewline }: { tokens: ThemedToken[]; addNewline: boolean }) {
-  return (
-    <span className="block">
-      {tokens.map((tok, i) => (
-        <span key={i} style={{ color: tok.color }}>
-          {tok.content}
-        </span>
-      ))}
-      {addNewline && '\n'}
-    </span>
-  );
-}
-
 interface CodeBlockProps {
   className?: string;
   children?: React.ReactNode;
 }
+
+const CODE_PRE_CLASS =
+  'my-2 overflow-x-auto rounded-md border border-border bg-mf-code-bg p-3 font-mono text-caption text-mf-code-fg';
 
 /** Fenced code block with shiki highlighting. Renders plain until shiki resolves. */
 function CodeBlock({ className, children }: CodeBlockProps) {
@@ -66,63 +53,7 @@ function CodeBlock({ className, children }: CodeBlockProps) {
   const langMatch = /language-(\w+)/.exec(className ?? '');
   const langHint = langMatch?.[1];
 
-  const [lines, setLines] = useState<ThemedToken[][] | null>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const lang = resolveLanguage(langHint);
-    if (!lang) {
-      setLines(null);
-      return;
-    }
-
-    getShikiHighlighter()
-      .then((h) => {
-        if (!mountedRef.current) return;
-        try {
-          const result = h.codeToTokens(raw, {
-            lang: lang as BundledLanguage,
-            theme: 'mf-warm-chrome',
-          });
-          setLines(result.tokens);
-        } catch {
-          /* expected: unsupported lang variant or tokenizer error — fall back to plain */
-          if (mountedRef.current) setLines(null);
-        }
-      })
-      .catch((err) => {
-        console.warn('[markdown-preview] shiki failed', { lang: langHint, err: String(err) });
-        if (mountedRef.current) setLines(null);
-      });
-  }, [raw, langHint]);
-
-  const preClass =
-    'my-2 overflow-x-auto rounded-md border border-border bg-mf-code-bg p-3 font-mono text-caption text-mf-code-fg';
-
-  if (lines) {
-    return (
-      <pre className={preClass}>
-        <code>
-          {lines.map((tokens, i) => (
-            <TokenLine key={i} tokens={tokens} addNewline={i < lines.length - 1} />
-          ))}
-        </code>
-      </pre>
-    );
-  }
-
-  return (
-    <pre className={preClass}>
-      <code>{raw}</code>
-    </pre>
-  );
+  return <ShikiCode code={raw} lang={langHint} preClass={CODE_PRE_CLASS} />;
 }
 
 // ── Component map ─────────────────────────────────────────────────────────────
