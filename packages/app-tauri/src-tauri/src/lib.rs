@@ -1,6 +1,7 @@
 mod commands;
 mod shell_env;
 mod sidecar;
+mod terminal;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -9,6 +10,7 @@ use tauri::{Emitter, Manager};
 
 // Re-export commands at crate root so generate_handler! can find them.
 use commands::{get_app_info, get_auth_token, get_homedir, get_platform, read_file, read_file_base64, show_item_in_folder};
+use terminal::{terminal_create, terminal_write, terminal_resize, terminal_kill, TerminalManager};
 
 /// The daemon handle lives for the entire app lifetime.
 /// OnceLock ensures single-init; Drop isn't guaranteed on all platforms,
@@ -57,8 +59,16 @@ pub fn run() {
             read_file,
             read_file_base64,
             get_platform,
+            terminal_create,
+            terminal_write,
+            terminal_resize,
+            terminal_kill,
         ])
         .setup(move |app| {
+            // Register the terminal manager (uses the same login-shell env as the
+            // daemon so shells inherit the correct PATH/SHELL).
+            app.manage(TerminalManager::new(shell_env.clone()));
+
             // Propagate any daemon-boot error to the renderer via the window title
             // (best-effort — the renderer polls get_daemon_status).
             if let Err(ref e) = daemon_result {
@@ -81,11 +91,16 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|_window, event| {
+        .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 // Kill the daemon when the last window closes.
                 if let Some(h) = DAEMON.get() {
                     h.kill();
+                }
+                // Kill all PTY sessions — go through app_handle() because
+                // try_state lives on Manager/AppHandle, not on &Window (M5).
+                if let Some(mgr) = window.app_handle().try_state::<TerminalManager>() {
+                    mgr.kill_all();
                 }
             }
         })

@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
-use tauri::ipc::{Channel, InvokeResponseBody};
+use tauri::{ipc::{Channel, InvokeResponseBody}, State};
 
 /// Sent on the typed exit channel when the child process ends.
 #[derive(Serialize, Clone)]
@@ -179,16 +179,59 @@ impl TerminalManager {
     }
 }
 
-/// TEMPORARY encoding-probe command (removed in Task 4). Sends one raw byte
-/// frame down a bare Channel so the JS side can assert it arrives as an
-/// ArrayBuffer, not a number[]. This proves the raw-Channel transport before
-/// any xterm wiring is built (design Path A gate).
 #[tauri::command]
-pub fn terminal_echo_byte(on_data: Channel) -> Result<(), String> {
-    on_data
-        .send(InvokeResponseBody::Raw(vec![0x41])) // ASCII 'A'
-        .map_err(|e| format!("channel send failed: {e}"))?;
-    Ok(())
+pub fn terminal_create(
+    id: String,
+    cwd: String,
+    cols: u16,
+    rows: u16,
+    on_data: Channel,
+    on_exit: Channel<ExitEvent>,
+    manager: State<'_, TerminalManager>,
+) -> Result<(), String> {
+    let data_ch = on_data.clone();
+    let exit_ch = on_exit.clone();
+    manager.spawn(
+        &id,
+        &cwd,
+        cols,
+        rows,
+        move |bytes| {
+            // Reader thread: never panic across the FFI boundary (panic="abort").
+            if let Err(e) = data_ch.send(InvokeResponseBody::Raw(bytes)) {
+                tracing::warn!(%e, "terminal on_data channel send failed");
+            }
+        },
+        move |code| {
+            if let Err(e) = exit_ch.send(ExitEvent { code }) {
+                tracing::warn!(%e, "terminal on_exit channel send failed");
+            }
+        },
+    )
+}
+
+#[tauri::command]
+pub fn terminal_write(
+    id: String,
+    data: String,
+    manager: State<'_, TerminalManager>,
+) -> Result<(), String> {
+    manager.write(&id, &data)
+}
+
+#[tauri::command]
+pub fn terminal_resize(
+    id: String,
+    cols: u16,
+    rows: u16,
+    manager: State<'_, TerminalManager>,
+) -> Result<(), String> {
+    manager.resize(&id, cols, rows)
+}
+
+#[tauri::command]
+pub fn terminal_kill(id: String, manager: State<'_, TerminalManager>) {
+    manager.kill(&id);
 }
 
 #[cfg(test)]
