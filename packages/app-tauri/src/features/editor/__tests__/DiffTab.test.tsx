@@ -148,4 +148,28 @@ describe('DiffTab — pre-resolved sides (existing behaviour)', () => {
     expect(mockGetWorkingDiff).not.toHaveBeenCalled();
     expect(screen.queryByText(/No diff available/)).toBeNull();
   });
+
+  it('updates CmDiffEditor when pre-resolved props change (stale-props bug)', async () => {
+    // Render with initial pre-resolved content.
+    const { rerender } = render(<DiffTab path="src/index.ts" original="v1-orig" modified="v1-mod" />);
+
+    await waitFor(() => {
+      const last = capturedDiffProps[capturedDiffProps.length - 1];
+      expect(last?.original).toBe('v1-orig');
+      expect(last?.modified).toBe('v1-mod');
+    });
+
+    // Simulate the tabs store updating the sides for an already-open diff tab.
+    capturedDiffProps.length = 0;
+    rerender(<DiffTab path="src/index.ts" original="v2-orig" modified="v2-mod" />);
+
+    // The diff editor must receive the new content — not stay frozen at v1.
+    await waitFor(() => {
+      const last = capturedDiffProps[capturedDiffProps.length - 1];
+      expect(last?.original).toBe('v2-orig');
+      expect(last?.modified).toBe('v2-mod');
+    });
+
+    expect(mockGetWorkingDiff).not.toHaveBeenCalled();
+  });
 });

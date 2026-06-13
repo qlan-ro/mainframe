@@ -48,6 +48,14 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
     return { status: 'loading' };
   });
 
+  // When pre-resolved props change on an already-mounted component, sync fetchState.
+  // CmDiffEditor is mount-only for doc content, so we must update state here so
+  // the parent can force a remount via a key change (see key prop on CmDiffEditor below).
+  useEffect(() => {
+    if (!hasPreResolved) return;
+    setFetchState({ status: 'ready', original: origProp!, modified: modProp! });
+  }, [hasPreResolved, origProp, modProp]);
+
   useEffect(() => {
     if (hasPreResolved) return;
     if (!projectId) {
@@ -108,6 +116,7 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
     <div data-testid="diff-tab" className="flex h-full flex-col overflow-hidden">
       <DiffHeader fileName={fileName} changeCount={changeCount} onPrev={prevChange} onNext={nextChange} />
       <CmDiffEditor
+        key={`${original}\x00${modified}`}
         original={original}
         modified={modified}
         language={language}
