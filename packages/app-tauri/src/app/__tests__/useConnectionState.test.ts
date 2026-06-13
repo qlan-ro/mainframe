@@ -126,6 +126,50 @@ describe('useConnectionState', () => {
     expect(result.current.daemonStatus).toBe('ready');
   });
 
+  it('ready is false before the daemon is reachable (port never acquired)', async () => {
+    mockGetDaemonPort.mockRejectedValue(new Error('no port'));
+
+    const { result } = renderHook(() => useConnectionState());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The data shell must NOT mount until the daemon answers /health, so ready
+    // stays false while the port can't even be acquired.
+    expect(result.current.ready).toBe(false);
+  });
+
+  it('ready latches true on first connect and STAYS true through a later disconnect', async () => {
+    mockGetDaemonPort.mockResolvedValue(31415);
+    mockGetDaemonStatus.mockResolvedValue('ready');
+    // First poll healthy → connected (ready latches true); every later poll
+    // unhealthy → disconnected, but ready must remain true so the mounted shell
+    // is not torn down by a transient blip.
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true } as Response)
+        .mockResolvedValue({ ok: false } as Response),
+    );
+
+    const { result } = renderHook(() => useConnectionState());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.state).toBe('connected');
+    expect(result.current.ready).toBe(true);
+
+    // Next poll fires after POLL_INTERVAL_MS and returns unhealthy.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    expect(result.current.state).toBe('disconnected');
+    expect(result.current.ready).toBe(true); // latched — shell stays mounted
+  });
+
   it('happy path — port resolves immediately, port is set and state reaches connected', async () => {
     mockGetDaemonPort.mockResolvedValue(31415);
     mockGetDaemonStatus.mockResolvedValue('ready');

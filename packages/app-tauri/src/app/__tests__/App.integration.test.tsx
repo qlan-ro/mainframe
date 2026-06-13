@@ -11,6 +11,7 @@
  *  7. provides the daemon port to the runtime layer — DaemonPortProvider is mounted; the
  *     useSessionsThreadList mock calls the REAL useDaemonPort and sees 31415.
  *  8. waits for daemon when port is null — app-waiting-daemon present, sessions-sidebar absent.
+ *  8b. waits for daemon when the port is known but not yet ready — shell stays gated (boot race).
  *  9. keeps top chrome controls clickable — no app-wide fixed drag region over the headers.
  *
  * Strategy:
@@ -44,7 +45,7 @@ const { initLspPortMock } = vi.hoisted(() => ({ initLspPortMock: vi.fn(() => Pro
 // ---------------------------------------------------------------------------
 
 vi.mock('../useConnectionState', () => ({
-  useConnectionState: vi.fn(() => ({ state: 'connected', daemonStatus: 'running', port: 31415 })),
+  useConnectionState: vi.fn(() => ({ state: 'connected', daemonStatus: 'running', port: 31415, ready: true })),
 }));
 
 vi.mock('../../lib/daemon/ws-client', () => ({
@@ -145,6 +146,7 @@ beforeEach(() => {
     state: 'connected',
     daemonStatus: 'running',
     port: 31415,
+    ready: true,
   });
 });
 
@@ -261,6 +263,33 @@ describe('App integration — waits for daemon when port is null', () => {
       state: 'connecting',
       daemonStatus: 'initializing',
       port: null,
+      ready: false,
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    expect(screen.getByTestId('app-waiting-daemon')).toBeDefined();
+    expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 8b — boot race: port known but daemon not yet ready
+// ---------------------------------------------------------------------------
+
+describe('App integration — waits for the daemon when the port is known but not yet ready', () => {
+  it('does NOT mount the data shell until /health passes (ready=false)', async () => {
+    // The sidecar opens its port before it accepts requests: the port is known
+    // but the daemon is not reachable yet (ready=false). Gating only on the port
+    // would mount the sidebar and fire the initial REST loads against a dead
+    // daemon — the boot race. The shell must stay gated until ready latches true.
+    vi.mocked(useConnectionState).mockReturnValueOnce({
+      state: 'connecting',
+      daemonStatus: 'initializing',
+      port: 31415,
+      ready: false,
     });
 
     await act(async () => {
@@ -292,6 +321,7 @@ describe('App integration — initializes the LSP port once connected', () => {
       state: 'connecting',
       daemonStatus: 'initializing',
       port: null,
+      ready: false,
     });
 
     await act(async () => {

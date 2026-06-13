@@ -45,10 +45,20 @@ export function useConnectionState(): {
   state: ConnectionState;
   daemonStatus: string;
   port: number | null;
+  /**
+   * Latched true on the first successful /health and never reset. The data shell
+   * gates its mount on this so the initial REST loads (projects/tags/threads)
+   * fire only once the daemon HTTP server is actually listening — having the
+   * port is not enough, the sidecar opens its port before it accepts requests.
+   * Latched (not just `state === 'connected'`) so a transient post-boot blip
+   * doesn't tear the mounted shell down.
+   */
+  ready: boolean;
 } {
   const [state, setState] = useState<ConnectionState>('connecting');
   const [daemonStatus, setDaemonStatus] = useState('initializing');
   const [port, setPort] = useState<number | null>(null);
+  const [ready, setReady] = useState(false);
   const portRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -68,6 +78,7 @@ export function useConnectionState(): {
       const healthy = await checkHealth(currentPort);
       if (cancelled) return;
       setState(healthy ? 'connected' : 'disconnected');
+      if (healthy) setReady(true); // one-way latch — never reset to false
       pollTimer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
     }
 
@@ -116,5 +127,5 @@ export function useConnectionState(): {
     };
   }, []);
 
-  return { state, daemonStatus, port };
+  return { state, daemonStatus, port, ready };
 }

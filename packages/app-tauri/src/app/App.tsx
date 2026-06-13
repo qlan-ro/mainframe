@@ -17,7 +17,7 @@ import { ThemeEffect } from './ThemeEffect';
 import { Toaster } from '@/components/ui/sonner';
 
 export function App() {
-  const { state, daemonStatus, port } = useConnectionState();
+  const { state, daemonStatus, port, ready } = useConnectionState();
 
   // Wire the WS client to the port once available (AppShell's router subscribes).
   useEffect(() => {
@@ -32,7 +32,11 @@ export function App() {
   return (
     <div className="flex h-screen flex-col bg-mf-window text-foreground font-sans">
       <ThemeEffect />
-      {port != null ? (
+      {/* Gate the data shell on `ready` (first successful /health), not merely
+          on a known port — the sidecar opens its port before it accepts
+          requests, so mounting on port-known alone races the initial REST
+          loads. `ready` latches, so a later blip won't unmount the shell. */}
+      {ready && port != null ? (
         <DaemonPortProvider port={port}>
           <AppShell port={port} />
         </DaemonPortProvider>
