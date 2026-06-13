@@ -41,10 +41,9 @@ describe('SurfacePicker (run surface)', () => {
     expect(screen.getByTestId('run-surface-picker')).toBeInTheDocument();
   });
 
-  it('run-picker-new-terminal button is disabled with a "Terminal coming soon" title', () => {
+  it('run-picker-new-terminal button is enabled', () => {
     render(<SurfacePicker surface="run" />);
     const btn = screen.getByTestId('run-picker-new-terminal');
-    expect(btn).toBeDisabled();
-    expect(btn).toHaveAttribute('title', 'Terminal coming soon');
+    expect(btn).not.toBeDisabled();
   });
 });

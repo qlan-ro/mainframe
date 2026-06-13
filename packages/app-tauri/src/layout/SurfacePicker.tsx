@@ -65,9 +65,8 @@ export function SurfacePicker({ surface }: Props) {
               testid="run-picker-new-terminal"
               icon={<Terminal size={14} className="flex-shrink-0 text-mf-surface-run" />}
               label="New terminal"
-              hint="zsh"
-              disabled
-              title="Terminal coming soon"
+              hint="shell"
+              onClick={() => emitSurfaceIntent({ type: 'new-terminal' })}
             />
           )}
         </div>

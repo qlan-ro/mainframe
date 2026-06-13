@@ -5,9 +5,11 @@
  * placeholder. The whole surface is a drop target for a Files-tab drag
  * (`data-drop-surface="run"`).
  */
-import { X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
+import { TerminalInstance } from '@/features/terminal/TerminalInstance';
 import { useLayoutStore } from '@/store/layout';
 import type { RunPane } from '@/store/run-pane';
+import { emitSurfaceIntent } from '@/store/surface-intents';
 import { SurfacePicker } from '../SurfacePicker';
 
 function RunTabPill({ paneId, tab, active }: { paneId: string; tab: RunPane['tabs'][number]; active: boolean }) {
@@ -51,6 +53,14 @@ function RunPaneView({ pane, showClosePane }: RunPaneViewProps) {
         {pane.tabs.map((t) => (
           <RunTabPill key={t.id} paneId={pane.id} tab={t} active={t.id === pane.active} />
         ))}
+        <button
+          data-testid={`run-pane-new-terminal-${pane.id}`}
+          onClick={() => emitSurfaceIntent({ type: 'new-terminal', paneId: pane.id })}
+          className={`grid h-5 w-5 flex-shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground${!showClosePane ? ' ml-auto' : ''}`}
+          aria-label="New terminal"
+        >
+          <Plus size={11} />
+        </button>
         {showClosePane && (
           <button
             data-testid={`run-pane-close-${pane.id}`}
@@ -62,8 +72,17 @@ function RunPaneView({ pane, showClosePane }: RunPaneViewProps) {
           </button>
         )}
       </div>
-      <div className="grid min-h-0 flex-1 place-items-center text-caption text-muted-foreground">
-        {activeTab ? `${activeTab.kind}: ${activeTab.title}` : 'Empty pane'}
+      <div className="relative min-h-0 flex-1">
+        {pane.tabs.map((t) =>
+          t.kind === 'terminal' ? (
+            <TerminalInstance key={t.id} terminalId={t.id} visible={t.id === pane.active} />
+          ) : null,
+        )}
+        {activeTab && activeTab.kind !== 'terminal' && (
+          <div className="grid h-full place-items-center text-caption text-muted-foreground">
+            {`${activeTab.kind}: ${activeTab.title}`}
+          </div>
+        )}
       </div>
     </div>
   );
