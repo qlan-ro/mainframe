@@ -6,7 +6,7 @@ export const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
 /**
  * Spacer that reserves the native macOS traffic-lights zone.
  * Width covers the ~68px cluster (3 × 12px circles + gaps + left inset)
- * so SurfaceRail never overlaps the window controls.
+ * so the sidebar header content never overlaps the window controls.
  */
 function TrafficLightsSpacer() {
   return <div className="flex-shrink-0" style={{ width: TRAFFIC_LIGHTS_SPACER_WIDTH }} />;
