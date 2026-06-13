@@ -20,8 +20,10 @@
  */
 import { FileX } from 'lucide-react';
 import { openExternal } from '@/lib/tauri/bridge';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { ViewerShell } from './ViewerShell';
+import { toFileUrl } from './viewer-file-url';
 
 interface UnsupportedViewerProps {
   path: string;
@@ -32,9 +34,13 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
   const ext = basename.includes('.') ? (basename.split('.').pop() ?? '') : '';
   const status = ext ? `${ext.toUpperCase()} · No preview` : 'No preview';
 
+  const { projectPath } = useActiveIdentity();
+  const fileUrl = toFileUrl(path, projectPath);
+
   async function handleOpenExternal() {
+    if (!fileUrl) return;
     try {
-      await openExternal(`file://${path}`);
+      await openExternal(fileUrl);
     } catch (err) {
       console.warn('[UnsupportedViewer] openExternal failed', err);
     }
@@ -60,7 +66,9 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
               data-testid="viewer-unsupported-open"
               type="button"
               onClick={() => void handleOpenExternal()}
-              className="rounded-md border border-border bg-transparent px-3 py-1.5 text-label font-medium text-foreground transition-colors hover:bg-accent"
+              disabled={fileUrl === null}
+              title={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}
+              className="rounded-md border border-border bg-transparent px-3 py-1.5 text-label font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
             >
               Open externally
             </button>

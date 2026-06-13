@@ -16,9 +16,11 @@ interface ZoomableImageProps {
   alt?: string;
   /** Classes for the thumbnail `<img>` (size/shape/border per call site). */
   className?: string;
+  /** Forwarded to the thumbnail `<img>` so callers can detect natural dimensions. */
+  onLoad?: React.ReactEventHandler<HTMLImageElement>;
 }
 
-export function ZoomableImage({ src, alt = '', className }: ZoomableImageProps) {
+export function ZoomableImage({ src, alt = '', className, onLoad }: ZoomableImageProps) {
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -28,7 +30,7 @@ export function ZoomableImage({ src, alt = '', className }: ZoomableImageProps) 
           aria-label="View image full size"
           className="block cursor-zoom-in rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <img src={src} alt={alt} className={className} />
+          <img src={src} alt={alt} className={className} onLoad={onLoad} />
         </button>
       </DialogTrigger>
       <DialogContent

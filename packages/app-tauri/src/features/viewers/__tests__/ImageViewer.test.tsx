@@ -12,16 +12,29 @@
  *  4. Loading state renders a placeholder when src is null.
  *  5. Renders inside ViewerShell (viewer-shell present).
  *  6. Footer status shows image dimensions and size (viewer-shell-status).
+ *  7. onLoad fires from the <img> element (not the wrapper div) and updates
+ *     the footer status — the status changes from "Loading…" to include
+ *     the file extension.
  */
+import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ImageViewer } from '../ImageViewer';
 
 // Mock ZoomableImage so the Dialog/Radix deps don't need to be wired in tests.
+// Forward onLoad so the ImageViewer's handleLoad can fire from the <img>.
 vi.mock('@/features/chat/parts/ZoomableImage', () => ({
-  ZoomableImage: ({ src, alt }: { src: string; alt?: string }) => (
+  ZoomableImage: ({
+    src,
+    alt,
+    onLoad,
+  }: {
+    src: string;
+    alt?: string;
+    onLoad?: React.ReactEventHandler<HTMLImageElement>;
+  }) => (
     <button data-testid="chat-image-zoom-trigger" aria-label="View image full size">
-      <img src={src} alt={alt ?? ''} />
+      <img src={src} alt={alt ?? ''} onLoad={onLoad} />
     </button>
   ),
 }));
@@ -80,5 +93,25 @@ describe('ImageViewer', () => {
 
     // After load, status should contain the extension
     expect(screen.getByTestId('viewer-shell-status').textContent).toMatch(/PNG/i);
+  });
+
+  it('onLoad fires from the img element (not the wrapper div) and updates status', () => {
+    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/photo.png" />);
+
+    const statusBefore = screen.getByTestId('viewer-shell-status').textContent;
+    expect(statusBefore).toMatch(/Loading/i);
+
+    // Find the img inside the zoom trigger (empty alt → no accessible role; use DOM query).
+    const img = document.querySelector('img') as HTMLImageElement;
+    expect(img).not.toBeNull();
+    Object.defineProperty(img, 'naturalWidth', { value: 800, configurable: true });
+    Object.defineProperty(img, 'naturalHeight', { value: 600, configurable: true });
+    fireEvent.load(img);
+
+    // Status must now reflect the loaded state (extension + dimensions or size)
+    const statusAfter = screen.getByTestId('viewer-shell-status').textContent;
+    expect(statusAfter).toMatch(/PNG/i);
+    // And it must no longer say "Loading"
+    expect(statusAfter).not.toMatch(/Loading/i);
   });
 });

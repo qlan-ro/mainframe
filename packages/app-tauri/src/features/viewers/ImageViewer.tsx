@@ -67,12 +67,16 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
           background:
             'repeating-conic-gradient(var(--mf-checker-dark) 0% 25%, var(--mf-checker-light) 0% 50%) 0 0 / 16px 16px',
         }}
-        onLoad={handleLoad}
       >
         {src === null ? (
           <span className="text-body text-muted-foreground">Loading image…</span>
         ) : (
-          <ZoomableImage src={src} alt={alt} className="max-h-[80vh] max-w-full rounded object-contain" />
+          <ZoomableImage
+            src={src}
+            alt={alt}
+            className="max-h-[80vh] max-w-full rounded object-contain"
+            onLoad={handleLoad}
+          />
         )}
       </div>
     </ViewerShell>

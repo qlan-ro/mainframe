@@ -19,8 +19,10 @@
  */
 import { useEffect, useState } from 'react';
 import { openExternal } from '@/lib/tauri/bridge';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { ViewerShell } from './ViewerShell';
 import { formatBytes } from './viewer-status';
+import { toFileUrl } from './viewer-file-url';
 
 interface PdfViewerProps {
   base64: string | null;
@@ -45,6 +47,8 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
 
 export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const { projectPath } = useActiveIdentity();
+  const fileUrl = toFileUrl(path, projectPath);
 
   useEffect(() => {
     if (base64 === null) {
@@ -63,9 +67,9 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
   }, [base64, mimeType]);
 
   async function handleOpenExternal() {
-    if (!path) return;
+    if (!fileUrl) return;
     try {
-      await openExternal(`file://${path}`);
+      await openExternal(fileUrl);
     } catch (err) {
       console.warn('[PdfViewer] openExternal failed', err);
     }
@@ -84,7 +88,9 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
             type="button"
             data-testid="viewer-pdf-fallback"
             onClick={() => void handleOpenExternal()}
-            className="rounded px-2 py-0.5 text-label font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            disabled={fileUrl === null}
+            title={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}
+            className="rounded px-2 py-0.5 text-label font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             Open externally
           </button>

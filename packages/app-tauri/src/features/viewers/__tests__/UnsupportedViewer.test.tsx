@@ -11,6 +11,9 @@
  *  7. The viewer renders inside ViewerShell (viewer-shell present).
  *  8. The viewer-router renders UnsupportedViewer for an unknown extension (.zip)
  *     when no renderCode prop is provided.
+ *  9. (toFileUrl) Relative path + projectPath → absolute file:// URL.
+ * 10. (toFileUrl) Relative path + no projectPath → button is disabled.
+ * 11. (toFileUrl) Absolute path → file:// URL passed through.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -31,14 +34,17 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
   useDaemonPort: vi.fn(() => 3000),
 }));
 
-// Mock the active-identity hook used by ViewerRouter.
+// Mock the active-identity hook used by ViewerRouter — default: no project.
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: vi.fn(() => ({ projectId: null, chatId: null })),
 }));
 
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { openExternal } from '@/lib/tauri/bridge';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { UnsupportedViewer } from '../UnsupportedViewer';
+
+const mockUseActiveIdentity = useActiveIdentity as ReturnType<typeof vi.fn>;
 
 const mockEmit = emitSurfaceIntent as ReturnType<typeof vi.fn>;
 const mockOpenExternal = openExternal as ReturnType<typeof vi.fn>;
@@ -46,6 +52,7 @@ const mockOpenExternal = openExternal as ReturnType<typeof vi.fn>;
 beforeEach(() => {
   mockEmit.mockClear();
   mockOpenExternal.mockClear();
+  mockUseActiveIdentity.mockReturnValue({ projectId: null, chatId: null, projectPath: undefined });
 });
 
 describe('UnsupportedViewer', () => {
@@ -95,5 +102,32 @@ describe('UnsupportedViewer', () => {
   it('renders inside ViewerShell (viewer-shell present)', () => {
     render(<UnsupportedViewer path="/archive.zip" />);
     expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
+  });
+
+  describe('toFileUrl — path resolution', () => {
+    it('resolves a relative path against projectPath to an absolute file:// URL', async () => {
+      mockUseActiveIdentity.mockReturnValue({ projectPath: '/home/user/myproject' });
+      const user = userEvent.setup();
+      render(<UnsupportedViewer path="src/spec.pdf" />);
+      const btn = screen.getByTestId('viewer-unsupported-open');
+      expect(btn).not.toBeDisabled();
+      await user.click(btn);
+      expect(mockOpenExternal).toHaveBeenCalledWith('file:///home/user/myproject/src/spec.pdf');
+    });
+
+    it('passes an already-absolute path through as a file:// URL unchanged', async () => {
+      mockUseActiveIdentity.mockReturnValue({ projectPath: '/home/user/myproject' });
+      const user = userEvent.setup();
+      render(<UnsupportedViewer path="/absolute/archive.zip" />);
+      await user.click(screen.getByTestId('viewer-unsupported-open'));
+      expect(mockOpenExternal).toHaveBeenCalledWith('file:///absolute/archive.zip');
+    });
+
+    it('disables "Open externally" when path is relative and projectPath is unavailable', () => {
+      mockUseActiveIdentity.mockReturnValue({ projectPath: undefined });
+      render(<UnsupportedViewer path="src/spec.pdf" />);
+      const btn = screen.getByTestId('viewer-unsupported-open');
+      expect(btn).toBeDisabled();
+    });
   });
 });
