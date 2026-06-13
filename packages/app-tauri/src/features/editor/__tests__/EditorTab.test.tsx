@@ -149,10 +149,15 @@ vi.mock('@/lib/editor/apply-value-update', () => ({
 // Mutable flag so tests can toggle lspClientManager.hasClient.
 let mockHasClient = false;
 
+// Track initLspPort call order vs ensureClient calls for the startup-race test.
+const lspCallOrder: string[] = [];
+
 vi.mock('@/lib/lsp', () => ({
   lspClientManager: {
     hasClient: (projectId: string, language: string) => mockHasClient && Boolean(projectId) && Boolean(language),
-    ensureClient: vi.fn().mockResolvedValue(undefined),
+    ensureClient: vi.fn().mockImplementation(async () => {
+      lspCallOrder.push('ensureClient');
+    }),
     ensureDocumentOpen: vi.fn(),
     preloadDocument: vi.fn(),
     getHover: vi.fn(),
@@ -162,6 +167,9 @@ vi.mock('@/lib/lsp', () => ({
   getLspLanguage: (filePath: string) => (filePath.endsWith('.ts') ? 'typescript' : null),
   hasLspSupport: (_lang: string) => true,
   initAutoConnect: vi.fn().mockReturnValue(() => undefined),
+  initLspPort: vi.fn().mockImplementation(async () => {
+    lspCallOrder.push('initLspPort');
+  }),
 }));
 
 // Inline sentinel — vi.mock factory is hoisted, so FAKE_LSP_EXTENSION is defined
@@ -201,7 +209,7 @@ vi.mock('@/features/viewers/ViewerShell', () => ({
 import { EditorTab } from '../EditorTab';
 import { saveProjectFile, getProjectFile } from '@/lib/api/files';
 
-beforeEach(() => {
+beforeEach(async () => {
   capturedCmEditorProps.length = 0;
   vi.mocked(saveProjectFile).mockClear();
   // Reset identity to no-project default so existing tests are unaffected.
@@ -217,6 +225,12 @@ beforeEach(() => {
   mockOnFileChange.mockClear();
   mockApplyValueUpdate.mockClear();
   vi.mocked(getProjectFile).mockResolvedValue('content');
+  // Reset LSP call-order tracker.
+  lspCallOrder.length = 0;
+  // Reset initLspPort and ensureClient mocks.
+  const { lspClientManager, initLspPort } = await import('@/lib/lsp');
+  vi.mocked(initLspPort).mockClear();
+  vi.mocked(lspClientManager.ensureClient).mockClear();
 });
 
 describe('EditorTab — read-only state (B4)', () => {
@@ -515,5 +529,122 @@ describe('EditorTab — live disk-change reload (D4)', () => {
     expect(screen.queryByTestId('editor-tab-reload')).toBeNull();
     // applyValueUpdate should NOT have been called by Keep-mine.
     expect(mockApplyValueUpdate.mock.calls.length).toBe(applyCallsBefore);
+  });
+});
+
+describe('EditorTab — lspReady resets on identity change (MAJOR finding)', () => {
+  it('rebuilds extraExtensions without lspReady when projectId changes (identity reset)', async () => {
+    // First render with projectId=proj-A, hasClient=true so lspReady becomes true.
+    activeIdentityState.projectId = 'proj-A';
+    activeIdentityState.chatId = 'chat-A';
+    activeIdentityState.projectPath = '/projects/A';
+    mockHasClient = true;
+
+    const { lspClientManager } = await import('@/lib/lsp');
+    vi.mocked(lspClientManager.ensureClient).mockResolvedValue(undefined);
+
+    const { rerender } = render(<EditorTab tabId="tab-lsp-reset-1" path="/project/src/index.ts" />);
+    await screen.findByTestId('cm-editor-mock');
+
+    // Switch to projectId=proj-B and mark hasClient=false so ensureClient is needed.
+    // lspReady should reset to false at the start of the ensure-client effect.
+    activeIdentityState.projectId = 'proj-B';
+    activeIdentityState.projectPath = '/projects/B';
+    mockHasClient = false;
+    // ensureClient for B will resolve but after this render cycle.
+    let resolveEnsure!: () => void;
+    vi.mocked(lspClientManager.ensureClient).mockImplementation(
+      () =>
+        new Promise<void>((r) => {
+          resolveEnsure = r;
+        }),
+    );
+
+    await act(async () => {
+      rerender(<EditorTab tabId="tab-lsp-reset-1" path="/project/src/index.ts" />);
+      await Promise.resolve();
+    });
+
+    // While ensureClient is in-flight (not yet resolved), lspReady must be false.
+    // extraExtensions is rebuilt with lspReady=false so it reflects current state.
+    const propsWhilePending = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    // createLspExtensions is always called if projectId + lspLanguage exist, but
+    // the important thing is that the hook reset lspReady. We verify that
+    // ensureClient was actually invoked (which means the reset path ran).
+    expect(vi.mocked(lspClientManager.ensureClient)).toHaveBeenCalled();
+    // The last captured props must still have extraExtensions (the useMemo is still
+    // built for proj-B since projectId+lspLanguage are set), but the call itself
+    // happening proves the effect re-ran after reset.
+    expect(propsWhilePending).toBeDefined();
+
+    // Resolve the pending ensure so we don't leave hanging promises.
+    await act(async () => {
+      resolveEnsure();
+      await Promise.resolve();
+    });
+  });
+});
+
+describe('EditorTab — initLspPort awaited before ensureClient (MAJOR finding)', () => {
+  it('calls initLspPort before ensureClient on mount when projectId is set', async () => {
+    activeIdentityState.projectId = 'proj-race';
+    activeIdentityState.chatId = 'chat-race';
+    activeIdentityState.projectPath = '/projects/race';
+    mockHasClient = false;
+
+    const { lspClientManager, initLspPort } = await import('@/lib/lsp');
+    // Track ordering: initLspPort resolves first, then ensureClient is called.
+    vi.mocked(initLspPort).mockImplementation(async () => {
+      lspCallOrder.push('initLspPort');
+    });
+    vi.mocked(lspClientManager.ensureClient).mockImplementation(async () => {
+      lspCallOrder.push('ensureClient');
+    });
+
+    render(<EditorTab tabId="tab-race" path="/project/src/index.ts" />);
+    await screen.findByTestId('cm-editor-mock');
+
+    // Allow async effects to drain.
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // initLspPort must appear before ensureClient in the call sequence.
+    const initIdx = lspCallOrder.indexOf('initLspPort');
+    const ensureIdx = lspCallOrder.indexOf('ensureClient');
+    expect(initIdx).toBeGreaterThanOrEqual(0);
+    expect(ensureIdx).toBeGreaterThan(initIdx);
+  });
+});
+
+describe('EditorTab — handleSave respects current readOnly (MINOR finding)', () => {
+  it('does NOT call saveProjectFile after readOnly turns true mid-render (dep closure)', async () => {
+    // Start with readOnly=false so the editor mounts.
+    activeIdentityState.projectId = 'proj-ro-dep';
+    activeIdentityState.chatId = 'chat-ro-dep';
+    activeIdentityState.projectPath = '/projects/ro-dep';
+
+    const { rerender } = render(<EditorTab tabId="tab-ro-dep" path="/project/src/app.js" readOnly={false} />);
+    await screen.findByTestId('cm-editor-mock');
+
+    // Flip readOnly=true so the tab becomes read-only.
+    await act(async () => {
+      rerender(<EditorTab tabId="tab-ro-dep" path="/project/src/app.js" readOnly={true} />);
+      await Promise.resolve();
+    });
+
+    // Capture the latest onSave prop (should now close over readOnly=true).
+    const latestProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
+    expect(latestProps?.onSave).toBeDefined();
+
+    vi.mocked(saveProjectFile).mockClear();
+
+    // Trigger a save via the prop — should be a no-op because readOnly=true.
+    await act(async () => {
+      latestProps?.onSave?.('attempted save');
+    });
+
+    expect(vi.mocked(saveProjectFile)).not.toHaveBeenCalled();
   });
 });

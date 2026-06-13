@@ -10,7 +10,7 @@
  *
  * data-testid: "editor-tab" on the root wrapper.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ViewerShell } from '@/features/viewers/ViewerShell';
 import type { EditorView } from '@codemirror/view';
 import { readFile } from '@/lib/tauri/bridge';
@@ -22,11 +22,11 @@ import { useEditorStore } from '@/store/editor';
 import { useTabsStore } from '@/store/tabs';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
 import { lspClientManager, getLspLanguage } from '@/lib/lsp';
-import { createLspExtensions } from './lsp/cm-lsp-extensions';
 import { EditorContextMenu } from './context-menu/EditorContextMenu';
 import { CmEditorWithComments } from './inline-comments/CmEditorWithComments';
 import { MarkdownEditorTab } from './MarkdownEditorTab';
 import { useFileWatchReload } from './use-file-watch-reload';
+import { useLspDocument } from './use-lsp-document';
 
 interface EditorTabProps {
   tabId: string;
@@ -41,7 +41,6 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [cursorPos, setCursorPos] = useState<{ ln: number; col: number }>({ ln: 1, col: 1 });
-  const [lspReady, setLspReady] = useState(false);
   const setBuffer = useEditorStore((s) => s.setBuffer);
   const promoteTab = useTabsStore((s) => s.promoteTab);
   const port = useDaemonPort();
@@ -128,54 +127,18 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
     };
   }, []);
 
-  // Ensure the LSP client is connected when a project is active and the file
-  // has a supported language. Sets lspReady once ensureClient resolves.
   const lspLanguage = projectId ? getLspLanguage(path) : null;
-  useEffect(() => {
-    if (!projectId || !lspLanguage || !projectPath) return;
-    // Already connected — mark ready immediately and skip.
-    if (lspClientManager.hasClient(projectId, lspLanguage)) {
-      setLspReady(true);
-      return;
-    }
-    let cancelled = false;
-    lspClientManager
-      .ensureClient(projectId, lspLanguage, projectPath, chatId)
-      .then(() => {
-        if (!cancelled) setLspReady(true);
-      })
-      .catch((err: unknown) => {
-        console.warn('[EditorTab] LSP ensureClient failed', err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, lspLanguage, projectPath, chatId]);
-
-  // Open the document on the LSP server once the client is ready. Hover /
-  // go-to-def return empty results until the server has seen a didOpen with
-  // the file content. ensureDocumentOpen dedups per URI, so re-runs are no-ops.
   const loadedValue = loadState.status === 'ready' ? loadState.value : null;
-  useEffect(() => {
-    if (!lspReady || !projectId || !lspLanguage || loadedValue == null) return;
-    lspClientManager.ensureDocumentOpen(projectId, lspLanguage, {
-      filePath: path,
-      languageId: lspLanguage,
-      version: 1,
-      text: loadedValue,
-    });
-  }, [lspReady, projectId, lspLanguage, path, loadedValue]);
 
-  // Build LSP CM6 extensions when a project + supported language is present.
-  const extraExtensions = useMemo(() => {
-    if (!projectId || !lspLanguage) return undefined;
-    return createLspExtensions(lspClientManager, {
-      projectId,
-      language: lspLanguage,
-      filePath: path,
-      lspReady,
-    });
-  }, [projectId, lspLanguage, path, lspReady]);
+  // LSP lifecycle: ensure-client (with startup-race fix + identity reset),
+  // ensure-document-open, and CM6 extension builder.
+  const { lspReady, extraExtensions } = useLspDocument({
+    path,
+    projectId,
+    projectPath,
+    chatId,
+    loadedValue,
+  });
 
   const handleChange = useCallback(
     (value: string) => {
@@ -205,7 +168,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
           setSaveError(msg);
         });
     },
-    [port, projectId, path, chatId, setBuffer],
+    [port, projectId, path, chatId, setBuffer, readOnly],
   );
 
   if (loadState.status === 'loading') {
