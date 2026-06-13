@@ -7,25 +7,38 @@
  *
  * Exports:
  *  - `useShikiTokens(code, langHint)` — hook that resolves to token lines or
- *    null while loading / for unknown languages.
+ *    null while loading / for unknown languages. Re-tokenizes when the shiki
+ *    theme is invalidated (mode/scheme change).
  *  - `TokenLine` — renders a single shiki token line as a `<span class="block">`.
  *  - `ShikiCode` — drop-in `<pre><code>` block that swaps from plain to
  *    highlighted once the highlighter resolves.
  */
-import { useState, useEffect, useRef } from 'react';
-import type { ThemedToken } from 'shiki';
-import type { BundledLanguage } from 'shiki';
-import { getShikiHighlighter, resolveLanguage } from '@/lib/shiki-highlighter';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import type { ThemedToken, BundledLanguage } from 'shiki';
+import {
+  getShikiHighlighter,
+  resolveLanguage,
+  getShikiThemeVersion,
+  subscribeShikiTheme,
+} from '@/lib/shiki-highlighter';
+
+// ── Theme version sync ────────────────────────────────────────────────────────
+
+function useShikiThemeVersion(): number {
+  return useSyncExternalStore(subscribeShikiTheme, getShikiThemeVersion, getShikiThemeVersion);
+}
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 /**
  * Resolves shiki token lines for `code` in `langHint`.
  * Returns null while loading or when the language is unknown / unsupported.
+ * Re-tokenizes whenever the shiki theme is invalidated (e.g., after a mode/scheme change).
  */
 export function useShikiTokens(code: string, langHint: string | undefined): ThemedToken[][] | null {
   const [lines, setLines] = useState<ThemedToken[][] | null>(null);
   const mountedRef = useRef(true);
+  const themeVersion = useShikiThemeVersion();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -42,13 +55,10 @@ export function useShikiTokens(code: string, langHint: string | undefined): Them
     }
 
     getShikiHighlighter()
-      .then((h) => {
+      .then(({ highlighter, theme }) => {
         if (!mountedRef.current) return;
         try {
-          const result = h.codeToTokens(code, {
-            lang: lang as BundledLanguage,
-            theme: 'mf-warm-chrome',
-          });
+          const result = highlighter.codeToTokens(code, { lang: lang as BundledLanguage, theme });
           setLines(result.tokens);
         } catch {
           /* expected: unsupported lang variant or tokenizer error — fall back to plain */
@@ -59,7 +69,7 @@ export function useShikiTokens(code: string, langHint: string | undefined): Them
         console.warn('[shiki-tokens] highlight failed', { lang: langHint, err: String(err) });
         if (mountedRef.current) setLines(null);
       });
-  }, [code, langHint]);
+  }, [code, langHint, themeVersion]);
 
   return lines;
 }

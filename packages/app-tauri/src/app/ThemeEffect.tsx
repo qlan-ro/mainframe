@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTheme } from '@/store/theme';
+import { invalidateShikiTheme } from '@/lib/shiki-highlighter';
 
 /**
  * Maintains the GLOBAL appearance axes on <html> for runtime changes:
@@ -17,6 +18,7 @@ export function ThemeEffect() {
     root.classList.toggle('dark', mode === 'dark');
     if (scheme === 'classic') root.removeAttribute('data-scheme');
     else root.setAttribute('data-scheme', scheme);
+    invalidateShikiTheme();
   }, [mode, scheme]);
   return null;
 }

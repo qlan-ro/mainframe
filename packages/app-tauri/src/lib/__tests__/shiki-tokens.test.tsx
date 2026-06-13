@@ -5,13 +5,16 @@
  * The mock returns a predictable token structure so we can assert on rendered
  * output without depending on real shiki internals.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { renderHook } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
 // Mock shiki-highlighter (must be before the import under test)
 // ---------------------------------------------------------------------------
+
+let _themeVersion = 0;
+const _themeListeners = new Set<() => void>();
 
 vi.mock('@/lib/shiki-highlighter', () => {
   type FakeToken = { color?: string; content: string };
@@ -68,13 +71,43 @@ vi.mock('@/lib/shiki-highlighter', () => {
     },
   };
 
+  function getShikiHighlighter() {
+    return Promise.resolve({ highlighter: fakeHighlighter, theme: `mf-warm-chrome-${_themeVersion}` });
+  }
+
+  function invalidateShikiTheme() {
+    _themeVersion += 1;
+    _themeListeners.forEach((l) => l());
+  }
+
+  function getShikiThemeVersion() {
+    return _themeVersion;
+  }
+
+  function subscribeShikiTheme(cb: () => void) {
+    _themeListeners.add(cb);
+    return () => {
+      _themeListeners.delete(cb);
+    };
+  }
+
   return {
     resolveLanguage,
-    getShikiHighlighter: () => Promise.resolve(fakeHighlighter),
+    getShikiHighlighter,
+    invalidateShikiTheme,
+    getShikiThemeVersion,
+    subscribeShikiTheme,
   };
 });
 
+beforeEach(() => {
+  _themeVersion = 0;
+  _themeListeners.clear();
+  vi.restoreAllMocks();
+});
+
 import { useShikiTokens, ShikiCode } from '../shiki-tokens';
+import * as hl from '@/lib/shiki-highlighter';
 
 // ---------------------------------------------------------------------------
 // useShikiTokens
@@ -162,4 +195,22 @@ describe('ShikiCode', () => {
     expect(screen.getByRole('code').textContent).toBe('raw code here');
     expect(document.querySelector('span[style*="color"]')).toBeNull();
   });
+});
+
+// ---------------------------------------------------------------------------
+// Theme invalidation: re-requests the highlighter when theme is invalidated
+// ---------------------------------------------------------------------------
+
+it('re-requests the highlighter when the theme is invalidated', async () => {
+  const spy = vi.spyOn(hl, 'getShikiHighlighter').mockResolvedValue({
+    // minimal stub
+    highlighter: { codeToTokens: () => ({ tokens: [[{ content: 'x', color: '#fff' }]] }) } as never,
+    theme: 'mf-warm-chrome-0',
+  });
+  render(<ShikiCode code="const x = 1" lang="ts" preClass="" />);
+  await Promise.resolve();
+  const callsBefore = spy.mock.calls.length;
+  hl.invalidateShikiTheme();
+  await Promise.resolve();
+  expect(spy.mock.calls.length).toBeGreaterThan(callsBefore);
 });

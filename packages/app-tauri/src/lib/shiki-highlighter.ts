@@ -4,11 +4,11 @@
  * Both the chat SyntaxHighlighter and the markdown preview code blocks consume
  * this module so the WASM grammar engine initialises only once per session.
  *
- * Consumers import `getShikiHighlighter()` and `resolveLanguage()`. They own
- * the theme used for tokenization — the engine is theme-aware but the theme
- * object is passed in at call time.
+ * Consumers import `getShikiHighlighter()` and `resolveLanguage()`. They receive
+ * both the highlighter and the CURRENT theme name — the theme name changes when
+ * the appearance theme is invalidated (mode/scheme change).
  */
-import { getSingletonHighlighter, type BundledLanguage } from 'shiki';
+import { createHighlighter, type BundledLanguage, type Highlighter } from 'shiki';
 
 // ── Language support ──────────────────────────────────────────────────────────
 
@@ -83,9 +83,18 @@ function readVar(name: string): string {
   return value;
 }
 
+// ── Theme versioning ──────────────────────────────────────────────────────────
+
+let themeVersion = 0;
+const themeListeners = new Set<() => void>();
+
+function currentThemeName(): string {
+  return `mf-warm-chrome-${themeVersion}`;
+}
+
 function buildWarmChromeTheme() {
   return {
-    name: 'mf-warm-chrome' as const,
+    name: currentThemeName(),
     type: 'dark' as const,
     colors: {
       'editor.background': readVar('--mf-code-bg'),
@@ -120,19 +129,40 @@ function buildWarmChromeTheme() {
   };
 }
 
+/** Invalidate the snapshotted code palette after a mode/scheme change. */
+export function invalidateShikiTheme(): void {
+  themeVersion += 1;
+  themeListeners.forEach((l) => l());
+}
+
+export function getShikiThemeVersion(): number {
+  return themeVersion;
+}
+
+export function subscribeShikiTheme(cb: () => void): () => void {
+  themeListeners.add(cb);
+  return () => {
+    themeListeners.delete(cb);
+  };
+}
+
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
-type HighlighterInstance = Awaited<ReturnType<typeof getSingletonHighlighter>>;
-
-let highlighterPromise: Promise<HighlighterInstance> | null = null;
+let highlighterPromise: Promise<Highlighter> | null = null;
+const loadedThemes = new Set<string>();
 
 /**
- * Returns the singleton shiki highlighter, initialising it on first call.
- * The promise is cached; failed inits clear the cache so the next call retries.
+ * Returns the shiki highlighter plus the CURRENT theme name. Consumers must
+ * tokenize with the returned `theme` (it changes when the appearance theme does).
+ * On a theme change the next call loads a freshly-built theme into the existing
+ * engine (no WASM re-init).
  */
-export function getShikiHighlighter(): Promise<HighlighterInstance> {
+export async function getShikiHighlighter(): Promise<{ highlighter: Highlighter; theme: string }> {
+  const theme = currentThemeName();
+
   if (!highlighterPromise) {
-    highlighterPromise = getSingletonHighlighter({
+    const themeAtInit = theme;
+    highlighterPromise = createHighlighter({
       themes: [buildWarmChromeTheme()],
       langs: SUPPORTED_SET as unknown as BundledLanguage[],
     }).catch((err) => {
@@ -140,6 +170,15 @@ export function getShikiHighlighter(): Promise<HighlighterInstance> {
       highlighterPromise = null;
       throw err as Error;
     });
+    loadedThemes.add(themeAtInit);
+    const highlighter = await highlighterPromise;
+    return { highlighter, theme: themeAtInit };
   }
-  return highlighterPromise;
+
+  const highlighter = await highlighterPromise;
+  if (!loadedThemes.has(theme)) {
+    await highlighter.loadTheme(buildWarmChromeTheme());
+    loadedThemes.add(theme);
+  }
+  return { highlighter, theme };
 }

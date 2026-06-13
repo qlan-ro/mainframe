@@ -72,9 +72,21 @@ vi.mock('@/lib/shiki-highlighter', () => {
     },
   };
 
+  const listeners = new Set<() => void>();
+
   return {
     resolveLanguage,
-    getShikiHighlighter: () => Promise.resolve(fakeHighlighter),
+    getShikiHighlighter: () => Promise.resolve({ highlighter: fakeHighlighter, theme: 'mf-warm-chrome-0' }),
+    invalidateShikiTheme: () => {
+      listeners.forEach((l) => l());
+    },
+    getShikiThemeVersion: () => 0,
+    subscribeShikiTheme: (cb: () => void) => {
+      listeners.add(cb);
+      return () => {
+        listeners.delete(cb);
+      };
+    },
   };
 });
 
