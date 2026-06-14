@@ -58,8 +58,10 @@ assistant-ui slots we *restyle*. Our designs are the styling target for those sl
 | **Settings** (05) | **`Dialog`** + **`Tabs`** + `Switch`/`Select`/`Input`/`Label`/`RadioGroup` | Our left-nav pane layout inside the dialog; `--popover` surface |
 | Branch switcher `BranchPopover` (13) | **`Popover`** + **`Command`** (searchable) | Our Local / worktree / Remote grouped sections; `+ new session` / delete actions |
 | Tabs (surface/editor tabs) (04) | `Tabs` *or* keep custom | Editor tabs are custom (close/split/drag); style to match `Tabs` token treatment. Active = `--mf-tab-active` |
-| **Sidebar** (02) | shadcn **`Sidebar`** primitive | Our session list density; collapsible groups = `Collapsible` |
-| Session rows `SessionRowDense` (02) | Custom on `Sidebar` rows | Keep our dense row (status dot, worktree, PR, tags) |
+| **Sidebar** (02) | shadcn **`Sidebar`** primitive | Full-height (no window-wide status bar below it). Our session list density; collapsible groups = `Collapsible`. Bottom **footer strip**: green Connected pip + compact session-state cluster (colored dot + count per status, full labels in `Tooltip`) |
+| Session rows `SessionRowDense` (02) | Custom on `Sidebar` rows | Keep our dense row (status dot, worktree, PR, tags). Status glyphs: working = accent spinner ring · **waiting = solid amber pip (+ pulsing halo when unread) + amber “Answer ready”/“Your turn” pill** · idle = grey dot (accent-tinted when unread) |
+| **Surface rail** Chat·Files·Run `SurfaceRail` (02) | segmented `Toggle` group | Lives in the **main toolbar right cluster** (grouped with mode toggle + inspector toggle — the “view controls”), NOT in the sidebar. Lit chip = surface present; last lit toggle disabled (floor invariant) |
+| **Update pill** (02) | `Button` (accent-tinted, small) | Sits in the **sidebar header next to traffic lights** (app-level chrome). Accent-tinted bg (`--primary` at ~8%), download icon + “Update” |
 | Tasks / Todos (12) | `Checkbox` + `Collapsible` / `Accordion` | Our grouped Global/Project sections, strike-through done |
 | Filter / tag pills (02) | **`Badge`** / **`Toggle`** | Pill radius `full`; active = `--primary` tint |
 | Icon buttons (`gActionStyle`, `PvToolBtn`, toolbar) | **`Button`** `variant="ghost" size="icon"` | 22–28px; hover `--accent` |
@@ -199,3 +201,64 @@ the consolidated "stock-shadcn-next-to-ours, diff" reference §5 asks for.
 
 **Rule of thumb:** if you need a field that isn't in the relevant `*-api.ts` / `*.d.ts`
 type, it isn't real — check the source before adding UI for it.
+
+---
+
+## 8. Appearance system — Mode × Colour Scheme × Window Style
+
+> **Added 2026-06-12.** The app's appearance is THREE independent, user-facing axes.
+> All 18 combinations (2 × 3 × 3) are valid and were validated live in the prototype.
+> `mainframe-theme.css` carries axes 1–2 entirely; axis 3 is structural and lands in
+> the shell layout component. Adapt the EXISTING layout — nothing here adds screens.
+
+### 8.1 Mode — `light | dark`
+- **CSS contract:** `class="dark"` on `<html>` (stock shadcn convention). Variables cascade live — no reload.
+- **Control:** the toolbar sun/moon button AND Settings. The toggle flips mode while **preserving the colour scheme** (`light-ocean` ↔ `dark-ocean`).
+
+### 8.2 Colour scheme — `classic | ocean | velvet`
+- **CSS contract:** `data-scheme="ocean" | "velvet"` on `<html>`; absent = classic. Composes with `.dark` (e.g. `.dark[data-scheme="ocean"]`).
+- A scheme re-colors **everything** — paper tint, accent, hover/selection tints, code + terminal palettes, the user-message cool card, viewer matte — but changes **zero geometry**. All six blocks are in `mainframe-theme.css`.
+- **The accent is per mode×scheme** (this is the headline change — `--primary`/`--ring` are no longer one shared blue):
+
+| Scheme | Light surfaces / accent | Dark surfaces / accent | Code-color personality |
+|---|---|---|---|
+| **Classic** | warm paper `#e9e7e2` / iOS blue `#0a84ff` | Dracula-ish slate `#1b1c25` / periwinkle `#8a70f5` | Xcode-ish (light) · pink/yellow/mint pastels (dark) |
+| **Ocean** | cool mist `#e2e8ea` / teal `#0e9888` | deep navy `#141923` / teal `#2fc6b7` | lake tones — cyan kw, lime str, gold fn |
+| **Velvet** | blush `#ebe4eb` / rose `#d6488f` | aubergine `#1e1726` / rose `#f06bb3` | berry tones — pink kw, amber str, mint fn |
+
+- **Never hardcode the accent.** The prototype rule carries over: components consume `--primary` (and tint via `color-mix`/alpha), never a literal. Anywhere the old code baked `#0a84ff` or `rgba(10,132,255,…)` must read the variable.
+- **Status colors** (`--mf-warning`, `--mf-success`, `--destructive`) are also per scheme/mode — keep consuming the vars.
+
+### 8.3 Window style — `unified | split | glass`
+- **Contract:** `data-window-style` on the shell root; consumed by the **layout components** (not the theme CSS). Structural only — identical components, different composition:
+
+| | **unified** (default) | **split** | **glass** |
+|---|---|---|---|
+| Window bg | flat `--mf-window` | `--background` (content fills window) | flat `--mf-window` (same as unified — a gradient wash was tried and cut: it made the sidebar gutter and bottom inset read as different colours) |
+| Window padding / gap | none | none | 7px padding, 7px gap between sidebar and main column |
+| Sidebar | transparent, flush, full-height | transparent, flush + `0.5px` hairline to its right | **frosted floating card**: `--mf-glass` bg, `backdrop-blur(40px) saturate(180%)`, radius 13, hairline ring shadow |
+| Surface panes | floating cards: radius 10, hairline ring + soft shadow, gutter 8, content inset `4 10 10` | full-bleed: radius 0, no shadow, panes divided by `0.5px` hairlines (gutter 9) | floating cards: radius 11, slightly deeper shadow, gutter 8, content inset `4 4 0` (zero bottom — card bottoms align with the sidebar card edge) |
+| Toolbar band | transparent over window bg | `--background` fill + bottom hairline | transparent over the wash |
+| Pane dividers | gap (empty gutter) | hairline line in gutter | gap |
+- Retired: a fourth “canvas” style (near-duplicate of unified) was cut — don't port it.
+- **Persistence:** one setting per axis. Prototype stores theme name as `mode[-scheme]` (`'dark-ocean'`) + window style separately; production should keep them as separate settings keys. The prototype's `?theme=` / `?shell=` URL params (non-persisting overrides) are a prototype-only affordance for embedding — optional in production.
+
+### 8.4 Where the controls live
+- **Toolbar (right cluster, “view controls”):** surface rail (Chat·Files·Run) · mode sun/moon · inspector toggle.
+- **Settings → Appearance:** Mode (Light/Dark) · Colour scheme (Classic/Ocean/Velvet) · Window style (Unified/Split/Glass). (In the prototype these are Tweaks-panel radios; in production they're Settings.)
+
+---
+
+## 9. Session changelog — 2026-06-12 (chrome + theming pass)
+
+Everything that changed in the prototype this session, so an existing implementation
+can be diffed against the spec instead of re-discovering it:
+
+1. **Appearance system** (§8) — Mode × Colour Scheme × Window Style. New: ocean + velvet schemes (both modes); dark-classic redesigned from warm charcoal to Dracula-ish slate; **the accent is now themed per mode×scheme** (periwinkle/teal/rose on dark — full iOS blue was strident); `mainframe-theme.css` regenerated with all six blocks.
+2. **Window styles** — “shell” variants unified/split/glass (§8.3); “canvas” retired.
+3. **Status bar REMOVED** — the window-wide bottom status bar is gone. Its contents were redistributed: **Connected pip + session-state counts → sidebar footer** (counts as compact colored dot+number cluster, derived from the live session list); **branch → title bar only** (was duplicated); **Update → accent pill in the sidebar header** next to the traffic lights. Main content now runs full-height.
+4. **Sidebar** — full-height; header hairline removed; bottom Context/Skills/Agents panel tint removed (one uniform surface, hairline dividers only); “+N more” collapse toggles are plain accent text labels (no pill chrome).
+5. **Surface rail moved** — Chat·Files·Run toggles moved from the sidebar header into the **main toolbar right cluster**, grouped with the mode + inspector toggles.
+6. **Session-row status system** — three honest glyphs: working = accent spinner ring; **waiting = solid amber pip with pulsing halo when unread + an amber “Answer ready” (unread) / outlined “Your turn” (seen) pill** in the meta line; idle = grey dot, accent-tinted when unread-non-blocking. No count badges (the state is binary). Status-bar-style counts now live in the sidebar footer and are **derived from the session list** (never hardcoded).
+7. **Tweaks/dev controls trimmed** (prototype-only) — starting arrangement, chat side, drop mechanics, inspector toggle, and the window-states dev section were removed from the prototype's Tweaks panel; remaining: Mode, Colour scheme, Window style. Production equivalent: Settings → Appearance (§8.4).
+8. **Misc fixes** — nested-`<button>` in the Run console drawer header (now `role="button"` div hosting the clear-logs icon button); doubled toolbar divider removed.

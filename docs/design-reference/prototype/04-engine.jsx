@@ -83,9 +83,7 @@ function Inspector() {
 
   return (
     <div ref={wrapRef} style={{
-      width: 288, flexShrink: 0, background: T.content2,
-      borderRadius: 13,
-      boxShadow: `0 0 0 0.5px ${T.border}, 0 1px 2px rgba(0,0,0,0.04)`,
+      width: 280, flexShrink: 0, background: 'transparent',
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
       fontFamily: FONT, color: T.text,
     }}>
@@ -478,62 +476,6 @@ function SectionLabel({ children }) {
 }
 
 // ── Status bar (matches real app: connection · branch · counts · update) ─
-function StatusBar() {
-  return (
-    <div style={{
-      height: 22, flexShrink: 0, background: T.glass,
-      backdropFilter: 'blur(40px) saturate(180%)',
-      WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-      borderTop: `0.5px solid ${T.border}`,
-      display: 'flex', alignItems: 'center', padding: '0 12px', gap: 16,
-      fontFamily: FONT, fontSize: 10, color: T.text3, letterSpacing: -0.05,
-    }}>
-      {/* Connection */}
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: T.text2 }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.green }}/>
-        Connected
-      </span>
-
-      {/* Git branch — opens the real branch switcher (upward, since the status bar
-          sits at the bottom of the viewport). */}
-      <BranchPopover side="top" align="start" trigger={({ toggle, open }) => (
-        <button onClick={toggle} title="Switch branch" style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          height: 18, padding: '0 6px', borderRadius: 4, marginLeft: -6,
-          border: 'none', background: open ? T.rowHover : 'transparent', cursor: 'pointer',
-          color: T.text2, fontFamily: FONT, fontSize: 10, letterSpacing: -0.05,
-        }} onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = T.rowHover; }}
-           onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = 'transparent'; }}>
-          <Icon name="branch" size={11} color={ACCENT}/>
-          <span style={{ fontFamily: MONO }}>{BRANCH_CURRENT}</span>
-        </button>
-      )}/>
-
-      {/* Session counts */}
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: T.text2 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <span style={{
-            width: 6, height: 6, borderRadius: '50%', background: ACCENT,
-          }} className="tw-pulse"/>
-          2 Working
-        </span>
-        <span style={{ color: T.amber }}>1 Needs Input</span>
-        <span>4 Idle</span>
-      </span>
-
-      <div style={{ flex: 1 }}/>
-
-      {/* Update indicator (right) */}
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5, color: ACCENT, cursor: 'pointer',
-      }}>
-        <Icon name="arrow.down" size={10} color={ACCENT}/>
-        Update v0.20.0
-      </span>
-    </div>
-  );
-}
-
 // ── Root ──────────────────────────────────────────────────────────────
 
 // Tree helpers --------------------------------------------------------
@@ -809,11 +751,36 @@ function buildInitialSessions(side, initialKind) {
 }
 
 // ── shared style atoms ────────────────────────────────────────────────
-const surfaceCard = {
-  display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0,
-  background: T.content, borderRadius: 11, overflow: 'hidden',
-  boxShadow: `0 0 0 0.5px ${T.border}, 0 1px 2px rgba(0,0,0,0.05)`,
+// Shell variants — window-chrome treatments, switchable from the Tweaks
+// panel ("Shell").
+//   unified — flat chrome: surfaces float as soft cards on the warm window bg.
+//   split   — full-bleed panes divided by hairlines (classic macOS document feel).
+//   glass   — liquid-glass sidebar: the sidebar floats as a frosted card on the
+//             window bg; surfaces keep the unified card language.
+const SHELLS = {
+  unified: {
+    pad: '4px 10px 10px', gutter: 8, divider: 'gap', toolbar: 'warm', contentBg: 'transparent',
+    card: { borderRadius: 10, boxShadow: `0 0 0 0.5px ${T.border}, 0 1px 2px rgba(0,0,0,0.04), 0 6px 18px rgba(0,0,0,0.05)` },
+    window: { pad: 0, gap: 0, gradient: false }, sidebar: 'flat',
+  },
+  split: {
+    pad: 0, gutter: 9, divider: 'hairline', toolbar: 'white', contentBg: T.content,
+    card: { borderRadius: 0, boxShadow: 'none' },
+    window: { pad: 0, gap: 0, gradient: false }, sidebar: 'flat',
+  },
+  glass: {
+    pad: '4px 4px 0', gutter: 8, divider: 'gap', toolbar: 'warm', contentBg: 'transparent',
+    card: { borderRadius: 11, boxShadow: `0 0 0 0.5px ${T.border}, 0 1px 2px rgba(0,0,0,0.05), 0 8px 24px rgba(0,0,0,0.06)` },
+    window: { pad: 7, gap: 7, gradient: false }, sidebar: 'glass',
+  },
 };
+let SHELL = SHELLS.unified;   // set per-render by MainframeTabbed before children render
+
+const surfaceCardBase = {
+  display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0,
+  background: T.content, overflow: 'hidden',
+};
+const surfCard = () => ({ ...surfaceCardBase, ...SHELL.card });
 const hdrBtn = {
   width: 24, height: 24, display: 'grid', placeItems: 'center', border: 'none',
   background: 'transparent', cursor: 'pointer', borderRadius: 6,
@@ -891,7 +858,7 @@ function SurfaceTabStrip({ surface, primary, paneId, tabs, active, drag, actions
   const labelFor = (t) => (t.kind === 'preview') ? (t.config || t.title) : t.title;
   return (
     <div style={{
-      height: 34, flexShrink: 0, background: T.tabBar, borderBottom: `0.5px solid ${T.border}`,
+      height: 36, flexShrink: 0, background: 'transparent', borderBottom: `0.5px solid ${T.hairline}`,
       display: 'flex', alignItems: 'center', position: 'relative',
     }}>
       {primary && (
@@ -924,9 +891,8 @@ function SurfaceTabStrip({ surface, primary, paneId, tabs, active, drag, actions
               onClick={() => actions.activateTab(surface, paneId, t.id)}
               title={isFiles ? 'Drag into Run to view side-by-side' : labelFor(t)}
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 6px 0 9px', height: 26, borderRadius: 8,
-                background: a ? T.content : 'transparent',
-                boxShadow: a ? `0 0 0 0.5px ${T.border}, 0 1px 2px rgba(0,0,0,0.05)` : 'none',
+                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 6px 0 9px', height: 26, borderRadius: 7,
+                background: a ? T.chipBg : 'transparent',
                 cursor: isFiles ? 'grab' : 'pointer', flexShrink: 0, transition: 'background 120ms ease',
               }}
               onMouseEnter={(e) => { if (!a) e.currentTarget.style.background = T.rowHover; }}
@@ -1043,10 +1009,10 @@ function SurfacePicker({ surface, actions }) {
 
 function ChatSurface({ ws, actions, drag, flex }) {
   return (
-    <div data-surface="chat" style={{ ...surfaceCard, flex }}>
+    <div data-surface="chat" style={{ ...surfCard(), flex }}>
       <div title="Drag to swap Chat side"
         onPointerDown={(e) => { if (e.button === 0 && drag) drag.beginSurfaceDrag('chat', e); }}
-        style={{ height: 34, flexShrink: 0, background: T.tabBar, borderBottom: `0.5px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 7, padding: '0 6px 0 8px', cursor: 'grab' }}>
+        style={{ height: 36, flexShrink: 0, background: 'transparent', borderBottom: `0.5px solid ${T.hairline}`, display: 'flex', alignItems: 'center', gap: 7, padding: '0 6px 0 8px', cursor: 'grab' }}>
         <Icon name="grip" size={13} color={T.text4}/>
         <Icon name="chat" size={13} color={ACCENT}/>
         <span className="tw-trim" style={{ flex: 1, minWidth: 0, fontFamily: FONT, fontSize: 12, fontWeight: 600, color: T.text, letterSpacing: -0.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ws.title}</span>
@@ -1085,7 +1051,7 @@ function FilesSurface({ ws, actions, drag, flex }) {
   const f = ws.files || { tabs: [], active: null };
   const active = f.tabs.find(t => t.id === f.active);
   return (
-    <div data-surface="files" style={{ ...surfaceCard, flex }}>
+    <div data-surface="files" style={{ ...surfCard(), flex }}>
       <SurfaceTabStrip surface="files" primary tabs={f.tabs} active={f.active} drag={drag} actions={actions}/>
       {active ? <SurfaceBody tab={active}/> : <SurfacePicker surface="files" actions={actions}/>}
     </div>
@@ -1108,7 +1074,7 @@ function RunSurface({ ws, actions, drag, flex }) {
   const split = run.panes.length === 2;
   return (
     <div ref={ref} data-surface="run" data-run-region style={{
-      ...surfaceCard, flex, flexDirection: split && run.dir === 'h' ? 'column' : 'row', position: 'relative',
+      ...surfCard(), flex, flexDirection: split && run.dir === 'h' ? 'column' : 'row', position: 'relative',
     }}>
       {run.panes.map((p, i) => (
         <React.Fragment key={p.id}>
@@ -1141,7 +1107,8 @@ function SurfDivider({ axis, containerRef, onFrac }) {
     const up = () => { document.body.style.cursor = ''; document.body.style.userSelect = ''; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   };
-  const gutter = 6;
+  const gutter = SHELL.gutter;
+  const hairline = SHELL.divider === 'hairline';
   return (
     <div onPointerDown={onDown} onMouseEnter={() => setHot(true)} onMouseLeave={() => setHot(false)}
       style={{
@@ -1150,9 +1117,9 @@ function SurfDivider({ axis, containerRef, onFrac }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
       <div style={{
-        [axis === 'x' ? 'width' : 'height']: hot ? 2 : 0,
+        [axis === 'x' ? 'width' : 'height']: hot ? 2 : (hairline ? 1 : 0),
         [axis === 'x' ? 'height' : 'width']: '100%',
-        background: ACCENT, borderRadius: 2, transition: 'all 0.12s',
+        background: hot ? ACCENT : T.border, borderRadius: 2, transition: 'background 0.12s',
       }}/>
     </div>
   );
@@ -1171,7 +1138,7 @@ function WorkspaceArea({ ws, actions, drag }) {
             <SurfaceView name={name} ws={ws} actions={actions} drag={drag} flex={ws.topFlex[name] || 1}/>
             {i < top.length - 1 && (twoCol
               ? <SurfDivider axis="x" containerRef={topRef} onFrac={(f) => actions.setTopFrac(top[0], top[1], f)}/>
-              : <div style={{ width: 6, flexShrink: 0 }}/>)}
+              : <div style={{ width: SHELL.gutter, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>{SHELL.divider === 'hairline' && <div style={{ width: 1, background: T.border }}/>}</div>)}
           </React.Fragment>
         ))}
       </div>
@@ -1212,7 +1179,8 @@ function DragOverlay({ drag, drop, pt }) {
 // ═════════════════════════════════════════════════════════════════════
 // ROOT
 // ═════════════════════════════════════════════════════════════════════
-function MainframeTabbed({ width = 1440, height = 920, chrome = 'warm', inspector = true, chatSide = 'left', dropMode = 'position', initial = 'chat-files' }) {
+function MainframeTabbed({ width = 1440, height = 920, shell = 'unified', inspector = true, chatSide = 'left', dropMode = 'position', initial = 'chat-files' }) {
+  SHELL = SHELLS[shell] || SHELLS.unified;   // module-level: children read it at render time
   const [bySession, setBySession] = React.useState(() => buildInitialSessions(chatSide, initial));
   const [activeSession, setActiveSession] = React.useState('s1');
   const [inspectorOpen, setInspectorOpen] = React.useState(inspector);
@@ -1422,9 +1390,12 @@ function MainframeTabbed({ width = 1440, height = 920, chrome = 'warm', inspecto
     <WorkspaceCtx.Provider value={{ openTarget }}>
     <LaunchCtx.Provider value={{ selected: launchSel, setSelected: setLaunchSel, openConfig: (name) => { setLaunchSel(name); actions.addRun('preview', name); }, status: launchStatus, start: startConfig, stop: stopConfig, restart: restartConfig }}>
       <div style={{
-        width, height, borderRadius: 11, overflow: 'hidden',
-        background: `radial-gradient(900px 600px at 20% 20%, ${ACCENT}10, transparent 60%), radial-gradient(700px 500px at 80% 90%, #ff9f0a10, transparent 60%), ${T.windowBg}`,
-        boxShadow: T.shadow, fontFamily: FONT, color: T.text, display: 'flex', flexDirection: 'column', position: 'relative', padding: 6,
+        width, height, borderRadius: 12, overflow: 'hidden',
+        background: SHELL.window.gradient
+          ? `radial-gradient(900px 600px at 20% 20%, ${ACCENT}10, transparent 60%), radial-gradient(700px 500px at 80% 90%, #ff9f0a10, transparent 60%), ${T.windowBg}`
+          : T.windowBg,
+        boxShadow: T.shadow, fontFamily: FONT, color: T.text, display: 'flex', flexDirection: 'column', position: 'relative',
+        padding: SHELL.window.pad,
       }}>
         <style>{`
           @keyframes twPulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
@@ -1443,7 +1414,7 @@ function MainframeTabbed({ width = 1440, height = 920, chrome = 'warm', inspecto
           .tw-trim { text-box-trim: trim-both; text-box-edge: cap alphabetic; -webkit-text-box-trim: trim-both; -webkit-text-box-edge: cap alphabetic; }
         `}</style>
 
-        <div style={{ flex: 1, display: 'flex', gap: 6, overflow: 'hidden', minHeight: 0, position: 'relative' }}>
+        <div style={{ flex: 1, display: 'flex', gap: SHELL.window.gap, overflow: 'hidden', minHeight: 0, position: 'relative' }}>
           {sidebarOpen && (
             <Sidebar surfaces={surfacesState} onToggleSurface={onToggleSurface}
               activeSession={activeSession} onSelectSession={setActiveSession}
@@ -1453,21 +1424,21 @@ function MainframeTabbed({ width = 1440, height = 920, chrome = 'warm', inspecto
           )}
           <div style={{
             flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0,
-            background: chrome === 'warm' ? T.tabBar : T.content, borderRadius: 13, overflow: 'hidden',
-            boxShadow: `0 0 0 0.5px ${T.border}, 0 1px 2px rgba(0,0,0,0.04)`,
+            background: SHELL.contentBg,
+            boxShadow: shell === 'split' ? `-0.5px 0 0 ${T.border}` : 'none',
           }}>
             <MainToolbar inspectorOpen={inspectorOpen} toggleInspector={() => setInspectorOpen(o => !o)}
-              variant={chrome} chatHidden={!surfacesState.chat} onShowChat={() => onToggleSurface('chat')}
+              variant={SHELL.toolbar} chatHidden={!surfacesState.chat} onShowChat={() => onToggleSurface('chat')}
               sidebarHidden={!sidebarOpen} onShowSidebar={() => setSidebarOpen(true)}
+              surfaces={surfacesState} onToggleSurface={onToggleSurface}
               onOpenSettings={() => setSettingsOpen(true)} onOpenSearch={() => setPaletteOpen(true)}/>
-            <div ref={contentRef} style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, padding: 6 }}>
+            <div ref={contentRef} style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, padding: SHELL.pad }}>
               <WorkspaceArea ws={ws} actions={actions} drag={dragApi}/>
             </div>
           </div>
           {inspectorOpen && <Inspector/>}
         </div>
 
-        <StatusBar/>
         <DragOverlay drag={drag} drop={drop} pt={pt}/>
         {window.SettingsModal && <window.SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)}/>}
         {window.DirectoryPickerModal && <window.DirectoryPickerModal open={dirPickerOpen} onCancel={() => setDirPickerOpen(false)} onSelect={() => setDirPickerOpen(false)}/>}

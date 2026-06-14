@@ -72,9 +72,15 @@ function ToolCard({ tool, defaultOpen, onOpenFile }) {
         <span style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, background: `${meta.color}1c`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon name={meta.icon} size={13} color={meta.color}/>
         </span>
-        <span style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: T.text, flexShrink: 0 }}>{meta.verb}</span>
-        {target && (
-          <code style={{ fontFamily: MONO, fontSize: 11, color: T.text2, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{target}</code>
+        {tool.type === 'bash' ? (
+          <code style={{ fontFamily: MONO, fontSize: 11.5, fontWeight: 500, color: T.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tool.cmd}</code>
+        ) : (
+          <React.Fragment>
+            <span style={{ fontFamily: FONT, fontSize: 12, fontWeight: 600, color: T.text, flexShrink: 0 }}>{meta.verb}</span>
+            {target && (
+              <code style={{ fontFamily: MONO, fontSize: 11, color: T.text2, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{target}</code>
+            )}
+          </React.Fragment>
         )}
         {tool.meta && <span style={{ fontFamily: MONO, fontSize: 10, color: T.text4, flexShrink: 0 }}>{tool.meta}</span>}
         <div style={{ flex: 1, minWidth: 8 }}/>

@@ -3,7 +3,26 @@
 // Tabs live in Editor Groups. Groups can be split horizontally or vertically.
 // Default: 50/50 chat on the left, code on the right.
 
-const ACCENT = '#0a84ff';
+// Theme is decided before tokens. The theme NAME composes MODE × SCHEME:
+//   mode:   'light' | 'dark'
+//   scheme: 'classic' (default, no suffix) | 'ocean' | 'velvet'
+//   names:  'light' · 'dark' · 'light-ocean' · 'dark-ocean' · 'light-velvet' · 'dark-velvet'
+// Classic = warm paper / Dracula-ish slate (blue / periwinkle accents).
+// Ocean   = cool mist / deep navy (teal accents, lime/gold/cyan code colors).
+// Velvet  = blush paper / aubergine (rose accents, pink/mint code colors).
+// The accent is themed per name — full iOS blue reads strident on dark.
+// ACCENT_RGB feeds rgba() tints.
+const __mfThemeName = (typeof window !== 'undefined' && typeof window.__mfTheme === 'string') ? window.__mfTheme : 'light';
+const __mfMode = __mfThemeName.indexOf('dark') === 0 ? 'dark' : 'light';
+const __MF_ACCENTS = {
+  'light':        ['#0a84ff', '10,132,255'],
+  'dark':         ['#8a70f5', '138,112,245'],
+  'light-ocean':  ['#0e9888', '14,152,136'],
+  'dark-ocean':   ['#2fc6b7', '47,198,183'],
+  'light-velvet': ['#d6488f', '214,72,143'],
+  'dark-velvet':  ['#f06bb3', '240,107,179'],
+};
+const [ACCENT, ACCENT_RGB] = __MF_ACCENTS[__mfThemeName] || __MF_ACCENTS.light;
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif';
 const MONO = '"SF Mono", ui-monospace, Menlo, Monaco, monospace';
 const FONT_DISPLAY = FONT;  // native system stack also serves display — no separate brand face by design
@@ -85,7 +104,8 @@ const EASING = {
 // time. It is THEME-SWAPPABLE: at module-eval the active theme's values are
 // copied into `T` (Object.assign), so every component — and every module-level
 // style atom that bakes a `T.*` color at eval — gets the right theme with no
-// per-call-site branching. Light is warm paper; dark is warm charcoal.
+// per-call-site branching. Light is warm paper; dark is a playful slate —
+// Darcula/Dracula-inspired: cool blue-violet surfaces, pastel code colors.
 // The host page opts in by setting `window.__mfTheme = 'dark'` BEFORE these
 // modules load; `setMfTheme(mode)` persists + reloads. Review pages that don't
 // opt in stay light. ACCENT is shared by both themes.
@@ -141,67 +161,277 @@ const MF_LIGHT = {
   viewerCheckA:'#efece6',
   viewerCheckB:'#dcd8d0',
 };
+// Light · Ocean — cool mist paper, teal accent; lake-toned code colors.
+const MF_LIGHT_OCEAN = {
+  windowBg:    '#e2e8ea',
+  glass:       'rgba(230,238,240,0.84)',
+  content:     '#ffffff',
+  content2:    '#f4f8f8',
+  raised:      '#eaf1f1',
+  tabBar:      '#edf3f4',
+  tabBarActive:'#ffffff',
+  popBg:       '#ffffff',
+  popShadow:   '0 16px 40px rgba(10,40,40,0.20), 0 0 0 0.5px rgba(0,0,0,0.14)',
+  border:      'rgba(10,40,45,0.10)',
+  borderH:     'rgba(10,40,45,0.16)',
+  borderFocus: ACCENT,
+  hairline:    'rgba(10,40,45,0.07)',
+  focusRing:   '0 0 0 3px rgba(14,152,136,0.32)',
+  text:        '#172225',
+  text2:       '#54646a',
+  text3:       '#89989d',
+  text4:       '#b6c3c7',
+  chipBg:      'rgba(10,50,55,0.05)',
+  selBg:       'rgba(14,152,136,0.11)',
+  rowHover:    'rgba(10,50,55,0.045)',
+  termBg:      '#152022',
+  termFg:      '#e3ecec',
+  termCmt:     '#6e8287',
+  termGreen:   '#34c98e',
+  termCyan:    '#4fc3dd',
+  termAmber:   '#f0a93c',
+  red:         '#d23b4e',
+  amber:       '#c07a12',
+  green:       '#1e9e58',
+  codeBg:      '#f6fafa',
+  codeKw:      '#0c7791',
+  codeStr:     '#3a7d2c',
+  codeFn:      '#a85d08',
+  codeType:    '#4956c9',
+  codeNum:     '#bb3e12',
+  codeCmt:     '#7d8a94',
+  codeFg:      '#1d262b',
+  shadow:      '0 24px 60px rgba(10,40,40,0.22), 0 0 0 0.5px rgba(0,0,0,0.18)',
+  umInk:       '#15252b',
+  umCard:      'linear-gradient(180deg, #eef7f6 0%, #e6f1f0 100%)',
+  umEdge:      'rgba(20,130,125,0.16)',
+  umDash:      'rgba(20,130,125,0.34)',
+  umFade:      '#e6f1f0',
+  viewerMatte: '#dde4e4',
+  viewerCheckA:'#e9efef',
+  viewerCheckB:'#d4dddd',
+};
+// Light · Velvet — blush paper, rose accent; berry-toned code colors.
+const MF_LIGHT_VELVET = {
+  windowBg:    '#ebe4eb',
+  glass:       'rgba(242,235,242,0.84)',
+  content:     '#ffffff',
+  content2:    '#faf6fa',
+  raised:      '#f3ecf3',
+  tabBar:      '#f2edf2',
+  tabBarActive:'#ffffff',
+  popBg:       '#ffffff',
+  popShadow:   '0 16px 40px rgba(60,20,50,0.20), 0 0 0 0.5px rgba(0,0,0,0.14)',
+  border:      'rgba(60,20,55,0.10)',
+  borderH:     'rgba(60,20,55,0.16)',
+  borderFocus: ACCENT,
+  hairline:    'rgba(60,20,55,0.07)',
+  focusRing:   '0 0 0 3px rgba(214,72,143,0.30)',
+  text:        '#231a28',
+  text2:       '#615669',
+  text3:       '#94899c',
+  text4:       '#c0b6c6',
+  chipBg:      'rgba(70,20,60,0.05)',
+  selBg:       'rgba(214,72,143,0.10)',
+  rowHover:    'rgba(70,20,60,0.045)',
+  termBg:      '#1f1622',
+  termFg:      '#ece5ee',
+  termCmt:     '#857a8e',
+  termGreen:   '#3fcf80',
+  termCyan:    '#5ec3e8',
+  termAmber:   '#f5a04c',
+  red:         '#d23b54',
+  amber:       '#c0741f',
+  green:       '#1f9e54',
+  codeBg:      '#fbf8fb',
+  codeKw:      '#bb2d92',
+  codeStr:     '#9a6a08',
+  codeFn:      '#15803d',
+  codeType:    '#7635d6',
+  codeNum:     '#2456c9',
+  codeCmt:     '#8a7d92',
+  codeFg:      '#271d2e',
+  shadow:      '0 24px 60px rgba(60,20,50,0.22), 0 0 0 0.5px rgba(0,0,0,0.18)',
+  umInk:       '#2a1a2e',
+  umCard:      'linear-gradient(180deg, #f9f1f7 0%, #f3e9f1 100%)',
+  umEdge:      'rgba(190,70,150,0.15)',
+  umDash:      'rgba(190,70,150,0.32)',
+  umFade:      '#f3e9f1',
+  viewerMatte: '#e4dce4',
+  viewerCheckA:'#efe8ef',
+  viewerCheckB:'#dcd2dc',
+};
 const MF_DARK = {
-  windowBg:    '#1a1714',
-  glass:       'rgba(30,27,22,0.85)',     // frosted chrome — titlebar + sidebar (blur 40px)
-  content:     '#221f1a',
-  content2:    '#1c1915',
-  raised:      '#2c2820',
-  tabBar:      '#1e1b16',
-  tabBarActive:'#332e25',
-  popBg:       '#2a261f',
+  windowBg:    '#1b1c25',
+  glass:       'rgba(34,36,47,0.85)',     // frosted chrome — titlebar + sidebar (blur 40px)
+  content:     '#262835',
+  content2:    '#212330',
+  raised:      '#313447',
+  tabBar:      '#21232e',
+  tabBarActive:'#373a4d',
+  popBg:       '#2c2e3d',
   popShadow:   '0 18px 44px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.10)',
   border:      'rgba(255,255,255,0.10)',
   borderH:     'rgba(255,255,255,0.18)',
   borderFocus: ACCENT,
   hairline:    'rgba(255,255,255,0.06)',
-  focusRing:   '0 0 0 3px rgba(10,132,255,0.50)',  // keyboard :focus-visible
-  text:        '#f1ede5',
-  text2:       '#ada89f',
-  text3:       '#847f76',
-  text4:       '#585349',
-  chipBg:      'rgba(255,255,255,0.06)',
-  selBg:       'rgba(10,132,255,0.26)',
-  rowHover:    'rgba(255,255,255,0.05)',
-  termBg:      '#141310',
-  termFg:      '#e7e6e3',
-  termCmt:     '#7f7a72',
-  termGreen:   '#30d158',
-  termCyan:    '#5ac8fa',
-  termAmber:   '#ff9f0a',
-  red:         '#ff6b6b',
-  amber:       '#e6a23c',
-  green:       '#3ad06a',
-  // Code colors (warm dark editor)
-  codeBg:      '#1b1814',
-  codeKw:      '#e592d6',
-  codeStr:     '#eaa48f',
-  codeFn:      '#7fcfd6',
-  codeType:    '#c6a6f5',
-  codeNum:     '#9fb4ff',
-  codeCmt:     '#6f7a83',
-  codeFg:      '#e6e2da',
+  focusRing:   '0 0 0 3px rgba(138,112,245,0.50)',  // keyboard :focus-visible (periwinkle accent)
+  text:        '#f2f2f8',
+  text2:       '#a9adc3',
+  text3:       '#7d8099',
+  text4:       '#555870',
+  chipBg:      'rgba(255,255,255,0.07)',
+  selBg:       'rgba(138,112,245,0.30)',
+  rowHover:    'rgba(255,255,255,0.055)',
+  termBg:      '#15161e',
+  termFg:      '#f0f1f7',
+  termCmt:     '#6e7294',
+  termGreen:   '#5af78e',
+  termCyan:    '#84e8f5',
+  termAmber:   '#ffb86c',
+  red:         '#ff6272',
+  amber:       '#f5a960',
+  green:       '#50d97c',
+  // Code colors (playful slate editor — pastel keywords/strings)
+  codeBg:      '#21222c',
+  codeKw:      '#f47fc4',
+  codeStr:     '#eef0a0',
+  codeFn:      '#6df295',
+  codeType:    '#bd9bf5',
+  codeNum:     '#86c9f5',
+  codeCmt:     '#6b7494',
+  codeFg:      '#eef0fa',
   shadow:      '0 28px 64px rgba(0,0,0,0.66), 0 0 0 0.5px rgba(255,255,255,0.10)',
-  umInk:       '#e9ecf5',
-  umCard:      'linear-gradient(180deg, #262a35 0%, #20242e 100%)',
-  umEdge:      'rgba(150,175,235,0.20)',
-  umDash:      'rgba(150,175,235,0.34)',
-  umFade:      '#20242e',
-  viewerMatte: '#16140f',
-  viewerCheckA:'#1c1a16',
-  viewerCheckB:'#26231d',
+  umInk:       '#ebeefb',
+  umCard:      'linear-gradient(180deg, #2b2f40 0%, #252938 100%)',
+  umEdge:      'rgba(160,180,250,0.22)',
+  umDash:      'rgba(160,180,250,0.36)',
+  umFade:      '#252938',
+  viewerMatte: '#181922',
+  viewerCheckA:'#1e2029',
+  viewerCheckB:'#292b38',
+};
+// Dark · Ocean — deep navy surfaces, teal accent; lime strings, gold functions.
+const MF_DARK_OCEAN = {
+  windowBg:    '#141923',
+  glass:       'rgba(26,33,44,0.85)',
+  content:     '#1e2632',
+  content2:    '#19202b',
+  raised:      '#2a3545',
+  tabBar:      '#1b222e',
+  tabBarActive:'#303d4f',
+  popBg:       '#242e3c',
+  popShadow:   '0 18px 44px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.10)',
+  border:      'rgba(255,255,255,0.10)',
+  borderH:     'rgba(255,255,255,0.18)',
+  borderFocus: ACCENT,
+  hairline:    'rgba(255,255,255,0.06)',
+  focusRing:   '0 0 0 3px rgba(47,198,183,0.50)',
+  text:        '#edf3f8',
+  text2:       '#a3b2c2',
+  text3:       '#76869b',
+  text4:       '#4d5a6b',
+  chipBg:      'rgba(255,255,255,0.07)',
+  selBg:       'rgba(47,198,183,0.26)',
+  rowHover:    'rgba(255,255,255,0.055)',
+  termBg:      '#10161e',
+  termFg:      '#e9f0f6',
+  termCmt:     '#5f7488',
+  termGreen:   '#4ce0a0',
+  termCyan:    '#5fd8ec',
+  termAmber:   '#ffc06e',
+  red:         '#ff6b7a',
+  amber:       '#f2b04e',
+  green:       '#3fd789',
+  codeBg:      '#19212c',
+  codeKw:      '#5fd0e6',
+  codeStr:     '#b9e88e',
+  codeFn:      '#ffd47e',
+  codeType:    '#9fb9ff',
+  codeNum:     '#ff9d9d',
+  codeCmt:     '#5b6e80',
+  codeFg:      '#e8eef6',
+  shadow:      '0 28px 64px rgba(0,0,0,0.66), 0 0 0 0.5px rgba(255,255,255,0.10)',
+  umInk:       '#e9f0fa',
+  umCard:      'linear-gradient(180deg, #27313f 0%, #212a37 100%)',
+  umEdge:      'rgba(120,200,220,0.20)',
+  umDash:      'rgba(120,200,220,0.34)',
+  umFade:      '#212a37',
+  viewerMatte: '#111720',
+  viewerCheckA:'#171e28',
+  viewerCheckB:'#222c39',
+};
+// Dark · Velvet — aubergine surfaces, rose accent; pink keywords, mint functions.
+const MF_DARK_VELVET = {
+  windowBg:    '#1e1726',
+  glass:       'rgba(36,28,46,0.85)',
+  content:     '#2a2136',
+  content2:    '#241c2f',
+  raised:      '#382c48',
+  tabBar:      '#251d30',
+  tabBarActive:'#3d2f4f',
+  popBg:       '#2f253d',
+  popShadow:   '0 18px 44px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.10)',
+  border:      'rgba(255,255,255,0.10)',
+  borderH:     'rgba(255,255,255,0.18)',
+  borderFocus: ACCENT,
+  hairline:    'rgba(255,255,255,0.06)',
+  focusRing:   '0 0 0 3px rgba(240,107,179,0.45)',
+  text:        '#f5f0f8',
+  text2:       '#b5a9c4',
+  text3:       '#877b97',
+  text4:       '#594f6a',
+  chipBg:      'rgba(255,255,255,0.07)',
+  selBg:       'rgba(240,107,179,0.24)',
+  rowHover:    'rgba(255,255,255,0.055)',
+  termBg:      '#181221',
+  termFg:      '#f2ecf8',
+  termCmt:     '#6e6488',
+  termGreen:   '#5af78e',
+  termCyan:    '#84e8f5',
+  termAmber:   '#ffb86c',
+  red:         '#ff6272',
+  amber:       '#f5a960',
+  green:       '#50d97c',
+  codeBg:      '#221a2d',
+  codeKw:      '#ff7ec9',
+  codeStr:     '#f3e88f',
+  codeFn:      '#76f0aa',
+  codeType:    '#c49df7',
+  codeNum:     '#90c8ff',
+  codeCmt:     '#6f6488',
+  codeFg:      '#f1eaf8',
+  shadow:      '0 28px 64px rgba(0,0,0,0.66), 0 0 0 0.5px rgba(255,255,255,0.10)',
+  umInk:       '#f0eafa',
+  umCard:      'linear-gradient(180deg, #2f2540 0%, #291f38 100%)',
+  umEdge:      'rgba(220,150,230,0.20)',
+  umDash:      'rgba(220,150,230,0.34)',
+  umFade:      '#291f38',
+  viewerMatte: '#150f1d',
+  viewerCheckA:'#1c1526',
+  viewerCheckB:'#281f35',
 };
 
-const __mfMode = (typeof window !== 'undefined' && window.__mfTheme === 'dark') ? 'dark' : 'light';
+const __MF_THEMES = {
+  'light': MF_LIGHT, 'dark': MF_DARK,
+  'light-ocean': MF_LIGHT_OCEAN, 'dark-ocean': MF_DARK_OCEAN,
+  'light-velvet': MF_LIGHT_VELVET, 'dark-velvet': MF_DARK_VELVET,
+};
 const T = {};
-Object.assign(T, __mfMode === 'dark' ? MF_DARK : MF_LIGHT);
+Object.assign(T, __MF_THEMES[__mfThemeName] || MF_LIGHT);
 if (typeof document !== 'undefined') document.documentElement.setAttribute('data-mf-theme', __mfMode);
 if (typeof window !== 'undefined') {
   window.MF_LIGHT = MF_LIGHT;
   window.MF_DARK = MF_DARK;
+  window.MF_LIGHT_OCEAN = MF_LIGHT_OCEAN;
+  window.MF_DARK_OCEAN = MF_DARK_OCEAN;
+  window.MF_LIGHT_VELVET = MF_LIGHT_VELVET;
+  window.MF_DARK_VELVET = MF_DARK_VELVET;
+  window.MF_THEME_NAMES = Object.keys(__MF_THEMES);
   // Persist + reload so module-eval re-bakes every token under the new theme.
   window.setMfTheme = (mode) => {
-    try { localStorage.setItem('mfTheme', mode === 'dark' ? 'dark' : 'light'); } catch (e) {}
+    const m = window.MF_THEME_NAMES.indexOf(mode) >= 0 ? mode : 'light';
+    try { localStorage.setItem('mfTheme', m); } catch (e) {}
     location.reload();
   };
 }

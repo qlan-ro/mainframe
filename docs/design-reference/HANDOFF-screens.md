@@ -5,7 +5,7 @@
 > app from that spec. The prototype is HTML + React-via-Babel and is **throwaway** — do not
 > port its internals; port the **visual intent** using the handoff artifacts below.
 
-**Date:** 2026-06-03 · **Production scaffold:** `desktop/` (already set up)
+**Date:** 2026-06-03 · **Last design pass:** 2026-06-12 (chrome + appearance system — see `handoff/component-map.md` §8–§9) · **Production scaffold:** `desktop/` (already set up)
 
 ---
 
@@ -37,8 +37,8 @@ Key decisions:
 
 | Artifact | What it gives you |
 |---|---|
-| **`handoff/mainframe-theme.css`** | The prototype's design tokens emitted as the **shadcn / Tailwind v4 theme contract** (`:root` + `.dark` + `@theme inline`). Drop into `src/renderer/index.css`; it styles your shadcn components **and** every assistant-ui component (same vars) in one shot. Includes `--mf-*` extensions for surfaces shadcn has no slot for (window chrome, code/terminal palettes, user-message cool card, viewer matte) and the `[data-noring]` focus-ring opt-out. |
-| **`handoff/component-map.md`** | Every wireframe element → its **shadcn / assistant-ui / Monaco** equivalent, with per-component customization notes, the warm-chrome deltas from shadcn defaults, a reconciliation checklist, and **§6 Primitives & icons** (atom → shadcn mapping + the lucide icon inventory). Removes "which component do I build, and how do I style it" guesswork. |
+| **`handoff/mainframe-theme.css`** | The prototype's design tokens emitted as the **shadcn / Tailwind v4 theme contract** — now SIX blocks: `:root`/`.dark` (Classic) plus `[data-scheme="ocean"]` / `[data-scheme="velvet"]` light+dark overrides, with the **accent themed per mode×scheme**. Drop into `src/renderer/index.css`; it styles your shadcn components **and** every assistant-ui component (same vars) in one shot. Includes `--mf-*` extensions for surfaces shadcn has no slot for (window chrome, code/terminal palettes, user-message cool card, viewer matte) and the `[data-noring]` focus-ring opt-out. |
+| **`handoff/component-map.md`** | Every wireframe element → its **shadcn / assistant-ui / Monaco** equivalent, with per-component customization notes, the warm-chrome deltas from shadcn defaults, a reconciliation checklist, **§6 Primitives & icons** (atom → shadcn mapping + the lucide icon inventory), **§8 the Appearance system (Mode × Colour Scheme × Window Style)** — the contract for adapting an existing layout — and **§9 the 2026-06-12 session changelog**. Removes "which component do I build, and how do I style it" guesswork. |
 | **`handoff/ADR-001-editor-monaco-vs-cm6.md`** | The editor decision. If CodeMirror 6 is ever reconsidered, this maps what ports for free (the LSP layer is already editor-agnostic) vs. what must be rebuilt (peek, references panel), and recommends a cheaper hybrid first. |
 
 **Build order:** drop in `mainframe-theme.css` → stand up the shadcn + assistant-ui shells → work component-by-component through `component-map.md`, diffing each themed primitive against `Primitives.html` / the relevant review canvas.
@@ -49,8 +49,9 @@ Key decisions:
 
 Everything below is designed and reviewable in the prototype. Build each to match.
 
-- **Window chrome & shell** — title bar / traffic lights, main toolbar (model/run controls, search, theme toggle), status bar, the three **typed surfaces** (Chat · Files · Run) with the surface rail, split, and per-session remembered layouts.
-- **Sidebar** — dense session list (status dot, worktree, PR, tags), grouped by time; project filter pills + **Add project**; sessions **sort** menu + **more** menu (archived / import external); settings gear.
+- **Window chrome & shell** — title bar / traffic lights + **Update pill** (sidebar header), main toolbar (search, launch picker/run, **surface rail**, mode toggle, inspector toggle), and **three window styles** (unified · split · glass — `component-map.md` §8.3). There is **no window-wide status bar** — the sidebar's footer carries Connected + session counts, and surfaces run full-height. Three **typed surfaces** (Chat · Files · Run) with split + per-session remembered layouts.
+- **Appearance system** — Mode (light/dark) × Colour scheme (classic/ocean/velvet) × Window style, 18 valid combinations; accent, code + terminal palettes themed per mode×scheme. Contract: `component-map.md` §8; tokens: `mainframe-theme.css`.
+- **Sidebar** — full-height: dense session list (status glyphs incl. the **unread-answer system**: amber pip + halo + “Answer ready” pill; no count badges), grouped by time; project filter pills + **Add project**; sessions **sort** menu + **more** menu (archived / import external); settings gear; footer (Connected + derived session-state counts).
 - **Chat thread** — assistant/user turns, the **user-turn system** (text + Read-more clamp, @mentions, /command, /skill, plan card, queued, rich attachments, sent-with-context chips, code-review snippet), **Markdown** rendering, **tool cards** (read/edit/write/bash/grep/todo/web), and **system markers** (compaction, skill-loaded, worktree, schedule, MCP, subagent task group + progress).
 - **Interactive chat cards** — Thinking/reasoning, **Ask-a-question** (single-select / multi-select / free-text "Other" / answered), **Permission** (tool name + JSON input details + Deny / Allow once / Always allow gated on suggestions), **Plan approval** (steps + touched files + exec-mode tray).
 - **Composer** — model/provider selector (locks after first message), permission mode, plan toggle, **dynamic reasoning-effort picker + harness-features popover (Fast / Ultracode / Adaptive thinking) driven per-model by advertised capabilities**, worktree button, sandbox-context capture chips.

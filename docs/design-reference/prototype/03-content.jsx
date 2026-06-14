@@ -299,7 +299,7 @@ function ModelSelector({ sessionEmpty }) {
         onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = T.rowHover; }}
         onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = 'transparent'; }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: provider.dot, flexShrink: 0 }}/>
-        <span style={{ fontWeight: 500 }}>{model.name}</span>
+        <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{model.name}</span>
         <Icon name="chevron.down" size={9} color={T.text3}/>
       </button>
       {open && (<React.Fragment>
@@ -1321,9 +1321,11 @@ function PreviewPane({ configName = 'Preview' }) {
       {/* Console — smart drawer for previews (collapsed tail), full panel for console-only configs */}
       {hasPreview ? (
         <div style={{ flexShrink: 0, borderTop: `0.5px solid ${T.hairline}`, display: 'flex', flexDirection: 'column' }}>
-          <button onClick={() => setLogOpen(v => !v)} style={{
+          <div role="button" tabIndex={0} onClick={() => setLogOpen(v => !v)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setLogOpen(v => !v); } }}
+            style={{
             height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px 0 12px',
-            border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left',
+            border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', boxSizing: 'border-box',
           }}>
             <Icon name="chevron.down" size={11} color={T.text3} style={{ transform: logOpen ? 'none' : 'rotate(-90deg)', flexShrink: 0 }}/>
             <span style={{ fontSize: 11, color: T.text2, fontWeight: 600, flexShrink: 0 }}>Console</span>
@@ -1335,7 +1337,7 @@ function PreviewPane({ configName = 'Preview' }) {
             <span onClick={(e) => { e.stopPropagation(); }} style={{ display: 'inline-flex', flexShrink: 0 }}>
               <PvToolBtn icon="trash" title="Clear logs" onClick={() => {}}/>
             </span>
-          </button>
+          </div>
           {logOpen && (
             <div style={{ height: 110, overflowY: 'auto', padding: '0 12px 10px', fontFamily: MONO, fontSize: 11, lineHeight: 1.6 }}>
               {logLines.length ? logLines.map((l, i) => <div key={i} style={{ color: l.c }}>{l.t}</div>) : <span style={{ color: T.text3 }}>No output yet.</span>}

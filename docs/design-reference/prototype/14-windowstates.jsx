@@ -14,7 +14,7 @@ const WS_STATUS = {
   success: { ink: T.green, tint: 'rgba(40,167,69,0.10)',  icon: 'checkmark' },
   error:   { ink: T.red,   tint: 'rgba(220,53,69,0.10)',  icon: 'exclamationmark.triangle' },
   warning: { ink: T.amber, tint: 'rgba(217,119,6,0.12)',  icon: 'exclamationmark.triangle' },
-  info:    { ink: ACCENT,  tint: 'rgba(10,132,255,0.10)', icon: 'info' },
+  info:    { ink: ACCENT,  tint: `rgba(${ACCENT_RGB},0.10)`, icon: 'info' },
 };
 
 // tiny inline info glyph (not in the base Icon set)
@@ -197,7 +197,7 @@ function WsTourLabel({ step, idx, total, onBack, onNext, onSkip, style }) {
         boxShadow: '0 18px 48px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(0,0,0,0.05)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-          <span style={{ display: 'inline-flex', width: 20, height: 20, borderRadius: 6, background: 'rgba(10,132,255,0.12)', color: ACCENT, alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ display: 'inline-flex', width: 20, height: 20, borderRadius: 6, background: `rgba(${ACCENT_RGB},0.12)`, color: ACCENT, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="sparkles" size={12} color={ACCENT}/>
           </span>
           <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 600, color: T.text3, textTransform: 'uppercase', letterSpacing: 0.5 }}>Step {idx + 1} of {total}</span>
@@ -273,7 +273,7 @@ function WsTourCore({ frameRef, measure, steps, onClose, framePad = 0 }) {
           outline: `2px solid ${ACCENT}`, outlineOffset: 2,
           transition: 'top 0.28s cubic-bezier(0.22,1,0.36,1), left 0.28s cubic-bezier(0.22,1,0.36,1), width 0.28s, height 0.28s',
         }}>
-          <div style={{ position: 'absolute', inset: -2, borderRadius: 8, animation: 'twPulse 1.8s ease-in-out infinite', boxShadow: `0 0 0 4px rgba(10,132,255,0.18)` }}/>
+          <div style={{ position: 'absolute', inset: -2, borderRadius: 8, animation: 'twPulse 1.8s ease-in-out infinite', boxShadow: `0 0 0 4px rgba(${ACCENT_RGB},0.18)` }}/>
         </div>
       )}
       <WsTourLabel step={step} idx={idx} total={steps.length} onBack={back} onNext={next} onSkip={onClose} style={labelStyle}/>

@@ -222,8 +222,19 @@ function TweaksPanel({ title = 'Tweaks', children }) {
       else if (t === '__deactivate_edit_mode') setOpen(false);
     };
     window.addEventListener('message', onMsg);
-    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
-    return () => window.removeEventListener('message', onMsg);
+    // Announce availability — and RE-announce on focus/visibility, so a host
+    // that wasn't listening at mount (tab restore, page swap) still learns
+    // about the panel. Idempotent on the host side.
+    const announce = () => window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    announce();
+    const onVis = () => { if (!document.hidden) announce(); };
+    window.addEventListener('focus', announce);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('message', onMsg);
+      window.removeEventListener('focus', announce);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, []);
 
   const dismiss = () => {

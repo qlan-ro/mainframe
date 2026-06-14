@@ -11,7 +11,7 @@
 // ── Type / priority palettes (warm-chrome compatible tints) ───────────
 const TD_TYPE = {
   bug:           { label: 'Bug',           fg: '#c4302b', bg: 'rgba(196,48,43,0.10)' },
-  feature:       { label: 'Feature',       fg: ACCENT,    bg: 'rgba(10,132,255,0.10)' },
+  feature:       { label: 'Feature',       fg: ACCENT,    bg: `rgba(${ACCENT_RGB},0.10)` },
   enhancement:   { label: 'Enhancement',   fg: '#7b3ff2', bg: 'rgba(123,63,242,0.10)' },
   documentation: { label: 'Documentation', fg: T.text2,   bg: T.chipBg },
   question:      { label: 'Question',      fg: '#b9770e', bg: 'rgba(185,119,14,0.12)' },
@@ -107,7 +107,7 @@ function TdChip({ on, onClick, children }) {
     <button type="button" onClick={onClick} style={{
       padding: '2px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',
       fontFamily: FONT, fontSize: 11, fontWeight: 500, letterSpacing: -0.05,
-      background: on ? 'rgba(10,132,255,0.14)' : T.chipBg,
+      background: on ? `rgba(${ACCENT_RGB},0.14)` : T.chipBg,
       color: on ? ACCENT : T.text2, textTransform: 'capitalize',
       transition: 'background .12s',
     }}>{children}</button>
@@ -198,11 +198,11 @@ function TdMenuBtn({ active, count, children, onClick, open }) {
     <button type="button" onClick={onClick} style={{
       display: 'inline-flex', alignItems: 'center', gap: 5, height: 30, padding: '0 10px', borderRadius: 8, cursor: 'pointer',
       border: `0.5px solid ${active || open ? 'transparent' : T.border}`,
-      background: active ? 'rgba(10,132,255,0.12)' : (open ? T.rowHover : T.content),
+      background: active ? `rgba(${ACCENT_RGB},0.12)` : (open ? T.rowHover : T.content),
       color: active ? ACCENT : T.text2, fontFamily: FONT, fontSize: 12, fontWeight: 500,
     }}>
       {children}
-      {count > 0 && <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: ACCENT, background: 'rgba(10,132,255,0.18)', borderRadius: 6, padding: '0 5px', height: 15, display: 'inline-flex', alignItems: 'center' }}>{count}</span>}
+      {count > 0 && <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: ACCENT, background: `rgba(${ACCENT_RGB},0.18)`, borderRadius: 6, padding: '0 5px', height: 15, display: 'inline-flex', alignItems: 'center' }}>{count}</span>}
       <Icon name="chevron.down" size={9} color={active ? ACCENT : T.text3}/>
     </button>
   );
@@ -448,7 +448,7 @@ function TdEditModal({ todo, allLabels = [], onClose, onSave, onDelete, onStart,
             </button>
           )}
           {isEdit && status === 'in_progress' && (
-            <button onClick={() => { onStart(todo); onClose(); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: 'none', background: 'rgba(10,132,255,0.12)', cursor: 'pointer', color: ACCENT, fontFamily: FONT, fontSize: 12, fontWeight: 600, marginLeft: isEdit ? 0 : 'auto' }}>
+            <button onClick={() => { onStart(todo); onClose(); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: 'none', background: `rgba(${ACCENT_RGB},0.12)`, cursor: 'pointer', color: ACCENT, fontFamily: FONT, fontSize: 12, fontWeight: 600, marginLeft: isEdit ? 0 : 'auto' }}>
               <Icon name="play.fill" size={11} color={ACCENT}/>Start session
             </button>
           )}
@@ -463,7 +463,7 @@ function TdEditModal({ todo, allLabels = [], onClose, onSave, onDelete, onStart,
 }
 
 // ── Agent-first list view pieces ──────────────────────────────────────
-const TD_AVATARS = [['#0a84ff', 'rgba(10,132,255,0.14)'], ['#7b3ff2', 'rgba(123,63,242,0.13)'], ['#c2540a', 'rgba(194,84,10,0.13)'], ['#1f8a5b', 'rgba(31,138,91,0.15)'], ['#a76d0c', 'rgba(185,119,14,0.16)']];
+const TD_AVATARS = [[ACCENT, `rgba(${ACCENT_RGB},0.14)`], ['#7b3ff2', 'rgba(123,63,242,0.13)'], ['#c2540a', 'rgba(194,84,10,0.13)'], ['#1f8a5b', 'rgba(31,138,91,0.15)'], ['#a76d0c', 'rgba(185,119,14,0.16)']];
 function tdHash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
 
 function TdAvatar({ name, size = 20 }) {
@@ -613,7 +613,7 @@ function TdBoardView({ todos, filters, sort, dragOver, setDragOver, move, onEdit
             onDragOver={(e) => { e.preventDefault(); setDragOver(status); }}
             onDragLeave={() => setDragOver(d => d === status ? null : d)}
             onDrop={(e) => { e.preventDefault(); const n = +e.dataTransfer.getData('text/todo'); if (n) move(n, status); setDragOver(null); }}
-            style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: isOver ? 'rgba(10,132,255,0.05)' : T.content2, transition: 'background .12s' }}>
+            style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: isOver ? `rgba(${ACCENT_RGB},0.05)` : T.content2, transition: 'background .12s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px 8px', flexShrink: 0 }}>
               <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 700, color: T.text2, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>
               <span style={{ fontFamily: MONO, fontSize: 10, color: T.text3, padding: '1px 6px', borderRadius: 8, background: T.chipBg }}>{col.length}</span>

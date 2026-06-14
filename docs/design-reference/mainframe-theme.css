@@ -8,8 +8,35 @@
    variables). Drop this into the renderer's global stylesheet (e.g.
    src/renderer/index.css), after the Tailwind import.
 
+   ── THE APPEARANCE SYSTEM: MODE × COLOUR SCHEME × WINDOW STYLE ──
+   The app's appearance is three INDEPENDENT user-facing axes:
+
+   1. MODE — light | dark.
+      CSS: add/remove `class="dark"` on <html>. Each scheme ships both modes.
+
+   2. COLOUR SCHEME — classic | ocean | velvet.
+      CSS: `data-scheme="ocean|velvet"` on <html> (absent/anything else = classic).
+      A scheme re-colors EVERYTHING (paper tint, accent, code+terminal palettes,
+      the user-message cool card) but changes NO geometry:
+        · classic — warm paper ↔ Dracula-ish slate; blue #0a84ff / periwinkle #8a70f5
+        · ocean   — cool mist ↔ deep navy;          teal #0e9888 / #2fc6b7
+        · velvet  — blush paper ↔ aubergine;        rose #d6488f / #f06bb3
+      NOTE the accent (--primary/--ring) is PER MODE AND SCHEME — full-strength
+      iOS blue reads strident on dark surfaces. Never hardcode the accent.
+
+   3. WINDOW STYLE — unified | split | glass.
+      Structural, not color: how the shell composes sidebar/surfaces/dividers.
+      CSS: `data-window-style` on the shell root; consumed by layout components,
+      NOT by this file (geometry lives in components). Contract + structural
+      deltas: see handoff/component-map.md §8. All 3 styles work with all 6
+      mode×scheme combinations (18 total, all validated in the prototype).
+
+   Persistence: one stored preference per axis (the prototype stores the theme
+   name as `mode[-scheme]` e.g. 'dark-ocean', plus the window style separately).
+   The mode toggle (sun/moon) flips mode while PRESERVING the scheme.
+
    LAYERS
-   1. :root / .dark          — the shadcn semantic token contract (warm-chrome).
+   1. :root / .dark (+ data-scheme overrides) — shadcn semantic token contract.
    2. --mf-*                 — app-specific surfaces shadcn has no slot for
                                (window chrome, code + terminal palettes, the
                                user-message cool card, the viewer matte).
@@ -18,31 +45,25 @@
                                `bg-mf-glass`, `text-mf-code-kw`, `rounded-lg`,
                                `font-mono`, etc. all resolve.
 
-   THEME SWITCH
-   Toggle dark by adding/removing `class="dark"` (or `[data-theme="dark"]`) on
-   <html>. Optionally honor the OS with the prefers-color-scheme block at the
-   bottom. (The prototype reloaded to re-bake a JS object; in the real app the
-   CSS variables cascade live — no reload needed.)
-
-   NOTE ON NAMING — this also closes audit gap #4 (semantic color names):
-   shadcn's contract (muted-foreground / popover / ring / destructive) IS the
-   industry-standard semantic vocabulary. Map to it; keep our richer hierarchy
-   (text2/3/4, the surface ladder) as --mf-* extensions.
+   (The prototype reloaded to re-bake a JS object; in the real app the CSS
+   variables cascade live — no reload needed.)
    ════════════════════════════════════════════════════════════════════════ */
 
+/* ────────────────────────────────────────────────────────────────────────
+   CLASSIC · LIGHT (default) — warm paper, iOS-blue accent
+   ──────────────────────────────────────────────────────────────────────── */
 :root {
   /* ── Radius (shadcn derives sm/md/lg/xl from --radius) ──
      Prototype scale: xs 4 · sm 6 · md 8 · lg 11 · xl 13. Base = md. */
   --radius: 0.5rem; /* 8px */
 
-  /* ── shadcn semantic contract — LIGHT (warm paper) ── */
   --background: #ffffff;            /* content surface — chat/editor body          (T.content)      */
   --foreground: #1c1c1e;            /* primary text                                (T.text)         */
   --card: #f8f6f2;                  /* subtly raised card surface                  (T.content2)     */
   --card-foreground: #1c1c1e;
   --popover: #ffffff;              /* menus, dropdowns, popovers                  (T.popBg)        */
   --popover-foreground: #1c1c1e;
-  --primary: #0a84ff;              /* BRAND accent — primary buttons, focus       (ACCENT)         */
+  --primary: #0a84ff;              /* BRAND accent — THEMED per mode+scheme       (ACCENT)         */
   --primary-foreground: #ffffff;
   --secondary: #f3efe7;            /* secondary/ghost button fill                 (T.raised)       */
   --secondary-foreground: #1c1c1e;
@@ -56,21 +77,20 @@
   --input: rgba(0,0,0,0.08);       /* field borders                              (T.border)       */
   --ring: #0a84ff;                 /* focus ring color                           (T.borderFocus)  */
 
-  /* ── App-specific surfaces shadcn has no slot for — LIGHT ── */
   --mf-window: #e9e7e2;            /* desktop / app shell behind the chrome       */
   --mf-glass: rgba(240,237,231,0.84); /* frosted titlebar + sidebar (backdrop-blur 40px) */
-  --mf-content2: #f8f6f2;          /* secondary panel                             */
-  --mf-raised: #f3efe7;            /* chips, segmented tracks, avatars            */
-  --mf-tab-bar: #f3f0ea;           /* tab strips, surface/viewer headers          */
-  --mf-tab-active: #ffffff;        /* active segmented chip / tab                 */
-  --mf-text-3: #92918d;            /* tertiary text                              */
-  --mf-text-4: #bcbab5;            /* quaternary / disabled text                  */
-  --mf-chip: rgba(0,0,0,0.05);     /* count / status chip fill                    */
-  --mf-selection: rgba(10,132,255,0.10); /* selected-row tint                     */
-  --mf-warning: #d97706;           /* amber status                               */
-  --mf-success: #28a745;           /* green status                               */
+  --mf-content2: #f8f6f2;
+  --mf-raised: #f3efe7;
+  --mf-tab-bar: #f3f0ea;
+  --mf-tab-active: #ffffff;
+  --mf-text-3: #92918d;
+  --mf-text-4: #bcbab5;
+  --mf-chip: rgba(0,0,0,0.05);
+  --mf-selection: rgba(10,132,255,0.10);
+  --mf-warning: #d97706;
+  --mf-success: #28a745;
 
-  /* Editor syntax — LIGHT (Xcode-ish on warm paper) */
+  /* Editor syntax — Xcode-ish on warm paper */
   --mf-code-bg: #fbfaf7;
   --mf-code-fg: #1f1f24;
   --mf-code-kw: #9b2393;
@@ -80,7 +100,6 @@
   --mf-code-num: #1c00cf;
   --mf-code-cmt: #707f8c;
 
-  /* Terminal — LIGHT */
   --mf-term-bg: #1d1d20;
   --mf-term-fg: #e7e6e3;
   --mf-term-cmt: #7a7a82;
@@ -88,23 +107,20 @@
   --mf-term-cyan: #5ac8fa;
   --mf-term-amber: #ff9f0a;
 
-  /* User-message "cool card" — LIGHT */
   --mf-um-card: linear-gradient(180deg, #f4f6fb 0%, #eef1f9 100%);
-  --mf-um-fade: #eef1f9;           /* solid end-stop for the line-clamp overlay   */
+  --mf-um-fade: #eef1f9;
   --mf-um-ink: #1b1e26;
   --mf-um-edge: rgba(40,70,150,0.13);
 
-  /* File-viewer backdrop + transparency checkerboard — LIGHT */
   --mf-viewer-matte: #e6e2da;
   --mf-viewer-check-a: #efece6;
   --mf-viewer-check-b: #dcd8d0;
 
-  /* Elevation + focus ring (full shadow strings) */
   --mf-shadow-pop: 0 16px 40px rgba(0,0,0,0.20), 0 0 0 0.5px rgba(0,0,0,0.14);
   --mf-shadow-modal: 0 24px 60px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(0,0,0,0.18);
   --mf-focus-ring: 0 0 0 3px rgba(10,132,255,0.35);
 
-  /* Type + motion (shared across themes) */
+  /* Type + motion (shared across all themes) */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
@@ -114,75 +130,334 @@
   --ease-signature: cubic-bezier(0.22, 1, 0.36, 1); /* the app slide-in */
 }
 
+/* ────────────────────────────────────────────────────────────────────────
+   CLASSIC · DARK — playful Dracula-ish slate, periwinkle accent
+   (Redesigned 2026-06-12: was warm charcoal + shared blue. The dark accents
+   are deliberately softer than light's — full blue is strident on slate.)
+   ──────────────────────────────────────────────────────────────────────── */
 .dark {
-  /* ── shadcn semantic contract — DARK (warm charcoal) ── */
-  --background: #221f1a;           /* (T.content)      */
-  --foreground: #f1ede5;           /* (T.text)         */
-  --card: #1c1915;                 /* (T.content2)     */
-  --card-foreground: #f1ede5;
-  --popover: #2a261f;              /* (T.popBg)        */
-  --popover-foreground: #f1ede5;
-  --primary: #0a84ff;              /* (ACCENT — shared) */
+  --background: #262835;           /* (T.content)      */
+  --foreground: #f2f2f8;           /* (T.text)         */
+  --card: #212330;                 /* (T.content2)     */
+  --card-foreground: #f2f2f8;
+  --popover: #2c2e3d;              /* (T.popBg)        */
+  --popover-foreground: #f2f2f8;
+  --primary: #8a70f5;              /* periwinkle (ACCENT, dark-classic) */
   --primary-foreground: #ffffff;
-  --secondary: #2c2820;            /* (T.raised)       */
-  --secondary-foreground: #f1ede5;
-  --muted: #2c2820;                /* (T.raised)       */
-  --muted-foreground: #ada89f;     /* (T.text2)        */
-  --accent: rgba(255,255,255,0.05);/* hover surface    (T.rowHover) */
-  --accent-foreground: #f1ede5;
-  --destructive: #ff6b6b;          /* (T.red — lightened for dark) */
-  --destructive-foreground: #1a1714;
-  --border: rgba(255,255,255,0.10);/* (T.border)       */
+  --secondary: #313447;            /* (T.raised)       */
+  --secondary-foreground: #f2f2f8;
+  --muted: #313447;
+  --muted-foreground: #a9adc3;     /* (T.text2)        */
+  --accent: rgba(255,255,255,0.055);
+  --accent-foreground: #f2f2f8;
+  --destructive: #ff6272;
+  --destructive-foreground: #1b1c25;
+  --border: rgba(255,255,255,0.10);
   --input: rgba(255,255,255,0.10);
-  --ring: #0a84ff;
+  --ring: #8a70f5;
 
-  /* ── App-specific surfaces — DARK ── */
-  --mf-window: #1a1714;
-  --mf-glass: rgba(30,27,22,0.85);
-  --mf-content2: #1c1915;
-  --mf-raised: #2c2820;
-  --mf-tab-bar: #1e1b16;
-  --mf-tab-active: #332e25;
-  --mf-text-3: #847f76;
-  --mf-text-4: #585349;
-  --mf-chip: rgba(255,255,255,0.06);
-  --mf-selection: rgba(10,132,255,0.26);
-  --mf-warning: #e6a23c;
-  --mf-success: #3ad06a;
+  --mf-window: #1b1c25;
+  --mf-glass: rgba(34,36,47,0.85);
+  --mf-content2: #212330;
+  --mf-raised: #313447;
+  --mf-tab-bar: #21232e;
+  --mf-tab-active: #373a4d;
+  --mf-text-3: #7d8099;
+  --mf-text-4: #555870;
+  --mf-chip: rgba(255,255,255,0.07);
+  --mf-selection: rgba(138,112,245,0.30);
+  --mf-warning: #f5a960;
+  --mf-success: #50d97c;
 
-  /* Editor syntax — DARK (warm pastels) */
-  --mf-code-bg: #1b1814;
-  --mf-code-fg: #e6e2da;
-  --mf-code-kw: #e592d6;
-  --mf-code-str: #eaa48f;
-  --mf-code-fn: #7fcfd6;
-  --mf-code-type: #c6a6f5;
-  --mf-code-num: #9fb4ff;
-  --mf-code-cmt: #6f7a83;
+  /* Editor syntax — playful slate pastels (pink kw, yellow str, mint fn) */
+  --mf-code-bg: #21222c;
+  --mf-code-fg: #eef0fa;
+  --mf-code-kw: #f47fc4;
+  --mf-code-str: #eef0a0;
+  --mf-code-fn: #6df295;
+  --mf-code-type: #bd9bf5;
+  --mf-code-num: #86c9f5;
+  --mf-code-cmt: #6b7494;
 
-  /* Terminal — DARK */
-  --mf-term-bg: #141310;
-  --mf-term-fg: #e7e6e3;
-  --mf-term-cmt: #7f7a72;
-  --mf-term-green: #30d158;
-  --mf-term-cyan: #5ac8fa;
-  --mf-term-amber: #ff9f0a;
+  --mf-term-bg: #15161e;
+  --mf-term-fg: #f0f1f7;
+  --mf-term-cmt: #6e7294;
+  --mf-term-green: #5af78e;
+  --mf-term-cyan: #84e8f5;
+  --mf-term-amber: #ffb86c;
 
-  /* User-message cool card — DARK */
-  --mf-um-card: linear-gradient(180deg, #262a35 0%, #20242e 100%);
-  --mf-um-fade: #20242e;
-  --mf-um-ink: #e9ecf5;
-  --mf-um-edge: rgba(150,175,235,0.20);
+  --mf-um-card: linear-gradient(180deg, #2b2f40 0%, #252938 100%);
+  --mf-um-fade: #252938;
+  --mf-um-ink: #ebeefb;
+  --mf-um-edge: rgba(160,180,250,0.22);
 
-  /* File-viewer backdrop — DARK */
-  --mf-viewer-matte: #16140f;
-  --mf-viewer-check-a: #1c1a16;
-  --mf-viewer-check-b: #26231d;
+  --mf-viewer-matte: #181922;
+  --mf-viewer-check-a: #1e2029;
+  --mf-viewer-check-b: #292b38;
 
-  /* Elevation + focus ring — DARK */
   --mf-shadow-pop: 0 18px 44px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.10);
   --mf-shadow-modal: 0 28px 64px rgba(0,0,0,0.66), 0 0 0 0.5px rgba(255,255,255,0.10);
-  --mf-focus-ring: 0 0 0 3px rgba(10,132,255,0.50);
+  --mf-focus-ring: 0 0 0 3px rgba(138,112,245,0.50);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   OCEAN · LIGHT — cool mist paper, teal accent, lake-toned code colors
+   ──────────────────────────────────────────────────────────────────────── */
+[data-scheme="ocean"] {
+  --foreground: #172225;
+  --card: #f4f8f8;
+  --card-foreground: #172225;
+  --popover-foreground: #172225;
+  --primary: #0e9888;
+  --secondary: #eaf1f1;
+  --secondary-foreground: #172225;
+  --muted: #eaf1f1;
+  --muted-foreground: #54646a;
+  --accent: rgba(10,50,55,0.045);
+  --accent-foreground: #172225;
+  --destructive: #d23b4e;
+  --border: rgba(10,40,45,0.10);
+  --input: rgba(10,40,45,0.10);
+  --ring: #0e9888;
+
+  --mf-window: #e2e8ea;
+  --mf-glass: rgba(230,238,240,0.84);
+  --mf-content2: #f4f8f8;
+  --mf-raised: #eaf1f1;
+  --mf-tab-bar: #edf3f4;
+  --mf-tab-active: #ffffff;
+  --mf-text-3: #89989d;
+  --mf-text-4: #b6c3c7;
+  --mf-chip: rgba(10,50,55,0.05);
+  --mf-selection: rgba(14,152,136,0.11);
+  --mf-warning: #c07a12;
+  --mf-success: #1e9e58;
+
+  --mf-code-bg: #f6fafa;
+  --mf-code-fg: #1d262b;
+  --mf-code-kw: #0c7791;
+  --mf-code-str: #3a7d2c;
+  --mf-code-fn: #a85d08;
+  --mf-code-type: #4956c9;
+  --mf-code-num: #bb3e12;
+  --mf-code-cmt: #7d8a94;
+
+  --mf-term-bg: #152022;
+  --mf-term-fg: #e3ecec;
+  --mf-term-cmt: #6e8287;
+  --mf-term-green: #34c98e;
+  --mf-term-cyan: #4fc3dd;
+  --mf-term-amber: #f0a93c;
+
+  --mf-um-card: linear-gradient(180deg, #eef7f6 0%, #e6f1f0 100%);
+  --mf-um-fade: #e6f1f0;
+  --mf-um-ink: #15252b;
+  --mf-um-edge: rgba(20,130,125,0.16);
+
+  --mf-viewer-matte: #dde4e4;
+  --mf-viewer-check-a: #e9efef;
+  --mf-viewer-check-b: #d4dddd;
+
+  --mf-shadow-pop: 0 16px 40px rgba(10,40,40,0.20), 0 0 0 0.5px rgba(0,0,0,0.14);
+  --mf-shadow-modal: 0 24px 60px rgba(10,40,40,0.22), 0 0 0 0.5px rgba(0,0,0,0.18);
+  --mf-focus-ring: 0 0 0 3px rgba(14,152,136,0.32);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   OCEAN · DARK — deep navy, teal accent (lime str / gold fn / cyan kw)
+   ──────────────────────────────────────────────────────────────────────── */
+.dark[data-scheme="ocean"] {
+  --background: #1e2632;
+  --foreground: #edf3f8;
+  --card: #19202b;
+  --card-foreground: #edf3f8;
+  --popover: #242e3c;
+  --popover-foreground: #edf3f8;
+  --primary: #2fc6b7;
+  --primary-foreground: #0b1a18;
+  --secondary: #2a3545;
+  --secondary-foreground: #edf3f8;
+  --muted: #2a3545;
+  --muted-foreground: #a3b2c2;
+  --accent: rgba(255,255,255,0.055);
+  --accent-foreground: #edf3f8;
+  --destructive: #ff6b7a;
+  --destructive-foreground: #141923;
+  --border: rgba(255,255,255,0.10);
+  --input: rgba(255,255,255,0.10);
+  --ring: #2fc6b7;
+
+  --mf-window: #141923;
+  --mf-glass: rgba(26,33,44,0.85);
+  --mf-content2: #19202b;
+  --mf-raised: #2a3545;
+  --mf-tab-bar: #1b222e;
+  --mf-tab-active: #303d4f;
+  --mf-text-3: #76869b;
+  --mf-text-4: #4d5a6b;
+  --mf-chip: rgba(255,255,255,0.07);
+  --mf-selection: rgba(47,198,183,0.26);
+  --mf-warning: #f2b04e;
+  --mf-success: #3fd789;
+
+  --mf-code-bg: #19212c;
+  --mf-code-fg: #e8eef6;
+  --mf-code-kw: #5fd0e6;
+  --mf-code-str: #b9e88e;
+  --mf-code-fn: #ffd47e;
+  --mf-code-type: #9fb9ff;
+  --mf-code-num: #ff9d9d;
+  --mf-code-cmt: #5b6e80;
+
+  --mf-term-bg: #10161e;
+  --mf-term-fg: #e9f0f6;
+  --mf-term-cmt: #5f7488;
+  --mf-term-green: #4ce0a0;
+  --mf-term-cyan: #5fd8ec;
+  --mf-term-amber: #ffc06e;
+
+  --mf-um-card: linear-gradient(180deg, #27313f 0%, #212a37 100%);
+  --mf-um-fade: #212a37;
+  --mf-um-ink: #e9f0fa;
+  --mf-um-edge: rgba(120,200,220,0.20);
+
+  --mf-viewer-matte: #111720;
+  --mf-viewer-check-a: #171e28;
+  --mf-viewer-check-b: #222c39;
+
+  --mf-shadow-pop: 0 18px 44px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.10);
+  --mf-shadow-modal: 0 28px 64px rgba(0,0,0,0.66), 0 0 0 0.5px rgba(255,255,255,0.10);
+  --mf-focus-ring: 0 0 0 3px rgba(47,198,183,0.50);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   VELVET · LIGHT — blush paper, rose accent, berry-toned code colors
+   ──────────────────────────────────────────────────────────────────────── */
+[data-scheme="velvet"] {
+  --foreground: #231a28;
+  --card: #faf6fa;
+  --card-foreground: #231a28;
+  --popover-foreground: #231a28;
+  --primary: #d6488f;
+  --secondary: #f3ecf3;
+  --secondary-foreground: #231a28;
+  --muted: #f3ecf3;
+  --muted-foreground: #615669;
+  --accent: rgba(70,20,60,0.045);
+  --accent-foreground: #231a28;
+  --destructive: #d23b54;
+  --border: rgba(60,20,55,0.10);
+  --input: rgba(60,20,55,0.10);
+  --ring: #d6488f;
+
+  --mf-window: #ebe4eb;
+  --mf-glass: rgba(242,235,242,0.84);
+  --mf-content2: #faf6fa;
+  --mf-raised: #f3ecf3;
+  --mf-tab-bar: #f2edf2;
+  --mf-tab-active: #ffffff;
+  --mf-text-3: #94899c;
+  --mf-text-4: #c0b6c6;
+  --mf-chip: rgba(70,20,60,0.05);
+  --mf-selection: rgba(214,72,143,0.10);
+  --mf-warning: #c0741f;
+  --mf-success: #1f9e54;
+
+  --mf-code-bg: #fbf8fb;
+  --mf-code-fg: #271d2e;
+  --mf-code-kw: #bb2d92;
+  --mf-code-str: #9a6a08;
+  --mf-code-fn: #15803d;
+  --mf-code-type: #7635d6;
+  --mf-code-num: #2456c9;
+  --mf-code-cmt: #8a7d92;
+
+  --mf-term-bg: #1f1622;
+  --mf-term-fg: #ece5ee;
+  --mf-term-cmt: #857a8e;
+  --mf-term-green: #3fcf80;
+  --mf-term-cyan: #5ec3e8;
+  --mf-term-amber: #f5a04c;
+
+  --mf-um-card: linear-gradient(180deg, #f9f1f7 0%, #f3e9f1 100%);
+  --mf-um-fade: #f3e9f1;
+  --mf-um-ink: #2a1a2e;
+  --mf-um-edge: rgba(190,70,150,0.15);
+
+  --mf-viewer-matte: #e4dce4;
+  --mf-viewer-check-a: #efe8ef;
+  --mf-viewer-check-b: #dcd2dc;
+
+  --mf-shadow-pop: 0 16px 40px rgba(60,20,50,0.20), 0 0 0 0.5px rgba(0,0,0,0.14);
+  --mf-shadow-modal: 0 24px 60px rgba(60,20,50,0.22), 0 0 0 0.5px rgba(0,0,0,0.18);
+  --mf-focus-ring: 0 0 0 3px rgba(214,72,143,0.30);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   VELVET · DARK — aubergine, rose accent (pink kw / mint fn)
+   ──────────────────────────────────────────────────────────────────────── */
+.dark[data-scheme="velvet"] {
+  --background: #2a2136;
+  --foreground: #f5f0f8;
+  --card: #241c2f;
+  --card-foreground: #f5f0f8;
+  --popover: #2f253d;
+  --popover-foreground: #f5f0f8;
+  --primary: #f06bb3;
+  --primary-foreground: #2a0a1c;
+  --secondary: #382c48;
+  --secondary-foreground: #f5f0f8;
+  --muted: #382c48;
+  --muted-foreground: #b5a9c4;
+  --accent: rgba(255,255,255,0.055);
+  --accent-foreground: #f5f0f8;
+  --destructive: #ff6272;
+  --destructive-foreground: #1e1726;
+  --border: rgba(255,255,255,0.10);
+  --input: rgba(255,255,255,0.10);
+  --ring: #f06bb3;
+
+  --mf-window: #1e1726;
+  --mf-glass: rgba(36,28,46,0.85);
+  --mf-content2: #241c2f;
+  --mf-raised: #382c48;
+  --mf-tab-bar: #251d30;
+  --mf-tab-active: #3d2f4f;
+  --mf-text-3: #877b97;
+  --mf-text-4: #594f6a;
+  --mf-chip: rgba(255,255,255,0.07);
+  --mf-selection: rgba(240,107,179,0.24);
+  --mf-warning: #f5a960;
+  --mf-success: #50d97c;
+
+  --mf-code-bg: #221a2d;
+  --mf-code-fg: #f1eaf8;
+  --mf-code-kw: #ff7ec9;
+  --mf-code-str: #f3e88f;
+  --mf-code-fn: #76f0aa;
+  --mf-code-type: #c49df7;
+  --mf-code-num: #90c8ff;
+  --mf-code-cmt: #6f6488;
+
+  --mf-term-bg: #181221;
+  --mf-term-fg: #f2ecf8;
+  --mf-term-cmt: #6e6488;
+  --mf-term-green: #5af78e;
+  --mf-term-cyan: #84e8f5;
+  --mf-term-amber: #ffb86c;
+
+  --mf-um-card: linear-gradient(180deg, #2f2540 0%, #291f38 100%);
+  --mf-um-fade: #291f38;
+  --mf-um-ink: #f0eafa;
+  --mf-um-edge: rgba(220,150,230,0.20);
+
+  --mf-viewer-matte: #150f1d;
+  --mf-viewer-check-a: #1c1526;
+  --mf-viewer-check-b: #281f35;
+
+  --mf-shadow-pop: 0 18px 44px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.10);
+  --mf-shadow-modal: 0 28px 64px rgba(0,0,0,0.66), 0 0 0 0.5px rgba(255,255,255,0.10);
+  --mf-focus-ring: 0 0 0 3px rgba(240,107,179,0.45);
 }
 
 /* ════════════════════════════════════════════════════════════════════════

@@ -107,18 +107,18 @@ function LaunchPicker() {
   );
 }
 
-function MainToolbar({ inspectorOpen, toggleInspector, variant = 'white', chatHidden, onShowChat, sidebarHidden, onShowSidebar, onOpenSettings, onOpenSearch }) {
+function MainToolbar({ inspectorOpen, toggleInspector, variant = 'white', chatHidden, onShowChat, sidebarHidden, onShowSidebar, onOpenSettings, onOpenSearch, surfaces, onToggleSurface }) {
   const ibtn = {
     width: 28, height: 24, display: 'inline-flex', alignItems: 'center',
     justifyContent: 'center', borderRadius: 6, background: 'transparent',
     border: 'none', cursor: 'pointer',
   };
-  // Chrome variants — how the toolbar band relates to the warm side panels vs white panes.
+  // Chrome variants — how the toolbar band relates to the unified window chrome.
   const VAR = {
-    white: { bg: T.content,                 blur: false, border: T.hairline },
-    warm:  { bg: T.tabBar,                  blur: false, border: T.border   },
-    glass: { bg: 'rgba(243,240,234,0.72)',  blur: true,  border: T.border   },
-  }[variant] || { bg: T.content, blur: false, border: T.hairline };
+    white: { bg: T.content,                 blur: false, border: T.hairline    },
+    warm:  { bg: 'transparent',             blur: false, border: 'transparent' },
+    glass: { bg: 'rgba(243,240,234,0.72)',  blur: true,  border: T.border      },
+  }[variant] || { bg: 'transparent', blur: false, border: 'transparent' };
   return (
     <div style={{
       height: 40, flexShrink: 0,
@@ -205,12 +205,17 @@ function MainToolbar({ inspectorOpen, toggleInspector, variant = 'white', chatHi
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         }}><Icon name="play.fill" size={15} color={T.green}/></button>
         <div style={{ width: 1, height: 16, background: T.border, margin: '0 4px' }}/>
-        <div style={{ width: 1, height: 16, background: T.border, margin: '0 4px' }}/>
+        {/* View controls — which surfaces are shown, plus theme + inspector. */}
+        {surfaces && onToggleSurface && <SurfaceRail surfaces={surfaces} onToggle={onToggleSurface}/>}
         {(() => {
-          const dark = (typeof window !== 'undefined' && window.__mfTheme === 'dark');
+          // Mode toggle — flips light↔dark while PRESERVING the colour scheme
+          // suffix ('light-ocean' ↔ 'dark-ocean'; classic has no suffix).
+          const name = (typeof window !== 'undefined' && typeof window.__mfTheme === 'string') ? window.__mfTheme : 'light';
+          const dark = name.indexOf('dark') === 0;
+          const scheme = name.indexOf('-') > 0 ? name.slice(name.indexOf('-')) : '';
           return (
             <button title={dark ? 'Switch to light' : 'Switch to dark'}
-              onClick={() => window.setMfTheme && window.setMfTheme(dark ? 'light' : 'dark')} style={{
+              onClick={() => window.setMfTheme && window.setMfTheme((dark ? 'light' : 'dark') + scheme)} style={{
               width: 28, height: 24, display: 'inline-flex', alignItems: 'center',
               justifyContent: 'center', borderRadius: 6, background: 'transparent',
               border: 'none', cursor: 'pointer',
@@ -305,10 +310,10 @@ const SESSIONS_DATA = [
     tags: ['agentic', 'pr-prep'], status: 'working', when: '11:56', pinned: true, sel: true },
   { id: 's2', t: 'Audit git history of zone', proj: 'mainframe',
     adapter: 'Claude · Sonnet 4.5', worktree: 'audit-zone',
-    tags: ['refactor'], status: 'waiting', when: '10:14' },
+    tags: ['refactor'], status: 'waiting', unread: true, when: '10:14' },
   { id: 's3', t: 'Wire Skill API into chat',   proj: 'mainframe',
     adapter: 'Codex · gpt-5',
-    tags: ['agentic', 'experiment'], status: 'idle', when: '09:02' },
+    tags: ['agentic', 'experiment'], status: 'waiting', unread: true, when: '09:02' },
   { id: 's4', t: 'Login overhaul (v3)',        proj: 'glen-home-hub',
     adapter: 'Claude · Sonnet 4.5', worktree: 'login-v3', unread: true,
     tags: ['ui'], status: 'idle', when: 'Yest' },
@@ -356,7 +361,8 @@ function TagPill({ name, variant = 'row', active = false, onClick }) {
 }
 
 function StatusDot({ status, unread }) {
-  if (status === 'working' || status === 'waiting') {
+  // Agent actively running — no action needed from you yet.
+  if (status === 'working') {
     return (
       <span style={{
         width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
@@ -365,6 +371,27 @@ function StatusDot({ status, unread }) {
       }}/>
     );
   }
+  // Agent stopped and handed the thread back — your turn. The unread variant
+  // (answer not yet seen) gets a pulsing halo so it pulls the eye; once seen
+  // it settles to a calm solid amber pip. There is no count — it's binary.
+  if (status === 'waiting') {
+    return (
+      <span style={{ position: 'relative', width: 10, height: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+        {unread && (
+          <span style={{
+            position: 'absolute', width: 10, height: 10, borderRadius: '50%',
+            background: T.amber, animation: 'tw-ping 1.9s cubic-bezier(0,0,0.2,1) infinite',
+          }}/>
+        )}
+        <span style={{
+          position: 'relative', width: 9, height: 9, borderRadius: '50%',
+          background: T.amber,
+          boxShadow: unread ? `0 0 0 2px ${hexToRgba(T.amber, 0.18)}` : 'none',
+        }}/>
+      </span>
+    );
+  }
+  // Idle — done, nothing pending. Unread (new content, non-blocking) tints accent.
   return (
     <span style={{
       width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
@@ -475,9 +502,15 @@ function SessionRowDense({ s, showProject, inPinnedGroup, active, onSelect }) {
           )}
           {s.status === 'waiting' && (
             <span style={{
-              fontFamily: FONT, fontSize: 10, fontWeight: 600,
-              color: T.amber, flexShrink: 0,
-            }}>Needs input</span>
+              display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+              height: 16, padding: '0 7px', borderRadius: 5,
+              fontFamily: FONT, fontSize: 10, fontWeight: 600, letterSpacing: -0.05,
+              background: s.unread ? T.amber : 'transparent',
+              color: s.unread ? '#fff' : T.amber,
+              boxShadow: s.unread ? 'none' : `inset 0 0 0 1px ${hexToRgba(T.amber, 0.45)}`,
+            }}>
+              {s.unread ? 'Answer ready' : 'Your turn'}
+            </span>
           )}
           <div style={{ flex: 1 }}/>
           {s.tags && s.tags.length > 0 && (
@@ -600,18 +633,32 @@ function Sidebar({ surfaces, onToggleSurface, activeSession, onSelectSession, on
     window.addEventListener('mouseup', onUp);
   }
 
+  // Liquid-glass mode — set by the shell variant (04-engine). Guarded so the
+  // sidebar still mounts on review pages that don't load the engine.
+  const glassSidebar = typeof SHELL !== 'undefined' && SHELL.sidebar === 'glass';
+
+  // Live summary of the sessions list — derived from the same seed the list
+  // renders, so the footer can never disagree with the rows above it.
+  const sessionCounts = SESSIONS_DATA.reduce((a, s) => {
+    a[s.status] = (a[s.status] || 0) + 1; return a;
+  }, {});
+
   return (
     <div ref={sidebarRef} style={{
-      width: 280, flexShrink: 0, background: T.glass,
-      backdropFilter: 'blur(40px) saturate(180%)',
-      WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-      borderRadius: 13,
-      boxShadow: `0 0 0 0.5px ${T.border}, 0 1px 2px rgba(0,0,0,0.04)`,
+      width: 280, flexShrink: 0,
+      background: glassSidebar ? T.glass : 'transparent',
+      ...(glassSidebar ? {
+        backdropFilter: 'blur(40px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+        borderRadius: 13,
+        boxShadow: `0 0 0 0.5px ${T.border}, 0 1px 2px rgba(0,0,0,0.04)`,
+      } : {}),
       display: 'flex', flexDirection: 'column',
       fontFamily: FONT, color: T.text, overflow: 'hidden',
     }}>
       <style>{`
         @keyframes tw-spin { from { transform: rotate(0) } to { transform: rotate(360deg) } }
+        @keyframes tw-ping { 0% { transform: scale(0.6); opacity: 0.5 } 70%,100% { transform: scale(2.3); opacity: 0 } }
         .tw-session-row:hover .tw-row-actions { display: flex !important; }
         .tw-session-row:hover .tw-row-time { display: none; }
       `}</style>
@@ -621,10 +668,20 @@ function Sidebar({ surfaces, onToggleSurface, activeSession, onSelectSession, on
         height: 38, flexShrink: 0,
         display: 'flex', alignItems: 'center',
         padding: '0 8px', gap: 8,
-        borderBottom: `0.5px solid ${T.hairline}`,
       }}>
         <TrafficLights/>
-        <SurfaceRail surfaces={surfaces} onToggle={onToggleSurface}/>
+        {/* App update notice \u2014 app-level chrome, sits with the window controls. */}
+        <button title="Install update \u2014 v0.20.0 is available" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5, height: 22,
+          padding: '0 9px 0 7px', borderRadius: 6, border: 'none', cursor: 'pointer',
+          background: `${ACCENT}14`, color: ACCENT,
+          fontFamily: FONT, fontSize: 11, fontWeight: 600, letterSpacing: -0.05, flexShrink: 0,
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.background = `${ACCENT}22`}
+        onMouseLeave={(e) => e.currentTarget.style.background = `${ACCENT}14`}>
+          <Icon name="arrow.down" size={12} color={ACCENT}/>
+          Update
+        </button>
         <div style={{ flex: 1 }}/>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <TasksButton/>
@@ -765,15 +822,15 @@ function Sidebar({ surfaces, onToggleSurface, activeSession, onSelectSession, on
             ))}
             {collapsible && (
               <button onClick={() => setProjsExpanded(v => !v)} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                height: 22, padding: '0 9px', borderRadius: 11,
-                background: T.rowHover, border: 'none', cursor: 'pointer',
-                color: T.text2, fontFamily: FONT, fontSize: 11, fontWeight: 600,
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                height: 22, padding: '0 4px', borderRadius: 0,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: ACCENT, fontFamily: FONT, fontSize: 11, fontWeight: 600,
                 letterSpacing: -0.05, flexShrink: 0,
               }}>
                 {projsExpanded ? (
                   <React.Fragment>
-                    <Icon name="chevron.down" size={9} color={T.text3}
+                    <Icon name="chevron.down" size={9} color={ACCENT}
                       style={{ transform: 'rotate(180deg)' }}/>
                     Less
                   </React.Fragment>
@@ -805,9 +862,13 @@ function Sidebar({ surfaces, onToggleSurface, activeSession, onSelectSession, on
               padding: '7px 12px 3px',
               fontFamily: FONT, fontSize: 10, fontWeight: 700,
               color: T.text3, textTransform: 'uppercase', letterSpacing: 0.7,
-              background: T.glass,
-              backdropFilter: 'blur(40px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+              ...(glassSidebar ? {
+                background: T.glass,
+                backdropFilter: 'blur(40px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+              } : {
+                background: `linear-gradient(180deg, ${T.windowBg} 72%, transparent)`,
+              }),
             }}>
               {label === 'Pinned' && <Icon name="pin" size={9} color={ACCENT}/>}
               {label}
@@ -871,15 +932,15 @@ function Sidebar({ surfaces, onToggleSurface, activeSession, onSelectSession, on
             )}
             {collapsible && (
               <button onClick={() => setTagsExpanded(v => !v)} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                height: 20, padding: '0 8px', borderRadius: 11,
-                background: T.rowHover, border: 'none', cursor: 'pointer',
-                color: T.text2, fontFamily: FONT, fontSize: 11, fontWeight: 600,
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                height: 20, padding: '0 4px', borderRadius: 0,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: ACCENT, fontFamily: FONT, fontSize: 11, fontWeight: 600,
                 letterSpacing: -0.05, flexShrink: 0,
               }}>
                 {tagsExpanded ? (
                   <React.Fragment>
-                    <Icon name="chevron.down" size={9} color={T.text3}
+                    <Icon name="chevron.down" size={9} color={ACCENT}
                       style={{ transform: 'rotate(180deg)' }}/>
                     Less
                   </React.Fragment>
@@ -908,7 +969,7 @@ function Sidebar({ surfaces, onToggleSurface, activeSession, onSelectSession, on
       <div style={{
         flexShrink: 0, height: bottomHeight,
         display: 'flex', flexDirection: 'column',
-        background: 'rgba(0,0,0,0.015)',
+        background: 'transparent',
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', padding: '4px 8px',
@@ -995,6 +1056,45 @@ function Sidebar({ surfaces, onToggleSurface, activeSession, onSelectSession, on
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Footer — app connection + session-state summary. Lives in the sidebar
+          (full-height) rather than a window-wide status bar: the counts
+          summarize the list directly above. */}
+      <div style={{
+        flexShrink: 0, height: 25,
+        display: 'flex', alignItems: 'center', padding: '0 12px',
+        fontFamily: FONT, fontSize: 10, color: T.text3, letterSpacing: -0.05,
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: T.text2 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.green }}/>
+          Connected
+        </span>
+        <div style={{ flex: 1 }}/>
+        {/* Session state — compact dot+count cluster (no words). Full labels
+            on hover; the colors map to the same status glyphs in the rows. */}
+        <span
+          title={`${sessionCounts.working || 0} working · ${sessionCounts.waiting || 0} need you · ${sessionCounts.idle || 0} idle`}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontVariantNumeric: 'tabular-nums' }}>
+          {sessionCounts.working > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: T.text2, fontWeight: 600 }}>
+              <span className="tw-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: ACCENT }}/>
+              {sessionCounts.working}
+            </span>
+          )}
+          {sessionCounts.waiting > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: T.amber, fontWeight: 600 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.amber }}/>
+              {sessionCounts.waiting}
+            </span>
+          )}
+          {sessionCounts.idle > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: T.text3, fontWeight: 600 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.text4 }}/>
+              {sessionCounts.idle}
+            </span>
+          )}
+        </span>
       </div>
     </div>
   );

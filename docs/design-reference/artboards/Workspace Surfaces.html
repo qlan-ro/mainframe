@@ -27,7 +27,18 @@
 <script>
   // Opt this page into the persisted theme BEFORE the modules load, so 01-base
   // bakes the right tokens at eval. Review pages don't set this → they stay light.
-  window.__mfTheme = (function(){ try { return localStorage.getItem('mfTheme') === 'dark' ? 'dark' : 'light'; } catch (e) { return 'light'; } })();
+  // ?theme= (mode[-scheme]: light · dark · light-ocean · dark-ocean · light-velvet · dark-velvet)
+  // overrides WITHOUT persisting — used by Theme Matrix.html to embed every
+  // combination. ?shell= likewise.
+  window.__mfTheme = (function(){
+    var ok = ['light','dark','light-ocean','dark-ocean','light-velvet','dark-velvet'];
+    try {
+      var p = new URLSearchParams(location.search).get('theme');
+      if (p && ok.indexOf(p) >= 0) return p;
+      var s = localStorage.getItem('mfTheme');
+      return ok.indexOf(s) >= 0 ? s : 'light';
+    } catch (e) { return 'light'; }
+  })();
 </script>
 </head>
 <body>
@@ -37,27 +48,27 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
-<script type="text/babel" src="tweaks-panel.jsx?v=tw1"></script>
-<script type="text/babel" src="mainframe/01-base.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/02-chrome.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/03-content.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/04-engine.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/05-settings.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/06-palette.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/07-review.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/08-markdown.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/09-toolcards.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/10-chatcards.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/11-usermessages.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/12-todos.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/13-popover.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/14-windowstates.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/15-viewers.jsx?v=ts112"></script>
-<script type="text/babel" src="mainframe/16-dirpicker.jsx?v=ts112"></script>
+<script type="text/babel" src="tweaks-panel.jsx?v=tw2"></script>
+<script type="text/babel" src="mainframe/01-base.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/02-chrome.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/03-content.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/04-engine.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/05-settings.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/06-palette.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/07-review.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/08-markdown.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/09-toolcards.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/10-chatcards.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/11-usermessages.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/12-todos.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/13-popover.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/14-windowstates.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/15-viewers.jsx?v=ts132"></script>
+<script type="text/babel" src="mainframe/16-dirpicker.jsx?v=ts132"></script>
 
 <script type="text/babel" data-presets="env,react">
 const { useState, useEffect, useRef, useCallback } = React;
-const { TweaksPanel, useTweaks, TweakSection, TweakRadio, TweakToggle, TweakSelect, TweakButton } = window;
+const { TweaksPanel, useTweaks, TweakSection, TweakRadio } = window;
 
 // Zoomable / pannable stage — fit-to-window; ⌘/Ctrl+scroll to zoom; drag the
 // empty backdrop (or ⌘/space+drag) to pan.
@@ -162,109 +173,68 @@ function ZoomStage({ designW, designH, children }) {
 }
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "initial": "chat",
-  "chatSide": "left",
-  "dropMode": "position",
-  "inspector": false,
-  "chrome": "warm",
-  "overlay": "none",
-  "devError": false
+  "shell": "glass"
 }/*EDITMODE-END*/;
 
-// Sample toasts cycled by the dev "Fire a toast" button.
-const WS_TOAST_SAMPLES = [
-  { type: 'success', title: 'Session merged', description: 'refactor/auth-flow → main · 14 files, +312 −88.' },
-  { type: 'error',   title: 'Build failed', description: "tsc exited 2 — Type error in SessionView.tsx:142. Click to open the session.", chatId: 's1' },
-  { type: 'info',    title: 'Agent finished', description: 'Fix flaky tests · 3 tools run, all checks green.', chatId: 's1' },
-  { type: 'warning', title: 'Worktree has uncommitted changes', description: 'Stash or commit before switching branches.' },
-];
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const toastIdx = useRef(0);
-  const fireToast = () => {
-    const s = WS_TOAST_SAMPLES[toastIdx.current % WS_TOAST_SAMPLES.length];
-    toastIdx.current += 1;
-    window.mfToast(s);
-  };
+  window.__wsSetTweak = setTweak;   // verification hook — lets scripts flip tweaks
+  // ?shell= override for embeds (Theme Matrix) — doesn't touch the saved tweak.
+  const urlShell = (() => { try { return new URLSearchParams(location.search).get('shell'); } catch (e) { return null; } })();
   return (
     <>
-      <window.MfErrorBoundary onReset={() => setTweak('devError', false)}>
+      <window.MfErrorBoundary onReset={() => window.location.reload()}>
         <ZoomStage designW={1440} designH={920}>
           <window.MainframeTabbed
-            initial={t.initial}
-            chatSide={t.chatSide}
-            dropMode={t.dropMode}
-            inspector={t.inspector}
-            chrome={t.chrome}
+            initial="chat"
+            chatSide="left"
+            dropMode="position"
+            inspector={true}
+            shell={urlShell || t.shell}
             width={1440}
             height={920}
           />
         </ZoomStage>
-        <window.WsBoom when={t.devError}/>
       </window.MfErrorBoundary>
       <window.MfToaster/>
-      <window.ConnectionOverlay open={t.overlay === 'connecting'}/>
-      <window.TutorialOverlay run={t.overlay === 'tutorial'} onClose={() => setTweak('overlay', 'none')}/>
       <TweaksPanel title="Tweaks">
-        <TweakSection title="Workspace">
-          <TweakRadio
-            label="Starting arrangement" value={t.initial}
-            options={[
-              { value: 'chat-files', label: 'Chat · Files' },
-              { value: 'all',        label: 'Chat · Files + Run strip' },
-              { value: 'chat-run',   label: 'Chat · Run' },
-              { value: 'chat',       label: 'Chat only' },
-            ]}
-            onChange={v => setTweak('initial', v)}
-          />
-          <TweakRadio
-            label="Chat side" value={t.chatSide}
-            options={[{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }]}
-            onChange={v => setTweak('chatSide', v)}
-          />
-        </TweakSection>
-        <TweakSection title="Drag a file into Run">
-          <TweakRadio
-            label="Drop mechanics" value={t.dropMode}
-            options={[
-              { value: 'position', label: 'A — center=tab · edge=split' },
-              { value: 'tab',      label: 'B — always add a tab' },
-            ]}
-            onChange={v => setTweak('dropMode', v)}
-          />
-        </TweakSection>
         <TweakSection title="Appearance">
-          <TweakRadio
-            label="Theme" value={window.__mfTheme}
-            options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]}
-            onChange={v => window.setMfTheme(v)}
-          />
+          {(() => {
+            const name = window.__mfTheme || 'light';
+            const mode = name.indexOf('dark') === 0 ? 'dark' : 'light';
+            const scheme = name.indexOf('-') > 0 ? name.split('-')[1] : 'classic';
+            const compose = (m, s) => s === 'classic' ? m : `${m}-${s}`;
+            return (
+              <>
+                <TweakRadio
+                  label="Mode" value={mode}
+                  options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]}
+                  onChange={m => window.setMfTheme(compose(m, scheme))}
+                />
+                <TweakRadio
+                  label="Colour scheme" value={scheme}
+                  options={[
+                    { value: 'classic', label: 'Classic' },
+                    { value: 'ocean',   label: 'Ocean' },
+                    { value: 'velvet',  label: 'Velvet' },
+                  ]}
+                  onChange={s => window.setMfTheme(compose(mode, s))}
+                />
+              </>
+            );
+          })()}
         </TweakSection>
-        <TweakSection title="Chrome">
+        <TweakSection title="Theme">
           <TweakRadio
-            label="Toolbar" value={t.chrome}
+            label="Window style" value={t.shell}
             options={[
-              { value: 'warm',  label: 'Warm' },
-              { value: 'white', label: 'White' },
-              { value: 'glass', label: 'Glass' },
+              { value: 'unified', label: 'Unified' },
+              { value: 'split',   label: 'Split' },
+              { value: 'glass',   label: 'Glass' },
             ]}
-            onChange={v => setTweak('chrome', v)}
+            onChange={v => setTweak('shell', v)}
           />
-          <TweakToggle label="Inspector pane" value={t.inspector} onChange={v => setTweak('inspector', v)}/>
-        </TweakSection>
-        <TweakSection label="Window states (dev)">
-          <TweakSelect
-            label="Overlay" value={t.overlay}
-            options={[
-              { value: 'none',       label: 'None' },
-              { value: 'connecting', label: 'Reconnecting…' },
-              { value: 'tutorial',   label: 'First-run tour' },
-            ]}
-            onChange={v => setTweak('overlay', v)}
-          />
-          <TweakButton label="Fire a toast" onClick={fireToast}/>
-          <TweakToggle label="Trigger render error" value={t.devError} onChange={v => setTweak('devError', v)}/>
         </TweakSection>
       </TweaksPanel>
     </>
