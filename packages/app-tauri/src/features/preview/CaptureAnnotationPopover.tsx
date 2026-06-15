@@ -18,7 +18,7 @@ export function CaptureAnnotationPopover({
       data-testid="preview-annotation-popover"
       className="fixed bottom-4 right-4 z-50 w-80 flex flex-col gap-2 rounded-lg border border-border bg-card p-4 shadow-lg"
     >
-      <h3 className="text-sm font-medium text-heading">Add annotations</h3>
+      <h3 className="text-heading font-medium text-foreground">Add annotations</h3>
       <ul data-testid="preview-annotation-list" className="flex flex-col gap-2">
         {captures.map((capture) => (
           <li key={capture.id} data-testid={`preview-annotation-item-${capture.id}`} className="flex flex-col gap-1">
@@ -29,11 +29,11 @@ export function CaptureAnnotationPopover({
               style={{ maxHeight: 80 }}
             />
             {capture.selector && (
-              <span className="text-xs text-muted-foreground">{capture.selector}</span>
+              <span className="text-caption text-muted-foreground">{capture.selector}</span>
             )}
             <textarea
               data-testid={`preview-annotation-input-${capture.id}`}
-              className="w-full rounded border border-border bg-card p-1 text-xs text-body resize-none"
+              className="w-full rounded border border-border bg-card p-1 text-caption text-body resize-none"
               rows={2}
               placeholder="Add a note..."
               defaultValue={capture.annotation ?? ''}
@@ -45,7 +45,7 @@ export function CaptureAnnotationPopover({
       <div className="flex gap-2 justify-end">
         <button
           data-testid="preview-annotation-cancel"
-          className="rounded px-3 py-1 text-xs text-body border border-border"
+          className="rounded px-3 py-1 text-caption text-body border border-border"
           type="button"
           onClick={onCancel}
         >
@@ -53,7 +53,7 @@ export function CaptureAnnotationPopover({
         </button>
         <button
           data-testid="preview-annotation-submit"
-          className="rounded bg-blue-500 px-3 py-1 text-xs text-white"
+          className="rounded bg-blue-500 px-3 py-1 text-caption text-white"
           type="button"
           onClick={() => { void onSubmit(); }}
         >
