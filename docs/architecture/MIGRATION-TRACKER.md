@@ -210,9 +210,12 @@ Do the chat leaves in this order; ☑ = done.
 - ☑ `drop` FullviewModal
 
 ### Tasks / Git / Tags / Sandbox(Run) → `features/{tasks,git,tags,run}`
-- ☐ `replace` Sandbox PreviewTab → **embedded Tauri webview** (inspect/capture/console)
-- ☐ `refactor` sandbox capture overlays + LaunchPopover/StopPopover + launch plumbing · Tasks/Todos panels (TodosPanel/TodoModal/QuickAdd/FilterBar/Card/Attachments/DependencyPicker) + todos-api · Git (BranchPopover/List/Submenu/NewBranch/Conflict/Rename + useBranchActions) · Tags (Popover/Pill/store/api)
-- ☐ `port` capture-to-chat send path
+- ☑ `refactor` **Tasks/Todos panels** + todos-api → DONE (2026-06-15, `features/tasks/` + `lib/api/todos.ts`). Inspector drawer + fullview modal; god-files decomposed.
+- ☑ `refactor` **Git** (BranchPopover/List/Submenu/NewBranch/Conflict/Rename + useBranchActions) → DONE (2026-06-15, `features/git/` + expanded `lib/api/git.ts`). Full parity on the toolbar branch pill.
+- ⊘ **Tags** (Popover/Pill/store/api) → DROPPED (2026-06-15) — no distinct run/sandbox tag entity; covered by the shipped sessions tags.
+- ☐ `replace` Sandbox PreviewTab → **embedded Tauri webview** (inspect/capture/console) — DEFERRED (pixel source for captures).
+- ☐ `refactor` sandbox capture overlays + LaunchPopover/StopPopover + launch plumbing — DEFERRED with the webview (launch plumbing is daemon-ready, splittable later).
+- ☐ `port` capture-to-chat send path — DEFERRED (needs the capture producer / webview).
 
 ### State & data layer → `lib/daemon/` · `lib/api/` · `lib/tauri/` · `stores/` · `hooks/`
 - ◐ `refactor` WS client + useConnectionState · ws-event-router · HTTP api/ — *partially in Phase 1*
@@ -309,14 +312,14 @@ The single source of truth for what's left. Folds in items previously living onl
 - ☑ **M — SearchPalette → shadcn Command** (`components/overlays/`) + retire the search store. DONE (2026-06-15) — Cmd+O unified sessions+files palette; FilePickerDialog kept (editor-scoped), shared logic in `use-file-search`.
 - ☑ **L — FindInPathModal + DirectoryPickerModal + ReviewPanel** (Header/DiffView/FileTree); drop `FullviewModal`. DONE (2026-06-15) — FindInPath via `searchContent`; DirectoryPicker = daemon-backed `useDirectoryPicker` promise-bridge (no consumer wired yet); ReviewPanel Cmd+Shift+R on `CmDiffEditor` (side-by-side only) + comment-to-chat; FullviewModal dropped (gated on plugins re-platform).
 
-**Sandbox / run**
+**Sandbox / run** *(DEFERRED as a cluster, 2026-06-15 — captures are produced only by the Electron `<webview>.capturePage()`; with the preview-webview deferred there is no pixel source, so capture overlays + capture-to-chat have no producer. Launch plumbing IS daemon-backed + webview-free — `GET /api/projects/:id/launch/{status,configs}` + POST `:name/{start,stop}` + WS `launch.output/status/tunnel`; a future pass can split launch out early via `lib/api/launch.ts`, no Rust.)*
 - ☐ **L — Sandbox PreviewTab → embedded Tauri webview** (`features/preview/`) — inspect/capture/console; replaces the Electron `<webview>`. iframe-vs-webview-vs-window scope TBD.
 - ☐ **L — Sandbox capture overlays + LaunchPopover/StopPopover + launch plumbing** (`features/run/`) + the capture-to-chat send path.
 
 **Tasks / Git / Tags**
-- ☐ **L — Tasks / Todos panels** (`features/tasks/`) — TodosPanel/TodoModal/QuickAdd/FilterBar/Card/Attachments/DependencyPicker + todos-api.
-- ☐ **L — Git panels** (`features/git/`) — BranchPopover/List/Submenu/NewBranch/Conflict/Rename + useBranchActions.
-- ☐ **M — Sandbox-side Tags** (`features/tags/`, run/sandbox tags) — distinct from the built **sessions** tags (Popover/Pill/store/api).
+- ☑ **L — Tasks / Todos panels** (`features/tasks/`) — DONE (2026-06-15). Inspector bottom drawer + fullview modal (List+Board, filter/sort, edit modal, quick-add, start-session prefill via `composer().setText`); new `lib/api/todos.ts` over the always-on todos plugin (raw bodies → `requestPlugin`). Decomposed the TodoModal/TodosPanel/TodoFilterBar god-files. Spec/plan: `docs/superpowers/{specs,plans}/2026-06-15-app-tauri-tasks-git-surfaces*`.
+- ☑ **L — Git panels** (`features/git/`) — DONE (2026-06-15). Full-parity BranchPopover on the `main-toolbar-branch` pill: list/switch/create + fetch/pull/push/merge/rebase/abort + delete (2-step force)/rename + worktree new-session/delete + conflict view; lazy-load on open. Expanded `lib/api/git.ts` to all branch/worktree routes (reuses git/git-write/worktree daemon routes — no daemon change). Shared `components/ui/confirm-dialog.tsx` + git confirm bridge.
+- ⊘ **M — Sandbox-side Tags** — DROPPED (2026-06-15). No distinct run/sandbox tag entity exists; tags are chat-scoped only and the full tag system already shipped for the session sidebar (`features/sessions/tags` + `lib/api/tags.ts`). Desktop `components/tags/` was the same chat tags mounted in-thread — redundant.
 
 **Plugins**
 - ☐ **XL — Plugins UI re-platform** (`features/plugins/`) — PluginView (779 lines), PluginIcon, PluginError, PluginGlobalComponents from Electron `<webview>` → Tauri webview + plugins store + plugins-api + usePluginShortcuts; drop the zone plugin bridge.
