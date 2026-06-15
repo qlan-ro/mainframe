@@ -40,7 +40,14 @@ export function SettingsDialog({ port }: { port: number }) {
     if (!isOpen) return;
     let cancelled = false;
     setLoading(true);
-    Promise.all([getProviderSettings(port).then(loadProviders), getGeneralSettings(port).then(loadGeneral)])
+    Promise.all([
+      getProviderSettings(port).then((p) => {
+        if (!cancelled) loadProviders(p);
+      }),
+      getGeneralSettings(port).then((g) => {
+        if (!cancelled) loadGeneral(g);
+      }),
+    ])
       .catch((err: unknown) => {
         if (!cancelled) console.warn('[settings/SettingsDialog]', err);
       })

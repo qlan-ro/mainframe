@@ -38,7 +38,7 @@ export function ModelDropdown({ adapterId, value, options, onChange }: ModelDrop
         <RowWithTooltip option={selected ?? { id: value, label: value }}>
           <DropdownMenuTrigger
             data-testid={`settings-${adapterId}-model-dropdown-trigger`}
-            className="w-full flex items-center justify-between bg-card border border-mf-border rounded-md px-3 py-1.5 text-body text-foreground hover:border-primary focus:outline-none data-[state=open]:border-primary cursor-pointer transition-colors"
+            className="w-full flex items-center justify-between bg-card border border-border rounded-md px-3 py-1.5 text-body text-foreground hover:border-primary focus:outline-none data-[state=open]:border-primary cursor-pointer transition-colors"
           >
             <span className="truncate">{selected?.label ?? value}</span>
             <ChevronDown size={14} className="text-muted-foreground shrink-0" />

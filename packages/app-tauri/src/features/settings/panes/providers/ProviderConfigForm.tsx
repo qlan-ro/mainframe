@@ -105,7 +105,7 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
           onChange={(e) => setExecPath(e.target.value)}
           onBlur={handleExecPathBlur}
           placeholder={label.toLowerCase()}
-          className="w-full px-3 py-1.5 text-body bg-card text-foreground border border-mf-border rounded-md focus:outline-none focus:border-primary"
+          className="w-full px-3 py-1.5 text-body bg-card text-foreground border border-border rounded-md focus:outline-none focus:border-primary"
         />
         {config.resolvedExecutable?.source === 'fallback' && (
           <p className="text-label text-muted-foreground">Not found on PATH — set the path to the binary above</p>

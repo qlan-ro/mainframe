@@ -49,7 +49,7 @@ export function GeneralPane({ port }: { port: number }) {
             data-testid="settings-worktree-dir-input"
             value={displayDir}
             onChange={handleDirChange}
-            className="flex-1 rounded border border-mf-border bg-card px-3 py-1.5 text-body text-foreground outline-none focus:border-primary"
+            className="flex-1 rounded border border-border bg-card px-3 py-1.5 text-body text-foreground outline-none focus:border-primary"
           />
           {isDirty && (
             <button

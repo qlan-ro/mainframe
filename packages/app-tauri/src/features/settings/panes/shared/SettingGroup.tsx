@@ -11,7 +11,7 @@ export function SettingGroup({ title, children }: SettingGroupProps) {
       <h4 className="text-label font-medium text-muted-foreground uppercase mb-1" style={{ letterSpacing: '0.05em' }}>
         {title}
       </h4>
-      <div className="divide-y divide-mf-border">{children}</div>
+      <div className="divide-y divide-border">{children}</div>
     </div>
   );
 }
