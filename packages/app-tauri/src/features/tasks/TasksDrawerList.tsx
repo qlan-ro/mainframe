@@ -40,7 +40,7 @@ export function TasksDrawerList({ port, projectId, onStartSession }: Props): Rea
     <>
       <div className="flex flex-col overflow-y-auto min-h-0 mf-thin-scrollbar">
         {active.length === 0 ? (
-          <div className="px-3 py-4 text-xs text-muted-foreground">No active tasks.</div>
+          <div className="px-3 py-4 text-caption text-muted-foreground">No active tasks.</div>
         ) : (
           active.map((todo) => (
             <button
@@ -54,8 +54,8 @@ export function TasksDrawerList({ port, projectId, onStartSession }: Props): Rea
               )}
             >
               <span className={cn('shrink-0 w-1.5 h-1.5 rounded-full', statusDotColor(todo.status))} />
-              <span className="shrink-0 font-mono text-xs text-primary">#{todo.number}</span>
-              <span className="flex-1 min-w-0 text-xs text-foreground truncate">{todo.title}</span>
+              <span className="shrink-0 font-mono text-caption text-primary">#{todo.number}</span>
+              <span className="flex-1 min-w-0 text-caption text-foreground truncate">{todo.title}</span>
             </button>
           ))
         )}

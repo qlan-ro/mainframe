@@ -51,15 +51,15 @@ export function TaskListRow({ todo, expanded, onToggle, onEdit, onStartSession }
         <span className={cn('shrink-0 w-2 h-2 rounded-full', statusDotColor(todo.status))} aria-label={todo.status} />
 
         {/* Number */}
-        <span className="shrink-0 font-mono text-xs font-medium text-primary w-10 text-right">#{todo.number}</span>
+        <span className="shrink-0 font-mono text-caption font-medium text-primary w-10 text-right">#{todo.number}</span>
 
         {/* Title */}
-        <span className="flex-1 min-w-0 text-sm text-foreground truncate">{todo.title}</span>
+        <span className="flex-1 min-w-0 text-body text-foreground truncate">{todo.title}</span>
 
         {/* Priority pill */}
         <span
           className={cn(
-            'shrink-0 text-xs font-medium px-1.5 py-0.5 rounded capitalize leading-4',
+            'shrink-0 text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
             priorityTint(todo.priority),
           )}
         >
@@ -107,10 +107,10 @@ export function TaskListRow({ todo, expanded, onToggle, onEdit, onStartSession }
 
       {/* Expanded detail panel */}
       {expanded && (
-        <div className="px-10 pb-3 space-y-2 text-sm text-muted-foreground bg-accent">
-          {todo.body && <p className="whitespace-pre-wrap text-foreground text-xs leading-relaxed">{todo.body}</p>}
+        <div className="px-10 pb-3 space-y-2 text-body text-muted-foreground bg-accent">
+          {todo.body && <p className="whitespace-pre-wrap text-foreground text-caption leading-relaxed">{todo.body}</p>}
 
-          <div className="flex flex-wrap gap-4 text-xs">
+          <div className="flex flex-wrap gap-4 text-caption">
             {todo.milestone && (
               <span>
                 <span className="font-medium text-foreground">Milestone:</span> {todo.milestone}
@@ -129,7 +129,7 @@ export function TaskListRow({ todo, expanded, onToggle, onEdit, onStartSession }
             )}
           </div>
 
-          <div className="flex gap-4 text-xs text-muted-foreground">
+          <div className="flex gap-4 text-caption text-muted-foreground">
             <span>Created {formatDate(todo.created_at)}</span>
             <span>Updated {formatDate(todo.updated_at)}</span>
           </div>
@@ -138,7 +138,7 @@ export function TaskListRow({ todo, expanded, onToggle, onEdit, onStartSession }
           {todo.labels.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {todo.labels.map((l) => (
-                <span key={l} className="text-xs bg-[var(--mf-chip)] px-1.5 py-0.5 rounded text-muted-foreground">
+                <span key={l} className="text-caption bg-[var(--mf-chip)] px-1.5 py-0.5 rounded text-muted-foreground">
                   {l}
                 </span>
               ))}

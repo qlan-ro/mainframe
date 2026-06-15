@@ -42,7 +42,7 @@ export function SortMenu({ sort, onChange }: Props): React.ReactElement {
           data-testid="tasks-sort-menu"
           type="button"
           className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors',
+            'flex items-center gap-1 px-2 py-1 rounded text-label font-medium transition-colors',
             'border border-border bg-background text-muted-foreground hover:text-foreground',
           )}
         >
@@ -54,11 +54,11 @@ export function SortMenu({ sort, onChange }: Props): React.ReactElement {
         {SORT_KEYS.map(({ key, label }, idx) => (
           <React.Fragment key={key}>
             {idx > 0 && <DropdownMenuSeparator className="my-1" />}
-            <div className="px-2 py-1 text-xs text-muted-foreground font-medium">{label}</div>
+            <div className="px-2 py-1 text-caption text-muted-foreground font-medium">{label}</div>
             <DropdownMenuItem
               data-testid={`tasks-sort-${key}-asc`}
               onSelect={() => onChange({ key, dir: 'asc' })}
-              className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer rounded"
+              className="flex items-center gap-2 px-2 py-1.5 text-body cursor-pointer rounded"
             >
               <span className="w-3.5 shrink-0">
                 {sort.key === key && sort.dir === 'asc' && (
@@ -70,7 +70,7 @@ export function SortMenu({ sort, onChange }: Props): React.ReactElement {
             <DropdownMenuItem
               data-testid={`tasks-sort-${key}-desc`}
               onSelect={() => onChange({ key, dir: 'desc' })}
-              className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer rounded"
+              className="flex items-center gap-2 px-2 py-1.5 text-body cursor-pointer rounded"
             >
               <span className="w-3.5 shrink-0">
                 {sort.key === key && sort.dir === 'desc' && (

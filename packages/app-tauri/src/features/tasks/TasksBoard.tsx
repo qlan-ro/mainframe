@@ -64,8 +64,8 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
     <div data-testid="tasks-board-modal" className="flex flex-col h-full min-h-0 overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
-        <span className="text-sm font-semibold text-foreground">Tasks</span>
-        <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+        <span className="text-body font-semibold text-foreground">Tasks</span>
+        <span className="text-caption text-muted-foreground bg-muted rounded-full px-2 py-0.5">
           {activeCount} active · {doneCount} done
         </span>
 
@@ -77,7 +77,7 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
             onClick={() => setView('list')}
             aria-pressed={view === 'list'}
             className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
+              'flex items-center gap-1 px-2 py-1 rounded text-caption transition-colors',
               view === 'list'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -92,7 +92,7 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
             onClick={() => setView('board')}
             aria-pressed={view === 'board'}
             className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
+              'flex items-center gap-1 px-2 py-1 rounded text-caption transition-colors',
               view === 'board'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -108,7 +108,7 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
           data-testid="tasks-board-new"
           type="button"
           onClick={handleNew}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-md bg-primary text-primary-foreground text-xs hover:opacity-90 transition-opacity"
+          className="flex items-center gap-1 px-2 py-1.5 rounded-md bg-primary text-primary-foreground text-caption hover:opacity-90 transition-opacity"
         >
           <Plus size={12} />
           New
@@ -127,7 +127,7 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
 
       {/* Body */}
       {loading ? (
-        <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Loading tasks…</div>
+        <div className="flex-1 flex items-center justify-center text-caption text-muted-foreground">Loading tasks…</div>
       ) : view === 'list' ? (
         <TaskListView
           port={port}

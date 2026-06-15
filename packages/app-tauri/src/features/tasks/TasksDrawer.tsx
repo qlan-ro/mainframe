@@ -115,9 +115,9 @@ export function TasksDrawer({ port, projectId, onStartSession }: Props): React.R
 
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 shrink-0 border-b border-border">
-        <span className="text-xs font-semibold text-foreground">Tasks</span>
+        <span className="text-caption font-semibold text-foreground">Tasks</span>
         {activeCount > 0 && (
-          <span className="text-xs text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 leading-none">
+          <span className="text-caption text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 leading-none">
             {activeCount}
           </span>
         )}

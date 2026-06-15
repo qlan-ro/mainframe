@@ -47,12 +47,15 @@ export const TaskCard = React.memo(function TaskCard({
     >
       {/* Row 1: #number + title + type badge */}
       <div className="flex items-start gap-1.5 min-w-0">
-        <span className="shrink-0 font-mono text-xs font-medium text-primary leading-5">#{todo.number}</span>
+        <span className="shrink-0 font-mono text-caption font-medium text-primary leading-5">#{todo.number}</span>
         <span className="flex-1 min-w-0">
-          <span className="text-sm text-foreground font-semibold leading-snug line-clamp-2">{todo.title}</span>
+          <span className="text-body text-foreground font-semibold leading-snug line-clamp-2">{todo.title}</span>
         </span>
         <span
-          className={cn('shrink-0 text-xs font-medium px-1.5 py-0.5 rounded capitalize leading-4', typeTint(todo.type))}
+          className={cn(
+            'shrink-0 text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
+            typeTint(todo.type),
+          )}
         >
           {todo.type.replace('_', ' ')}
         </span>
@@ -60,7 +63,7 @@ export const TaskCard = React.memo(function TaskCard({
 
       {/* Dependencies line */}
       {todo.dependencies.length > 0 && (
-        <div className="text-xs text-muted-foreground">
+        <div className="text-caption text-muted-foreground">
           Depends on {todo.dependencies.map((n) => `#${n}`).join(', ')}
         </div>
       )}
@@ -69,7 +72,7 @@ export const TaskCard = React.memo(function TaskCard({
       <div>
         <span
           className={cn(
-            'inline-block text-xs font-medium px-1.5 py-0.5 rounded capitalize leading-4',
+            'inline-block text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
             priorityTint(todo.priority),
           )}
         >
@@ -81,12 +84,12 @@ export const TaskCard = React.memo(function TaskCard({
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1 min-w-0">
           {todo.labels.map((l) => (
-            <span key={l} className="text-xs bg-[var(--mf-chip)] px-1.5 py-0.5 rounded text-muted-foreground">
+            <span key={l} className="text-caption bg-[var(--mf-chip)] px-1.5 py-0.5 rounded text-muted-foreground">
               {l}
             </span>
           ))}
           {attachmentCount != null && attachmentCount > 0 && (
-            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-0.5 text-caption text-muted-foreground">
               <Paperclip size={10} />
               {attachmentCount}
             </span>

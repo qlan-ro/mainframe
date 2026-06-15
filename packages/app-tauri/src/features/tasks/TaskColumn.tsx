@@ -58,8 +58,8 @@ export function TaskColumn({ status, todos, onDrop, onEdit, onDelete, onStartSes
     >
       {/* Column header */}
       <div className="flex items-center gap-2 px-1 py-0.5 shrink-0">
-        <span className="text-xs font-semibold text-foreground">{STATUS_LABEL[status]}</span>
-        <span className="ml-auto text-xs font-medium text-muted-foreground bg-background rounded-full px-1.5 py-0.5">
+        <span className="text-caption font-semibold text-foreground">{STATUS_LABEL[status]}</span>
+        <span className="ml-auto text-caption font-medium text-muted-foreground bg-background rounded-full px-1.5 py-0.5">
           {todos.length}
         </span>
       </div>
@@ -70,7 +70,9 @@ export function TaskColumn({ status, todos, onDrop, onEdit, onDelete, onStartSes
           <TaskCard key={todo.id} todo={todo} onEdit={onEdit} onDelete={onDelete} onStartSession={onStartSession} />
         ))}
         {todos.length === 0 && (
-          <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-6">No tasks</div>
+          <div className="flex-1 flex items-center justify-center text-caption text-muted-foreground py-6">
+            No tasks
+          </div>
         )}
       </div>
     </div>

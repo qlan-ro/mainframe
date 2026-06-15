@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@assistant-ui/react', () => ({
   AssistantRuntimeProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useAuiState: vi.fn(() => 'Fixture Chat'),
+  useAssistantRuntime: () => ({ threads: { reload: vi.fn().mockResolvedValue(undefined), switchToThread: vi.fn() } }),
+  useAui: () => ({ composer: () => ({ setText: vi.fn() }) }),
 }));
 
 vi.mock('@/features/sessions/sidebar/SessionSidebar', () => ({

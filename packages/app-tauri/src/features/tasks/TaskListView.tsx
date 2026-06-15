@@ -101,7 +101,7 @@ export function TaskListView({ todos, onEdit, onStartSession }: Props): React.Re
           {/* Group header */}
           <button
             type="button"
-            className="flex items-center gap-1.5 w-full px-3 py-1.5 bg-muted/40 border-b border-border hover:bg-accent transition-colors text-xs font-semibold text-muted-foreground"
+            className="flex items-center gap-1.5 w-full px-3 py-1.5 bg-muted/40 border-b border-border hover:bg-accent transition-colors text-caption font-semibold text-muted-foreground"
             onClick={() => toggleGroup(status)}
           >
             {collapsedGroups.has(status) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -125,13 +125,13 @@ export function TaskListView({ todos, onEdit, onStartSession }: Props): React.Re
       ))}
 
       {todos.length === 0 && (
-        <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-12">
+        <div className="flex-1 flex items-center justify-center text-caption text-muted-foreground py-12">
           No tasks match the current filters.
         </div>
       )}
 
       {/* Footer hint */}
-      <div className="shrink-0 px-3 py-2 border-t border-border bg-card text-xs text-muted-foreground">
+      <div className="shrink-0 px-3 py-2 border-t border-border bg-card text-caption text-muted-foreground">
         <span>↑/↓ select · ↵ start session · E edit</span>
       </div>
     </div>

@@ -48,7 +48,7 @@ export function FilterMenu({ label, options, selected, onChange }: Props): React
           data-testid={`tasks-filter-${toKebab(label)}`}
           type="button"
           className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors',
+            'flex items-center gap-1 px-2 py-1 rounded text-label font-medium transition-colors',
             'border border-border',
             hasSelection
               ? 'bg-primary text-primary-foreground border-primary'
@@ -71,7 +71,7 @@ export function FilterMenu({ label, options, selected, onChange }: Props): React
                 e.preventDefault();
                 onChange(toggleValue(selected, opt.value));
               }}
-              className="flex items-center gap-2 px-2 py-1.5 rounded text-sm cursor-pointer"
+              className="flex items-center gap-2 px-2 py-1.5 rounded text-body cursor-pointer"
             >
               {/* Checkbox indicator */}
               <span
@@ -83,11 +83,13 @@ export function FilterMenu({ label, options, selected, onChange }: Props): React
                 {isSelected && <Check size={9} strokeWidth={3} />}
               </span>
               <span className="flex-1 capitalize">{opt.label.replace('_', ' ')}</span>
-              {opt.count > 0 && <span className="text-xs text-muted-foreground tabular-nums">{opt.count}</span>}
+              {opt.count > 0 && <span className="text-caption text-muted-foreground tabular-nums">{opt.count}</span>}
             </DropdownMenuItem>
           );
         })}
-        {options.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground text-center">No options</div>}
+        {options.length === 0 && (
+          <div className="px-2 py-2 text-caption text-muted-foreground text-center">No options</div>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
