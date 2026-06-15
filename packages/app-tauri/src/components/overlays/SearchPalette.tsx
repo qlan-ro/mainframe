@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/command';
 import { useOverlaysStore } from '@/store/overlays';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { useFileSearch } from '@/features/files/use-file-search';
+import { useFileSearch, dirOf } from '@/features/files/use-file-search';
 import { threadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -101,9 +101,7 @@ export function SearchPalette() {
               >
                 <FileIcon className="size-4 shrink-0 text-muted-foreground" />
                 <span className="truncate font-medium">{result.name}</span>
-                <span className="ml-auto truncate text-caption text-muted-foreground">
-                  {result.path.includes('/') ? result.path.slice(0, result.path.lastIndexOf('/')) : '.'}
-                </span>
+                <span className="ml-auto truncate text-caption text-muted-foreground">{dirOf(result.path)}</span>
               </CommandItem>
             ))}
           </CommandGroup>

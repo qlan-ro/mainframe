@@ -110,7 +110,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, revealPath }: NodePro
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem
-            data-testid="file-tree-find-in-path"
+            data-testid="file-tree-find-in-file"
             onSelect={() => emitSurfaceIntent({ type: 'open-find-in-path', scopePath: entry.path, scopeType: 'file' })}
           >
             Find in file
@@ -141,7 +141,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, revealPath }: NodePro
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem
-            data-testid="file-tree-find-in-path"
+            data-testid="file-tree-find-in-folder"
             onSelect={() =>
               emitSurfaceIntent({ type: 'open-find-in-path', scopePath: entry.path, scopeType: 'directory' })
             }

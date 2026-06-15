@@ -59,7 +59,7 @@ describe('FileTree — context menu', () => {
     render(<FileTree port={1} projectId="p1" />);
     const row = await screen.findByTestId('file-tree-row-src/a.ts');
     fireEvent.contextMenu(row);
-    const menuItem = await screen.findByTestId('file-tree-find-in-path');
+    const menuItem = await screen.findByTestId('file-tree-find-in-file');
     fireEvent.click(menuItem);
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-find-in-path', scopePath: 'src/a.ts', scopeType: 'file' });
   });
@@ -69,7 +69,7 @@ describe('FileTree — context menu', () => {
     render(<FileTree port={1} projectId="p1" />);
     const row = await screen.findByTestId('file-tree-row-src');
     fireEvent.contextMenu(row);
-    const menuItem = await screen.findByTestId('file-tree-find-in-path');
+    const menuItem = await screen.findByTestId('file-tree-find-in-folder');
     fireEvent.click(menuItem);
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-find-in-path', scopePath: 'src', scopeType: 'directory' });
   });

@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 import { FileIcon } from 'lucide-react';
 import { searchFiles, type FileResult } from '@/lib/api/files';
 
+/** Returns the directory portion of a relative path, or '.' for root-level files. */
+export function dirOf(path: string): string {
+  return path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.';
+}
+
 export function useDebounce<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState<T>(value);
   useEffect(() => {
@@ -35,7 +40,7 @@ export function useListNavigation(count: number, onConfirm: (index: number) => v
         });
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (count > 0) onConfirm(activeIndex);
+        if (count > 0) onConfirm(Math.min(activeIndex, count - 1));
       }
     },
     [count, activeIndex, onConfirm],
@@ -54,7 +59,7 @@ export function FileRow({
   rowRef: (el: HTMLButtonElement | null) => void;
   onSelect: (path: string) => void;
 }) {
-  const dir = result.path.includes('/') ? result.path.slice(0, result.path.lastIndexOf('/')) : '.';
+  const dir = dirOf(result.path);
   const activeClasses = isActive ? 'bg-accent text-accent-foreground' : '';
   return (
     <button
@@ -74,7 +79,10 @@ export function FileRow({
   );
 }
 
-/** Debounced project file search. Returns [] for queries shorter than minLength chars (default 2). */
+/**
+ * Debounced project file search. Returns [] for queries shorter than `minLength`
+ * chars (default 2; FilePickerDialog passes 1 for single-keystroke search).
+ */
 export function useFileSearch(
   port: number,
   projectId: string | undefined,
@@ -89,8 +97,11 @@ export function useFileSearch(
   const reqIdRef = useRef(0);
   useEffect(() => {
     if (!projectId || debounced.trim().length < minLength) {
+      // Invalidate any in-flight request so a late response cannot land.
+      reqIdRef.current++;
       setResults([]);
       setSearched(false);
+      setLoading(false);
       return;
     }
     const reqId = ++reqIdRef.current;
