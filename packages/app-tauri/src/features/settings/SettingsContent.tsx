@@ -1,4 +1,5 @@
 import { useSettingsStore } from '../../store/settings';
+import { GeneralPane } from './panes/general/GeneralPane';
 
 function Stub({ id }: { id: string }) {
   return (
@@ -10,10 +11,9 @@ function Stub({ id }: { id: string }) {
 
 export function SettingsContent({ port }: { port: number }) {
   const activeTab = useSettingsStore((s) => s.activeTab);
-  void port; // panes consume it once implemented
   switch (activeTab) {
     case 'general':
-      return <Stub id="general" />;
+      return <GeneralPane port={port} />;
     case 'providers':
       return <Stub id="providers" />;
     case 'notifications':
