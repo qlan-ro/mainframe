@@ -3,10 +3,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { FileTreeEntry } from '@/lib/api/files';
 
 const getFileTree = vi.fn();
-const emitSurfaceIntent = vi.fn();
+const mockEmit = vi.fn();
 
 vi.mock('@/lib/api/files', () => ({ getFileTree: (...a: unknown[]) => getFileTree(...a) }));
-vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => emitSurfaceIntent(...a) }));
+vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
+
+// alias for backward compat within this file
+const emitSurfaceIntent = mockEmit;
 
 import { FileTree } from '../FileTree';
 
@@ -16,7 +19,7 @@ const file = (name: string, path: string): FileTreeEntry => ({ name, path, type:
 describe('FileTree', () => {
   beforeEach(() => {
     getFileTree.mockReset();
-    emitSurfaceIntent.mockReset();
+    mockEmit.mockReset();
   });
 
   it('renders root entries with directories before files', async () => {
@@ -42,5 +45,32 @@ describe('FileTree', () => {
     fireEvent.click(await screen.findByTestId('file-tree-row-src'));
     await waitFor(() => expect(screen.getByTestId('file-tree-row-src/a.ts')).toBeTruthy());
     expect(getFileTree).toHaveBeenNthCalledWith(2, 1, 'p1', 'src', undefined);
+  });
+});
+
+describe('FileTree — context menu', () => {
+  beforeEach(() => {
+    getFileTree.mockReset();
+    mockEmit.mockReset();
+  });
+
+  it('emits open-find-in-path for a file row', async () => {
+    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
+    render(<FileTree port={1} projectId="p1" />);
+    const row = await screen.findByTestId('file-tree-row-src/a.ts');
+    fireEvent.contextMenu(row);
+    const menuItem = await screen.findByTestId('file-tree-find-in-path');
+    fireEvent.click(menuItem);
+    expect(mockEmit).toHaveBeenCalledWith({ type: 'open-find-in-path', scopePath: 'src/a.ts', scopeType: 'file' });
+  });
+
+  it('emits open-find-in-path for a directory row', async () => {
+    getFileTree.mockResolvedValueOnce([dir('src', 'src')]);
+    render(<FileTree port={1} projectId="p1" />);
+    const row = await screen.findByTestId('file-tree-row-src');
+    fireEvent.contextMenu(row);
+    const menuItem = await screen.findByTestId('file-tree-find-in-path');
+    fireEvent.click(menuItem);
+    expect(mockEmit).toHaveBeenCalledWith({ type: 'open-find-in-path', scopePath: 'src', scopeType: 'directory' });
   });
 });

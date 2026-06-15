@@ -16,6 +16,7 @@ import { ChevronRight, FileText, Folder } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 
 /** Directories first, then files, each alphabetical. */
 function sortEntries(entries: FileTreeEntry[]): FileTreeEntry[] {
@@ -89,40 +90,66 @@ function TreeNode({ entry, depth, port, projectId, chatId, revealPath }: NodePro
 
   if (entry.type === 'file') {
     return (
-      <button
-        ref={rowRef}
-        data-testid={`file-tree-row-${entry.path}`}
-        data-highlighted={isRevealTarget ? 'true' : undefined}
-        type="button"
-        onClick={() => emitSurfaceIntent({ type: 'open-file', path: entry.path })}
-        style={{ paddingLeft: indent }}
-        className={`flex h-[22px] w-full items-center gap-1.5 border-none pr-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground ${
-          isRevealTarget ? 'bg-accent/60 text-foreground' : 'bg-transparent'
-        }`}
-      >
-        <span className="w-[9px] flex-shrink-0" />
-        <FileText size={11} className="flex-shrink-0 text-mf-text-3" />
-        <span className="truncate">{entry.name}</span>
-      </button>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <button
+            ref={rowRef}
+            data-testid={`file-tree-row-${entry.path}`}
+            data-highlighted={isRevealTarget ? 'true' : undefined}
+            type="button"
+            onClick={() => emitSurfaceIntent({ type: 'open-file', path: entry.path })}
+            style={{ paddingLeft: indent }}
+            className={`flex h-[22px] w-full items-center gap-1.5 border-none pr-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground ${
+              isRevealTarget ? 'bg-accent/60 text-foreground' : 'bg-transparent'
+            }`}
+          >
+            <span className="w-[9px] flex-shrink-0" />
+            <FileText size={11} className="flex-shrink-0 text-mf-text-3" />
+            <span className="truncate">{entry.name}</span>
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem
+            data-testid="file-tree-find-in-path"
+            onSelect={() => emitSurfaceIntent({ type: 'open-find-in-path', scopePath: entry.path, scopeType: 'file' })}
+          >
+            Find in file
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     );
   }
 
   return (
     <>
-      <button
-        data-testid={`file-tree-row-${entry.path}`}
-        type="button"
-        onClick={toggle}
-        style={{ paddingLeft: indent }}
-        className="flex h-[22px] w-full items-center gap-1.5 border-none bg-transparent pr-3 text-left text-caption font-medium text-foreground hover:bg-accent"
-      >
-        <ChevronRight
-          size={9}
-          className={`flex-shrink-0 text-mf-text-3 transition-transform ${open ? 'rotate-90' : ''}`}
-        />
-        <Folder size={12} className="flex-shrink-0 text-mf-surface-files" />
-        <span className="truncate">{entry.name}</span>
-      </button>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <button
+            data-testid={`file-tree-row-${entry.path}`}
+            type="button"
+            onClick={toggle}
+            style={{ paddingLeft: indent }}
+            className="flex h-[22px] w-full items-center gap-1.5 border-none bg-transparent pr-3 text-left text-caption font-medium text-foreground hover:bg-accent"
+          >
+            <ChevronRight
+              size={9}
+              className={`flex-shrink-0 text-mf-text-3 transition-transform ${open ? 'rotate-90' : ''}`}
+            />
+            <Folder size={12} className="flex-shrink-0 text-mf-surface-files" />
+            <span className="truncate">{entry.name}</span>
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem
+            data-testid="file-tree-find-in-path"
+            onSelect={() =>
+              emitSurfaceIntent({ type: 'open-find-in-path', scopePath: entry.path, scopeType: 'directory' })
+            }
+          >
+            Find in folder
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
       {open &&
         (children ?? []).length > 0 &&
         sortEntries(children!).map((child) => (
