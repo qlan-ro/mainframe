@@ -8,6 +8,11 @@
  * The `port` and `projectId` are passed into load/mutation actions —
  * not held as store state — so the caller threads them from
  * useActiveIdentity() + the port prop.
+ *
+ * Stale-completion guard: a module-level counter (`_loadSeq`) increments
+ * on every `load()` call. When the async result resolves, it is discarded
+ * if a newer call has been issued since — preventing earlier slow responses
+ * from overwriting the state set by a faster, more-recent call.
  */
 import { create } from 'zustand';
 import {
@@ -26,10 +31,14 @@ import type { TodoFilters, TodoSort } from './todos-filters';
 const DEFAULT_FILTERS: TodoFilters = { types: [], priorities: [], labels: [], search: '' };
 const DEFAULT_SORT: TodoSort = { key: 'number', dir: 'desc' };
 
+// Monotonic counter — lives outside React/Zustand so it persists across renders.
+let _loadSeq = 0;
+
 interface TodosState {
   todos: Todo[];
   loading: boolean;
   error: string | null;
+  loadedProjectId: string | null;
   filters: TodoFilters;
   sort: TodoSort;
   view: 'list' | 'board';
@@ -48,16 +57,21 @@ export const useTodosStore = create<TodosState>((set, get) => ({
   todos: [],
   loading: false,
   error: null,
+  loadedProjectId: null,
   filters: DEFAULT_FILTERS,
   sort: DEFAULT_SORT,
   view: 'list',
 
   load: async (port, projectId) => {
+    const seq = ++_loadSeq;
     set({ loading: true, error: null });
     try {
       const todos = await listTodos(port, projectId);
-      set({ todos, loading: false });
+      // Drop stale result if a newer load has started.
+      if (seq !== _loadSeq) return;
+      set({ todos, loading: false, loadedProjectId: projectId });
     } catch (err) {
+      if (seq !== _loadSeq) return;
       set({ loading: false, error: err instanceof Error ? err.message : 'Failed to load tasks' });
     }
   },

@@ -14,18 +14,29 @@
  * directly — no manual resolution of item.id needed.
  *
  * Confirmed in: SearchPalette.tsx:51 (calls switchToThread with remoteId).
+ *
+ * Status transition: if the todo is `open`, it is moved to `in_progress`
+ * before the session starts (mirrors desktop behavior).
  */
 import { useCallback } from 'react';
 import { useAssistantRuntime, useAui } from '@assistant-ui/react';
-import { startTodoSession } from '@/lib/api/todos';
+import { startTodoSession, moveTodo, type TodoStatus } from '@/lib/api/todos';
+import { useTodosStore } from './use-todos-store';
 
-export function useStartTodoSession(port: number, projectId: string | undefined): (todoId: string) => Promise<void> {
+export function useStartTodoSession(
+  port: number,
+  projectId: string | undefined,
+): (todoId: string, currentStatus?: TodoStatus) => Promise<void> {
   const runtime = useAssistantRuntime();
   const aui = useAui();
 
   return useCallback(
-    async (todoId: string): Promise<void> => {
+    async (todoId: string, currentStatus?: TodoStatus): Promise<void> => {
       if (!projectId) return;
+      if (currentStatus === 'open') {
+        await moveTodo(port, todoId, 'in_progress');
+        await useTodosStore.getState().load(port, projectId);
+      }
       const { chatId, initialMessage } = await startTodoSession(port, todoId, projectId);
       // Reload the thread list so the new remote chat appears before switching.
       await runtime.threads.reload();

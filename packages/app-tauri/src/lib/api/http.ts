@@ -70,3 +70,20 @@ export async function requestPluginNoContent(method: string, url: string): Promi
   const res = await fetch(url, { method });
   if (!res.ok) throw new Error(await extractError(res));
 }
+
+/**
+ * Extracts a named field from a plugin response body.
+ * Throws a clear error if the field is absent or undefined, so callers
+ * never silently get `undefined.filter(...)` downstream.
+ */
+export function expectField<T>(body: unknown, key: string): T {
+  if (
+    body === null ||
+    typeof body !== 'object' ||
+    !(key in (body as object)) ||
+    (body as Record<string, unknown>)[key] === undefined
+  ) {
+    throw new Error(`Plugin response missing field "${key}"`);
+  }
+  return (body as Record<string, unknown>)[key] as T;
+}

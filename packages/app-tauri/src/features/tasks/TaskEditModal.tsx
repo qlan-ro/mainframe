@@ -11,6 +11,7 @@
  */
 import React, { useState, useCallback } from 'react';
 import { Trash2, Pencil, Plus, Play } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTodosStore } from './use-todos-store';
@@ -115,7 +116,9 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
           }
         }
         onClose();
-      } catch {
+      } catch (err) {
+        console.warn('[tasks] save task failed', err);
+        toast.error('Failed to save task');
         setSaving(false);
       }
     },

@@ -108,6 +108,7 @@ export function TasksDrawer({ port, projectId, onStartSession }: Props): React.R
     >
       {/* Resize handle */}
       <div
+        data-testid="tasks-drawer-resize-handle"
         className="h-1 w-full cursor-row-resize bg-transparent hover:bg-primary/20 transition-colors shrink-0"
         onMouseDown={handleResizeStart}
         aria-label="Resize tasks drawer"

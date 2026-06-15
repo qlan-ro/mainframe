@@ -12,7 +12,7 @@
  *  8.  requestPluginNoContent throws on HTTP error.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { requestPlugin, requestPluginNoContent } from '../http';
+import { requestPlugin, requestPluginNoContent, expectField } from '../http';
 
 // ---------------------------------------------------------------------------
 // fetch mock helpers
@@ -147,6 +147,32 @@ describe('requestPlugin — throws on HTTP error', () => {
 // ---------------------------------------------------------------------------
 // requestPluginNoContent
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// expectField — field extraction helper
+// ---------------------------------------------------------------------------
+
+describe('expectField — throws when field is missing', () => {
+  it('throws with a clear message when the key is absent', () => {
+    expect(() => expectField({ todo: { id: '1' } }, 'todos')).toThrow('Plugin response missing field "todos"');
+  });
+
+  it('returns the field value when present', () => {
+    expect(expectField({ todos: [{ id: '1' }] }, 'todos')).toEqual([{ id: '1' }]);
+  });
+
+  it('throws when body is null', () => {
+    expect(() => expectField(null, 'todos')).toThrow('Plugin response missing field "todos"');
+  });
+
+  it('throws when the field value is undefined', () => {
+    expect(() => expectField({ todos: undefined }, 'todos')).toThrow('Plugin response missing field "todos"');
+  });
+
+  it('does not throw for a falsy-but-present field value like an empty array', () => {
+    expect(expectField({ todos: [] }, 'todos')).toEqual([]);
+  });
+});
 
 describe('requestPluginNoContent — resolves void on 204', () => {
   it('returns undefined (void) when the response is 204', async () => {

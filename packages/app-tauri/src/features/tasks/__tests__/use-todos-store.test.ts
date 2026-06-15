@@ -73,6 +73,7 @@ beforeEach(() => {
       todos: [],
       loading: false,
       error: null,
+      loadedProjectId: null,
       filters: { types: [], priorities: [], labels: [], search: '' },
       sort: { key: 'number', dir: 'desc' },
       view: 'list',
@@ -111,6 +112,56 @@ describe('useTodosStore.load — success', () => {
 
     expect(todosApi.listTodos).toHaveBeenCalledOnce();
     expect(todosApi.listTodos).toHaveBeenCalledWith(PORT, PROJECT_ID);
+  });
+
+  it('sets loadedProjectId to the projectId after a successful load', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValue([TODO_A]);
+
+    const { result } = renderHook(() => useTodosStore());
+
+    await act(async () => {
+      await result.current.load(PORT, PROJECT_ID);
+    });
+
+    expect(result.current.loadedProjectId).toBe(PROJECT_ID);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1b. load — stale-completion guard
+// ---------------------------------------------------------------------------
+
+describe('useTodosStore.load — stale-completion guard', () => {
+  it('drops result from an earlier load when a newer load has started', async () => {
+    let resolve1!: (v: Todo[]) => void;
+    const slowPromise = new Promise<Todo[]>((res) => {
+      resolve1 = res;
+    });
+    vi.mocked(todosApi.listTodos)
+      .mockImplementationOnce(() => slowPromise)
+      .mockResolvedValueOnce([TODO_B]);
+
+    const { result } = renderHook(() => useTodosStore());
+
+    // Start load 1 (slow — not yet resolved)
+    let p1!: Promise<void>;
+    act(() => {
+      p1 = result.current.load(PORT, PROJECT_ID);
+    });
+
+    // Start load 2 before load 1 resolves — this increments _loadSeq
+    await act(async () => {
+      await result.current.load(PORT, PROJECT_ID);
+    });
+
+    // Now resolve load 1 with stale data
+    await act(async () => {
+      resolve1([TODO_A]);
+      await p1;
+    });
+
+    // Store must hold TODO_B (load 2 result), not TODO_A (stale load 1 result)
+    expect(result.current.todos).toEqual([TODO_B]);
   });
 });
 

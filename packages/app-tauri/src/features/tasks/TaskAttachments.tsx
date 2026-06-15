@@ -12,6 +12,7 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, X, FileIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ZoomableImage } from '@/features/chat/parts/ZoomableImage';
 import {
@@ -73,7 +74,8 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
         ),
       );
       setSaved(full);
-    } catch {
+    } catch (err) {
+      console.warn('[tasks] load attachments failed', err);
       /* non-fatal — user still sees upload button */
     }
   }, [port, todoId]);
@@ -108,8 +110,9 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
             sizeBytes: file.size,
           });
           await loadSaved();
-        } catch {
-          /* silent — upload failure is rare */
+        } catch (err) {
+          console.warn('[tasks] upload attachment failed', err);
+          toast.error('Upload failed');
         } finally {
           setUploading(false);
         }
@@ -131,8 +134,9 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
       try {
         await deleteAttachment(port, todoId, attId);
         setSaved((prev) => prev.filter((a) => a.id !== attId));
-      } catch {
-        /* non-fatal */
+      } catch (err) {
+        console.warn('[tasks] delete attachment failed', err);
+        toast.error('Failed to delete attachment');
       }
     },
     [port, todoId],

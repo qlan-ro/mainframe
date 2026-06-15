@@ -390,6 +390,41 @@ describe('uploadAttachment', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Missing-field validation (expectField integration)
+// ---------------------------------------------------------------------------
+
+describe('listTodos — throws when .todos field is missing', () => {
+  it('throws when the response body does not contain .todos', async () => {
+    mockFetchPluginOk({ data: [] });
+
+    await expect(listTodos(PORT, PROJECT_ID)).rejects.toThrow('Plugin response missing field "todos"');
+  });
+});
+
+describe('createTodo — throws when .todo field is missing', () => {
+  it('throws when the response body does not contain .todo', async () => {
+    mockFetchPluginOk({ data: {} });
+
+    await expect(createTodo(PORT, { title: 'Test' })).rejects.toThrow('Plugin response missing field "todo"');
+  });
+});
+
+describe('uploadAttachment — throws when .attachment field is missing', () => {
+  it('throws when the response body does not contain .attachment', async () => {
+    mockFetchPluginOk({ data: {} });
+
+    await expect(
+      uploadAttachment(PORT, TODO_ID, {
+        filename: 'test.png',
+        mimeType: 'image/png',
+        data: 'abc',
+        sizeBytes: 100,
+      }),
+    ).rejects.toThrow('Plugin response missing field "attachment"');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 10. deleteAttachment
 // ---------------------------------------------------------------------------
 

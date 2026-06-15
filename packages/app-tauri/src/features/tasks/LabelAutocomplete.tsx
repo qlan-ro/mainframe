@@ -75,6 +75,7 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
             {label}
             <button
               type="button"
+              data-testid={`tasks-label-remove-${label}`}
               onClick={(e) => {
                 e.stopPropagation();
                 removeLabel(label);

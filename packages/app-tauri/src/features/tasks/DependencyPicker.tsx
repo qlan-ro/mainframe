@@ -82,6 +82,7 @@ export function DependencyPicker({ currentNumber, allTodos, value, onChange }: P
               #{t.number} {t.title.length > 24 ? t.title.slice(0, 24) + '…' : t.title}
               <button
                 type="button"
+                data-testid={`tasks-dep-remove-${t.number}`}
                 onClick={() => removeDep(t.number)}
                 className="hover:text-foreground transition-colors"
                 aria-label={`Remove dependency on #${t.number}`}

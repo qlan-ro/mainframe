@@ -6,7 +6,7 @@
  *
  * Base: /api/plugins/todos/todos
  */
-import { apiBase, requestPlugin, requestPluginNoContent } from './http';
+import { apiBase, requestPlugin, requestPluginNoContent, expectField } from './http';
 
 // ── Domain types (not exported from @qlan-ro/mainframe-types — defined locally) ──
 
@@ -70,16 +70,16 @@ const base = (port: number): string => `${apiBase(port)}/api/plugins/todos/todos
 // ── API functions ──
 
 export const listTodos = async (port: number, projectId: string): Promise<Todo[]> =>
-  (await requestPlugin<{ todos: Todo[] }>('GET', `${base(port)}?projectId=${encodeURIComponent(projectId)}`)).todos;
+  expectField<Todo[]>(await requestPlugin('GET', `${base(port)}?projectId=${encodeURIComponent(projectId)}`), 'todos');
 
 export const createTodo = async (port: number, input: CreateTodoInput): Promise<Todo> =>
-  (await requestPlugin<{ todo: Todo }>('POST', base(port), input)).todo;
+  expectField<Todo>(await requestPlugin('POST', base(port), input), 'todo');
 
 export const updateTodo = async (port: number, id: string, input: UpdateTodoInput): Promise<Todo> =>
-  (await requestPlugin<{ todo: Todo }>('PATCH', `${base(port)}/${encodeURIComponent(id)}`, input)).todo;
+  expectField<Todo>(await requestPlugin('PATCH', `${base(port)}/${encodeURIComponent(id)}`, input), 'todo');
 
 export const moveTodo = async (port: number, id: string, status: TodoStatus): Promise<Todo> =>
-  (await requestPlugin<{ todo: Todo }>('PATCH', `${base(port)}/${encodeURIComponent(id)}/move`, { status })).todo;
+  expectField<Todo>(await requestPlugin('PATCH', `${base(port)}/${encodeURIComponent(id)}/move`, { status }), 'todo');
 
 export const deleteTodo = (port: number, id: string): Promise<void> =>
   requestPluginNoContent('DELETE', `${base(port)}/${encodeURIComponent(id)}`);
@@ -96,8 +96,10 @@ export const startTodoSession = (
   );
 
 export const listAttachments = async (port: number, id: string): Promise<AttachmentMeta[]> =>
-  (await requestPlugin<{ attachments: AttachmentMeta[] }>('GET', `${base(port)}/${encodeURIComponent(id)}/attachments`))
-    .attachments;
+  expectField<AttachmentMeta[]>(
+    await requestPlugin('GET', `${base(port)}/${encodeURIComponent(id)}/attachments`),
+    'attachments',
+  );
 
 export const getAttachment = (
   port: number,
@@ -114,13 +116,10 @@ export const uploadAttachment = async (
   id: string,
   file: { filename: string; mimeType: string; data: string; sizeBytes: number },
 ): Promise<AttachmentMeta> =>
-  (
-    await requestPlugin<{ attachment: AttachmentMeta }>(
-      'POST',
-      `${base(port)}/${encodeURIComponent(id)}/attachments`,
-      file,
-    )
-  ).attachment;
+  expectField<AttachmentMeta>(
+    await requestPlugin('POST', `${base(port)}/${encodeURIComponent(id)}/attachments`, file),
+    'attachment',
+  );
 
 export const deleteAttachment = (port: number, id: string, attachmentId: string): Promise<void> =>
   requestPluginNoContent(
