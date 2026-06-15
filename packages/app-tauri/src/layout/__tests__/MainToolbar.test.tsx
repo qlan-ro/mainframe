@@ -24,6 +24,7 @@ describe('MainToolbar — root element', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -42,6 +43,7 @@ describe('MainToolbar — project name', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -59,6 +61,7 @@ describe('MainToolbar — branch chip', () => {
         projectName="mainframe"
         branchName="feat/x"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -75,6 +78,7 @@ describe('MainToolbar — branch chip', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -92,6 +96,7 @@ describe('MainToolbar — show-sidebar button', () => {
         onExpandSidebar={onExpandSidebar}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -111,6 +116,7 @@ describe('MainToolbar — show-sidebar button', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -127,6 +133,7 @@ describe('MainToolbar — stub buttons', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -144,6 +151,7 @@ describe('MainToolbar — search button', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -158,6 +166,7 @@ describe('MainToolbar — search button', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -175,6 +184,7 @@ describe('MainToolbar — inspector toggle', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -199,6 +209,7 @@ describe('MainToolbar — theme toggle', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 
@@ -217,6 +228,7 @@ describe('MainToolbar — theme toggle', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         windowStyle="glass"
+        port={31415}
       />,
     );
 

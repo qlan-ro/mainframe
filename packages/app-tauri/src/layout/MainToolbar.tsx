@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Play, Search, Sun } from 'lucide-react';
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useLayoutStore } from '@/store/layout';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { BranchPopover } from '../features/git/BranchPopover';
 import { SurfaceRail } from './SurfaceRail';
 
 interface MainToolbarProps {
@@ -15,6 +17,9 @@ interface MainToolbarProps {
   projectName: string;
   branchName?: string;
   windowStyle: WindowStyle;
+  port: number;
+  projectId?: string;
+  chatId?: string;
 }
 
 const ICON_BTN =
@@ -48,7 +53,11 @@ export function MainToolbar({
   projectName,
   branchName,
   windowStyle,
+  port,
+  projectId,
+  chatId,
 }: MainToolbarProps) {
+  const [branchOpen, setBranchOpen] = useState(false);
   const mode = useTheme((s) => s.mode);
   const toggleTheme = useTheme((s) => s.toggle);
   const isDark = mode === 'dark';
@@ -83,17 +92,39 @@ export function MainToolbar({
           {branchName && (
             <>
               <span className="font-normal text-mf-text-4">|</span>
-              <button
-                data-testid="main-toolbar-branch"
-                type="button"
-                title="Switch branch — coming with its surface"
-                disabled
-                className="inline-flex min-w-0 max-w-[230px] cursor-not-allowed items-center gap-1.5 rounded-[6px] px-1.5 py-0.5 font-mono text-micro font-normal text-muted-foreground opacity-80"
-              >
-                <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
-                <span className="truncate">{branchName}</span>
-                <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
-              </button>
+              {branchName && projectId ? (
+                <BranchPopover
+                  port={port}
+                  projectId={projectId}
+                  chatId={chatId}
+                  open={branchOpen}
+                  onOpenChange={setBranchOpen}
+                >
+                  <button
+                    data-testid="main-toolbar-branch"
+                    type="button"
+                    title="Switch branch"
+                    onClick={() => setBranchOpen((o) => !o)}
+                    className="inline-flex min-w-0 max-w-[230px] cursor-pointer items-center gap-1.5 rounded-[6px] px-1.5 py-0.5 font-mono text-micro font-normal text-muted-foreground hover:bg-accent"
+                  >
+                    <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
+                    <span className="truncate">{branchName}</span>
+                    <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
+                  </button>
+                </BranchPopover>
+              ) : (
+                <button
+                  data-testid="main-toolbar-branch"
+                  type="button"
+                  title="Switch branch — coming with its surface"
+                  disabled
+                  className="inline-flex min-w-0 max-w-[230px] cursor-not-allowed items-center gap-1.5 rounded-[6px] px-1.5 py-0.5 font-mono text-micro font-normal text-muted-foreground opacity-80"
+                >
+                  <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
+                  <span className="truncate">{branchName}</span>
+                  <ChevronDown size={8} className="flex-shrink-0 text-mf-text-4" />
+                </button>
+              )}
             </>
           )}
         </span>

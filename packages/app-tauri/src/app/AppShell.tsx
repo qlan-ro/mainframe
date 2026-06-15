@@ -50,7 +50,7 @@ function RuntimeBody({ port }: { port: number }) {
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
-  const { projectName, branchName, worktreePath, projectPath } = useActiveIdentity();
+  const { projectName, branchName, worktreePath, projectPath, projectId, chatId } = useActiveIdentity();
 
   // Sync the active bases into the store so the intent subscriber (outside React)
   // can normalize open-file path flavors to a canonical relative key (F1 fix).
@@ -137,6 +137,9 @@ function RuntimeBody({ port }: { port: number }) {
           projectName={projectName}
           branchName={branchName}
           windowStyle={windowStyle}
+          port={port}
+          projectId={projectId}
+          chatId={chatId}
         />
         <SurfaceHost port={port} />
       </div>
