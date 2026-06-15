@@ -32,6 +32,7 @@ import { SurfaceHost } from '../layout/SurfaceHost';
 import { TRAFFIC_LIGHTS_SPACER_WIDTH } from '../layout/SidebarHeader';
 import { useSidebarResize } from '../layout/useSidebarResize';
 import { useGlobalOverlayHotkeys } from './use-global-overlay-hotkeys';
+import { useSandboxWsRouter } from '../features/run/use-sandbox-ws-router';
 
 /** While the sidebar is collapsed, the surface area's top-left sits under the
  *  native traffic lights, so the MainToolbar's left group insets to clear them. */
@@ -47,6 +48,7 @@ function getMainOverlap(sidebarRendered: boolean, sidebarWidth: number): number 
 
 function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
+  useSandboxWsRouter();
   useGlobalOverlayHotkeys();
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
