@@ -306,8 +306,8 @@ The single source of truth for what's left. Folds in items previously living onl
 - ☑ **M — Settings + remote-access API port** (`lib/api/settings.ts` + remote-access-api); drop the Keybindings placeholder pane.
 
 **Overlays / review**
-- ☐ **M — SearchPalette → shadcn Command** (`components/overlays/`) + retire the search store.
-- ☐ **L — FindInPathModal + DirectoryPickerModal + ReviewPanel** (Header/DiffView/FileTree); drop `FullviewModal`.
+- ☑ **M — SearchPalette → shadcn Command** (`components/overlays/`) + retire the search store. DONE (2026-06-15) — Cmd+O unified sessions+files palette; FilePickerDialog kept (editor-scoped), shared logic in `use-file-search`.
+- ☑ **L — FindInPathModal + DirectoryPickerModal + ReviewPanel** (Header/DiffView/FileTree); drop `FullviewModal`. DONE (2026-06-15) — FindInPath via `searchContent`; DirectoryPicker = daemon-backed `useDirectoryPicker` promise-bridge (no consumer wired yet); ReviewPanel Cmd+Shift+R on `CmDiffEditor` (side-by-side only) + comment-to-chat; FullviewModal dropped (gated on plugins re-platform).
 
 **Sandbox / run**
 - ☐ **L — Sandbox PreviewTab → embedded Tauri webview** (`features/preview/`) — inspect/capture/console; replaces the Electron `<webview>`. iframe-vs-webview-vs-window scope TBD.
