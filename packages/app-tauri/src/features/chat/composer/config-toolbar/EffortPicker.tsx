@@ -11,7 +11,7 @@
  */
 
 import { Gauge } from 'lucide-react';
-import type { AdapterModel, Chat, EffortLevel } from '@qlan-ro/mainframe-types';
+import type { AdapterModel, Chat, EffortLevel, ProviderConfig } from '@qlan-ro/mainframe-types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,7 @@ export interface EffortPickerProps {
   model: AdapterModel;
   setEffort: (effort: EffortLevel) => void;
   disabled: boolean;
+  providerDefaults?: ProviderConfig;
 }
 
 /** Trigger label shown inside the button. */
@@ -33,14 +34,13 @@ function EffortLabel({ value }: { value: string }) {
   return <span className="text-label font-medium">{value}</span>;
 }
 
-export function EffortPicker({ chat, model, setEffort, disabled }: EffortPickerProps) {
+export function EffortPicker({ chat, model, setEffort, disabled, providerDefaults }: EffortPickerProps) {
   const options = effortOptions(model);
 
   // Hidden when the model has no effort control.
   if (options.length === 0) return null;
 
-  // Provider defaults not yet fetched in app-tauri — pass undefined.
-  const { value: current, locked } = displayEffort(chat, model, undefined);
+  const { value: current, locked } = displayEffort(chat, model, providerDefaults);
   const isDisabled = disabled || locked;
 
   const selectedOption = options.find((o) => o.id === current);

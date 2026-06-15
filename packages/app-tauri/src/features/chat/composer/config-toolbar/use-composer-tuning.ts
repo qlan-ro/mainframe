@@ -3,20 +3,20 @@
 /**
  * Composer tuning hooks — data layer for EffortPicker + FeaturesPopover.
  *
- * Two independent concerns:
- *   useAdapters  — fetches the adapter registry once on mount (model catalog).
- *   useComposerTuning — fetches the current chat, resolves the model, and
- *                       exposes setEffort/setFeature with optimistic updates.
+ * Three independent concerns:
+ *   useAdapters         — fetches the adapter registry once on mount (model catalog).
+ *   useProviderDefaults — fetches provider settings once on mount; returns the
+ *                         requested adapter's ProviderConfig (a structural TuningDefaults,
+ *                         D-D) for effort/feature inheritance. Plain React state, no zustand.
+ *   useComposerTuning   — fetches the current chat, resolves the model, and
+ *                         exposes setEffort/setFeature with optimistic updates.
  *
- * Neither hook uses Zustand. They hold plain React state to avoid the
+ * No hook here uses Zustand. They hold plain React state to avoid the
  * getSnapshot-loop trap that affects external-store selectors.
  *
  * `disabled` reads the LIVE thread run-state from `useAuiState` (not the stale
  * REST snapshot) so the toolbar is correctly disabled mid-run. The daemon port
  * is threaded from `useChatExtras()` — no extra `getDaemonPort()` call here.
- *
- * Provider defaults (`displayEffort` 3rd arg / `effectiveFeature` provider arg)
- * are NOT fetched in app-tauri yet — callers pass `undefined` (follow-up ticket).
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -28,9 +28,11 @@ import type {
   EffortLevel,
   ExecutionMode,
   FeatureKey,
+  ProviderConfig,
   SessionTuning,
 } from '@qlan-ro/mainframe-types';
 import { getAdapters } from '@/lib/api/adapters';
+import { getProviderSettings } from '@/lib/api/settings';
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
@@ -72,6 +74,44 @@ export function useAdapters(): AdapterInfo[] {
 }
 
 // ---------------------------------------------------------------------------
+// useProviderDefaults
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches the provider-settings map once on mount and returns this adapter's
+ * ProviderConfig (a structural TuningDefaults, D-D), or undefined while loading,
+ * on error, or when the adapter has no saved config. Mirrors `useAdapters` —
+ * plain React state, NOT a zustand selector (this module is deliberately
+ * zustand-free to avoid the getSnapshot-loop trap under useExternalStoreRuntime).
+ */
+export function useProviderDefaults(adapterId: string | null): ProviderConfig | undefined {
+  const extras = useChatExtras();
+  const port = extras?.port;
+  const [providers, setProviders] = useState<Record<string, ProviderConfig>>({});
+
+  useEffect(() => {
+    if (port == null) return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const data = await getProviderSettings(port!);
+        if (!cancelled) setProviders(data);
+      } catch (err) {
+        console.warn('[composer/useProviderDefaults] failed to load provider settings', err);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [port]);
+
+  return adapterId != null ? providers[adapterId] : undefined;
+}
+
+// ---------------------------------------------------------------------------
 // useComposerTuning
 // ---------------------------------------------------------------------------
 
@@ -79,6 +119,7 @@ export interface ComposerTuningHook {
   chat: Chat | null;
   adapter: AdapterInfo | null;
   model: AdapterModel | null;
+  providerDefaults: ProviderConfig | undefined;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
   setModel: (model: string) => void;
@@ -117,6 +158,8 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
 
   const adapter: AdapterInfo | null = chat != null ? (adapters.find((a) => a.id === chat.adapterId) ?? null) : null;
+
+  const providerDefaults = useProviderDefaults(adapter?.id ?? null);
 
   // Resolve the AdapterModel: the chat's explicit model, else the adapter's
   // default (chat.model is null when the session inherits the adapter default).
@@ -219,6 +262,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     chat,
     adapter,
     model,
+    providerDefaults,
     setEffort,
     setFeature,
     setModel,

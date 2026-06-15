@@ -30,6 +30,10 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: vi.fn().mockReturnValue(false),
 }));
 
+vi.mock('@/lib/api/settings', () => ({
+  getProviderSettings: vi.fn().mockResolvedValue({ claude: { defaultEffort: 'high', defaultUltracode: 'true' } }),
+}));
+
 vi.mock('../../../runtime/use-chat-thread-runtime', () => ({
   useChatExtras: vi.fn(),
 }));
@@ -56,12 +60,15 @@ vi.mock('@/features/sessions/runtime/draft-config', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { useComposerTuning } from '../use-composer-tuning';
+import { useComposerTuning, useProviderDefaults } from '../use-composer-tuning';
 import { useChatExtras } from '../../../runtime/use-chat-thread-runtime';
 import { useAuiState } from '@assistant-ui/react';
 import { setChatTuning, setChatConfig } from '@/lib/api/chats';
 import type { Chat, AdapterInfo } from '@qlan-ro/mainframe-types';
 import type { DraftCfg } from '@/features/sessions/runtime/draft-config';
+import { waitFor } from '@testing-library/react';
+import { displayEffort, effectiveFeature } from '@/lib/model-tuning';
+import { getProviderSettings } from '@/lib/api/settings';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -538,5 +545,54 @@ describe('useComposerTuning — real chat: setters hit REST helpers, not patchDr
 
     expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, { model: 'claude-3-haiku' });
     expect(patchDraftConfigSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14. composer provider-default inheritance — useProviderDefaults hook
+// ---------------------------------------------------------------------------
+
+// A minimal tuning model fixture with effort + ultracode support.
+const tuningModel = {
+  id: 'm',
+  supportedEfforts: ['low', 'high'],
+  defaultEffort: 'low',
+  supportsUltracode: true,
+} as unknown as AdapterInfo['models'][number];
+
+describe('composer provider-default inheritance', () => {
+  beforeEach(() => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProviderSettings).mockResolvedValue({ claude: { defaultEffort: 'high', defaultUltracode: 'true' } });
+  });
+
+  it('displayEffort uses provider defaultEffort when the chat has none', () => {
+    const provider = { defaultEffort: 'high' } as const;
+    expect(displayEffort({ effort: null }, tuningModel, provider).value).toBe('high');
+  });
+
+  it('falls back to model default when provider config is undefined (not yet fetched)', () => {
+    expect(displayEffort({ effort: null }, tuningModel, undefined).value).toBe('low');
+  });
+
+  it('effectiveFeature reads provider ultracode default', () => {
+    expect(effectiveFeature({ ultracode: null }, { defaultUltracode: 'true' }, 'ultracode')).toBe(true);
+  });
+
+  it('useProviderDefaults fetches into plain state and returns the adapter config', async () => {
+    const { result } = renderHook(() => useProviderDefaults('claude'));
+    // Before the async fetch resolves the hook returns undefined.
+    expect(result.current).toBeUndefined();
+    await waitFor(() => expect(result.current).toEqual({ defaultEffort: 'high', defaultUltracode: 'true' }));
+    expect(vi.mocked(getProviderSettings)).toHaveBeenCalledWith(PORT);
+    // ProviderConfig is structurally a TuningDefaults (D-D) — passes through resolution.
+    // defaultUltracode:'true' + supportsUltracode:true overrides effort to xhigh (locked).
+    expect(displayEffort({ effort: null }, tuningModel, result.current).value).toBe('xhigh');
+  });
+
+  it('returns undefined for an unknown adapter id (safe fallback)', async () => {
+    const { result } = renderHook(() => useProviderDefaults('nonexistent'));
+    await waitFor(() => expect(vi.mocked(getProviderSettings)).toHaveBeenCalled());
+    expect(result.current).toBeUndefined();
   });
 });

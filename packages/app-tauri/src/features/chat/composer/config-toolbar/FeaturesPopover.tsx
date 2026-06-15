@@ -12,7 +12,7 @@
  */
 
 import { SlidersHorizontal } from 'lucide-react';
-import type { AdapterModel, Chat, FeatureKey } from '@qlan-ro/mainframe-types';
+import type { AdapterModel, Chat, FeatureKey, ProviderConfig } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -23,6 +23,7 @@ export interface FeaturesPopoverProps {
   model: AdapterModel;
   setFeature: (key: FeatureKey, on: boolean) => void;
   disabled: boolean;
+  providerDefaults?: ProviderConfig;
 }
 
 interface FeatureRowProps {
@@ -52,8 +53,7 @@ function FeatureRow({ featureKey, label, desc, checked, disabled, onToggle }: Fe
   );
 }
 
-export function FeaturesPopover({ chat, model, setFeature, disabled }: FeaturesPopoverProps) {
-  // Provider defaults not yet fetched in app-tauri — pass undefined.
+export function FeaturesPopover({ chat, model, setFeature, disabled, providerDefaults }: FeaturesPopoverProps) {
   const features = visibleFeatures(model);
 
   // Hidden entirely when the model exposes no tunable features.
@@ -101,7 +101,7 @@ export function FeaturesPopover({ chat, model, setFeature, disabled }: FeaturesP
               featureKey={f.key}
               label={f.label}
               desc={f.desc}
-              checked={effectiveFeature(chat, undefined, f.key)}
+              checked={effectiveFeature(chat, providerDefaults, f.key)}
               disabled={disabled}
               onToggle={setFeature}
             />

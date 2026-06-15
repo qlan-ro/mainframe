@@ -26,6 +26,7 @@ export function ComposerToolbar() {
     chat,
     adapter,
     model,
+    providerDefaults,
     setModel,
     setAdapter,
     setPermissionMode,
@@ -55,8 +56,24 @@ export function ComposerToolbar() {
       />
       <PermissionSelect chat={chat} setPermissionMode={setPermissionMode} />
       {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}
-      {model && <EffortPicker chat={chat} model={model} setEffort={setEffort} disabled={disabled} />}
-      {model && <FeaturesPopover chat={chat} model={model} setFeature={setFeature} disabled={disabled} />}
+      {model && (
+        <EffortPicker
+          chat={chat}
+          model={model}
+          setEffort={setEffort}
+          disabled={disabled}
+          providerDefaults={providerDefaults}
+        />
+      )}
+      {model && (
+        <FeaturesPopover
+          chat={chat}
+          model={model}
+          setFeature={setFeature}
+          disabled={disabled}
+          providerDefaults={providerDefaults}
+        />
+      )}
     </>
   );
 }
