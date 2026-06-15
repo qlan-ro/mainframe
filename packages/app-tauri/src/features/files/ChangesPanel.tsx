@@ -4,14 +4,19 @@
  */
 import { useEffect, useState } from 'react';
 import { getGitStatus, type GitStatusFile } from '@/lib/api/git';
+import { gitStatusKind } from '@/lib/git-status-kind';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
-/** Short status code → a tint class (added/modified/deleted). */
+const KIND_CLASS: Record<string, string> = {
+  added: 'text-mf-diff-add-text',
+  deleted: 'text-mf-diff-del-text',
+  modified: 'text-mf-warning',
+  renamed: 'text-mf-warning',
+};
+
+/** Short status code → a tint class (added/modified/deleted/renamed). */
 function statusClass(code: string): string {
-  if (code.includes('A') || code === '??') return 'text-mf-diff-add-text';
-  if (code.includes('D')) return 'text-mf-diff-del-text';
-  if (code.includes('M')) return 'text-mf-warning';
-  return 'text-mf-warning';
+  return KIND_CLASS[gitStatusKind(code)] ?? 'text-mf-warning';
 }
 
 function basename(path: string): string {
