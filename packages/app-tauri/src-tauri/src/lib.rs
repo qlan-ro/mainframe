@@ -1,4 +1,5 @@
 mod commands;
+mod preview;
 mod shell_env;
 mod sidecar;
 mod terminal;
@@ -11,6 +12,11 @@ use tauri::{Emitter, Manager};
 // Re-export commands at crate root so generate_handler! can find them.
 use commands::{get_app_info, get_auth_token, get_homedir, get_platform, read_file, read_file_base64, show_item_in_folder};
 use terminal::{terminal_create, terminal_write, terminal_resize, terminal_kill, TerminalManager};
+use preview::{
+    preview_capture, preview_create, preview_destroy, preview_eval, preview_inspect_result,
+    preview_navigate, preview_open_external, preview_set_bounds, preview_set_visible,
+    PreviewManager,
+};
 
 /// The daemon handle lives for the entire app lifetime.
 /// OnceLock ensures single-init; Drop isn't guaranteed on all platforms,
@@ -63,11 +69,24 @@ pub fn run() {
             terminal_write,
             terminal_resize,
             terminal_kill,
+            // preview child-webview commands
+            preview_create,
+            preview_navigate,
+            preview_set_bounds,
+            preview_set_visible,
+            preview_capture,
+            preview_destroy,
+            preview_open_external,
+            preview_inspect_result,
+            preview_eval,
         ])
         .setup(move |app| {
             // Register the terminal manager (uses the same login-shell env as the
             // daemon so shells inherit the correct PATH/SHELL).
             app.manage(TerminalManager::new(shell_env.clone()));
+
+            // Register the preview child-webview manager.
+            app.manage(PreviewManager::new());
 
             // Propagate any daemon-boot error to the renderer via the window title
             // (best-effort — the renderer polls get_daemon_status).
@@ -100,6 +119,12 @@ pub fn run() {
                 // Kill all PTY sessions — go through app_handle() because
                 // try_state lives on Manager/AppHandle, not on &Window (M5).
                 if let Some(mgr) = window.app_handle().try_state::<TerminalManager>() {
+                    mgr.kill_all();
+                }
+                // Close all preview child webviews.
+                // NOTE: pane/tab-level teardown is handled by the JS side
+                // calling preview_destroy on each removed 'preview' run tab.
+                if let Some(mgr) = window.app_handle().try_state::<PreviewManager>() {
                     mgr.kill_all();
                 }
             }

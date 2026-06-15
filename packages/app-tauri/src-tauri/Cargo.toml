@@ -18,7 +18,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
+tauri = { version = "2", features = ["macos-private-api", "unstable"] }
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
@@ -33,6 +33,18 @@ portable-pty = "0.9"
 # Dev-only: MCP Bridge plugin for the Tauri MCP server (webview screenshots,
 # DOM inspection, IPC). Only registered under debug_assertions in lib.rs.
 tauri-plugin-mcp-bridge = "0.11"
+
+# macOS-only deps for the preview child-webview native snapshot (Task 5).
+# Pin to the same major versions as tauri 2.11.2 itself to avoid duplicate
+# crate copies and type-incompatibility when casting the WKWebView pointer.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["std", "NSError"] }
+objc2-app-kit = { version = "0.3", features = ["std", "NSImage", "NSBitmapImageRep", "NSGraphicsContext"] }
+objc2-web-kit = { version = "0.3", features = ["std", "WKWebView", "WKSnapshotConfiguration", "block2"] }
+block2 = "0.6"
+objc2-core-graphics = { version = "0.3", features = ["std", "CGGeometry"] }
+png = "0.17"
 
 [profile.dev]
 incremental = true
