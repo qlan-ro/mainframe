@@ -195,10 +195,12 @@ Do the chat leaves in this order; ☑ = done.
 - **Completion note (2026-06-13, pushed `b352d1f7..c64e3600`):** design `docs/architecture/2026-06-13-run-terminal-design.md` · plan `docs/plans/2026-06-13-run-terminal-plan.md`. Built via the full `/do` pipeline (brainstorm → codex spec review → thermo-nuclear plan review → TDD impl → dual final review). **Dual final review APPROVED** (codex + quality-reviewer); the one Major finding — `validate_cwd` symlink/`..` traversal — fixed by canonicalization (`c64e3600`). **Live-verified** in the running app (real PTY spawn, cwd=worktree, bidirectional I/O via `terminal_write` + raw Channel, xterm render, pane `+` spawns a 2nd PTY, close/toggle cleanup; zero panics). 15 cargo tests + 43 JS terminal tests + typecheck green. Open v1 gaps: orphan-PTY reap on session delete/archive (documented deferred — delete path is in the sessions runtime, `kill_all` reaps on quit); release-build PTY packaging verification (portable-pty is statically linked → no sidecar bundle, unlike node-pty). Deferred review nits: `resize()` `drain_reaped`, `--mf-selection` token for xterm selection, `#[cfg(test)]` on `count()`.
 
 ### Settings → `features/settings/`
-- ☐ `replace` SettingsModal shell (chrome/sidebar/routing on shadcn Dialog)
-- ☐ `refactor` settings store · Provider(+TuningDefaults/CodexTuning/ModelDropdown) · General/Notifications/About/Sidebar · RemoteAccess (tunnel/pairing/devices — decompose the 697-line god-file)
-- ☐ `port` settings-api + remote-access-api
-- ☐ `drop` Keybindings placeholder pane
+- ☑ `replace` SettingsModal shell (chrome/sidebar/routing on shadcn Dialog)
+- ☑ `refactor` settings store · Provider(+TuningDefaults/CodexTuning/ModelDropdown) · General/Notifications/About/Sidebar · RemoteAccess (tunnel/pairing/devices — decompose the 697-line god-file)
+- ☑ `port` settings-api + remote-access-api
+- ☑ `drop` Keybindings placeholder pane
+
+**Completion note (2026-06-15):** design `docs/architecture/2026-06-15-settings-surface-design.md`; built via the full `/do` pipeline (brainstorm → codex spec review → thermo-nuclear plan review → TDD impl → dual final review). `features/settings/` shadcn-Dialog shell (opened from the sidebar gear + `⌘,`, mounted in `RuntimeBody`) with five panes: General (worktree dir + **3-axis appearance UI** bound to `useTheme` — closes the deferred "Settings → Appearance UI"), Providers (decomposed: ProvidersPane/ProviderConfigForm/SessionModeRadio/ConfigConflictsWarning/ModelDropdown/ProviderTuningDefaults/CodexTuningDefaults), Notifications, RemoteAccess (697-line god-file → `use-tunnel-status` hook + tunnel/pairing/devices sections), About. New `lib/api/{settings,remote-access}.ts` clients (no daemon contract change). Composer provider-tuning-defaults now wired via a plain-state `useProviderDefaults` hook (closes the EffortPicker/FeaturesPopover `undefined` gap). Keybindings dropped. Changeset `app-tauri-settings-surface` (minor).
 
 ### Modals / palettes / pickers → `components/overlays/` · `features/review/`
 - ☐ `replace` SearchPalette (+search store) → shadcn Command
@@ -254,7 +256,7 @@ The single source of truth for what's left. Folds in items previously living onl
 6. ✅ **DONE (2026-06-11) — editor surface on CodeMirror 6** (ADR-001 overridden), with diff/viewers/LSP/inline-comments/markdown-preview, and `chat-tool-context` `openFile`/`revealFile` are now LIVE (the intent subscriber opens a Files tab). *Remaining follow-up: thread `projectId` into `EditorTab` so the LSP adapters mount in the open editor.*
 7. **De-risk packaging early** — spike the **sidecar bundling** (Node runtime + `better-sqlite3`/`node-pty`/ripgrep/LSP servers, per-platform binaries, signing/notarization) and establish **capabilities/CSP**. *Flagged as a schedule-killer; spike now in parallel to avoid a late GA blocker.*
 8. **Resolve the standing open decisions in dependency order** — shared pure-logic package home (unblocks `convertMessage`/`model-tuning` dedup) → Phase-2 Rust-daemon go/no-go → Electron retire-vs-coexist + mobile-contract governance. *These gate cross-package structure and the terminal/sidecar architecture.*
-9. ✅ **DONE (terminal portion, 2026-06-13) — Build the remaining standalone surfaces in parity order** — ~~Run/terminal (Rust PTY + xterm)~~ ✅ → Settings (modal shell + panes + RemoteAccess decompose) → overlays (SearchPalette→Command, FindInPath/DirectoryPicker/Review) → Tasks/Git → Sandbox preview → Plugins UI. *Independent leaves once bridge + layout + intent bus exist; plugins last (largest god-file + webview re-platform).*
+9. ◐ **IN PROGRESS — Build the remaining standalone surfaces in parity order** — ~~Run/terminal (Rust PTY + xterm)~~ ✅ (2026-06-13) → ~~Settings (modal shell + panes + RemoteAccess decompose)~~ ✅ (2026-06-15) → overlays (SearchPalette→Command, FindInPath/DirectoryPicker/Review) → Tasks/Git → Sandbox preview → Plugins UI. *Independent leaves once bridge + layout + intent bus exist; plugins last (largest god-file + webview re-platform).*
 10. **Complete the cross-cutting foundation last** — theming refactor (Tailwind v4 `@theme` + 4 themes + CSS split once Monaco lands), domain-store/pure-helper port, remaining shadcn primitive swaps, and grow the **e2e harness** (built 2026-06-09 — browser-mode Playwright; 3 specs ported) to cover new surfaces as they land. *Pervasive but lower-risk; the theme CSS split is partly blocked on Monaco.*
 
 ### Backlog by category
@@ -296,10 +298,10 @@ The single source of truth for what's left. Folds in items previously living onl
 - ☑ **L — Rust PTY backend** (`src-tauri/src/terminal/`) — DONE (2026-06-13). `TerminalManager` Tauri-managed state; `terminal_create`/`terminal_write`/`terminal_resize`/`terminal_kill` commands; raw `Channel(InvokeResponseBody::Raw)` for output bytes (→ JS `ArrayBuffer`) + typed `Channel<ExitEvent>` for exit; mutex-poison-safe; reader thread never locks the session map (MPSC reap); kill-before-remove; canonicalized cwd; `kill_all` on `WindowEvent::Destroyed`. 15 cargo tests pass.
 - ☑ **L — Terminal UI** (`features/terminal/` + `surfaces/run/`) — DONE (2026-06-13). `TerminalInstance` (xterm + fit addon, ResizeObserver) + `create-terminal` orchestrator + `terminal-cache` + `resolveCwd` + `new-terminal` surface intent subscriber; `RunSurface` renders terminal panes with a pane `+` button and a RunPicker "New Terminal" entry. `useTerminalStore` dropped (superseded by Run pane model). tool-windows registration not ported.
 
-**Settings**
-- ☐ **M — Settings modal shell** (`features/settings/`) — shadcn Dialog-based chrome/sidebar/routing.
-- ☐ **L — Settings store + Provider + panes** — TuningDefaults/CodexTuning/ModelDropdown + General/Notifications/About/Sidebar; decompose the 697-line `RemoteAccess` god-file (tunnel/pairing/devices).
-- ☐ **M — Settings + remote-access API port** (`lib/api/settings.ts` + remote-access-api); drop the Keybindings placeholder pane.
+**Settings** — ☑ DONE (2026-06-15, see §Settings completion note)
+- ☑ **M — Settings modal shell** (`features/settings/`) — shadcn Dialog-based chrome/sidebar/routing.
+- ☑ **L — Settings store + Provider + panes** — TuningDefaults/CodexTuning/ModelDropdown + General/Notifications/About/Sidebar; decompose the 697-line `RemoteAccess` god-file (tunnel/pairing/devices).
+- ☑ **M — Settings + remote-access API port** (`lib/api/settings.ts` + remote-access-api); drop the Keybindings placeholder pane.
 
 **Overlays / review**
 - ☐ **M — SearchPalette → shadcn Command** (`components/overlays/`) + retire the search store.
