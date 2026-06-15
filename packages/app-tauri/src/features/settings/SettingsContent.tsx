@@ -3,14 +3,7 @@ import { GeneralPane } from './panes/general/GeneralPane';
 import { NotificationsPane } from './panes/notifications/NotificationsPane';
 import { AboutPane } from './panes/about/AboutPane';
 import { ProvidersPane } from './panes/providers/ProvidersPane';
-
-function Stub({ id }: { id: string }) {
-  return (
-    <div data-testid={`settings-pane-${id}`} className="text-mf-text-secondary">
-      {id} — coming soon
-    </div>
-  );
-}
+import { RemoteAccessPane } from './panes/remote-access/RemoteAccessPane';
 
 export function SettingsContent({ port }: { port: number }) {
   const activeTab = useSettingsStore((s) => s.activeTab);
@@ -22,7 +15,7 @@ export function SettingsContent({ port }: { port: number }) {
     case 'notifications':
       return <NotificationsPane port={port} />;
     case 'remote-access':
-      return <Stub id="remote-access" />;
+      return <RemoteAccessPane port={port} />;
     case 'about':
       return <AboutPane />;
   }
