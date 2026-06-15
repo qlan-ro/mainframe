@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { getTunnelConfig } from '../../../../lib/api/remote-access';
 import { NamedTunnelSection } from './NamedTunnelSection';
 import { QuickTunnelSection } from './QuickTunnelSection';
+import { PairingSection } from './PairingSection';
+import { DevicesSection } from './DevicesSection';
 import type { UseTunnelStatusResult } from './use-tunnel-status';
 
 interface TunnelControlProps {
@@ -49,8 +51,8 @@ export function TunnelControl({ port, tunnel }: TunnelControlProps): React.React
           for the same underlying tunnel would be confusing. */}
       {!hasNamedConfig && <QuickTunnelSection tunnel={tunnel} />}
 
-      {/* TODO(Task 12): {tunnel.verified && <PairingSection port={port} />} */}
-      {/* TODO(Task 12): <DevicesSection port={port} /> (rendered always) */}
+      {tunnel.verified && <PairingSection port={port} />}
+      <DevicesSection port={port} />
     </div>
   );
 }
