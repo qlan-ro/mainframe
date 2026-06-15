@@ -105,17 +105,17 @@ Folder-per-pane under `features/settings/panes/`:
 
 ### Composer wiring (Decision 2)
 
-The composer is used in every chat session, so provider defaults must be available independent of whether the user has ever opened Settings. The load path is:
+The composer is used in every chat session, so provider defaults must be available independent of whether the user has ever opened Settings. **The composer owns its own fetch** — it does NOT read `useSettingsStore` and there is NO prefetch into the settings store from `RuntimeBody`. `use-composer-tuning.ts` is deliberately zustand-free (its header warns of the getSnapshot-loop trap under `useExternalStoreRuntime`), so provider defaults are loaded into plain React state, mirroring the existing `useAdapters` hook in that same file. The load path is:
 
-1. **Prefetch on mount in `RuntimeBody`**: call `useSettingsStore.getState().loadProviders(await getProviderSettings(port))` once in a `useEffect` that fires when `port` is known (alongside the existing `daemonWs.setPort(port)` call in `App.tsx`, or equivalently in a `useEffect` in `RuntimeBody`). Guard with `Object.keys(providers).length === 0 && !loading` to avoid redundant fetches. Log and swallow errors — `providers` stays empty, which keeps the current `undefined` fallback safe for the composer.
+1. **New `useProviderDefaults(adapterId)` hook in `use-composer-tuning.ts`** — plain React state (`useState` + `useEffect`), NOT a zustand selector. It reads `port` from `useChatExtras()` (like `useAdapters`), fetches `getProviderSettings(port)` once on mount, and returns the requested adapter's `ProviderConfig` (or `undefined` while loading, on error, or when the adapter has no saved config). This is the same pattern as `useAdapters` and keeps the composer entirely off zustand — no getSnapshot-loop risk, no `getState()` reach-through.
 
-2. **Reactive read in `use-composer-tuning.ts`**: read provider config via the zustand selector form — `const providerDefaults = useSettingsStore((s) => adapter ? s.providers[adapter.id] : undefined)` — **not** `getState()`, which is non-reactive and would not re-render when the async prefetch resolves. This is consistent with the DoD "no `getState()` reach-through in render" rule.
+2. **`useComposerTuning` returns `providerDefaults`** — it calls `useProviderDefaults(adapter?.id ?? null)` with the adapter it already resolves, and adds `providerDefaults` to its returned object. `ComposerToolbar` threads `providerDefaults` as a prop to both `EffortPicker` and `FeaturesPopover`, the same way it already fans `chat`/`model`/`setEffort` to those pickers. The pickers read the prop — they do NOT read any store.
 
-3. **Replace the placeholder `undefined`s**: `displayEffort(chat, model, undefined)` at `EffortPicker.tsx:43` and `effectiveFeature(chat, undefined, f.key)` at `FeaturesPopover.tsx:104` — replace both `undefined` args with the reactive `providerDefaults` value. Treat `undefined` (not-yet-loaded or unavailable) identically to the current behavior — controls resolve constraints without provider inheritance, which is safe.
+3. **Replace the placeholder `undefined`s**: `displayEffort(chat, model, undefined)` at `EffortPicker.tsx:43` and `effectiveFeature(chat, undefined, f.key)` at `FeaturesPopover.tsx:104` — replace both `undefined` args with the `providerDefaults` prop. Treat `undefined` (not-yet-loaded or unavailable) identically to the current behavior — controls resolve constraints without provider inheritance, which is safe. `ProviderConfig` is structurally a `TuningDefaults`, so it passes through directly.
 
-4. **Draft mode**: draft chats have no daemon-issued `adapterId`; read `draftConfig.adapterId` from the draft store to key into `providers`.
+4. **Draft mode**: draft chats have no daemon-issued `adapterId`; the `adapter` resolved inside `useComposerTuning` already accounts for `draftConfig.adapterId` via the existing `useDraftConfig` path, so `useProviderDefaults(adapter?.id ?? null)` keys correctly for drafts too.
 
-5. **Settings dialog re-loads** on open (existing design — `loadProviders` + `loadGeneral` fire in the `useEffect([isOpen])`), which keeps the Settings pane fresh and acts as a natural refresh path after the user changes provider config from another device.
+5. **Settings dialog re-loads** on open (existing design — `loadProviders` + `loadGeneral` fire in the `useEffect([isOpen])`), which keeps the Settings pane fresh. This is independent of the composer fetch above; the two paths do not share state.
 
 Keep this a **separable final task** in the plan — it touches the composer, not the settings feature — so it can be reviewed independently and dropped without blocking the Settings surface review.
 
@@ -123,15 +123,15 @@ Keep this a **separable final task** in the plan — it touches the composer, no
 
 - API clients surface failures through the existing `http.ts` error path; callers log with context (no silent catches; app-tauri renderer uses `console.warn` with a module tag, e.g. `console.warn('[settings/GeneralPane]', err)`).
 - The tunnel hook keeps the desktop's defensive pattern: `refresh()` after `start()` to converge if a WS broadcast was missed; warn-and-continue on status/config/devices fetch failures.
-- The prefetch action (`RuntimeBody` → `loadProviders`) logs and swallows errors — `providers` stays empty, which is the existing `undefined` fallback, safe for the composer.
+- The composer's `useProviderDefaults` hook logs and swallows fetch errors — it returns `undefined`, which the pickers treat identically to not-yet-loaded (no provider inheritance), safe for the composer.
 
 ## Testing
 
 - **`use-tunnel-status` hook** — state-machine transitions across all six states + WS events + start/stop/retry (primary target).
-- **`store/settings.ts`** — open/close, tab/provider selection, load + optimistic patch, deep-partial notifications, prefetch dedup guard + error swallow.
+- **`store/settings.ts`** — open/close, tab/provider selection, load + optimistic patch, deep-partial notifications.
 - **`lib/api/settings.ts` + `lib/api/remote-access.ts`** — endpoint/method/shape per function (mock `http`).
 - **Panes** — render + interaction smoke tests bound to `data-testid`s; design-conformance vs `05-settings.jsx`.
-- Composer wiring — extend existing `use-composer-tuning` / `EffortPicker` / `FeaturesPopover` tests for provider-default inheritance; verify that the `useSettingsStore` selector re-renders the toolbar when `providers` populates asynchronously; verify fallback when `providers` is empty.
+- Composer wiring — extend existing `use-composer-tuning` / `EffortPicker` / `FeaturesPopover` tests for provider-default inheritance; verify the plain-state `useProviderDefaults` hook fetches on mount and the consumer re-renders once the fetch resolves (`undefined` → config); verify fallback when the fetch returns nothing / the adapter has no config.
 
 ## Definition of done (per app-tauri DoD)
 
