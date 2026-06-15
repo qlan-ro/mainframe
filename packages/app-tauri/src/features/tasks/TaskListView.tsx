@@ -10,6 +10,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { Todo, TodoStatus } from '@/lib/api/todos';
+import type { TodoFilters } from './todos-filters';
 import { TaskListRow } from './TaskListRow';
 
 const GROUP_ORDER: TodoStatus[] = ['in_progress', 'open', 'done'];
@@ -23,13 +24,14 @@ interface Props {
   port: number;
   projectId: string;
   todos: Todo[];
+  filters?: TodoFilters;
   onEdit: (todo: Todo) => void;
   onStartSession: (todo: Todo) => void;
 }
 
 type GroupKey = TodoStatus;
 
-export function TaskListView({ todos, onEdit, onStartSession }: Props): React.ReactElement {
+export function TaskListView({ todos, filters, onEdit, onStartSession }: Props): React.ReactElement {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<GroupKey>>(new Set(['done']));
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
@@ -89,6 +91,14 @@ export function TaskListView({ todos, onEdit, onStartSession }: Props): React.Re
     items: todos.filter((t) => t.status === status),
   }));
 
+  const totalVisible = grouped.reduce((sum, g) => sum + g.items.length, 0);
+  const filtersActive =
+    filters != null &&
+    (filters.types.length > 0 ||
+      filters.priorities.length > 0 ||
+      filters.labels.length > 0 ||
+      filters.search.trim().length > 0);
+
   return (
     <div
       ref={containerRef}
@@ -96,38 +106,42 @@ export function TaskListView({ todos, onEdit, onStartSession }: Props): React.Re
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
-      {grouped.map(({ status, items }) => (
-        <div key={status}>
-          {/* Group header */}
-          <button
-            type="button"
-            className="flex items-center gap-1.5 w-full px-3 py-1.5 bg-muted/40 border-b border-border hover:bg-accent transition-colors text-caption font-semibold text-muted-foreground"
-            onClick={() => toggleGroup(status)}
-          >
-            {collapsedGroups.has(status) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-            {GROUP_LABEL[status]}
-            <span className="ml-1 font-normal text-muted-foreground/70">{items.length}</span>
-          </button>
-
-          {/* Rows */}
-          {!collapsedGroups.has(status) &&
-            items.map((todo) => (
-              <TaskListRow
-                key={todo.id}
-                todo={todo}
-                expanded={expanded.has(todo.number)}
-                onToggle={toggleRow}
-                onEdit={onEdit}
-                onStartSession={onStartSession}
-              />
-            ))}
-        </div>
-      ))}
-
-      {todos.length === 0 && (
+      {totalVisible === 0 ? (
         <div className="flex-1 flex items-center justify-center text-caption text-muted-foreground py-12">
-          No tasks match the current filters.
+          {filtersActive ? 'No tasks match these filters' : 'No tasks yet'}
         </div>
+      ) : (
+        grouped.map(({ status, items }) =>
+          items.length === 0 ? null : (
+            <div key={status}>
+              {/* Group header */}
+              <button
+                type="button"
+                data-testid={`tasks-list-group-${status}`}
+                className="flex items-center gap-1.5 w-full px-3 py-1.5 bg-muted/40 border-b border-border hover:bg-accent transition-colors text-caption font-semibold text-muted-foreground"
+                onClick={() => toggleGroup(status)}
+              >
+                {collapsedGroups.has(status) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                {GROUP_LABEL[status]}
+                <span className="ml-1 font-normal text-muted-foreground/70">{items.length}</span>
+              </button>
+
+              {/* Rows */}
+              {!collapsedGroups.has(status) &&
+                items.map((todo) => (
+                  <TaskListRow
+                    key={todo.id}
+                    todo={todo}
+                    selected={selectedNumber === todo.number}
+                    expanded={expanded.has(todo.number)}
+                    onToggle={toggleRow}
+                    onEdit={onEdit}
+                    onStartSession={onStartSession}
+                  />
+                ))}
+            </div>
+          ),
+        )
       )}
 
       {/* Footer hint */}

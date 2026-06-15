@@ -10,7 +10,7 @@
  * Rebuilt on shadcn/ui Dialog + warm-chrome tokens; no mf-* phantom classes.
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTodosStore } from './use-todos-store';
@@ -172,14 +172,27 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
     >
       <DialogContent data-testid="tasks-quick-dialog" className="max-w-md w-full max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
-          <DialogTitle className="text-caption font-medium">Quick Task</DialogTitle>
+          <DialogTitle className="flex items-center gap-1.5 text-body font-bold">
+            <Zap size={13} className="text-primary shrink-0" aria-hidden />
+            Quick Task
+          </DialogTitle>
         </DialogHeader>
 
         <div className="px-4 py-3 space-y-3 overflow-y-auto flex-1 min-h-0">
           {/* Type toggle */}
           <div className="flex gap-2">
-            <TypePill label="Feature" active={taskType === 'feature'} onClick={() => setTaskType('feature')} />
-            <TypePill label="Bug" active={taskType === 'bug'} onClick={() => setTaskType('bug')} />
+            <TypePill
+              label="Feature"
+              active={taskType === 'feature'}
+              onClick={() => setTaskType('feature')}
+              testId="tasks-quick-feature"
+            />
+            <TypePill
+              label="Bug"
+              active={taskType === 'bug'}
+              onClick={() => setTaskType('bug')}
+              testId="tasks-quick-bug"
+            />
           </div>
 
           {/* Title */}
@@ -247,6 +260,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
                   label={p.charAt(0).toUpperCase() + p.slice(1)}
                   active={priority === p}
                   onClick={() => setPriority(p)}
+                  testId={`tasks-quick-priority-${p}`}
                 />
               ))}
             </div>

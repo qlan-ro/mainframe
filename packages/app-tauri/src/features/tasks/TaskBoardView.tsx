@@ -14,6 +14,7 @@ interface Props {
   port: number;
   projectId: string;
   todos: Todo[];
+  filtersActive?: boolean;
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
   onStartSession: (todo: Todo) => void;
@@ -24,6 +25,7 @@ export function TaskBoardView({
   port,
   projectId,
   todos,
+  filtersActive,
   onEdit,
   onDelete,
   onStartSession,
@@ -42,6 +44,7 @@ export function TaskBoardView({
           key={status}
           status={status}
           todos={todos.filter((t) => t.status === status)}
+          filtersActive={filtersActive}
           onDrop={handleDrop}
           onEdit={onEdit}
           onDelete={onDelete}

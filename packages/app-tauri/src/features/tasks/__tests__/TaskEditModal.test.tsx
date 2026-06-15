@@ -254,8 +254,8 @@ describe('TaskEditModal — dialog title text', () => {
     expect(screen.getByText('New Task')).toBeTruthy();
   });
 
-  it('shows "Edit Task" in edit mode', () => {
+  it('shows "Edit Task #<number>" in edit mode', () => {
     renderModal({ todo: EXISTING_TODO });
-    expect(screen.getByText('Edit Task')).toBeTruthy();
+    expect(screen.getByText(`Edit Task #${EXISTING_TODO.number}`)).toBeTruthy();
   });
 });

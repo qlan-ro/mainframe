@@ -53,6 +53,7 @@ export function TaskMetaFields({
       <div className="flex flex-col gap-1">
         <label className="text-caption text-muted-foreground">Assignees (comma-separated)</label>
         <input
+          data-testid="tasks-edit-assignees"
           className={inputCls}
           value={assignees}
           onChange={(e) => onAssigneesChange(e.target.value)}
@@ -63,6 +64,7 @@ export function TaskMetaFields({
       <div className="flex flex-col gap-1">
         <label className="text-caption text-muted-foreground">Milestone</label>
         <input
+          data-testid="tasks-edit-milestone"
           className={inputCls}
           value={milestone}
           onChange={(e) => onMilestoneChange(e.target.value)}

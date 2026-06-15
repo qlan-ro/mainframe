@@ -10,7 +10,7 @@
  * Rebuilt on shadcn/ui + warm-chrome tokens; mf-* phantom classes removed.
  */
 import React, { useState, useCallback } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Pencil, Plus, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTodosStore } from './use-todos-store';
@@ -155,7 +155,19 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
     >
       <DialogContent className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
-          <DialogTitle className="text-body font-medium">{todo ? 'Edit Task' : 'New Task'}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-heading font-bold">
+            {todo ? (
+              <>
+                <Pencil size={14} className="text-primary shrink-0" aria-hidden />
+                Edit Task #{todo.number}
+              </>
+            ) : (
+              <>
+                <Plus size={14} className="text-primary shrink-0" aria-hidden />
+                New Task
+              </>
+            )}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
@@ -189,6 +201,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               </div>
               <div className={textareaWrap}>
                 <textarea
+                  data-testid="tasks-edit-body"
                   className={textareaInner}
                   rows={4}
                   value={body}
@@ -244,8 +257,9 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
                   onStartSession(todo.id);
                   onClose();
                 }}
-                className="px-3 py-1.5 rounded-md text-caption text-primary hover:bg-primary/10 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-caption bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
               >
+                <Play size={12} aria-hidden />
                 Start session
               </button>
             )}

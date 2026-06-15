@@ -11,10 +11,11 @@
  * data-testid="tasks-board-modal".
  */
 import React, { useState } from 'react';
-import { LayoutList, LayoutGrid, Plus } from 'lucide-react';
+import { LayoutList, LayoutGrid, Plus, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTodosStore } from './use-todos-store';
 import { matchesFilters, sortTodos, extractAllLabels } from './todos-filters';
+import type { TodoFilters } from './todos-filters';
 import { TasksFilterBar } from './TasksFilterBar';
 import { TaskListView } from './TaskListView';
 import { TaskBoardView } from './TaskBoardView';
@@ -36,6 +37,11 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
     todos.filter((t) => matchesFilters(t, filters)),
     sort,
   );
+  const filtersActive =
+    (filters as TodoFilters).types.length > 0 ||
+    (filters as TodoFilters).priorities.length > 0 ||
+    (filters as TodoFilters).labels.length > 0 ||
+    (filters as TodoFilters).search.trim().length > 0;
 
   const activeCount = todos.filter((t) => t.status !== 'done').length;
   const doneCount = todos.filter((t) => t.status === 'done').length;
@@ -64,6 +70,7 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
     <div data-testid="tasks-board-modal" className="flex flex-col h-full min-h-0 overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
+        <ListChecks size={15} className="shrink-0 text-muted-foreground" aria-hidden />
         <span className="text-body font-semibold text-foreground">Tasks</span>
         <span className="text-caption text-muted-foreground bg-muted rounded-full px-2 py-0.5">
           {activeCount} active · {doneCount} done
@@ -133,6 +140,7 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
           port={port}
           projectId={projectId}
           todos={filtered}
+          filters={filters as TodoFilters}
           onEdit={handleEdit}
           onStartSession={handleStart}
         />
@@ -141,6 +149,7 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
           port={port}
           projectId={projectId}
           todos={filtered}
+          filtersActive={filtersActive}
           onEdit={handleEdit}
           onDelete={handleDelete}
           onStartSession={handleStart}

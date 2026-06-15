@@ -9,11 +9,26 @@
  * rebuilt on app-tauri shadcn/ui + warm-chrome theme tokens.
  */
 import React from 'react';
-import { Play, Edit, Trash2, Paperclip } from 'lucide-react';
+import { Play, Edit, Trash2, Paperclip, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { Todo } from '@/lib/api/todos';
 import { typeTint, priorityTint } from './task-palettes';
+
+/** Returns a short human-readable "ago" string for an ISO date string. */
+function relativeTime(iso: string): string {
+  try {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const days = Math.round(diffMs / 86_400_000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 7) return `${days}d ago`;
+    if (days < 28) return `${Math.round(days / 7)}w ago`;
+    return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+}
 
 interface Props {
   todo: Todo;
@@ -49,7 +64,14 @@ export const TaskCard = React.memo(function TaskCard({
       <div className="flex items-start gap-1.5 min-w-0">
         <span className="shrink-0 font-mono text-caption font-medium text-primary leading-5">#{todo.number}</span>
         <span className="flex-1 min-w-0">
-          <span className="text-body text-foreground font-semibold leading-snug line-clamp-2">{todo.title}</span>
+          <span
+            className={cn(
+              'text-body font-semibold leading-snug line-clamp-2',
+              todo.status === 'done' ? 'line-through text-muted-foreground' : 'text-foreground',
+            )}
+          >
+            {todo.title}
+          </span>
         </span>
         <span
           className={cn(
@@ -68,8 +90,8 @@ export const TaskCard = React.memo(function TaskCard({
         </div>
       )}
 
-      {/* Row 2: priority pill */}
-      <div>
+      {/* Row 2: priority pill + right-aligned updated timestamp */}
+      <div className="flex items-center gap-2">
         <span
           className={cn(
             'inline-block text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
@@ -78,13 +100,21 @@ export const TaskCard = React.memo(function TaskCard({
         >
           {todo.priority}
         </span>
+        <span className="flex-1" />
+        <span
+          title={`Updated ${new Date(todo.updated_at).toLocaleDateString()}`}
+          className="inline-flex items-center gap-1 text-caption text-muted-foreground shrink-0 whitespace-nowrap"
+        >
+          <Clock size={10} aria-hidden />
+          {relativeTime(todo.updated_at)}
+        </span>
       </div>
 
       {/* Row 3: labels + attachments + hover actions */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1 min-w-0">
           {todo.labels.map((l) => (
-            <span key={l} className="text-caption bg-[var(--mf-chip)] px-1.5 py-0.5 rounded text-muted-foreground">
+            <span key={l} className="text-caption bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
               {l}
             </span>
           ))}

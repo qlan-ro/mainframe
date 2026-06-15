@@ -21,13 +21,22 @@ const STATUS_LABEL: Record<TodoStatus, string> = {
 interface Props {
   status: TodoStatus;
   todos: Todo[];
+  filtersActive?: boolean;
   onDrop: (number: number, status: TodoStatus) => void;
   onEdit: (todo: Todo) => void;
   onDelete: (id: string) => void;
   onStartSession: (todo: Todo) => void;
 }
 
-export function TaskColumn({ status, todos, onDrop, onEdit, onDelete, onStartSession }: Props): React.ReactElement {
+export function TaskColumn({
+  status,
+  todos,
+  filtersActive,
+  onDrop,
+  onEdit,
+  onDelete,
+  onStartSession,
+}: Props): React.ReactElement {
   const [dragOver, setDragOver] = useState(false);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -70,8 +79,8 @@ export function TaskColumn({ status, todos, onDrop, onEdit, onDelete, onStartSes
           <TaskCard key={todo.id} todo={todo} onEdit={onEdit} onDelete={onDelete} onStartSession={onStartSession} />
         ))}
         {todos.length === 0 && (
-          <div className="flex-1 flex items-center justify-center text-caption text-muted-foreground py-6">
-            No tasks
+          <div className="flex-1 flex items-center justify-center text-caption text-muted-foreground py-6 border border-dashed border-border rounded-md min-h-[72px]">
+            {dragOver ? 'Drop here' : filtersActive ? 'No matches' : 'Nothing here'}
           </div>
         )}
       </div>
