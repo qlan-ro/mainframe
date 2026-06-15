@@ -10,6 +10,7 @@ import { ArchiveWorktreeDialog } from '../features/sessions/sidebar/ArchiveWorkt
 import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
+import { TasksModalHost } from '../features/tasks/TasksModalHost';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { SearchPalette } from '../components/overlays/SearchPalette';
 import { FindInPathModal } from '../components/overlays/FindInPathModal';
@@ -151,6 +152,7 @@ function RuntimeBody({ port }: { port: number }) {
       <DirectoryPickerModal />
       <ReviewPanel />
       <TagPopoverHost port={port} />
+      <TasksModalHost port={port} />
       <SettingsDialog port={port} />
     </div>
   );
