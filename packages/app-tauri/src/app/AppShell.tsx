@@ -10,6 +10,8 @@ import { ArchiveWorktreeDialog } from '../features/sessions/sidebar/ArchiveWorkt
 import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
+import { SettingsDialog } from '../features/settings/SettingsDialog';
+import { useSettingsStore } from '../store/settings';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
@@ -49,6 +51,18 @@ function RuntimeBody({ port }: { port: number }) {
   useEffect(() => {
     setActiveBases({ worktreePath, projectPath });
   }, [worktreePath, projectPath, setActiveBases]);
+
+  // ⌘, / Ctrl+, opens settings.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        useSettingsStore.getState().open();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const windowStyle = useTheme((s) => s.windowStyle);
   const geo = windowStyleGeometry(windowStyle);
@@ -127,6 +141,7 @@ function RuntimeBody({ port }: { port: number }) {
       <ArchiveWorktreeDialog />
       <FilePickerDialog />
       <TagPopoverHost port={port} />
+      <SettingsDialog port={port} />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useLayoutStore } from '@/store/layout';
+import { useSettingsStore } from '@/store/settings';
 import { GearGlyph, SidebarLeftGlyph, TasksGlyph } from './surface-icons';
 
 export const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
@@ -33,6 +34,7 @@ function SettingsBtn() {
       type="button"
       title="Settings · ⌘,"
       className="inline-flex h-[22px] w-[26px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
+      onClick={() => useSettingsStore.getState().open()}
     >
       <GearGlyph size={15} className="text-muted-foreground" />
     </button>

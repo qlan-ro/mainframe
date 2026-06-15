@@ -1,0 +1,71 @@
+import { useEffect } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { X } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { getProviderSettings, getGeneralSettings } from '@/lib/api/settings';
+import { useSettingsStore } from '../../store/settings';
+import { SettingsSidebar } from './SettingsSidebar';
+import { SettingsContent } from './SettingsContent';
+
+function SettingsDialogOverlay() {
+  return (
+    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+  );
+}
+
+function SettingsDialogCloseBtn() {
+  const close = useSettingsStore((s) => s.close);
+  return (
+    <button
+      type="button"
+      data-testid="settings-dialog-close"
+      onClick={close}
+      className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-0"
+      aria-label="Close settings"
+    >
+      <X size={16} />
+      <span className="sr-only">Close</span>
+    </button>
+  );
+}
+
+export function SettingsDialog({ port }: { port: number }) {
+  const isOpen = useSettingsStore((s) => s.isOpen);
+  const loadProviders = useSettingsStore((s) => s.loadProviders);
+  const loadGeneral = useSettingsStore((s) => s.loadGeneral);
+  const setLoading = useSettingsStore((s) => s.setLoading);
+  const close = useSettingsStore((s) => s.close);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setLoading(true);
+    Promise.all([getProviderSettings(port).then(loadProviders), getGeneralSettings(port).then(loadGeneral)])
+      .catch((err: unknown) => console.warn('[settings/SettingsDialog]', err))
+      .finally(() => setLoading(false));
+  }, [isOpen, port, loadProviders, loadGeneral, setLoading]);
+
+  return (
+    <DialogPrimitive.Root
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) close();
+      }}
+    >
+      <DialogPrimitive.Portal>
+        <SettingsDialogOverlay />
+        <DialogPrimitive.Content
+          data-testid="settings-dialog"
+          className="fixed left-1/2 top-1/2 z-50 flex h-[600px] w-full max-w-[760px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-popover shadow-[var(--mf-shadow-modal)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+        >
+          <SettingsSidebar port={port} />
+          <ScrollArea className="flex-1">
+            <div className="p-6">
+              <SettingsContent port={port} />
+            </div>
+          </ScrollArea>
+          <SettingsDialogCloseBtn />
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
