@@ -2,7 +2,10 @@ import { useRef } from 'react';
 import { usePreviewLifecycle } from './use-preview-lifecycle';
 import { usePreviewGeometry } from './use-preview-geometry';
 import { usePreviewVisibility } from './use-preview-visibility';
+import { usePreviewCapture } from './use-preview-capture';
 import { PreviewToolbar } from './PreviewToolbar';
+import { RegionCaptureOverlay } from './RegionCaptureOverlay';
+import { CaptureAnnotationPopover } from './CaptureAnnotationPopover';
 import { useSandboxStore } from '@/store/sandbox';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 
@@ -44,7 +47,20 @@ export function PreviewInstance({
   const { processStopped } = usePreviewLifecycle({ tabId, status, port, anchorRef });
   usePreviewGeometry({ tabId, anchorRef, active: visible });
   const [, setOverlayMounted] = usePreviewVisibility(tabId, visible);
-  void setOverlayMounted;
+
+  const {
+    pendingCaptures,
+    regionOverlayOpen,
+    annotationPopoverOpen,
+    inspectActive,
+    onCaptureClick,
+    onRegionClick,
+    onInspectClick,
+    onRegionSelect,
+    onAnnotationChange,
+    onAnnotationSubmit,
+    onAnnotationCancel,
+  } = usePreviewCapture(tabId, setOverlayMounted);
 
   return (
     <div
@@ -58,15 +74,9 @@ export function PreviewInstance({
         configName={config}
         projectId={projectId}
         daemonPort={daemonPort}
-        onCaptureClick={() => {
-          /* Unit D */
-        }}
-        onRegionClick={() => {
-          /* Unit D */
-        }}
-        onInspectClick={() => {
-          /* Unit E */
-        }}
+        onCaptureClick={onCaptureClick}
+        onRegionClick={onRegionClick}
+        onInspectClick={onInspectClick}
       />
       <div className="relative min-h-0 flex-1">
         <div ref={anchorRef} data-testid={`preview-anchor-${tabId}`} className="absolute inset-0" />
@@ -78,7 +88,24 @@ export function PreviewInstance({
             Process stopped
           </div>
         )}
+        {inspectActive && (
+          <div
+            data-testid="preview-inspect-active-indicator"
+            className="absolute inset-x-0 top-0 h-0.5 bg-blue-500"
+          />
+        )}
       </div>
+      {regionOverlayOpen && (
+        <RegionCaptureOverlay onRegionSelect={onRegionSelect} onClose={onRegionClick} />
+      )}
+      {annotationPopoverOpen && (
+        <CaptureAnnotationPopover
+          captures={pendingCaptures}
+          onAnnotationChange={onAnnotationChange}
+          onSubmit={onAnnotationSubmit}
+          onCancel={onAnnotationCancel}
+        />
+      )}
     </div>
   );
 }
