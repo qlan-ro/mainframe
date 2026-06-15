@@ -325,19 +325,18 @@ describe('BranchPopover — Abort in conflict view fires handleAbort then return
 // ---------------------------------------------------------------------------
 
 describe('BranchPopover — back arrow in submenu returns to list', () => {
-  it('shows git-branch-search after navigating to submenu and pressing checkout which triggers loadBranches', async () => {
-    // The BranchSubmenu has no explicit "back" button testid in its own DOM —
-    // goToList is an `onClose` callback prop passed by BranchPopover. The
-    // submenu itself doesn't render a back button; the view-router in BranchPopover
-    // calls goToList (which shows the list view). We verify the submenu IS accessible
-    // after clicking a branch row, and the popover root remains open.
+  it('shows git-branch-search after clicking git-submenu-back', async () => {
     renderPopover({ open: true });
 
     await waitFor(() => screen.getByTestId('git-branch-row-feat/login'));
     await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
     await waitFor(() => screen.getByTestId('git-submenu'));
 
-    expect(screen.getByTestId('git-submenu')).toBeTruthy();
-    expect(screen.getByTestId('git-branch-popover')).toBeTruthy();
+    // Click the back button in the submenu header
+    await userEvent.click(screen.getByTestId('git-submenu-back'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('git-branch-search')).toBeTruthy();
+    });
   });
 });

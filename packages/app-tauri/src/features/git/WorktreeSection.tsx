@@ -2,7 +2,7 @@
  * WorktreeSection — per-worktree branch row with New Session + Delete affordances.
  */
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, GitFork, Loader2, Plus, Trash2 } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,7 @@ export function WorktreeSection({
           className="flex-1 flex items-center gap-1 px-2 py-1 text-caption font-semibold text-muted-foreground uppercase"
         >
           {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+          <GitFork size={11} className="text-mf-warning shrink-0" />
           {name}
         </button>
         {onNewSession && (

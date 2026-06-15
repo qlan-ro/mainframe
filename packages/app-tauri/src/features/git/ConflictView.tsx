@@ -30,6 +30,11 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
       <div className="flex items-center gap-2 px-3 py-2 bg-mf-destructive-tint rounded-t">
         <AlertTriangle size={14} className="text-destructive shrink-0" />
         <span className="text-body font-semibold text-destructive">{headerLabel}</span>
+        {hasConflicts && (
+          <span className="font-mono text-caption font-bold text-destructive bg-destructive/10 rounded-full px-1.5 py-0.5 shrink-0">
+            {conflictFiles.length}
+          </span>
+        )}
       </div>
 
       {operationInProgress ? (
@@ -43,7 +48,9 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
             {conflictFiles.map((f) => (
               <div key={f.path} className="flex items-center gap-2 px-3 py-1 text-body">
                 <span className="text-destructive font-mono text-caption shrink-0">C</span>
-                <span className="text-foreground truncate">{f.path}</span>
+                <span className="text-foreground truncate" style={{ direction: 'rtl', textAlign: 'left' }}>
+                  {f.path}
+                </span>
               </div>
             ))}
           </div>

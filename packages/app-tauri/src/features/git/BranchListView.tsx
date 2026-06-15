@@ -49,7 +49,7 @@ export function BranchListView({
     <>
       {/* Search + Fetch */}
       <div className="flex items-center gap-1.5 p-2 border-b border-border">
-        <div className="flex-1 flex items-center gap-1 px-2 py-1 rounded border border-border bg-background">
+        <div className="flex-1 flex items-center gap-1 px-2 py-1 rounded border border-border bg-mf-content2">
           <Search size={12} className="text-muted-foreground shrink-0" />
           <input
             data-testid="git-branch-search"
@@ -68,7 +68,9 @@ export function BranchListView({
               disabled={busy}
               aria-label="Fetch"
               className={cn(
-                'p-1.5 rounded hover:bg-accent text-muted-foreground',
+                'flex-shrink-0 w-[30px] h-[30px] rounded-lg border border-border bg-card',
+                'inline-flex items-center justify-center text-muted-foreground',
+                'hover:bg-accent transition-colors',
                 busy && 'opacity-40 cursor-not-allowed',
               )}
             >
@@ -86,8 +88,8 @@ export function BranchListView({
           onClick={onNewBranch}
           className="w-full flex items-center gap-2 px-3 py-1.5 text-body text-foreground hover:bg-accent"
         >
-          <Plus size={12} />
-          <span>New Branch...</span>
+          <Plus size={12} className={search ? 'text-primary' : ''} />
+          <span>{search ? `Create branch "${search}"` : 'New branch…'}</span>
         </button>
         <button
           data-testid="git-update-all"

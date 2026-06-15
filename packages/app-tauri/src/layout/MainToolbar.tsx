@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Play, Search, Sun } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useLayoutStore } from '@/store/layout';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
@@ -105,7 +106,12 @@ export function MainToolbar({
                     type="button"
                     title="Switch branch"
                     onClick={() => setBranchOpen((o) => !o)}
-                    className="inline-flex min-w-0 max-w-[230px] cursor-pointer items-center gap-1.5 rounded-[6px] px-1.5 py-0.5 font-mono text-micro font-normal text-muted-foreground hover:bg-accent"
+                    className={cn(
+                      'inline-flex min-w-0 max-w-[230px] cursor-pointer items-center gap-1.5 rounded-[6px] px-1.5 py-0.5 font-mono text-micro font-normal',
+                      branchOpen
+                        ? 'bg-primary/10 border border-primary/40 text-foreground'
+                        : 'text-muted-foreground hover:bg-accent',
+                    )}
                   >
                     <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
                     <span className="truncate">{branchName}</span>

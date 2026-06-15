@@ -1,12 +1,11 @@
 /**
  * BranchRow — single row in the branch list.
- * Shows branch name, ahead/behind divergence chips, current marker.
+ * Shows checkmark gutter (current marker), status dot, branch name (mono),
+ * ahead/behind divergence, and a chevron to open the submenu.
  */
-import { ChevronRight, GitBranch, Star } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
-
-const MAIN_BRANCHES = new Set(['main', 'master', 'develop']);
 
 export interface BranchRowProps {
   branch: BranchInfo;
@@ -16,38 +15,50 @@ export interface BranchRowProps {
   onSelect: (branch: BranchInfo) => void;
 }
 
+function BranchDivergence({ ahead, behind }: { ahead?: number; behind?: number }) {
+  if (!ahead && !behind) {
+    return <span className="text-caption text-mf-text-4 shrink-0">up to date</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-caption text-muted-foreground shrink-0">
+      {(ahead ?? 0) > 0 && <span className="inline-flex items-center gap-0.5 text-mf-success">↑{ahead}</span>}
+      {(behind ?? 0) > 0 && <span className="inline-flex items-center gap-0.5 text-mf-warning">↓{behind}</span>}
+    </span>
+  );
+}
+
 export function BranchRow({ branch, isCurrent, isRemote = false, grouped = false, onSelect }: BranchRowProps) {
-  const { name, ahead, behind, tracking } = branch;
+  const { name, ahead, behind } = branch;
   const displayName = grouped && name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
-  const isMain = !isRemote && MAIN_BRANCHES.has(name);
 
   return (
     <button
       data-testid={`git-branch-row-${name}`}
       onClick={() => onSelect(branch)}
       className={cn(
-        'w-full flex items-center gap-1.5 px-3 py-1 text-left text-body',
+        'w-full flex items-center gap-1.5 px-2 py-1.5 text-left text-body',
         'hover:bg-accent rounded transition-colors',
-        isCurrent && 'bg-accent text-primary font-medium',
+        isCurrent && 'bg-accent/50',
       )}
     >
-      {isMain ? (
-        <Star size={12} className="text-mf-warning shrink-0" />
-      ) : (
-        <GitBranch size={12} className="shrink-0 text-muted-foreground" />
-      )}
-      <span className="truncate flex-1">{displayName}</span>
-      {((ahead != null && ahead > 0) || (behind != null && behind > 0)) && (
-        <span className="flex items-center gap-0.5 shrink-0 ml-1 text-caption text-muted-foreground">
-          <span className="opacity-40">·</span>
-          {behind != null && behind > 0 && <span>↓{behind}</span>}
-          {ahead != null && ahead > 0 && <span>↑{ahead}</span>}
-        </span>
-      )}
-      {tracking && (
-        <span className="ml-auto shrink-0 text-caption text-muted-foreground truncate max-w-[100px]">{tracking}</span>
-      )}
-      <ChevronRight size={12} className={cn('shrink-0 text-muted-foreground', !tracking && 'ml-auto')} />
+      {/* Checkmark gutter — fixed ~13px wide */}
+      <span className="w-[13px] inline-flex items-center justify-center flex-shrink-0">
+        {isCurrent && <Check size={11} className="text-primary" />}
+      </span>
+      {/* Status dot — 6px */}
+      <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', isCurrent ? 'bg-mf-success' : 'bg-mf-text-4')} />
+      {/* Branch name in monospace */}
+      <span
+        className={cn(
+          'truncate flex-1 font-mono',
+          isCurrent && 'font-semibold text-foreground',
+          !isCurrent && 'text-foreground',
+        )}
+      >
+        {displayName}
+      </span>
+      {!isRemote && <BranchDivergence ahead={ahead} behind={behind} />}
+      <ChevronRight size={11} className="shrink-0 text-mf-text-4" />
     </button>
   );
 }

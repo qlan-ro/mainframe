@@ -3,7 +3,20 @@
  * new-branch-from/rename/delete actions, plus optional worktree affordances.
  * Renders as a self-contained menu panel (positioned by the parent popover).
  */
-import { Check, Download, GitMerge, GitPullRequest, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Download,
+  GitBranch,
+  GitMerge,
+  GitPullRequest,
+  Globe,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface BranchSubmenuProps {
@@ -198,8 +211,22 @@ export function BranchSubmenu(props: BranchSubmenuProps) {
 
   return (
     <div data-testid="git-submenu" className="min-w-[220px]">
-      <div className="px-3 py-1.5 border-b border-border flex items-center gap-2">
-        <span className="text-body font-medium text-foreground truncate flex-1">{branch}</span>
+      <div className="px-1.5 py-1.5 border-b border-border flex items-center gap-1.5">
+        <button
+          data-testid="git-submenu-back"
+          type="button"
+          onClick={props.onClose}
+          aria-label="Back to branch list"
+          className="flex-shrink-0 inline-flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-accent text-muted-foreground transition-colors"
+        >
+          <ArrowLeft size={12} />
+        </button>
+        {props.isRemote ? (
+          <Globe size={12} className="text-muted-foreground shrink-0" />
+        ) : (
+          <GitBranch size={12} className="text-muted-foreground shrink-0" />
+        )}
+        <span className="text-body font-mono font-medium text-foreground truncate flex-1">{branch}</span>
         {busy && <Loader2 size={11} className="animate-spin text-muted-foreground shrink-0" />}
       </div>
       <div className="py-1">

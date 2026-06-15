@@ -72,17 +72,7 @@ export function BranchGroupSection({
       {expanded && (
         <>
           {isRemote ? (
-            branches.map((b) => (
-              <button
-                key={b.name}
-                data-testid={`git-branch-row-${b.name}`}
-                onClick={() => onSelect(b)}
-                className="w-full flex items-center gap-1.5 px-3 py-1 text-left text-body text-muted-foreground hover:bg-accent rounded transition-colors"
-              >
-                <span className="truncate flex-1">{b.name}</span>
-                <ChevronRight size={12} className="ml-auto shrink-0" />
-              </button>
-            ))
+            branches.map((b) => <BranchRow key={b.name} branch={b} isCurrent={false} isRemote onSelect={onSelect} />)
           ) : (
             <>
               {ungrouped.map((b) => (
