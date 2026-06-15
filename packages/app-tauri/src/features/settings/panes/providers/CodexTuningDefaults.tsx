@@ -18,7 +18,7 @@ function SelectField({
     <select
       data-testid={testId}
       value={value ?? ''}
-      className="w-full px-3 py-1.5 text-sm bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-md focus:outline-none focus:border-mf-accent"
+      className="w-full px-3 py-1.5 text-body bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-md focus:outline-none focus:border-mf-accent"
       onChange={(e) => onChange(e.target.value)}
     >
       <option value="">Inherit</option>
@@ -46,7 +46,7 @@ export function CodexTuningDefaults({ adapterId, model, config, onChange }: Code
     <div className="space-y-3">
       {model?.supportsPersonality && (
         <label className="block space-y-1.5">
-          <span className="text-xs text-mf-text-secondary">Personality</span>
+          <span className="text-label text-mf-text-secondary">Personality</span>
           <SelectField
             testId={`settings-${adapterId}-personality`}
             value={config.personality}
@@ -56,7 +56,7 @@ export function CodexTuningDefaults({ adapterId, model, config, onChange }: Code
         </label>
       )}
       <label className="block space-y-1.5">
-        <span className="text-xs text-mf-text-secondary">Reasoning Summary</span>
+        <span className="text-label text-mf-text-secondary">Reasoning Summary</span>
         <SelectField
           testId={`settings-${adapterId}-reasoning-summary`}
           value={config.reasoningSummary}

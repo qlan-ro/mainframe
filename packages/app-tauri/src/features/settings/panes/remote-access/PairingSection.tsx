@@ -109,7 +109,9 @@ function PairingCodeDisplay({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-center gap-3 p-4 bg-mf-input-bg border border-mf-divider rounded-mf-input">
-        <span className="text-2xl font-mono font-bold tracking-[0.3em] text-mf-text-primary">{code}</span>
+        <span className="text-display font-mono font-bold text-mf-text-primary" style={{ letterSpacing: '0.3em' }}>
+          {code}
+        </span>
         <CopyButton text={code} testId="pairing-code-copy" />
       </div>
       <div className="flex items-center justify-between">

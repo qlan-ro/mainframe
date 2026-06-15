@@ -23,12 +23,12 @@ export function ProviderTuningDefaults({ adapterId, model, config, onChange }: P
     <div className="space-y-3">
       {efforts.length > 0 && (
         <label className="block space-y-1.5">
-          <span className="text-xs text-mf-text-secondary">Default Effort</span>
+          <span className="text-label text-mf-text-secondary">Default Effort</span>
           <select
             data-testid={`settings-${adapterId}-default-effort`}
             value={config.defaultEffort ?? ''}
             onChange={(e) => onChange({ defaultEffort: e.target.value as EffortLevel | '' })}
-            className="w-full px-3 py-1.5 text-sm bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-md focus:outline-none focus:border-mf-accent"
+            className="w-full px-3 py-1.5 text-body bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-md focus:outline-none focus:border-mf-accent"
           >
             <option value="">Inherit (model default)</option>
             {efforts.map((o) => (
@@ -44,8 +44,8 @@ export function ProviderTuningDefaults({ adapterId, model, config, onChange }: P
         return (
           <div key={f.key} className="flex items-center justify-between gap-3">
             <div className="flex-1">
-              <span className="text-sm text-mf-text-primary">{f.label}</span>
-              <p className="text-xs text-mf-text-secondary">{f.desc}</p>
+              <span className="text-body text-mf-text-primary">{f.label}</span>
+              <p className="text-label text-mf-text-secondary">{f.desc}</p>
             </div>
             <input
               data-testid={`settings-${adapterId}-default-feature-${f.key}`}

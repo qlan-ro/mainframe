@@ -42,7 +42,7 @@ export function ModelDropdown({ adapterId, value, options, onChange }: ModelDrop
       type="button"
       data-testid={`settings-${adapterId}-model-dropdown-trigger`}
       onClick={() => setOpen(!open)}
-      className="w-full flex items-center justify-between bg-mf-input-bg border border-mf-border rounded-md px-3 py-1.5 text-sm text-mf-text-primary hover:border-mf-accent focus:outline-none focus:border-mf-accent cursor-pointer transition-colors"
+      className="w-full flex items-center justify-between bg-mf-input-bg border border-mf-border rounded-md px-3 py-1.5 text-body text-mf-text-primary hover:border-mf-accent focus:outline-none focus:border-mf-accent cursor-pointer transition-colors"
     >
       <span className="truncate">{selected?.label ?? value}</span>
       <ChevronDown size={14} className="text-mf-text-secondary shrink-0" />
@@ -51,7 +51,7 @@ export function ModelDropdown({ adapterId, value, options, onChange }: ModelDrop
 
   return (
     <div className="space-y-1.5">
-      <label className="text-xs text-mf-text-secondary">Default Model</label>
+      <label className="text-label text-mf-text-secondary">Default Model</label>
       <div className="relative" ref={ref}>
         {selected ? <RowWithTooltip option={selected}>{trigger}</RowWithTooltip> : trigger}
         {open && (
@@ -65,7 +65,7 @@ export function ModelDropdown({ adapterId, value, options, onChange }: ModelDrop
                     onChange(opt.id);
                     setOpen(false);
                   }}
-                  className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                  className={`w-full text-left px-3 py-1.5 text-body transition-colors ${
                     opt.id === value
                       ? 'text-mf-text-primary bg-mf-hover'
                       : 'text-mf-text-secondary hover:bg-mf-hover hover:text-mf-text-primary'

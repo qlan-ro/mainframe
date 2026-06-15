@@ -34,13 +34,13 @@ export function GeneralPane({ port }: { port: number }) {
   return (
     <div data-testid="settings-pane-general" className="flex flex-col gap-6 p-4">
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-mf-text-primary">Appearance</h3>
+        <h3 className="text-heading font-medium text-mf-text-primary">Appearance</h3>
         <AppearanceControls />
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-mf-text-primary">Worktree Directory</h3>
-        <p className="text-xs text-mf-text-secondary">
+        <h3 className="text-heading font-medium text-mf-text-primary">Worktree Directory</h3>
+        <p className="text-label text-mf-text-secondary">
           Relative path where worktrees are created inside project roots.
         </p>
         <div className="flex items-center gap-2">
@@ -49,20 +49,20 @@ export function GeneralPane({ port }: { port: number }) {
             data-testid="settings-worktree-dir-input"
             value={displayDir}
             onChange={handleDirChange}
-            className="flex-1 rounded border border-mf-border bg-mf-surface-overlay px-3 py-1.5 text-sm text-mf-text-primary outline-none focus:border-primary"
+            className="flex-1 rounded border border-mf-border bg-mf-surface-overlay px-3 py-1.5 text-body text-mf-text-primary outline-none focus:border-primary"
           />
           {isDirty && (
             <button
               type="button"
               data-testid="settings-worktree-dir-save"
               onClick={handleSave}
-              className="rounded bg-primary px-3 py-1.5 text-sm text-white hover:opacity-90"
+              className="rounded bg-primary px-3 py-1.5 text-body text-white hover:opacity-90"
             >
               Save
             </button>
           )}
         </div>
-        {saveError !== null && <p className="text-xs text-destructive">{saveError}</p>}
+        {saveError !== null && <p className="text-label text-destructive">{saveError}</p>}
       </section>
     </div>
   );

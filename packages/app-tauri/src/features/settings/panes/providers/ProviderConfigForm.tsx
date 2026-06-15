@@ -97,7 +97,7 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
     <div data-testid={`settings-pane-provider-${adapterId}`} className="space-y-4">
       {/* Executable path — commits on blur to avoid one PUT per keystroke */}
       <div className="space-y-1.5">
-        <label className="text-xs text-mf-text-secondary">Executable Path</label>
+        <label className="text-label text-mf-text-secondary">Executable Path</label>
         <input
           data-testid={`settings-${adapterId}-executable-path-input`}
           type="text"
@@ -105,10 +105,10 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
           onChange={(e) => setExecPath(e.target.value)}
           onBlur={handleExecPathBlur}
           placeholder={label.toLowerCase()}
-          className="w-full px-3 py-1.5 text-sm bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-md focus:outline-none focus:border-mf-accent"
+          className="w-full px-3 py-1.5 text-body bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-md focus:outline-none focus:border-mf-accent"
         />
         {config.resolvedExecutable?.source === 'fallback' && (
-          <p className="text-xs text-mf-text-secondary">Not found on PATH — set the path to the binary above</p>
+          <p className="text-label text-mf-text-secondary">Not found on PATH — set the path to the binary above</p>
         )}
       </div>
 
@@ -162,8 +162,8 @@ function ProviderToggles({
           style={{ marginTop: 'calc((1.125rem - 1rem) / 2)' }}
         />
         <div className="flex-1">
-          <span className="text-sm text-mf-text-primary">Enforce AskUserQuestion for agent questions</span>
-          <p className="text-xs text-mf-text-secondary">
+          <span className="text-body text-mf-text-primary">Enforce AskUserQuestion for agent questions</span>
+          <p className="text-label text-mf-text-secondary">
             Instructs the agent to use the interactive AskUserQuestion tool instead of asking in plain text.
           </p>
         </div>
@@ -180,8 +180,8 @@ function ProviderToggles({
             style={{ marginTop: 'calc((1.125rem - 1rem) / 2)' }}
           />
           <div className="flex-1">
-            <span className="text-sm text-mf-text-primary">Start in Plan Mode</span>
-            <p className="text-xs text-mf-text-secondary">
+            <span className="text-body text-mf-text-primary">Start in Plan Mode</span>
+            <p className="text-label text-mf-text-secondary">
               New chats begin with plan mode enabled. You can toggle it off mid-session.
             </p>
           </div>

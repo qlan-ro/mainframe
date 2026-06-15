@@ -13,9 +13,9 @@ export function AboutPane() {
   return (
     <div data-testid="settings-pane-about" className="flex flex-col gap-6 p-4">
       <section className="flex flex-col gap-4">
-        <h3 className="text-sm font-medium text-mf-text-primary">About Mainframe</h3>
+        <h3 className="text-heading font-medium text-mf-text-primary">About Mainframe</h3>
 
-        <div className="flex flex-col gap-2 text-sm">
+        <div className="flex flex-col gap-2 text-body">
           <div className="flex items-center justify-between">
             <span className="text-mf-text-secondary">Version</span>
             <span data-testid="settings-about-version" className="text-mf-text-primary font-mono">
@@ -34,7 +34,7 @@ export function AboutPane() {
             <span className="text-mf-text-secondary">Home directory</span>
             <span
               data-testid="settings-about-homedir"
-              className="text-mf-text-primary font-mono text-xs truncate max-w-[220px]"
+              className="text-mf-text-primary font-mono text-label truncate max-w-[220px]"
               title={info !== null ? info.homedir : undefined}
             >
               {info !== null ? info.homedir : '—'}

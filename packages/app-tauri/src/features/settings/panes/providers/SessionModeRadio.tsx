@@ -11,7 +11,7 @@ interface SessionModeRadioProps {
 export function SessionModeRadio({ adapterId, config, onChange }: SessionModeRadioProps) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs text-mf-text-secondary">Default Session Mode</label>
+      <label className="text-label text-mf-text-secondary">Default Session Mode</label>
       <div className="space-y-1">
         {MODE_OPTIONS.map((mode) => (
           <label
@@ -28,8 +28,8 @@ export function SessionModeRadio({ adapterId, config, onChange }: SessionModeRad
               style={{ marginTop: 'calc((1.125rem - 1rem) / 2)' }}
             />
             <div className="flex-1">
-              <span className={`text-sm ${mode.danger ? 'text-red-400' : 'text-mf-text-primary'}`}>{mode.label}</span>
-              <p className="text-xs text-mf-text-secondary">{mode.description}</p>
+              <span className={`text-body ${mode.danger ? 'text-red-400' : 'text-mf-text-primary'}`}>{mode.label}</span>
+              <p className="text-label text-mf-text-secondary">{mode.description}</p>
             </div>
           </label>
         ))}

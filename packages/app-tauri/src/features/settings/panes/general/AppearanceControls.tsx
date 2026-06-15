@@ -33,7 +33,7 @@ function PickerRow<T extends string>({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-sm text-mf-text-secondary">{label}</span>
+      <span className="text-body text-mf-text-secondary">{label}</span>
       <div className="flex gap-1">
         {options.map((opt) => (
           <button
@@ -42,7 +42,7 @@ function PickerRow<T extends string>({
             data-testid={`${prefix}-${opt.id}`}
             onClick={() => onSelect(opt.id)}
             className={cn(
-              'px-3 py-1 rounded text-sm transition-colors',
+              'px-3 py-1 rounded text-body transition-colors',
               current === opt.id
                 ? 'bg-mf-surface-overlay text-mf-text-primary'
                 : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-surface-overlay/50',

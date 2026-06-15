@@ -12,7 +12,7 @@ export function ConfigConflictsWarning({ conflicts }: ConfigConflictsWarningProp
   return (
     <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-yellow-500/10 border border-yellow-500/30">
       <AlertTriangle size={14} className="text-yellow-500 shrink-0 mt-0.5" />
-      <p className="text-xs text-yellow-500">
+      <p className="text-label text-yellow-500">
         Claude Code settings.json defines {conflicts.join(', ')}. Mainframe flags will take precedence when launching
         sessions.
       </p>
