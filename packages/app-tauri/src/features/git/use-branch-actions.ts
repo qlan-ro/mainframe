@@ -8,7 +8,7 @@
  * attempt returns "not-merged", a second "Force delete?" before retrying.
  * handleDeleteWorktree lives in use-worktree-actions to keep this file < 300 lines.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import type { BranchListResult } from '@qlan-ro/mainframe-types';
 import {
@@ -82,9 +82,8 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
     }
   }, [port, projectId, chatId]);
 
-  useEffect(() => {
-    void loadBranches();
-  }, [loadBranches]);
+  // loadBranches is NOT called automatically on mount — the BranchPopover gates
+  // it behind the `open` state so closed popovers never fire git fetches.
 
   const { handleDeleteWorktree } = useWorktreeActions({ port, projectId, loadBranches, withBusy });
 
