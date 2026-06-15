@@ -2,7 +2,7 @@
  * InspectorPane — the right-side Inspector (design: prototype/04-engine.jsx
  * `Inspector`). A Files-tree / Changes tabbed panel scoped to the active
  * session's project. Toggled from the MainToolbar (`inspectorVisible`).
- * The bottom Tasks drawer is deferred until the todos plugin is ported.
+ * The bottom Tasks drawer is composed below the body when a project is active.
  */
 import { useState, useEffect } from 'react';
 import { FileText, GitCompare } from 'lucide-react';
@@ -10,6 +10,7 @@ import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { ChangesPanel } from './ChangesPanel';
 import { FileTree } from './FileTree';
+import { TasksDrawer } from '../tasks/TasksDrawer';
 
 type Tab = 'files' | 'changes';
 
@@ -70,6 +71,9 @@ export function InspectorPane({ port }: { port: number }) {
           <ChangesPanel port={port} projectId={projectId} chatId={chatId} />
         )}
       </div>
+
+      {/* Tasks drawer — mounted when a project is active; owns the load() effect */}
+      {projectId && <TasksDrawer port={port} projectId={projectId} />}
     </aside>
   );
 }
