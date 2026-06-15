@@ -2,12 +2,17 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
 import { useLayoutStore } from '@/store/layout';
+
+const mockEmit = vi.fn();
+vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
+
 import { MainToolbar } from '../MainToolbar';
 
 beforeEach(() => {
   localStorage.clear();
   useTheme.getState().setMode('light');
   useLayoutStore.setState({ inspectorVisible: false });
+  mockEmit.mockReset();
 });
 
 describe('MainToolbar — root element', () => {
@@ -114,7 +119,7 @@ describe('MainToolbar — show-sidebar button', () => {
 });
 
 describe('MainToolbar — stub buttons', () => {
-  it('renders search, launch, and play stub buttons all disabled', () => {
+  it('renders launch and play stub buttons disabled', () => {
     render(
       <MainToolbar
         leadingInset={0}
@@ -125,9 +130,39 @@ describe('MainToolbar — stub buttons', () => {
       />,
     );
 
-    expect(screen.getByTestId('main-toolbar-search')).toBeDisabled();
     expect(screen.getByTestId('main-toolbar-launch')).toBeDisabled();
     expect(screen.getByTestId('main-toolbar-play')).toBeDisabled();
+  });
+});
+
+describe('MainToolbar — search button', () => {
+  it('search button is not disabled', () => {
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
+
+    expect(screen.getByTestId('main-toolbar-search')).not.toBeDisabled();
+  });
+
+  it('clicking main-toolbar-search emits open-search-palette', () => {
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('main-toolbar-search'));
+    expect(mockEmit).toHaveBeenCalledWith({ type: 'open-search-palette' });
   });
 });
 

@@ -2,6 +2,7 @@ import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Play, Search, Sun 
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useLayoutStore } from '@/store/layout';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
+import { emitSurfaceIntent } from '@/store/surface-intents';
 import { SurfaceRail } from './SurfaceRail';
 
 interface MainToolbarProps {
@@ -102,9 +103,15 @@ export function MainToolbar({
       <div className="flex flex-shrink-0 items-center gap-1">
         <SurfaceRail />
         <span className="mx-0.5 h-4 w-px bg-border" />
-        <StubButton testid="main-toolbar-search" title="Search (⌘O)">
+        <button
+          data-testid="main-toolbar-search"
+          type="button"
+          title="Search (⌘O)"
+          onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
+          className={ICON_BTN}
+        >
           <Search size={14} />
-        </StubButton>
+        </button>
         <span className="mx-0.5 h-4 w-px bg-border" />
         <StubButton testid="main-toolbar-launch" title="Launch configurations">
           <ChevronDown size={12} />

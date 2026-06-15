@@ -8,6 +8,9 @@ vi.mock('@assistant-ui/react', () => ({
 
 vi.mock('@/lib/tauri/bridge', () => ({ openExternal: vi.fn() }));
 
+const mockEmit = vi.fn();
+vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
+
 import { ChatCardHeader } from '../ChatCardHeader';
 import { layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { openExternal } from '@/lib/tauri/bridge';
@@ -20,6 +23,7 @@ beforeEach(() => {
   });
   fakeState = { threadListItem: { title: 'Fixture Chat', custom: { detectedPrs: [] } } };
   vi.mocked(openExternal).mockClear();
+  mockEmit.mockReset();
 });
 
 describe('ChatCardHeader — structure', () => {
@@ -132,9 +136,35 @@ describe('ChatCardHeader — PRs + review', () => {
     expect(document.querySelector('[data-testid^="chat-header-pr-"]')).toBeNull();
   });
 
-  it('renders a disabled Review button', () => {
+  it('renders a disabled Review button when worktreePath is absent', () => {
+    // fakeState has no worktreePath in custom
     render(<ChatCardHeader />);
 
     expect(screen.getByTestId('chat-header-review')).toBeDisabled();
+  });
+});
+
+describe('ChatCardHeader — review button gating', () => {
+  it('review button is disabled when worktreePath is undefined', () => {
+    fakeState = { threadListItem: { title: 'Chat', custom: { detectedPrs: [], worktreePath: undefined } } };
+    render(<ChatCardHeader />);
+    expect(screen.getByTestId('chat-header-review')).toBeDisabled();
+  });
+
+  it('review button is enabled when worktreePath is set', () => {
+    fakeState = {
+      threadListItem: { title: 'Chat', custom: { detectedPrs: [], worktreePath: '/Users/me/proj' } },
+    };
+    render(<ChatCardHeader />);
+    expect(screen.getByTestId('chat-header-review')).not.toBeDisabled();
+  });
+
+  it('clicking the enabled review button emits open-review', () => {
+    fakeState = {
+      threadListItem: { title: 'Chat', custom: { detectedPrs: [], worktreePath: '/Users/me/proj' } },
+    };
+    render(<ChatCardHeader />);
+    fireEvent.click(screen.getByTestId('chat-header-review'));
+    expect(mockEmit).toHaveBeenCalledWith({ type: 'open-review' });
   });
 });

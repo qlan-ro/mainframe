@@ -10,6 +10,7 @@ import {
 import { layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { sessionCustomOf } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { openExternal } from '@/lib/tauri/bridge';
+import { emitSurfaceIntent } from '@/store/surface-intents';
 
 // 24×24 header buttons (hdrBtn in artboard), distinct from the 22×22 SurfaceTabStrip actions.
 const HDR_BTN =
@@ -25,6 +26,7 @@ export function ChatCardHeader() {
   const title = useAuiState((s) => s.threadListItem?.title) ?? 'Untitled';
   const custom = useAuiState((s) => sessionCustomOf(s.threadListItem?.custom));
   const prs = custom?.detectedPrs ?? [];
+  const worktreePath = custom?.worktreePath;
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
 
@@ -52,9 +54,10 @@ export function ChatCardHeader() {
       <button
         data-testid="chat-header-review"
         type="button"
-        title="Review changes — coming with the review surface"
-        disabled
-        className="inline-flex h-6 flex-shrink-0 cursor-not-allowed items-center gap-1.5 rounded-[6px] border-none bg-transparent px-2 text-caption text-muted-foreground opacity-50"
+        title="Review changes (⌘⇧R)"
+        disabled={!worktreePath}
+        onClick={() => emitSurfaceIntent({ type: 'open-review' })}
+        className={`inline-flex h-6 flex-shrink-0 items-center gap-1.5 rounded-[6px] border-none bg-transparent px-2 text-caption text-muted-foreground ${!worktreePath ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-accent hover:text-foreground'}`}
       >
         <ClipboardCheck size={13} />
         Review
