@@ -1,6 +1,7 @@
 import { useSettingsStore } from '../../store/settings';
 import { GeneralPane } from './panes/general/GeneralPane';
 import { NotificationsPane } from './panes/notifications/NotificationsPane';
+import { AboutPane } from './panes/about/AboutPane';
 
 function Stub({ id }: { id: string }) {
   return (
@@ -22,6 +23,6 @@ export function SettingsContent({ port }: { port: number }) {
     case 'remote-access':
       return <Stub id="remote-access" />;
     case 'about':
-      return <Stub id="about" />;
+      return <AboutPane />;
   }
 }
