@@ -202,10 +202,12 @@ Do the chat leaves in this order; ☑ = done.
 
 **Completion note (2026-06-15):** design `docs/architecture/2026-06-15-settings-surface-design.md`; built via the full `/do` pipeline (brainstorm → codex spec review → thermo-nuclear plan review → TDD impl → dual final review). `features/settings/` shadcn-Dialog shell (opened from the sidebar gear + `⌘,`, mounted in `RuntimeBody`) with five panes: General (worktree dir + **3-axis appearance UI** bound to `useTheme` — closes the deferred "Settings → Appearance UI"), Providers (decomposed: ProvidersPane/ProviderConfigForm/SessionModeRadio/ConfigConflictsWarning/ModelDropdown/ProviderTuningDefaults/CodexTuningDefaults), Notifications, RemoteAccess (697-line god-file → `use-tunnel-status` hook + tunnel/pairing/devices sections), About. New `lib/api/{settings,remote-access}.ts` clients (no daemon contract change). Composer provider-tuning-defaults now wired via a plain-state `useProviderDefaults` hook (closes the EffortPicker/FeaturesPopover `undefined` gap). Keybindings dropped. Changeset `app-tauri-settings-surface` (minor).
 
+**Completion note (2026-06-15):** shipped side-by-side-only review diff (no inline/split toggle — `CmDiffEditor` is MergeView-only); FullviewModal dropped (deferred with the plugins-UI re-platform); directory picker + `useDirectoryPicker` hook shipped with no consumer wired (Settings/add-project call it later). Changeset `app-tauri-overlays-palettes-pickers` (minor).
+
 ### Modals / palettes / pickers → `components/overlays/` · `features/review/`
-- ☐ `replace` SearchPalette (+search store) → shadcn Command
-- ☐ `refactor` FindInPathModal · DirectoryPickerModal · ReviewPanel(+Header/DiffView/FileTree)
-- ☐ `drop` FullviewModal
+- ☑ `replace` SearchPalette (+search store) → shadcn Command
+- ☑ `refactor` FindInPathModal · DirectoryPickerModal · ReviewPanel(+Header/DiffView/FileTree)
+- ☑ `drop` FullviewModal
 
 ### Tasks / Git / Tags / Sandbox(Run) → `features/{tasks,git,tags,run}`
 - ☐ `replace` Sandbox PreviewTab → **embedded Tauri webview** (inspect/capture/console)

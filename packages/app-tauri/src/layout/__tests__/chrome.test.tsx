@@ -33,6 +33,22 @@ vi.mock('../../features/files/FilePickerDialog', () => ({
   FilePickerDialog: () => null,
 }));
 
+vi.mock('../../components/overlays/SearchPalette', () => ({
+  SearchPalette: () => null,
+}));
+
+vi.mock('../../components/overlays/FindInPathModal', () => ({
+  FindInPathModal: () => null,
+}));
+
+vi.mock('../../components/overlays/DirectoryPickerModal', () => ({
+  DirectoryPickerModal: () => null,
+}));
+
+vi.mock('../../features/review/ReviewPanel', () => ({
+  ReviewPanel: () => null,
+}));
+
 vi.mock('../../features/sessions/tags/TagPopoverHost', () => ({
   TagPopoverHost: () => null,
 }));

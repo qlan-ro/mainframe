@@ -120,6 +120,22 @@ vi.mock('../../features/sessions/sidebar/ArchiveWorktreeDialog', () => ({
   ArchiveWorktreeDialog: () => <div data-testid="sessions-archive-confirm-dialog" />,
 }));
 
+vi.mock('../../components/overlays/SearchPalette', () => ({
+  SearchPalette: () => null,
+}));
+
+vi.mock('../../components/overlays/FindInPathModal', () => ({
+  FindInPathModal: () => null,
+}));
+
+vi.mock('../../components/overlays/DirectoryPickerModal', () => ({
+  DirectoryPickerModal: () => null,
+}));
+
+vi.mock('../../features/review/ReviewPanel', () => ({
+  ReviewPanel: () => null,
+}));
+
 vi.mock('../../features/sessions/tags/TagPopoverHost', () => ({
   TagPopoverHost: (p: { port: number }) => <div data-testid="tag-popover-host-stub" data-port={p.port} />,
 }));
