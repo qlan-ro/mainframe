@@ -50,3 +50,23 @@ export async function requestNoContent(method: string, url: string): Promise<voi
   const res = await fetch(url, { method });
   if (!res.ok) throw new Error(await extractError(res));
 }
+
+/**
+ * For builtin-plugin routes that return RAW JSON bodies (e.g. `{ todos }`),
+ * NOT the `ApiResponse<T>` envelope. Throws on HTTP error; returns the parsed
+ * body typed as T (the caller extracts the named field).
+ */
+export async function requestPlugin<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) throw new Error(await extractError(res));
+  return (await res.json()) as T;
+}
+
+/** For plugin routes that return HTTP 204 with no body (DELETE). */
+export async function requestPluginNoContent(method: string, url: string): Promise<void> {
+  const res = await fetch(url, { method });
+  if (!res.ok) throw new Error(await extractError(res));
+}
