@@ -1,13 +1,10 @@
 /**
  * DirectoryPickerModal — daemon-backed directory/file picker.
  *
- * Opened via the useDirectoryPicker promise-bridge hook. Reads `pending` from
- * the hook's store; when non-null, renders a Dialog with a lazy tree driven by
- * browseFilesystem(port, '~', { includeFiles: mode === 'file' }).
- *
- * Expanding a directory node lazy-loads its children via a second browseFilesystem
- * call. Confirming resolves the bridge with the selected path; cancelling resolves
- * with null. The `~` seed is expanded server-side — verified fact from the plan.
+ * Tree state is a FLAT map (path → FlatNode) with a rootPaths ordering array,
+ * so expand and patch are O(1) keyed updates — no recursive deep clone.
+ * Seed effect uses a cancelled flag (ReviewPanel pattern) to guard stale root
+ * browses. Child-expand errors set a per-node loadError flag rendered inline.
  */
 import { useEffect, useState } from 'react';
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FileIcon } from 'lucide-react';
@@ -17,18 +14,34 @@ import { browseFilesystem, type FileTreeEntry } from '@/lib/api/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 
 // ---------------------------------------------------------------------------
-// Tree node state
+// Flat tree state types
 // ---------------------------------------------------------------------------
 
-interface TreeNode {
+interface FlatNode {
   entry: FileTreeEntry;
-  children: TreeNode[] | null; // null = not yet loaded; [] = loaded empty
+  /** null = not yet loaded; [] = loaded, empty directory */
+  childrenPaths: string[] | null;
   expanded: boolean;
+  /** true when the child browse failed — renders a "Failed to load" row */
+  loadError: boolean;
   depth: number;
 }
 
-function entriesToNodes(entries: FileTreeEntry[], depth: number): TreeNode[] {
-  return entries.map((e) => ({ entry: e, children: null, expanded: false, depth }));
+interface FlatTree {
+  nodes: Map<string, FlatNode>;
+  rootPaths: string[];
+}
+
+const EMPTY_TREE: FlatTree = { nodes: new Map(), rootPaths: [] };
+
+function buildTree(entries: FileTreeEntry[], depth: number): FlatTree {
+  const nodes = new Map<string, FlatNode>();
+  const rootPaths: string[] = [];
+  for (const e of entries) {
+    rootPaths.push(e.path);
+    nodes.set(e.path, { entry: e, childrenPaths: null, expanded: false, loadError: false, depth });
+  }
+  return { nodes, rootPaths };
 }
 
 // ---------------------------------------------------------------------------
@@ -36,10 +49,10 @@ function entriesToNodes(entries: FileTreeEntry[], depth: number): TreeNode[] {
 // ---------------------------------------------------------------------------
 
 interface PickerRowProps {
-  node: TreeNode;
+  node: FlatNode;
   selectedPath: string | null;
-  onSelect: (node: TreeNode) => void;
-  onToggle: (node: TreeNode) => void;
+  onSelect: (node: FlatNode) => void;
+  onToggle: (node: FlatNode) => void;
 }
 
 function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
@@ -53,9 +66,7 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
       type="button"
       data-testid={`directory-picker-row-${entry.path}`}
       onClick={() => {
-        if (isDirectory) {
-          onToggle(node);
-        }
+        if (isDirectory) onToggle(node);
         onSelect(node);
       }}
       className={`flex w-full items-center gap-1.5 rounded-sm px-2 py-1 text-left text-body outline-none hover:bg-accent hover:text-accent-foreground ${isSelected ? 'bg-accent text-accent-foreground' : ''}`}
@@ -81,36 +92,47 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Flat renderer (depth-first traversal of the tree)
+// Flat renderer — depth-first traversal via ordered paths
 // ---------------------------------------------------------------------------
 
-interface FlatTreeProps {
-  nodes: TreeNode[];
+interface FlatTreeViewProps {
+  tree: FlatTree;
   selectedPath: string | null;
-  onSelect: (node: TreeNode) => void;
-  onToggle: (node: TreeNode) => void;
+  onSelect: (node: FlatNode) => void;
+  onToggle: (node: FlatNode) => void;
 }
 
-function FlatTree({ nodes, selectedPath, onSelect, onToggle }: FlatTreeProps) {
-  const rows: TreeNode[] = [];
-  function collect(ns: TreeNode[]) {
-    for (const n of ns) {
-      rows.push(n);
-      if (n.expanded && n.children) collect(n.children);
+function FlatTreeView({ tree, selectedPath, onSelect, onToggle }: FlatTreeViewProps) {
+  const rows: FlatNode[] = [];
+
+  function collect(paths: string[], visited: Set<string>) {
+    for (const p of paths) {
+      if (visited.has(p)) continue;
+      const node = tree.nodes.get(p);
+      if (!node) continue;
+      visited.add(p);
+      rows.push(node);
+      if (node.expanded && node.childrenPaths) collect(node.childrenPaths, visited);
     }
   }
-  collect(nodes);
+
+  collect(tree.rootPaths, new Set());
 
   return (
     <div className="py-1">
       {rows.map((node) => (
-        <PickerRow
-          key={node.entry.path}
-          node={node}
-          selectedPath={selectedPath}
-          onSelect={onSelect}
-          onToggle={onToggle}
-        />
+        <div key={node.entry.path}>
+          <PickerRow node={node} selectedPath={selectedPath} onSelect={onSelect} onToggle={onToggle} />
+          {node.expanded && node.loadError && (
+            <p
+              data-testid={`directory-picker-load-error-${node.entry.path}`}
+              className="px-3 py-0.5 text-micro text-destructive"
+              style={{ paddingLeft: `${8 + (node.depth + 1) * 16}px` }}
+            >
+              Failed to load
+            </p>
+          )}
+        </div>
       ))}
     </div>
   );
@@ -125,79 +147,95 @@ export function DirectoryPickerModal() {
   const resolve = useDirectoryPicker((s) => s.resolve);
   const port = useDaemonPort();
 
-  const [nodes, setNodes] = useState<TreeNode[]>([]);
+  const [tree, setTree] = useState<FlatTree>(EMPTY_TREE);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<'file' | 'directory' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [rootError, setRootError] = useState<string | null>(null);
 
-  // Seed the tree when the picker opens
+  // Seed the tree whenever pending changes (open, close, or reopen).
+  // The cancelled flag mirrors the ReviewPanel pattern: the effect cleanup
+  // marks any in-flight root browse as stale so it cannot overwrite the tree
+  // after a second pickDirectory supersedes the first.
   useEffect(() => {
-    if (!pending) {
-      setNodes([]);
-      setSelectedPath(null);
-      setSelectedType(null);
-      setError(null);
-      return;
-    }
+    // Always reset UI state on any pending transition
+    setTree(EMPTY_TREE);
+    setSelectedPath(null);
+    setSelectedType(null);
+    setRootError(null);
+
+    if (!pending) return;
+
+    let cancelled = false;
     const includeFiles = pending.mode === 'file';
     browseFilesystem(port, '~', { includeFiles })
       .then((entries) => {
-        setNodes(entriesToNodes(entries, 0));
+        if (cancelled) return;
+        setTree(buildTree(entries, 0));
       })
       .catch((err) => {
+        if (cancelled) return;
         console.warn('[directory-picker] browse failed', err);
-        setError('Failed to load directory. Please try again.');
+        setRootError('Failed to load directory. Please try again.');
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [pending, port]);
 
-  function handleSelect(node: TreeNode) {
+  function handleSelect(node: FlatNode) {
     setSelectedPath(node.entry.path);
     setSelectedType(node.entry.type);
   }
 
-  function handleToggle(node: TreeNode) {
-    setNodes((prev) => {
-      const next = structuredClone(prev);
+  function handleToggle(node: FlatNode) {
+    const path = node.entry.path;
 
-      function findAndToggle(ns: TreeNode[]): boolean {
-        for (const n of ns) {
-          if (n.entry.path === node.entry.path) {
-            n.expanded = !n.expanded;
-            // Lazy-load children on first expand
-            if (n.expanded && n.children === null) {
-              const includeFiles = pending?.mode === 'file';
-              browseFilesystem(port, node.entry.path, { includeFiles })
-                .then((entries) => {
-                  setNodes((current) => {
-                    const updated = structuredClone(current);
-                    function patch(ns2: TreeNode[]): boolean {
-                      for (const n2 of ns2) {
-                        if (n2.entry.path === node.entry.path) {
-                          n2.children = entriesToNodes(entries, node.depth + 1);
-                          return true;
-                        }
-                        if (n2.children && patch(n2.children)) return true;
-                      }
-                      return false;
-                    }
-                    patch(updated);
-                    return updated;
-                  });
-                })
-                .catch((err) => {
-                  console.warn('[directory-picker] browse failed', err);
-                });
-            }
-            return true;
-          }
-          if (n.children && findAndToggle(n.children)) return true;
-        }
-        return false;
-      }
-
-      findAndToggle(next);
-      return next;
+    // Optimistically flip the expanded flag (O(1) patch)
+    setTree((prev) => {
+      const existing = prev.nodes.get(path);
+      if (!existing) return prev;
+      const next = new Map(prev.nodes);
+      next.set(path, { ...existing, expanded: !existing.expanded });
+      return { ...prev, nodes: next };
     });
+
+    // Lazy-load children on first expand (children not yet fetched)
+    const current = tree.nodes.get(path);
+    if (!current || current.expanded || current.childrenPaths !== null) return;
+
+    const includeFiles = pending?.mode === 'file';
+    browseFilesystem(port, path, { includeFiles })
+      .then((entries) => {
+        setTree((prev) => {
+          const target = prev.nodes.get(path);
+          if (!target) return prev;
+          const childrenPaths = entries.map((e) => e.path);
+          const next = new Map(prev.nodes);
+          for (const e of entries) {
+            next.set(e.path, {
+              entry: e,
+              childrenPaths: null,
+              expanded: false,
+              loadError: false,
+              depth: target.depth + 1,
+            });
+          }
+          next.set(path, { ...target, childrenPaths, loadError: false });
+          return { ...prev, nodes: next };
+        });
+      })
+      .catch((err) => {
+        console.warn('[directory-picker] child browse failed', err);
+        setTree((prev) => {
+          const target = prev.nodes.get(path);
+          if (!target) return prev;
+          const next = new Map(prev.nodes);
+          // Keep the node expanded; show an error row beneath it
+          next.set(path, { ...target, childrenPaths: [], loadError: true });
+          return { ...prev, nodes: next };
+        });
+      });
   }
 
   const canConfirm =
@@ -226,12 +264,12 @@ export function DirectoryPickerModal() {
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto min-h-0">
-          {error && <p className="px-4 py-4 text-caption text-destructive">{error}</p>}
-          {!error && nodes.length === 0 && pending && (
+          {rootError && <p className="px-4 py-4 text-caption text-destructive">{rootError}</p>}
+          {!rootError && tree.rootPaths.length === 0 && pending && (
             <p className="px-4 py-6 text-center text-caption text-muted-foreground">Loading…</p>
           )}
-          {nodes.length > 0 && (
-            <FlatTree nodes={nodes} selectedPath={selectedPath} onSelect={handleSelect} onToggle={handleToggle} />
+          {tree.rootPaths.length > 0 && (
+            <FlatTreeView tree={tree} selectedPath={selectedPath} onSelect={handleSelect} onToggle={handleToggle} />
           )}
         </div>
 

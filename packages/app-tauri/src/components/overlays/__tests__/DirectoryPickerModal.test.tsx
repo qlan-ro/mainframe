@@ -197,3 +197,84 @@ describe('DirectoryPickerModal — file mode', () => {
     expect(screen.getByTestId('directory-picker-confirm')).not.toBeDisabled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6. Lazy-load error — shows a "Failed to load" row under the expanded node
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — lazy-load error', () => {
+  it('shows a failed-to-load indicator when child browse rejects', async () => {
+    // Root seed succeeds; child expand fails
+    mockBrowse
+      .mockResolvedValueOnce([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }])
+      .mockRejectedValueOnce(new Error('network error'));
+
+    render(<DirectoryPickerModal />);
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
+    });
+
+    // Expand the directory — its child browse will reject
+    await userEvent.click(screen.getByTestId('directory-picker-row-/Users/me/proj'));
+
+    // A "Failed to load" message should appear under the expanded node
+    await waitFor(() => {
+      expect(screen.getByTestId('directory-picker-load-error-/Users/me/proj')).toBeTruthy();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Stale-seed guard — second pickDirectory supersedes the first
+// ---------------------------------------------------------------------------
+
+describe('DirectoryPickerModal — stale-seed guard', () => {
+  it('a stale root browse does not overwrite the current tree', async () => {
+    let resolveFirst!: (v: { name: string; path: string; type: string }[]) => void;
+    const firstBrowse = new Promise<{ name: string; path: string; type: string }[]>((res) => {
+      resolveFirst = res;
+    });
+
+    // First call: hangs; second call returns a different set immediately
+    mockBrowse
+      .mockReturnValueOnce(firstBrowse)
+      .mockResolvedValue([{ name: 'second', path: '/Users/me/second', type: 'directory' }]);
+
+    render(<DirectoryPickerModal />);
+
+    // Open once (hangs)
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    // Cancel and re-open immediately (second call will resolve right away)
+    act(() => {
+      useDirectoryPicker.getState().resolve(null);
+      useDirectoryPicker.setState({ pending: null });
+    });
+
+    act(() => {
+      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
+    });
+
+    // Wait for the second tree to render
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/second')).not.toBeNull();
+    });
+
+    // Now resolve the stale first browse with different data
+    act(() => {
+      resolveFirst([{ name: 'stale', path: '/Users/me/stale', type: 'directory' }]);
+    });
+
+    // The stale data must NOT appear; the current tree must remain intact
+    await waitFor(() => {
+      expect(screen.queryByTestId('directory-picker-row-/Users/me/stale')).toBeNull();
+    });
+    expect(screen.queryByTestId('directory-picker-row-/Users/me/second')).not.toBeNull();
+  });
+});
