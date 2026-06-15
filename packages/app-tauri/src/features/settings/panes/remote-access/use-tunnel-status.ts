@@ -18,7 +18,7 @@ export interface UseTunnelStatusResult {
   togglingAction: 'start' | 'stop' | null;
   running: boolean;
   verified: boolean;
-  start: (opts?: { token?: string; url?: string }) => Promise<void>;
+  start: (opts?: { token?: string; url?: string }) => Promise<{ url: string } | null>;
   stop: (opts?: { clearConfig?: boolean }) => Promise<void>;
   retryVerify: () => Promise<void>;
 }
@@ -78,19 +78,22 @@ export function useTunnelStatus(port: number): UseTunnelStatusResult {
   }, []);
 
   const start = useCallback(
-    async (opts?: { token?: string; url?: string }): Promise<void> => {
+    async (opts?: { token?: string; url?: string }): Promise<{ url: string } | null> => {
       setTogglingAction('start');
       try {
         setState('starting');
         setErrorMsg(null);
-        await startTunnel(port, opts);
+        const result = await startTunnel(port, opts);
+        setUrl(result.url);
         // Refresh after the HTTP call resolves to converge on daemon state in
         // case a WS broadcast was missed while the socket was briefly disconnected.
         await refresh();
+        return result;
       } catch (err) {
         console.warn('[settings/use-tunnel-status] tunnel start failed', err);
         setErrorMsg(err instanceof Error ? err.message : String(err));
         setState('error');
+        return null;
       } finally {
         setTogglingAction(null);
       }
