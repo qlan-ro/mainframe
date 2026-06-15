@@ -96,3 +96,17 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
     /* jsdom stub */
   };
 }
+
+// ── PointerCapture stubs ─────────────────────────────────────────────────────
+// jsdom does not implement the Pointer Capture API. Radix UI primitives
+// (Select, DropdownMenu) call hasPointerCapture/releasePointerCapture on the
+// trigger before opening; without these the menu never opens in tests.
+if (typeof Element !== 'undefined' && !Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {
+    /* jsdom stub */
+  };
+  Element.prototype.releasePointerCapture = () => {
+    /* jsdom stub */
+  };
+}

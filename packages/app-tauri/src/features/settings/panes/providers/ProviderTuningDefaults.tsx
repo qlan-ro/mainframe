@@ -1,6 +1,10 @@
 import type { AdapterModel, EffortLevel, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { TUNABLE_FEATURES } from '@qlan-ro/mainframe-types';
 import { effortOptions, visibleFeatures } from '../../../../lib/model-tuning';
+import { Switch } from '../../../../components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
+
+const INHERIT = '__inherit__';
 
 interface ProviderTuningDefaultsProps {
   adapterId: string;
@@ -23,20 +27,25 @@ export function ProviderTuningDefaults({ adapterId, model, config, onChange }: P
     <div className="space-y-3">
       {efforts.length > 0 && (
         <label className="block space-y-1.5">
-          <span className="text-label text-mf-text-secondary">Default Effort</span>
-          <select
-            data-testid={`settings-${adapterId}-default-effort`}
-            value={config.defaultEffort ?? ''}
-            onChange={(e) => onChange({ defaultEffort: e.target.value as EffortLevel | '' })}
-            className="w-full px-3 py-1.5 text-body bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-md focus:outline-none focus:border-mf-accent"
+          <span className="text-label text-muted-foreground">Default Effort</span>
+          <Select
+            value={config.defaultEffort ?? INHERIT}
+            onValueChange={(v) => onChange({ defaultEffort: (v === INHERIT ? '' : v) as EffortLevel | '' })}
           >
-            <option value="">Inherit (model default)</option>
-            {efforts.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger data-testid={`settings-${adapterId}-default-effort`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={INHERIT} data-testid={`settings-${adapterId}-default-effort-option-inherit`}>
+                Inherit (model default)
+              </SelectItem>
+              {efforts.map((o) => (
+                <SelectItem key={o.id} value={o.id} data-testid={`settings-${adapterId}-default-effort-option-${o.id}`}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       )}
       {features.map((f) => {
@@ -44,15 +53,13 @@ export function ProviderTuningDefaults({ adapterId, model, config, onChange }: P
         return (
           <div key={f.key} className="flex items-center justify-between gap-3">
             <div className="flex-1">
-              <span className="text-body text-mf-text-primary">{f.label}</span>
-              <p className="text-label text-mf-text-secondary">{f.desc}</p>
+              <span className="text-body text-foreground">{f.label}</span>
+              <p className="text-label text-muted-foreground">{f.desc}</p>
             </div>
-            <input
+            <Switch
               data-testid={`settings-${adapterId}-default-feature-${f.key}`}
-              type="checkbox"
               checked={config[key] === 'true'}
-              onChange={(e) => onChange({ [key]: e.target.checked ? 'true' : 'false' } as ProviderConfigUpdate)}
-              className="h-4 w-4 accent-mf-accent"
+              onCheckedChange={(checked) => onChange({ [key]: checked ? 'true' : 'false' } as ProviderConfigUpdate)}
             />
           </div>
         );

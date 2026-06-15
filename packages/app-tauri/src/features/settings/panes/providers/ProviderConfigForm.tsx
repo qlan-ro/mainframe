@@ -7,6 +7,7 @@ import { ConfigConflictsWarning } from './ConfigConflictsWarning';
 import { ModelDropdown } from './ModelDropdown';
 import { ProviderTuningDefaults } from './ProviderTuningDefaults';
 import { CodexTuningDefaults } from './CodexTuningDefaults';
+import { Switch } from '../../../../components/ui/switch';
 
 const EMPTY_CONFIG: ProviderConfig = {};
 
@@ -97,7 +98,7 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
     <div data-testid={`settings-pane-provider-${adapterId}`} className="space-y-4">
       {/* Executable path — commits on blur to avoid one PUT per keystroke */}
       <div className="space-y-1.5">
-        <label className="text-label text-mf-text-secondary">Executable Path</label>
+        <label className="text-label text-muted-foreground">Executable Path</label>
         <input
           data-testid={`settings-${adapterId}-executable-path-input`}
           type="text"
@@ -105,10 +106,10 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
           onChange={(e) => setExecPath(e.target.value)}
           onBlur={handleExecPathBlur}
           placeholder={label.toLowerCase()}
-          className="w-full px-3 py-1.5 text-body bg-mf-input-bg text-mf-text-primary border border-mf-border rounded-md focus:outline-none focus:border-mf-accent"
+          className="w-full px-3 py-1.5 text-body bg-card text-foreground border border-mf-border rounded-md focus:outline-none focus:border-primary"
         />
         {config.resolvedExecutable?.source === 'fallback' && (
-          <p className="text-label text-mf-text-secondary">Not found on PATH — set the path to the binary above</p>
+          <p className="text-label text-muted-foreground">Not found on PATH — set the path to the binary above</p>
         )}
       </div>
 
@@ -152,36 +153,32 @@ function ProviderToggles({
 }) {
   return (
     <div className="space-y-1">
-      <label className="flex items-start gap-2.5 px-3 py-2 rounded-md cursor-pointer hover:bg-mf-hover transition-colors">
-        <input
+      <label className="flex items-start gap-2.5 px-3 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors">
+        <Switch
           data-testid={`settings-${adapterId}-system-prompt-toggle`}
-          type="checkbox"
           checked={config.systemPrompt === 'enabled'}
-          onChange={(e) => update({ systemPrompt: e.target.checked ? 'enabled' : '' })}
-          className="h-4 w-4 accent-mf-accent shrink-0 m-0"
-          style={{ marginTop: 'calc((1.125rem - 1rem) / 2)' }}
+          onCheckedChange={(checked) => update({ systemPrompt: checked ? 'enabled' : '' })}
+          className="mt-0.5 shrink-0"
         />
         <div className="flex-1">
-          <span className="text-body text-mf-text-primary">Enforce AskUserQuestion for agent questions</span>
-          <p className="text-label text-mf-text-secondary">
+          <span className="text-body text-foreground">Enforce AskUserQuestion for agent questions</span>
+          <p className="text-label text-muted-foreground">
             Instructs the agent to use the interactive AskUserQuestion tool instead of asking in plain text.
           </p>
         </div>
       </label>
 
       {adapter.capabilities.planMode && (
-        <label className="flex items-start gap-2.5 px-3 py-2 rounded-md cursor-pointer hover:bg-mf-hover transition-colors">
-          <input
+        <label className="flex items-start gap-2.5 px-3 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors">
+          <Switch
             data-testid={`settings-${adapterId}-plan-mode-toggle`}
-            type="checkbox"
             checked={config.defaultPlanMode === 'true'}
-            onChange={(e) => update({ defaultPlanMode: e.target.checked ? 'true' : 'false' })}
-            className="h-4 w-4 accent-mf-accent shrink-0 m-0"
-            style={{ marginTop: 'calc((1.125rem - 1rem) / 2)' }}
+            onCheckedChange={(checked) => update({ defaultPlanMode: checked ? 'true' : 'false' })}
+            className="mt-0.5 shrink-0"
           />
           <div className="flex-1">
-            <span className="text-body text-mf-text-primary">Start in Plan Mode</span>
-            <p className="text-label text-mf-text-secondary">
+            <span className="text-body text-foreground">Start in Plan Mode</span>
+            <p className="text-label text-muted-foreground">
               New chats begin with plan mode enabled. You can toggle it off mid-session.
             </p>
           </div>

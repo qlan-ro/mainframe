@@ -15,7 +15,10 @@ const adapter = {
   id: 'claude',
   label: 'Claude',
   capabilities: { planMode: true },
-  models: [{ id: 'opus', isDefault: true, supportedEfforts: [], defaultEffort: 'medium' }],
+  models: [
+    { id: 'opus', label: 'Opus', isDefault: true, supportedEfforts: ['low', 'high'], defaultEffort: 'medium' },
+    { id: 'sonnet', label: 'Sonnet', supportedEfforts: ['low', 'high'], defaultEffort: 'medium' },
+  ],
 } as unknown as AdapterInfo;
 
 beforeEach(() => {
@@ -35,17 +38,37 @@ describe('ProviderConfigForm', () => {
     expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { executablePath: '/bin/claude' });
     expect(useSettingsStore.getState().providers.claude?.executablePath).toBe('/bin/claude');
   });
-  it('selecting a default session mode PUTs defaultMode', () => {
+  it('selecting a default session mode PUTs defaultMode (radio-group primitive)', () => {
     render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
     fireEvent.click(screen.getByTestId('settings-claude-mode-option-yolo'));
     expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { defaultMode: 'yolo' });
   });
-  it('the systemPrompt toggle PUTs enabled on, and clears with "" off (D-C)', () => {
+  it('the systemPrompt toggle (switch primitive) PUTs enabled on, and clears with "" off (D-C)', () => {
     render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
     const toggle = screen.getByTestId('settings-claude-system-prompt-toggle');
     fireEvent.click(toggle); // off → on
     expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { systemPrompt: 'enabled' });
     fireEvent.click(toggle); // on → off, '' clears the key per the route contract
     expect(updateProviderSettings).toHaveBeenLastCalledWith(31415, 'claude', { systemPrompt: '' });
+  });
+  it('the plan-mode toggle (switch primitive) PUTs defaultPlanMode true/false', () => {
+    render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
+    fireEvent.click(screen.getByTestId('settings-claude-plan-mode-toggle'));
+    expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { defaultPlanMode: 'true' });
+  });
+  it('selecting a default effort PUTs defaultEffort (select primitive)', () => {
+    render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
+    fireEvent.click(screen.getByTestId('settings-claude-default-effort'));
+    fireEvent.click(screen.getByTestId('settings-claude-default-effort-option-high'));
+    expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { defaultEffort: 'high' });
+  });
+  it('choosing a default model PUTs defaultModel (dropdown-menu primitive)', () => {
+    render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
+    // Radix DropdownMenu opens on pointer events (a real mouse click fires these too).
+    const trigger = screen.getByTestId('settings-claude-model-dropdown-trigger');
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.pointerUp(trigger);
+    fireEvent.click(screen.getByTestId('settings-claude-model-option-sonnet'));
+    expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { defaultModel: 'sonnet' });
   });
 });
