@@ -2,6 +2,7 @@ import { useSettingsStore } from '../../store/settings';
 import { GeneralPane } from './panes/general/GeneralPane';
 import { NotificationsPane } from './panes/notifications/NotificationsPane';
 import { AboutPane } from './panes/about/AboutPane';
+import { ProvidersPane } from './panes/providers/ProvidersPane';
 
 function Stub({ id }: { id: string }) {
   return (
@@ -17,7 +18,7 @@ export function SettingsContent({ port }: { port: number }) {
     case 'general':
       return <GeneralPane port={port} />;
     case 'providers':
-      return <Stub id="providers" />;
+      return <ProvidersPane port={port} />;
     case 'notifications':
       return <NotificationsPane port={port} />;
     case 'remote-access':
