@@ -11,6 +11,7 @@ import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
+import { GitConfirmDialog } from '../features/git/GitConfirmDialog';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { SearchPalette } from '../components/overlays/SearchPalette';
 import { FindInPathModal } from '../components/overlays/FindInPathModal';
@@ -156,6 +157,7 @@ function RuntimeBody({ port }: { port: number }) {
       <ReviewPanel />
       <TagPopoverHost port={port} />
       <TasksModalHost port={port} />
+      <GitConfirmDialog />
       <SettingsDialog port={port} />
     </div>
   );
