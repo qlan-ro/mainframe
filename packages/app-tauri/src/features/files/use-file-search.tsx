@@ -74,15 +74,21 @@ export function FileRow({
   );
 }
 
-/** Debounced project file search. Returns [] for queries < 2 chars. */
-export function useFileSearch(port: number, projectId: string | undefined, chatId: string | undefined, query = '') {
+/** Debounced project file search. Returns [] for queries shorter than minLength chars (default 2). */
+export function useFileSearch(
+  port: number,
+  projectId: string | undefined,
+  chatId: string | undefined,
+  query = '',
+  minLength = 2,
+) {
   const debounced = useDebounce(query, 300);
   const [results, setResults] = useState<FileResult[]>([]);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const reqIdRef = useRef(0);
   useEffect(() => {
-    if (!projectId || debounced.trim().length < 2) {
+    if (!projectId || debounced.trim().length < minLength) {
       setResults([]);
       setSearched(false);
       return;
@@ -106,6 +112,6 @@ export function useFileSearch(port: number, projectId: string | undefined, chatI
       .finally(() => {
         if (reqId === reqIdRef.current) setLoading(false);
       });
-  }, [port, projectId, chatId, debounced]);
+  }, [port, projectId, chatId, debounced, minLength]);
   return { results, searched, loading };
 }

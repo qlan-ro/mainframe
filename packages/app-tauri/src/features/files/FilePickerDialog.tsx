@@ -12,105 +12,12 @@
  * Port and project context come from DaemonPortContext + useActiveIdentity.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
-import { FileIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { searchFiles, type FileResult } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
-
-// ---------------------------------------------------------------------------
-// Debounce hook — avoids hitting the daemon on every keystroke
-// ---------------------------------------------------------------------------
-
-function useDebounce<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState<T>(value);
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(id);
-  }, [value, delayMs]);
-  return debounced;
-}
-
-// ---------------------------------------------------------------------------
-// useListNavigation — arrow-key + Enter navigation over a flat result list.
-// Active index resets to 0 whenever `count` changes (new results).
-// Returns the active index and a key-down handler for the input element.
-// ---------------------------------------------------------------------------
-
-function useListNavigation(count: number, onConfirm: (index: number) => void) {
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  // Reset to top whenever the result set changes.
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [count]);
-
-  const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setActiveIndex((i) => {
-          const next = Math.min(i + 1, count - 1);
-          rowRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-          return next;
-        });
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveIndex((i) => {
-          const next = Math.max(i - 1, 0);
-          rowRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-          return next;
-        });
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (count > 0) onConfirm(activeIndex);
-      }
-    },
-    [count, activeIndex, onConfirm],
-  );
-
-  return { activeIndex, handleKeyDown, rowRefs };
-}
-
-// ---------------------------------------------------------------------------
-// Result row
-// ---------------------------------------------------------------------------
-
-function FileRow({
-  result,
-  isActive,
-  rowRef,
-  onSelect,
-}: {
-  result: FileResult;
-  isActive: boolean;
-  rowRef: (el: HTMLButtonElement | null) => void;
-  onSelect: (path: string) => void;
-}) {
-  const dir = result.path.includes('/') ? result.path.slice(0, result.path.lastIndexOf('/')) : '.';
-  const activeClasses = isActive ? 'bg-accent text-accent-foreground' : '';
-  return (
-    <button
-      ref={rowRef}
-      type="button"
-      role="option"
-      aria-selected={isActive}
-      data-active={isActive ? 'true' : 'false'}
-      data-testid={`file-picker-row-${result.path}`}
-      onClick={() => onSelect(result.path)}
-      className={`flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground ${activeClasses}`}
-    >
-      <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="text-body font-medium truncate">{result.name}</span>
-      <span className="text-caption text-muted-foreground truncate ml-auto">{dir}</span>
-    </button>
-  );
-}
+import { useFileSearch, useListNavigation, FileRow } from './use-file-search';
 
 // ---------------------------------------------------------------------------
 // Inner dialog body — only rendered when open (avoids stale search state)
@@ -128,10 +35,10 @@ function PickerBody({
   onClose: () => void;
 }) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<FileResult[]>([]);
-  const [searched, setSearched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debouncedQuery = useDebounce(query, 150);
+
+  // minLength=1: the picker searches on any non-empty keystroke (original behaviour).
+  const { results, searched } = useFileSearch(port, projectId, chatId, query, 1);
 
   // Autofocus on mount
   useEffect(() => {
@@ -140,33 +47,6 @@ function PickerBody({
     });
     return () => cancelAnimationFrame(id);
   }, []);
-
-  // Trigger search when debounced query changes
-  useEffect(() => {
-    if (!debouncedQuery.trim()) {
-      setResults([]);
-      setSearched(false);
-      return;
-    }
-    let cancelled = false;
-    searchFiles(port, projectId, debouncedQuery, chatId)
-      .then((res) => {
-        if (!cancelled) {
-          setResults(res);
-          setSearched(true);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          console.warn('[file-picker] searchFiles error', err);
-          setResults([]);
-          setSearched(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedQuery, port, projectId, chatId]);
 
   const handleSelect = useCallback(
     (path: string) => {
@@ -186,8 +66,8 @@ function PickerBody({
 
   const { activeIndex, handleKeyDown, rowRefs } = useListNavigation(results.length, handleConfirm);
 
-  const showHint = !debouncedQuery.trim();
-  const showEmpty = debouncedQuery.trim().length > 0 && searched && results.length === 0;
+  const showHint = !query.trim();
+  const showEmpty = query.trim().length > 0 && searched && results.length === 0;
 
   return (
     <div data-testid="file-picker-dialog" className="flex flex-col overflow-hidden">
