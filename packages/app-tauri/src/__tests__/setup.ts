@@ -86,3 +86,13 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
     /* jsdom stub */
   };
 }
+
+// ── scrollTo stub ────────────────────────────────────────────────────────────
+// jsdom does not implement Element.scrollTo. assistant-ui's useThreadViewportAutoScroll
+// calls it from a requestAnimationFrame callback that can fire after a test tears down,
+// surfacing as an intermittent "div.scrollTo is not a function" error in full-suite runs.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = () => {
+    /* jsdom stub */
+  };
+}
