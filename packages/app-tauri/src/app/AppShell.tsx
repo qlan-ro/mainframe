@@ -11,6 +11,10 @@ import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
 import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
+import { SearchPalette } from '../components/overlays/SearchPalette';
+import { FindInPathModal } from '../components/overlays/FindInPathModal';
+import { DirectoryPickerModal } from '../components/overlays/DirectoryPickerModal';
+import { ReviewPanel } from '../features/review/ReviewPanel';
 import { useSettingsStore } from '../store/settings';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
@@ -25,6 +29,7 @@ import { SIDEBAR_EXPANDED_WIDTH, SidebarShell } from '../layout/SidebarShell';
 import { SurfaceHost } from '../layout/SurfaceHost';
 import { TRAFFIC_LIGHTS_SPACER_WIDTH } from '../layout/SidebarHeader';
 import { useSidebarResize } from '../layout/useSidebarResize';
+import { useGlobalOverlayHotkeys } from './use-global-overlay-hotkeys';
 
 /** While the sidebar is collapsed, the surface area's top-left sits under the
  *  native traffic lights, so the MainToolbar's left group insets to clear them. */
@@ -40,6 +45,7 @@ function getMainOverlap(sidebarRendered: boolean, sidebarWidth: number): number 
 
 function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
+  useGlobalOverlayHotkeys();
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
@@ -140,6 +146,10 @@ function RuntimeBody({ port }: { port: number }) {
       {/* Single app-wide outlets driven by their bridges/stores */}
       <ArchiveWorktreeDialog />
       <FilePickerDialog />
+      <SearchPalette />
+      <FindInPathModal />
+      <DirectoryPickerModal />
+      <ReviewPanel />
       <TagPopoverHost port={port} />
       <SettingsDialog port={port} />
     </div>
