@@ -4,8 +4,11 @@
  * Behaviors covered:
  *  - On mount with a file, calls getWorkingDiff(port, projectId, file, { chatId }).
  *  - Renders a CmDiffEditor stub with the returned original/modified.
- *  - Submitting an inline comment calls onAppend with a string matching the
- *    parse-review-comment format: starts with "Diff of `<file>`\n\nAt line..."
+ *  - Submitting an inline comment calls onAppend with a body matching the
+ *    parse-review-comment format using a REAL clicked line + its text (not empty).
+ *    The mock CmDiffEditor fires its onLineSelect prop to simulate a line click.
+ *  - Submit is disabled until a line is selected AND a comment is typed.
+ *  - review-comment-selected-line shows the chosen line + a text snippet.
  *  - A getWorkingDiff rejection renders an inline error (no silent catch).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -22,13 +25,18 @@ vi.mock('@/lib/api/git', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock CmDiffEditor — record its props instead of mounting a real CodeMirror
+// Mock CmDiffEditor — record its props and expose onLineSelect so tests can
+// trigger a simulated line click without mounting real CodeMirror.
 // ---------------------------------------------------------------------------
 
+type OnLineSelect = (sel: { line: number; text: string }) => void;
 const lastDiffEditorProps: Record<string, unknown> = {};
+let capturedOnLineSelect: OnLineSelect | undefined;
+
 vi.mock('@/features/editor/CmDiffEditor', () => ({
   CmDiffEditor: (props: Record<string, unknown>) => {
     Object.assign(lastDiffEditorProps, props);
+    capturedOnLineSelect = props['onLineSelect'] as OnLineSelect | undefined;
     return <div data-testid="cm-diff-editor-stub" />;
   },
 }));
@@ -58,6 +66,7 @@ const { ReviewDiffView } = await import('../ReviewDiffView');
 beforeEach(() => {
   mockGetWorkingDiff.mockReset();
   Object.keys(lastDiffEditorProps).forEach((k) => delete lastDiffEditorProps[k]);
+  capturedOnLineSelect = undefined;
 });
 
 // ---------------------------------------------------------------------------
@@ -91,24 +100,63 @@ describe('ReviewDiffView', () => {
     expect(lastDiffEditorProps['modified']).toBe('const a = 2;');
   });
 
-  it('appends a formatted review comment when the form is submitted', async () => {
+  it('submit is disabled before a line is selected and a comment is typed', async () => {
+    mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
+    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
+
+    await waitFor(() => screen.queryByTestId('cm-diff-editor-stub'));
+
+    const submit = screen.getByTestId('review-comment-submit');
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('submit is disabled when a line is selected but no comment is typed', async () => {
+    mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
+    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
+
+    await waitFor(() => screen.queryByTestId('cm-diff-editor-stub'));
+
+    // Simulate a line click in CmDiffEditor
+    capturedOnLineSelect?.({ line: 3, text: 'const x = 1;' });
+
+    const submit = screen.getByTestId('review-comment-submit');
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows the selected line info in review-comment-selected-line after a click', async () => {
+    mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
+    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
+
+    await waitFor(() => screen.queryByTestId('cm-diff-editor-stub'));
+
+    capturedOnLineSelect?.({ line: 3, text: 'const x = 1;' });
+
+    await waitFor(() => {
+      const el = screen.getByTestId('review-comment-selected-line');
+      expect(el.textContent).toContain('3');
+    });
+  });
+
+  it('appends a formatted comment with the REAL clicked line and text when submitted', async () => {
     mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
     const onAppend = vi.fn();
     render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={onAppend} />);
 
-    await waitFor(() => {
-      expect(screen.queryByTestId('review-comment-input')).not.toBeNull();
-    });
+    await waitFor(() => screen.queryByTestId('cm-diff-editor-stub'));
 
-    // Fill in the comment. The line starts at 1 (default), so we assert
-    // "At line 1:" — we don't need to change the line number.
+    // Simulate clicking line 3 in CmDiffEditor
+    capturedOnLineSelect?.({ line: 3, text: 'const x = 1;' });
+
     const commentInput = screen.getByTestId('review-comment-input');
     await userEvent.type(commentInput, 'looks off');
 
     await userEvent.click(screen.getByTestId('review-comment-submit'));
 
-    // The format satisfies parse-review-comment: "Diff of `<file>`\n\nAt line <N>:..."
-    expect(onAppend).toHaveBeenCalledWith(expect.stringMatching(/^Diff of `src\/a\.ts`\n\nAt line \d+:/));
+    expect(onAppend).toHaveBeenCalledTimes(1);
+
+    const body = onAppend.mock.calls[0]![0] as string;
+    // Must match: "Diff of `src/a.ts`\n\nAt line 3:\n```\nconst x = 1;\n```\nlooks off"
+    expect(body).toMatch(/^Diff of `src\/a\.ts`\n\nAt line 3:\n```\nconst x = 1;\n```\nlooks off$/);
   });
 
   it('renders an error when getWorkingDiff rejects', async () => {

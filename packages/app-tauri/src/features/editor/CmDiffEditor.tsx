@@ -22,6 +22,14 @@ import type { LangPackId } from '@/lib/editor/file-types';
 import { buildBaseExtensions, createEditorCompartments, resolveLanguage } from './cm-setup';
 import { setActiveMergeView, clearActiveMergeView } from './diff-nav';
 
+/** Line selection payload reported by onLineSelect. */
+export interface LineSelection {
+  /** 1-based line number in the modified document. */
+  line: number;
+  /** The full text of that line (without the trailing newline). */
+  text: string;
+}
+
 // ── Warm-chrome diff theme overlay ──────────────────────────────────────────
 //
 // @codemirror/merge decorates changed/inserted/deleted lines with specific CSS
@@ -65,11 +73,29 @@ export interface CmDiffEditorProps {
    * without polling the global singleton.
    */
   onChunksChange?: (count: number) => void;
+  /**
+   * Optional. Called when the user clicks a line in the MODIFIED (right) pane.
+   * Reports the 1-based line number and the text of that line.
+   * When undefined (the default), the click handler is not installed — existing
+   * behaviour is completely unchanged.
+   */
+  onLineSelect?: (sel: LineSelection) => void;
 }
 
-export function CmDiffEditor({ original, modified, language, readOnly = false, onChunksChange }: CmDiffEditorProps) {
+export function CmDiffEditor({
+  original,
+  modified,
+  language,
+  readOnly = false,
+  onChunksChange,
+  onLineSelect,
+}: CmDiffEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mergeViewRef = useRef<MergeView | null>(null);
+  // Stable ref so the mount-only effect can always read the latest callback
+  // without needing to re-run (which would destroy/recreate the MergeView).
+  const onLineSelectRef = useRef(onLineSelect);
+  onLineSelectRef.current = onLineSelect;
 
   // Per-pane compartments — one set for a (original), one for b (modified).
   // Each must be a separate instance: sharing Compartments across EditorViews
@@ -87,6 +113,21 @@ export function CmDiffEditor({ original, modified, language, readOnly = false, o
     const langExt = resolveLanguage(language);
     const baseExts = buildBaseExtensions();
 
+    // Click handler for the modified (b) pane — installed only when onLineSelect
+    // is provided. Uses EditorView.domEventHandlers so it is additive and does
+    // not interfere with existing CM6 event handling.
+    const bClickExt = EditorView.domEventHandlers({
+      click(event, view) {
+        const cb = onLineSelectRef.current;
+        if (!cb) return false;
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        if (pos == null) return false;
+        const lineObj = view.state.doc.lineAt(pos);
+        cb({ line: lineObj.number, text: lineObj.text });
+        return false; // do not consume the event
+      },
+    });
+
     const aState = EditorState.create({
       doc: original,
       extensions: [
@@ -99,7 +140,7 @@ export function CmDiffEditor({ original, modified, language, readOnly = false, o
 
     const bState = EditorState.create({
       doc: modified,
-      extensions: [...baseExts, diffTheme, bLang.of(langExt), bRo.of(EditorState.readOnly.of(readOnly))],
+      extensions: [...baseExts, diffTheme, bLang.of(langExt), bRo.of(EditorState.readOnly.of(readOnly)), bClickExt],
     });
 
     const mv = new MergeView({
@@ -126,6 +167,7 @@ export function CmDiffEditor({ original, modified, language, readOnly = false, o
       mergeViewRef.current = null;
     };
     // Mount-only: language/readOnly are kept in sync by separate effects below.
+    // onLineSelect is read via ref so no dep needed.
   }, []);
 
   // ── Sync language changes ────────────────────────────────────────────────

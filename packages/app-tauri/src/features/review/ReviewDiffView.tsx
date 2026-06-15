@@ -14,10 +14,14 @@
  *   ```
  *   <comment body>
  *
+ * The selected line + its text come from clicking in the CmDiffEditor modified
+ * pane via the `onLineSelect` prop — not from a manual number spinner. Submit
+ * is disabled until a line is selected AND a comment is typed.
+ *
  * The `onAppend` prop is wired by ReviewPanel to the runtime's append call.
  */
-import { useEffect, useState } from 'react';
-import { CmDiffEditor } from '@/features/editor/CmDiffEditor';
+import { useEffect, useState, useCallback } from 'react';
+import { CmDiffEditor, type LineSelection } from '@/features/editor/CmDiffEditor';
 import { getWorkingDiff, type WorkingDiff } from '@/lib/api/git';
 import { inferLanguage } from '@/lib/editor/file-types';
 import { formatLineComment } from '@/lib/format-line-comment';
@@ -35,13 +39,14 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
   const [error, setError] = useState<string | null>(null);
 
   // Comment form state
-  const [startLine, setStartLine] = useState(1);
+  const [selectedLine, setSelectedLine] = useState<LineSelection | null>(null);
   const [comment, setComment] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setDiff(null);
     setError(null);
+    setSelectedLine(null);
     getWorkingDiff(port, projectId, file, { chatId })
       .then((d) => {
         if (!cancelled) setDiff(d);
@@ -57,23 +62,33 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
     };
   }, [port, projectId, file, chatId]);
 
+  const handleLineSelect = useCallback((sel: LineSelection) => {
+    setSelectedLine(sel);
+  }, []);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!comment.trim()) return;
-    // Line content is empty here (we have the diff but no per-line indexing yet).
-    // The parse-review-comment parser accepts an empty fence (no fenced block) by
-    // design — it still satisfies PART_RE.
+    if (!selectedLine || !comment.trim()) return;
     const body = `Diff of \`${file}\`\n\n${formatLineComment({
-      startLine,
-      endLine: startLine,
-      lineContent: '',
+      startLine: selectedLine.line,
+      endLine: selectedLine.line,
+      lineContent: selectedLine.text,
       comment: comment.trim(),
     })}`;
     onAppend(body);
     setComment('');
+    setSelectedLine(null);
   }
 
   const language = inferLanguage(file);
+  const canSubmit = selectedLine !== null && comment.trim().length > 0;
+
+  // Truncate long lines in the snippet so the UI stays compact.
+  const snippetText = selectedLine
+    ? selectedLine.text.length > 60
+      ? `${selectedLine.text.slice(0, 60)}…`
+      : selectedLine.text
+    : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -81,7 +96,14 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
 
       {diff && (
         <div className="flex-1 min-h-0">
-          <CmDiffEditor original={diff.original} modified={diff.modified} language={language} path={file} readOnly />
+          <CmDiffEditor
+            original={diff.original}
+            modified={diff.modified}
+            language={language}
+            path={file}
+            readOnly
+            onLineSelect={handleLineSelect}
+          />
         </div>
       )}
 
@@ -89,17 +111,17 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
 
       {/* Inline comment authoring */}
       <form onSubmit={handleSubmit} className="shrink-0 border-t border-border px-4 py-3 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <label className="text-caption text-muted-foreground shrink-0">Line</label>
-          <input
-            type="number"
-            min={1}
-            data-testid="review-comment-line"
-            value={startLine}
-            onChange={(e) => setStartLine(Number(e.target.value) || 1)}
-            className="w-20 rounded border border-border bg-transparent px-2 py-1 text-caption outline-none focus:ring-1 focus:ring-ring"
-          />
-        </div>
+        {selectedLine ? (
+          <div
+            data-testid="review-comment-selected-line"
+            className="flex items-baseline gap-1.5 text-caption text-muted-foreground"
+          >
+            <span className="font-medium text-foreground">Line {selectedLine.line}</span>
+            {snippetText && <span className="font-mono truncate text-muted-foreground">— {snippetText}</span>}
+          </div>
+        ) : (
+          <p className="text-caption text-muted-foreground">Click a line in the diff to anchor your comment.</p>
+        )}
         <textarea
           data-testid="review-comment-input"
           value={comment}
@@ -112,7 +134,7 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
           <button
             type="submit"
             data-testid="review-comment-submit"
-            disabled={!comment.trim()}
+            disabled={!canSubmit}
             className="rounded-md px-3 py-1.5 text-body bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Comment
