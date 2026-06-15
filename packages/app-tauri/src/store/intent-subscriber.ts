@@ -29,6 +29,7 @@ import { useLayoutStore } from './layout';
 import { useTabsStore } from './tabs';
 import { useEditorStore } from './editor';
 import { useFilesStore } from './files';
+import { useOverlaysStore } from './overlays';
 import { useActiveBasesStore } from './active-bases-store';
 import type { OpenTabTarget } from './tabs';
 
@@ -109,6 +110,21 @@ export function subscribeToFileIntents(): () => void {
       // Open the file-picker dialog. FilePickerDialog subscribes to this flag
       // via useFilesStore and renders the command-palette UI.
       useFilesStore.getState().setPickerOpen(true);
+      return;
+    }
+
+    if (intent.type === 'open-search-palette') {
+      useOverlaysStore.getState().setPaletteOpen(true);
+      return;
+    }
+
+    if (intent.type === 'open-find-in-path') {
+      useOverlaysStore.getState().setFindInPath({ scopePath: intent.scopePath, scopeType: intent.scopeType });
+      return;
+    }
+
+    if (intent.type === 'open-review') {
+      useOverlaysStore.getState().setReviewOpen(true);
       return;
     }
 

@@ -8,7 +8,13 @@ export type SurfaceIntent =
   /** Switch the InspectorPane to the specified tab. */
   | { type: 'inspector-tab'; tab: 'files' | 'changes' }
   /** Spawn a new terminal in the Run surface (optionally targeting a pane). */
-  | { type: 'new-terminal'; paneId?: string };
+  | { type: 'new-terminal'; paneId?: string }
+  /** Open the global search / command palette overlay. */
+  | { type: 'open-search-palette' }
+  /** Open the find-in-path overlay scoped to a file or directory. */
+  | { type: 'open-find-in-path'; scopePath: string; scopeType: 'file' | 'directory' }
+  /** Open the review modal overlay. */
+  | { type: 'open-review' };
 
 type Listener = (intent: SurfaceIntent) => void;
 

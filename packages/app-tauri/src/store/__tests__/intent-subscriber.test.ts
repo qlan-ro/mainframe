@@ -16,6 +16,7 @@ import { useEditorStore } from '../editor';
 import { useFilesStore } from '../files';
 import { useActiveBasesStore } from '../active-bases-store';
 import { subscribeToFileIntents } from '../intent-subscriber';
+import { useOverlaysStore } from '../overlays';
 
 const WORKTREE = '/Users/dev/myapp/.worktrees/feat-wt';
 const PROJECT = '/Users/dev/myapp';
@@ -271,6 +272,33 @@ describe('F1 regression: path-flavor normalization prevents duplicate tabs', () 
     expect(tabs).toHaveLength(1);
     expect(tabs[0]!.path).toBe('src/c.ts');
 
+    unsub();
+  });
+});
+
+describe('intent-subscriber overlay intents', () => {
+  beforeEach(() => {
+    useOverlaysStore.setState({ paletteOpen: false, findInPath: null, reviewOpen: false });
+  });
+
+  it('open-search-palette sets paletteOpen', () => {
+    const unsub = subscribeToFileIntents();
+    emitSurfaceIntent({ type: 'open-search-palette' });
+    expect(useOverlaysStore.getState().paletteOpen).toBe(true);
+    unsub();
+  });
+
+  it('open-find-in-path sets the scope', () => {
+    const unsub = subscribeToFileIntents();
+    emitSurfaceIntent({ type: 'open-find-in-path', scopePath: 'src', scopeType: 'directory' });
+    expect(useOverlaysStore.getState().findInPath).toEqual({ scopePath: 'src', scopeType: 'directory' });
+    unsub();
+  });
+
+  it('open-review sets reviewOpen', () => {
+    const unsub = subscribeToFileIntents();
+    emitSurfaceIntent({ type: 'open-review' });
+    expect(useOverlaysStore.getState().reviewOpen).toBe(true);
     unsub();
   });
 });
