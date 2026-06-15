@@ -11,6 +11,7 @@ import { onSurfaceIntent } from '@/store/surface-intents';
 import { ChangesPanel } from './ChangesPanel';
 import { FileTree } from './FileTree';
 import { TasksDrawer } from '../tasks/TasksDrawer';
+import { useStartTodoSession } from '../tasks/use-start-todo-session';
 
 type Tab = 'files' | 'changes';
 
@@ -19,6 +20,7 @@ const SEG = 'flex h-[22px] flex-1 items-center justify-center gap-1.5 rounded-[6
 export function InspectorPane({ port }: { port: number }) {
   const { projectId, chatId } = useActiveIdentity();
   const [tab, setTab] = useState<Tab>('files');
+  const startTodoSession = useStartTodoSession(port, projectId);
 
   // Subscribe to inspector-tab intents so external triggers (e.g. the
   // SurfacePicker "View changes" button) can switch the active tab.
@@ -73,7 +75,9 @@ export function InspectorPane({ port }: { port: number }) {
       </div>
 
       {/* Tasks drawer — mounted when a project is active; owns the load() effect */}
-      {projectId && <TasksDrawer port={port} projectId={projectId} />}
+      {projectId && (
+        <TasksDrawer port={port} projectId={projectId} onStartSession={(t) => void startTodoSession(t.id)} />
+      )}
     </aside>
   );
 }

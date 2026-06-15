@@ -9,18 +9,18 @@ import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useTasksModal } from './use-tasks-modal';
+import { useStartTodoSession } from './use-start-todo-session';
 import { TasksBoard } from './TasksBoard';
 import { QuickTaskDialog } from './QuickTaskDialog';
-import type { Todo } from '@/lib/api/todos';
 
 interface Props {
   port: number;
-  onStartSession?: (todo: Todo) => void;
 }
 
-export function TasksModalHost({ port, onStartSession }: Props): React.ReactElement | null {
+export function TasksModalHost({ port }: Props): React.ReactElement | null {
   const { open, quickOpen, closeModal, openQuick, closeQuick } = useTasksModal();
   const { projectId } = useActiveIdentity();
+  const startSession = useStartTodoSession(port, projectId);
 
   // ⌘⇧T → open quick-add dialog
   useEffect(() => {
@@ -54,7 +54,7 @@ export function TasksModalHost({ port, onStartSession }: Props): React.ReactElem
             projectId={projectId}
             onStartSession={(todo) => {
               closeModal();
-              onStartSession?.(todo);
+              void startSession(todo.id);
             }}
           />
         </DialogContent>
