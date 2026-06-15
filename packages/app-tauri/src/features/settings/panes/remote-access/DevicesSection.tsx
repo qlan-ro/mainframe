@@ -45,16 +45,16 @@ export function DevicesSection({ port }: DevicesSectionProps): React.ReactElemen
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-mf-small text-mf-text-secondary">Paired Devices</label>
+        <label className="text-caption text-muted-foreground">Paired Devices</label>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-mf-small text-mf-text-secondary">
+        <div className="flex items-center gap-2 text-caption text-muted-foreground">
           <Loader2 size={14} className="animate-spin" />
           Loading...
         </div>
       ) : devices.length === 0 ? (
-        <p className="text-mf-status text-mf-text-tertiary">No paired devices.</p>
+        <p className="text-micro text-muted-foreground">No paired devices.</p>
       ) : (
         <div className="space-y-1.5">
           {devices.map((device) => (
@@ -68,19 +68,17 @@ export function DevicesSection({ port }: DevicesSectionProps): React.ReactElemen
 
 function DeviceRow({ device, onRemove }: { device: Device; onRemove: (id: string) => void }): React.ReactElement {
   return (
-    <div className="flex items-center justify-between p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
+    <div className="flex items-center justify-between p-2.5 bg-card border border-border rounded-md">
       <div>
-        <span className="text-mf-small text-mf-text-primary">{device.deviceName}</span>
-        <span className="text-mf-status text-mf-text-tertiary ml-2">
-          {new Date(device.createdAt).toLocaleDateString()}
-        </span>
+        <span className="text-caption text-foreground">{device.deviceName}</span>
+        <span className="text-micro text-muted-foreground ml-2">{new Date(device.createdAt).toLocaleDateString()}</span>
       </div>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             data-testid={`remote-access-device-remove-${device.deviceId}`}
             onClick={() => onRemove(device.deviceId)}
-            className="p-1 text-mf-text-tertiary hover:text-red-400 transition-colors"
+            className="p-1 text-muted-foreground hover:text-destructive transition-colors"
           >
             <Trash2 size={14} />
           </button>

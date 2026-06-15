@@ -33,7 +33,7 @@ function PickerRow<T extends string>({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-body text-mf-text-secondary">{label}</span>
+      <span className="text-body text-muted-foreground">{label}</span>
       <div className="flex gap-1">
         {options.map((opt) => (
           <button
@@ -44,8 +44,8 @@ function PickerRow<T extends string>({
             className={cn(
               'px-3 py-1 rounded text-body transition-colors',
               current === opt.id
-                ? 'bg-mf-surface-overlay text-mf-text-primary'
-                : 'text-mf-text-secondary hover:text-mf-text-primary hover:bg-mf-surface-overlay/50',
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
             )}
           >
             {opt.label}

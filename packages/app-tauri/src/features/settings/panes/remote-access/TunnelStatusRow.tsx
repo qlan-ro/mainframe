@@ -18,9 +18,9 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
 
   if (state === 'starting' || (state === 'verifying' && !url)) {
     return (
-      <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
-        <Loader2 size={12} className="animate-spin text-yellow-500 shrink-0" />
-        <span className="text-mf-small text-mf-text-secondary flex-1">
+      <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
+        <Loader2 size={12} className="animate-spin text-mf-warning shrink-0" />
+        <span className="text-caption text-muted-foreground flex-1">
           {state === 'starting' ? 'Starting tunnel…' : 'Verifying DNS…'}
         </span>
       </div>
@@ -29,10 +29,10 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
 
   if (state === 'verifying' && url) {
     return (
-      <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
-        <Loader2 size={12} className="animate-spin text-yellow-500 shrink-0" />
-        <span className="text-mf-small text-mf-text-secondary flex-1">
-          Verifying DNS for <code className="text-mf-text-primary">{url}</code>…
+      <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
+        <Loader2 size={12} className="animate-spin text-mf-warning shrink-0" />
+        <span className="text-caption text-muted-foreground flex-1">
+          Verifying DNS for <code className="text-foreground">{url}</code>…
         </span>
       </div>
     );
@@ -40,9 +40,9 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
 
   if (state === 'ready' && url) {
     return (
-      <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
-        <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-        <code className="text-mf-small text-mf-text-primary truncate flex-1">{url}</code>
+      <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
+        <span className="w-2 h-2 rounded-full bg-mf-success shrink-0" />
+        <code className="text-caption text-foreground truncate flex-1">{url}</code>
         <CopyButton text={url} testId="tunnel-url-copy-ready" />
       </div>
     );
@@ -51,19 +51,19 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
   if (state === 'unreachable' && url) {
     return (
       <div className="space-y-2">
-        <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
-          <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
-          <code className="text-mf-small text-mf-text-secondary truncate flex-1">{url}</code>
+        <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
+          <span className="w-2 h-2 rounded-full bg-mf-warning shrink-0" />
+          <code className="text-caption text-muted-foreground truncate flex-1">{url}</code>
           <CopyButton text={url} testId="tunnel-url-copy-unreachable" />
         </div>
         <div className="flex items-center justify-between">
-          <p className="text-mf-status text-yellow-500">
+          <p className="text-micro text-mf-warning">
             DNS not yet propagated — tunnel may not be reachable. Pairing disabled.
           </p>
           <button
             data-testid="tunnel-recheck-verify"
             onClick={onRetryVerify}
-            className="text-mf-small text-mf-accent hover:underline shrink-0 ml-2"
+            className="text-caption text-primary hover:underline shrink-0 ml-2"
           >
             Re-check
           </button>

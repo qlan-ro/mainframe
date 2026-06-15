@@ -56,8 +56,8 @@ export function NamedTunnelSection({
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-mf-small text-mf-text-secondary">Named Tunnel</label>
-        <p className="text-mf-status text-mf-text-tertiary mt-0.5">
+        <label className="text-caption text-muted-foreground">Named Tunnel</label>
+        <p className="text-micro text-muted-foreground mt-0.5">
           Use a Cloudflare connector token for a persistent URL.
         </p>
       </div>
@@ -101,27 +101,29 @@ function NamedTunnelConfigured({
   return (
     <div className="space-y-2">
       {tunnel.state === 'idle' || tunnel.state === 'error' ? (
-        <div className="flex items-center gap-2 p-2.5 bg-mf-input-bg border border-mf-divider rounded-mf-input">
-          <span className="w-2 h-2 rounded-full bg-mf-text-tertiary opacity-60 shrink-0" />
-          <code className="text-mf-small text-mf-text-secondary truncate flex-1">{savedUrl}</code>
-          <span className="text-mf-status text-mf-text-tertiary shrink-0">
+        <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
+          <span className="w-2 h-2 rounded-full bg-muted-foreground opacity-60 shrink-0" />
+          <code className="text-caption text-muted-foreground truncate flex-1">{savedUrl}</code>
+          <span className="text-micro text-muted-foreground shrink-0">
             {tunnel.state === 'error' ? 'Stopped (error)' : 'Stopped'}
           </span>
         </div>
       ) : (
         <TunnelStatusRow state={tunnel.state} url={tunnel.url ?? savedUrl} onRetryVerify={tunnel.retryVerify} />
       )}
-      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-mf-small text-red-500">{tunnel.errorMsg}</p>}
-      {saveError && <p className="text-mf-small text-red-500">{saveError}</p>}
+      {tunnel.state === 'error' && tunnel.errorMsg && (
+        <p className="text-caption text-destructive">{tunnel.errorMsg}</p>
+      )}
+      {saveError && <p className="text-caption text-destructive">{saveError}</p>}
       <div className="flex items-center gap-2">
         <button
           data-testid="named-tunnel-toggle"
           onClick={onStartStop}
           disabled={tunnel.togglingAction !== null}
-          className={`px-3 py-1.5 text-mf-small rounded-mf-input transition-colors disabled:opacity-50 ${
+          className={`px-3 py-1.5 text-caption rounded-md transition-colors disabled:opacity-50 ${
             tunnel.running
-              ? 'bg-mf-hover text-mf-text-primary border border-mf-divider hover:bg-mf-hover/80'
-              : 'bg-mf-accent text-white hover:opacity-90'
+              ? 'bg-accent text-foreground border border-border hover:bg-accent/80'
+              : 'bg-primary text-primary-foreground hover:opacity-90'
           }`}
         >
           {tunnel.togglingAction ? (
@@ -139,7 +141,7 @@ function NamedTunnelConfigured({
           data-testid="named-tunnel-clear-config"
           onClick={onClear}
           disabled={tunnel.togglingAction === 'stop'}
-          className="px-3 py-1.5 text-mf-small text-mf-text-secondary bg-mf-hover border border-mf-divider rounded-mf-input hover:bg-mf-hover/80 disabled:opacity-50 transition-colors"
+          className="px-3 py-1.5 text-caption text-muted-foreground bg-accent border border-border rounded-md hover:bg-accent/80 disabled:opacity-50 transition-colors"
         >
           Clear Configuration
         </button>
@@ -173,7 +175,7 @@ function NamedTunnelSetup({
         value={token}
         onChange={(e) => onTokenChange(e.target.value)}
         placeholder="Cloudflare connector token"
-        className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg border border-mf-divider rounded-mf-input text-mf-text-primary placeholder:text-mf-text-tertiary focus:outline-none focus:border-mf-accent"
+        className="w-full px-3 py-1.5 text-caption bg-card border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
       />
       <input
         data-testid="named-tunnel-url-input"
@@ -181,14 +183,14 @@ function NamedTunnelSetup({
         value={url}
         onChange={(e) => onUrlChange(e.target.value)}
         placeholder="https://mainframe.example.com"
-        className="w-full px-3 py-1.5 text-mf-small bg-mf-input-bg border border-mf-divider rounded-mf-input text-mf-text-primary placeholder:text-mf-text-tertiary focus:outline-none focus:border-mf-accent"
+        className="w-full px-3 py-1.5 text-caption bg-card border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
       />
-      {saveError && <p className="text-mf-small text-red-500">{saveError}</p>}
+      {saveError && <p className="text-caption text-destructive">{saveError}</p>}
       <button
         data-testid="named-tunnel-save"
         onClick={onSave}
         disabled={togglingStart || !token.trim() || !url.trim()}
-        className="px-3 py-1.5 text-mf-small bg-mf-accent text-white rounded-mf-input hover:opacity-90 disabled:opacity-50 transition-opacity"
+        className="px-3 py-1.5 text-caption bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
         {togglingStart ? (
           <span className="flex items-center gap-1.5">

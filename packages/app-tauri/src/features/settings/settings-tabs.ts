@@ -31,17 +31,3 @@ export const MODE_OPTIONS: {
     danger: true,
   },
 ];
-
-export const PROVIDER_COLORS: Record<string, string> = {
-  claude: 'bg-mf-accent-claude',
-  codex: 'bg-mf-accent-codex',
-  gemini: 'bg-mf-accent-gemini',
-  opencode: 'bg-mf-accent-opencode',
-};
-
-export const PROVIDER_BORDER_COLORS: Record<string, string> = {
-  claude: 'border-mf-accent-claude',
-  codex: 'border-mf-accent-codex',
-  gemini: 'border-mf-accent-gemini',
-  opencode: 'border-mf-accent-opencode',
-};

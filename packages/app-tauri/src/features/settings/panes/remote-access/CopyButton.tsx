@@ -15,8 +15,9 @@ export function CopyButton({ text, testId }: CopyButtonProps): React.ReactElemen
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } catch (err) {
       /* expected — clipboard may not be available in all contexts */
+      console.warn('[settings/CopyButton] clipboard write failed', err);
     }
   }, [text]);
 
@@ -26,7 +27,7 @@ export function CopyButton({ text, testId }: CopyButtonProps): React.ReactElemen
         <button
           data-testid={testId}
           onClick={handleCopy}
-          className="p-1 text-mf-text-tertiary hover:text-mf-text-primary transition-colors shrink-0"
+          className="p-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>

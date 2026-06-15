@@ -25,14 +25,14 @@ export function ProvidersPane({ port }: ProvidersPaneProps) {
   return (
     <div data-testid="settings-pane-providers" className="flex flex-col gap-4 p-4">
       {!selectedProvider && (
-        <p className="text-body text-mf-text-secondary">Select a provider from the sidebar to configure it.</p>
+        <p className="text-body text-muted-foreground">Select a provider from the sidebar to configure it.</p>
       )}
       {selectedProvider && !adapter && adapters.length > 0 && (
-        <p className="text-body text-mf-text-secondary">Provider &ldquo;{selectedProvider}&rdquo; not found.</p>
+        <p className="text-body text-muted-foreground">Provider &ldquo;{selectedProvider}&rdquo; not found.</p>
       )}
       {selectedProvider && adapter && (
         <>
-          <h3 className="text-heading font-medium text-mf-text-primary">{adapter.name}</h3>
+          <h3 className="text-heading font-medium text-foreground">{adapter.name}</h3>
           <ProviderConfigForm port={port} adapterId={selectedProvider} label={adapter.name} adapter={adapter} />
         </>
       )}

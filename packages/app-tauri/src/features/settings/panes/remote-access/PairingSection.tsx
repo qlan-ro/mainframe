@@ -60,8 +60,8 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-mf-small text-mf-text-secondary">Mobile Pairing</label>
-        <p className="text-mf-status text-mf-text-tertiary mt-0.5">Generate a code to pair a mobile device.</p>
+        <label className="text-caption text-muted-foreground">Mobile Pairing</label>
+        <p className="text-micro text-muted-foreground mt-0.5">Generate a code to pair a mobile device.</p>
       </div>
 
       {code ? (
@@ -77,7 +77,7 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
           data-testid="pairing-generate-code"
           onClick={handleGenerate}
           disabled={generating}
-          className="px-3 py-1.5 text-mf-small bg-mf-accent text-white rounded-mf-input hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="px-3 py-1.5 text-caption bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
           {generating ? (
             <span className="flex items-center gap-1.5">
@@ -108,21 +108,21 @@ function PairingCodeDisplay({
 }): React.ReactElement {
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-center gap-3 p-4 bg-mf-input-bg border border-mf-divider rounded-mf-input">
-        <span className="text-display font-mono font-bold text-mf-text-primary" style={{ letterSpacing: '0.3em' }}>
+      <div className="flex items-center justify-center gap-3 p-4 bg-card border border-border rounded-md">
+        <span className="text-display font-mono font-bold text-foreground" style={{ letterSpacing: '0.3em' }}>
           {code}
         </span>
         <CopyButton text={code} testId="pairing-code-copy" />
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-mf-status text-mf-text-tertiary">
+        <span className="text-micro text-muted-foreground">
           Expires in {minutes}:{seconds.toString().padStart(2, '0')}
         </span>
         <button
           data-testid="pairing-regenerate-code"
           onClick={onGenerate}
           disabled={generating}
-          className="text-mf-small text-mf-accent hover:underline disabled:opacity-50"
+          className="text-caption text-primary hover:underline disabled:opacity-50"
         >
           Generate new
         </button>
