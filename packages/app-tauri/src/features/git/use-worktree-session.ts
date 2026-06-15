@@ -11,6 +11,7 @@ import { useCallback } from 'react';
 import { useAssistantRuntime } from '@assistant-ui/react';
 import { createChat } from '@/lib/api/chats';
 import { getProjectWorktrees } from '@/lib/api/git';
+import { resolveWorktree } from './worktree-resolve';
 
 export function useWorktreeSession(port: number, projectId: string | undefined, adapterId: string) {
   const runtime = useAssistantRuntime();
@@ -18,7 +19,7 @@ export function useWorktreeSession(port: number, projectId: string | undefined, 
     async (worktreeDirName: string, branchName?: string): Promise<void> => {
       if (!projectId) return;
       const worktrees = await getProjectWorktrees(port, projectId);
-      const wt = worktrees.find((w) => w.path.endsWith(worktreeDirName) || w.branch === branchName);
+      const wt = resolveWorktree(worktrees, { dirName: worktreeDirName, branchName });
       if (!wt) return;
       const chat = await createChat(port, {
         projectId,

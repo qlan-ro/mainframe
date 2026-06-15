@@ -8,6 +8,7 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { getProjectWorktrees, deleteWorktree } from '@/lib/api/git';
 import { requestGitConfirm } from './use-git-confirm';
+import { resolveWorktree } from './worktree-resolve';
 import type { BranchBusy } from './use-branch-busy';
 
 export interface WorktreeActionsProps {
@@ -36,7 +37,7 @@ export function useWorktreeActions({ port, projectId, loadBranches, withBusy }: 
       if (!confirmed) return false;
       return withBusy(async () => {
         const worktrees = await getProjectWorktrees(port, projectId);
-        const match = worktrees.find((wt) => wt.path.endsWith(`/${worktreeDirName}`) || wt.path === worktreeDirName);
+        const match = resolveWorktree(worktrees, { dirName: worktreeDirName, branchName });
         if (!match) {
           toast.error(`Could not resolve path for worktree '${worktreeDirName}'`);
           return;

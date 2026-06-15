@@ -209,10 +209,9 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
             confirmLabel: 'Force delete',
             destructive: true,
           });
-          if (force) {
-            await gitDeleteBranch(port, projectId, branch, { force: true, remote: isRemote, chatId });
-            toast.success(`Deleted ${label}`);
-          }
+          if (!force) return;
+          await gitDeleteBranch(port, projectId, branch, { force: true, remote: isRemote, chatId });
+          toast.success(`Deleted ${label}`);
         } else {
           toast.success(`Deleted ${label}`);
         }

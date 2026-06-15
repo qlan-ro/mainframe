@@ -153,16 +153,16 @@ export function BranchPopover({
   const newSession = useWorktreeSession(port, projectId, adapterId);
 
   const handleNewSession = useCallback(
-    (branchName: string) => {
-      void newSession(branchName, branchName);
+    (dirName: string, branchName?: string) => {
+      void newSession(dirName, branchName);
       onOpenChange(false);
     },
     [newSession, onOpenChange],
   );
 
   const handleDeleteWorktreeAction = useCallback(
-    async (dirName: string): Promise<boolean> => {
-      const ok = await handleDeleteWorktree(dirName, undefined);
+    async (dirName: string, branchName?: string): Promise<boolean> => {
+      const ok = await handleDeleteWorktree(dirName, branchName);
       if (ok) goToList();
       return ok;
     },
@@ -209,10 +209,7 @@ export function BranchPopover({
               handleUpdateAll,
               handlePush,
               handleDeleteWorktree: handleDeleteWorktreeAction,
-              handleNewSession: (name, branchName) => {
-                const bn = branchName ?? name;
-                handleNewSession(bn);
-              },
+              handleNewSession,
             }}
             busy={busy}
             busyAction={busyAction}
@@ -246,11 +243,17 @@ export function BranchPopover({
               void handleDelete(b, isRemote).then(() => onBranchChanged?.());
             }}
             onNewBranchFrom={(b) => handleNewBranch(b)}
-            onNewSession={isSelectedWorktree ? handleNewSession : undefined}
+            onNewSession={
+              isSelectedWorktree
+                ? (b) => {
+                    handleNewSession(selected.info.worktree!, b);
+                  }
+                : undefined
+            }
             onDeleteWorktree={
               isSelectedWorktree
                 ? (b) => {
-                    void handleDeleteWorktreeAction(b);
+                    void handleDeleteWorktreeAction(selected.info.worktree!, b);
                   }
                 : undefined
             }
