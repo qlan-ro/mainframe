@@ -8,6 +8,7 @@ import {
   getProjectFileBase64,
   saveProjectFile,
   resolvePath,
+  searchContent,
 } from '../files';
 
 // ---------------------------------------------------------------------------
@@ -508,5 +509,37 @@ describe('resolvePath', () => {
     );
 
     await expect(resolvePath(31415, 'proj-1', 'a.ts', 'chat-gone')).rejects.toThrow('Worktree missing');
+  });
+});
+
+describe('searchContent', () => {
+  const FIXTURE = [
+    { file: 'src/a.ts', line: 10, column: 4, text: 'const foo = 1;' },
+    { file: 'src/b.ts', line: 2, column: 0, text: 'foo()' },
+  ];
+
+  it('calls GET .../search/content with q and path params', async () => {
+    mockFetchOk({ results: FIXTURE });
+    await searchContent(31415, 'proj-1', 'foo', 'src');
+    expect(fetch).toHaveBeenCalledOnce();
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('/api/projects/proj-1/search/content?');
+    expect(url).toContain('q=foo');
+    expect(url).toContain('path=src');
+  });
+
+  it('appends includeIgnored=true and chatId when provided', async () => {
+    mockFetchOk({ results: FIXTURE });
+    await searchContent(31415, 'proj-1', 'foo', 'src', { includeIgnored: true, chatId: 'chat-9' });
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(url).toContain('includeIgnored=true');
+    expect(url).toContain('chatId=chat-9');
+  });
+
+  it('unwraps results from the { results } envelope', async () => {
+    mockFetchOk({ results: FIXTURE });
+    const out = await searchContent(31415, 'proj-1', 'foo', 'src');
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual({ file: 'src/a.ts', line: 10, column: 4, text: 'const foo = 1;' });
   });
 });

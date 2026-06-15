@@ -2,6 +2,7 @@
  * File search, project tree, and filesystem browse REST wrappers.
  */
 import { apiBase, request } from './http';
+import type { SearchContentResult } from '@qlan-ro/mainframe-types';
 
 export interface FileResult {
   name: string;
@@ -146,3 +147,19 @@ export async function browseFilesystem(port: number, dir: string, opts: BrowseOp
   const data = await request<BrowseResponseData>('GET', `${apiBase(port)}/api/filesystem/browse?${qs}`);
   return data.entries;
 }
+
+export const searchContent = (
+  port: number,
+  projectId: string,
+  query: string,
+  scopePath: string,
+  opts: { includeIgnored?: boolean; chatId?: string } = {},
+): Promise<SearchContentResult[]> => {
+  const qs = new URLSearchParams({ q: query, path: scopePath });
+  if (opts.includeIgnored) qs.set('includeIgnored', 'true');
+  if (opts.chatId) qs.set('chatId', opts.chatId);
+  return request<{ results: SearchContentResult[] }>(
+    'GET',
+    `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/search/content?${qs}`,
+  ).then((data) => data.results);
+};
