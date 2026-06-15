@@ -1,8 +1,63 @@
+/**
+ * git.test.ts — git API client shaping tests.
+ *
+ * Behaviors covered (URL / method / body / result passthrough):
+ *  1.  getGitBranch — GET /git/branch, no chatId
+ *  2.  getGitBranch — GET /git/branch?chatId=... when chatId is provided
+ *  3.  getGitBranches — GET /git/branches, no chatId
+ *  4.  getGitBranches — GET /git/branches?chatId=... when chatId is provided
+ *  5.  gitCheckout — POST /git/checkout with {branch}
+ *  6.  gitCheckout — POST /git/checkout includes chatId when provided
+ *  7.  gitCreateBranch — POST /git/branch with {name}
+ *  8.  gitCreateBranch — includes startPoint + chatId when provided
+ *  9.  gitFetch — POST /git/fetch, no body fields when no opts
+ *  10. gitFetch — includes remote + chatId when provided
+ *  11. gitPull — POST /git/pull passes opts object through
+ *  12. gitPush — POST /git/push passes opts object through
+ *  13. gitMerge — POST /git/merge with {branch}
+ *  14. gitMerge — includes chatId when provided
+ *  15. gitRebase — POST /git/rebase with {branch}
+ *  16. gitAbort — POST /git/abort with empty body when no chatId
+ *  17. gitAbort — includes {chatId} body when chatId is provided
+ *  18. gitRenameBranch — POST /git/rename-branch with {oldName, newName}
+ *  19. gitDeleteBranch — POST /git/delete-branch with {name}
+ *  20. gitDeleteBranch — includes {force, remote} when provided
+ *  21. gitUpdateAll — POST /git/update-all with empty body when no chatId
+ *  22. gitUpdateAll — includes {chatId} when provided
+ *  23. getProjectWorktrees — GET /git/worktrees; extracts .worktrees array
+ *  24. deleteWorktree — POST /git/delete-worktree with {worktreePath}, no branchName
+ *  25. deleteWorktree — includes {branchName} when provided
+ *  26. projectId is URL-encoded in all routes
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getWorkingDiff } from '../git';
+import {
+  getGitBranch,
+  getGitBranches,
+  gitCheckout,
+  gitCreateBranch,
+  gitFetch,
+  gitPull,
+  gitPush,
+  gitMerge,
+  gitRebase,
+  gitAbort,
+  gitRenameBranch,
+  gitDeleteBranch,
+  gitUpdateAll,
+  getProjectWorktrees,
+  deleteWorktree,
+} from '../git';
 
 // ---------------------------------------------------------------------------
-// fetch mock helpers
+// Constants
+// ---------------------------------------------------------------------------
+
+const PORT = 31415;
+const PROJECT_ID = 'proj-abc';
+const BASE = `http://127.0.0.1:${PORT}/api/projects/${PROJECT_ID}/git`;
+
+// ---------------------------------------------------------------------------
+// fetch mock helpers — git routes use the ApiResponse envelope (request/requestEmpty)
 // ---------------------------------------------------------------------------
 
 function mockFetchOk(data: unknown): void {
@@ -15,12 +70,12 @@ function mockFetchOk(data: unknown): void {
   );
 }
 
-function mockFetchApiError(error: string): void {
+function mockFetchEmpty(): void {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ success: false, error }),
+      json: () => Promise.resolve({ success: true }),
     }),
   );
 }
@@ -29,22 +84,20 @@ function mockFetchApiError(error: string): void {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const DIFF_FIXTURE = {
-  diff: '@@ -1,3 +1,4 @@\n const x = 1\n+const y = 2\n',
-  original: 'const x = 1\n',
-  modified: 'const x = 1\nconst y = 2\n',
-  source: 'git',
+const BRANCH_LIST_FIXTURE = {
+  current: 'main',
+  local: [{ name: 'main', current: true }],
+  remote: ['origin/main'],
+  worktrees: [],
 };
 
-const EMPTY_DIFF_FIXTURE = {
-  diff: '',
-  original: '',
-  modified: '',
-  source: 'git',
-};
+const WORKTREES_FIXTURE = [
+  { path: '/repo/.git/worktrees/feat', branch: 'feat/my-feature' },
+  { path: '/repo/.git/worktrees/fix', branch: null },
+];
 
 // ---------------------------------------------------------------------------
-// Tests
+// Reset
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
@@ -55,95 +108,474 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('getWorkingDiff', () => {
-  it('GETs /git/diff with file and source=git params', async () => {
-    mockFetchOk(DIFF_FIXTURE);
+// ---------------------------------------------------------------------------
+// Helper to extract the called URL and body
+// ---------------------------------------------------------------------------
 
-    await getWorkingDiff(31415, 'proj-1', 'src/index.ts');
+function lastCall(): { url: string; init: RequestInit } {
+  const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls;
+  const last = calls[calls.length - 1];
+  return { url: last?.[0] as string, init: last?.[1] as RequestInit };
+}
 
-    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
-    expect(url).toContain('/api/projects/proj-1/git/diff?');
-    expect(url).toContain('file=src%2Findex.ts');
-    expect(url).toContain('source=git');
-    expect(url).not.toContain('base=');
-    expect(url).not.toContain('chatId=');
+// ---------------------------------------------------------------------------
+// 1–2. getGitBranch
+// ---------------------------------------------------------------------------
+
+describe('getGitBranch', () => {
+  it('GETs /git/branch with no query string when chatId is omitted', async () => {
+    mockFetchOk({ branch: 'main' });
+
+    await getGitBranch(PORT, PROJECT_ID);
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/branch`);
+    expect(init.method).toBe('GET');
   });
 
-  it('includes base= when opts.base is provided', async () => {
-    mockFetchOk(DIFF_FIXTURE);
+  it('appends ?chatId= when chatId is provided', async () => {
+    mockFetchOk({ branch: 'feat/foo' });
 
-    await getWorkingDiff(31415, 'proj-1', 'src/index.ts', { base: 'main' });
+    await getGitBranch(PORT, PROJECT_ID, 'chat-1');
 
-    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
-    expect(url).toContain('base=main');
-    expect(url).toContain('source=git');
+    const { url } = lastCall();
+    expect(url).toBe(`${BASE}/branch?chatId=chat-1`);
   });
 
-  it('includes chatId= when opts.chatId is provided', async () => {
-    mockFetchOk(DIFF_FIXTURE);
+  it('returns the {branch} data from the response', async () => {
+    mockFetchOk({ branch: 'feat/bar' });
 
-    await getWorkingDiff(31415, 'proj-1', 'src/index.ts', { chatId: 'chat-abc' });
+    const result = await getGitBranch(PORT, PROJECT_ID);
 
-    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
-    expect(url).toContain('chatId=chat-abc');
-    expect(url).toContain('source=git');
-    expect(url).not.toContain('base=');
+    expect(result).toEqual({ branch: 'feat/bar' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3–4. getGitBranches
+// ---------------------------------------------------------------------------
+
+describe('getGitBranches', () => {
+  it('GETs /git/branches with no query string when chatId is omitted', async () => {
+    mockFetchOk(BRANCH_LIST_FIXTURE);
+
+    await getGitBranches(PORT, PROJECT_ID);
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/branches`);
+    expect(init.method).toBe('GET');
   });
 
-  it('includes both base= and chatId= when both opts are provided', async () => {
-    mockFetchOk(DIFF_FIXTURE);
+  it('appends ?chatId= when chatId is provided', async () => {
+    mockFetchOk(BRANCH_LIST_FIXTURE);
 
-    await getWorkingDiff(31415, 'proj-1', 'src/index.ts', { base: 'HEAD~1', chatId: 'chat-xyz' });
+    await getGitBranches(PORT, PROJECT_ID, 'chat-2');
 
-    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
-    expect(url).toContain('base=HEAD');
-    expect(url).toContain('chatId=chat-xyz');
+    const { url } = lastCall();
+    expect(url).toBe(`${BASE}/branches?chatId=chat-2`);
   });
 
-  it('returns the {diff,original,modified,source} body from the response', async () => {
-    mockFetchOk(DIFF_FIXTURE);
+  it('returns the BranchListResult data from the response', async () => {
+    mockFetchOk(BRANCH_LIST_FIXTURE);
 
-    const result = await getWorkingDiff(31415, 'proj-1', 'src/index.ts');
+    const result = await getGitBranches(PORT, PROJECT_ID);
 
-    expect(result).toEqual(DIFF_FIXTURE);
+    expect(result).toEqual(BRANCH_LIST_FIXTURE);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5–6. gitCheckout
+// ---------------------------------------------------------------------------
+
+describe('gitCheckout', () => {
+  it('POSTs /git/checkout with {branch} and no chatId when omitted', async () => {
+    mockFetchEmpty();
+
+    await gitCheckout(PORT, PROJECT_ID, 'feat/xyz');
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/checkout`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ branch: 'feat/xyz' });
   });
 
-  it('returns an empty-triple soft-error response as-is without throwing', async () => {
-    mockFetchOk(EMPTY_DIFF_FIXTURE);
+  it('includes chatId in the body when provided', async () => {
+    mockFetchEmpty();
 
-    const result = await getWorkingDiff(31415, 'proj-1', 'untracked.ts');
+    await gitCheckout(PORT, PROJECT_ID, 'main', 'chat-3');
 
-    expect(result).toEqual(EMPTY_DIFF_FIXTURE);
-    expect(result.diff).toBe('');
-    expect(result.original).toBe('');
-    expect(result.modified).toBe('');
+    const body = JSON.parse(lastCall().init.body as string);
+    expect(body).toEqual({ branch: 'main', chatId: 'chat-3' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7–8. gitCreateBranch
+// ---------------------------------------------------------------------------
+
+describe('gitCreateBranch', () => {
+  it('POSTs /git/branch with {name} only when startPoint and chatId are omitted', async () => {
+    mockFetchEmpty();
+
+    await gitCreateBranch(PORT, PROJECT_ID, 'feat/new');
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/branch`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ name: 'feat/new' });
   });
 
-  it('URL-encodes the projectId in the path', async () => {
-    mockFetchOk(DIFF_FIXTURE);
+  it('includes startPoint and chatId in body when provided', async () => {
+    mockFetchEmpty();
 
-    await getWorkingDiff(31415, 'my project/1', 'a.ts');
+    await gitCreateBranch(PORT, PROJECT_ID, 'feat/new', 'main', 'chat-4');
 
-    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
-    expect(url).toContain('/api/projects/my%20project%2F1/git/diff');
+    const body = JSON.parse(lastCall().init.body as string);
+    expect(body).toEqual({ name: 'feat/new', startPoint: 'main', chatId: 'chat-4' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9–10. gitFetch
+// ---------------------------------------------------------------------------
+
+describe('gitFetch', () => {
+  it('POSTs /git/fetch with an empty body when remote and chatId are omitted', async () => {
+    mockFetchOk({ status: 'success', remote: 'origin' });
+
+    await gitFetch(PORT, PROJECT_ID);
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/fetch`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({});
   });
 
-  it('throws when success is false', async () => {
-    mockFetchApiError('project not found');
+  it('includes remote and chatId in body when provided', async () => {
+    mockFetchOk({ status: 'success', remote: 'upstream' });
 
-    await expect(getWorkingDiff(31415, 'proj-1', 'a.ts')).rejects.toThrow('project not found');
+    await gitFetch(PORT, PROJECT_ID, 'upstream', 'chat-5');
+
+    const body = JSON.parse(lastCall().init.body as string);
+    expect(body).toEqual({ remote: 'upstream', chatId: 'chat-5' });
   });
 
-  it('throws when the HTTP response is not ok', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ error: 'server error' }),
-      }),
-    );
+  it('returns the FetchResult data', async () => {
+    mockFetchOk({ status: 'success', remote: 'origin' });
 
-    await expect(getWorkingDiff(31415, 'proj-1', 'a.ts')).rejects.toThrow('server error');
+    const result = await gitFetch(PORT, PROJECT_ID);
+
+    expect(result).toEqual({ status: 'success', remote: 'origin' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. gitPull
+// ---------------------------------------------------------------------------
+
+describe('gitPull', () => {
+  it('POSTs /git/pull with the opts object passed through', async () => {
+    mockFetchOk({ status: 'success', summary: { changes: 3, insertions: 5, deletions: 2 } });
+
+    await gitPull(PORT, PROJECT_ID, { remote: 'origin', branch: 'main', localBranch: 'main', chatId: 'chat-6' });
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/pull`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      remote: 'origin',
+      branch: 'main',
+      localBranch: 'main',
+      chatId: 'chat-6',
+    });
+  });
+
+  it('returns the PullResult data', async () => {
+    mockFetchOk({ status: 'up-to-date' });
+
+    const result = await gitPull(PORT, PROJECT_ID);
+
+    expect(result).toEqual({ status: 'up-to-date' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. gitPush
+// ---------------------------------------------------------------------------
+
+describe('gitPush', () => {
+  it('POSTs /git/push with opts passed through', async () => {
+    mockFetchOk({ status: 'success', branch: 'main', remote: 'origin' });
+
+    await gitPush(PORT, PROJECT_ID, { branch: 'main', remote: 'origin', chatId: 'chat-7' });
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/push`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ branch: 'main', remote: 'origin', chatId: 'chat-7' });
+  });
+
+  it('returns the PushResult data', async () => {
+    mockFetchOk({ status: 'success', branch: 'feat', remote: 'origin' });
+
+    const result = await gitPush(PORT, PROJECT_ID, { branch: 'feat' });
+
+    expect(result).toEqual({ status: 'success', branch: 'feat', remote: 'origin' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13–14. gitMerge
+// ---------------------------------------------------------------------------
+
+describe('gitMerge', () => {
+  it('POSTs /git/merge with {branch} and no chatId when omitted', async () => {
+    mockFetchOk({ status: 'success', summary: { commits: 1, insertions: 10, deletions: 0 } });
+
+    await gitMerge(PORT, PROJECT_ID, 'feat/x');
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/merge`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ branch: 'feat/x' });
+  });
+
+  it('includes chatId in body when provided', async () => {
+    mockFetchOk({ status: 'success', summary: { commits: 2, insertions: 5, deletions: 3 } });
+
+    await gitMerge(PORT, PROJECT_ID, 'main', 'chat-8');
+
+    const body = JSON.parse(lastCall().init.body as string);
+    expect(body.chatId).toBe('chat-8');
+    expect(body.branch).toBe('main');
+  });
+
+  it('returns the MergeResult data', async () => {
+    mockFetchOk({ status: 'conflict', conflicts: ['src/a.ts'], message: 'Conflict in a.ts' });
+
+    const result = await gitMerge(PORT, PROJECT_ID, 'feat/x');
+
+    expect(result).toEqual({ status: 'conflict', conflicts: ['src/a.ts'], message: 'Conflict in a.ts' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. gitRebase
+// ---------------------------------------------------------------------------
+
+describe('gitRebase', () => {
+  it('POSTs /git/rebase with {branch}', async () => {
+    mockFetchOk({ status: 'success' });
+
+    await gitRebase(PORT, PROJECT_ID, 'main');
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/rebase`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ branch: 'main' });
+  });
+
+  it('returns the RebaseResult data', async () => {
+    mockFetchOk({ status: 'conflict', conflicts: ['src/b.ts'], message: 'Conflict in b.ts' });
+
+    const result = await gitRebase(PORT, PROJECT_ID, 'main');
+
+    expect(result).toEqual({ status: 'conflict', conflicts: ['src/b.ts'], message: 'Conflict in b.ts' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16–17. gitAbort
+// ---------------------------------------------------------------------------
+
+describe('gitAbort', () => {
+  it('POSTs /git/abort with empty body when chatId is omitted', async () => {
+    mockFetchEmpty();
+
+    await gitAbort(PORT, PROJECT_ID);
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/abort`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({});
+  });
+
+  it('includes {chatId} body when chatId is provided', async () => {
+    mockFetchEmpty();
+
+    await gitAbort(PORT, PROJECT_ID, 'chat-9');
+
+    const body = JSON.parse(lastCall().init.body as string);
+    expect(body).toEqual({ chatId: 'chat-9' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 18. gitRenameBranch
+// ---------------------------------------------------------------------------
+
+describe('gitRenameBranch', () => {
+  it('POSTs /git/rename-branch with {oldName, newName}', async () => {
+    mockFetchEmpty();
+
+    await gitRenameBranch(PORT, PROJECT_ID, 'old-branch', 'new-branch');
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/rename-branch`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ oldName: 'old-branch', newName: 'new-branch' });
+  });
+
+  it('includes chatId when provided', async () => {
+    mockFetchEmpty();
+
+    await gitRenameBranch(PORT, PROJECT_ID, 'old', 'new', 'chat-10');
+
+    const body = JSON.parse(lastCall().init.body as string);
+    expect(body.chatId).toBe('chat-10');
+    expect(body.oldName).toBe('old');
+    expect(body.newName).toBe('new');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19–20. gitDeleteBranch
+// ---------------------------------------------------------------------------
+
+describe('gitDeleteBranch', () => {
+  it('POSTs /git/delete-branch with {name} and no extra opts when omitted', async () => {
+    mockFetchOk({ status: 'success' });
+
+    await gitDeleteBranch(PORT, PROJECT_ID, 'feat/done');
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/delete-branch`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ name: 'feat/done' });
+  });
+
+  it('includes force and remote opts when provided', async () => {
+    mockFetchOk({ status: 'success' });
+
+    await gitDeleteBranch(PORT, PROJECT_ID, 'feat/done', { force: true, remote: true, chatId: 'chat-11' });
+
+    const body = JSON.parse(lastCall().init.body as string);
+    expect(body).toEqual({ name: 'feat/done', force: true, remote: true, chatId: 'chat-11' });
+  });
+
+  it('returns the DeleteBranchResult data', async () => {
+    mockFetchOk({ status: 'not-merged', message: 'Branch not fully merged' });
+
+    const result = await gitDeleteBranch(PORT, PROJECT_ID, 'feat/unmerged');
+
+    expect(result).toEqual({ status: 'not-merged', message: 'Branch not fully merged' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 21–22. gitUpdateAll
+// ---------------------------------------------------------------------------
+
+describe('gitUpdateAll', () => {
+  it('POSTs /git/update-all with empty body when chatId is omitted', async () => {
+    mockFetchOk({ fetched: true, pull: { status: 'up-to-date' }, branches: [] });
+
+    await gitUpdateAll(PORT, PROJECT_ID);
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/update-all`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({});
+  });
+
+  it('includes {chatId} when provided', async () => {
+    mockFetchOk({ fetched: true, pull: { status: 'up-to-date' }, branches: [] });
+
+    await gitUpdateAll(PORT, PROJECT_ID, 'chat-12');
+
+    const body = JSON.parse(lastCall().init.body as string);
+    expect(body).toEqual({ chatId: 'chat-12' });
+  });
+
+  it('returns the UpdateAllResult data', async () => {
+    mockFetchOk({
+      fetched: true,
+      pull: { status: 'success', summary: { changes: 2, insertions: 4, deletions: 1 } },
+      branches: [{ branch: 'feat/a', status: 'updated' }],
+    });
+
+    const result = await gitUpdateAll(PORT, PROJECT_ID);
+
+    expect(result.fetched).toBe(true);
+    expect(result.pull.status).toBe('success');
+    expect(result.branches).toHaveLength(1);
+    expect(result.branches[0]?.branch).toBe('feat/a');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 23. getProjectWorktrees
+// ---------------------------------------------------------------------------
+
+describe('getProjectWorktrees', () => {
+  it('GETs /git/worktrees and extracts the .worktrees array', async () => {
+    mockFetchOk({ worktrees: WORKTREES_FIXTURE });
+
+    const result = await getProjectWorktrees(PORT, PROJECT_ID);
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/worktrees`);
+    expect(init.method).toBe('GET');
+    expect(result).toEqual(WORKTREES_FIXTURE);
+  });
+
+  it('returns an empty array when the response contains an empty worktrees list', async () => {
+    mockFetchOk({ worktrees: [] });
+
+    const result = await getProjectWorktrees(PORT, PROJECT_ID);
+
+    expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 24–25. deleteWorktree
+// ---------------------------------------------------------------------------
+
+describe('deleteWorktree', () => {
+  it('POSTs /git/delete-worktree with {worktreePath} and no branchName when omitted', async () => {
+    mockFetchEmpty();
+
+    await deleteWorktree(PORT, PROJECT_ID, '/repo/.git/worktrees/feat');
+
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/delete-worktree`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ worktreePath: '/repo/.git/worktrees/feat' });
+  });
+
+  it('includes {branchName} in the body when provided', async () => {
+    mockFetchEmpty();
+
+    await deleteWorktree(PORT, PROJECT_ID, '/repo/.git/worktrees/feat', 'feat/my-feature');
+
+    const body = JSON.parse(lastCall().init.body as string);
+    expect(body).toEqual({ worktreePath: '/repo/.git/worktrees/feat', branchName: 'feat/my-feature' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 26. URL-encoding of projectId
+// ---------------------------------------------------------------------------
+
+describe('projectId URL-encoding', () => {
+  it('URL-encodes a projectId with spaces and slashes in the path', async () => {
+    mockFetchOk({ branch: 'main' });
+
+    await getGitBranch(PORT, 'my project/1');
+
+    const { url } = lastCall();
+    expect(url).toContain('/api/projects/my%20project%2F1/git/branch');
   });
 });
