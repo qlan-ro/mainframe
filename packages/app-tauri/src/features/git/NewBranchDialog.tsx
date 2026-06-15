@@ -42,7 +42,7 @@ export function NewBranchDialog({
     inputRef.current?.focus();
   }, []);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     const err = validate(name, localBranches);
     if (err) {
