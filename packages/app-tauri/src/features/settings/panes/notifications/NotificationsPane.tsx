@@ -46,7 +46,7 @@ export function NotificationsPane({ port }: { port: number }) {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div data-testid="settings-pane-notifications" className="flex flex-col gap-6 p-4">
       <SettingGroup title="Chat">
         <ToggleRow
           label="Task Complete"

@@ -11,7 +11,7 @@ export function AboutPane() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div data-testid="settings-pane-about" className="flex flex-col gap-6 p-4">
       <section className="flex flex-col gap-4">
         <h3 className="text-sm font-medium text-mf-text-primary">About Mainframe</h3>
 

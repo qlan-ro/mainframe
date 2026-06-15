@@ -32,7 +32,7 @@ export function GeneralPane({ port }: { port: number }) {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div data-testid="settings-pane-general" className="flex flex-col gap-6 p-4">
       <section className="flex flex-col gap-3">
         <h3 className="text-sm font-medium text-mf-text-primary">Appearance</h3>
         <AppearanceControls />
