@@ -7,6 +7,7 @@
  */
 import { Plus, X } from 'lucide-react';
 import { TerminalInstance } from '@/features/terminal/TerminalInstance';
+import { PreviewInstance } from '@/features/preview/PreviewInstance';
 import { useLayoutStore } from '@/store/layout';
 import type { RunPane } from '@/store/run-pane';
 import { emitSurfaceIntent } from '@/store/surface-intents';
@@ -73,12 +74,16 @@ function RunPaneView({ pane, showClosePane }: RunPaneViewProps) {
         )}
       </div>
       <div className="relative min-h-0 flex-1">
-        {pane.tabs.map((t) =>
-          t.kind === 'terminal' ? (
-            <TerminalInstance key={t.id} terminalId={t.id} visible={t.id === pane.active} />
-          ) : null,
-        )}
-        {activeTab && activeTab.kind !== 'terminal' && (
+        {pane.tabs.map((t) => {
+          if (t.kind === 'terminal') {
+            return <TerminalInstance key={t.id} terminalId={t.id} visible={t.id === pane.active} />;
+          }
+          if (t.kind === 'preview') {
+            return <PreviewInstance key={t.id} tabId={t.id} config={t.config} visible={t.id === pane.active} />;
+          }
+          return null;
+        })}
+        {activeTab && activeTab.kind !== 'terminal' && activeTab.kind !== 'preview' && (
           <div className="grid h-full place-items-center text-caption text-muted-foreground">
             {`${activeTab.kind}: ${activeTab.title}`}
           </div>

@@ -13,6 +13,7 @@ import {
 } from './run-pane';
 import { useTabsStore } from './tabs';
 import { killAndDisposeCachedTerminals } from './terminal-cleanup';
+import { previewDestroy } from '@/lib/tauri/preview';
 
 export type SurfaceId = 'chat' | 'files' | 'run';
 
@@ -270,6 +271,9 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
       if (!run) return;
       const tab = run.panes.find((p) => p.id === paneId)?.tabs.find((t) => t.id === tabId);
       if (tab?.kind === 'terminal') killAndDisposeCachedTerminals([tabId]);
+      if (tab?.kind === 'preview') {
+        previewDestroy(tabId).catch((e) => console.warn('[preview] reap on close', e));
+      }
       const nextRun = closeRunTabReducer(run, paneId, tabId);
       writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
     },
@@ -278,6 +282,14 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
       const { layout, run } = get();
       if (!run) return;
       killAndDisposeCachedTerminals(terminalIdsInPane(run, paneId));
+      const pane = run.panes.find((p) => p.id === paneId);
+      if (pane) {
+        for (const tab of pane.tabs) {
+          if (tab.kind === 'preview') {
+            previewDestroy(tab.id).catch((e) => console.warn('[preview] reap on pane close', e));
+          }
+        }
+      }
       const nextRun = closePaneReducer(run, paneId);
       writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
     },
