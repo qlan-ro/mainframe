@@ -26,11 +26,16 @@ vi.mock('@/lib/api/git', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock CmDiffEditor so we don't mount CodeMirror in tests
+// Mock CmDiffEditor so we don't mount CodeMirror in tests. Capture onLineSelect
+// so tests can simulate a gutter line click (submit is gated on a selection).
 // ---------------------------------------------------------------------------
 
+let capturedOnLineSelect: ((sel: { line: number; text: string }) => void) | undefined;
 vi.mock('@/features/editor/CmDiffEditor', () => ({
-  CmDiffEditor: () => <div data-testid="cm-diff-editor-stub" />,
+  CmDiffEditor: (props: { onLineSelect?: (sel: { line: number; text: string }) => void }) => {
+    capturedOnLineSelect = props.onLineSelect;
+    return <div data-testid="cm-diff-editor-stub" />;
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -152,6 +157,11 @@ describe('ReviewPanel — append call shape', () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId('review-comment-input')).not.toBeNull();
+    });
+
+    // Select a line (gutter click) — submit is gated on a real selection
+    act(() => {
+      capturedOnLineSelect?.({ line: 3, text: 'const x = 1;' });
     });
 
     // Type a comment and submit
