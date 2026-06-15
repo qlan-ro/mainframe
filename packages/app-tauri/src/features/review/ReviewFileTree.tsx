@@ -7,13 +7,14 @@
  * convention, derived from the semantic `status` field — NOT from raw porcelain
  * codes (the mapper already ran).
  */
+import { KIND_LABEL } from '@/lib/git-status-kind';
 import type { ReviewFile } from './git-status-to-files';
 
-const BADGE: Record<ReviewFile['status'], { label: string; className: string }> = {
-  added: { label: 'A', className: 'text-mf-diff-add-text' },
-  modified: { label: 'M', className: 'text-mf-warning' },
-  deleted: { label: 'D', className: 'text-mf-diff-del-text' },
-  renamed: { label: 'R', className: 'text-mf-warning' },
+const BADGE_CLASS: Record<ReviewFile['status'], string> = {
+  added: 'text-mf-diff-add-text',
+  modified: 'text-mf-warning',
+  deleted: 'text-mf-diff-del-text',
+  renamed: 'text-mf-warning',
 };
 
 interface ReviewFileTreeProps {
@@ -30,7 +31,7 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile }: ReviewFile
   return (
     <div className="py-1 overflow-y-auto">
       {files.map((f) => {
-        const badge = BADGE[f.status];
+        const badgeClass = BADGE_CLASS[f.status];
         const isSelected = selectedFile === f.path;
         return (
           <button
@@ -41,8 +42,8 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile }: ReviewFile
             onClick={() => onSelectFile(f.path)}
             className={`flex h-[22px] w-full items-center gap-2 border-none bg-transparent px-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground ${isSelected ? 'bg-accent text-foreground' : ''}`}
           >
-            <span className={`w-3 flex-shrink-0 text-center font-mono text-micro ${badge.className}`}>
-              {badge.label}
+            <span className={`w-3 flex-shrink-0 text-center font-mono text-micro ${badgeClass}`}>
+              {KIND_LABEL[f.status]}
             </span>
             <span className="truncate text-foreground">{f.path.split('/').pop() ?? f.path}</span>
             <span className="ml-auto truncate font-mono text-micro text-mf-text-4">{f.path}</span>

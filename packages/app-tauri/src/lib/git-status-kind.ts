@@ -18,3 +18,15 @@ export function gitStatusKind(code: string): GitStatusKind {
   if (code.includes('D')) return 'deleted';
   return 'modified';
 }
+
+/**
+ * Canonical single-char display label per semantic kind.
+ * Used by both ChangesPanel and ReviewFileTree so the badge label is derived
+ * from the same source of truth as the tint class.
+ */
+export const KIND_LABEL: Record<GitStatusKind, string> = {
+  added: 'A',
+  modified: 'M',
+  deleted: 'D',
+  renamed: 'R',
+};

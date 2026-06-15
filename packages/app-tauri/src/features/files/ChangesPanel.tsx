@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { getGitStatus, type GitStatusFile } from '@/lib/api/git';
-import { gitStatusKind } from '@/lib/git-status-kind';
+import { gitStatusKind, KIND_LABEL } from '@/lib/git-status-kind';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 const KIND_CLASS: Record<string, string> = {
@@ -71,7 +71,7 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
             data-testid={`changes-status-${f.path}`}
             className={`w-3 flex-shrink-0 text-center font-mono text-micro ${statusClass(f.status)}`}
           >
-            {f.status.trim().charAt(0) || '•'}
+            {KIND_LABEL[gitStatusKind(f.status)]}
           </span>
           <span className="truncate text-foreground">{basename(f.path)}</span>
           <span className="ml-auto truncate font-mono text-micro text-mf-text-4">{f.path}</span>
