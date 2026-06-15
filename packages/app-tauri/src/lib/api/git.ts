@@ -1,8 +1,30 @@
 /**
- * Git REST wrappers (read-only). The daemon serves git status/diff per project;
- * the Inspector's Changes tab consumes status.
+ * Git REST wrappers for the daemon API.
+ *
+ * Read-only helpers (getGitStatus, getWorkingDiff) are preserved from the
+ * original file. Branch/worktree write operations are added here for B1.
+ *
+ * All routes are under `/api/projects/:projectId/git/` and wrapped in the
+ * `ApiResponse<T>` envelope — use `request<T>` for typed responses and
+ * `requestEmpty` for routes that return `okEmpty` (no data field).
  */
-import { apiBase, request } from './http';
+import type {
+  BranchListResult,
+  FetchResult,
+  PullResult,
+  PushResult,
+  MergeResult,
+  RebaseResult,
+  DeleteBranchResult,
+  UpdateAllResult,
+} from '@qlan-ro/mainframe-types';
+import { apiBase, request, requestEmpty } from './http';
+
+/** `{ path, branch }` shape returned by the `/worktrees` route. */
+export interface WorktreeEntry {
+  path: string;
+  branch: string | null;
+}
 
 export interface GitStatusFile {
   /** Repo-relative path. */
@@ -52,3 +74,108 @@ export async function getWorkingDiff(
   if (opts?.chatId) qs.set('chatId', opts.chatId);
   return request<WorkingDiff>('GET', `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/git/diff?${qs}`);
 }
+
+// ---------------------------------------------------------------------------
+// Branch helpers
+// ---------------------------------------------------------------------------
+
+function projGit(port: number, projectId: string): string {
+  return `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/git`;
+}
+
+function chatQs(chatId?: string): string {
+  return chatId ? `?chatId=${encodeURIComponent(chatId)}` : '';
+}
+
+export const getGitBranch = (port: number, projectId: string, chatId?: string): Promise<{ branch: string | null }> =>
+  request('GET', `${projGit(port, projectId)}/branch${chatQs(chatId)}`);
+
+export const getGitBranches = (port: number, projectId: string, chatId?: string): Promise<BranchListResult> =>
+  request('GET', `${projGit(port, projectId)}/branches${chatQs(chatId)}`);
+
+export const gitCheckout = (port: number, projectId: string, branch: string, chatId?: string): Promise<void> =>
+  requestEmpty('POST', `${projGit(port, projectId)}/checkout`, { branch, ...(chatId ? { chatId } : {}) });
+
+export const gitCreateBranch = (
+  port: number,
+  projectId: string,
+  name: string,
+  startPoint?: string,
+  chatId?: string,
+): Promise<void> =>
+  requestEmpty('POST', `${projGit(port, projectId)}/branch`, {
+    name,
+    ...(startPoint ? { startPoint } : {}),
+    ...(chatId ? { chatId } : {}),
+  });
+
+export const gitFetch = (port: number, projectId: string, remote?: string, chatId?: string): Promise<FetchResult> =>
+  request('POST', `${projGit(port, projectId)}/fetch`, {
+    ...(remote ? { remote } : {}),
+    ...(chatId ? { chatId } : {}),
+  });
+
+export const gitPull = (
+  port: number,
+  projectId: string,
+  opts: { remote?: string; branch?: string; localBranch?: string; chatId?: string } = {},
+): Promise<PullResult> => request('POST', `${projGit(port, projectId)}/pull`, { ...opts });
+
+export const gitPush = (
+  port: number,
+  projectId: string,
+  opts: { branch?: string; remote?: string; chatId?: string } = {},
+): Promise<PushResult> => request('POST', `${projGit(port, projectId)}/push`, { ...opts });
+
+export const gitMerge = (port: number, projectId: string, branch: string, chatId?: string): Promise<MergeResult> =>
+  request('POST', `${projGit(port, projectId)}/merge`, { branch, ...(chatId ? { chatId } : {}) });
+
+export const gitRebase = (port: number, projectId: string, branch: string, chatId?: string): Promise<RebaseResult> =>
+  request('POST', `${projGit(port, projectId)}/rebase`, { branch, ...(chatId ? { chatId } : {}) });
+
+// NOTE: the abort route returns ok(res, data) but the shape is only {aborted:boolean}.
+// We consume it as empty — the popover never reads the field.
+// Do NOT "fix" to request<{aborted:boolean}> and assert on a field nothing uses.
+export const gitAbort = (port: number, projectId: string, chatId?: string): Promise<void> =>
+  requestEmpty('POST', `${projGit(port, projectId)}/abort`, chatId ? { chatId } : {});
+
+export const gitRenameBranch = (
+  port: number,
+  projectId: string,
+  oldName: string,
+  newName: string,
+  chatId?: string,
+): Promise<void> =>
+  requestEmpty('POST', `${projGit(port, projectId)}/rename-branch`, {
+    oldName,
+    newName,
+    ...(chatId ? { chatId } : {}),
+  });
+
+export const gitDeleteBranch = (
+  port: number,
+  projectId: string,
+  name: string,
+  opts: { force?: boolean; remote?: boolean; chatId?: string } = {},
+): Promise<DeleteBranchResult> => request('POST', `${projGit(port, projectId)}/delete-branch`, { name, ...opts });
+
+export const gitUpdateAll = (port: number, projectId: string, chatId?: string): Promise<UpdateAllResult> =>
+  request('POST', `${projGit(port, projectId)}/update-all`, chatId ? { chatId } : {});
+
+// ---------------------------------------------------------------------------
+// Worktree helpers
+// ---------------------------------------------------------------------------
+
+export const getProjectWorktrees = async (port: number, projectId: string): Promise<WorktreeEntry[]> =>
+  (await request<{ worktrees: WorktreeEntry[] }>('GET', `${projGit(port, projectId)}/worktrees`)).worktrees;
+
+export const deleteWorktree = (
+  port: number,
+  projectId: string,
+  worktreePath: string,
+  branchName?: string,
+): Promise<void> =>
+  requestEmpty('POST', `${projGit(port, projectId)}/delete-worktree`, {
+    worktreePath,
+    ...(branchName ? { branchName } : {}),
+  });
