@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { daemonWs } from '../../../../lib/daemon/ws-client';
 import { getTunnelStatus, startTunnel, stopTunnel } from '../../../../lib/api/remote-access';
 import type { TunnelStatus } from '../../../../lib/api/remote-access';
@@ -46,20 +46,28 @@ export function useTunnelStatus(port: number): UseTunnelStatusResult {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [togglingAction, setTogglingAction] = useState<'start' | 'stop' | null>(null);
+  // Monotonic generation counter: incremented on every WS transition and on
+  // start()/stop() so that a stale REST snapshot from a pending refresh() is
+  // discarded when a newer WS event already advanced the state.
+  const genRef = useRef(0);
 
   const running = state !== 'idle' && state !== 'error';
   const verified = state === 'ready';
 
   const refresh = useCallback(async () => {
+    const capturedGen = genRef.current;
     try {
       const status = await getTunnelStatus(port);
+      // If a WS event (or start/stop) advanced the generation while we were
+      // awaiting the REST call, the snapshot is stale — discard it.
+      if (genRef.current !== capturedGen) return;
       const { uiState, url: derivedUrl } = deriveStateFromSnapshot(status);
       setUrl(derivedUrl);
       setState(uiState);
     } catch (err) {
       console.warn('[settings/use-tunnel-status] failed to get tunnel status', err);
     } finally {
-      setLoading(false);
+      if (genRef.current === capturedGen) setLoading(false);
     }
   }, [port]);
 
@@ -73,6 +81,7 @@ export function useTunnelStatus(port: number): UseTunnelStatusResult {
       const e = event as Record<string, unknown>;
       if (e['type'] !== 'tunnel:status') return;
       if (e['label'] !== 'daemon') return;
+      genRef.current += 1;
       applyWsEvent(e, setState, setUrl, setErrorMsg);
     });
   }, []);
@@ -80,6 +89,7 @@ export function useTunnelStatus(port: number): UseTunnelStatusResult {
   const start = useCallback(
     async (opts?: { token?: string; url?: string }): Promise<{ url: string } | null> => {
       setTogglingAction('start');
+      genRef.current += 1;
       try {
         setState('starting');
         setErrorMsg(null);
@@ -104,6 +114,7 @@ export function useTunnelStatus(port: number): UseTunnelStatusResult {
   const stop = useCallback(
     async (opts?: { clearConfig?: boolean }) => {
       setTogglingAction('stop');
+      genRef.current += 1;
       try {
         await stopTunnel(port, opts);
         setState('idle');

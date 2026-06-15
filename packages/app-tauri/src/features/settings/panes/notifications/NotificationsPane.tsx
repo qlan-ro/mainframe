@@ -4,12 +4,19 @@ import { updateGeneralSettings, getGeneralSettings } from '../../../../lib/api/s
 import { ToggleRow } from '../shared/ToggleRow';
 import { SettingGroup } from '../shared/SettingGroup';
 
+/** Deep-partial patch shape — mirrors the daemon's NotificationPatch. */
+type NotificationPatch = {
+  chat?: Partial<NotificationConfig['chat']>;
+  permission?: Partial<NotificationConfig['permission']>;
+  other?: Partial<NotificationConfig['other']>;
+};
+
 // Read latest from the store inside the handler so rapid toggles compose
 // against the current UI state rather than a stale closure snapshot. The PUT
-// body stays a deep-partial patch so concurrent writes from different groups
+// body stays a leaf-only patch so concurrent writes from different groups
 // remain commutative — full-object writes would let an older request
 // overwrite a newer one's changes.
-async function applyPatch(port: number, patch: Partial<NotificationConfig>): Promise<void> {
+async function applyPatch(port: number, patch: NotificationPatch): Promise<void> {
   const current = useSettingsStore.getState().general.notifications;
   const merged: NotificationConfig = {
     chat: { ...current.chat, ...patch.chat },
@@ -34,15 +41,19 @@ export function NotificationsPane({ port }: { port: number }) {
   const notifications = useSettingsStore((s) => s.general.notifications);
 
   function patchChat(key: keyof NotificationConfig['chat'], value: boolean) {
-    void applyPatch(port, { chat: { ...notifications.chat, [key]: value } });
+    // Pass only the changed leaf; applyPatch merges against live store state.
+    const leaf = { [key]: value } as Partial<NotificationConfig['chat']>;
+    void applyPatch(port, { chat: leaf });
   }
 
   function patchPermission(key: keyof NotificationConfig['permission'], value: boolean) {
-    void applyPatch(port, { permission: { ...notifications.permission, [key]: value } });
+    const leaf = { [key]: value } as Partial<NotificationConfig['permission']>;
+    void applyPatch(port, { permission: leaf });
   }
 
   function patchOther(key: keyof NotificationConfig['other'], value: boolean) {
-    void applyPatch(port, { other: { ...notifications.other, [key]: value } });
+    const leaf = { [key]: value } as Partial<NotificationConfig['other']>;
+    void applyPatch(port, { other: leaf });
   }
 
   return (

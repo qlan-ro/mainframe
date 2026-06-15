@@ -145,4 +145,43 @@ describe('use-tunnel-status', () => {
     });
     expect(result.current.state).toBe('idle');
   });
+  it('WS stopped event during a pending refresh() keeps idle — WS wins over stale REST snapshot', async () => {
+    // Scenario: refresh() is called (REST pending), a WS "stopped" arrives
+    // during the await, then REST resolves with the stale "ready" snapshot.
+    // Without a generation guard the REST apply would clobber the WS update.
+    let resolveRest!: (v: { running: boolean; url: string; verified: boolean }) => void;
+    // First REST call (initial seed): resolves immediately to idle
+    getTunnelStatus
+      .mockResolvedValueOnce({ running: false, url: null, verified: false })
+      // Second REST call (from refresh): returns a controllable promise
+      .mockReturnValueOnce(
+        new Promise<{ running: boolean; url: string | null; verified: boolean }>((r) => {
+          resolveRest = r as typeof resolveRest;
+        }),
+      );
+
+    const { result } = renderHook(() => useTunnelStatus(PORT));
+    await flush(); // initial seed resolves → idle
+
+    // Trigger refresh() without awaiting — REST is now pending
+    let refreshPromise: Promise<void>;
+    act(() => {
+      refreshPromise = result.current.retryVerify();
+    });
+    // state goes to 'verifying' synchronously (retryVerify sets it)
+    expect(result.current.state).toBe('verifying');
+
+    // WS "stopped" arrives while REST is still pending
+    act(() => emit({ type: 'tunnel:status', state: 'stopped', label: 'daemon' }));
+    expect(result.current.state).toBe('idle');
+
+    // Now resolve REST with a stale "ready" snapshot — should NOT clobber the WS result
+    await act(async () => {
+      resolveRest({ running: true, url: 'https://x', verified: true });
+      await refreshPromise!;
+    });
+
+    // WS wins: state must stay idle
+    expect(result.current.state).toBe('idle');
+  });
 });

@@ -38,10 +38,18 @@ export function SettingsDialog({ port }: { port: number }) {
 
   useEffect(() => {
     if (!isOpen) return;
+    let cancelled = false;
     setLoading(true);
     Promise.all([getProviderSettings(port).then(loadProviders), getGeneralSettings(port).then(loadGeneral)])
-      .catch((err: unknown) => console.warn('[settings/SettingsDialog]', err))
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => {
+        if (!cancelled) console.warn('[settings/SettingsDialog]', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, port, loadProviders, loadGeneral, setLoading]);
 
   return (

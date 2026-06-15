@@ -38,6 +38,31 @@ describe('ProviderConfigForm', () => {
     expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { executablePath: '/bin/claude' });
     expect(useSettingsStore.getState().providers.claude?.executablePath).toBe('/bin/claude');
   });
+  it('clearing the executable path sends "" (the daemon clear sentinel) — not undefined', () => {
+    // Seed the store with an existing path so there is something to clear.
+    useSettingsStore.setState({
+      providers: { claude: { executablePath: '/old/claude' } },
+      selectedProvider: 'claude',
+    });
+    render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
+    const input = screen.getByTestId('settings-claude-executable-path-input');
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    // The PUT body must carry '' (the sentinel the daemon uses to delete the key),
+    // not undefined (which JSON.stringify drops, making the clear a no-op).
+    expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { executablePath: '' });
+  });
+  it('two rapid updates preserve both fields optimistically (no stale config closure)', () => {
+    render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
+    // First update: toggle system prompt on
+    fireEvent.click(screen.getByTestId('settings-claude-system-prompt-toggle'));
+    // Second update immediately after (before re-render): toggle plan mode on
+    fireEvent.click(screen.getByTestId('settings-claude-plan-mode-toggle'));
+    // Both fields must be present in the optimistic store — neither overwrites the other
+    const { providers } = useSettingsStore.getState();
+    expect(providers.claude?.systemPrompt).toBe('enabled');
+    expect(providers.claude?.defaultPlanMode).toBe('true');
+  });
   it('selecting a default session mode PUTs defaultMode (radio-group primitive)', () => {
     render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
     fireEvent.click(screen.getByTestId('settings-claude-mode-option-yolo'));

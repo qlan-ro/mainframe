@@ -19,20 +19,18 @@ interface ProviderConfigFormProps {
 }
 
 /** Optimistic update: applies the patch locally then PUTs to daemon.
+ *  Reads live state from the store (not the render-time closure) so rapid
+ *  successive calls compose correctly rather than both merging into the same
+ *  stale snapshot.
  *  The '' sentinel clears the key so the control falls back to the inherited default. */
-function applyUpdate(
-  port: number,
-  adapterId: string,
-  config: ProviderConfig,
-  setProviderConfig: (id: string, c: ProviderConfig) => void,
-  partial: ProviderConfigUpdate,
-): void {
-  const next: Record<string, unknown> = { ...config };
+function applyUpdate(port: number, adapterId: string, partial: ProviderConfigUpdate): void {
+  const current = useSettingsStore.getState().providers[adapterId] ?? EMPTY_CONFIG;
+  const next: Record<string, unknown> = { ...current };
   for (const [k, v] of Object.entries(partial)) {
     if (v === '') delete next[k];
     else next[k] = v;
   }
-  setProviderConfig(adapterId, next as ProviderConfig);
+  useSettingsStore.getState().setProviderConfig(adapterId, next as ProviderConfig);
   updateProviderSettings(port, adapterId, partial).catch((err: unknown) =>
     console.warn('[settings/ProviderConfigForm]', err),
   );
@@ -51,7 +49,6 @@ function buildModelOptions(adapter: AdapterInfo) {
 
 export function ProviderConfigForm({ port, adapterId, label, adapter }: ProviderConfigFormProps) {
   const config = useSettingsStore((s) => s.providers[adapterId] ?? EMPTY_CONFIG);
-  const setProviderConfig = useSettingsStore((s) => s.setProviderConfig);
   const [conflicts, setConflicts] = useState<string[]>([]);
   // Local state for the exec path input — commits on blur only (not per-keystroke).
   const [execPath, setExecPath] = useState(config.executablePath ?? '');
@@ -73,17 +70,19 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
     }
   }, [config.executablePath]);
 
+  // applyUpdate reads live state internally — no need to close over config.
   const update = useCallback(
     (partial: ProviderConfigUpdate) => {
-      applyUpdate(port, adapterId, config, setProviderConfig, partial);
+      applyUpdate(port, adapterId, partial);
     },
-    [port, adapterId, config, setProviderConfig],
+    [port, adapterId],
   );
 
   function handleExecPathBlur() {
     const trimmed = execPath.trim();
     if (trimmed !== (config.executablePath ?? '')) {
-      update({ executablePath: trimmed || undefined });
+      // '' is the daemon clear sentinel — JSON.stringify keeps it (unlike undefined).
+      update({ executablePath: trimmed });
     }
   }
 
