@@ -8,6 +8,26 @@ vi.mock('@/features/terminal/TerminalInstance', () => ({
 }));
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: vi.fn() }));
 
+// Stub features that require assistant-ui runtime context (not needed in this layout test).
+vi.mock('@/features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectId: undefined, chatId: undefined }),
+}));
+vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
+  useDaemonPort: () => 31415,
+}));
+vi.mock('@/features/run/LaunchPopover', () => ({
+  LaunchPopover: () => <div data-testid="stub-launch-popover" />,
+}));
+vi.mock('@/features/run/StopPopover', () => ({
+  StopPopover: () => <div data-testid="stub-stop-popover" />,
+}));
+vi.mock('@/features/run/ConsolePane', () => ({
+  ConsolePane: () => <div data-testid="stub-console-pane" />,
+}));
+vi.mock('@/features/preview/PreviewInstance', () => ({
+  PreviewInstance: ({ tabId }: { tabId: string }) => <div data-testid={`stub-preview-${tabId}`} />,
+}));
+
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useLayoutStore } from '@/store/layout';
 import { RunSurface } from '../surfaces/RunSurface';

@@ -8,7 +8,12 @@
 import { Plus, X } from 'lucide-react';
 import { TerminalInstance } from '@/features/terminal/TerminalInstance';
 import { PreviewInstance } from '@/features/preview/PreviewInstance';
+import { LaunchPopover } from '@/features/run/LaunchPopover';
+import { StopPopover } from '@/features/run/StopPopover';
+import { ConsolePane } from '@/features/run/ConsolePane';
 import { useLayoutStore } from '@/store/layout';
+import { useSandboxStore } from '@/store/sandbox';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import type { RunPane } from '@/store/run-pane';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { SurfacePicker } from '../SurfacePicker';
@@ -93,13 +98,42 @@ function RunPaneView({ pane, showClosePane }: RunPaneViewProps) {
   );
 }
 
+/**
+ * RunLaunchBar — global launch / stop controls at the top of the Run surface.
+ * Also houses the ConsolePane when a process is selected.
+ */
+function RunLaunchBar({ scopeKey, selectedProcess }: { scopeKey: string | null; selectedProcess: string | null }) {
+  return (
+    <div
+      data-testid="run-launch-bar"
+      className="flex h-[34px] flex-shrink-0 items-center gap-1 border-b border-border bg-mf-tab-bar px-2"
+    >
+      <LaunchPopover />
+      {scopeKey && <StopPopover scopeKey={scopeKey} />}
+      {selectedProcess && <span className="ml-2 text-caption text-muted-foreground">{selectedProcess}</span>}
+    </div>
+  );
+}
+
 export function RunSurface() {
   const run = useLayoutStore((s) => s.run);
   const hasContent = run && run.panes.some((p) => p.tabs.length > 0);
   const multiPane = run ? run.panes.length >= 2 : false;
 
+  const { projectId } = useActiveIdentity();
+  const selectedConfigName = useSandboxStore((s) => s.selectedConfigName);
+  const processStatuses = useSandboxStore((s) => s.processStatuses);
+
+  // Derive the scope key from the first scope that has statuses for the active project.
+  // The effectivePath comes from the launch status fetch; we look for any scope
+  // matching the active projectId prefix so we can pass it to StopPopover/ConsolePane.
+  const scopeKey = projectId
+    ? Object.keys(processStatuses).find((k) => k.startsWith(`${projectId}:`)) ?? null
+    : null;
+
   return (
     <div data-testid="run-surface" className="flex h-full flex-col">
+      <RunLaunchBar scopeKey={scopeKey} selectedProcess={selectedConfigName} />
       {hasContent ? (
         <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
           {run.panes.map((pane, i) => (
@@ -119,6 +153,10 @@ export function RunSurface() {
         </div>
       ) : (
         <SurfacePicker surface="run" />
+      )}
+      {/* Console pane appears at the bottom when a non-preview process is selected */}
+      {scopeKey && selectedConfigName && (
+        <ConsolePane scopeKey={scopeKey} processName={selectedConfigName} />
       )}
     </div>
   );
