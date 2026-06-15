@@ -217,7 +217,47 @@ describe('FindInPathModal — include-ignored checkbox only in directory scope',
 });
 
 // ---------------------------------------------------------------------------
-// 7. Error from searchContent renders inline error
+// 7. Stale-results race: clearing query after an in-flight request must not
+//    let the late response overwrite the cleared state (Finding A).
+// ---------------------------------------------------------------------------
+
+describe('FindInPathModal — stale searchContent response is ignored after query drops below 2 chars', () => {
+  it('does not populate results when a stale response resolves after the query is cleared', async () => {
+    let resolveLate!: (v: { file: string; line: number; column: number; text: string }[]) => void;
+    const deferred = new Promise<{ file: string; line: number; column: number; text: string }[]>((r) => {
+      resolveLate = r;
+    });
+    mockSearchContent.mockReturnValueOnce(deferred);
+
+    render(<FindInPathModal />);
+    openModal();
+    await waitFor(() => {
+      expect(screen.queryByTestId('find-in-path-input')).not.toBeNull();
+    });
+
+    const input = screen.getByTestId('find-in-path-input');
+    // Type ≥2 chars to trigger the in-flight request
+    await userEvent.type(input, 'fo');
+    await waitFor(() => expect(mockSearchContent).toHaveBeenCalledTimes(1));
+
+    // Clear the query to drop below 2 chars
+    await userEvent.clear(input);
+
+    // Wait for the debounce to propagate the empty value so the effect
+    // re-runs, bumps reqIdRef, and invalidates the in-flight request.
+    await new Promise((r) => setTimeout(r, 350));
+
+    // Resolve the now-stale request — it must not land
+    act(() => resolveLate([{ file: 'src/a.ts', line: 10, column: 4, text: 'foo' }]));
+    await new Promise((r) => setTimeout(r, 50));
+
+    // The stale result must NOT appear
+    expect(screen.queryByTestId('find-in-path-result-src/a.ts:10:4')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Error from searchContent renders inline error
 // ---------------------------------------------------------------------------
 
 describe('FindInPathModal — searchContent error renders error row', () => {

@@ -19,8 +19,8 @@
  *  - open-file: openTab(path, {mode:'preview'}) + ensure Files surface is active.
  *    When the intent carries a `line`/`character` position, also stashes a
  *    reveal target in useEditorStore so CmEditor can scroll to it on mount.
- *  - reveal-file: ensure Files surface is active (tree-reveal is a TODO — the
- *    tree component doesn't exist yet; we at minimum surface the panel).
+ *  - reveal-file: ensure Files surface is active and stash the path in
+ *    useFilesStore.revealTarget; FileTree auto-expands ancestors and scrolls.
  */
 import { pickViewerKind } from '@/features/viewers/viewer-router';
 import { toFileRef } from '@/lib/files/file-ref';

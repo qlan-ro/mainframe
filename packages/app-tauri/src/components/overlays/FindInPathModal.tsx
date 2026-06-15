@@ -118,9 +118,11 @@ export function FindInPathModal() {
 
   const reqIdRef = useRef(0);
 
-  // Reset state when scope changes (new open)
+  // Reset state when scope changes (new open or close).
+  // Bump reqIdRef so any in-flight searchContent cannot land after reset.
   useEffect(() => {
     if (scope == null) {
+      reqIdRef.current++;
       setQuery('');
       setResults([]);
       setError(null);
@@ -130,6 +132,8 @@ export function FindInPathModal() {
   // Fetch results on debounced query change
   useEffect(() => {
     if (scope == null || !projectId || debounced.trim().length < 2) {
+      // Invalidate any in-flight request so a late response cannot land.
+      reqIdRef.current++;
       setResults([]);
       setError(null);
       return;

@@ -38,7 +38,7 @@ function PickerBody({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // minLength=1: the picker searches on any non-empty keystroke (original behaviour).
-  const { results, searched } = useFileSearch(port, projectId, chatId, query, 1);
+  const { results, searched, loading } = useFileSearch(port, projectId, chatId, query, 1);
 
   // Autofocus on mount
   useEffect(() => {
@@ -87,6 +87,11 @@ function PickerBody({
       </div>
       <div role="listbox" className="max-h-80 overflow-y-auto overflow-x-hidden p-1">
         {showHint && <p className="py-6 text-center text-body text-muted-foreground">Type to search files</p>}
+        {loading && !results.length && (
+          <p data-testid="file-picker-loading" className="py-6 text-center text-body text-muted-foreground">
+            Searching…
+          </p>
+        )}
         {showEmpty && <p className="py-6 text-center text-body text-muted-foreground">No matching files</p>}
         {results.map((r, i) => (
           <FileRow
