@@ -2,7 +2,7 @@
  * BranchListView — the main list view of the branch popover:
  * search field + Fetch + global quick actions (New branch, Update all, Push) + BranchList.
  */
-import { ArrowDownLeft, Loader2, Plus, RefreshCw, Search, Upload } from 'lucide-react';
+import { ArrowUp, Loader2, Plus, RefreshCw, Search } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
@@ -48,9 +48,9 @@ export function BranchListView({
   return (
     <>
       {/* Search + Fetch */}
-      <div className="flex items-center gap-1.5 p-2 border-b border-border">
-        <div className="flex-1 flex items-center gap-1 px-2 py-1 rounded border border-border bg-mf-content2">
-          <Search size={12} className="text-muted-foreground shrink-0" />
+      <div className="flex items-center gap-1.5 px-2 pt-2 pb-1.5">
+        <div className="flex-1 flex items-center gap-[7px] h-[30px] px-[9px] rounded-md border-[0.5px] border-border bg-mf-content2">
+          <Search size={13} className="text-muted-foreground shrink-0" />
           <input
             data-testid="git-branch-search"
             ref={searchRef}
@@ -68,13 +68,13 @@ export function BranchListView({
               disabled={busy}
               aria-label="Fetch"
               className={cn(
-                'flex-shrink-0 w-[30px] h-[30px] rounded-lg border border-border bg-card',
+                'flex-shrink-0 w-[30px] h-[30px] rounded-md border-[0.5px] border-border bg-background',
                 'inline-flex items-center justify-center text-muted-foreground',
                 'hover:bg-accent transition-colors',
                 busy && 'opacity-40 cursor-not-allowed',
               )}
             >
-              <ArrowDownLeft size={12} className={busyAction === 'fetch' ? 'animate-pulse' : ''} />
+              <RefreshCw size={13} className={busyAction === 'fetch' ? 'animate-spin' : ''} />
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Fetch from all remotes</TooltipContent>
@@ -101,7 +101,8 @@ export function BranchListView({
           )}
         >
           {busyAction === 'updateAll' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-          <span>Update All</span>
+          <span>Update all</span>
+          <span className="ml-auto text-caption text-muted-foreground">⤓</span>
         </button>
         <button
           data-testid="git-push-current"
@@ -112,7 +113,7 @@ export function BranchListView({
             busy && 'opacity-40 cursor-not-allowed',
           )}
         >
-          <Upload size={12} />
+          <ArrowUp size={12} />
           <span>Push</span>
         </button>
       </div>

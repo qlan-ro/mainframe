@@ -67,7 +67,7 @@ export function BranchList({
   return (
     <div data-testid="git-branch-list" className="max-h-60 overflow-y-auto">
       <BranchGroupSection
-        title="Local"
+        title="Local branches"
         branches={mainBranches}
         currentBranch={currentBranch}
         onSelect={onSelectBranch}
