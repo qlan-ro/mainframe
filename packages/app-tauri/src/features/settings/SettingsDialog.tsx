@@ -20,10 +20,10 @@ function SettingsDialogCloseBtn() {
       type="button"
       data-testid="settings-dialog-close"
       onClick={close}
-      className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-0"
+      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus:outline-none"
       aria-label="Close settings"
     >
-      <X size={16} />
+      <X size={13} />
       <span className="sr-only">Close</span>
     </button>
   );
@@ -70,15 +70,22 @@ export function SettingsDialog({ port }: { port: number }) {
         <SettingsDialogOverlay />
         <DialogPrimitive.Content
           data-testid="settings-dialog"
-          className="fixed left-1/2 top-1/2 z-50 flex h-[600px] w-full max-w-[760px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-popover shadow-[var(--mf-shadow-modal)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          className="fixed left-1/2 top-1/2 z-50 flex h-[600px] w-full max-w-[760px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-[var(--mf-shadow-modal)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
         >
-          <SettingsSidebar port={port} />
-          <ScrollArea className="flex-1">
-            <div className="p-6">
-              <SettingsContent port={port} />
-            </div>
-          </ScrollArea>
-          <SettingsDialogCloseBtn />
+          <header className="flex h-[50px] shrink-0 items-center justify-between border-b border-border bg-mf-content2 px-[18px]">
+            <DialogPrimitive.Title className="text-heading font-bold tracking-tight text-foreground">
+              Settings
+            </DialogPrimitive.Title>
+            <SettingsDialogCloseBtn />
+          </header>
+          <div className="flex min-h-0 flex-1">
+            <SettingsSidebar port={port} />
+            <ScrollArea className="flex-1">
+              <div className="px-[26px] pb-[32px] pt-[22px]">
+                <SettingsContent port={port} />
+              </div>
+            </ScrollArea>
+          </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

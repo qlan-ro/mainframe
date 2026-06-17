@@ -3,7 +3,13 @@ import { cn } from '@/lib/utils';
 import { getAdapters } from '@/lib/api/adapters';
 import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import { useSettingsStore } from '../../store/settings';
+import { providerDot } from '../chat/composer/config-toolbar/ProviderModelSelect';
 import { SETTINGS_TABS } from './settings-tabs';
+
+/** The provider's brand colour as a left-border utility (mirrors the composer's provider dot). */
+function providerBorder(id: string): string {
+  return providerDot(id).replace('bg-', 'border-l-');
+}
 
 interface NavItemProps {
   id: string;
@@ -21,13 +27,13 @@ function SettingsNavItem({ id: _id, label, icon: Icon, active, onClick, testId }
       data-testid={testId}
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-body transition-colors',
+        'flex w-full items-center gap-2.5 rounded-md px-[9px] py-[7px] text-left text-label transition-colors',
         active
-          ? 'bg-mf-selection text-foreground font-medium'
+          ? 'bg-mf-selection font-semibold text-foreground'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
-      <Icon size={15} className="flex-shrink-0" />
+      <Icon size={14} className={cn('flex-shrink-0', active ? 'text-primary' : 'text-mf-text-3')} />
       <span>{label}</span>
     </button>
   );
@@ -44,23 +50,35 @@ function ProviderSubItems({ port, activeProvider }: { port: number; activeProvid
   }, [port]);
 
   return (
-    <div className="ml-5 flex flex-col gap-0.5 border-l border-border pl-3">
-      {adapters.map((adapter) => (
-        <button
-          key={adapter.id}
-          type="button"
-          data-testid={`settings-nav-provider-${adapter.id}`}
-          onClick={() => setSelectedProvider(adapter.id)}
-          className={cn(
-            'rounded-md px-2 py-1.5 text-left text-body transition-colors',
-            activeProvider === adapter.id
-              ? 'bg-mf-selection text-foreground font-medium'
-              : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-          )}
-        >
-          {adapter.name ?? adapter.id}
-        </button>
-      ))}
+    <div className="flex flex-col gap-px py-px">
+      {adapters.map((adapter) => {
+        const active = activeProvider === adapter.id;
+        const name = adapter.name ?? adapter.id;
+        return (
+          <button
+            key={adapter.id}
+            type="button"
+            data-testid={`settings-nav-provider-${adapter.id}`}
+            onClick={() => setSelectedProvider(adapter.id)}
+            className={cn(
+              'flex items-center gap-2 border-l-2 py-[5px] pl-[26px] pr-[9px] text-left text-label transition-colors',
+              active
+                ? cn('bg-mf-selection font-semibold text-foreground', providerBorder(adapter.id))
+                : 'border-l-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+            )}
+          >
+            <span
+              className={cn(
+                'inline-flex size-[15px] shrink-0 items-center justify-center rounded-xs text-micro font-bold text-white ring-1 ring-inset ring-black/10',
+                providerDot(adapter.id),
+              )}
+            >
+              {name.charAt(0).toUpperCase()}
+            </span>
+            <span className="truncate">{name}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -71,7 +89,7 @@ export function SettingsSidebar({ port }: { port: number }) {
   const setActiveTab = useSettingsStore((s) => s.setActiveTab);
 
   return (
-    <nav className="flex w-48 flex-shrink-0 flex-col gap-0.5 border-r border-border p-3">
+    <nav className="flex w-[184px] flex-shrink-0 flex-col gap-px overflow-y-auto border-r border-border bg-mf-content2 p-2">
       {SETTINGS_TABS.map((tab) => (
         <div key={tab.id}>
           <SettingsNavItem

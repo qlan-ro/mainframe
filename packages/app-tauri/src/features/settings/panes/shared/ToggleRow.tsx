@@ -11,7 +11,7 @@ interface ToggleRowProps {
 
 export function ToggleRow({ label, description, checked, onChange, testId }: ToggleRowProps) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div className="flex items-center justify-between gap-4 px-0.5 py-[11px]">
       <div className="flex-1 min-w-0">
         <Label className="text-body text-foreground cursor-pointer">{label}</Label>
         {description !== undefined && <p className="text-label text-muted-foreground mt-0.5">{description}</p>}
