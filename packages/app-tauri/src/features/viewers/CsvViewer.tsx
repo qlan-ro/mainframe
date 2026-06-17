@@ -162,14 +162,14 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
               <tbody>
                 {displayRows.map((row, rowIdx) => (
                   <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-card'}>
-                    <td className="[border-right:0.5px_solid_var(--border)] px-2 py-1 text-right text-muted-foreground tabular-nums">
+                    <td className="[border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-2 py-1 text-right text-muted-foreground tabular-nums">
                       {rowIdx + 1}
                     </td>
                     {parsed.headers.map((_header, colIdx) => (
                       <td
                         key={colIdx}
                         className={[
-                          'px-2 py-1',
+                          'px-2 py-1 [border-bottom:0.5px_solid_var(--border)]',
                           numericCols.has(colIdx) ? 'text-right tabular-nums' : 'text-left',
                           'text-foreground',
                         ].join(' ')}
@@ -179,6 +179,16 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                     ))}
                   </tr>
                 ))}
+                {displayRows.length === 0 && filter.trim() && (
+                  <tr data-testid="viewer-csv-empty">
+                    <td
+                      colSpan={parsed.headers.length + 1}
+                      className="px-3 py-10 text-center text-body text-muted-foreground"
+                    >
+                      {`No rows match "${filter}".`}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

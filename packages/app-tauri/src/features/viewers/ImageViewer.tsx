@@ -19,7 +19,7 @@
  * data-testid="viewer-image" on the root element.
  */
 import { useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { ZoomOut, ZoomIn } from 'lucide-react';
 import { ZoomableImage } from '@/features/chat/parts/ZoomableImage';
 import { ViewerShell } from './ViewerShell';
 import { splitImageStatus } from './viewer-status';
@@ -101,7 +101,7 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
         onClick={handleZoomOut}
         className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
       >
-        <Minus size={11} aria-hidden />
+        <ZoomOut size={11} aria-hidden />
       </button>
       <button
         type="button"
@@ -111,7 +111,7 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
         onClick={handleZoomIn}
         className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
       >
-        <Plus size={11} aria-hidden />
+        <ZoomIn size={11} aria-hidden />
       </button>
       <div className="flex items-center gap-0.5">
         <button
