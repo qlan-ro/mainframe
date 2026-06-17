@@ -71,7 +71,10 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
 
           <div className="flex flex-col gap-1">
             <h2 className="text-body font-semibold text-foreground">No preview available</h2>
-            <p className="text-label text-mf-text-3">{"Mainframe can't render this file type inline"}</p>
+            <p className="text-label text-mf-text-3">
+              Mainframe can&apos;t render{' '}
+              <code className="font-mono text-caption text-foreground">{basename}</code> inline.
+            </p>
           </div>
 
           <div className="flex gap-2">

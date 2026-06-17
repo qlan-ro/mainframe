@@ -11,7 +11,7 @@
  *  4. Preview/Source toggle switches views.
  *  5. Renders inside ViewerShell (viewer-shell present).
  *  6. Footer status (viewer-shell-status) contains SVG metadata.
- *  7. Active toggle uses bg-mf-tab-active class (not bg-accent).
+ *  7. Active toggle is the raised bg-background segment (not bg-accent).
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -88,10 +88,10 @@ describe('SvgViewer', () => {
     expect(status.textContent).toMatch(/SVG/);
   });
 
-  it('active toggle uses bg-mf-tab-active, not bg-accent', () => {
+  it('active toggle is the raised bg-background segment, not bg-accent', () => {
     render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
     const previewBtn = screen.getByTestId('viewer-svg-preview-toggle');
-    expect(previewBtn.className).toContain('bg-mf-tab-active');
+    expect(previewBtn.className).toContain('bg-background');
     expect(previewBtn.className).not.toContain('bg-accent');
   });
 

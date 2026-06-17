@@ -69,9 +69,11 @@ describe('UnsupportedViewer', () => {
     expect(screen.getByText('No preview available')).toBeInTheDocument();
   });
 
-  it('shows subtext about unsupported file type', () => {
+  it('shows subtext naming the unsupported file inline', () => {
     render(<UnsupportedViewer path="/archive.zip" />);
-    expect(screen.getByText("Mainframe can't render this file type inline")).toBeInTheDocument();
+    // Copy is split across text + a <code> filename node (also shown in the breadcrumb).
+    expect(screen.getByText('archive.zip', { selector: 'code' })).toBeInTheDocument();
+    expect(screen.getByText(/can't render/i)).toBeInTheDocument();
   });
 
   it('renders "Open externally" button with data-testid="viewer-unsupported-open"', () => {

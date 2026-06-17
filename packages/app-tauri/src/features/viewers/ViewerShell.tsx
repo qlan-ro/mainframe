@@ -44,7 +44,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
   return (
     <div data-testid="viewer-shell" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header / breadcrumb */}
-      <div className="flex h-6 shrink-0 items-center gap-1 border-b border-border bg-mf-tab-bar px-3 text-caption">
+      <div className="flex h-6 shrink-0 items-center gap-1 border-b border-border bg-mf-tab-bar pl-3 pr-1.5 text-caption">
         <Folder size={10} className="shrink-0 text-mf-text-3" aria-hidden />
 
         {dirParts.map((segment, i) => (
@@ -78,13 +78,13 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
 
       {/* Footer / status */}
       <div className="flex h-5 shrink-0 items-center border-t border-border bg-mf-tab-bar px-2.5">
-        <span data-testid="viewer-shell-status" className="text-micro font-mono text-mf-text-4">
+        <span data-testid="viewer-shell-status" className="text-micro font-mono text-mf-text-3">
           {status}
         </span>
         {statusRight && (
           <>
             <div className="flex-1" />
-            <span className="text-micro font-mono text-mf-text-4">{statusRight}</span>
+            <span className="text-micro font-mono text-mf-text-3">{statusRight}</span>
           </>
         )}
       </div>

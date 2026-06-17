@@ -123,7 +123,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
               <thead className="sticky top-0 bg-mf-content2">
                 <tr>
                   {/* Row-number gutter */}
-                  <th className="w-10 [border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-2 py-1.5 text-right text-muted-foreground select-none">
+                  <th className="w-10 [border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-3.5 py-1.5 text-right text-muted-foreground select-none">
                     #
                   </th>
                   {parsed.headers.map((header, i) => {
@@ -135,7 +135,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                         data-testid={`viewer-csv-header-${header}`}
                         onClick={() => handleHeaderClick(i)}
                         className={[
-                          'cursor-pointer [border-bottom:0.5px_solid_var(--border)] px-2 py-1.5 font-medium select-none',
+                          'cursor-pointer [border-bottom:0.5px_solid_var(--border)] px-3.5 py-1.5 font-medium select-none',
                           'hover:bg-accent',
                           isNum ? 'text-right' : 'text-left',
                           isActive ? 'text-foreground' : 'text-muted-foreground',
@@ -162,14 +162,14 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
               <tbody>
                 {displayRows.map((row, rowIdx) => (
                   <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-card'}>
-                    <td className="[border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-2 py-1 text-right text-muted-foreground tabular-nums">
+                    <td className="[border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-3.5 py-1 text-right text-muted-foreground tabular-nums">
                       {rowIdx + 1}
                     </td>
                     {parsed.headers.map((_header, colIdx) => (
                       <td
                         key={colIdx}
                         className={[
-                          'px-2 py-1 [border-bottom:0.5px_solid_var(--border)]',
+                          'px-3.5 py-1 [border-bottom:0.5px_solid_var(--border)]',
                           numericCols.has(colIdx) ? 'text-right tabular-nums' : 'text-left',
                           'text-foreground',
                         ].join(' ')}

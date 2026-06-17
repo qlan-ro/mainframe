@@ -78,25 +78,22 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
   const bytes = base64 ? base64ByteLength(base64) : 0;
   const status = base64 ? `PDF · ${formatBytes(bytes)}` : 'PDF · Loading…';
 
-  return (
-    <ViewerShell path={path} status={status}>
-      <div data-testid="viewer-pdf" className="flex h-full flex-col">
-        {/* Toolbar */}
-        <div className="flex shrink-0 items-center gap-2 [border-bottom:0.5px_solid_var(--border)] px-3 py-1.5">
-          <span className="flex-1 truncate text-label text-muted-foreground">{path.split('/').pop()}</span>
-          <button
-            type="button"
-            data-testid="viewer-pdf-fallback"
-            onClick={() => void handleOpenExternal()}
-            disabled={fileUrl === null}
-            title={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}
-            className="rounded px-2 py-0.5 text-label font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Open externally
-          </button>
-        </div>
+  const actions = (
+    <button
+      type="button"
+      data-testid="viewer-pdf-fallback"
+      onClick={() => void handleOpenExternal()}
+      disabled={fileUrl === null}
+      title={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}
+      className="rounded-sm px-2 py-0.5 text-caption font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      Open externally
+    </button>
+  );
 
-        {/* Body */}
+  return (
+    <ViewerShell path={path} status={status} actions={actions}>
+      <div data-testid="viewer-pdf" className="flex h-full flex-col bg-mf-viewer-matte">
         {base64 === null ? (
           <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
         ) : objectUrl ? (

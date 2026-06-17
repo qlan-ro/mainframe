@@ -43,8 +43,8 @@ function parseSvgMeta(svg: string): { viewBox: string; w: number; h: number } | 
   return { viewBox, w, h };
 }
 
-const SEG_BTN = 'rounded px-1.5 py-0.5 text-caption font-medium transition-colors';
-const SEG_ACTIVE = 'bg-mf-tab-active text-foreground shadow-[0_0_0_0.5px_var(--border)]';
+const SEG_BTN = 'rounded-sm px-1.5 py-0.5 text-caption font-medium transition-colors';
+const SEG_ACTIVE = 'bg-background text-foreground shadow-[0_0_0_0.5px_var(--border)]';
 const SEG_IDLE = 'text-muted-foreground hover:text-foreground';
 
 export function SvgViewer({ content, path }: SvgViewerProps) {
@@ -75,7 +75,7 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
 
   // Preview/Source segmented toggle — lives in the ViewerShell breadcrumb header.
   const seg = (
-    <div className="flex items-center gap-0.5">
+    <div className="inline-flex items-center gap-px rounded-md bg-mf-chip p-0.5">
       <button
         type="button"
         data-testid="viewer-svg-preview-toggle"
