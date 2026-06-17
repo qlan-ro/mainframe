@@ -65,7 +65,7 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
         className="relative flex h-full w-full flex-col items-center justify-center overflow-auto"
         style={{
           background:
-            'repeating-conic-gradient(var(--mf-checker-dark) 0% 25%, var(--mf-checker-light) 0% 50%) 0 0 / 16px 16px',
+            'repeating-conic-gradient(var(--mf-viewer-check-b) 0% 25%, var(--mf-viewer-check-a) 0% 50%) 0 0 / 18px 18px',
         }}
       >
         {src === null ? (

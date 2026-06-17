@@ -45,7 +45,7 @@ export function CodeRefCard({ codeRef }: { codeRef: CodeRef }) {
   return (
     <div
       data-testid="chat-user-code-ref"
-      className="max-w-[75%] overflow-hidden rounded-[11px] border-[0.5px] border-border bg-mf-content2 shadow-sm"
+      className="max-w-[75%] overflow-hidden rounded-[11px] border-[0.5px] border-border bg-mf-code-bg shadow-sm"
     >
       <div className="flex items-center gap-2 border-b-[0.5px] border-border bg-mf-raised px-3 py-1.5">
         <CodeIcon size={12} className="flex-shrink-0 text-primary" />
@@ -62,7 +62,7 @@ export function CodeRefCard({ codeRef }: { codeRef: CodeRef }) {
           <SnippetLines lines={shown} start={codeRef.range.start} />
         </div>
         {big && !expanded && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7 bg-gradient-to-b from-transparent to-mf-content2" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7 bg-gradient-to-b from-transparent to-mf-code-bg" />
         )}
       </div>
       {big && (

@@ -81,7 +81,7 @@ function MarkdownTable({ children, ...props }: React.ComponentProps<'table'>) {
 
 function MarkdownThead({ children, ...props }: React.ComponentProps<'thead'>) {
   return (
-    <thead className="bg-muted" {...props}>
+    <thead className="bg-mf-content2" {...props}>
       {children}
     </thead>
   );
@@ -108,7 +108,7 @@ function MarkdownTd({ children, ...props }: React.ComponentProps<'td'>) {
 
 function MarkdownTr({ children, ...props }: React.ComponentProps<'tr'>) {
   return (
-    <tr className="even:bg-accent" {...props}>
+    <tr className="even:bg-mf-content2" {...props}>
       {children}
     </tr>
   );

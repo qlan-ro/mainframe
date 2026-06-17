@@ -53,7 +53,7 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
   return (
     <ViewerShell path={path} status={status}>
       <div data-testid="viewer-unsupported" className="flex h-full flex-col items-center justify-center gap-4">
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-mf-tab-bar px-10 py-8 text-center shadow-sm">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card px-10 py-8 text-center shadow-sm">
           <FileX size={32} className="text-mf-text-3" aria-hidden />
 
           <div className="flex flex-col gap-1">

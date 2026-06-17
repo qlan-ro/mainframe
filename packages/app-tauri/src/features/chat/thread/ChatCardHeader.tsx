@@ -34,7 +34,7 @@ export function ChatCardHeader() {
     <div
       data-testid="chat-header"
       data-tauri-drag-region
-      className="flex h-[38px] flex-shrink-0 items-center gap-[7px] bg-mf-tab-bar pl-2 pr-1.5 [border-bottom:0.5px_solid_var(--border)]"
+      className="flex h-[38px] flex-shrink-0 items-center gap-[7px] pl-2 pr-1.5 [border-bottom:0.5px_solid_var(--border)]"
     >
       <GripHorizontal size={13} className="flex-shrink-0 cursor-grab text-mf-text-4" />
       <MessageSquare size={13} className="flex-shrink-0 text-primary" />

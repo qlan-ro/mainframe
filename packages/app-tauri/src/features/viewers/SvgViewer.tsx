@@ -109,7 +109,7 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
               className="flex flex-1 items-center justify-center p-4"
               style={{
                 background:
-                  'repeating-conic-gradient(var(--mf-checker-dark) 0% 25%, var(--mf-checker-light) 0% 50%) 0 0 / 16px 16px',
+                  'repeating-conic-gradient(var(--mf-viewer-check-b) 0% 25%, var(--mf-viewer-check-a) 0% 50%) 0 0 / 18px 18px',
               }}
             >
               {objectUrl && <img src={objectUrl} alt="SVG preview" className="max-h-full max-w-full object-contain" />}

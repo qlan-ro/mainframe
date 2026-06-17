@@ -27,7 +27,7 @@ export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   const displayLang = language && language !== 'unknown' && language !== 'text' ? language : 'text';
 
   return (
-    <div className={cn('flex items-center justify-between', 'mt-3 bg-mf-code-bg border border-border rounded-t-md', 'px-3 py-1.5')}>
+    <div className={cn('flex items-center justify-between', 'mt-3 bg-mf-content2 border border-border rounded-t-md', 'px-3 py-1.5')}>
       <span className="text-caption font-mono text-muted-foreground lowercase">{displayLang}</span>
 
       <button

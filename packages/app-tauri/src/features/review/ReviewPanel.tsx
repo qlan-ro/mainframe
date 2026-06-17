@@ -84,7 +84,7 @@ export function ReviewPanel() {
 
         <div className="flex flex-1 min-h-0">
           {/* Left: file list */}
-          <div className="w-64 shrink-0 border-r border-border overflow-y-auto">
+          <div className="w-64 shrink-0 border-r border-border overflow-y-auto bg-card">
             <ReviewFileTree files={files} selectedFile={selectedFile} onSelectFile={setSelectedFile} />
           </div>
 
