@@ -66,7 +66,7 @@ export function TaskColumn({
       onDrop={handleDrop}
     >
       {/* Column header */}
-      <div className="flex shrink-0 items-center gap-2 px-3.5 pb-2 pt-2.5">
+      <div className="flex shrink-0 items-center gap-2 px-3.5 pb-4 pt-2.5">
         <span className="text-caption font-bold uppercase tracking-wide text-muted-foreground">
           {STATUS_LABEL[status]}
         </span>
@@ -76,7 +76,7 @@ export function TaskColumn({
       </div>
 
       {/* Cards */}
-      <div className="mf-thin-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
+      <div className="mf-thin-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-5 pb-5">
         {todos.map((todo) => (
           <TaskCard key={todo.id} todo={todo} onEdit={onEdit} onDelete={onDelete} onStartSession={onStartSession} />
         ))}

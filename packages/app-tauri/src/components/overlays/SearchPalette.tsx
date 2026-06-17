@@ -113,7 +113,7 @@ export function SearchPalette() {
       </CommandList>
       <div
         data-testid="search-palette-footer"
-        className="flex h-[34px] shrink-0 items-center gap-4 border-t border-border bg-mf-content2 px-3.5"
+        className="flex h-[34px] shrink-0 items-center gap-6 border-t border-border bg-mf-content2 px-3.5"
       >
         {(
           [

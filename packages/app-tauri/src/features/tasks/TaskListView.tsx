@@ -186,7 +186,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
       )}
 
       {/* Footer hint */}
-      <div className="flex shrink-0 items-center gap-4 border-t border-border bg-mf-content2 px-3 py-1.5">
+      <div className="flex shrink-0 items-center gap-6 border-t border-border bg-mf-content2 px-3 py-1.5">
         {(
           [
             ['↑↓', 'Navigate'],

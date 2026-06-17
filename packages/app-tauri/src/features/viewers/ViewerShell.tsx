@@ -44,7 +44,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
   return (
     <div data-testid="viewer-shell" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header / breadcrumb */}
-      <div className="flex h-6 shrink-0 items-center gap-1 border-b border-border bg-mf-tab-bar pl-3 pr-1.5 text-caption">
+      <div className="flex h-6 shrink-0 items-center gap-1 border-b border-border bg-mf-tab-bar pl-5 pr-1.5 text-caption">
         <Folder size={10} className="shrink-0 text-mf-text-3" aria-hidden />
 
         {dirParts.map((segment, i) => (

@@ -26,7 +26,7 @@ export function AboutPane() {
 
   return (
     <div data-testid="settings-pane-about">
-      <div className="mb-6 flex items-center gap-3.5">
+      <div className="mb-8 flex items-center gap-3.5">
         <div className="inline-flex size-[52px] shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,var(--primary),oklch(0.62_0.23_304))] text-hero font-extrabold text-white shadow-md">
           m
         </div>
@@ -41,7 +41,7 @@ export function AboutPane() {
           <div
             key={row.label}
             className={cn(
-              'flex items-center gap-4 px-3.5 py-[11px]',
+              'flex items-center gap-6 px-3.5 py-[11px]',
               i < rows.length - 1 && 'border-b-[0.5px] border-border',
             )}
           >
