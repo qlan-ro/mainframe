@@ -94,4 +94,20 @@ describe('SvgViewer', () => {
     expect(previewBtn.className).toContain('bg-mf-tab-active');
     expect(previewBtn.className).not.toContain('bg-accent');
   });
+
+  it('source view uses the code surface (bg-mf-code-bg + code foreground)', () => {
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
+    fireEvent.click(screen.getByTestId('viewer-svg-source-toggle'));
+    const pre = screen.getByTestId('viewer-svg-source');
+    expect(pre.className).toContain('bg-mf-code-bg');
+    expect(pre.className).toContain('text-mf-code-fg');
+  });
+
+  it('preview mode shows the SVG inside a raised rounded card (not bare on the checkerboard)', () => {
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
+    const img = screen.getByTestId('viewer-svg').querySelector('img');
+    const card = img?.parentElement;
+    expect(card?.className).toMatch(/rounded-/);
+    expect(card?.className).toMatch(/shadow-/);
+  });
 });

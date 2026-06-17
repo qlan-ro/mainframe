@@ -43,7 +43,9 @@ function parseSvgMeta(svg: string): { viewBox: string; w: number; h: number } | 
   return { viewBox, w, h };
 }
 
-const SEG_BTN = 'rounded px-2 py-0.5 text-label font-medium transition-colors';
+const SEG_BTN = 'rounded px-1.5 py-0.5 text-caption font-medium transition-colors';
+const SEG_ACTIVE = 'bg-mf-tab-active text-foreground shadow-[0_0_0_0.5px_var(--border)]';
+const SEG_IDLE = 'text-muted-foreground hover:text-foreground';
 
 export function SvgViewer({ content, path }: SvgViewerProps) {
   const [mode, setMode] = useState<SvgMode>('preview');
@@ -71,14 +73,15 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
     ? formatSvgStatus({ viewBox: svgMeta.viewBox, w: svgMeta.w, h: svgMeta.h, bytes })
     : 'SVG · Loading…';
 
-  const toggleBar = (
-    <div className="flex shrink-0 items-center gap-1 [border-bottom:0.5px_solid_var(--border)] px-3 py-1.5">
+  // Preview/Source segmented toggle — lives in the ViewerShell breadcrumb header.
+  const seg = (
+    <div className="flex items-center gap-0.5">
       <button
         type="button"
         data-testid="viewer-svg-preview-toggle"
         aria-pressed={mode === 'preview'}
         onClick={() => setMode('preview')}
-        className={`${SEG_BTN} ${mode === 'preview' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+        className={`${SEG_BTN} ${mode === 'preview' ? SEG_ACTIVE : SEG_IDLE}`}
       >
         Preview
       </button>
@@ -87,7 +90,7 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
         data-testid="viewer-svg-source-toggle"
         aria-pressed={mode === 'source'}
         onClick={() => setMode('source')}
-        className={`${SEG_BTN} ${mode === 'source' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+        className={`${SEG_BTN} ${mode === 'source' ? SEG_ACTIVE : SEG_IDLE}`}
       >
         Source
       </button>
@@ -95,29 +98,29 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
   );
 
   return (
-    <ViewerShell path={path} status={status}>
+    <ViewerShell path={path} status={status} actions={seg}>
       <div data-testid="viewer-svg" className="flex h-full flex-col">
-        {/* Header bar */}
-        {toggleBar}
-
-        {/* Body */}
         <div className="flex flex-1 overflow-auto">
           {content === null ? (
             <span className="m-auto text-body text-muted-foreground">Loading…</span>
           ) : mode === 'preview' ? (
             <div
-              className="flex flex-1 items-center justify-center p-4"
+              className="flex flex-1 items-center justify-center p-6"
               style={{
                 background:
                   'repeating-conic-gradient(var(--mf-viewer-check-b) 0% 25%, var(--mf-viewer-check-a) 0% 50%) 0 0 / 18px 18px',
               }}
             >
-              {objectUrl && <img src={objectUrl} alt="SVG preview" className="max-h-full max-w-full object-contain" />}
+              <div className="rounded-[11px] bg-background p-9 shadow-[var(--mf-shadow-pop)]">
+                {objectUrl && (
+                  <img src={objectUrl} alt="SVG preview" className="max-h-full max-w-full object-contain" />
+                )}
+              </div>
             </div>
           ) : (
             <pre
               data-testid="viewer-svg-source"
-              className="mf-editor-selectable flex-1 overflow-auto p-4 text-label font-mono text-foreground"
+              className="mf-editor-selectable flex-1 overflow-auto bg-mf-code-bg p-4 text-label font-mono text-mf-code-fg"
             >
               {content}
             </pre>
