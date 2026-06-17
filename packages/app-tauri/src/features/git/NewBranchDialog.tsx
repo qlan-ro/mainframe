@@ -86,7 +86,7 @@ export function NewBranchDialog({
             placeholder="feature/my-branch"
             disabled={creating}
             className={cn(
-              'w-full px-2 py-1 text-body rounded border bg-background text-foreground',
+              'w-full h-[30px] px-[9px] rounded-md border-[0.5px] bg-background font-mono text-caption text-foreground',
               'focus:outline-none focus:ring-1 focus:ring-primary',
               error ? 'border-destructive' : 'border-border',
             )}
@@ -101,7 +101,7 @@ export function NewBranchDialog({
             value={startPoint}
             onChange={(e) => setStartPoint(e.target.value)}
             disabled={creating}
-            className="w-full px-2 py-1 text-body rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full h-[30px] px-[9px] rounded-md border-[0.5px] border-border bg-background font-mono text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <optgroup label="Local">
               {localBranches.map((b) => (

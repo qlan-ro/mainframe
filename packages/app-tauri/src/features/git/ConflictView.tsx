@@ -27,7 +27,7 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
 
   return (
     <div data-testid="git-conflict-view" className="min-w-[280px]">
-      <div className="flex items-center gap-2 px-3 py-2 bg-mf-destructive-tint rounded-t">
+      <div className="flex items-center gap-2 rounded-t border-b border-destructive/15 bg-mf-destructive-tint px-3 py-2">
         <AlertTriangle size={14} className="text-destructive shrink-0" />
         <span className="text-body font-semibold text-destructive">{headerLabel}</span>
         {hasConflicts && (

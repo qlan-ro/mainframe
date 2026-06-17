@@ -86,9 +86,9 @@ export function BranchListView({
         <button
           data-testid="git-new-branch"
           onClick={onNewBranch}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-body text-foreground hover:bg-accent"
+          className="flex w-full items-center gap-[9px] rounded-sm px-2 py-[7px] text-label text-foreground hover:bg-accent"
         >
-          <Plus size={12} className={search ? 'text-primary' : ''} />
+          <Plus size={12} className="text-primary" />
           <span>{search ? `Create branch "${search}"` : 'New branch…'}</span>
         </button>
         <button
@@ -96,7 +96,7 @@ export function BranchListView({
           onClick={() => void actions.handleUpdateAll()}
           disabled={busy}
           className={cn(
-            'w-full flex items-center gap-2 px-3 py-1.5 text-body text-foreground hover:bg-accent',
+            'flex w-full items-center gap-[9px] rounded-sm px-2 py-[7px] text-label text-foreground hover:bg-accent',
             busy && 'opacity-40 cursor-not-allowed',
           )}
         >
@@ -109,7 +109,7 @@ export function BranchListView({
           onClick={() => void actions.handlePush(currentBranch)}
           disabled={busy}
           className={cn(
-            'w-full flex items-center gap-2 px-3 py-1.5 text-body text-foreground hover:bg-accent',
+            'flex w-full items-center gap-[9px] rounded-sm px-2 py-[7px] text-label text-foreground hover:bg-accent',
             busy && 'opacity-40 cursor-not-allowed',
           )}
         >

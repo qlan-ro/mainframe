@@ -18,10 +18,10 @@
  * PopoverContent) to avoid nested Radix FocusScope recursion in jsdom.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Plus, Search } from 'lucide-react';
+import { cn } from '../../../lib/utils';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from '../../../components/ui/popover';
-import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { setChatTags } from '../../../lib/api/tags';
 import { validateTagName, tagNameErrorMessage } from './validate-tag-name';
@@ -184,24 +184,31 @@ export function TagPopover({
         )}
         {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
         <PopoverContent data-testid="sessions-tag-popover" className="w-64 p-2" align="start">
-          <div className="text-caption text-muted-foreground uppercase tracking-wide px-2 py-1">Tag session</div>
-          <Input
-            ref={searchRef}
-            data-testid="sessions-tag-popover-search"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setError(null);
-            }}
-            onKeyDown={(e) => {
-              // Escape: let Radix Popover handle close (fires onOpenChange → onClose).
-              // Do NOT call onClose() here — the Popover's onOpenChange does it,
-              // and a direct call would trigger onClose twice.
-              if (e.key === 'Enter' && showCreate) void createAndApply();
-            }}
-            placeholder="# Find or create..."
-            className="h-8 text-body"
-          />
+          <div className="px-2 py-1 text-micro font-bold uppercase tracking-wide text-mf-text-3">Tags</div>
+          <div className="relative">
+            <Search
+              size={13}
+              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-mf-text-3"
+              aria-hidden="true"
+            />
+            <Input
+              ref={searchRef}
+              data-testid="sessions-tag-popover-search"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setError(null);
+              }}
+              onKeyDown={(e) => {
+                // Escape: let Radix Popover handle close (fires onOpenChange → onClose).
+                // Do NOT call onClose() here — the Popover's onOpenChange does it,
+                // and a direct call would trigger onClose twice.
+                if (e.key === 'Enter' && showCreate) void createAndApply();
+              }}
+              placeholder="Find or create..."
+              className="h-[30px] pl-7 text-body"
+            />
+          </div>
           {lower.length > 0 && nameError !== null && (
             <div className="text-caption text-destructive px-2 py-1">{tagNameErrorMessage(nameError)}</div>
           )}
@@ -248,29 +255,42 @@ export function TagPopover({
                     aria-checked={applied.has(t.name)}
                     data-tag-row={t.name}
                     onClick={() => void toggle(t.name)}
-                    className="w-full flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-accent text-body"
+                    className="flex w-full items-center gap-[9px] rounded-md px-2 py-1.5 text-body hover:bg-accent"
                   >
-                    <span className="flex items-center gap-2" data-testid={`sessions-tag-registry-row-${t.name}`}>
-                      <span className="w-1.5 h-1.5 rounded-full" style={TAG_DOT_STYLE(t.color)} aria-hidden="true" />
+                    <span
+                      className={cn(
+                        'inline-flex size-[15px] flex-shrink-0 items-center justify-center rounded-xs',
+                        applied.has(t.name) ? 'bg-primary' : 'border-[1.5px] border-border bg-transparent',
+                      )}
+                      aria-hidden="true"
+                    >
+                      {applied.has(t.name) && <Check size={9} className="text-primary-foreground" />}
+                    </span>
+                    <span
+                      className="flex flex-1 items-center gap-2"
+                      data-testid={`sessions-tag-registry-row-${t.name}`}
+                    >
+                      <span className="size-1.5 shrink-0 rounded-full" style={TAG_DOT_STYLE(t.color)} aria-hidden="true" />
                       <span className="text-foreground">{t.name}</span>
                     </span>
-                    {applied.has(t.name) && <Check size={12} className="text-primary" aria-hidden="true" />}
                   </button>
                 </TagRegistryItemMenu>
               ),
             )}
           </div>
           {showCreate && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              data-testid="sessions-tag-popover-create"
-              onClick={() => void createAndApply()}
-              className="w-full justify-start text-muted-foreground mt-1 border-t border-border rounded-none"
-            >
-              + Create tag &quot;{lower}&quot;
-            </Button>
+            <>
+              <div className="my-1 border-t border-border" />
+              <button
+                type="button"
+                data-testid="sessions-tag-popover-create"
+                onClick={() => void createAndApply()}
+                className="flex w-full items-center gap-[9px] rounded-sm px-2 py-[7px] text-label hover:bg-accent"
+              >
+                <Plus size={13} className="shrink-0 text-primary" />
+                <span className="text-foreground">Create tag &quot;{lower}&quot;</span>
+              </button>
+            </>
           )}
           {recoloring && (
             <div className="mt-1">

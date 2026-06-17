@@ -226,7 +226,7 @@ export function BranchSubmenu(props: BranchSubmenuProps) {
         ) : (
           <GitBranch size={12} className="text-muted-foreground shrink-0" />
         )}
-        <span className="text-body font-mono font-medium text-foreground truncate flex-1">{branch}</span>
+        <span className="flex-1 truncate font-mono text-label font-semibold text-foreground">{branch}</span>
         {busy && <Loader2 size={11} className="animate-spin text-muted-foreground shrink-0" />}
       </div>
       <div className="py-1">
@@ -242,7 +242,7 @@ export function BranchSubmenu(props: BranchSubmenuProps) {
               onClick={mi.action}
               disabled={mi.disabled}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-1.5 text-body text-left',
+                'w-full flex items-center gap-[9px] px-2 py-[7px] text-label text-left',
                 'hover:bg-accent rounded-sm transition-colors',
                 mi.disabled && 'opacity-40 cursor-not-allowed pointer-events-none',
                 mi.destructive && !mi.disabled && 'text-destructive',
