@@ -157,7 +157,7 @@ export function ProviderModelSelect({
               data-testid="composer-model-select"
               aria-label={`Provider and model: ${triggerLabel}`}
               className={cn(
-                'flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-label text-muted-foreground',
+                'flex items-center gap-1.5 rounded-[11px] border-[0.5px] border-transparent px-2 py-1 text-label text-muted-foreground',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors focus-visible:outline-none',

@@ -50,7 +50,7 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
               aria-label={`Permission mode: ${currentLabel}`}
               className={[
                 'flex items-center gap-1 px-2 py-1',
-                'rounded-md border border-transparent text-label',
+                'rounded-[11px] border-[0.5px] border-transparent text-label',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors',

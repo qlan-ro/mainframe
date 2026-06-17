@@ -58,7 +58,7 @@ export function EffortPicker({ chat, model, setEffort, disabled, providerDefault
               aria-label={`Effort: ${triggerLabel}`}
               className={[
                 'flex items-center gap-1 px-2 py-1',
-                'rounded-md border border-transparent text-label text-muted-foreground',
+                'rounded-[11px] border-[0.5px] border-transparent text-label text-muted-foreground',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors',

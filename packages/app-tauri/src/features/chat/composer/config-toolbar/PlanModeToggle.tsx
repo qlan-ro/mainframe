@@ -40,7 +40,7 @@ export function PlanModeToggle({ chat, adapter, setPlanMode }: PlanModeTogglePro
           onClick={() => setPlanMode(!active)}
           className={[
             'flex items-center gap-1 px-2 py-1',
-            'rounded-md border text-label',
+            'rounded-[11px] border-[0.5px] text-label',
             'transition-colors',
             'focus-visible:outline-none',
             active

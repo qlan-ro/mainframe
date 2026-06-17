@@ -73,7 +73,7 @@ export function FeaturesPopover({ chat, model, setFeature, disabled, providerDef
               aria-label="Feature settings"
               className={[
                 'relative flex items-center justify-center px-2 py-1',
-                'rounded-md border border-transparent text-muted-foreground',
+                'rounded-[11px] border-[0.5px] border-transparent text-muted-foreground',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors',
