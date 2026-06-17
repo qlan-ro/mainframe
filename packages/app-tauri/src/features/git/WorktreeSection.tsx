@@ -34,7 +34,7 @@ export function WorktreeSection({
   return (
     <>
       <div className="border-t border-border my-1" />
-      <div data-testid={`git-worktree-row-${name}`} className="flex items-center">
+      <div data-testid={`git-worktree-row-${name}`} className="flex items-center pr-1.5">
         <button
           data-testid={`git-worktree-toggle-${name}`}
           onClick={() => setExpanded((v) => !v)}
