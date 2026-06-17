@@ -184,7 +184,7 @@ export function TagPopover({
         )}
         {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
         <PopoverContent data-testid="sessions-tag-popover" className="w-64 p-2" align="start">
-          <div className="text-caption text-muted-foreground uppercase tracking-normal px-2 py-1">Tag session</div>
+          <div className="text-caption text-muted-foreground uppercase tracking-wide px-2 py-1">Tag session</div>
           <Input
             ref={searchRef}
             data-testid="sessions-tag-popover-search"

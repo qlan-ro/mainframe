@@ -16,6 +16,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import type { SyntaxHighlighterProps } from '@assistant-ui/react-markdown';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
@@ -29,6 +30,8 @@ vi.mock('@/lib/tauri/bridge', () => ({
 // Import after mock declaration so the component picks up the mock.
 import { openExternal } from '@/lib/tauri/bridge';
 import { markdownComponents } from '../markdown-text';
+import { CodeHeader } from '../CodeHeader';
+import { SyntaxHighlighter } from '../syntax-highlight';
 
 const mockOpenExternal = vi.mocked(openExternal);
 
@@ -79,5 +82,31 @@ describe('markdownComponents.a (LinkWithPreview)', () => {
     expect(mockOpenExternal).toHaveBeenCalledTimes(1);
     expect(mockOpenExternal).toHaveBeenCalledWith('https://example.com');
     expect(clickEvent.defaultPrevented).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fenced code block — CodeHeader + SyntaxHighlighter must compose ONE bordered,
+// rounded container (they are Fragment siblings; the container is CSS-composed).
+// ---------------------------------------------------------------------------
+
+describe('fenced code block container', () => {
+  it('CodeHeader forms the rounded, bordered top of the container', () => {
+    const { container } = render(<CodeHeader language="ts" code="const x = 1;" />);
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className).toContain('rounded-t-md');
+    expect(root.className).toContain('border-border');
+  });
+
+  it('SyntaxHighlighter <pre> forms the rounded, bordered bottom of the container', () => {
+    // `components` is required by the slot type but ignored by our shiki impl.
+    const components = {} as unknown as SyntaxHighlighterProps['components'];
+    const { container } = render(<SyntaxHighlighter code="const x = 1;" language="ts" components={components} />);
+    const pre = container.querySelector('pre');
+    expect(pre).not.toBeNull();
+    expect(pre!.className).toContain('rounded-b-md');
+    expect(pre!.className).toContain('border-border');
+    // header's bottom border is the divider — the pre must not double it
+    expect(pre!.className).toContain('border-t-0');
   });
 });

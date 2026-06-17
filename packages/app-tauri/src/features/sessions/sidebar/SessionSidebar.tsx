@@ -64,7 +64,7 @@ function SessionsGroupHeader({ count }: { count: number }) {
     'inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
   return (
     <div className="flex items-center gap-1 px-3 pb-1 pt-2">
-      <span className="text-micro font-bold uppercase tracking-normal text-muted-foreground">Sessions</span>
+      <span className="text-micro font-bold uppercase tracking-wide text-muted-foreground">Sessions</span>
       <span className="text-micro text-mf-text-3">{count}</span>
       <div className="flex-1" />
       <ThreadListPrimitive.New asChild>

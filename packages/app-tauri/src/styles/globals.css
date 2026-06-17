@@ -88,6 +88,7 @@
   --mf-shadow-pop: 0 16px 40px rgba(0,0,0,0.20), 0 0 0 0.5px rgba(0,0,0,0.14);
   --mf-shadow-modal: 0 24px 60px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(0,0,0,0.18);
   --mf-focus-ring: 0 0 0 3px rgba(10,132,255,0.35);
+  --mf-scrim: rgba(22, 19, 15, 0.40); /* modal/overlay backdrop — warm near-black (all light schemes) */
 
   /* Type + motion (shared across all themes) */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
@@ -213,6 +214,7 @@
   --mf-shadow-pop: 0 18px 44px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.10);
   --mf-shadow-modal: 0 28px 64px rgba(0,0,0,0.66), 0 0 0 0.5px rgba(255,255,255,0.10);
   --mf-focus-ring: 0 0 0 3px rgba(138,112,245,0.50);
+  --mf-scrim: rgba(0, 0, 0, 0.55); /* heavier scrim for all dark schemes (inherited by ocean/velvet dark) */
 
   /* ── App-only tokens — DARK ── */
   --mf-destructive-tint: rgba(255, 107, 107, 0.10);
@@ -710,6 +712,9 @@
   --color-mf-um-edge: var(--mf-um-edge);
   --color-mf-um-dash: var(--mf-um-dash);
   --color-mf-viewer-matte: var(--mf-viewer-matte);
+  --color-mf-viewer-check-a: var(--mf-viewer-check-a);
+  --color-mf-viewer-check-b: var(--mf-viewer-check-b);
+  --color-mf-scrim: var(--mf-scrim);
 
   /* Diff tint utilities */
   --color-mf-diff-add-bg: var(--mf-diff-add-bg);
@@ -737,9 +742,9 @@
   --text-hero: 1.75rem;      /* 28px */
 
   /* Letter spacing + line-height */
-  --tracking-tight: 0;
+  --tracking-tight: -0.02em;
   --tracking-normal: 0;
-  --tracking-wide: 0;
+  --tracking-wide: 0.06em;
   --leading-tight: 1.15;
   --leading-normal: 1.5;
   --leading-relaxed: 1.65;

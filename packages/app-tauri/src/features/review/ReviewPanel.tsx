@@ -71,7 +71,11 @@ export function ReviewPanel() {
         if (!o) handleClose();
       }}
     >
-      <DialogContent data-testid="review-modal" className="max-w-5xl w-full h-[80vh] p-0 gap-0 flex flex-col">
+      <DialogContent
+        data-testid="review-modal"
+        hideClose
+        className="max-w-5xl w-full h-[80vh] p-0 gap-0 flex flex-col"
+      >
         <ReviewPanelHeader worktreePath={worktreePath} onClose={handleClose} />
 
         {loadError && (

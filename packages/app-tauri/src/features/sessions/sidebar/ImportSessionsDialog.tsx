@@ -37,7 +37,7 @@ function ProjectPicker({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="px-2 pb-1.5 pt-0.5 text-micro font-bold uppercase tracking-normal text-mf-text-3">
+      <div className="px-2 pb-1.5 pt-0.5 text-micro font-bold uppercase tracking-wide text-mf-text-3">
         Select project
       </div>
       {sorted.map((project) => (

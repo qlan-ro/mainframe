@@ -178,7 +178,7 @@ export function ProviderModelSelect({
         className="w-72 p-2"
       >
         <div data-testid="composer-provider-header" className="flex items-center justify-between px-1 pb-1.5">
-          <span className="text-caption font-semibold uppercase tracking-normal text-muted-foreground">Provider</span>
+          <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">Provider</span>
           {locked && (
             <span className="flex items-center gap-1 text-caption text-muted-foreground">
               <Lock size={11} /> Locked
@@ -194,7 +194,7 @@ export function ProviderModelSelect({
 
         <div className="my-2 border-t border-border" />
 
-        <div className="px-1 pb-1 text-caption font-semibold uppercase tracking-normal text-muted-foreground">
+        <div className="px-1 pb-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
           {active?.name ?? 'Models'} models
         </div>
         <div className="flex flex-col gap-px">

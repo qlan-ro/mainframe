@@ -33,7 +33,7 @@ export function SessionSortMenu({ mode, onChange }: SessionSortMenuProps) {
         </button>
       </PopoverTrigger>
       <PopoverContent data-testid="sessions-sort-popover" align="end" sideOffset={6} className="w-44 p-1.5">
-        <div className="px-2 pb-1.5 pt-1 text-micro font-bold uppercase tracking-normal text-mf-text-3">Sort by</div>
+        <div className="px-2 pb-1.5 pt-1 text-micro font-bold uppercase tracking-wide text-mf-text-3">Sort by</div>
         {SESSION_SORTS.map((sort) => {
           const active = sort.id === mode;
           return (

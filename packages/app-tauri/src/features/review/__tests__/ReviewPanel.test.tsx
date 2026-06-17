@@ -192,4 +192,21 @@ describe('ReviewPanel — close', () => {
       expect(useOverlaysStore.getState().reviewOpen).toBe(false);
     });
   });
+
+  it('renders exactly one close control (no duplicate Dialog built-in close)', async () => {
+    mockGetGitStatus.mockResolvedValue([]);
+
+    render(<ReviewPanel />);
+    openReview();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('review-modal')).not.toBeNull();
+    });
+
+    // Only the header's "Close review" button should exist — not the shadcn
+    // DialogContent built-in "Close" X (the panel owns its own close).
+    const closeButtons = screen.getAllByRole('button', { name: /close/i });
+    expect(closeButtons).toHaveLength(1);
+    expect(screen.getByTestId('review-close')).toBeInTheDocument();
+  });
 });

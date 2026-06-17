@@ -9,7 +9,7 @@ const buttonVariants = cva(
     'rounded-md text-body font-medium',
     'transition-colors',
     'focus-visible:outline-none',
-    'disabled:pointer-events-none disabled:opacity-50',
+    'disabled:pointer-events-none disabled:opacity-[0.45]',
     '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   ],
   {

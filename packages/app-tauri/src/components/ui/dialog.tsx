@@ -12,7 +12,7 @@ function DialogOverlay({ className, ...props }: React.ComponentPropsWithoutRef<t
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        'fixed inset-0 z-50 bg-black/40 backdrop-blur-sm',
+        'fixed inset-0 z-50 bg-mf-scrim backdrop-blur-sm',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         className,
@@ -25,8 +25,9 @@ function DialogOverlay({ className, ...props }: React.ComponentPropsWithoutRef<t
 function DialogContent({
   className,
   children,
+  hideClose = false,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>) {
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -47,17 +48,19 @@ function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close
-          className={cn(
-            'absolute right-4 top-4 rounded-sm opacity-70',
-            'ring-offset-background transition-opacity hover:opacity-100',
-            'focus:outline-none focus:ring-0',
-            'disabled:pointer-events-none',
-          )}
-        >
-          <XIcon className="size-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        {!hideClose && (
+          <DialogPrimitive.Close
+            className={cn(
+              'absolute right-4 top-4 rounded-sm opacity-70',
+              'ring-offset-background transition-opacity hover:opacity-100',
+              'focus:outline-none focus:ring-0',
+              'disabled:pointer-events-none',
+            )}
+          >
+            <XIcon className="size-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
       </DialogPrimitive.Content>
     </DialogPortal>
   );

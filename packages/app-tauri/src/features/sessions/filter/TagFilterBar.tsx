@@ -107,7 +107,7 @@ export function TagFilterBar({ items, filterProjectId, registry }: Props): React
       data-testid="sessions-tag-filter-bar"
       className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-t border-border/60 px-3 py-1.5"
     >
-      <span className="shrink-0 select-none text-micro font-semibold uppercase tracking-normal text-mf-text-3">
+      <span className="shrink-0 select-none text-micro font-semibold uppercase tracking-wide text-mf-text-3">
         Tags
       </span>
       {shownTags.map((name) => (

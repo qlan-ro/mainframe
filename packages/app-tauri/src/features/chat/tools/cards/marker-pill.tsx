@@ -96,7 +96,7 @@ export function MarkerBody({ children }: { children: React.ReactNode }) {
 
 /** ARGUMENTS / RESULT section label inside a MarkerBody. */
 export function MarkerCapsLabel({ children }: { children: React.ReactNode }) {
-  return <div className="text-micro font-bold tracking-normal uppercase text-mf-text-3 mb-1">{children}</div>;
+  return <div className="text-micro font-bold tracking-wide uppercase text-mf-text-3 mb-1">{children}</div>;
 }
 
 // ── MarkerPre ─────────────────────────────────────────────────────────────────

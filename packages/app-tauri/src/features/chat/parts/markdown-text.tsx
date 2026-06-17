@@ -90,7 +90,7 @@ function MarkdownThead({ children, ...props }: React.ComponentProps<'thead'>) {
 function MarkdownTh({ children, ...props }: React.ComponentProps<'th'>) {
   return (
     <th
-      className="font-mono text-label font-semibold uppercase tracking-normal text-muted-foreground px-3 py-2 text-left"
+      className="font-mono text-label font-semibold uppercase tracking-wide text-muted-foreground px-3 py-2 text-left"
       {...props}
     >
       {children}
