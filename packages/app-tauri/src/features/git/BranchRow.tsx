@@ -52,7 +52,7 @@ export function BranchRow({ branch, isCurrent, isRemote = false, grouped = false
         className={cn(
           'truncate flex-1 font-mono text-label',
           isCurrent && 'font-semibold text-foreground',
-          !isCurrent && 'text-foreground',
+          !isCurrent && 'font-medium text-foreground',
         )}
       >
         {displayName}
