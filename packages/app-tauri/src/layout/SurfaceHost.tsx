@@ -18,9 +18,10 @@ const SHORTCUT_MAP: Record<string, SurfaceId> = {
   '3': 'run',
 };
 
-// Surfaces are flat panels inside the rounded main-surface-shell card (which owns
-// the rounded corners + shadow, so the MainToolbar reads as the card's top).
-const PANEL_CLS = 'flex flex-col overflow-hidden bg-background';
+// Each surface is its own rounded floating card (geo.surface), per the prototype
+// (04-engine `surfCard`); the MainToolbar sits transparent on the window background,
+// NOT inside a white card.
+const PANEL_LAYOUT = 'flex flex-col overflow-hidden';
 
 function SurfaceView({ name, port }: { name: SurfaceId; port: number }) {
   if (name === 'chat') return <ChatSurface port={port} />;
@@ -39,6 +40,7 @@ export function SurfaceHost({ port }: Props) {
   const setVFrac = useLayoutStore((s) => s.setVFrac);
   const windowStyle = useTheme((s) => s.windowStyle);
   const geo = windowStyleGeometry(windowStyle);
+  const panelCls = `${PANEL_LAYOUT} ${geo.surface}`;
 
   const outerRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
@@ -92,7 +94,7 @@ export function SurfaceHost({ port }: Props) {
       <div ref={topRef} style={{ flex: bottom ? vFlex.top : 1 }} className="flex min-h-0 overflow-hidden">
         {top.map((name, i) => (
           <Fragment key={name}>
-            <div data-drop-surface={name} style={{ flex: topFlex[name] ?? 1 }} className={`min-w-0 ${PANEL_CLS}`}>
+            <div data-drop-surface={name} style={{ flex: topFlex[name] ?? 1 }} className={`min-w-0 ${panelCls}`}>
               <SurfaceView name={name} port={port} />
             </div>
             {i < top.length - 1 &&
@@ -110,7 +112,7 @@ export function SurfaceHost({ port }: Props) {
         <>
           <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} lineClass={geo.divider} />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
-            <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${PANEL_CLS}`}>
+            <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${panelCls}`}>
               <SurfaceView name={bottom} port={port} />
             </div>
           </div>
