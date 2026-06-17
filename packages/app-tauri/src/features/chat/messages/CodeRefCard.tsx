@@ -47,7 +47,7 @@ export function CodeRefCard({ codeRef }: { codeRef: CodeRef }) {
       data-testid="chat-user-code-ref"
       className="max-w-[75%] overflow-hidden rounded-[11px] border-[0.5px] border-border bg-mf-code-bg shadow-sm"
     >
-      <div className="flex items-center gap-2 border-b-[0.5px] border-border bg-mf-raised px-3 py-1.5">
+      <div className="flex items-center gap-2 border-b-[0.5px] border-border bg-mf-content2 px-3 py-1.5">
         <CodeIcon size={12} className="flex-shrink-0 text-primary" />
         <span className="font-mono text-caption font-semibold text-muted-foreground">{codeRef.file}</span>
         <span className="font-mono text-micro text-mf-text-4">{rangeLabel(codeRef.range)}</span>
@@ -70,7 +70,7 @@ export function CodeRefCard({ codeRef }: { codeRef: CodeRef }) {
           type="button"
           data-testid="chat-user-code-ref-expand"
           onClick={() => setExpanded((e) => !e)}
-          className="flex w-full items-center justify-center gap-1.5 border-t-[0.5px] border-border bg-mf-raised py-1.5 text-caption font-semibold text-primary transition-colors hover:bg-accent"
+          className="flex w-full items-center justify-center gap-1.5 border-t-[0.5px] border-border bg-mf-content2 py-1.5 text-caption font-semibold text-primary transition-colors hover:bg-mf-raised"
         >
           {expanded ? 'Collapse' : `Show all ${lines.length} lines`}
           {expanded ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}

@@ -79,7 +79,7 @@ export function AnswerPill({ badge }: { badge: SessionBadge }) {
     // Solid amber fill with white text — artboard lines 508-509.
     <span
       data-testid="sessions-row-answer-pill"
-      className="rounded-[5px] bg-mf-warning px-1.5 py-px text-micro font-semibold text-white"
+      className="inline-flex h-[16px] items-center rounded-[5px] bg-mf-warning px-[7px] text-micro font-semibold text-white"
     >
       Answer ready
     </span>
@@ -87,7 +87,7 @@ export function AnswerPill({ badge }: { badge: SessionBadge }) {
     // 45%-opacity amber inset ring — artboard line 510.
     <span
       data-testid="sessions-row-answer-pill"
-      className="rounded-[5px] px-1.5 py-px text-micro font-medium text-mf-warning shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--mf-warning)_45%,transparent)]"
+      className="inline-flex h-[16px] items-center rounded-[5px] px-[7px] text-micro font-medium text-mf-warning shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--mf-warning)_45%,transparent)]"
     >
       Your turn
     </span>
@@ -122,7 +122,7 @@ function RowHoverActions({
   onArchive: () => void;
 }) {
   const btn =
-    'inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
+    'inline-flex size-[22px] items-center justify-center rounded-xs text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
   const stop = (fn: () => void) => (e: MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();

@@ -107,7 +107,7 @@ function CoolCard({ children, className }: CoolCardProps) {
     <div
       style={CARD_STYLE}
       className={cn(
-        'relative max-w-[75%] rounded-xl border-[0.5px] px-[15px] py-[10px]',
+        'relative max-w-[470px] rounded-xl border-[0.5px] px-[15px] py-[10px]',
         'border-mf-um-edge text-mf-um-ink',
         'text-body leading-relaxed tracking-normal',
         className,

@@ -145,7 +145,7 @@ export const TaskCard: ToolCallMessagePartComponent = (part) => {
     <Collapsible
       data-testid="chat-task-card"
       data-state={open ? 'open' : 'closed'}
-      className="group/task-card w-full rounded-lg border border-border bg-card px-3 py-2"
+      className="group/task-card w-full rounded-lg border border-border bg-card px-[10px] py-[7px]"
       open={open}
       onOpenChange={handleOpenChange}
     >
