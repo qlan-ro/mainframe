@@ -39,17 +39,17 @@ export function PlanModeToggle({ chat, adapter, setPlanMode }: PlanModeTogglePro
           aria-pressed={active}
           onClick={() => setPlanMode(!active)}
           className={[
-            'flex items-center gap-1 px-2 py-1',
-            'rounded-[11px] border-[0.5px] text-label',
+            'flex h-[20px] items-center gap-[5px] pl-[8px] pr-[7px]',
+            'rounded-[11px] border-[0.5px] text-caption',
             'transition-colors',
             'focus-visible:outline-none',
             active
               ? 'border-mf-warning bg-mf-warning-tint text-mf-warning'
-              : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+              : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',
           ].join(' ')}
         >
           <ClipboardList size={14} className="shrink-0" />
-          <span className="text-label font-medium">Plan</span>
+          <span className="text-caption font-medium">Plan</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="top">{active ? 'Plan mode: on' : 'Plan mode: off'}</TooltipContent>

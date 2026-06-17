@@ -49,8 +49,8 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
               data-testid="composer-permission-mode-select"
               aria-label={`Permission mode: ${currentLabel}`}
               className={[
-                'flex items-center gap-1 px-2 py-1',
-                'rounded-[11px] border-[0.5px] border-transparent text-label',
+                'flex h-[20px] items-center gap-[5px] pl-[8px] pr-[7px]',
+                'rounded-[11px] border-[0.5px] border-border text-caption',
                 'hover:bg-accent hover:text-accent-foreground',
                 'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors',
@@ -59,7 +59,7 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
               ].join(' ')}
             >
               <Shield size={14} className="shrink-0" />
-              <span className="text-label font-medium">{currentLabel}</span>
+              <span className="text-caption font-medium">{currentLabel}</span>
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
