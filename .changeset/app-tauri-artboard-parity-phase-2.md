@@ -19,3 +19,6 @@ reach), from `docs/architecture/2026-06-17-artboard-parity-drift-audit.md`:
 - **Hardcoded colors → tokens:** the image/svg viewer checkerboard now uses the warm
   per-scheme `--mf-viewer-check-a/b` tokens (18px tile) instead of the cool-gray
   `--mf-checker-*` chat tokens.
+- **Bespoke-component gaps (found in live verification):** the Settings dialog's own
+  overlay now uses `bg-mf-scrim` (it bypasses the shared `DialogOverlay`), and the
+  General-pane worktree input uses the shared `0.5px` hairline + `border-input`.
