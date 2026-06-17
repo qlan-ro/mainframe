@@ -38,9 +38,9 @@ export function WorktreeSection({
         <button
           data-testid={`git-worktree-toggle-${name}`}
           onClick={() => setExpanded((v) => !v)}
-          className="flex-1 flex items-center gap-1 px-2 py-1 text-caption font-semibold text-muted-foreground uppercase"
+          className="flex-1 flex items-center gap-1 px-2 py-1 text-micro font-bold text-mf-text-3 uppercase tracking-wide"
         >
-          {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+          {expanded ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
           <GitFork size={11} className="text-mf-warning shrink-0" />
           {name}
         </button>

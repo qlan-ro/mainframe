@@ -63,9 +63,9 @@ export function BranchGroupSection({
       <button
         data-testid={`git-branch-section-toggle-${title.toLowerCase().replace(/\s+/g, '-')}`}
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-1 px-2 py-1 text-caption font-semibold text-muted-foreground uppercase"
+        className="w-full flex items-center gap-1 px-2 py-1 text-micro font-bold text-mf-text-3 uppercase tracking-wide"
       >
-        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        {expanded ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
         {title}
       </button>
 

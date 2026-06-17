@@ -36,8 +36,8 @@ export function BranchRow({ branch, isCurrent, isRemote = false, grouped = false
       data-testid={`git-branch-row-${name}`}
       onClick={() => onSelect(branch)}
       className={cn(
-        'w-full flex items-center gap-1.5 px-2 py-1.5 text-left text-body',
-        'hover:bg-accent rounded transition-colors',
+        'w-full flex items-center gap-2 px-2 py-1.5 text-left text-body',
+        'hover:bg-accent rounded-sm transition-colors',
         isCurrent && 'bg-accent/50',
       )}
     >
@@ -50,7 +50,7 @@ export function BranchRow({ branch, isCurrent, isRemote = false, grouped = false
       {/* Branch name in monospace */}
       <span
         className={cn(
-          'truncate flex-1 font-mono',
+          'truncate flex-1 font-mono text-label',
           isCurrent && 'font-semibold text-foreground',
           !isCurrent && 'text-foreground',
         )}
