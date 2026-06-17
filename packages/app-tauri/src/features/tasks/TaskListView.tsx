@@ -3,14 +3,15 @@
  *
  * Groups: In Progress / Open / Done (Done collapsed by default).
  * Keyboard nav: ↑/↓ (j/k) select row; ↵ start session; E edit;
- * Space cycle status; →/← expand/collapse group.
+ * Space cycle status; →/← expand/collapse row.
  *
  * Receives todos + handlers from TasksBoard; no data loading here.
  */
 import React, { useState, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ListChecks } from 'lucide-react';
 import type { Todo, TodoStatus } from '@/lib/api/todos';
 import type { TodoFilters } from './todos-filters';
+import { useTodosStore } from './use-todos-store';
 import { TaskListRow } from './TaskListRow';
 
 const GROUP_ORDER: TodoStatus[] = ['in_progress', 'open', 'done'];
@@ -31,11 +32,12 @@ interface Props {
 
 type GroupKey = TodoStatus;
 
-export function TaskListView({ todos, filters, onEdit, onStartSession }: Props): React.ReactElement {
+export function TaskListView({ port, projectId, todos, filters, onEdit, onStartSession }: Props): React.ReactElement {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<GroupKey>>(new Set(['done']));
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { move, remove } = useTodosStore();
 
   const toggleRow = useCallback((number: number) => {
     setExpanded((prev) => {
@@ -60,6 +62,24 @@ export function TaskListView({ todos, filters, onEdit, onStartSession }: Props):
     return todos.filter((t) => t.status === status);
   });
 
+  const handleCycle = useCallback(
+    (id: string) => {
+      const todo = todos.find((t) => t.id === id);
+      if (!todo) return;
+      const nextStatus: TodoStatus =
+        todo.status === 'open' ? 'in_progress' : todo.status === 'in_progress' ? 'done' : 'open';
+      void move(port, id, nextStatus, projectId);
+    },
+    [todos, move, port, projectId],
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      void remove(port, id, projectId);
+    },
+    [remove, port, projectId],
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (!flatVisible.length) return;
@@ -81,9 +101,27 @@ export function TaskListView({ todos, filters, onEdit, onStartSession }: Props):
         e.preventDefault();
         const todo = flatVisible[idx];
         if (todo) onEdit(todo);
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        const todo = flatVisible[idx];
+        if (todo) handleCycle(todo.id);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (selectedNumber != null) {
+          setExpanded((prev) => new Set(prev).add(selectedNumber));
+        }
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (selectedNumber != null) {
+          setExpanded((prev) => {
+            const s = new Set(prev);
+            s.delete(selectedNumber);
+            return s;
+          });
+        }
       }
     },
-    [flatVisible, selectedNumber, onStartSession, onEdit],
+    [flatVisible, selectedNumber, onStartSession, onEdit, handleCycle],
   );
 
   const grouped = GROUP_ORDER.map((status) => ({
@@ -107,7 +145,8 @@ export function TaskListView({ todos, filters, onEdit, onStartSession }: Props):
       onKeyDown={handleKeyDown}
     >
       {totalVisible === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-caption text-muted-foreground py-12">
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-caption text-muted-foreground py-12">
+          <ListChecks size={26} className="text-muted-foreground/40" aria-hidden />
           {filtersActive ? 'No tasks match these filters' : 'No tasks yet'}
         </div>
       ) : (
@@ -137,6 +176,8 @@ export function TaskListView({ todos, filters, onEdit, onStartSession }: Props):
                     onToggle={toggleRow}
                     onEdit={onEdit}
                     onStartSession={onStartSession}
+                    onCycle={handleCycle}
+                    onDelete={handleDelete}
                   />
                 ))}
             </div>
@@ -146,7 +187,7 @@ export function TaskListView({ todos, filters, onEdit, onStartSession }: Props):
 
       {/* Footer hint */}
       <div className="shrink-0 px-3 py-2 border-t border-border bg-card text-caption text-muted-foreground">
-        <span>↑/↓ select · ↵ start session · E edit</span>
+        <span>↑/↓ select · ↵ start session · E edit · Space toggle status</span>
       </div>
     </div>
   );

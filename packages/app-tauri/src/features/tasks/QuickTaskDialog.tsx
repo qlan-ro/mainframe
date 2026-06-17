@@ -272,7 +272,8 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
 
         <div className="flex items-center justify-between px-4 py-3 border-t border-border shrink-0">
           <span className="text-caption text-muted-foreground">
-            <kbd className="px-1 py-0.5 bg-muted rounded border border-border text-caption">⌘↵</kbd> to create
+            <kbd className="px-1 py-0.5 bg-muted rounded border border-border text-caption">⌘↵</kbd> to create ·{' '}
+            <kbd className="px-1 py-0.5 bg-muted rounded border border-border text-caption">Esc</kbd> to cancel
           </span>
           <button
             type="button"

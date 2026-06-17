@@ -86,6 +86,143 @@ describe('markdownComponents.a (LinkWithPreview)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Markdown table — th/td must use sans-serif (not mono), th without uppercase.
+// ---------------------------------------------------------------------------
+
+const Th = markdownComponents.th as React.ComponentType<React.ThHTMLAttributes<HTMLTableCellElement>>;
+const Td = markdownComponents.td as React.ComponentType<React.TdHTMLAttributes<HTMLTableCellElement>>;
+const Tr = markdownComponents.tr as React.ComponentType<React.HTMLAttributes<HTMLTableRowElement>>;
+const Thead = markdownComponents.thead as React.ComponentType<React.HTMLAttributes<HTMLTableSectionElement>>;
+const Table = markdownComponents.table as React.ComponentType<React.TableHTMLAttributes<HTMLTableElement>>;
+
+describe('markdownComponents table cells', () => {
+  it('MarkdownTh does NOT use font-mono class', () => {
+    const { container } = render(<table><thead><tr><Th>Header</Th></tr></thead></table>);
+    const th = container.querySelector('th');
+    expect(th).not.toBeNull();
+    expect(th!.className).not.toContain('font-mono');
+  });
+
+  it('MarkdownTh does NOT use uppercase class', () => {
+    const { container } = render(<table><thead><tr><Th>Header</Th></tr></thead></table>);
+    const th = container.querySelector('th');
+    expect(th!.className).not.toContain('uppercase');
+  });
+
+  it('MarkdownTh uses font-sans class', () => {
+    const { container } = render(<table><thead><tr><Th>Header</Th></tr></thead></table>);
+    const th = container.querySelector('th');
+    expect(th!.className).toContain('font-sans');
+  });
+
+  it('MarkdownTd does NOT use font-mono class', () => {
+    const { container } = render(<table><tbody><tr><Td>Cell</Td></tr></tbody></table>);
+    const td = container.querySelector('td');
+    expect(td).not.toBeNull();
+    expect(td!.className).not.toContain('font-mono');
+  });
+
+  it('MarkdownTd uses font-sans class', () => {
+    const { container } = render(<table><tbody><tr><Td>Cell</Td></tr></tbody></table>);
+    const td = container.querySelector('td');
+    expect(td!.className).toContain('font-sans');
+  });
+});
+
+describe('markdownComponents table structure', () => {
+  it('MarkdownTable wrapper uses rounded-md (not rounded-lg)', () => {
+    const { container } = render(<Table><tbody><tr><td>x</td></tr></tbody></Table>);
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.className).toContain('rounded-md');
+    expect(wrapper.className).not.toContain('rounded-lg');
+  });
+
+  it('MarkdownTr even rows use bg-mf-content2 (not bg-accent)', () => {
+    const { container } = render(<table><tbody><Tr>x</Tr></tbody></table>);
+    const tr = container.querySelector('tr');
+    expect(tr!.className).toContain('even:bg-mf-content2');
+    expect(tr!.className).not.toContain('even:bg-accent');
+  });
+
+  it('MarkdownThead uses bg-mf-content2', () => {
+    const { container } = render(<table><Thead><tr><th>h</th></tr></Thead></table>);
+    const thead = container.querySelector('thead');
+    expect(thead!.className).toContain('bg-mf-content2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Markdown blockquote — must use 3px primary/40 border (not grey 2px).
+// ---------------------------------------------------------------------------
+
+describe('markdownComponents blockquote', () => {
+  const Bq = markdownComponents.blockquote as React.ComponentType<React.BlockquoteHTMLAttributes<HTMLElement>>;
+
+  it('uses border-s-[3px] (not border-s-2)', () => {
+    const { container } = render(<Bq>quoted text</Bq>);
+    const bq = container.querySelector('blockquote');
+    expect(bq!.className).toContain('border-s-[3px]');
+    expect(bq!.className).not.toContain('border-s-2');
+  });
+
+  it('uses border-primary/40 (not border-mf-text-3)', () => {
+    const { container } = render(<Bq>quoted text</Bq>);
+    const bq = container.querySelector('blockquote');
+    expect(bq!.className).toContain('border-primary/40');
+    expect(bq!.className).not.toContain('border-mf-text-3');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Markdown headings — h1 larger than h2, h2 larger than h3.
+// ---------------------------------------------------------------------------
+
+describe('markdownComponents headings hierarchy', () => {
+  const H1 = markdownComponents.h1 as React.ComponentType<React.HTMLAttributes<HTMLHeadingElement>>;
+  const H2 = markdownComponents.h2 as React.ComponentType<React.HTMLAttributes<HTMLHeadingElement>>;
+  const H3 = markdownComponents.h3 as React.ComponentType<React.HTMLAttributes<HTMLHeadingElement>>;
+
+  it('h1 uses text-title class (larger than body)', () => {
+    const { container } = render(<H1>Heading 1</H1>);
+    const h1 = container.querySelector('h1');
+    expect(h1!.className).toContain('text-title');
+  });
+
+  it('h2 uses text-heading class', () => {
+    const { container } = render(<H2>Heading 2</H2>);
+    const h2 = container.querySelector('h2');
+    expect(h2!.className).toContain('text-heading');
+  });
+
+  it('h2 does NOT use text-body (avoids collapsed hierarchy)', () => {
+    const { container } = render(<H2>Heading 2</H2>);
+    const h2 = container.querySelector('h2');
+    expect(h2!.className).not.toContain('text-body');
+  });
+
+  it('h3 uses font-bold (heavier than body semibold)', () => {
+    const { container } = render(<H3>Heading 3</H3>);
+    const h3 = container.querySelector('h3');
+    expect(h3!.className).toContain('font-bold');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Markdown HR — my-0.5 (minimal gap) not my-3.
+// ---------------------------------------------------------------------------
+
+describe('markdownComponents hr', () => {
+  const Hr = markdownComponents.hr as React.ComponentType<React.HTMLAttributes<HTMLHRElement>>;
+
+  it('uses my-0.5 margin (not my-3)', () => {
+    const { container } = render(<Hr />);
+    const hr = container.querySelector('hr');
+    expect(hr!.className).toContain('my-0.5');
+    expect(hr!.className).not.toContain('my-3');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Fenced code block — CodeHeader + SyntaxHighlighter must compose ONE bordered,
 // rounded container (they are Fragment siblings; the container is CSS-composed).
 // ---------------------------------------------------------------------------

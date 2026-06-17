@@ -13,7 +13,7 @@ import { Play, Edit, Trash2, Paperclip, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { Todo } from '@/lib/api/todos';
-import { typeTint, priorityTint } from './task-palettes';
+import { typeTint, priorityTint, priorityDotClass } from './task-palettes';
 
 /** Returns a short human-readable "ago" string for an ISO date string. */
 function relativeTime(iso: string): string {
@@ -94,10 +94,14 @@ export const TaskCard = React.memo(function TaskCard({
       <div className="flex items-center gap-2">
         <span
           className={cn(
-            'inline-block text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
+            'inline-flex items-center gap-1 text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
             priorityTint(todo.priority),
           )}
         >
+          <span
+            className={cn('w-1.5 h-1.5 rounded-full shrink-0 inline-block', priorityDotClass(todo.priority))}
+            aria-hidden
+          />
           {todo.priority}
         </span>
         <span className="flex-1" />

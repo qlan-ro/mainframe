@@ -14,7 +14,11 @@
  *  8. No duplicate-key React warnings on duplicate column headers.
  *  9. Row identity is stable under sort (keyed off parsed-row index, not sorted index).
  * 10. Renders inside ViewerShell (viewer-shell present).
- * 11. Footer status (viewer-shell-status) contains CSV row/col metadata.
+ * 11. Footer status (viewer-shell-status) contains CSV type ("CSV").
+ * 12. Footer statusRight (viewer-shell-status-right) contains row/col counts.
+ * 13. Filter input lives in the ViewerShell actions (header), not a separate sub-bar.
+ * 14. Sort arrows use accent-colored ▲/▼ spans (not plain text ↑/↓).
+ * 15. Sticky thead uses bg-mf-content2, not bg-background.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -153,12 +157,53 @@ describe('CsvViewer', () => {
     expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
   });
 
-  it('shows CSV row/col metadata in the viewer-shell-status footer', () => {
+  it('shows CSV type label in the viewer-shell-status footer', () => {
     render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
     const status = screen.getByTestId('viewer-shell-status');
-    // SIMPLE_CSV has 3 data rows and 3 columns
     expect(status.textContent).toMatch(/CSV/);
-    expect(status.textContent).toMatch(/3 rows/);
-    expect(status.textContent).toMatch(/3 cols/);
+  });
+
+  it('shows row/col metadata in the statusRight slot of ViewerShell footer', () => {
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
+    // SIMPLE_CSV has 3 data rows and 3 columns — must appear right-aligned in footer
+    // The ViewerShell footer renders status (left) and statusRight (right) as separate spans.
+    // We query the footer div (last child of viewer-shell) and check its full text.
+    const shell = screen.getByTestId('viewer-shell');
+    const footer = shell.lastElementChild as HTMLElement;
+    expect(footer.textContent).toMatch(/3 rows/);
+    expect(footer.textContent).toMatch(/3 cols/);
+  });
+
+  it('filter input is inside the ViewerShell header (actions slot), not a separate sub-bar', () => {
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
+    const shell = screen.getByTestId('viewer-shell');
+    const header = shell.children[0] as HTMLElement; // first child = header div
+    const filterInput = header.querySelector('[data-testid="viewer-csv-filter"]');
+    expect(filterInput).not.toBeNull();
+  });
+
+  it('sort arrows use accent-colored ▲/▼ spans, not plain ↑/↓ text', () => {
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
+    const nameHeader = screen.getByTestId('viewer-csv-header-name');
+    // Click to sort ascending
+    fireEvent.click(nameHeader);
+    // ▲ should appear as a span with text-primary class
+    const arrowSpan = nameHeader.querySelector('.text-primary');
+    expect(arrowSpan).not.toBeNull();
+    expect(arrowSpan?.textContent).toBe('▲');
+
+    // Click again for descending
+    fireEvent.click(nameHeader);
+    const arrowSpanDesc = nameHeader.querySelector('.text-primary');
+    expect(arrowSpanDesc).not.toBeNull();
+    expect(arrowSpanDesc?.textContent).toBe('▼');
+  });
+
+  it('sticky thead has bg-mf-content2 class (not bg-background)', () => {
+    render(<CsvViewer content={SIMPLE_CSV} path="/data/table.csv" />);
+    const thead = document.querySelector('thead');
+    expect(thead).not.toBeNull();
+    expect(thead?.className).toContain('bg-mf-content2');
+    expect(thead?.className).not.toContain('bg-background');
   });
 });

@@ -190,6 +190,49 @@ describe('PlanGate', () => {
     expect(screen.queryByTestId('chat-plan-feedback-input')).not.toBeInTheDocument();
   });
 
+  // --- Behavior 8: approve shows persistent running footer with pulsing dot ---
+
+  it('after approving, hides action row and shows running footer with pulsing dot and mode text', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    // Action row (Approve button) is gone
+    expect(screen.queryByTestId('chat-plan-approve')).not.toBeInTheDocument();
+
+    // Running footer is visible
+    const footer = screen.getByTestId('chat-plan-running-footer');
+    expect(footer).toBeInTheDocument();
+
+    // Footer contains the execution mode text
+    expect(footer).toHaveTextContent(/Executing in/);
+    expect(footer).toHaveTextContent(/Interactive/);
+  });
+
+  it('running footer pulsing dot is present after approve', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    const footer = screen.getByTestId('chat-plan-running-footer');
+    // The pulsing dot is a span with tw-pulse animation class
+    const dot = footer.querySelector('.animate-pulse');
+    expect(dot).toBeInTheDocument();
+  });
+
+  it('running footer uses destructive dot color in yolo exec-mode', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+
+    fireEvent.click(screen.getByTestId('chat-plan-execmode-yolo'));
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    const footer = screen.getByTestId('chat-plan-running-footer');
+    expect(footer).toHaveTextContent(/Unattended/);
+    // Dot should have the destructive class for yolo mode
+    const dot = footer.querySelector('.bg-destructive');
+    expect(dot).toBeInTheDocument();
+  });
+
   // --- Behavior 7: keep-planning Cancel returns to the approve panel ---
 
   it('clicking Keep planning then Cancel returns to the approve panel without calling reply', () => {

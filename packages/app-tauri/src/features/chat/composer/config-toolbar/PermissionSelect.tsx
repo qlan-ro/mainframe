@@ -28,10 +28,10 @@ export interface PermissionSelectProps {
   setPermissionMode: (mode: ExecutionMode) => void;
 }
 
-const PERMISSION_MODES: { id: ExecutionMode; label: string }[] = [
-  { id: 'default', label: 'Interactive' },
-  { id: 'acceptEdits', label: 'Auto-Edits' },
-  { id: 'yolo', label: 'Unattended' },
+const PERMISSION_MODES: { id: ExecutionMode; label: string; description: string }[] = [
+  { id: 'default', label: 'Interactive', description: 'Approve every action' },
+  { id: 'acceptEdits', label: 'Auto-Edits', description: 'Edits auto-applied; commands ask' },
+  { id: 'yolo', label: 'Unattended', description: 'Runs without prompts' },
 ];
 
 export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectProps) {
@@ -50,8 +50,9 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
               aria-label={`Permission mode: ${currentLabel}`}
               className={[
                 'flex items-center gap-1 px-2 py-1',
-                'rounded-md text-label',
+                'rounded-md border border-transparent text-label',
                 'hover:bg-accent hover:text-accent-foreground',
+                'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors',
                 'focus-visible:outline-none',
                 isYolo ? 'text-destructive' : 'text-muted-foreground',
@@ -73,7 +74,10 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
             onSelect={() => setPermissionMode(mode.id)}
             className={mode.id === currentMode ? 'bg-accent text-accent-foreground font-medium' : ''}
           >
-            {mode.label}
+            <div className="flex flex-col">
+              <span className="text-label font-medium">{mode.label}</span>
+              <span className="text-caption text-muted-foreground">{mode.description}</span>
+            </div>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

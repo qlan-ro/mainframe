@@ -289,7 +289,7 @@ describe('ProviderModelSelect — locked prop controls footer and pill state', (
     expect(screen.getByTestId('composer-adapter-select-option-claude')).not.toBeDisabled();
   });
 
-  it('locked=false does NOT render the provider footer', async () => {
+  it('locked=false renders the footer with the unlocked hint text', async () => {
     renderSelect({
       adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
       adapter: ADAPTER_CLAUDE,
@@ -300,7 +300,9 @@ describe('ProviderModelSelect — locked prop controls footer and pill state', (
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
 
-    expect(screen.queryByTestId('composer-provider-footer')).not.toBeInTheDocument();
+    const footer = screen.getByTestId('composer-provider-footer');
+    expect(footer).toBeInTheDocument();
+    expect(footer.textContent).toBe('Pick a provider before your first message.');
   });
 });
 

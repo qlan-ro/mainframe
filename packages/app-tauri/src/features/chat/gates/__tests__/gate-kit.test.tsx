@@ -112,6 +112,13 @@ describe('GateCardShell', () => {
     wrap(<GateCardShell data-testid="shell-omitted">content</GateCardShell>);
     expect(screen.getByTestId('shell-omitted')).toHaveClass('border-mf-border-hover');
   });
+
+  it('root element uses bg-card (card surface) not bg-background (white)', () => {
+    wrap(<GateCardShell data-testid="shell-bg">content</GateCardShell>);
+    const el = screen.getByTestId('shell-bg');
+    expect(el).toHaveClass('bg-card');
+    expect(el).not.toHaveClass('bg-background');
+  });
 });
 
 // ---------------------------------------------------------------------------

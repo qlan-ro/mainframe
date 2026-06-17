@@ -84,7 +84,7 @@ function ImageAttachment({ name }: { name: string }) {
       {thumb}
       <span className="flex min-w-0 flex-col">
         {capture?.selector && (
-          <code className="truncate font-mono text-caption text-mf-success">{capture.selector}</code>
+          <code className="truncate font-mono text-caption text-mf-code-fn">{capture.selector}</code>
         )}
         {capture?.annotation && <span className="truncate text-micro text-mf-text-3">{capture.annotation}</span>}
       </span>

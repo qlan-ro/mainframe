@@ -70,7 +70,7 @@ export function MainToolbar({
     <div
       data-testid="main-toolbar"
       data-tauri-drag-region
-      className={`flex h-[38px] flex-shrink-0 items-center justify-between gap-2 pr-1.5 ${geo.toolbar}`}
+      className={`flex h-[40px] flex-shrink-0 items-center justify-between gap-2 pr-1.5 ${geo.toolbar}`}
     >
       {/* Left: identity */}
       <div
@@ -145,9 +145,15 @@ export function MainToolbar({
           type="button"
           title="Search (⌘O)"
           onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
-          className={ICON_BTN}
+          className={`${ICON_BTN} w-auto gap-1.5 px-1.5`}
         >
           <Search size={14} />
+          <span
+            data-testid="main-toolbar-search-hint"
+            className="inline-flex h-[17px] items-center rounded px-[5px] text-caption font-semibold leading-none text-muted-foreground [border:0.5px_solid_var(--border)] shadow-[0_1px_0_var(--border)]"
+          >
+            ⌘O
+          </span>
         </button>
         <span className="mx-0.5 h-4 w-px bg-border" />
         <StubButton testid="main-toolbar-launch" title="Launch configurations">

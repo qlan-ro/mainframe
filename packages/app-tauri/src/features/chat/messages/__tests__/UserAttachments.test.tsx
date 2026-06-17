@@ -265,6 +265,33 @@ describe('UserAttachments — B6: image attachment without selector renders thum
 });
 
 // ---------------------------------------------------------------------------
+// Tests — B8: capture chip selector uses mf-code-fn color token (not mf-success)
+// ---------------------------------------------------------------------------
+
+describe('UserAttachments — B8: capture selector uses text-mf-code-fn class', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __attachmentType = 'image';
+    __src = 'data:img';
+  });
+
+  it('the selector <code> element has text-mf-code-fn class and not text-mf-success', () => {
+    __attachmentName = 'element1.png';
+    __meta = {
+      captures: [{ label: 'element1', imageName: 'element1.png', selector: 'nav > .active' }],
+    };
+
+    renderAttachments();
+
+    // Find the code element containing the selector text
+    const codeEl = screen.getByText('nav > .active');
+    expect(codeEl.tagName.toLowerCase()).toBe('code');
+    expect(codeEl.className).toContain('text-mf-code-fn');
+    expect(codeEl.className).not.toContain('text-mf-success');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests — B7: image attachment with no matching capture → bare thumb, no crash
 // ---------------------------------------------------------------------------
 

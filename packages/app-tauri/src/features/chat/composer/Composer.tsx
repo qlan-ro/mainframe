@@ -26,7 +26,7 @@ import { ComposerTriggers } from './triggers/ComposerTriggers';
 /** Send (idle, disabled while empty or worktree-missing) ↔ Cancel (running) — swapped on thread.isRunning. */
 function SendOrCancelButton({ sendDisabled }: { sendDisabled?: boolean }) {
   const isRunning = useAuiState((s) => s.thread.isRunning);
-  const base = 'flex size-8 shrink-0 items-center justify-center rounded-full transition-opacity';
+  const base = 'flex size-[26px] shrink-0 items-center justify-center rounded-md transition-opacity';
 
   if (isRunning) {
     return (
@@ -141,9 +141,11 @@ export function Composer() {
           />
 
           <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2.5">
-            {/* Left slot: paperclip + config toolbar */}
+            {/* Left slot: paperclip + separator + config toolbar */}
             <div data-testid="chat-composer-toolbar" className="flex min-h-8 items-center gap-1 text-mf-text-3">
               <ComposerAddAttachment />
+              {/* 1×12px hairline divider separating attachment actions from config chips */}
+              <div className="mx-1 h-3 w-px shrink-0 bg-border" aria-hidden />
               <ComposerToolbar />
             </div>
             <SendOrCancelButton sendDisabled={worktreeMissing} />

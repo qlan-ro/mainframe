@@ -15,7 +15,7 @@ export interface TodoFilters {
   search: string;
 }
 
-export type TodoSortKey = 'number' | 'priority' | 'type';
+export type TodoSortKey = 'number' | 'priority' | 'type' | 'updated';
 export type TodoSortDir = 'asc' | 'desc';
 
 export interface TodoSort {
@@ -38,6 +38,8 @@ export function sortTodos(todos: Todo[], sort: TodoSort): Todo[] {
         return ((PRIORITY_RANK[a.priority] ?? 4) - (PRIORITY_RANK[b.priority] ?? 4)) * dir;
       case 'type':
         return a.type.localeCompare(b.type) * dir;
+      case 'updated':
+        return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * dir;
       default:
         return 0;
     }

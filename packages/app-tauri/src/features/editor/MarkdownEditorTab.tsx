@@ -1,7 +1,11 @@
 /**
- * MarkdownEditorTab — a markdown file in the Files surface with an Edit/Preview
- * toggle. Edit = the CM6 editor (markdown highlighting, editable); Preview =
- * rendered warm-chrome prose of the live buffer value wrapped in ViewerShell.
+ * MarkdownEditorTab — a markdown file in the Files surface with a Preview/Source
+ * toggle. Source = the CM6 editor (markdown highlighting, editable); Preview =
+ * rendered warm-chrome prose of the live buffer value.
+ *
+ * A single persistent ViewerShell provides the breadcrumb header and status
+ * footer in both modes — the toggle sits in the header's `actions` slot so
+ * there is no duplicate chrome bar.
  */
 import { useState } from 'react';
 import { CmEditor } from './CmEditor';
@@ -19,6 +23,9 @@ interface MarkdownEditorTabProps {
   readOnly?: boolean;
 }
 
+// Active segment gets a subtle raised-card ring per spec (0.5px uniform ring via border var).
+const ACTIVE_CLASS = 'bg-mf-tab-active text-foreground shadow-[0_0_0_0.5px_var(--border)]';
+const INACTIVE_CLASS = 'text-muted-foreground hover:text-foreground';
 const SEG_BTN = 'h-[22px] rounded-[6px] px-2.5 text-caption transition-colors';
 
 /** Count words in markdown source (split on whitespace, filter empty). */
@@ -36,51 +43,45 @@ export function MarkdownEditorTab({ value, path, onChange, onSave, readOnly = fa
 
   const status = formatMarkdownStatus({ words: countWords(value), lines: countLines(value) });
 
+  // Toggle segment control — passed into ViewerShell's actions slot so it lives
+  // in the header row, not as a separate sub-bar.
   const toggle = (
-    <div className="flex h-[30px] flex-shrink-0 items-center gap-1 bg-mf-tab-bar px-2 [border-bottom:0.5px_solid_var(--border)]">
-      <div className="flex items-center gap-0.5 rounded-[7px] bg-mf-chip p-0.5">
-        <button
-          data-testid="markdown-mode-edit"
-          type="button"
-          onClick={() => setMode('edit')}
-          aria-pressed={mode === 'edit'}
-          className={`${SEG_BTN} ${mode === 'edit' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          Edit
-        </button>
-        <button
-          data-testid="markdown-mode-preview"
-          type="button"
-          onClick={() => setMode('preview')}
-          aria-pressed={mode === 'preview'}
-          className={`${SEG_BTN} ${mode === 'preview' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          Preview
-        </button>
-      </div>
+    <div className="flex items-center gap-0.5 rounded-[7px] bg-mf-chip p-0.5">
+      <button
+        data-testid="markdown-mode-preview"
+        type="button"
+        onClick={() => setMode('preview')}
+        aria-pressed={mode === 'preview'}
+        className={`${SEG_BTN} ${mode === 'preview' ? ACTIVE_CLASS : INACTIVE_CLASS}`}
+      >
+        Preview
+      </button>
+      <button
+        data-testid="markdown-mode-edit"
+        type="button"
+        onClick={() => setMode('edit')}
+        aria-pressed={mode === 'edit'}
+        className={`${SEG_BTN} ${mode === 'edit' ? ACTIVE_CLASS : INACTIVE_CLASS}`}
+      >
+        Source
+      </button>
     </div>
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {toggle}
-
-      <div className="min-h-0 flex-1">
-        {mode === 'edit' ? (
-          <CmEditor
-            value={value}
-            language="markdown"
-            readOnly={readOnly}
-            onChange={onChange}
-            onSave={onSave}
-            path={path}
-          />
-        ) : (
-          <ViewerShell path={path} status={status}>
-            <MarkdownPreview value={value} />
-          </ViewerShell>
-        )}
-      </div>
-    </div>
+    <ViewerShell path={path} status={status} actions={toggle}>
+      {mode === 'edit' ? (
+        <CmEditor
+          value={value}
+          language="markdown"
+          readOnly={readOnly}
+          onChange={onChange}
+          onSave={onSave}
+          path={path}
+        />
+      ) : (
+        <MarkdownPreview value={value} />
+      )}
+    </ViewerShell>
   );
 }

@@ -46,6 +46,24 @@ function dotClass(badge: SessionBadge): string {
 }
 
 export function StatusDot({ badge }: { badge: SessionBadge }) {
+  const isWaitingUnread = badge.base === 'waiting' && badge.unread;
+
+  if (isWaitingUnread) {
+    // Expanding ping-halo beacon — matches artboard StatusDot lines 379-390.
+    // A separate absolute element expands outward and fades (animate-ping),
+    // while the inner dot stays solid and non-animated.
+    return (
+      <span
+        data-testid="sessions-row-status-dot"
+        aria-label={badge.base}
+        className="relative inline-flex size-2.5 flex-shrink-0 items-center justify-center"
+      >
+        <span className="absolute size-full animate-ping rounded-full bg-mf-warning opacity-75" />
+        <span className="relative size-[9px] rounded-full bg-mf-warning" />
+      </span>
+    );
+  }
+
   return (
     <span
       data-testid="sessions-row-status-dot"
@@ -58,16 +76,18 @@ export function StatusDot({ badge }: { badge: SessionBadge }) {
 export function AnswerPill({ badge }: { badge: SessionBadge }) {
   if (badge.base !== 'waiting') return null;
   return badge.unread ? (
+    // Solid amber fill with white text — artboard lines 508-509.
     <span
       data-testid="sessions-row-answer-pill"
-      className="rounded-full bg-mf-warning/15 px-1.5 py-px text-micro font-medium text-mf-warning"
+      className="rounded-[5px] bg-mf-warning px-1.5 py-px text-micro font-semibold text-white"
     >
       Answer ready
     </span>
   ) : (
+    // 45%-opacity amber inset ring — artboard line 510.
     <span
       data-testid="sessions-row-answer-pill"
-      className="rounded-full px-1.5 py-px text-micro font-medium text-muted-foreground [border:0.5px_solid_var(--border)]"
+      className="rounded-[5px] px-1.5 py-px text-micro font-medium text-mf-warning shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--mf-warning)_45%,transparent)]"
     >
       Your turn
     </span>
@@ -223,7 +243,7 @@ function SessionRowInner({
             session. Interactive children (PR links, hover actions, the rename
             input) stopPropagation, so they keep their own behavior. */}
         <ThreadListItemPrimitive.Trigger asChild>
-          <div className="flex w-full cursor-pointer items-center gap-[9px] py-2 pl-2.5 pr-3 text-left">
+          <div className="flex w-full cursor-pointer items-center gap-[9px] pb-[9px] pl-2.5 pr-3 pt-2 text-left">
             <div className="flex flex-shrink-0 items-center gap-1.5">
               {custom.pinned && !inPinnedGroup && (
                 <PinIcon data-testid="sessions-row-pin-glyph" className="size-3 flex-shrink-0 text-primary" />

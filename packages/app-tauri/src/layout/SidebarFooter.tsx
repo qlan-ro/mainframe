@@ -9,7 +9,7 @@ const PIP: Record<ConnectionStatus['state'], string> = {
 };
 
 const COUNT_META: { key: keyof BaseStatusCounts; label: string; dot: string }[] = [
-  { key: 'working', label: 'Working', dot: 'bg-primary' },
+  { key: 'working', label: 'Working', dot: 'bg-primary animate-pulse' },
   { key: 'waiting', label: 'Waiting for you', dot: 'bg-mf-warning' },
   { key: 'idle', label: 'Idle', dot: 'bg-mf-text-4' },
 ];
@@ -18,7 +18,7 @@ export function SidebarFooterView({ connection, counts }: { connection: Connecti
   return (
     <div
       data-testid="sidebar-footer"
-      className="flex h-7 flex-shrink-0 items-center gap-2 px-3 text-micro text-mf-text-3"
+      className="flex h-[25px] flex-shrink-0 items-center gap-2 px-3 text-micro text-mf-text-3"
     >
       <span className="flex items-center gap-1.5">
         <span data-testid="sidebar-footer-connection" className={`size-1.5 rounded-full ${PIP[connection.state]}`} />

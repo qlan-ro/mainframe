@@ -27,6 +27,7 @@ const SORT_KEYS: { key: TodoSortKey; label: string }[] = [
   { key: 'number', label: '#' },
   { key: 'priority', label: 'Priority' },
   { key: 'type', label: 'Type' },
+  { key: 'updated', label: 'Last updated' },
 ];
 
 function activeSortLabel(sort: TodoSort): string {

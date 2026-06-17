@@ -8,17 +8,22 @@
  *
  * Layout:
  *   Wrapped in ViewerShell for the standard breadcrumb + status footer.
- *   Body: centered card with a file icon, "No preview available" heading,
- *   subtext, and two action buttons:
- *     - "Open externally" — opens the file in the OS default app.
- *     - "Reveal in tree"  — emits the reveal-file surface intent.
+ *   Body: centered card (bg-card, rounded-xl, shadow) with:
+ *     - 46×46 rounded-[11px] bg-mf-chip icon chip containing a File icon.
+ *     - "No preview available" heading.
+ *     - Subtext with the filename.
+ *     - Two action buttons:
+ *         "Open externally" — primary accent fill (bg-primary) CTA.
+ *         "Reveal in tree"  — outline secondary style.
  *
  * data-testids:
- *   viewer-unsupported       — root card element
- *   viewer-unsupported-open  — "Open externally" button
- *   viewer-unsupported-reveal — "Reveal in tree" button
+ *   viewer-unsupported         — root wrapper element
+ *   viewer-unsupported-card    — centered card element
+ *   viewer-unsupported-icon-chip — 46×46 icon chip container
+ *   viewer-unsupported-open    — "Open externally" button
+ *   viewer-unsupported-reveal  — "Reveal in tree" button
  */
-import { FileX } from 'lucide-react';
+import { File } from 'lucide-react';
 import { openExternal } from '@/lib/tauri/bridge';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { emitSurfaceIntent } from '@/store/surface-intents';
@@ -53,8 +58,16 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
   return (
     <ViewerShell path={path} status={status}>
       <div data-testid="viewer-unsupported" className="flex h-full flex-col items-center justify-center gap-4">
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card px-10 py-8 text-center shadow-sm">
-          <FileX size={32} className="text-mf-text-3" aria-hidden />
+        <div
+          data-testid="viewer-unsupported-card"
+          className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card px-10 py-8 text-center shadow-sm"
+        >
+          <div
+            data-testid="viewer-unsupported-icon-chip"
+            className="grid place-items-center mx-auto mb-0.5 w-[46px] h-[46px] rounded-[11px] bg-mf-chip"
+          >
+            <File size={22} className="text-mf-text-3" aria-hidden />
+          </div>
 
           <div className="flex flex-col gap-1">
             <h2 className="text-body font-semibold text-foreground">No preview available</h2>
@@ -68,7 +81,7 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
               onClick={() => void handleOpenExternal()}
               disabled={fileUrl === null}
               title={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}
-              className="rounded-md border border-border bg-transparent px-3 py-1.5 text-label font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md bg-primary px-3 py-1.5 text-label font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Open externally
             </button>

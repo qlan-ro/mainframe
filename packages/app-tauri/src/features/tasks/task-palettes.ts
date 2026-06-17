@@ -71,6 +71,25 @@ export function priorityTint(priority: TodoPriority): string {
   }
 }
 
+/**
+ * Leading dot color class for a priority pill.
+ * Matches the prototype TdPill dot palette:
+ * critical=#c4302b, high=#e8730f, medium=#e0a019, low=muted
+ */
+export function priorityDotClass(priority: TodoPriority): string {
+  switch (priority) {
+    case 'critical':
+      return 'bg-red-600';
+    case 'high':
+      return 'bg-orange-500';
+    case 'medium':
+      return 'bg-yellow-500';
+    case 'low':
+    default:
+      return 'bg-muted-foreground/60';
+  }
+}
+
 /** Dot color class for a status indicator dot. */
 export function statusDotColor(status: TodoStatus): string {
   switch (status) {

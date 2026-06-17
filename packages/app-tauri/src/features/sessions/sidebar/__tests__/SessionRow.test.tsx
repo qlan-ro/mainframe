@@ -299,7 +299,7 @@ describe('SessionRow — relative time renders non-empty text', () => {
 // ---------------------------------------------------------------------------
 
 describe('session row badge presentation', () => {
-  it('waiting + unread → amber pip + Answer ready pill', () => {
+  it('waiting + unread → amber ping-halo dot + Answer ready pill', () => {
     render(
       <>
         <StatusDot badge={{ base: 'waiting', unread: true }} />
@@ -307,7 +307,10 @@ describe('session row badge presentation', () => {
       </>,
     );
     const dot = screen.getByTestId('sessions-row-status-dot');
-    expect(dot.className).toContain('bg-mf-warning');
+    // The dot uses a ping-halo structure: the outer container has a child
+    // span with the amber color and animate-ping (the halo beacon).
+    const halo = dot.querySelector('.bg-mf-warning');
+    expect(halo).toBeTruthy();
     expect(screen.getByText('Answer ready')).toBeTruthy();
   });
   it('waiting + seen → Your turn pill', () => {
@@ -395,6 +398,60 @@ describe('SessionRow — exposes data-chat-id on the row', () => {
   it('exposes the chat id on the row for deterministic e2e selection', () => {
     render(<SessionRow item={makeItem()} />);
     expect(screen.getByTestId('sessions-row')).toHaveAttribute('data-chat-id', 'chat-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14. AnswerPill design-parity (artboard Phase-3 majors)
+// ---------------------------------------------------------------------------
+
+describe('AnswerPill design-parity', () => {
+  it('"Answer ready" pill uses solid amber fill (bg-mf-warning) with white text', () => {
+    render(<AnswerPill badge={{ base: 'waiting', unread: true }} />);
+    const pill = screen.getByTestId('sessions-row-answer-pill');
+    expect(pill.className).toContain('bg-mf-warning');
+    expect(pill.className).toContain('text-white');
+  });
+
+  it('"Answer ready" pill uses rounded-[5px] (not rounded-full)', () => {
+    render(<AnswerPill badge={{ base: 'waiting', unread: true }} />);
+    const pill = screen.getByTestId('sessions-row-answer-pill');
+    expect(pill.className).toContain('rounded-[5px]');
+    expect(pill.className).not.toContain('rounded-full');
+  });
+
+  it('"Your turn" pill uses rounded-[5px] (not rounded-full)', () => {
+    render(<AnswerPill badge={{ base: 'waiting', unread: false }} />);
+    const pill = screen.getByTestId('sessions-row-answer-pill');
+    expect(pill.className).toContain('rounded-[5px]');
+    expect(pill.className).not.toContain('rounded-full');
+  });
+
+  it('"Your turn" pill uses amber shadow ring (not generic border)', () => {
+    render(<AnswerPill badge={{ base: 'waiting', unread: false }} />);
+    const pill = screen.getByTestId('sessions-row-answer-pill');
+    expect(pill.className).toContain('shadow-[inset');
+    expect(pill.className).not.toContain('border:0.5px_solid_var(--border)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. StatusDot waiting-unread ping-halo (artboard Phase-3 majors)
+// ---------------------------------------------------------------------------
+
+describe('StatusDot waiting-unread ping-halo', () => {
+  it('waiting + unread status dot renders a child halo span with animate-ping class', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: true }} />);
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    // The halo is a child element with animate-ping
+    const halo = dot.querySelector('.animate-ping');
+    expect(halo).toBeTruthy();
+  });
+
+  it('waiting + seen status dot does NOT render animate-ping halo', () => {
+    render(<StatusDot badge={{ base: 'waiting', unread: false }} />);
+    const dot = screen.getByTestId('sessions-row-status-dot');
+    expect(dot.querySelector('.animate-ping')).toBeNull();
   });
 });
 

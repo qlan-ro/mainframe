@@ -10,7 +10,7 @@ export function GateCardShell({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl border bg-background',
+        'overflow-hidden rounded-xl border bg-card',
         resolved ? 'border-border' : 'border-mf-border-hover shadow-[var(--mf-shadow-pop)]',
         className,
       )}

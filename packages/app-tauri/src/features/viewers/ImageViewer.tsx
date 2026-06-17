@@ -3,21 +3,26 @@
 /**
  * ImageViewer.tsx
  *
- * Renders a raster image (png/jpg/gif/webp) with a checkerboard transparency
- * backdrop and click-to-zoom via the existing ZoomableImage dialog.
+ * Renders a raster image (png/jpg/gif/webp) with:
+ *   - A checkerboard transparency backdrop (warm mf-viewer-check-a/b tokens, 18px tile).
+ *   - White shadow card behind the image (bg-white with pop shadow).
+ *   - Fit/100% segmented toggle in the ViewerShell header actions slot.
+ *   - Zoom in/out buttons (disabled in Fit mode) in the actions slot.
+ *   - statusRight with file size and zoom level.
+ *   - Click-to-zoom via ZoomableImage (Fit mode only — acts as quick preview trigger).
  *
  * Props:
  *   src  — data URI (data:image/…;base64,…) or any URL; null while loading.
  *   alt  — alt text forwarded to the img element.
  *   path — file path used by ViewerShell for breadcrumb + reveal.
  *
- * Used by ViewerRouter after it reads the file as base64 and builds the URI.
  * data-testid="viewer-image" on the root element.
  */
 import { useState } from 'react';
+import { Minus, Plus } from 'lucide-react';
 import { ZoomableImage } from '@/features/chat/parts/ZoomableImage';
 import { ViewerShell } from './ViewerShell';
-import { formatImageStatus } from './viewer-status';
+import { splitImageStatus } from './viewer-status';
 
 interface ImageViewerProps {
   src: string | null;
@@ -30,6 +35,16 @@ interface ImgMeta {
   h: number;
   bytes: number;
 }
+
+type FitMode = 'fit' | 'actual';
+
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.25;
+
+const SEG_BTN = 'rounded px-1.5 py-0.5 text-caption font-medium transition-colors';
+const SEG_ACTIVE = 'bg-mf-tab-active text-foreground shadow-[0_0_0_0.5px_var(--border)]';
+const SEG_IDLE = 'text-muted-foreground hover:text-foreground';
 
 function getExt(path: string): string {
   const parts = path.split('.');
@@ -46,11 +61,15 @@ function base64ByteLength(src: string): number {
 
 export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
   const [meta, setMeta] = useState<ImgMeta | null>(null);
+  const [fitMode, setFitMode] = useState<FitMode>('fit');
+  const [zoom, setZoom] = useState(1);
 
   const ext = getExt(path);
-  const status = meta
-    ? formatImageStatus({ ext, w: meta.w, h: meta.h, bytes: meta.bytes })
-    : `${ext.toUpperCase()} · Loading…`;
+  const isFit = fitMode === 'fit';
+
+  const { left: statusLeft, right: statusRight } = meta
+    ? splitImageStatus({ ext, w: meta.w, h: meta.h, bytes: meta.bytes, zoom, fit: isFit })
+    : { left: `${ext.toUpperCase()} · Loading…`, right: '' };
 
   function handleLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const img = e.currentTarget;
@@ -58,25 +77,105 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
     setMeta({ w: img.naturalWidth, h: img.naturalHeight, bytes });
   }
 
+  function handleZoomIn() {
+    setZoom((z) => Math.min(MAX_ZOOM, +(z + ZOOM_STEP).toFixed(2)));
+  }
+
+  function handleZoomOut() {
+    setZoom((z) => Math.max(MIN_ZOOM, +(z - ZOOM_STEP).toFixed(2)));
+  }
+
+  function handleFitToggle(mode: FitMode) {
+    setFitMode(mode);
+    if (mode === 'actual') setZoom(1);
+  }
+
+  // Header controls: zoom out, zoom in, Fit/100% segmented toggle.
+  const actions = (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        data-testid="viewer-image-zoom-out"
+        title="Zoom out"
+        disabled={isFit}
+        onClick={handleZoomOut}
+        className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
+      >
+        <Minus size={11} aria-hidden />
+      </button>
+      <button
+        type="button"
+        data-testid="viewer-image-zoom-in"
+        title="Zoom in"
+        disabled={isFit}
+        onClick={handleZoomIn}
+        className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
+      >
+        <Plus size={11} aria-hidden />
+      </button>
+      <div className="flex items-center gap-0.5">
+        <button
+          type="button"
+          data-testid="viewer-image-fit-toggle"
+          aria-pressed={isFit}
+          onClick={() => handleFitToggle('fit')}
+          className={`${SEG_BTN} ${isFit ? SEG_ACTIVE : SEG_IDLE}`}
+        >
+          Fit
+        </button>
+        <button
+          type="button"
+          data-testid="viewer-image-actual-toggle"
+          aria-pressed={!isFit}
+          onClick={() => handleFitToggle('actual')}
+          className={`${SEG_BTN} ${!isFit ? SEG_ACTIVE : SEG_IDLE}`}
+        >
+          100%
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <ViewerShell path={path} status={status}>
+    <ViewerShell
+      path={path}
+      status={statusLeft}
+      statusRight={statusRight || undefined}
+      actions={actions}
+    >
       <div
         data-testid="viewer-image"
-        className="relative flex h-full w-full flex-col items-center justify-center overflow-auto"
+        className="relative flex h-full w-full items-center justify-center overflow-auto p-7"
         style={{
-          background:
-            'repeating-conic-gradient(var(--mf-viewer-check-b) 0% 25%, var(--mf-viewer-check-a) 0% 50%) 0 0 / 18px 18px',
+          backgroundColor: 'var(--mf-viewer-check-a)',
+          backgroundImage: [
+            'linear-gradient(45deg,var(--mf-viewer-check-b) 25%,transparent 25%)',
+            'linear-gradient(-45deg,var(--mf-viewer-check-b) 25%,transparent 25%)',
+            'linear-gradient(45deg,transparent 75%,var(--mf-viewer-check-b) 75%)',
+            'linear-gradient(-45deg,transparent 75%,var(--mf-viewer-check-b) 75%)',
+          ].join(','),
+          backgroundSize: '18px 18px',
+          backgroundPosition: '0 0,0 9px,9px -9px,-9px 0',
         }}
       >
         {src === null ? (
           <span className="text-body text-muted-foreground">Loading image…</span>
         ) : (
-          <ZoomableImage
-            src={src}
-            alt={alt}
-            className="max-h-[80vh] max-w-full rounded object-contain"
-            onLoad={handleLoad}
-          />
+          <div
+            className="bg-white shadow-[var(--mf-shadow-pop)] relative overflow-hidden"
+            style={
+              isFit
+                ? { maxWidth: '86%', flexShrink: 0 }
+                : { width: meta ? meta.w * zoom : 'auto', flexShrink: 0 }
+            }
+          >
+            <ZoomableImage
+              src={src}
+              alt={alt}
+              className="block w-full h-auto object-contain"
+              onLoad={handleLoad}
+            />
+          </div>
         )}
       </div>
     </ViewerShell>

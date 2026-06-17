@@ -10,7 +10,7 @@
  * Uses real mf-* tokens and opaque rgba for opacity; never the /opacity modifier.
  */
 
-import { Gauge } from 'lucide-react';
+import { Gauge, Lock } from 'lucide-react';
 import type { AdapterModel, Chat, EffortLevel, ProviderConfig } from '@qlan-ro/mainframe-types';
 import {
   DropdownMenu,
@@ -58,8 +58,9 @@ export function EffortPicker({ chat, model, setEffort, disabled, providerDefault
               aria-label={`Effort: ${triggerLabel}`}
               className={[
                 'flex items-center gap-1 px-2 py-1',
-                'rounded-md text-label text-muted-foreground',
+                'rounded-md border border-transparent text-label text-muted-foreground',
                 'hover:bg-accent hover:text-accent-foreground',
+                'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors',
                 'disabled:pointer-events-none',
                 'disabled:opacity-40',
@@ -68,6 +69,7 @@ export function EffortPicker({ chat, model, setEffort, disabled, providerDefault
             >
               <Gauge size={14} className="shrink-0" />
               <EffortLabel value={triggerLabel} />
+              {locked && <Lock size={10} className="shrink-0 text-mf-text-4" />}
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

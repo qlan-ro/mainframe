@@ -64,60 +64,86 @@ export const warmHighlight = HighlightStyle.define([
 ]);
 
 // ── Warm-chrome base theme ───────────────────────────────────────────────────
+//
+// All colors are CSS-var references so they update automatically when the app
+// theme changes — no view rebuild needed.
+//
+// The CM6 `dark` flag controls internal default assumptions (unfocused selection
+// tint, cursor visibility) for properties NOT overridden by our theme spec. We
+// derive it from the document class at call time so light and dark schemes both
+// get correct CM6-internal defaults.
 
-export const warmTheme = EditorView.theme(
-  {
-    '&': {
-      backgroundColor: 'var(--mf-code-bg)',
-      color: 'var(--mf-code-fg)',
-      fontSize: '12px',
-      height: '100%',
-    },
-    '.cm-content': {
-      fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-      caretColor: 'var(--mf-code-fg)',
-      padding: '4px 0',
-    },
-    '.cm-gutters': {
-      backgroundColor: 'var(--mf-code-bg)',
-      color: 'var(--mf-code-cmt)',
-      border: 'none',
-      paddingRight: '8px',
-    },
-    '.cm-activeLineGutter': {
-      backgroundColor: 'transparent',
-      color: 'var(--mf-code-fg)',
-    },
-    '.cm-activeLine': {
-      backgroundColor: 'var(--mf-cm-active-line)',
-    },
-    '.cm-cursor': {
-      borderLeftColor: 'var(--mf-code-fg)',
-    },
-    '.cm-selectionBackground, ::selection': {
-      backgroundColor: 'var(--mf-cm-selection)',
-    },
-    '&.cm-focused .cm-selectionBackground': {
-      backgroundColor: 'var(--mf-cm-selection-focused)',
-    },
-    '.cm-searchMatch': {
-      backgroundColor: 'var(--mf-cm-match)',
-      outline: '1px solid var(--mf-cm-match-border)',
-    },
-    '.cm-searchMatch.cm-searchMatch-selected': {
-      backgroundColor: 'var(--mf-cm-match-selected)',
-    },
-    '.cm-selectionMatch': {
-      backgroundColor: 'var(--mf-cm-sel-match)',
-    },
-    '.cm-scroller': {
-      overflow: 'auto',
-    },
-    '.cm-foldGutter': {
-      color: 'var(--mf-code-cmt)',
-    },
+const CM6_THEME_SPEC = {
+  '&': {
+    backgroundColor: 'var(--mf-code-bg)',
+    color: 'var(--mf-code-fg)',
+    fontSize: '12px',
+    height: '100%',
   },
-  { dark: true },
+  '.cm-content': {
+    fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+    caretColor: 'var(--mf-code-fg)',
+    padding: '4px 0',
+  },
+  '.cm-gutters': {
+    backgroundColor: 'var(--mf-code-bg)',
+    color: 'var(--mf-code-cmt)',
+    border: 'none',
+    paddingRight: '8px',
+  },
+  '.cm-activeLineGutter': {
+    backgroundColor: 'transparent',
+    color: 'var(--mf-code-fg)',
+  },
+  '.cm-activeLine': {
+    backgroundColor: 'var(--mf-cm-active-line)',
+  },
+  '.cm-cursor': {
+    borderLeftColor: 'var(--mf-code-fg)',
+  },
+  '.cm-selectionBackground, ::selection': {
+    backgroundColor: 'var(--mf-cm-selection)',
+  },
+  '&.cm-focused .cm-selectionBackground': {
+    backgroundColor: 'var(--mf-cm-selection-focused)',
+  },
+  '.cm-searchMatch': {
+    backgroundColor: 'var(--mf-cm-match)',
+    outline: '1px solid var(--mf-cm-match-border)',
+  },
+  '.cm-searchMatch.cm-searchMatch-selected': {
+    backgroundColor: 'var(--mf-cm-match-selected)',
+  },
+  '.cm-selectionMatch': {
+    backgroundColor: 'var(--mf-cm-sel-match)',
+  },
+  '.cm-scroller': {
+    overflow: 'auto',
+  },
+  '.cm-foldGutter': {
+    color: 'var(--mf-code-cmt)',
+  },
+} as const;
+
+/**
+ * Build the warm-chrome CM6 base theme with a mode-aware `dark` flag.
+ *
+ * Pass `isDark = true` for dark color schemes so CM6's internal defaults
+ * (unfocused selection tint, cursor visibility) match the scheme. Callers
+ * that don't track the theme can use the exported `warmTheme` singleton which
+ * reads `document.documentElement.classList.contains('dark')` at module load.
+ */
+export function makeWarmTheme(isDark: boolean): ReturnType<typeof EditorView.theme> {
+  return EditorView.theme(CM6_THEME_SPEC, { dark: isDark });
+}
+
+/**
+ * Default warm-chrome theme instance. Reads the document's `dark` class at
+ * module evaluation time so the CM6 dark flag matches the app's initial scheme.
+ * This covers the common case; hot-swap on scheme change uses a Compartment.
+ */
+export const warmTheme = makeWarmTheme(
+  typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
 );
 
 // ── Per-instance compartments ────────────────────────────────────────────────

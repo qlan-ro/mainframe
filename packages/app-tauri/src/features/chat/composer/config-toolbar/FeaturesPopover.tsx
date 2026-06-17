@@ -59,6 +59,8 @@ export function FeaturesPopover({ chat, model, setFeature, disabled, providerDef
   // Hidden entirely when the model exposes no tunable features.
   if (features.length === 0) return null;
 
+  const hasActive = features.some((f) => effectiveFeature(chat, providerDefaults, f.key));
+
   return (
     <Popover>
       <Tooltip>
@@ -70,9 +72,10 @@ export function FeaturesPopover({ chat, model, setFeature, disabled, providerDef
               disabled={disabled}
               aria-label="Feature settings"
               className={[
-                'flex items-center justify-center px-2 py-1',
-                'rounded-md text-muted-foreground',
+                'relative flex items-center justify-center px-2 py-1',
+                'rounded-md border border-transparent text-muted-foreground',
                 'hover:bg-accent hover:text-accent-foreground',
+                'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
                 'transition-colors',
                 'disabled:pointer-events-none',
                 'disabled:opacity-40',
@@ -80,6 +83,9 @@ export function FeaturesPopover({ chat, model, setFeature, disabled, providerDef
               ].join(' ')}
             >
               <SlidersHorizontal size={14} />
+              {hasActive && (
+                <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-primary" aria-hidden />
+              )}
             </button>
           </PopoverTrigger>
         </TooltipTrigger>

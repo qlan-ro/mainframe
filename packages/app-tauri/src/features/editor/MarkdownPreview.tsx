@@ -102,10 +102,12 @@ const components = {
 
 export function MarkdownPreview({ value }: { value: string }) {
   return (
-    <div data-testid="markdown-preview" className="mf-editor-selectable h-full overflow-auto px-6 py-4">
-      <Markdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={urlTransform} components={components}>
-        {value}
-      </Markdown>
+    <div data-testid="markdown-preview" className="mf-editor-selectable h-full overflow-auto">
+      <div className="mx-auto max-w-[720px] px-10 pb-16 pt-9">
+        <Markdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={urlTransform} components={components}>
+          {value}
+        </Markdown>
+      </div>
     </div>
   );
 }

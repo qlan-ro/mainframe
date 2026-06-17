@@ -71,7 +71,7 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
 
 function MarkdownTable({ children, ...props }: React.ComponentProps<'table'>) {
   return (
-    <div className="rounded-lg border border-border overflow-hidden my-3">
+    <div className="rounded-md border border-border overflow-hidden my-3">
       <table className="w-full border-collapse text-body" {...props}>
         {children}
       </table>
@@ -90,7 +90,7 @@ function MarkdownThead({ children, ...props }: React.ComponentProps<'thead'>) {
 function MarkdownTh({ children, ...props }: React.ComponentProps<'th'>) {
   return (
     <th
-      className="font-mono text-label font-semibold uppercase tracking-wide text-muted-foreground px-3 py-2 text-left"
+      className="font-sans text-label font-bold text-muted-foreground px-3 py-2 text-left"
       {...props}
     >
       {children}
@@ -100,7 +100,7 @@ function MarkdownTh({ children, ...props }: React.ComponentProps<'th'>) {
 
 function MarkdownTd({ children, ...props }: React.ComponentProps<'td'>) {
   return (
-    <td className="font-mono text-label text-foreground px-3 py-2 border-t border-border" {...props}>
+    <td className="font-sans text-label text-foreground px-3 py-2 border-t border-border" {...props}>
       {children}
     </td>
   );
@@ -210,16 +210,16 @@ function LinkWithPreview({
 
 export const markdownComponents = unstable_memoizeMarkdownComponents({
   h1: ({ className, ...props }) => (
-    <h1 className={cn('aui-md-h1 text-heading font-semibold mt-4 mb-2 first:mt-0', className)} {...props} />
+    <h1 className={cn('aui-md-h1 text-title font-bold mt-4 mb-2 first:mt-0', className)} {...props} />
   ),
   h2: ({ className, ...props }) => (
-    <h2 className={cn('aui-md-h2 text-body font-semibold mt-3 mb-1.5 first:mt-0', className)} {...props} />
+    <h2 className={cn('aui-md-h2 text-heading font-bold mt-3 mb-1.5 first:mt-0', className)} {...props} />
   ),
   h3: ({ className, ...props }) => (
-    <h3 className={cn('aui-md-h3 text-body font-semibold mt-2.5 mb-1 first:mt-0', className)} {...props} />
+    <h3 className={cn('aui-md-h3 text-body font-bold mt-2.5 mb-1 first:mt-0', className)} {...props} />
   ),
   h4: ({ className, ...props }) => (
-    <h4 className={cn('aui-md-h4 text-body font-medium mt-2 mb-1 first:mt-0', className)} {...props} />
+    <h4 className={cn('aui-md-h4 text-body font-semibold mt-2 mb-1 first:mt-0', className)} {...props} />
   ),
   p: ({ className, ...props }) => (
     <p className={cn('aui-md-p my-2.5 leading-relaxed first:mt-0 last:mb-0', className)} {...props} />
@@ -228,7 +228,7 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
   blockquote: ({ className, ...props }) => (
     <blockquote
       className={cn(
-        'aui-md-blockquote border-s-2 border-mf-text-3 text-muted-foreground',
+        'aui-md-blockquote border-s-[3px] border-primary/40 text-muted-foreground',
         'my-2.5 ps-3 italic',
         className,
       )}
@@ -248,7 +248,7 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
     />
   ),
   li: ({ className, ...props }) => <li className={cn('aui-md-li leading-relaxed', className)} {...props} />,
-  hr: ({ className, ...props }) => <hr className={cn('aui-md-hr border-border my-3', className)} {...props} />,
+  hr: ({ className, ...props }) => <hr className={cn('aui-md-hr border-border my-0.5', className)} {...props} />,
   table: MarkdownTable,
   thead: MarkdownThead,
   th: MarkdownTh,

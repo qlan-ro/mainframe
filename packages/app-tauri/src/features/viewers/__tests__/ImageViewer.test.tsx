@@ -11,10 +11,14 @@
  *  3. Zoom trigger is present (delegates to ZoomableImage).
  *  4. Loading state renders a placeholder when src is null.
  *  5. Renders inside ViewerShell (viewer-shell present).
- *  6. Footer status shows image dimensions and size (viewer-shell-status).
+ *  6. Footer status shows image format (viewer-shell-status).
  *  7. onLoad fires from the <img> element (not the wrapper div) and updates
  *     the footer status — the status changes from "Loading…" to include
  *     the file extension.
+ *  8. Fit/100% toggle is present in the header actions slot.
+ *  9. Zoom-in and zoom-out buttons are in the header actions slot.
+ * 10. statusRight (viewer-shell-status-right) shows size/zoom info after load.
+ * 11. Image is wrapped in a white shadow card div (not floating on checkerboard).
  */
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
@@ -77,9 +81,8 @@ describe('ImageViewer', () => {
     expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
   });
 
-  it('shows image metadata in the footer status after load', () => {
+  it('shows image format in the footer status after load', () => {
     render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
-    // Before onLoad fires: status shows loading placeholder or file extension
     const status = screen.getByTestId('viewer-shell-status');
     expect(status).toBeInTheDocument();
 
@@ -108,10 +111,59 @@ describe('ImageViewer', () => {
     Object.defineProperty(img, 'naturalHeight', { value: 600, configurable: true });
     fireEvent.load(img);
 
-    // Status must now reflect the loaded state (extension + dimensions or size)
+    // Status must now reflect the loaded state (extension)
     const statusAfter = screen.getByTestId('viewer-shell-status').textContent;
     expect(statusAfter).toMatch(/PNG/i);
     // And it must no longer say "Loading"
     expect(statusAfter).not.toMatch(/Loading/i);
+  });
+
+  it('renders Fit/100% toggle buttons in the header actions slot', () => {
+    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
+    expect(screen.getByTestId('viewer-image-fit-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('viewer-image-actual-toggle')).toBeInTheDocument();
+  });
+
+  it('renders zoom-in and zoom-out buttons in the header', () => {
+    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
+    expect(screen.getByTestId('viewer-image-zoom-in')).toBeInTheDocument();
+    expect(screen.getByTestId('viewer-image-zoom-out')).toBeInTheDocument();
+  });
+
+  it('zoom buttons are disabled when fit mode is active', () => {
+    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
+    // Default is fit mode — zoom buttons should be disabled
+    expect(screen.getByTestId('viewer-image-zoom-in')).toBeDisabled();
+    expect(screen.getByTestId('viewer-image-zoom-out')).toBeDisabled();
+  });
+
+  it('zoom buttons are enabled after switching to 100% mode', () => {
+    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
+    // Switch to actual/100% mode
+    fireEvent.click(screen.getByTestId('viewer-image-actual-toggle'));
+    expect(screen.getByTestId('viewer-image-zoom-in')).not.toBeDisabled();
+    expect(screen.getByTestId('viewer-image-zoom-out')).not.toBeDisabled();
+  });
+
+  it('statusRight shows fit-to-window info in fit mode', () => {
+    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
+    const img = document.querySelector('img') as HTMLImageElement;
+    if (img) {
+      Object.defineProperty(img, 'naturalWidth', { value: 800, configurable: true });
+      Object.defineProperty(img, 'naturalHeight', { value: 600, configurable: true });
+      fireEvent.load(img);
+    }
+    // ViewerShell renders statusRight as a span in the footer. Check footer text.
+    const shell = screen.getByTestId('viewer-shell');
+    const footer = shell.lastElementChild as HTMLElement;
+    expect(footer.textContent).toMatch(/fit/i);
+  });
+
+  it('image is wrapped in a white shadow card (not floating directly on checkerboard)', () => {
+    render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
+    const root = screen.getByTestId('viewer-image');
+    // The image card should have bg-white class
+    const card = root.querySelector('.bg-white');
+    expect(card).not.toBeNull();
   });
 });

@@ -161,6 +161,42 @@ describe('CodeRefCard', () => {
     });
   });
 
+  describe('H5 — body uses bg-mf-code-bg token (not bg-mf-content2)', () => {
+    it('the card root element has bg-mf-code-bg class, not bg-mf-content2', () => {
+      render(
+        <CodeRefCard
+          codeRef={{
+            file: 'Layout.tsx',
+            range: { start: 1 },
+            code: 'const x = 1;',
+          }}
+        />,
+      );
+      const root = screen.getByTestId('chat-user-code-ref');
+      expect(root.className).toContain('bg-mf-code-bg');
+      expect(root.className).not.toContain('bg-mf-content2');
+    });
+
+    it('gradient fade overlay uses to-mf-code-bg (not to-mf-content2)', () => {
+      // Generate a 12-line snippet so the fade overlay renders
+      const TWELVE = Array.from({ length: 12 }, (_, i) => `line-${i}`).join('\n');
+      const { container } = render(
+        <CodeRefCard
+          codeRef={{
+            file: 'Big.tsx',
+            range: { start: 1 },
+            code: TWELVE,
+          }}
+        />,
+      );
+      // The fade overlay is a div with pointer-events-none + bg-gradient-to-b
+      const overlay = container.querySelector('.pointer-events-none');
+      expect(overlay).not.toBeNull();
+      expect(overlay!.className).toContain('to-mf-code-bg');
+      expect(overlay!.className).not.toContain('to-mf-content2');
+    });
+  });
+
   describe('H4 — 12-line snippet with expand/collapse toggle', () => {
     // Lines '1'..'12' are the line CONTENT; the line NUMBERS in the DOM are
     // also 1..12 (range.start = 1). We use non-numeric content ('line-a'

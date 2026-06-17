@@ -14,6 +14,9 @@
  *  9. (toFileUrl) Relative path + projectPath → absolute file:// URL.
  * 10. (toFileUrl) Relative path + no projectPath → button is disabled.
  * 11. (toFileUrl) Absolute path → file:// URL passed through.
+ * 12. "Open externally" button uses primary accent fill (bg-primary class).
+ * 13. Icon chip is 46×46 with rounded-[11px] bg-mf-chip container.
+ * 14. Card uses bg-card (not bg-mf-tab-bar).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -102,6 +105,30 @@ describe('UnsupportedViewer', () => {
   it('renders inside ViewerShell (viewer-shell present)', () => {
     render(<UnsupportedViewer path="/archive.zip" />);
     expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
+  });
+
+  it('"Open externally" button has primary accent fill (bg-primary class)', () => {
+    render(<UnsupportedViewer path="/archive.zip" />);
+    const btn = screen.getByTestId('viewer-unsupported-open');
+    expect(btn.className).toContain('bg-primary');
+    // Should NOT have outline/ghost style
+    expect(btn.className).not.toContain('bg-transparent');
+  });
+
+  it('icon chip has 46×46 size and rounded-[11px] bg-mf-chip container', () => {
+    render(<UnsupportedViewer path="/archive.zip" />);
+    const root = screen.getByTestId('viewer-unsupported');
+    // The chip is the div wrapping the icon
+    const chip = root.querySelector('[data-testid="viewer-unsupported-icon-chip"]');
+    expect(chip).not.toBeNull();
+    expect(chip?.className).toContain('bg-mf-chip');
+  });
+
+  it('card uses bg-card class (not bg-mf-tab-bar)', () => {
+    render(<UnsupportedViewer path="/archive.zip" />);
+    const card = screen.getByTestId('viewer-unsupported-card');
+    expect(card.className).toContain('bg-card');
+    expect(card.className).not.toContain('bg-mf-tab-bar');
   });
 
   describe('toFileUrl — path resolution', () => {

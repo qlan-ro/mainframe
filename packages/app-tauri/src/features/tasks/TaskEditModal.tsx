@@ -280,7 +280,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               disabled={!title.trim() || saving}
               className="px-3 py-1.5 rounded-md text-caption bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
             >
-              {saving ? 'Saving…' : todo ? 'Save changes' : 'Save task'}
+              {saving ? 'Saving…' : todo ? 'Save changes' : 'Create task'}
             </button>
           </div>
         </form>

@@ -157,8 +157,10 @@ export function ProviderModelSelect({
               data-testid="composer-model-select"
               aria-label={`Provider and model: ${triggerLabel}`}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-2 py-1 text-label text-muted-foreground',
-                'hover:bg-accent hover:text-accent-foreground transition-colors focus-visible:outline-none',
+                'flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-label text-muted-foreground',
+                'hover:bg-accent hover:text-accent-foreground',
+                'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
+                'transition-colors focus-visible:outline-none',
               )}
             >
               <span className={cn('inline-block size-2 flex-shrink-0 rounded-full', providerDot(activeId))} />
@@ -203,11 +205,9 @@ export function ProviderModelSelect({
           ))}
         </div>
 
-        {locked && (
-          <p data-testid="composer-provider-footer" className="px-1 pt-2 text-caption text-muted-foreground">
-            Provider stays fixed for this session.
-          </p>
-        )}
+        <p data-testid="composer-provider-footer" className="px-1 pt-2 text-caption text-muted-foreground">
+          {locked ? 'Provider stays fixed for this session.' : 'Pick a provider before your first message.'}
+        </p>
       </PopoverContent>
     </Popover>
   );

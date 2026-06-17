@@ -4,7 +4,7 @@ import type { WindowStyle } from '@/store/theme';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { SidebarHeader } from './SidebarHeader';
 
-export const SIDEBAR_EXPANDED_WIDTH = 300;
+export const SIDEBAR_EXPANDED_WIDTH = 280;
 export const SIDEBAR_COLLAPSED_WIDTH = 0;
 export const SIDEBAR_COLLAPSE_THRESHOLD = 150;
 /** Upper cap when dragging the sidebar wider than its natural width. */

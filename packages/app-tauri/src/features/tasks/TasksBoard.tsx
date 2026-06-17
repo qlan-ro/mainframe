@@ -70,7 +70,7 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
     <div data-testid="tasks-board-modal" className="flex flex-col h-full min-h-0 overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
-        <ListChecks size={15} className="shrink-0 text-muted-foreground" aria-hidden />
+        <ListChecks size={15} className="shrink-0 text-primary" aria-hidden />
         <span className="text-body font-semibold text-foreground">Tasks</span>
         <span className="text-caption text-muted-foreground bg-muted rounded-full px-2 py-0.5">
           {activeCount} active · {doneCount} done
@@ -118,7 +118,7 @@ export function TasksBoard({ port, projectId, onStartSession }: Props): React.Re
           className="flex items-center gap-1 px-2 py-1.5 rounded-md bg-primary text-primary-foreground text-caption hover:opacity-90 transition-opacity"
         >
           <Plus size={12} />
-          New
+          New task
         </button>
       </div>
 

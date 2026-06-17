@@ -109,6 +109,17 @@ describe('MarkdownPreview', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 
+  it('has a centered max-width prose column (max-w-[720px] mx-auto)', () => {
+    const { container } = render(<MarkdownPreview value={MD} />);
+    // The outer scroll wrapper (data-testid="markdown-preview") must contain an
+    // inner div that carries the centering classes.
+    const outer = container.querySelector('[data-testid="markdown-preview"]');
+    expect(outer).toBeTruthy();
+    const inner = outer?.firstElementChild as HTMLElement | null;
+    expect(inner?.className).toContain('max-w-[720px]');
+    expect(inner?.className).toContain('mx-auto');
+  });
+
   it('renders a fenced JS code block as a plain pre initially', () => {
     const md = '```javascript\nconst x = 1\n```';
     render(<MarkdownPreview value={md} />);
@@ -148,6 +159,12 @@ describe('MarkdownEditorTab', () => {
     capturedCmEditorProps.length = 0;
   });
 
+  it('toggle labels are "Preview" and "Source" (not "Edit" and "Preview")', () => {
+    render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
+    expect(screen.getByTestId('markdown-mode-preview').textContent).toBe('Preview');
+    expect(screen.getByTestId('markdown-mode-edit').textContent).toBe('Source');
+  });
+
   it('starts in Edit mode showing the CM6 editor, not the preview', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
     expect(screen.getByTestId('cm-editor-mock')).toBeInTheDocument();
@@ -166,6 +183,26 @@ describe('MarkdownEditorTab', () => {
     expect(screen.getByTestId('cm-editor-mock')).toBeInTheDocument();
   });
 
+  it('has exactly one viewer-shell regardless of mode (no duplicate chrome)', () => {
+    render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
+
+    // Edit mode: the single persistent ViewerShell should be present.
+    const shellsInEdit = screen.getAllByTestId('viewer-shell');
+    expect(shellsInEdit).toHaveLength(1);
+
+    // Preview mode: still only ONE ViewerShell.
+    fireEvent.click(screen.getByTestId('markdown-mode-preview'));
+    const shellsInPreview = screen.getAllByTestId('viewer-shell');
+    expect(shellsInPreview).toHaveLength(1);
+  });
+
+  it('ViewerShell is always present and contains the toggle in the header', () => {
+    render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
+    // Shell present in edit mode (not just preview mode)
+    expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
+    expect(screen.getByTestId('viewer-shell-status')).toBeInTheDocument();
+  });
+
   it('wraps the preview in ViewerShell when in preview mode', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
 
@@ -177,10 +214,8 @@ describe('MarkdownEditorTab', () => {
     expect(screen.getByTestId('viewer-shell-status')).toBeInTheDocument();
   });
 
-  it('status shows word count and line count in preview mode', () => {
+  it('status shows word count and line count', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
-
-    fireEvent.click(screen.getByTestId('markdown-mode-preview'));
 
     const status = screen.getByTestId('viewer-shell-status');
     expect(status.textContent).toMatch(/Markdown/);

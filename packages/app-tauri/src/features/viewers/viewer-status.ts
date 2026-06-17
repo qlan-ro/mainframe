@@ -27,6 +27,30 @@ export function formatImageStatus({ ext, w, h, bytes }: ImageStatusArgs): string
   return `${ext.toUpperCase()} · ${w}×${h} · ${formatBytes(bytes)}`;
 }
 
+/**
+ * Split image status for left/right footer slots.
+ * left:  'PNG · 1840×1024'
+ * right: '248 KB · fit to window' or '248 KB · 100%'
+ */
+export interface ImageStatusSplit {
+  left: string;
+  right: string;
+}
+
+export function splitImageStatus({
+  ext,
+  w,
+  h,
+  bytes,
+  zoom,
+  fit,
+}: ImageStatusArgs & { zoom: number; fit: boolean }): ImageStatusSplit {
+  const left = `${ext.toUpperCase()} · ${w}×${h}`;
+  const zoomLabel = fit ? 'fit to window' : `${Math.round(zoom * 100)}%`;
+  const right = bytes > 0 ? `${formatBytes(bytes)} · ${zoomLabel}` : zoomLabel;
+  return { left, right };
+}
+
 export interface CsvStatusArgs {
   rows: number;
   cols: number;
@@ -35,6 +59,31 @@ export interface CsvStatusArgs {
 /** e.g. 'CSV · UTF-8 · 12 rows · 4 cols' */
 export function formatCsvStatus({ rows, cols }: CsvStatusArgs): string {
   return `CSV · UTF-8 · ${rows} rows · ${cols} cols`;
+}
+
+/**
+ * Split CSV status for left/right footer slots.
+ * left:  'CSV · UTF-8'
+ * right: '12 rows · 4 cols' (or 'N/total rows · M cols' when filtered)
+ */
+export interface CsvStatusSplit {
+  left: string;
+  right: string;
+}
+
+export function splitCsvStatus({
+  rows,
+  cols,
+  filtered,
+  total,
+}: CsvStatusArgs & { filtered?: number; total?: number }): CsvStatusSplit {
+  const left = 'CSV · UTF-8';
+  const rowLabel =
+    filtered !== undefined && total !== undefined && filtered !== total
+      ? `${filtered}/${total} rows`
+      : `${rows} rows`;
+  const right = `${rowLabel} · ${cols} cols`;
+  return { left, right };
 }
 
 export interface MarkdownStatusArgs {

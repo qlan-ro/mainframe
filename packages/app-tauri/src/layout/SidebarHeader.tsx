@@ -19,7 +19,7 @@ function TasksBtn() {
       data-testid="sidebar-tasks-button"
       type="button"
       title="Tasks"
-      className="inline-flex h-6 w-7 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-mf-chip"
+      className="inline-flex h-6 w-7 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
       onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
     >
       <TasksGlyph size={14} className="text-muted-foreground" />

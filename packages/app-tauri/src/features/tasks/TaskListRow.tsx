@@ -1,18 +1,18 @@
 /**
  * TaskListRow — compact list-view row for a single Todo.
  *
- * Collapsed: priority stripe · status dot · #number · title · priority pill.
+ * Collapsed: priority stripe · status dot (cycle button) · #number · title · priority pill.
  * Expanded: body · milestone · dependencies · timestamps · Start/Resume/Edit buttons.
  *
  * Port of packages/desktop/src/renderer/components/todos/TodoCard.tsx (list
  * variant), rebuilt on app-tauri shadcn/ui + warm-chrome theme tokens.
  */
 import React from 'react';
-import { ChevronDown, ChevronRight, Play, Edit } from 'lucide-react';
+import { ChevronDown, ChevronRight, Play, Edit, Trash2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { Todo } from '@/lib/api/todos';
-import { statusDotColor, priorityTint } from './task-palettes';
+import { priorityTint, priorityDotClass } from './task-palettes';
 
 interface Props {
   todo: Todo;
@@ -21,6 +21,8 @@ interface Props {
   onToggle: (number: number) => void;
   onEdit: (todo: Todo) => void;
   onStartSession: (todo: Todo) => void;
+  onCycle: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
 function formatDate(iso: string): string {
@@ -55,7 +57,76 @@ function PriorityStripe({ todo }: { todo: Todo }): React.ReactElement {
   return <span className={stripeClass} aria-hidden />;
 }
 
-export function TaskListRow({ todo, selected, expanded, onToggle, onEdit, onStartSession }: Props): React.ReactElement {
+/**
+ * StatusDot — interactive cycle button with three distinct visual states:
+ *  open       = empty ring (border only, no fill), border-primary on hover
+ *  in_progress = primary-colored ring + inner pulsing dot
+ *  done       = filled mf-success circle with a white checkmark
+ */
+function StatusDot({ todo, onCycle }: { todo: Todo; onCycle: (id: string) => void }): React.ReactElement {
+  const { status, id, number } = todo;
+
+  function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    onCycle(id);
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid={`tasks-list-row-cycle-${number}`}
+      aria-label={`Status: ${status}. Click to cycle.`}
+      onClick={handleClick}
+      className={cn(
+        'shrink-0 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-full',
+        status === 'done'
+          ? 'w-4 h-4 bg-mf-success'
+          : status === 'in_progress'
+            ? 'w-[15px] h-[15px] rounded-full border-2 border-primary'
+            : 'w-3.5 h-3.5 rounded-full border-2 border-border hover:border-primary',
+      )}
+    >
+      {status === 'done' && <Check size={9} className="text-white" strokeWidth={3} />}
+      {status === 'in_progress' && (
+        <span
+          data-status-pulse
+          className="w-[5px] h-[5px] rounded-full bg-primary animate-pulse"
+          aria-hidden
+        />
+      )}
+    </button>
+  );
+}
+
+/** Priority pill with a leading colored dot. */
+function PriorityPill({ todo }: { todo: Todo }): React.ReactElement {
+  return (
+    <span
+      className={cn(
+        'shrink-0 inline-flex items-center gap-1 text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
+        priorityTint(todo.priority),
+      )}
+    >
+      <span
+        data-testid={`tasks-priority-dot-${todo.number}`}
+        className={cn('w-1.5 h-1.5 rounded-full shrink-0 inline-block', priorityDotClass(todo.priority))}
+        aria-hidden
+      />
+      {todo.priority}
+    </span>
+  );
+}
+
+export function TaskListRow({
+  todo,
+  selected,
+  expanded,
+  onToggle,
+  onEdit,
+  onStartSession,
+  onCycle,
+  onDelete,
+}: Props): React.ReactElement {
   const canStart = todo.status === 'open' || todo.status === 'in_progress';
   const isDone = todo.status === 'done';
 
@@ -84,8 +155,8 @@ export function TaskListRow({ todo, selected, expanded, onToggle, onEdit, onStar
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
 
-        {/* Status dot */}
-        <span className={cn('shrink-0 w-2 h-2 rounded-full', statusDotColor(todo.status))} aria-label={todo.status} />
+        {/* Status dot — interactive cycle button */}
+        <StatusDot todo={todo} onCycle={onCycle} />
 
         {/* Number */}
         <span className="shrink-0 font-mono text-caption font-medium text-primary w-10 text-right">#{todo.number}</span>
@@ -100,15 +171,8 @@ export function TaskListRow({ todo, selected, expanded, onToggle, onEdit, onStar
           {todo.title}
         </span>
 
-        {/* Priority pill */}
-        <span
-          className={cn(
-            'shrink-0 text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
-            priorityTint(todo.priority),
-          )}
-        >
-          {todo.priority}
-        </span>
+        {/* Priority pill with leading dot */}
+        <PriorityPill todo={todo} />
 
         {/* Hover actions */}
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
@@ -145,6 +209,22 @@ export function TaskListRow({ todo, selected, expanded, onToggle, onEdit, onStar
               </button>
             </TooltipTrigger>
             <TooltipContent>Edit</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                data-testid={`tasks-list-row-delete-${todo.number}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(todo.id);
+                }}
+                className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
+                aria-label="Delete task"
+              >
+                <Trash2 size={13} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Delete</TooltipContent>
           </Tooltip>
         </div>
       </div>

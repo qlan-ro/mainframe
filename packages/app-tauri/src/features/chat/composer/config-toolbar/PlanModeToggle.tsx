@@ -40,12 +40,12 @@ export function PlanModeToggle({ chat, adapter, setPlanMode }: PlanModeTogglePro
           onClick={() => setPlanMode(!active)}
           className={[
             'flex items-center gap-1 px-2 py-1',
-            'rounded-md text-label',
+            'rounded-md border text-label',
             'transition-colors',
             'focus-visible:outline-none',
             active
-              ? 'bg-mf-selection text-primary'
-              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+              ? 'border-mf-warning bg-mf-warning-tint text-mf-warning'
+              : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
           ].join(' ')}
         >
           <ClipboardList size={14} className="shrink-0" />

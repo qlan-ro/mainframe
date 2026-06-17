@@ -200,6 +200,41 @@ describe('MainToolbar — inspector toggle', () => {
   });
 });
 
+describe('MainToolbar — height 40px', () => {
+  it('root element has h-[40px] class (artboard specifies height: 40)', () => {
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+    const toolbar = screen.getByTestId('main-toolbar');
+    expect(toolbar.className).toContain('h-[40px]');
+  });
+});
+
+describe('MainToolbar — CMD+O hint chip in search button', () => {
+  it('renders the ⌘O keyboard hint chip inside the search button', () => {
+    render(
+      <MainToolbar
+        leadingInset={0}
+        sidebarRendered={true}
+        onExpandSidebar={vi.fn()}
+        projectName="mainframe"
+        windowStyle="glass"
+        port={31415}
+      />,
+    );
+    const hint = screen.getByTestId('main-toolbar-search-hint');
+    expect(hint).toBeTruthy();
+    expect(hint.textContent).toBe('⌘O');
+  });
+});
+
 describe('MainToolbar — theme toggle', () => {
   it('clicking main-toolbar-theme flips the theme mode from light to dark', () => {
     render(
