@@ -183,7 +183,7 @@ export function FindInPathModal() {
         if (!o) setFindInPath(null);
       }}
     >
-      <DialogContent className="max-w-2xl p-0 gap-0">
+      <DialogContent data-testid="find-in-path" className="max-w-2xl p-0 gap-0">
         <DialogHeader className="px-4 pt-4 pb-2">
           <DialogTitle className="text-body">
             {scope?.scopeType === 'file' ? `Find in file: ${scope.scopePath}` : `Find in: ${scope?.scopePath ?? ''}`}

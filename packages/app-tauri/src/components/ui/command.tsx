@@ -19,11 +19,17 @@ const Command = React.forwardRef<
 ));
 Command.displayName = CommandPrimitive.displayName;
 
-function CommandDialog({ children, ...props }: React.ComponentPropsWithoutRef<typeof Dialog>) {
+interface CommandDialogProps extends React.ComponentPropsWithoutRef<typeof Dialog> {
+  /** Forwarded to the DialogContent — lets callers override width/position (e.g. spotlight). */
+  className?: string;
+  'data-testid'?: string;
+}
+
+function CommandDialog({ children, className, 'data-testid': testId, ...props }: CommandDialogProps) {
   return (
     <Dialog {...props}>
-      <DialogContent className="overflow-hidden p-0">
-        <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-caption [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+      <DialogContent data-testid={testId} className={cn('overflow-hidden p-0', className)}>
+        <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-mf-text-3 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input]]:h-[54px] [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2">
           {children}
         </Command>
       </DialogContent>
@@ -41,7 +47,7 @@ const CommandInput = React.forwardRef<
       ref={ref}
       className={cn(
         'flex h-10 w-full rounded-md bg-transparent py-3',
-        'text-body outline-none',
+        'text-heading tracking-tight outline-none',
         'placeholder:text-muted-foreground',
         'disabled:cursor-not-allowed disabled:opacity-50',
         className,
@@ -77,8 +83,8 @@ const CommandGroup = React.forwardRef<
     className={cn(
       'overflow-hidden p-1 text-foreground',
       '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5',
-      '[&_[cmdk-group-heading]]:text-caption [&_[cmdk-group-heading]]:font-semibold',
-      '[&_[cmdk-group-heading]]:text-muted-foreground',
+      '[&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide',
+      '[&_[cmdk-group-heading]]:text-mf-text-3',
       className,
     )}
     {...props}

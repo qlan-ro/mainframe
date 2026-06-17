@@ -60,6 +60,8 @@ export function SearchPalette() {
 
   return (
     <CommandDialog
+      data-testid="search-palette"
+      className="top-[11vh] max-w-[580px] translate-y-0"
       open={open}
       onOpenChange={(o) => {
         if (!o) close();
@@ -109,6 +111,25 @@ export function SearchPalette() {
 
         {query.trim().length >= 2 && fileResults.length === 0 && <CommandEmpty>No matches</CommandEmpty>}
       </CommandList>
+      <div
+        data-testid="search-palette-footer"
+        className="flex h-[34px] shrink-0 items-center gap-4 border-t border-border bg-mf-content2 px-3.5"
+      >
+        {(
+          [
+            ['↑↓', 'Navigate'],
+            ['⏎', 'Open'],
+            ['esc', 'Dismiss'],
+          ] as const
+        ).map(([key, label]) => (
+          <span key={label} className="inline-flex items-center gap-1.5">
+            <kbd className="inline-flex h-4 items-center rounded-xs bg-mf-chip px-[5px] text-micro font-semibold text-mf-text-3">
+              {key}
+            </kbd>
+            <span className="text-caption text-mf-text-3">{label}</span>
+          </span>
+        ))}
+      </div>
     </CommandDialog>
   );
 }

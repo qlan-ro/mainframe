@@ -82,7 +82,7 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
         <span className="size-3.5 shrink-0" />
       )}
       {isDirectory ? (
-        <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        <FolderIcon className="size-3.5 shrink-0 text-primary" />
       ) : (
         <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
       )}
@@ -256,12 +256,22 @@ export function DirectoryPickerModal() {
         if (!o) resolve(null);
       }}
     >
-      <DialogContent className="max-w-lg p-0 gap-0 flex flex-col max-h-[70vh]">
+      <DialogContent
+        data-testid="directory-picker"
+        className="max-w-lg p-0 gap-0 flex flex-col max-h-[70vh]"
+      >
         <DialogHeader className="px-4 pt-4 pb-2 shrink-0">
           <DialogTitle className="text-body">
             {pending?.title ?? (pending?.mode === 'file' ? 'Select a file' : 'Select a directory')}
           </DialogTitle>
         </DialogHeader>
+
+        <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-3.5 py-[7px] font-mono text-caption text-mf-text-3">
+          <FolderIcon className="size-3 shrink-0 text-mf-text-4" />
+          <span className="truncate" data-testid="directory-picker-crumb">
+            {selectedPath ?? '~'}
+          </span>
+        </div>
 
         <div className="flex-1 overflow-y-auto min-h-0">
           {rootError && <p className="px-4 py-4 text-caption text-destructive">{rootError}</p>}
@@ -278,7 +288,7 @@ export function DirectoryPickerModal() {
             type="button"
             data-testid="directory-picker-cancel"
             onClick={handleCancel}
-            className="rounded-md px-3 py-1.5 text-body text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            className="rounded-md bg-mf-chip px-3 py-1.5 text-body text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             Cancel
           </button>
