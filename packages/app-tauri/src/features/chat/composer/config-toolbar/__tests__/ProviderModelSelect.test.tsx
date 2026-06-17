@@ -184,6 +184,22 @@ describe('ProviderModelSelect — popover contents after open', () => {
     expect(screen.getByTestId('composer-model-select-option-sonnet')).toBeInTheDocument();
     expect(screen.getByTestId('composer-model-select-option-haiku')).toBeInTheDocument();
   });
+
+  it('marks the active model row with the brand selection tint (distinct from hover)', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE],
+      adapter: ADAPTER_CLAUDE,
+      model: SONNET,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    const activeRow = screen.getByTestId('composer-model-select-option-sonnet');
+    const otherRow = screen.getByTestId('composer-model-select-option-haiku');
+    expect(activeRow.className).toContain('bg-mf-selection');
+    expect(otherRow.className).not.toContain('bg-mf-selection');
+  });
 });
 
 // ---------------------------------------------------------------------------

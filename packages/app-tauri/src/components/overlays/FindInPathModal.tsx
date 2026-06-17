@@ -31,7 +31,7 @@ interface ResultRowProps {
 }
 
 function ResultRow({ result, isActive, rowRef, onSelect }: ResultRowProps) {
-  const activeClasses = isActive ? 'bg-accent text-accent-foreground' : '';
+  const activeClasses = isActive ? 'bg-mf-selection text-foreground' : '';
   return (
     <button
       ref={rowRef}

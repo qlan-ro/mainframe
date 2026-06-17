@@ -69,7 +69,7 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
         if (isDirectory) onToggle(node);
         onSelect(node);
       }}
-      className={`flex w-full items-center gap-1.5 rounded-sm px-2 py-1 text-left text-body outline-none hover:bg-accent hover:text-accent-foreground ${isSelected ? 'bg-accent text-accent-foreground' : ''}`}
+      className={`flex w-full items-center gap-1.5 rounded-sm px-2 py-1 text-left text-body outline-none hover:bg-accent hover:text-accent-foreground ${isSelected ? 'bg-mf-selection text-foreground' : ''}`}
       style={{ paddingLeft: `${8 + indent}px` }}
     >
       {isDirectory ? (

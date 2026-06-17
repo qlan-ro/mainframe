@@ -40,7 +40,7 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile }: ReviewFile
             data-testid={`review-file-row-${f.path}`}
             title={f.path}
             onClick={() => onSelectFile(f.path)}
-            className={`flex h-[22px] w-full items-center gap-2 border-none bg-transparent px-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground ${isSelected ? 'bg-accent text-foreground' : ''}`}
+            className={`flex h-[22px] w-full items-center gap-2 border-none bg-transparent px-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground ${isSelected ? 'bg-mf-selection text-foreground' : ''}`}
           >
             <span className={`w-3 flex-shrink-0 text-center font-mono text-micro ${badgeClass}`}>
               {KIND_LABEL[f.status]}

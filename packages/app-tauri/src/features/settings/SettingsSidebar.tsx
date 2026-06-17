@@ -23,7 +23,7 @@ function SettingsNavItem({ id: _id, label, icon: Icon, active, onClick, testId }
       className={cn(
         'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-body transition-colors',
         active
-          ? 'bg-accent text-accent-foreground font-medium'
+          ? 'bg-mf-selection text-foreground font-medium'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
@@ -54,7 +54,7 @@ function ProviderSubItems({ port, activeProvider }: { port: number; activeProvid
           className={cn(
             'rounded-md px-2 py-1.5 text-left text-body transition-colors',
             activeProvider === adapter.id
-              ? 'bg-accent text-accent-foreground font-medium'
+              ? 'bg-mf-selection text-foreground font-medium'
               : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
           )}
         >

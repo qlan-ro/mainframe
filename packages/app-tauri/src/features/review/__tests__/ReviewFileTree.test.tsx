@@ -40,4 +40,12 @@ describe('ReviewFileTree', () => {
     expect(screen.getByText('D')).toBeTruthy();
     expect(screen.getByText('R')).toBeTruthy();
   });
+
+  it('marks the selected row with the brand selection tint (distinct from unselected)', () => {
+    render(<ReviewFileTree files={FILES} selectedFile="src/a.ts" onSelectFile={vi.fn()} />);
+    const selected = screen.getByTestId('review-file-row-src/a.ts');
+    const unselected = screen.getByTestId('review-file-row-src/b.ts');
+    expect(selected.className).toContain('bg-mf-selection');
+    expect(unselected.className).not.toContain('bg-mf-selection');
+  });
 });
