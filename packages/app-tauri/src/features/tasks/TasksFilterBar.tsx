@@ -105,7 +105,7 @@ export function TasksFilterBar({ filters, onChange, allLabels, sort, onSortChang
             value={filters.search}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
             placeholder="Filter by title…"
-            className="pl-6 pr-6 h-7 text-caption w-40"
+            className="h-[30px] w-[230px] pl-6 pr-6 text-caption"
           />
           {filters.search && (
             <button

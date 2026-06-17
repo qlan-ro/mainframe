@@ -22,11 +22,11 @@ import type { Todo, TodoStatus, TodoType, TodoPriority } from '@/lib/api/todos';
 
 // Physical padding avoids Chromium scroll-clip on <input>.
 const inputCls = cn(
-  'bg-background border border-border rounded-md pl-3 pr-3 py-1.5',
+  'bg-mf-content2 border-[0.5px] border-border rounded-md pl-3 pr-3 py-1.5',
   'text-caption text-foreground focus:outline-none focus:ring-1 focus:ring-ring w-full',
 );
 const textareaWrap = cn(
-  'bg-background border border-border rounded-md pl-3 pr-3 py-1.5 focus-within:ring-1 focus-within:ring-ring',
+  'bg-mf-content2 border-[0.5px] border-border rounded-md pl-3 pr-3 py-1.5 focus-within:ring-1 focus-within:ring-ring',
 );
 const textareaInner = cn(
   'w-full bg-transparent border-0 p-0 resize-none text-caption text-foreground outline-none focus:outline-none focus-visible:outline-none',
@@ -156,7 +156,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
         if (!o) onClose();
       }}
     >
-      <DialogContent className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0">
+      <DialogContent hideClose className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
           <DialogTitle className="flex items-center gap-2 text-heading font-bold">
             {todo ? (

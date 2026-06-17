@@ -56,8 +56,8 @@ export const TaskCard = React.memo(function TaskCard({
       onDragStart={handleDragStart}
       onClick={() => onEdit(todo)}
       className={cn(
-        'bg-card rounded-lg p-3 space-y-1.5 border border-border group cursor-pointer',
-        'hover:border-border/80 transition-colors',
+        'group cursor-pointer space-y-1.5 rounded-md border-[0.5px] border-border bg-background px-[11px] py-[10px]',
+        'transition-colors hover:border-border/80',
       )}
     >
       {/* Row 1: #number + title + type badge */}

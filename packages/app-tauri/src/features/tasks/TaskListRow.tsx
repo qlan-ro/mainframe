@@ -12,7 +12,7 @@ import { ChevronDown, ChevronRight, Play, Edit, Trash2, Check } from 'lucide-rea
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { Todo } from '@/lib/api/todos';
-import { priorityTint, priorityDotClass } from './task-palettes';
+import { priorityTint, priorityDotClass, typeTint } from './task-palettes';
 
 interface Props {
   todo: Todo;
@@ -83,7 +83,7 @@ function StatusDot({ todo, onCycle }: { todo: Todo; onCycle: (id: string) => voi
           ? 'w-4 h-4 bg-mf-success'
           : status === 'in_progress'
             ? 'w-[15px] h-[15px] rounded-full border-2 border-primary'
-            : 'w-3.5 h-3.5 rounded-full border-2 border-border hover:border-primary',
+            : 'w-3.5 h-3.5 rounded-full border-[1.6px] border-mf-text-4 hover:border-primary',
       )}
     >
       {status === 'done' && <Check size={9} className="text-white" strokeWidth={3} />}
@@ -169,6 +169,17 @@ export function TaskListRow({
           )}
         >
           {todo.title}
+        </span>
+
+        {/* Type badge */}
+        <span
+          data-testid={`tasks-list-row-type-${todo.number}`}
+          className={cn(
+            'shrink-0 rounded px-1.5 py-0.5 text-caption font-medium capitalize leading-4',
+            typeTint(todo.type),
+          )}
+        >
+          {todo.type.replace('_', ' ')}
         </span>
 
         {/* Priority pill with leading dot */}

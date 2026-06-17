@@ -48,11 +48,10 @@ export function FilterMenu({ label, options, selected, onChange }: Props): React
           data-testid={`tasks-filter-${toKebab(label)}`}
           type="button"
           className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded text-label font-medium transition-colors',
-            'border border-border',
+            'flex items-center gap-1 rounded-md border-[0.5px] px-2 py-1 text-label font-medium transition-colors',
             hasSelection
-              ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-background text-muted-foreground hover:text-foreground hover:border-border',
+              ? 'border-transparent bg-primary/10 text-primary'
+              : 'border-border bg-background text-muted-foreground hover:text-foreground',
           )}
         >
           {label}

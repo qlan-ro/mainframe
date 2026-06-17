@@ -66,7 +66,7 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
           if (!o) closeModal();
         }}
       >
-        <DialogContent className="max-w-4xl w-full max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogContent hideClose className="max-w-4xl w-full max-h-[85vh] flex flex-col p-0 gap-0">
           <DialogHeader className="sr-only">
             <DialogTitle>Tasks</DialogTitle>
           </DialogHeader>

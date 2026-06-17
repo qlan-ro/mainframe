@@ -58,23 +58,25 @@ export function TaskColumn({
     <div
       data-testid={`tasks-column-${status}`}
       className={cn(
-        'flex flex-col gap-2 min-h-0 flex-1 rounded-lg p-2 transition-colors',
-        dragOver ? 'bg-accent/60 ring-1 ring-border' : 'bg-muted/40',
+        'flex flex-col min-h-0 transition-colors',
+        dragOver ? 'bg-primary/5' : 'bg-mf-content2',
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       {/* Column header */}
-      <div className="flex items-center gap-2 px-1 py-0.5 shrink-0">
-        <span className="text-caption font-semibold text-foreground">{STATUS_LABEL[status]}</span>
-        <span className="ml-auto text-caption font-medium text-muted-foreground bg-background rounded-full px-1.5 py-0.5">
+      <div className="flex shrink-0 items-center gap-2 px-3.5 pb-2 pt-2.5">
+        <span className="text-caption font-bold uppercase tracking-wide text-muted-foreground">
+          {STATUS_LABEL[status]}
+        </span>
+        <span className="ml-auto rounded-md bg-mf-chip px-1.5 py-px font-mono text-micro text-mf-text-3">
           {todos.length}
         </span>
       </div>
 
       {/* Cards */}
-      <div className="flex flex-col gap-2 overflow-y-auto min-h-0 flex-1 mf-thin-scrollbar">
+      <div className="mf-thin-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
         {todos.map((todo) => (
           <TaskCard key={todo.id} todo={todo} onEdit={onEdit} onDelete={onDelete} onStartSession={onStartSession} />
         ))}

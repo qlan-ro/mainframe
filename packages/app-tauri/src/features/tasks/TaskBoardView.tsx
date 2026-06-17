@@ -38,7 +38,7 @@ export function TaskBoardView({
   }
 
   return (
-    <div className="flex gap-3 min-h-0 flex-1 overflow-x-auto p-3">
+    <div className="grid min-h-0 flex-1 grid-cols-3 gap-px overflow-hidden bg-border">
       {COLUMNS.map((status) => (
         <TaskColumn
           key={status}

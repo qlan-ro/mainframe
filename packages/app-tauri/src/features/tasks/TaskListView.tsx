@@ -157,7 +157,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
               <button
                 type="button"
                 data-testid={`tasks-list-group-${status}`}
-                className="flex items-center gap-1.5 w-full px-3 py-1.5 bg-muted/40 border-b border-border hover:bg-accent transition-colors text-caption font-semibold text-muted-foreground"
+                className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border bg-mf-content2 px-3 py-1.5 text-caption font-bold uppercase tracking-wide text-muted-foreground"
                 onClick={() => toggleGroup(status)}
               >
                 {collapsedGroups.has(status) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -186,8 +186,22 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
       )}
 
       {/* Footer hint */}
-      <div className="shrink-0 px-3 py-2 border-t border-border bg-card text-caption text-muted-foreground">
-        <span>↑/↓ select · ↵ start session · E edit · Space toggle status</span>
+      <div className="flex shrink-0 items-center gap-4 border-t border-border bg-mf-content2 px-3 py-1.5">
+        {(
+          [
+            ['↑↓', 'Navigate'],
+            ['↵', 'Start session'],
+            ['E', 'Edit'],
+            ['Space', 'Toggle status'],
+          ] as const
+        ).map(([key, label]) => (
+          <span key={label} className="inline-flex items-center gap-1.5">
+            <kbd className="rounded-sm border-[0.5px] border-border bg-card px-1.5 py-0.5 font-mono text-caption leading-none text-muted-foreground">
+              {key}
+            </kbd>
+            <span className="text-caption text-mf-text-3">{label}</span>
+          </span>
+        ))}
       </div>
     </div>
   );
