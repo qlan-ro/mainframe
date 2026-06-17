@@ -3,7 +3,7 @@
 **Date:** 2026-06-17  
 **Method:** 14 parallel `design-conformance` audits (one per built surface) diffing built code against its warm-chrome artboard + prototype JSX + the `styles/globals.css` token contract; each surface’s findings adversarially re-verified against the real code; then synthesized. 29 agents, ~2.9M tokens.  
 **Result:** **179 confirmed drifts** (2 blocker · 95 major · 82 minor) across 14 surfaces · 2 refuted · 4 foundational token claims independently re-verified by the orchestrator.  
-**Status:** proposal — *no fixes applied*.
+**Status:** Phase 0–3 implemented (see tracker); **the live-render conformance sweep over the remaining surfaces is COMPLETE (2026-06-18)** — settings, overlays/palette, viewers, tasks, branch/tag popovers, sidebar/chat-deep, and the composer chips were each rendered in the running app, diffed against the prototype via computed-style probes, fixed, verified (typecheck + per-surface tests + design-token-audit), and committed per surface. Plus a foundational `cn()`/tailwind-merge font-size fix and a compressed-spacing-scale correction pass. Deferred items (need a new token/daemon endpoint or a deliberate UX decision) are listed in the tracker. See `docs/architecture/MIGRATION-TRACKER.md` (2026-06-18 entry).
 
 > Parity audit against the artboards in `docs/design-reference/`. Documented **approved divergences** (@mention Badge chip, 4-line read-more clamp, native collapsed reasoning, side-by-side-only review) and **tracker-deferred** features were excluded from drift; deferred items observed during the sweep are listed per surface under *Deferred (not drift)*.
 
