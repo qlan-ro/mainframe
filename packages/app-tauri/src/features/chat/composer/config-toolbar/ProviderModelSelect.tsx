@@ -23,6 +23,7 @@ import { Check, ChevronDown, Lock } from 'lucide-react';
 import type { AdapterInfo, AdapterModel, Chat } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { MenuLabel } from '@/components/ui/menu';
 import { cn } from '@/lib/utils';
 
 export interface ProviderModelSelectProps {
@@ -177,18 +178,23 @@ export function ProviderModelSelect({
         align="start"
         side="top"
         sideOffset={6}
-        className="w-72 p-2"
+        className="w-72"
       >
-        <div data-testid="composer-provider-header" className="flex items-center justify-between px-1 pb-1.5">
-          <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">Provider</span>
-          {locked && (
-            <span className="flex items-center gap-1 text-caption text-muted-foreground">
-              <Lock size={11} /> Locked
-            </span>
-          )}
+        <div data-testid="composer-provider-header">
+          <MenuLabel
+            trailing={
+              locked ? (
+                <span className="flex items-center gap-1 text-caption text-muted-foreground">
+                  <Lock size={11} /> Locked
+                </span>
+              ) : undefined
+            }
+          >
+            Provider
+          </MenuLabel>
         </div>
 
-        <div className="flex flex-wrap gap-1 px-1">
+        <div className="flex flex-wrap gap-1 px-[8px]">
           {adapters.map((a) => (
             <ProviderPill key={a.id} option={a} active={a.id === activeId} locked={locked} onSelect={onPickProvider} />
           ))}
@@ -196,16 +202,14 @@ export function ProviderModelSelect({
 
         <div className="my-2 border-t border-border" />
 
-        <div className="px-1 pb-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
-          {active?.name ?? 'Models'} models
-        </div>
+        <MenuLabel>{active?.name ?? 'Models'} models</MenuLabel>
         <div className="flex flex-col gap-px">
           {rows.map((m) => (
             <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
           ))}
         </div>
 
-        <p data-testid="composer-provider-footer" className="px-1 pt-2 text-caption text-muted-foreground">
+        <p data-testid="composer-provider-footer" className="px-[8px] pt-2 text-caption text-muted-foreground">
           {locked ? 'Provider stays fixed for this session.' : 'Pick a provider before your first message.'}
         </p>
       </PopoverContent>

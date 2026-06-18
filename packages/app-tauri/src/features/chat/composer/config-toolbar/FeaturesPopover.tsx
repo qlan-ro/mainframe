@@ -16,6 +16,7 @@ import type { AdapterModel, Chat, FeatureKey, ProviderConfig } from '@qlan-ro/ma
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { MenuLabel } from '@/components/ui/menu';
 import { visibleFeatures, effectiveFeature } from '@/lib/model-tuning';
 
 export interface FeaturesPopoverProps {
@@ -97,9 +98,9 @@ export function FeaturesPopover({ chat, model, setFeature, disabled, providerDef
         align="start"
         side="top"
         sideOffset={6}
-        className="w-64 p-3"
+        className="w-64"
       >
-        <p className="mb-2 text-label font-semibold text-foreground">Features</p>
+        <MenuLabel>Features</MenuLabel>
         <div className="divide-y divide-border">
           {features.map((f) => (
             <FeatureRow
