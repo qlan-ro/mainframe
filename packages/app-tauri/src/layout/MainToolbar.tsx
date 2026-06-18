@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Play, Search, Sun } from 'lucide-react';
+import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Search, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme, type WindowStyle } from '@/store/theme';
 import { useLayoutStore } from '@/store/layout';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { BranchPopover } from '../features/git/BranchPopover';
+import { ToolbarLaunchControls } from '../features/run/ToolbarLaunchControls';
 import { SurfaceRail } from './SurfaceRail';
 
 interface MainToolbarProps {
@@ -24,22 +25,7 @@ interface MainToolbarProps {
 }
 
 const ICON_BTN =
-  'inline-flex h-[22px] w-[26px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
-
-/** A gated chrome control: present (per the design) but disabled until its surface/subsystem lands. */
-function StubButton({ testid, title, children }: { testid: string; title: string; children: React.ReactNode }) {
-  return (
-    <button
-      data-testid={testid}
-      type="button"
-      title={`${title} — coming with its surface`}
-      disabled
-      className={`${ICON_BTN} cursor-not-allowed opacity-50 hover:bg-transparent`}
-    >
-      {children}
-    </button>
-  );
-}
+  'inline-flex h-[24px] w-[28px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
 
 /**
  * Shell-level surface-area toolbar (above SurfaceHost): project · branch identity
@@ -70,11 +56,11 @@ export function MainToolbar({
     <div
       data-testid="main-toolbar"
       data-tauri-drag-region
-      className={`flex h-[40px] flex-shrink-0 items-center justify-between gap-2 pr-1.5 ${geo.toolbar}`}
+      className={`flex h-[40px] flex-shrink-0 items-center justify-between gap-2 pr-[12px] ${geo.toolbar}`}
     >
       {/* Left: identity */}
       <div
-        className="flex min-w-0 items-center gap-1.5 pl-2"
+        className="flex min-w-0 items-center gap-[8px] pl-[8px]"
         style={leadingInset > 0 ? { paddingLeft: leadingInset } : undefined}
       >
         {!sidebarRendered && (
@@ -88,7 +74,7 @@ export function MainToolbar({
             <PanelLeft size={14} />
           </button>
         )}
-        <span className="flex min-w-0 items-center gap-1.5 text-caption font-semibold text-foreground">
+        <span className="flex min-w-0 items-center gap-[5px] text-body font-semibold tracking-[-0.2px] text-foreground">
           <span className="truncate">{projectName}</span>
           {branchName && (
             <>
@@ -107,7 +93,7 @@ export function MainToolbar({
                     title="Switch branch"
                     onClick={() => setBranchOpen((o) => !o)}
                     className={cn(
-                      'inline-flex min-w-0 max-w-[230px] cursor-pointer items-center gap-1.5 rounded-[6px] px-1.5 py-0.5 font-mono text-micro font-normal',
+                      'inline-flex h-[22px] min-w-0 max-w-[230px] cursor-pointer items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal',
                       branchOpen
                         ? 'bg-primary/10 border border-primary/40 text-foreground'
                         : 'text-muted-foreground hover:bg-accent',
@@ -124,7 +110,7 @@ export function MainToolbar({
                   type="button"
                   title="Switch branch — coming with its surface"
                   disabled
-                  className="inline-flex min-w-0 max-w-[230px] cursor-not-allowed items-center gap-1.5 rounded-[6px] px-1.5 py-0.5 font-mono text-micro font-normal text-muted-foreground opacity-80"
+                  className="inline-flex h-[22px] min-w-0 max-w-[230px] cursor-not-allowed items-center gap-[5px] rounded-[6px] px-[6px] font-mono text-caption font-normal text-muted-foreground opacity-80"
                 >
                   <GitBranch size={11} className="flex-shrink-0 text-mf-text-3" />
                   <span className="truncate">{branchName}</span>
@@ -136,33 +122,28 @@ export function MainToolbar({
         </span>
       </div>
 
-      {/* Right: controls */}
-      <div className="flex flex-shrink-0 items-center gap-1">
-        <SurfaceRail />
-        <span className="mx-0.5 h-4 w-px bg-border" />
+      {/* Right: controls — order mirrors the artboard (search → launch → play → surfaces → theme → inspector). */}
+      <div className="flex flex-shrink-0 items-center gap-[4px]">
         <button
           data-testid="main-toolbar-search"
           type="button"
           title="Search (⌘O)"
           onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
-          className={`${ICON_BTN} w-auto gap-1.5 px-1.5`}
+          className={`${ICON_BTN} h-[24px] w-auto gap-[6px] pl-[7px] pr-[6px]`}
         >
           <Search size={14} />
           <span
             data-testid="main-toolbar-search-hint"
-            className="inline-flex h-[17px] items-center rounded px-[5px] text-caption font-semibold leading-none text-muted-foreground [border:0.5px_solid_var(--border)] shadow-[0_1px_0_var(--border)]"
+            className="inline-flex h-[17px] items-center rounded-[4px] bg-background px-[5px] text-caption font-semibold leading-none text-muted-foreground [border:0.5px_solid_var(--border)] shadow-[0_1px_0_rgba(0,0,0,0.03)]"
           >
             ⌘O
           </span>
         </button>
-        <span className="mx-0.5 h-4 w-px bg-border" />
-        <StubButton testid="main-toolbar-launch" title="Launch configurations">
-          <ChevronDown size={12} />
-        </StubButton>
-        <StubButton testid="main-toolbar-play" title="Start">
-          <Play size={12} />
-        </StubButton>
-        <span className="mx-0.5 h-4 w-px bg-border" />
+        <span className="mx-[4px] h-[16px] w-px bg-border" />
+        {/* Launch picker ("Preview" dropdown) + run button, wired to the launch subsystem. */}
+        <ToolbarLaunchControls port={port} projectId={projectId} chatId={chatId} />
+        <span className="mx-[4px] h-[16px] w-px bg-border" />
+        <SurfaceRail />
         <button
           data-testid="main-toolbar-theme"
           type="button"

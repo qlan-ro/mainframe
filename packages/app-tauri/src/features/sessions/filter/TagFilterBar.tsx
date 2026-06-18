@@ -32,7 +32,7 @@ const SYNTHETIC_LABELS: Record<SyntheticTag, string> = {
 };
 
 const CHIP_BASE =
-  'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-[11px] px-[9px] text-caption tracking-normal transition-colors';
+  'inline-flex h-[20px] shrink-0 items-center gap-[5px] rounded-[11px] px-[9px] text-caption tracking-normal transition-colors';
 const CHIP_ACTIVE = 'bg-mf-selection font-semibold text-primary';
 const CHIP_IDLE = 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground';
 
@@ -55,7 +55,7 @@ function TagPill({
       onClick={onClick}
       className={cn(CHIP_BASE, active ? CHIP_ACTIVE : CHIP_IDLE)}
     >
-      <span className="w-1.5 h-1.5 rounded-full" style={TAG_DOT_STYLE(color)} aria-hidden="true" />
+      <span className="size-[6px] rounded-full" style={TAG_DOT_STYLE(color)} aria-hidden="true" />
       {name}
     </button>
   );
@@ -105,7 +105,7 @@ export function TagFilterBar({ items, filterProjectId, registry }: Props): React
   return (
     <div
       data-testid="sessions-tag-filter-bar"
-      className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-t-[0.5px] border-border/75 px-3 pb-[7px] pt-1.5"
+      className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-t-[0.5px] border-border/75 px-[12px] pb-[7px] pt-1.5"
     >
       <span className="shrink-0 select-none text-micro font-semibold uppercase tracking-wide text-mf-text-3">
         Tags

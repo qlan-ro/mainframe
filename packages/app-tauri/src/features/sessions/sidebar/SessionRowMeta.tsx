@@ -47,11 +47,11 @@ export function SessionRowMeta({
   const chipColor = projectId != null ? projectColor(projectId) : undefined;
 
   return (
-    <div className="flex min-w-0 items-center gap-2 text-micro tracking-normal text-mf-text-3">
+    <div className="flex min-w-0 items-center gap-[8px] text-micro tracking-normal text-mf-text-3">
       {projectName != null && chipColor != null && (
         <span
           data-testid="sessions-row-meta-project"
-          className="inline-flex max-w-[124px] flex-shrink-0 items-center gap-1 rounded-[4px] px-1.5 py-px text-micro font-semibold"
+          className="inline-flex h-[15px] max-w-[124px] flex-shrink-0 items-center gap-[4px] rounded-[4px] px-1.5 py-px text-micro font-semibold"
           style={{
             backgroundColor: `color-mix(in oklch, ${chipColor} 12%, transparent)`,
             color: chipColor,
@@ -118,7 +118,7 @@ export function SessionRowMeta({
             <span
               key={name}
               data-testid={`sessions-row-meta-tag-dot-${name}`}
-              className="inline-block size-1.5 rounded-full"
+              className="inline-block size-[6px] rounded-full"
               style={TAG_DOT_STYLE(colorOf(name))}
               aria-hidden="true"
             />

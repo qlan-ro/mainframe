@@ -61,16 +61,16 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
 function SessionsGroupHeader({ count }: { count: number }) {
   const { sortMode, setSortMode } = useSessionFilters();
   const iconBtn =
-    'inline-flex size-[22px] items-center justify-center rounded-md text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
+    'inline-flex size-[22px] items-center justify-center rounded-[6px] text-mf-text-3 transition-colors hover:bg-accent hover:text-foreground';
   return (
-    <div className="flex items-center gap-1 px-3 pb-1 pt-2">
+    <div className="flex items-center gap-[4px] px-[12px] pb-1 pt-[8px]">
       <ChevronDown size={10} className="shrink-0 text-mf-text-3" aria-hidden />
       <span className="text-micro font-bold uppercase tracking-wide text-muted-foreground">Sessions</span>
       <span className="text-micro text-mf-text-3">{count}</span>
       <div className="flex-1" />
       <ThreadListPrimitive.New asChild>
         <button data-testid="sessions-new-button" type="button" title="New session" className={iconBtn}>
-          <PlusIcon className="size-3" />
+          <PlusIcon className="size-[12px]" />
         </button>
       </ThreadListPrimitive.New>
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />

@@ -40,7 +40,7 @@ export function ProjectFilterPillBar({
   const shownProjects = expanded ? projects : projects.slice(0, COLLAPSE_AT);
 
   return (
-    <div className="flex flex-wrap gap-1 px-2.5 pb-1.5 pt-1">
+    <div className="flex flex-wrap gap-[4px] px-2.5 pb-1.5 pt-[4px]">
       <FilterPill
         label="All"
         active={filterProjectId == null}

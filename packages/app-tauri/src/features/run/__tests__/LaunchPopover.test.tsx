@@ -48,9 +48,15 @@ vi.mock('@/store/layout', () => ({
 }));
 
 // ── mock sandbox store — no running processes ────────────────────────────────
+const setSelectedConfigName = vi.fn();
 vi.mock('@/store/sandbox', () => ({
-  useSandboxStore: (selector: (s: { processStatuses: Record<string, Record<string, string>> }) => unknown) =>
-    selector({ processStatuses: {} }),
+  useSandboxStore: (
+    selector: (s: {
+      processStatuses: Record<string, Record<string, string>>;
+      selectedConfigName: string | null;
+      setSelectedConfigName: typeof setSelectedConfigName;
+    }) => unknown,
+  ) => selector({ processStatuses: {}, selectedConfigName: null, setSelectedConfigName }),
 }));
 
 // ── mock toast ───────────────────────────────────────────────────────────────

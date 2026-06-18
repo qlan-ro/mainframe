@@ -20,7 +20,7 @@ export function SurfaceRail() {
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
 
   return (
-    <div data-testid="surface-rail" className="flex flex-shrink-0 gap-0.5 rounded-lg bg-mf-chip p-0.5">
+    <div data-testid="surface-rail" className="flex flex-shrink-0 gap-0.5 rounded-[8px] bg-mf-chip p-0.5">
       {SURFACES.map(({ id, label, Icon, activeColor }) => {
         const on = layout.top.includes(id) || layout.bottom === id;
         // Chat is the permanent floor — its button is always lit and never toggleable.

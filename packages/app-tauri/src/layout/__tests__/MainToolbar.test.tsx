@@ -124,8 +124,8 @@ describe('MainToolbar — show-sidebar button', () => {
   });
 });
 
-describe('MainToolbar — stub buttons', () => {
-  it('renders launch and play stub buttons disabled', () => {
+describe('MainToolbar — launch controls', () => {
+  it('renders an enabled launch picker; the run button is disabled until configs load', () => {
     render(
       <MainToolbar
         leadingInset={0}
@@ -137,7 +137,9 @@ describe('MainToolbar — stub buttons', () => {
       />,
     );
 
-    expect(screen.getByTestId('main-toolbar-launch')).toBeDisabled();
+    // No projectId → no configs fetched → run button has no target (disabled),
+    // but the picker itself is now live (was a disabled stub before wiring).
+    expect(screen.getByTestId('main-toolbar-launch')).not.toBeDisabled();
     expect(screen.getByTestId('main-toolbar-play')).toBeDisabled();
   });
 });

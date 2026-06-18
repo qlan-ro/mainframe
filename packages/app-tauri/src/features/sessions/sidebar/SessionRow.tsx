@@ -243,10 +243,10 @@ function SessionRowInner({
             session. Interactive children (PR links, hover actions, the rename
             input) stopPropagation, so they keep their own behavior. */}
         <ThreadListItemPrimitive.Trigger asChild>
-          <div className="flex w-full cursor-pointer items-center gap-[9px] pb-[9px] pl-2.5 pr-3 pt-2 text-left">
-            <div className="flex flex-shrink-0 items-center gap-1.5">
+          <div className="flex w-full cursor-pointer items-center gap-[9px] pb-[9px] pl-2.5 pr-[12px] pt-[8px] text-left">
+            <div className="flex flex-shrink-0 items-center gap-[5px]">
               {custom.pinned && !inPinnedGroup && (
-                <PinIcon data-testid="sessions-row-pin-glyph" className="size-3 flex-shrink-0 text-primary" />
+                <PinIcon data-testid="sessions-row-pin-glyph" className="size-[11px] flex-shrink-0 text-primary" />
               )}
               <StatusDot badge={badge} />
             </div>
@@ -280,7 +280,7 @@ function SessionRowInner({
                   onArchive={() => void itemRuntime.archive()}
                 />
               </div>
-              <div className="mt-1 @max-[220px]:hidden">
+              <div className="mt-[4px] @max-[220px]:hidden">
                 <SessionRowMeta
                   worktreePath={custom.worktreePath}
                   worktreeMissing={custom.worktreeMissing}

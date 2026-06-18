@@ -9,64 +9,38 @@
  */
 import { useState, useCallback } from 'react';
 import { Play, Square, Loader2, Rocket } from 'lucide-react';
-import { toast } from 'sonner';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
-import { startLaunchConfig, stopLaunchConfig } from '@/lib/api/launch';
-import { buildLaunchScope } from '@/lib/launch-scope';
-import { useSandboxStore } from '@/store/sandbox';
-import { useLayoutStore } from '@/store/layout';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { MenuRow, MenuEmpty } from '@/components/ui/menu';
-import { useLaunchConfigs } from './use-launch-configs';
+import { useLaunchActions } from './use-launch-actions';
 
 export function LaunchPopover() {
   const [open, setOpen] = useState(false);
   const port = useDaemonPort();
   const { projectId, chatId } = useActiveIdentity();
-  const { configs, statusData, refetch } = useLaunchConfigs();
-  const processStatuses = useSandboxStore((s) => s.processStatuses);
-  const addRunTab = useLayoutStore((s) => s.addRunTab);
-
-  const scopeKey = projectId && statusData?.effectivePath
-    ? buildLaunchScope(projectId, statusData.effectivePath)
-    : null;
-  const scopeStatuses: Record<string, string> = scopeKey
-    ? (processStatuses[scopeKey] ?? {})
-    : {};
+  const { configs, scopeStatuses, handleLaunch, handleStop, refetch } = useLaunchActions(
+    port,
+    projectId,
+    chatId,
+  );
 
   const handleOpen = useCallback((next: boolean) => {
     if (next) refetch();
     setOpen(next);
   }, [refetch]);
 
-  const handleLaunch = useCallback(async (config: LaunchConfiguration) => {
-    if (!projectId) return;
+  const onLaunch = useCallback((config: LaunchConfiguration) => {
     setOpen(false);
-    try {
-      if (config.preview) {
-        const tabId = `preview-${config.name}-${crypto.randomUUID().slice(0, 8)}`;
-        addRunTab({ id: tabId, kind: 'preview', title: config.name, config: config.name });
-      }
-      await startLaunchConfig(port, projectId, config.name, chatId ?? undefined);
-    } catch (err) {
-      toast.error(`Failed to start "${config.name}"`);
-      console.warn('[launch] start failed', err);
-    }
-  }, [port, projectId, chatId, addRunTab]);
+    handleLaunch(config);
+  }, [handleLaunch]);
 
-  const handleStop = useCallback(async (config: LaunchConfiguration) => {
-    if (!projectId) return;
+  const onStop = useCallback((config: LaunchConfiguration) => {
     setOpen(false);
-    try {
-      await stopLaunchConfig(port, projectId, config.name, chatId ?? undefined);
-    } catch (err) {
-      toast.error(`Failed to stop "${config.name}"`);
-      console.warn('[launch] stop failed', err);
-    }
-  }, [port, projectId, chatId]);
+    handleStop(config);
+  }, [handleStop]);
 
   return (
     <Popover open={open} onOpenChange={handleOpen}>
@@ -95,8 +69,8 @@ export function LaunchPopover() {
               key={cfg.name}
               config={cfg}
               status={scopeStatuses[cfg.name] ?? 'stopped'}
-              onLaunch={handleLaunch}
-              onStop={handleStop}
+              onLaunch={onLaunch}
+              onStop={onStop}
             />
           ))
         )}
@@ -110,16 +84,18 @@ interface LaunchConfigRowProps {
   status: string;
   onLaunch: (cfg: LaunchConfiguration) => void;
   onStop: (cfg: LaunchConfiguration) => void;
+  /** Override the row testid (the toolbar picker scopes its own). */
+  testid?: string;
 }
 
-function LaunchConfigRow({ config, status, onLaunch, onStop }: LaunchConfigRowProps) {
+export function LaunchConfigRow({ config, status, onLaunch, onStop, testid }: LaunchConfigRowProps) {
   const isRunning = status === 'running';
   const isStarting = status === 'starting';
   const isActive = isRunning || isStarting;
 
   return (
     <MenuRow
-      data-testid={`run-launch-config-${config.name}`}
+      data-testid={testid ?? `run-launch-config-${config.name}`}
       label={config.name}
       trailing={<StatusIcon status={status} />}
       onClick={() => (isActive ? onStop(config) : onLaunch(config))}

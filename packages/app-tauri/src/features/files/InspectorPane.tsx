@@ -15,7 +15,7 @@ import { useStartTodoSession } from '../tasks/use-start-todo-session';
 
 type Tab = 'files' | 'changes';
 
-const SEG = 'flex h-[22px] flex-1 items-center justify-center gap-1.5 rounded-[6px] text-caption transition-colors';
+const SEG = 'flex h-[22px] flex-1 items-center justify-center gap-[5px] rounded-[6px] text-caption transition-colors';
 
 export function InspectorPane({ port }: { port: number }) {
   const { projectId, chatId } = useActiveIdentity();
@@ -35,10 +35,10 @@ export function InspectorPane({ port }: { port: number }) {
   return (
     <aside
       data-testid="inspector-pane"
-      className="flex w-[272px] flex-shrink-0 flex-col overflow-hidden rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]"
+      className="flex w-[280px] flex-shrink-0 flex-col overflow-hidden rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]"
     >
       {/* Files / Changes tabs */}
-      <div className="flex-shrink-0 p-2.5 pb-2">
+      <div className="flex-shrink-0 p-2.5 pb-[8px]">
         <div className="flex items-center gap-0.5 rounded-[8px] bg-mf-chip p-0.5">
           <button
             data-testid="inspector-tab-files"

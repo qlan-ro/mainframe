@@ -19,7 +19,7 @@ function TasksBtn() {
       data-testid="sidebar-tasks-button"
       type="button"
       title="Tasks"
-      className="inline-flex h-6 w-7 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
+      className="inline-flex h-[24px] w-[28px] cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent hover:bg-accent"
       onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
     >
       <TasksGlyph size={14} className="text-muted-foreground" />
@@ -61,14 +61,14 @@ export function SidebarHeader() {
     <div
       data-testid="sidebar-header"
       data-tauri-drag-region
-      className="flex h-[38px] flex-shrink-0 items-center gap-2 px-2"
+      className="flex h-[38px] flex-shrink-0 items-center gap-[8px] px-[8px]"
     >
       <TrafficLightsSpacer />
       <div className="flex-1" />
       <div className="flex items-center gap-0.5">
         <TasksBtn />
         <SettingsBtn />
-        <span className="mx-px h-4 w-px bg-border" />
+        <span className="mx-px h-[16px] w-px bg-border" />
         <HideSidebarBtn />
       </div>
     </div>

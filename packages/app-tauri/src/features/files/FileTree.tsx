@@ -99,7 +99,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, revealPath }: NodePro
             type="button"
             onClick={() => emitSurfaceIntent({ type: 'open-file', path: entry.path })}
             style={{ paddingLeft: indent }}
-            className={`flex h-[22px] w-full items-center gap-1.5 border-none pr-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground ${
+            className={`flex h-[22px] w-full items-center gap-[5px] border-none pr-[12px] text-left text-label text-muted-foreground hover:bg-accent hover:text-foreground ${
               isRevealTarget ? 'bg-accent/60 text-foreground' : 'bg-transparent'
             }`}
           >
@@ -219,7 +219,7 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
   }
 
   return (
-    <div data-testid="file-tree" className="py-1">
+    <div data-testid="file-tree" className="py-[4px]">
       {sortEntries(roots).map((entry) => (
         <TreeNode
           key={entry.path}

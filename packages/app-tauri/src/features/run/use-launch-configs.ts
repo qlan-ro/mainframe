@@ -1,16 +1,14 @@
 /**
  * use-launch-configs — fetch and refresh launch configs + statuses.
  *
- * Resolves the active {port, projectId, chatId} from context and fetches both
- * configs and the current process statuses in a single effect. Exposes a
- * `refetch` callback so callers can trigger a manual refresh (e.g. on popover
- * open).
+ * Takes the active {port, projectId, chatId} explicitly so it works both inside
+ * the Run surface (context-derived) and in the shell MainToolbar (prop-derived).
+ * Fetches both configs and the current process statuses in a single effect, and
+ * exposes a `refetch` callback for manual refresh (e.g. on popover open).
  */
 import { useEffect, useCallback, useState } from 'react';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { fetchLaunchConfigs, fetchLaunchStatuses, type LaunchStatusData } from '@/lib/api/launch';
-import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
-import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 
 export interface UseLaunchConfigsResult {
   configs: LaunchConfiguration[];
@@ -18,10 +16,11 @@ export interface UseLaunchConfigsResult {
   refetch: () => void;
 }
 
-export function useLaunchConfigs(): UseLaunchConfigsResult {
-  const port = useDaemonPort();
-  const { projectId, chatId } = useActiveIdentity();
-
+export function useLaunchConfigs(
+  port: number,
+  projectId: string | undefined,
+  chatId: string | undefined,
+): UseLaunchConfigsResult {
   const [configs, setConfigs] = useState<LaunchConfiguration[]>([]);
   const [statusData, setStatusData] = useState<LaunchStatusData | null>(null);
   const [tick, setTick] = useState(0);
