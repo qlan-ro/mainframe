@@ -51,10 +51,10 @@ describe('SessionSortMenu — selecting an option', () => {
 });
 
 describe('SessionSortMenu — active option is marked', () => {
-  it('marks the active option with aria-checked="true"', async () => {
+  it('marks the active option with aria-pressed="true"', async () => {
     render(<SessionSortMenu mode="status" onChange={vi.fn()} />);
     await userEvent.click(screen.getByTestId('sessions-sort-button'));
-    expect(screen.getByTestId('sessions-sort-status').getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByTestId('sessions-sort-recent').getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByTestId('sessions-sort-status').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('sessions-sort-recent').getAttribute('aria-pressed')).toBe('false');
   });
 });

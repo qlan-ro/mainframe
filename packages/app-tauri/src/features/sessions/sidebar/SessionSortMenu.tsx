@@ -9,7 +9,8 @@
  */
 import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ChevronsUpDownIcon, CheckIcon } from 'lucide-react';
+import { ChevronsUpDownIcon } from 'lucide-react';
+import { MenuLabel, MenuSelectRow } from '@/components/ui/menu';
 import { SESSION_SORTS, type SortMode } from '../view-model/group-sessions';
 
 interface SessionSortMenuProps {
@@ -32,33 +33,20 @@ export function SessionSortMenu({ mode, onChange }: SessionSortMenuProps) {
           <ChevronsUpDownIcon className="size-[11px]" />
         </button>
       </PopoverTrigger>
-      <PopoverContent data-testid="sessions-sort-popover" align="end" sideOffset={6} className="w-44 p-1.5">
-        <div className="px-2 pb-1.5 pt-1 text-micro font-bold uppercase tracking-wide text-mf-text-3">Sort by</div>
-        {SESSION_SORTS.map((sort) => {
-          const active = sort.id === mode;
-          return (
-            <button
-              key={sort.id}
-              data-testid={`sessions-sort-${sort.id}`}
-              type="button"
-              role="menuitemradio"
-              aria-checked={active}
-              onClick={() => {
-                onChange(sort.id);
-                setOpen(false);
-              }}
-              className={[
-                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-body transition-colors',
-                active ? 'bg-accent font-semibold text-foreground' : 'font-medium text-foreground hover:bg-accent',
-              ].join(' ')}
-            >
-              <span className="inline-flex w-[13px] flex-shrink-0 justify-center">
-                {active && <CheckIcon className="size-3 text-primary" strokeWidth={2.5} />}
-              </span>
-              {sort.label}
-            </button>
-          );
-        })}
+      <PopoverContent data-testid="sessions-sort-popover" align="end" sideOffset={6} className="w-44">
+        <MenuLabel>Sort by</MenuLabel>
+        {SESSION_SORTS.map((sort) => (
+          <MenuSelectRow
+            key={sort.id}
+            data-testid={`sessions-sort-${sort.id}`}
+            selected={sort.id === mode}
+            label={sort.label}
+            onClick={() => {
+              onChange(sort.id);
+              setOpen(false);
+            }}
+          />
+        ))}
       </PopoverContent>
     </Popover>
   );
