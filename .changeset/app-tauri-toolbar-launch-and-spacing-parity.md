@@ -18,4 +18,8 @@ existing launch subsystem (previously inert stubs). They share a new
 `useLaunchActions` hook with the Run surface's `LaunchPopover`, list the
 project's `.mainframe/launch.json` configs, start/stop them, and track the
 selected config. Re-launching a preview config now focuses its existing Run tab
-instead of stacking duplicates.
+instead of stacking duplicates. The dropdown follows the artboard `LaunchPicker`:
+each row has a leading eye/terminal type icon, an amber starting-ring, and a
+separate start/stop button, and clicking a row selects the config (opening its
+preview tab) rather than starting it; a gated "Generate with Agent" footer is a
+placeholder until a config-generation flow lands.

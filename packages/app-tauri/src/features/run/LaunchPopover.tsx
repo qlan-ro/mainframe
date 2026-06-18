@@ -84,23 +84,18 @@ interface LaunchConfigRowProps {
   status: LaunchProcessStatus;
   onLaunch: (cfg: LaunchConfiguration) => void;
   onStop: (cfg: LaunchConfiguration) => void;
-  /** Override the row testid (the toolbar picker scopes its own). */
-  testid?: string;
-  /** Highlights the row that the toolbar picker currently reflects. */
-  selected?: boolean;
 }
 
-export function LaunchConfigRow({ config, status, onLaunch, onStop, testid, selected }: LaunchConfigRowProps) {
+function LaunchConfigRow({ config, status, onLaunch, onStop }: LaunchConfigRowProps) {
   const isRunning = status === 'running';
   const isStarting = status === 'starting';
   const isActive = isRunning || isStarting;
 
   return (
     <MenuRow
-      data-testid={testid ?? `run-launch-config-${config.name}`}
+      data-testid={`run-launch-config-${config.name}`}
       label={config.name}
       trailing={<StatusIcon status={status} />}
-      className={selected ? 'bg-accent' : undefined}
       onClick={() => (isActive ? onStop(config) : onLaunch(config))}
     />
   );

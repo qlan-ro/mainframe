@@ -4,11 +4,13 @@
  * Behaviors covered:
  *  - Renders the launch trigger with label "Preview" when no config is selected
  *  - The run button is disabled when fetchLaunchConfigs resolves to []
- *  - Opening the dropdown renders both config rows
- *  - Clicking a non-preview config calls startLaunchConfig only (no addRunTab)
- *  - Clicking a preview config calls startLaunchConfig AND addRunTab with kind:'preview'
- *  - Clicking the run button starts the first config when none is running
- *  - Clicking the run button stops the config when its status is 'running'
+ *  - Opening the dropdown renders both config rows and the gated "Generate with Agent" footer (disabled)
+ *  - Clicking a non-preview config ROW selects it: calls setSelectedConfigName, does NOT call startLaunchConfig, does NOT call addRunTab
+ *  - Clicking a preview config ROW selects it: calls setSelectedConfigName AND addRunTab with kind:'preview', does NOT call startLaunchConfig
+ *  - Clicking the per-row START button calls startLaunchConfig(port, projectId, name, chatId)
+ *  - When a config is 'running', the row shows a STOP button; clicking it calls stopLaunchConfig
+ *  - Run button (main-toolbar-play): clicking starts the first config when none is running
+ *  - Run button (main-toolbar-play): clicking stops the config when its status is 'running'
  *
  * Mocked dependencies:
  *  - @/lib/api/launch — startLaunchConfig, stopLaunchConfig, fetchLaunchConfigs, fetchLaunchStatuses
@@ -44,7 +46,7 @@ vi.mock('@/store/layout', () => ({
 // ── mock sandbox store ───────────────────────────────────────────────────────
 const setSelectedConfigName = vi.fn();
 
-// processStatuses is mutable so individual tests can override it
+// processStatuses and selectedConfigName are mutable so individual tests can override them
 let mockProcessStatuses: Record<string, Record<string, string>> = {};
 let mockSelectedConfigName: string | null = null;
 
@@ -81,6 +83,7 @@ const configs: LaunchConfiguration[] = [
 ];
 
 // Scope key: buildLaunchScope('proj-1', '/repo') = 'proj-1:/repo'
+// Hardcoded here; effectivePath comes from the fetchLaunchStatuses mock returning '/repo'.
 const SCOPE_KEY = 'proj-1:/repo';
 
 describe('ToolbarLaunchControls', () => {
@@ -121,33 +124,54 @@ describe('ToolbarLaunchControls', () => {
     });
   });
 
-  it('opening the dropdown renders both config rows', async () => {
+  it('opening the dropdown renders both config rows and a disabled generate footer', async () => {
     await renderAndOpen();
     expect(screen.getByTestId('main-toolbar-launch-config-dev server')).toBeInTheDocument();
     expect(screen.getByTestId('main-toolbar-launch-config-preview-app')).toBeInTheDocument();
+    expect(screen.getByTestId('main-toolbar-launch-generate')).toBeDisabled();
   });
 
-  it('clicking a non-preview config row calls startLaunchConfig and does NOT call addRunTab', async () => {
+  it('clicking the non-preview ROW selects it: calls setSelectedConfigName, does NOT call startLaunchConfig or addRunTab', async () => {
     await renderAndOpen();
     fireEvent.click(screen.getByTestId('main-toolbar-launch-config-dev server'));
-    await waitFor(() =>
-      expect(startLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'),
-    );
+    await waitFor(() => expect(setSelectedConfigName).toHaveBeenCalledWith('dev server'));
+    expect(startLaunchConfig).not.toHaveBeenCalled();
     expect(addRunTab).not.toHaveBeenCalled();
   });
 
-  it('clicking a preview config row calls startLaunchConfig AND addRunTab with kind:preview', async () => {
+  it('clicking the preview ROW selects it: calls setSelectedConfigName AND addRunTab with kind:preview, does NOT call startLaunchConfig', async () => {
     await renderAndOpen();
     fireEvent.click(screen.getByTestId('main-toolbar-launch-config-preview-app'));
-    await waitFor(() =>
-      expect(startLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'preview-app', 'chat-9'),
-    );
+    await waitFor(() => expect(setSelectedConfigName).toHaveBeenCalledWith('preview-app'));
     expect(addRunTab).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'preview', config: 'preview-app' }),
     );
+    expect(startLaunchConfig).not.toHaveBeenCalled();
   });
 
-  it('clicking the run button starts the first config when none is running', async () => {
+  it('clicking the per-row START button calls startLaunchConfig(31415, proj-1, dev server, chat-9)', async () => {
+    await renderAndOpen();
+    fireEvent.click(screen.getByTestId('main-toolbar-launch-start-dev server'));
+    await waitFor(() =>
+      expect(startLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'),
+    );
+  });
+
+  it('when dev server is running, the row shows a stop button; clicking it calls stopLaunchConfig', async () => {
+    // Set processStatuses so 'dev server' is 'running' for scope 'proj-1:/repo'
+    // effectivePath '/repo' comes from the fetchLaunchStatuses mock above
+    mockProcessStatuses = { [SCOPE_KEY]: { 'dev server': 'running' } };
+    await renderAndOpen();
+    // The trailing button should now be the STOP variant
+    expect(screen.getByTestId('main-toolbar-launch-stop-dev server')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('main-toolbar-launch-stop-dev server'));
+    await waitFor(() =>
+      expect(stopLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'),
+    );
+    expect(startLaunchConfig).not.toHaveBeenCalled();
+  });
+
+  it('clicking the run button (main-toolbar-play) starts the first config when none is running', async () => {
     const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
     render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
     await waitFor(() => expect(screen.getByTestId('main-toolbar-play')).not.toBeDisabled());
@@ -158,8 +182,9 @@ describe('ToolbarLaunchControls', () => {
     expect(stopLaunchConfig).not.toHaveBeenCalled();
   });
 
-  it('clicking the run button stops the config when its status is running', async () => {
+  it('clicking the run button (main-toolbar-play) stops the config when its status is running', async () => {
     // Set processStatuses so 'dev server' (the run target / first config) is 'running'
+    // Scope key = buildLaunchScope('proj-1', '/repo') = 'proj-1:/repo'; effectivePath '/repo' from mock
     mockProcessStatuses = { [SCOPE_KEY]: { 'dev server': 'running' } };
     const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
     render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);

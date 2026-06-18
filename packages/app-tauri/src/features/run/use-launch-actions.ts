@@ -21,6 +21,8 @@ export interface UseLaunchActionsResult {
   /** Status by config name for the active project/worktree scope. */
   scopeStatuses: Record<string, LaunchProcessStatus>;
   selectedConfigName: string | null;
+  /** Select a config (and open/focus its preview tab) without starting it. */
+  handleSelect: (config: LaunchConfiguration) => void;
   handleLaunch: (config: LaunchConfiguration) => void;
   handleStop: (config: LaunchConfiguration) => void;
   refetch: () => void;
@@ -43,22 +45,31 @@ export function useLaunchActions(
     ? (processStatuses[scopeKey] ?? {})
     : {};
 
+  const handleSelect = useCallback(
+    (config: LaunchConfiguration) => {
+      if (!projectId) return;
+      setSelectedConfigName(config.name);
+      // Preview configs open (or focus, via addRunTab's dedup) their Run tab on select.
+      if (config.preview) {
+        const tabId = `preview-${config.name}-${crypto.randomUUID().slice(0, 8)}`;
+        addRunTab({ id: tabId, kind: 'preview', title: config.name, config: config.name });
+      }
+    },
+    [projectId, addRunTab, setSelectedConfigName],
+  );
+
   const handleLaunch = useCallback(
     async (config: LaunchConfiguration) => {
       if (!projectId) return;
-      setSelectedConfigName(config.name);
+      handleSelect(config);
       try {
-        if (config.preview) {
-          const tabId = `preview-${config.name}-${crypto.randomUUID().slice(0, 8)}`;
-          addRunTab({ id: tabId, kind: 'preview', title: config.name, config: config.name });
-        }
         await startLaunchConfig(port, projectId, config.name, chatId ?? undefined);
       } catch (err) {
         toast.error(`Failed to start "${config.name}"`);
         console.warn('[launch] start failed', err);
       }
     },
-    [port, projectId, chatId, addRunTab, setSelectedConfigName],
+    [port, projectId, chatId, handleSelect],
   );
 
   const handleStop = useCallback(
@@ -74,5 +85,5 @@ export function useLaunchActions(
     [port, projectId, chatId],
   );
 
-  return { configs, scopeStatuses, selectedConfigName, handleLaunch, handleStop, refetch };
+  return { configs, scopeStatuses, selectedConfigName, handleSelect, handleLaunch, handleStop, refetch };
 }
