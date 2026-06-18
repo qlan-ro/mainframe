@@ -19,6 +19,7 @@ import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { MenuRow, MenuEmpty } from '@/components/ui/menu';
 import { useLaunchConfigs } from './use-launch-configs';
 
 export function LaunchPopover() {
@@ -83,11 +84,11 @@ export function LaunchPopover() {
       </PopoverTrigger>
       <PopoverContent
         data-testid="run-launch-popover"
-        className="w-56 p-1"
+        className="w-56"
         align="start"
       >
         {configs.length === 0 ? (
-          <p className="px-2 py-1.5 text-caption text-muted-foreground">No launch configs found.</p>
+          <MenuEmpty>No launch configs found.</MenuEmpty>
         ) : (
           configs.map((cfg) => (
             <LaunchConfigRow
@@ -117,14 +118,12 @@ function LaunchConfigRow({ config, status, onLaunch, onStop }: LaunchConfigRowPr
   const isActive = isRunning || isStarting;
 
   return (
-    <div
+    <MenuRow
       data-testid={`run-launch-config-${config.name}`}
-      className="flex items-center justify-between rounded px-2 py-1.5 text-caption text-foreground hover:bg-accent cursor-pointer"
+      label={config.name}
+      trailing={<StatusIcon status={status} />}
       onClick={() => (isActive ? onStop(config) : onLaunch(config))}
-    >
-      <span className="flex-1 truncate">{config.name}</span>
-      <StatusIcon status={status} />
-    </div>
+    />
   );
 }
 

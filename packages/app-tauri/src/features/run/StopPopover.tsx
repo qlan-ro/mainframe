@@ -18,6 +18,7 @@ import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { MenuRow, MenuDivider, MenuEmpty } from '@/components/ui/menu';
 
 interface StopPopoverProps {
   /** Scope key = buildLaunchScope(projectId, effectivePath). */
@@ -81,35 +82,31 @@ export function StopPopover({ scopeKey }: StopPopoverProps) {
       </PopoverTrigger>
       <PopoverContent
         data-testid="run-stop-popover"
-        className="w-56 p-1"
+        className="w-56"
         align="start"
       >
         {runningProcesses.length === 0 ? (
-          <p className="px-2 py-1.5 text-caption text-muted-foreground">No running processes.</p>
+          <MenuEmpty>No running processes.</MenuEmpty>
         ) : (
           <>
             {runningProcesses.map((name) => (
-              <button
+              <MenuRow
                 key={name}
                 data-testid={`run-stop-process-${name}`}
+                icon={<Square className="text-destructive" />}
+                label={`Stop '${name}'`}
                 onClick={() => {
                   void handleStop(name);
                   setOpen(false);
                 }}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-caption text-foreground hover:bg-accent"
-              >
-                <Square size={10} className="shrink-0 text-destructive" />
-                <span className="flex-1 truncate text-left">Stop &apos;{name}&apos;</span>
-              </button>
+              />
             ))}
-            <div className="my-0.5 border-t border-border" />
-            <button
+            <MenuDivider />
+            <MenuRow
               data-testid="run-stop-all"
+              label="Stop all"
               onClick={() => void handleStopAll()}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-caption text-muted-foreground hover:bg-accent hover:text-foreground"
-            >
-              Stop All
-            </button>
+            />
           </>
         )}
       </PopoverContent>
