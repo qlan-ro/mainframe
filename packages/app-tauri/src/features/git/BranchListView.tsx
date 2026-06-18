@@ -5,6 +5,7 @@
 import { ArrowUp, Loader2, Plus, RefreshCw, Search } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { MenuDivider, MenuRow } from '@/components/ui/menu';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { BranchList } from './BranchList';
 
@@ -82,41 +83,30 @@ export function BranchListView({
       </div>
 
       {/* Quick actions */}
-      <div className="border-b border-border">
-        <button
+      <div>
+        <MenuRow
           data-testid="git-new-branch"
+          icon={<Plus size={12} className="text-primary" />}
+          label={search ? `Create branch "${search}"` : 'New branch…'}
           onClick={onNewBranch}
-          className="flex w-full items-center gap-[9px] rounded-sm px-2 py-[7px] text-label text-foreground hover:bg-accent"
-        >
-          <Plus size={12} className="text-primary" />
-          <span>{search ? `Create branch "${search}"` : 'New branch…'}</span>
-        </button>
-        <button
+        />
+        <MenuRow
           data-testid="git-update-all"
+          icon={busyAction === 'updateAll' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          label="Update all"
+          hint="⤓"
+          disabled={busy}
           onClick={() => void actions.handleUpdateAll()}
-          disabled={busy}
-          className={cn(
-            'flex w-full items-center gap-[9px] rounded-sm px-2 py-[7px] text-label text-foreground hover:bg-accent',
-            busy && 'opacity-40 cursor-not-allowed',
-          )}
-        >
-          {busyAction === 'updateAll' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-          <span>Update all</span>
-          <span className="ml-auto text-caption text-muted-foreground">⤓</span>
-        </button>
-        <button
+        />
+        <MenuRow
           data-testid="git-push-current"
-          onClick={() => void actions.handlePush(currentBranch)}
+          icon={<ArrowUp size={12} />}
+          label="Push"
           disabled={busy}
-          className={cn(
-            'flex w-full items-center gap-[9px] rounded-sm px-2 py-[7px] text-label text-foreground hover:bg-accent',
-            busy && 'opacity-40 cursor-not-allowed',
-          )}
-        >
-          <ArrowUp size={12} />
-          <span>Push</span>
-        </button>
+          onClick={() => void actions.handlePush(currentBranch)}
+        />
       </div>
+      <MenuDivider className="mx-0 my-0 border-t" />
 
       {/* Branch list */}
       <BranchList

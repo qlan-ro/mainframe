@@ -17,7 +17,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { MenuDivider, MenuRow } from '@/components/ui/menu';
 
 export interface BranchSubmenuProps {
   branch: string;
@@ -232,25 +232,19 @@ export function BranchSubmenu(props: BranchSubmenuProps) {
       <div className="py-1">
         {items.map((item, idx) => {
           if ('separator' in item && item.separator) {
-            return <div key={`sep-${idx}`} className="border-t border-border my-1" />;
+            return <MenuDivider key={`sep-${idx}`} />;
           }
           const mi = item as MenuItem;
           return (
-            <button
+            <MenuRow
               key={mi.testid}
               data-testid={mi.testid}
-              onClick={mi.action}
+              icon={mi.icon}
+              label={mi.label}
+              danger={mi.destructive}
               disabled={mi.disabled}
-              className={cn(
-                'w-full flex items-center gap-[9px] px-2 py-[7px] text-label text-left',
-                'hover:bg-accent rounded-sm transition-colors',
-                mi.disabled && 'opacity-40 cursor-not-allowed pointer-events-none',
-                mi.destructive && !mi.disabled && 'text-destructive',
-              )}
-            >
-              {mi.icon}
-              <span>{mi.label}</span>
-            </button>
+              onClick={mi.action}
+            />
           );
         })}
       </div>
