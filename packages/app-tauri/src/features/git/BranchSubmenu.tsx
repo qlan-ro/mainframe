@@ -81,28 +81,28 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
     return [
       {
         label: 'Checkout',
-        icon: <Check size={12} />,
+        icon: <Check />,
         testid: 'git-submenu-checkout',
         action: () => onCheckout(branch),
         disabled: busy,
       },
       {
         label: `New Branch from '${label}'...`,
-        icon: <Plus size={12} />,
+        icon: <Plus />,
         testid: 'git-submenu-new-branch-from',
         action: () => onNewBranchFrom(branch),
       },
       { separator: true },
       {
         label: 'Merge into Current Branch',
-        icon: <GitMerge size={12} />,
+        icon: <GitMerge />,
         testid: 'git-submenu-merge',
         action: () => onMerge(branch),
         disabled: busy,
       },
       {
         label: 'Rebase Current onto This',
-        icon: <GitPullRequest size={12} />,
+        icon: <GitPullRequest />,
         testid: 'git-submenu-rebase',
         action: () => onRebase(branch),
         disabled: busy,
@@ -110,7 +110,7 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
       { separator: true },
       {
         label: 'Delete Remote Branch',
-        icon: <Trash2 size={12} />,
+        icon: <Trash2 />,
         testid: 'git-submenu-delete',
         action: () => onDelete(branch, true),
         disabled: busy,
@@ -122,28 +122,28 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
   const items: MenuEntry[] = [
     {
       label: `New Branch from '${label}'...`,
-      icon: <Plus size={12} />,
+      icon: <Plus />,
       testid: 'git-submenu-new-branch-from',
       action: () => onNewBranchFrom(branch),
     },
     { separator: true },
     {
       label: 'Checkout',
-      icon: <Check size={12} />,
+      icon: <Check />,
       testid: 'git-submenu-checkout',
       action: () => onCheckout(branch),
       disabled: isCurrent || isWorktree || busy,
     },
     {
       label: 'Pull',
-      icon: <Download size={12} />,
+      icon: <Download />,
       testid: 'git-submenu-pull',
       action: () => onPull(branch),
       disabled: isWorktree || busy,
     },
     {
       label: 'Push',
-      icon: <Upload size={12} />,
+      icon: <Upload />,
       testid: 'git-submenu-push',
       action: () => onPush(branch),
       disabled: busy,
@@ -151,14 +151,14 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
     { separator: true },
     {
       label: 'Merge into Current Branch',
-      icon: <GitMerge size={12} />,
+      icon: <GitMerge />,
       testid: 'git-submenu-merge',
       action: () => onMerge(branch),
       disabled: isCurrent || busy,
     },
     {
       label: 'Rebase Current onto This',
-      icon: <GitPullRequest size={12} />,
+      icon: <GitPullRequest />,
       testid: 'git-submenu-rebase',
       action: () => onRebase(branch),
       disabled: isCurrent || busy,
@@ -166,14 +166,14 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
     { separator: true },
     {
       label: 'Rename...',
-      icon: <Pencil size={12} />,
+      icon: <Pencil />,
       testid: 'git-submenu-rename',
       action: () => onRename(branch),
       disabled: isWorktree || busy,
     },
     {
       label: 'Delete Branch',
-      icon: <Trash2 size={12} />,
+      icon: <Trash2 />,
       testid: 'git-submenu-delete',
       action: () => onDelete(branch, false),
       disabled: isCurrent || isWorktree || busy,
@@ -186,7 +186,7 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
     if (onNewSession) {
       items.push({
         label: 'New Session on Worktree',
-        icon: <Plus size={12} />,
+        icon: <Plus />,
         testid: 'git-submenu-new-session',
         action: () => onNewSession(branch),
       });
@@ -194,7 +194,7 @@ function buildItems(props: BranchSubmenuProps): MenuEntry[] {
     if (onDeleteWorktree) {
       items.push({
         label: 'Delete Worktree',
-        icon: <Trash2 size={12} />,
+        icon: <Trash2 />,
         testid: 'git-submenu-delete-worktree',
         action: () => onDeleteWorktree(branch),
         destructive: true,

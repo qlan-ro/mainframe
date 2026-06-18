@@ -23,8 +23,15 @@ export function MenuLabel({
   );
 }
 
-export function MenuDivider({ className }: { className?: string }) {
-  return <div className={cn('mx-1.5 my-[4px] border-t-[0.5px] border-border', className)} />;
+export function MenuDivider({ className, section }: { className?: string; section?: boolean }) {
+  return (
+    <div
+      className={cn(
+        section ? 'border-t border-border' : 'mx-1.5 my-[4px] border-t-[0.5px] border-border',
+        className,
+      )}
+    />
+  );
 }
 
 interface MenuRowProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -49,8 +56,8 @@ export const MenuRow = React.forwardRef<HTMLButtonElement, MenuRowProps>(
     >
       {icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {note && <span className="shrink-0 text-caption text-mf-text-3">{note}</span>}
-      {hint && <span className="shrink-0 text-caption text-mf-text-4">{hint}</span>}
+      {note != null && <span className="shrink-0 text-caption text-mf-text-3">{note}</span>}
+      {hint != null && <span className="shrink-0 text-caption text-mf-text-4">{hint}</span>}
       {trailing}
     </button>
   ),
@@ -125,7 +132,7 @@ export const MenuSelectRow = React.forwardRef<HTMLButtonElement, MenuSelectRowPr
     >
       {dot}
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {meta && <span className="shrink-0 text-caption text-mf-text-3">{meta}</span>}
+      {meta != null && <span className="shrink-0 text-caption text-mf-text-3">{meta}</span>}
       {selected && <Check size={13} className="shrink-0 text-primary" />}
     </button>
   ),

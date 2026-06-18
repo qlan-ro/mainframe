@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MenuRow, MenuLabel, MenuCheckRow, MenuSearchField, MENU_CONTENT_PADDING, menuItemVariants } from '../menu';
+import { MenuRow, MenuDivider, MenuLabel, MenuCheckRow, MenuSearchField, MENU_CONTENT_PADDING, menuItemVariants } from '../menu';
 
 describe('menu vocabulary', () => {
   it('MENU_CONTENT_PADDING is the canonical 5px', () => {
@@ -47,5 +47,21 @@ describe('menu vocabulary', () => {
     render(<MenuSearchField data-testid="x-search" value="" onValueChange={onValueChange} placeholder="Find" />);
     fireEvent.change(screen.getByPlaceholderText('Find'), { target: { value: 'a' } });
     expect(onValueChange).toHaveBeenCalledWith('a');
+  });
+
+  it('MenuDivider default renders the inter-row hairline', () => {
+    const { container } = render(<MenuDivider />);
+    const el = container.firstChild as HTMLElement;
+    expect(el.className).toContain('mx-1.5');
+    expect(el.className).toContain('my-[4px]');
+    expect(el.className).toContain('border-t-[0.5px]');
+  });
+
+  it('MenuDivider section renders a full-bleed 1px separator', () => {
+    const { container } = render(<MenuDivider section />);
+    const el = container.firstChild as HTMLElement;
+    expect(el.className).toContain('border-t');
+    expect(el.className).toContain('border-border');
+    expect(el.className).not.toContain('mx-1.5');
   });
 });

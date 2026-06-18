@@ -86,13 +86,13 @@ export function BranchListView({
       <div>
         <MenuRow
           data-testid="git-new-branch"
-          icon={<Plus size={12} className="text-primary" />}
+          icon={<Plus className="text-primary" />}
           label={search ? `Create branch "${search}"` : 'New branch…'}
           onClick={onNewBranch}
         />
         <MenuRow
           data-testid="git-update-all"
-          icon={busyAction === 'updateAll' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          icon={busyAction === 'updateAll' ? <Loader2 className="animate-spin" /> : <RefreshCw />}
           label="Update all"
           hint="⤓"
           disabled={busy}
@@ -100,13 +100,13 @@ export function BranchListView({
         />
         <MenuRow
           data-testid="git-push-current"
-          icon={<ArrowUp size={12} />}
+          icon={<ArrowUp />}
           label="Push"
           disabled={busy}
           onClick={() => void actions.handlePush(currentBranch)}
         />
       </div>
-      <MenuDivider className="mx-0 my-0 border-t" />
+      <MenuDivider section />
 
       {/* Branch list */}
       <BranchList
