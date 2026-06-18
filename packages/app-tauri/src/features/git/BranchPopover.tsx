@@ -184,7 +184,7 @@ export function BranchPopover({
       {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
       <PopoverContent
         data-testid="git-branch-popover"
-        className="p-0 w-auto min-w-[280px] max-w-[360px]"
+        className="p-[5px] w-auto min-w-[280px] max-w-[360px]"
         align="start"
         side="bottom"
         sideOffset={4}
