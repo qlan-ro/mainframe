@@ -60,6 +60,18 @@ export function emptyRun(): RunState {
  */
 export function addRunTab(run: RunState | null, tab: RunTab, paneId?: string): RunState | null {
   const base = run ?? emptyRun();
+  // Preview tabs are singletons per launch config: if one already exists (in any
+  // pane), focus it instead of stacking a duplicate — the run button re-launches
+  // the same config repeatedly. This is the "or activates" half of addRunTab.
+  if (tab.kind === 'preview' && tab.config) {
+    const pane = base.panes.find((p) =>
+      p.tabs.some((t) => t.kind === 'preview' && t.config === tab.config),
+    );
+    if (pane) {
+      const existing = pane.tabs.find((t) => t.kind === 'preview' && t.config === tab.config)!;
+      return activateRunTab(base, pane.id, existing.id);
+    }
+  }
   let idx: number;
   if (paneId) {
     idx = base.panes.findIndex((p) => p.id === paneId);

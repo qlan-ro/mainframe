@@ -9,7 +9,7 @@
  */
 import { useState, useCallback } from 'react';
 import { Play, Square, Loader2, Rocket } from 'lucide-react';
-import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
+import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -81,14 +81,16 @@ export function LaunchPopover() {
 
 interface LaunchConfigRowProps {
   config: LaunchConfiguration;
-  status: string;
+  status: LaunchProcessStatus;
   onLaunch: (cfg: LaunchConfiguration) => void;
   onStop: (cfg: LaunchConfiguration) => void;
   /** Override the row testid (the toolbar picker scopes its own). */
   testid?: string;
+  /** Highlights the row that the toolbar picker currently reflects. */
+  selected?: boolean;
 }
 
-export function LaunchConfigRow({ config, status, onLaunch, onStop, testid }: LaunchConfigRowProps) {
+export function LaunchConfigRow({ config, status, onLaunch, onStop, testid, selected }: LaunchConfigRowProps) {
   const isRunning = status === 'running';
   const isStarting = status === 'starting';
   const isActive = isRunning || isStarting;
@@ -98,12 +100,13 @@ export function LaunchConfigRow({ config, status, onLaunch, onStop, testid }: La
       data-testid={testid ?? `run-launch-config-${config.name}`}
       label={config.name}
       trailing={<StatusIcon status={status} />}
+      className={selected ? 'bg-accent' : undefined}
       onClick={() => (isActive ? onStop(config) : onLaunch(config))}
     />
   );
 }
 
-function StatusIcon({ status }: { status: string }) {
+function StatusIcon({ status }: { status: LaunchProcessStatus }) {
   if (status === 'starting') return <Loader2 size={11} className="animate-spin text-muted-foreground" />;
   if (status === 'running') return <Square size={11} className="text-destructive" />;
   return <Play size={11} className="text-muted-foreground" />;

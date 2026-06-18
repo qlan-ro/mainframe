@@ -73,7 +73,7 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
             data-testid="main-toolbar-launch"
             type="button"
             title="Launch configurations"
-            className="inline-flex h-[24px] max-w-[200px] cursor-pointer items-center gap-[5px] rounded-[6px] bg-mf-chip px-[8px] text-label font-medium text-muted-foreground hover:text-foreground"
+            className="inline-flex h-[24px] max-w-[200px] cursor-pointer items-center gap-[5px] rounded-[6px] bg-mf-chip px-[8px] text-label font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
           >
             <span className="truncate">{label}</span>
             <ChevronDown size={9} className="flex-shrink-0 text-mf-text-3" />
@@ -89,6 +89,7 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
                 testid={`main-toolbar-launch-config-${cfg.name}`}
                 config={cfg}
                 status={scopeStatuses[cfg.name] ?? 'stopped'}
+                selected={cfg.name === selectedConfigName}
                 onLaunch={onLaunch}
                 onStop={onStop}
               />
@@ -107,9 +108,9 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
         className="inline-flex h-[24px] w-[28px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
       >
         {running ? (
-          <Square size={13} className="text-destructive" fill="currentColor" />
+          <Square size={15} className="text-destructive" fill="currentColor" />
         ) : (
-          <Play size={15} className="text-[var(--mf-success)]" fill="currentColor" />
+          <Play size={15} className="text-mf-success" fill="currentColor" />
         )}
       </button>
     </>

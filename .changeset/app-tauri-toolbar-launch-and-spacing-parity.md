@@ -17,4 +17,5 @@ Launch picker: the toolbar "Preview" dropdown + run button are now wired to the
 existing launch subsystem (previously inert stubs). They share a new
 `useLaunchActions` hook with the Run surface's `LaunchPopover`, list the
 project's `.mainframe/launch.json` configs, start/stop them, and track the
-selected config.
+selected config. Re-launching a preview config now focuses its existing Run tab
+instead of stacking duplicates.

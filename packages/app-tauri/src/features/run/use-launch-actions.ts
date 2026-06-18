@@ -9,7 +9,7 @@
  */
 import { useCallback } from 'react';
 import { toast } from 'sonner';
-import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
+import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { startLaunchConfig, stopLaunchConfig } from '@/lib/api/launch';
 import { buildLaunchScope } from '@/lib/launch-scope';
 import { useSandboxStore } from '@/store/sandbox';
@@ -19,7 +19,7 @@ import { useLaunchConfigs } from './use-launch-configs';
 export interface UseLaunchActionsResult {
   configs: LaunchConfiguration[];
   /** Status by config name for the active project/worktree scope. */
-  scopeStatuses: Record<string, string>;
+  scopeStatuses: Record<string, LaunchProcessStatus>;
   selectedConfigName: string | null;
   handleLaunch: (config: LaunchConfiguration) => void;
   handleStop: (config: LaunchConfiguration) => void;
@@ -39,7 +39,9 @@ export function useLaunchActions(
 
   const scopeKey =
     projectId && statusData?.effectivePath ? buildLaunchScope(projectId, statusData.effectivePath) : null;
-  const scopeStatuses: Record<string, string> = scopeKey ? (processStatuses[scopeKey] ?? {}) : {};
+  const scopeStatuses: Record<string, LaunchProcessStatus> = scopeKey
+    ? (processStatuses[scopeKey] ?? {})
+    : {};
 
   const handleLaunch = useCallback(
     async (config: LaunchConfiguration) => {
