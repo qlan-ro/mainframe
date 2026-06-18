@@ -18,11 +18,11 @@
  * PopoverContent) to avoid nested Radix FocusScope recursion in jsdom.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Plus, Search } from 'lucide-react';
-import { cn } from '../../../lib/utils';
+import { Plus } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from '../../../components/ui/popover';
 import { Input } from '../../../components/ui/input';
+import { MenuLabel, MenuSearchField, MenuCheckRow, MenuRow, MenuDivider } from '../../../components/ui/menu';
 import { setChatTags } from '../../../lib/api/tags';
 import { validateTagName, tagNameErrorMessage } from './validate-tag-name';
 import { buildTagCascade, type ThreadTagSnapshot, type TagCascadeUpdate } from './build-tag-cascade';
@@ -183,32 +183,24 @@ export function TagPopover({
           />
         )}
         {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
-        <PopoverContent data-testid="sessions-tag-popover" className="w-64 p-2" align="start">
-          <div className="px-2 py-1 text-micro font-bold uppercase tracking-wide text-mf-text-3">Tags</div>
-          <div className="relative">
-            <Search
-              size={13}
-              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-mf-text-3"
-              aria-hidden="true"
-            />
-            <Input
-              ref={searchRef}
-              data-testid="sessions-tag-popover-search"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setError(null);
-              }}
-              onKeyDown={(e) => {
-                // Escape: let Radix Popover handle close (fires onOpenChange → onClose).
-                // Do NOT call onClose() here — the Popover's onOpenChange does it,
-                // and a direct call would trigger onClose twice.
-                if (e.key === 'Enter' && showCreate) void createAndApply();
-              }}
-              placeholder="Find or create..."
-              className="h-[30px] pl-7 text-body"
-            />
-          </div>
+        <PopoverContent data-testid="sessions-tag-popover" className="w-64" align="start">
+          <MenuLabel>Tags</MenuLabel>
+          <MenuSearchField
+            data-testid="sessions-tag-popover-search"
+            value={query}
+            onValueChange={(v) => {
+              setQuery(v);
+              setError(null);
+            }}
+            inputRef={searchRef}
+            placeholder="Find or create..."
+            onKeyDown={(e) => {
+              // Escape: let Radix Popover handle close (fires onOpenChange → onClose).
+              // Do NOT call onClose() here — the Popover's onOpenChange does it,
+              // and a direct call would trigger onClose twice.
+              if (e.key === 'Enter' && showCreate) void createAndApply();
+            }}
+          />
           {lower.length > 0 && nameError !== null && (
             <div className="text-caption text-destructive px-2 py-1">{tagNameErrorMessage(nameError)}</div>
           )}
@@ -249,47 +241,37 @@ export function TagPopover({
                   onRecolor={(n) => setRecoloring(n)}
                   onDelete={(n) => setConfirmDelete(n)}
                 >
-                  <button
-                    type="button"
+                  <MenuCheckRow
                     data-testid={`sessions-tag-toggle-${t.name}`}
-                    aria-checked={applied.has(t.name)}
                     data-tag-row={t.name}
+                    checked={applied.has(t.name)}
                     onClick={() => void toggle(t.name)}
-                    className="flex w-full items-center gap-[9px] rounded-md px-2 py-1.5 text-body hover:bg-accent"
-                  >
-                    <span
-                      className={cn(
-                        'inline-flex size-[15px] flex-shrink-0 items-center justify-center rounded-xs',
-                        applied.has(t.name) ? 'bg-primary' : 'border-[1.5px] border-border bg-transparent',
-                      )}
-                      aria-hidden="true"
-                    >
-                      {applied.has(t.name) && <Check size={9} className="text-primary-foreground" />}
-                    </span>
-                    <span
-                      className="flex flex-1 items-center gap-2"
-                      data-testid={`sessions-tag-registry-row-${t.name}`}
-                    >
-                      <span className="size-1.5 shrink-0 rounded-full" style={TAG_DOT_STYLE(t.color)} aria-hidden="true" />
-                      <span className="text-foreground">{t.name}</span>
-                    </span>
-                  </button>
+                    swatch={
+                      <span
+                        className="size-1.5 shrink-0 rounded-full"
+                        style={TAG_DOT_STYLE(t.color)}
+                        aria-hidden="true"
+                      />
+                    }
+                    label={
+                      <span data-testid={`sessions-tag-registry-row-${t.name}`} className="text-foreground">
+                        {t.name}
+                      </span>
+                    }
+                  />
                 </TagRegistryItemMenu>
               ),
             )}
           </div>
           {showCreate && (
             <>
-              <div className="my-1 border-t border-border" />
-              <button
-                type="button"
+              <MenuDivider />
+              <MenuRow
                 data-testid="sessions-tag-popover-create"
+                icon={<Plus className="text-primary" />}
+                label={`Create tag "${lower}"`}
                 onClick={() => void createAndApply()}
-                className="flex w-full items-center gap-[9px] rounded-sm px-2 py-[7px] text-label hover:bg-accent"
-              >
-                <Plus size={13} className="shrink-0 text-primary" />
-                <span className="text-foreground">Create tag &quot;{lower}&quot;</span>
-              </button>
+              />
             </>
           )}
           {recoloring && (
