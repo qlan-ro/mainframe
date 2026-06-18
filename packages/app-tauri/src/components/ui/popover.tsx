@@ -1,6 +1,7 @@
 import * as React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { cn } from '@/lib/utils';
+import { MENU_CONTENT_PADDING } from './menu-variants';
 
 const Popover = PopoverPrimitive.Root;
 const PopoverTrigger = PopoverPrimitive.Trigger;
@@ -18,7 +19,8 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          'z-50 w-72 rounded-lg border border-border bg-popover p-1 overflow-hidden',
+          'z-50 w-72 rounded-lg border border-border bg-popover overflow-hidden',
+          MENU_CONTENT_PADDING,
           'text-body text-popover-foreground',
           'shadow-[var(--mf-shadow-pop)]',
           'outline-none',
