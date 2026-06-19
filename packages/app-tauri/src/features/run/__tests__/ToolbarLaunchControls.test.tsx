@@ -6,8 +6,9 @@
  *  - The run button is disabled when fetchLaunchConfigs resolves to []
  *  - Opening the dropdown renders both config rows and the gated "Generate with Agent" footer (disabled)
  *  - Clicking a non-preview config ROW selects it: calls setSelectedConfigName, does NOT call startLaunchConfig, does NOT call addRunTab
- *  - Clicking a preview config ROW selects it: calls setSelectedConfigName AND addRunTab with kind:'preview', does NOT call startLaunchConfig
- *  - Clicking the per-row START button calls startLaunchConfig(port, projectId, name, chatId)
+ *  - Clicking a preview config ROW is PURE SELECTION: calls setSelectedConfigName, does NOT call addRunTab, does NOT call startLaunchConfig
+ *  - Clicking the per-row START button on a non-preview config calls startLaunchConfig, does NOT call addRunTab
+ *  - Clicking the per-row START button on a preview config calls startLaunchConfig AND addRunTab with kind:'preview'
  *  - When a config is 'running', the row shows a STOP button; clicking it calls stopLaunchConfig
  *  - Run button (main-toolbar-play): clicking starts the first config when none is running
  *  - Run button (main-toolbar-play): clicking stops the config when its status is 'running'
@@ -139,21 +140,31 @@ describe('ToolbarLaunchControls', () => {
     expect(addRunTab).not.toHaveBeenCalled();
   });
 
-  it('clicking the preview ROW selects it: calls setSelectedConfigName AND addRunTab with kind:preview, does NOT call startLaunchConfig', async () => {
+  it('clicking the preview ROW is pure selection: calls setSelectedConfigName, does NOT call addRunTab or startLaunchConfig', async () => {
     await renderAndOpen();
     fireEvent.click(screen.getByTestId('main-toolbar-launch-config-preview-app'));
     await waitFor(() => expect(setSelectedConfigName).toHaveBeenCalledWith('preview-app'));
-    expect(addRunTab).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'preview', config: 'preview-app' }),
-    );
+    expect(addRunTab).not.toHaveBeenCalled();
     expect(startLaunchConfig).not.toHaveBeenCalled();
   });
 
-  it('clicking the per-row START button calls startLaunchConfig(31415, proj-1, dev server, chat-9)', async () => {
+  it('clicking the per-row START button on a non-preview config calls startLaunchConfig, does NOT call addRunTab', async () => {
     await renderAndOpen();
     fireEvent.click(screen.getByTestId('main-toolbar-launch-start-dev server'));
     await waitFor(() =>
       expect(startLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'),
+    );
+    expect(addRunTab).not.toHaveBeenCalled();
+  });
+
+  it('clicking the per-row START button on a preview config calls startLaunchConfig AND addRunTab with kind:preview', async () => {
+    await renderAndOpen();
+    fireEvent.click(screen.getByTestId('main-toolbar-launch-start-preview-app'));
+    await waitFor(() =>
+      expect(startLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'preview-app', 'chat-9'),
+    );
+    expect(addRunTab).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'preview', config: 'preview-app' }),
     );
   });
 

@@ -4,11 +4,12 @@
  * same launch subsystem as the Run surface's `LaunchPopover` (via
  * `useLaunchActions`).
  *
- * Per the artboard `LaunchPicker`, a dropdown row click SELECTS the config (and
- * opens/focuses its preview tab) while a separate per-row button starts/stops
- * it; the toolbar run button starts the selected config (or the first
- * available), and stops it while running. "Generate with Agent" is a gated
- * placeholder until a config-generation flow exists.
+ * Per the artboard `LaunchPicker`, a dropdown row click only SELECTS the config
+ * (no tab, no start) while a separate per-row button starts/stops it; the
+ * toolbar run button starts the selected config (or the first available), and
+ * stops it while running. Starting (either button) is what opens the preview
+ * tab. "Generate with Agent" is a gated placeholder until a config-generation
+ * flow exists.
  *
  * Scoped testids: main-toolbar-launch, main-toolbar-play,
  * main-toolbar-launch-config-<name>, main-toolbar-launch-{start,stop}-<name>,

@@ -21,7 +21,7 @@ export interface UseLaunchActionsResult {
   /** Status by config name for the active project/worktree scope. */
   scopeStatuses: Record<string, LaunchProcessStatus>;
   selectedConfigName: string | null;
-  /** Select a config (and open/focus its preview tab) without starting it. */
+  /** Select a config — updates the selected config only; no tab, no start. */
   handleSelect: (config: LaunchConfiguration) => void;
   handleLaunch: (config: LaunchConfiguration) => void;
   handleStop: (config: LaunchConfiguration) => void;
@@ -45,23 +45,25 @@ export function useLaunchActions(
     ? (processStatuses[scopeKey] ?? {})
     : {};
 
+  // Pure selection — only updates the selected config. Does NOT open a preview
+  // tab or start anything; that happens on start (handleLaunch).
   const handleSelect = useCallback(
     (config: LaunchConfiguration) => {
       if (!projectId) return;
       setSelectedConfigName(config.name);
-      // Preview configs open (or focus, via addRunTab's dedup) their Run tab on select.
-      if (config.preview) {
-        const tabId = `preview-${config.name}-${crypto.randomUUID().slice(0, 8)}`;
-        addRunTab({ id: tabId, kind: 'preview', title: config.name, config: config.name });
-      }
     },
-    [projectId, addRunTab, setSelectedConfigName],
+    [projectId, setSelectedConfigName],
   );
 
   const handleLaunch = useCallback(
     async (config: LaunchConfiguration) => {
       if (!projectId) return;
-      handleSelect(config);
+      setSelectedConfigName(config.name);
+      // Starting a preview config opens (or focuses, via addRunTab's dedup) its Run tab.
+      if (config.preview) {
+        const tabId = `preview-${config.name}-${crypto.randomUUID().slice(0, 8)}`;
+        addRunTab({ id: tabId, kind: 'preview', title: config.name, config: config.name });
+      }
       try {
         await startLaunchConfig(port, projectId, config.name, chatId ?? undefined);
       } catch (err) {
@@ -69,7 +71,7 @@ export function useLaunchActions(
         console.warn('[launch] start failed', err);
       }
     },
-    [port, projectId, chatId, handleSelect],
+    [port, projectId, chatId, addRunTab, setSelectedConfigName],
   );
 
   const handleStop = useCallback(
