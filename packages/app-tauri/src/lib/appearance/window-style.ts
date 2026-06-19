@@ -26,7 +26,10 @@ export const WINDOW_STYLE_GEOMETRY: Record<WindowStyle, WindowStyleGeometry> = {
   unified: {
     windowRoot: 'bg-mf-window p-2 gap-2',
     sidebar: 'bg-transparent backdrop-blur-0 rounded-none shadow-none',
-    pane: 'bg-transparent gap-2',
+    // Opaque (same colour as the window backdrop it sits on) so the pane slides
+    // as a SOLID cover over the sidebar during a drag-collapse — otherwise the
+    // transparent toolbar strip lets the sidebar header icons show through.
+    pane: 'bg-mf-window gap-2',
     surface: 'rounded-[10px] bg-background shadow-[var(--mf-shadow-panel)] ring-[0.5px] ring-border',
     divider: 'bg-transparent',
     toolbar: 'bg-transparent',
@@ -43,7 +46,9 @@ export const WINDOW_STYLE_GEOMETRY: Record<WindowStyle, WindowStyleGeometry> = {
     windowRoot: 'bg-mf-window p-[7px] gap-[7px]',
     sidebar:
       'bg-mf-glass backdrop-blur-[40px] backdrop-saturate-[1.8] rounded-[13px] shadow-[var(--mf-shadow-panel-soft)]',
-    pane: 'bg-transparent gap-[7px]',
+    // Opaque (same colour as the window backdrop) so the pane is a SOLID cover
+    // over the sidebar during a drag-collapse — see the `unified` note above.
+    pane: 'bg-mf-window gap-[7px]',
     surface: 'rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]',
     divider: 'bg-transparent',
     toolbar: 'bg-transparent',
