@@ -37,6 +37,28 @@ interface EditorTabProps {
 
 type LoadState = { status: 'loading' } | { status: 'ready'; value: string } | { status: 'error'; message: string };
 
+/** Save-status chip shown in the ViewerShell header actions slot. */
+function SaveStatusChip({ dirty }: { dirty: boolean }) {
+  if (dirty) {
+    return (
+      <span
+        data-testid="editor-save-status"
+        className="rounded-[4px] bg-mf-warning-tint px-[5px] py-[1px] font-mono text-micro text-mf-warning"
+      >
+        ● unsaved
+      </span>
+    );
+  }
+  return (
+    <span
+      data-testid="editor-save-status"
+      className="rounded-[4px] bg-mf-success-tint px-[5px] py-[1px] font-mono text-micro text-mf-success"
+    >
+      ● saved
+    </span>
+  );
+}
+
 export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -50,6 +72,10 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   pathRef.current = path;
   // Ref to the live EditorView — populated via CmEditor's onViewReady seam.
   const viewRef = useRef<EditorView | null>(null);
+
+  // Subscribe to the dirty flag for the save-status chip.
+  // Read from store state (not subscribed via selector — we want the live value).
+  const isDirty = useEditorStore((s) => s.getBuffer(path)?.dirty ?? false);
 
   // Callback for silent reload (disk change with clean buffer): updates loadState
   // value so React reflects the new content even without an EditorView.
@@ -189,6 +215,9 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   const language = inferLanguage(path);
 
+  // Save status chip for the ViewerShell header actions slot.
+  const saveStatusChip = <SaveStatusChip dirty={isDirty} />;
+
   return (
     <div data-testid="editor-tab" className="flex h-full flex-col overflow-hidden">
       <ViewerRouter
@@ -203,7 +232,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
               readOnly={readOnly}
             />
           ) : (
-            <ViewerShell path={path} status={`Ln ${cursorPos.ln}, Col ${cursorPos.col}`}>
+            <ViewerShell path={path} status={`Ln ${cursorPos.ln}, Col ${cursorPos.col}`} actions={saveStatusChip}>
               {readOnly && (
                 <div
                   data-testid="editor-tab-readonly"

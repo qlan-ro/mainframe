@@ -3,9 +3,10 @@
  * surface's `LaunchPopover` and the shell `ToolbarLaunchControls`.
  *
  * Wraps `useLaunchConfigs` (fetch) with the per-scope process statuses, the
- * selected-config state, and the start/stop handlers. Starting a `preview:true`
- * config also opens a `kind:'preview'` Run tab. Selecting/starting a config
- * records it as the selected one so the toolbar picker reflects it.
+ * selected-config state, and the start/stop handlers. Starting any config opens
+ * (or focuses) its own Run tab — a `preview` webview tab for `preview:true`
+ * configs, a full-space `console` tab for process configs. Selecting/starting a
+ * config records it as the selected one so the toolbar picker reflects it.
  */
 import { useCallback } from 'react';
 import { mfToast } from '@/lib/toast';
@@ -15,6 +16,7 @@ import { buildLaunchScope } from '@/lib/launch-scope';
 import { useSandboxStore } from '@/store/sandbox';
 import { useLayoutStore } from '@/store/layout';
 import { useLaunchConfigs } from './use-launch-configs';
+import { runTabForConfig } from './run-tab-for-config';
 
 export interface UseLaunchActionsResult {
   configs: LaunchConfiguration[];
@@ -59,11 +61,12 @@ export function useLaunchActions(
     async (config: LaunchConfiguration) => {
       if (!projectId) return;
       setSelectedConfigName(config.name);
-      // Starting a preview config opens (or focuses, via addRunTab's dedup) its Run tab.
-      if (config.preview) {
-        const tabId = `preview-${config.name}-${crypto.randomUUID().slice(0, 8)}`;
-        addRunTab({ id: tabId, kind: 'preview', title: config.name, config: config.name });
-      }
+      // Every launch config opens (or focuses, via addRunTab's dedup) its own Run
+      // tab: a `preview` config gets a webview tab, a process config gets a
+      // full-space `console` tab. Distinct configs never share a tab. The tab
+      // carries the launch scope so its console/status survive a later switch to
+      // a chat that doesn't resolve to this scope.
+      addRunTab(runTabForConfig(config, scopeKey));
       try {
         await startLaunchConfig(port, projectId, config.name, chatId ?? undefined);
       } catch (err) {
@@ -71,7 +74,7 @@ export function useLaunchActions(
         console.warn('[launch] start failed', err);
       }
     },
-    [port, projectId, chatId, addRunTab, setSelectedConfigName],
+    [port, projectId, chatId, scopeKey, addRunTab, setSelectedConfigName],
   );
 
   const handleStop = useCallback(

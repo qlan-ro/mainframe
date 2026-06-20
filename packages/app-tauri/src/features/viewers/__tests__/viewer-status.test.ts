@@ -6,6 +6,8 @@ import {
   formatMarkdownStatus,
   formatPdfStatus,
   formatSvgStatus,
+  splitSvgStatus,
+  splitMarkdownStatus,
 } from '../viewer-status';
 
 describe('formatBytes', () => {
@@ -51,5 +53,27 @@ describe('formatSvgStatus', () => {
     expect(formatSvgStatus({ viewBox: '0 0 96 96', w: 96, h: 96, bytes: 410 })).toBe(
       'SVG · viewBox 0 0 96 96 · 96×96 · 0.4 KB',
     );
+  });
+});
+
+describe('splitSvgStatus', () => {
+  it('splits SVG status into left (SVG · viewBox) and right (dimensions · size)', () => {
+    const result = splitSvgStatus({ viewBox: '0 0 96 96', w: 96, h: 96, bytes: 410 });
+    expect(result.left).toBe('SVG · viewBox 0 0 96 96');
+    expect(result.right).toBe('96×96 · 0.4 KB');
+  });
+});
+
+describe('splitMarkdownStatus', () => {
+  it('returns left="Markdown · UTF-8" and right with word/line counts', () => {
+    const result = splitMarkdownStatus(320, 88);
+    expect(result.left).toBe('Markdown · UTF-8');
+    expect(result.right).toBe('320 words · 88 lines');
+  });
+
+  it('handles zero word/line counts', () => {
+    const result = splitMarkdownStatus(0, 0);
+    expect(result.left).toBe('Markdown · UTF-8');
+    expect(result.right).toBe('0 words · 0 lines');
   });
 });

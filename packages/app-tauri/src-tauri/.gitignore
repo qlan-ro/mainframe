@@ -3,3 +3,6 @@
 
 # Tauri generated schemas (regenerated from capabilities at build)
 /gen/schemas
+
+# Runtime logs (preview/security capture output)
+/logs

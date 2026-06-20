@@ -23,12 +23,39 @@ pub struct Bounds {
     pub h: f64,
 }
 
+/// Viewport dimensions sent by the BRIDGE_JS inspect handler.
+///
+/// The bridge sends `{ w, h }` only (no x/y).  A dedicated struct avoids
+/// requiring x/y fields on deserialization and is clearer than `#[serde(default)]`
+/// on `Bounds` (Finding 3b).
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
+pub struct Viewport {
+    pub w: f64,
+    pub h: f64,
+}
+
+/// Result posted back by the BRIDGE_JS element-inspect picker.
+///
+/// `#[serde(rename_all = "camelCase")]` maps `tab_id` ↔ `tabId` so that the
+/// bridge's camelCase JSON binds correctly (Finding 3a).
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct InspectResult {
     pub tab_id: String,
     pub selector: Option<String>,
     pub rect: Option<Bounds>,
-    pub viewport: Option<Bounds>,
+    pub viewport: Option<Viewport>,
+}
+
+// ── URL scheme allowlist ───────────────────────────────────────────────────────
+
+/// Returns `true` only for schemes safe to forward to the OS opener.
+///
+/// Rejects `file://`, `javascript:`, `ssh://`, `app:` and any unknown scheme
+/// (Finding 2).
+fn is_allowed_external_scheme(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    lower.starts_with("https://") || lower.starts_with("http://")
 }
 
 // ── PreviewManager ─────────────────────────────────────────────────────────────
@@ -219,6 +246,11 @@ pub async fn preview_destroy(
 ///
 /// macOS: WKWebView `takeSnapshot`, DPR-aware, optionally cropped to `region`.
 /// Win/Linux: returns a clean `Err("preview capture unsupported on this platform")`.
+///
+/// The webview borrow is released before the first `.await` (Finding 1 + 5):
+/// `schedule_capture` dispatches the ObjC snapshot call synchronously inside
+/// `with_webview`, returns an owned `Receiver`, and we `.await` the receiver
+/// outside — no Tokio worker is ever parked for the snapshot duration.
 #[tauri::command]
 pub async fn preview_capture(
     tab_id: String,
@@ -227,9 +259,30 @@ pub async fn preview_capture(
 ) -> Result<Vec<u8>, String> {
     #[cfg(target_os = "macos")]
     {
-        manager
-            .with_webview(&tab_id, |wv| capture_macos::capture_png(wv, region))
-            .ok_or_else(|| format!("no preview tab {tab_id}"))?
+        // Phase 1 (sync): schedule the snapshot and get back an owned Receiver.
+        // The &tauri::Webview borrow is released here, before any .await.
+        let rx = manager
+            .with_webview(&tab_id, capture_macos::schedule_capture)
+            .ok_or_else(|| format!("no preview tab {tab_id}"))??;
+
+        // Phase 2 (async): suspend until the ObjC completion handler fires.
+        let (rgba, img_w, img_h, dpr) = rx
+            .await
+            .map_err(|_| "snapshot oneshot sender dropped before completion".to_string())??;
+
+        // Phase 3: crop/encode (same path as before).
+        match region {
+            None => capture_macos::encode_png(&rgba, img_w, img_h),
+            Some(r) => {
+                use crate::preview::crop::{clamp_rect, scale_region};
+                let rect = clamp_rect(scale_region(r, dpr), img_w, img_h);
+                if rect.w == 0 || rect.h == 0 {
+                    return Err("capture region is empty after clamping".to_string());
+                }
+                let cropped = capture_macos::crop_rgba(&rgba, img_w, rect);
+                capture_macos::encode_png(&cropped, rect.w, rect.h)
+            }
+        }
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -238,10 +291,19 @@ pub async fn preview_capture(
     }
 }
 
-/// Open a URL in the OS default browser (called from the BRIDGE_JS click handler).
+/// Open a URL in the OS default browser.
+///
+/// Only `http://` and `https://` are forwarded to the opener.  Any other
+/// scheme (`file://`, `javascript:`, `ssh://`, etc.) is rejected and logged
+/// to prevent BRIDGE_JS from being used as an OS-command injection vector
+/// (Finding 2).
 #[tauri::command]
 pub async fn preview_open_external(url: String, app: tauri::AppHandle) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
+    if !is_allowed_external_scheme(&url) {
+        tracing::warn!(url = %url, "preview_open_external: rejected disallowed scheme");
+        return Err(format!("disallowed URL scheme: {url}"));
+    }
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
@@ -275,6 +337,8 @@ pub async fn preview_eval(
 mod tests {
     use super::*;
 
+    // ── PreviewManager bookkeeping ────────────────────────────────────────────
+
     #[test]
     fn create_registers_tab_and_is_idempotent() {
         let mgr = PreviewManager::new();
@@ -305,5 +369,82 @@ mod tests {
         // Must not panic — poison-safe lock recovers the guard.
         mgr.register("after-poison", Bounds { x: 0.0, y: 0.0, w: 1.0, h: 1.0 });
         assert_eq!(mgr.count(), 1);
+    }
+
+    // ── Finding 2: URL scheme allowlist ───────────────────────────────────────
+
+    #[test]
+    fn allowed_schemes_pass() {
+        assert!(is_allowed_external_scheme("https://example.com/path?q=1"));
+        assert!(is_allowed_external_scheme("http://localhost:3000"));
+        assert!(is_allowed_external_scheme("HTTPS://EXAMPLE.COM")); // case-insensitive
+        assert!(is_allowed_external_scheme("HTTP://example.com"));
+    }
+
+    #[test]
+    fn disallowed_schemes_are_rejected() {
+        assert!(!is_allowed_external_scheme("file:///etc/passwd"));
+        assert!(!is_allowed_external_scheme("javascript:alert(1)"));
+        assert!(!is_allowed_external_scheme("ssh://host"));
+        assert!(!is_allowed_external_scheme("app://some.bundle/path"));
+        assert!(!is_allowed_external_scheme("ftp://ftp.example.com"));
+        assert!(!is_allowed_external_scheme("data:text/html,<h1>hi</h1>"));
+        assert!(!is_allowed_external_scheme(""));
+    }
+
+    // ── Finding 3: InspectResult deserialization ──────────────────────────────
+
+    /// The BRIDGE_JS inspect handler posts:
+    ///   { tabId, selector, rect: {x,y,w,h}, viewport: {w,h} }
+    /// Verify that the exact shape round-trips through serde.
+    #[test]
+    fn inspect_result_deserializes_bridge_json() {
+        let json = r#"{
+            "tabId": "tab-abc",
+            "selector": "body > div:nth-child(2)",
+            "rect": { "x": 10.0, "y": 20.0, "w": 300.0, "h": 150.0 },
+            "viewport": { "w": 1280.0, "h": 800.0 }
+        }"#;
+        let result: InspectResult = serde_json::from_str(json).expect("deserialization failed");
+        // Finding 3a: snake_case field mapped from camelCase tabId.
+        assert_eq!(result.tab_id, "tab-abc");
+        assert_eq!(result.selector.as_deref(), Some("body > div:nth-child(2)"));
+        let rect = result.rect.expect("rect should be Some");
+        assert_eq!(rect.x, 10.0);
+        assert_eq!(rect.w, 300.0);
+        // Finding 3b: viewport is {w,h} only — no x/y fields required.
+        let vp = result.viewport.expect("viewport should be Some");
+        assert_eq!(vp.w, 1280.0);
+        assert_eq!(vp.h, 800.0);
+    }
+
+    /// Escape-key cancel path: all nullable fields are null.
+    #[test]
+    fn inspect_result_deserializes_cancel_payload() {
+        let json = r#"{
+            "tabId": "tab-xyz",
+            "selector": null,
+            "rect": null,
+            "viewport": null
+        }"#;
+        let result: InspectResult = serde_json::from_str(json).expect("cancel payload failed");
+        assert_eq!(result.tab_id, "tab-xyz");
+        assert!(result.selector.is_none());
+        assert!(result.rect.is_none());
+        assert!(result.viewport.is_none());
+    }
+
+    /// Re-emit serializes back to camelCase so the renderer receives `tabId`.
+    #[test]
+    fn inspect_result_serializes_to_camel_case() {
+        let result = InspectResult {
+            tab_id: "tab-1".to_string(),
+            selector: None,
+            rect: None,
+            viewport: Some(Viewport { w: 800.0, h: 600.0 }),
+        };
+        let json = serde_json::to_string(&result).expect("serialization failed");
+        assert!(json.contains("\"tabId\""), "expected camelCase tabId, got: {json}");
+        assert!(!json.contains("\"tab_id\""), "snake_case leaked into JSON: {json}");
     }
 }

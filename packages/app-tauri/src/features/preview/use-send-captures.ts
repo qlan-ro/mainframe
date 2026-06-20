@@ -1,52 +1,46 @@
 import { useCallback } from 'react';
-import { useAssistantRuntime } from '@assistant-ui/react';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
-import { sendCaptures } from '@/features/run/send-captures';
-import { uploadAttachments } from '@/lib/api/attachments';
-import { daemonWs } from '@/lib/daemon/ws-client';
-import type { CaptureLike } from '@/features/run/format-captures';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
+import { formatCaptures, type CaptureLike } from '@/features/run/format-captures';
+import type { AppendMessage } from '@assistant-ui/react';
 
 export function useSendCaptures() {
-  const runtime = useAssistantRuntime();
   const port = useDaemonPort();
+  const { chatId } = useActiveIdentity();
 
   return useCallback(
     async (captures: ReadonlyArray<CaptureLike>) => {
-      // Resolve the active chatId from the thread list.
-      // Production: reads mainThreadId + threadItems from getState().
-      // Test: the module mock exposes getActiveThread() on the threads object.
-      const threads = runtime.threads as unknown as {
-        getActiveThread?: () => { remoteId?: string | null } | null;
-        getState: () => { mainThreadId: string; threadItems: Record<string, { remoteId?: string }> };
-      };
-      let chatId: string | null = null;
-      if (typeof threads.getActiveThread === 'function') {
-        // Test environment (module is fully mocked).
-        chatId = threads.getActiveThread()?.remoteId ?? null;
-      } else {
-        const state = threads.getState();
-        chatId = state.threadItems[state.mainThreadId]?.remoteId ?? null;
-      }
-
       if (!chatId) {
-        console.warn('[preview] no active thread chatId, skipping send');
+        console.warn('[preview] no active chatId, skipping send');
         return;
       }
+      if (captures.length === 0) return;
 
-      await sendCaptures(captures, {
-        port,
-        chatId,
-        uploadAttachments: (p, cId, items) => uploadAttachments(p, cId, items),
-        sendMessage: async ({ text, attachmentIds }) => {
-          daemonWs.send({
-            type: 'message.send',
-            chatId: chatId!,
-            content: text,
-            attachmentIds,
-          });
-        },
-      });
+      const { markdown, attachments } = formatCaptures(captures);
+      if (attachments.length === 0) return;
+
+      const controller = chatControllerRegistry.getOrCreate(chatId, port);
+
+      const message: AppendMessage = {
+        role: 'user',
+        content: [{ type: 'text', text: markdown }],
+        attachments: attachments.map((att) => ({
+          id: att.name,
+          type: 'image' as const,
+          name: att.name,
+          status: { type: 'complete' as const },
+          content: [{ type: 'image' as const, image: `data:${att.mediaType};base64,${att.data}` }],
+        })),
+        metadata: { custom: {} },
+        createdAt: new Date(),
+        parentId: null,
+        sourceId: null,
+        runConfig: undefined,
+      };
+
+      await controller.sendMessage(message);
     },
-    [runtime, port],
+    [chatId, port],
   );
 }

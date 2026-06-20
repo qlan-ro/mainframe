@@ -15,11 +15,16 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
   useDaemonPort: () => 31415,
 }));
-vi.mock('@/features/run/LaunchPopover', () => ({
-  LaunchPopover: () => <div data-testid="stub-launch-popover" />,
-}));
-vi.mock('@/features/run/StopPopover', () => ({
-  StopPopover: () => <div data-testid="stub-stop-popover" />,
+vi.mock('@/features/run/use-launch-actions', () => ({
+  useLaunchActions: () => ({
+    configs: [],
+    scopeStatuses: {},
+    selectedConfigName: null,
+    handleSelect: vi.fn(),
+    handleLaunch: vi.fn(),
+    handleStop: vi.fn(),
+    refetch: vi.fn(),
+  }),
 }));
 vi.mock('@/features/run/ConsolePane', () => ({
   ConsolePane: () => <div data-testid="stub-console-pane" />,
@@ -59,9 +64,11 @@ describe('RunSurface terminal rendering', () => {
     expect(screen.getByTestId('stub-terminal-term-9')).toBeInTheDocument();
   });
 
-  it('the pane + button emits new-terminal with the paneId', async () => {
+  it('the + opens a popover whose "New terminal" row emits new-terminal with the paneId', async () => {
     const user = userEvent.setup();
     render(<RunSurface />);
+    // The + is a popover trigger, not a direct action.
+    await user.click(screen.getByTestId('run-tab-strip-add-pane-1'));
     await user.click(screen.getByTestId('run-pane-new-terminal-pane-1'));
     expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'new-terminal', paneId: 'pane-1' });
   });

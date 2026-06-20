@@ -110,6 +110,21 @@ pub fn run() {
 
             Ok(())
         })
+        .on_page_load(|webview, payload| {
+            // A hard reload of the MAIN webview (e.g. Cmd-R) re-runs the renderer
+            // from scratch, but React unmount effects do NOT fire — so any preview
+            // child webviews from the previous page are orphaned and stick on
+            // screen. Tear them all down the moment the main webview starts
+            // loading a new page. (Preview child webviews have non-"main" labels,
+            // so their own loads never trigger this.)
+            if webview.label() == "main"
+                && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
+            {
+                if let Some(mgr) = webview.app_handle().try_state::<PreviewManager>() {
+                    mgr.kill_all();
+                }
+            }
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 // Kill the daemon when the last window closes.

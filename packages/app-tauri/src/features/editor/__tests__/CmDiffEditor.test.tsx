@@ -67,6 +67,19 @@ describe('CmDiffEditor', () => {
     expect(editors.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('renders the line-number gutter in both panes (custom extensions reach the MergeView)', () => {
+    // Regression guard: MergeView builds its panes from `config.a/b.extensions`.
+    // Passing a pre-built EditorState (which has no `.extensions` property) drops
+    // every custom extension — lineNumbers, syntax highlighting, the warm theme.
+    render(
+      <CmDiffEditor original={'a\nb\nc\n'} modified={'a\nB\nc\n'} language="javascript" path="/test/gutter.ts" />,
+    );
+    const root = screen.getByTestId('editor-diff');
+    const lineNumberGutters = root.querySelectorAll('.cm-lineNumbers');
+    // One line-number gutter per pane (a + b).
+    expect(lineNumberGutters.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('modified pane is read-only when readOnly=true — b pane EditorState.readOnly is set', () => {
     // We can't easily query aria-readonly inside jsdom for MergeView
     // (CM6 sets it on .cm-content, but MergeView's internal mount timing differs from

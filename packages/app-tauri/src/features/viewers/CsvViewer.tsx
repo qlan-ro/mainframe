@@ -96,7 +96,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
 
   // Filter chip — lives in the ViewerShell header actions slot.
   const filterChip = (
-    <div className="inline-flex h-5 items-center gap-1 rounded-md bg-mf-chip px-2">
+    <div className="inline-flex h-5 items-center gap-1 rounded-md bg-mf-chip px-[8px]">
       <Search size={10} className="shrink-0 text-mf-text-3" aria-hidden />
       <input
         type="text"
@@ -123,7 +123,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
               <thead className="sticky top-0 bg-mf-content2">
                 <tr>
                   {/* Row-number gutter */}
-                  <th className="w-10 [border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-3.5 py-1.5 text-right text-muted-foreground select-none">
+                  <th className="w-10 [border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-3.5 py-1.5 text-right font-mono text-micro text-mf-text-4 select-none">
                     #
                   </th>
                   {parsed.headers.map((header, i) => {
@@ -135,13 +135,13 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                         data-testid={`viewer-csv-header-${header}`}
                         onClick={() => handleHeaderClick(i)}
                         className={[
-                          'cursor-pointer [border-bottom:0.5px_solid_var(--border)] px-3.5 py-1.5 font-medium select-none',
+                          'cursor-pointer [border-bottom:0.5px_solid_var(--border)] px-3.5 py-1.5 font-semibold select-none',
                           'hover:bg-accent',
                           isNum ? 'text-right' : 'text-left',
                           isActive ? 'text-foreground' : 'text-muted-foreground',
                         ].join(' ')}
                       >
-                        <span className="inline-flex items-center gap-1">
+                        <span className={['inline-flex items-center gap-1', isNum ? 'flex-row-reverse' : ''].join(' ')}>
                           {header}
                           {isActive && sort.dir === 'asc' && (
                             <span className="text-primary" style={{ fontSize: 10 }}>
@@ -162,15 +162,15 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
               <tbody>
                 {displayRows.map((row, rowIdx) => (
                   <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-card'}>
-                    <td className="[border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-3.5 py-1 text-right text-muted-foreground tabular-nums">
+                    <td className="[border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-3.5 py-1.5 text-right font-mono text-micro text-mf-text-4 tabular-nums">
                       {rowIdx + 1}
                     </td>
                     {parsed.headers.map((_header, colIdx) => (
                       <td
                         key={colIdx}
                         className={[
-                          'px-3.5 py-1 [border-bottom:0.5px_solid_var(--border)]',
-                          numericCols.has(colIdx) ? 'text-right tabular-nums' : 'text-left',
+                          'px-3.5 py-1.5 [border-bottom:0.5px_solid_var(--border)]',
+                          numericCols.has(colIdx) ? 'text-right tabular-nums font-mono text-caption' : 'text-left',
                           'text-foreground',
                         ].join(' ')}
                       >
@@ -183,7 +183,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                   <tr data-testid="viewer-csv-empty">
                     <td
                       colSpan={parsed.headers.length + 1}
-                      className="px-3 py-10 text-center text-body text-muted-foreground"
+                      className="px-3 py-10 text-center text-label text-mf-text-3"
                     >
                       {`No rows match "${filter}".`}
                     </td>

@@ -60,7 +60,7 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
       <div data-testid="viewer-unsupported" className="flex h-full flex-col items-center justify-center gap-4 bg-mf-content2">
         <div
           data-testid="viewer-unsupported-card"
-          className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card px-10 py-8 text-center shadow-sm"
+          className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background px-[24px] py-[26px] text-center shadow-sm"
         >
           <div
             data-testid="viewer-unsupported-icon-chip"

@@ -5,13 +5,14 @@
  * Max-height derived from the drawer's own container ref (ResizeObserver) or
  * a fixed cap — NOT from layout/. Composed into InspectorPane below the body.
  *
- * Header: "Tasks" chip with active count + New (+) button + Expand button.
+ * Header: "Tasks" label with active count + New (+) button + Expand button.
  * Body: TasksDrawerList (owns the single load() effect).
  *
  * data-testid="tasks-drawer".
  */
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Plus, Maximize2 } from 'lucide-react';
+import { ExternalLink, Plus } from 'lucide-react';
+import { TasksGlyph } from '@/layout/surface-icons';
 import { useTodosStore } from './use-todos-store';
 import { useTasksModal } from './use-tasks-modal';
 import { TasksDrawerList } from './TasksDrawerList';
@@ -103,22 +104,25 @@ export function TasksDrawer({ port, projectId, onStartSession }: Props): React.R
     <div
       ref={containerRef}
       data-testid="tasks-drawer"
-      className="flex flex-col border-t border-border bg-card shrink-0"
+      className="flex flex-col shrink-0 bg-card"
       style={{ height }}
     >
-      {/* Resize handle */}
+      {/* Resize handle — hairline inner stripe, hover highlights */}
       <div
         data-testid="tasks-drawer-resize-handle"
-        className="h-1 w-full cursor-row-resize bg-transparent hover:bg-primary/20 transition-colors shrink-0"
+        className="group h-[5px] w-full cursor-row-resize shrink-0 flex items-center"
         onMouseDown={handleResizeStart}
         aria-label="Resize tasks drawer"
-      />
+      >
+        <div className="h-px w-full bg-border group-hover:bg-primary transition-colors" />
+      </div>
 
       {/* Header */}
-      <div className="flex items-center gap-1.5 px-2.5 py-1.5 shrink-0 border-b border-border">
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 shrink-0 [border-bottom:0.5px_solid_var(--border)]">
+        <TasksGlyph size={11} className="text-primary flex-shrink-0" />
         <span className="text-caption font-semibold text-foreground">Tasks</span>
         {activeCount > 0 && (
-          <span className="text-caption text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 leading-none">
+          <span className="font-mono text-micro text-mf-text-3">
             {activeCount}
           </span>
         )}
@@ -127,19 +131,19 @@ export function TasksDrawer({ port, projectId, onStartSession }: Props): React.R
             data-testid="tasks-drawer-new"
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[4px] border-none bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             aria-label="New task"
           >
-            <Plus size={13} />
+            <Plus size={11} />
           </button>
           <button
             data-testid="tasks-drawer-expand"
             type="button"
             onClick={openModal}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[4px] border-none bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             aria-label="Open full Tasks view"
           >
-            <Maximize2 size={13} />
+            <ExternalLink size={13} />
           </button>
         </div>
       </div>

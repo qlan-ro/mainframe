@@ -130,7 +130,7 @@ export function FilePickerDialog() {
         {projectId != null ? (
           <PickerBody port={port} projectId={projectId} chatId={chatId} onClose={handleClose} />
         ) : (
-          <div data-testid="file-picker-dialog" className="py-6 text-center text-body text-muted-foreground">
+          <div data-testid="file-picker-no-project" className="py-6 text-center text-body text-muted-foreground">
             No project selected
           </div>
         )}

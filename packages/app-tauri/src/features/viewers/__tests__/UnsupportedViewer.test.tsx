@@ -16,7 +16,7 @@
  * 11. (toFileUrl) Absolute path → file:// URL passed through.
  * 12. "Open externally" button uses primary accent fill (bg-primary class).
  * 13. Icon chip is 46×46 with rounded-[11px] bg-mf-chip container.
- * 14. Card uses bg-card (not bg-mf-tab-bar).
+ * 14. Card uses bg-background (not bg-card or bg-mf-tab-bar).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -126,10 +126,11 @@ describe('UnsupportedViewer', () => {
     expect(chip?.className).toContain('bg-mf-chip');
   });
 
-  it('card uses bg-card class (not bg-mf-tab-bar)', () => {
+  it('card uses bg-background class (not bg-card or bg-mf-tab-bar)', () => {
     render(<UnsupportedViewer path="/archive.zip" />);
     const card = screen.getByTestId('viewer-unsupported-card');
-    expect(card.className).toContain('bg-card');
+    expect(card.className).toContain('bg-background');
+    expect(card.className).not.toContain('bg-card');
     expect(card.className).not.toContain('bg-mf-tab-bar');
   });
 

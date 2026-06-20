@@ -14,6 +14,8 @@ import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 const CAPTURE_CAP = 500;
 const LOG_CAP = 500;
 
+let logSeq = 0;
+
 export interface Capture {
   id: string;
   type: 'element' | 'screenshot';
@@ -23,6 +25,7 @@ export interface Capture {
 }
 
 export interface LogEntry {
+  seq: number;
   scopeKey: string;
   name: string;
   data: string;
@@ -75,7 +78,7 @@ export const useSandboxStore = create<SandboxState>()((set) => ({
 
   appendLog: (scopeKey, name, data, stream) =>
     set((state) => ({
-      logsOutput: [...state.logsOutput, { scopeKey, name, data, stream }].slice(-LOG_CAP),
+      logsOutput: [...state.logsOutput, { seq: ++logSeq, scopeKey, name, data, stream }].slice(-LOG_CAP),
     })),
 
   clearLogs: () => set({ logsOutput: [] }),

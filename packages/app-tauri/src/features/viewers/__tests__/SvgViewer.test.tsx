@@ -57,10 +57,11 @@ describe('SvgViewer', () => {
     expect(img).not.toBeNull();
   });
 
-  it('switches to source (code) view on Source toggle click', () => {
+  it('switches to source (code) view on Code toggle click', () => {
     render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
-    // Find the Source toggle button
+    // The second toggle is now labelled "Code" (renamed from "Source")
     const sourceBtn = screen.getByTestId('viewer-svg-source-toggle');
+    expect(sourceBtn.textContent).toBe('Code');
     fireEvent.click(sourceBtn);
     // In source mode the raw SVG text should be visible
     expect(screen.getByTestId('viewer-svg-source')).toBeInTheDocument();
@@ -86,6 +87,14 @@ describe('SvgViewer', () => {
     render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
     const status = screen.getByTestId('viewer-shell-status');
     expect(status.textContent).toMatch(/SVG/);
+  });
+
+  it('statusRight slot shows dimensions and size when SVG metadata is available', () => {
+    render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
+    const shell = screen.getByTestId('viewer-shell');
+    const footer = shell.lastElementChild as HTMLElement;
+    // SAMPLE_SVG has viewBox 0 0 10 10 → right should contain 10×10
+    expect(footer.textContent).toMatch(/10×10/);
   });
 
   it('active toggle is the raised bg-background segment, not bg-accent', () => {

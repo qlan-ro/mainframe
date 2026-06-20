@@ -70,7 +70,7 @@ const components = {
   ol: (p: ElProps<'ol'>) => <ol {...p} className="my-2 ml-5 list-decimal text-body text-foreground" />,
   li: (p: ElProps<'li'>) => <li {...p} className="my-0.5" />,
   blockquote: (p: ElProps<'blockquote'>) => (
-    <blockquote {...p} className="my-2 border-l-2 border-border pl-3 text-body text-muted-foreground" />
+    <blockquote {...p} className="my-2 border-l-[3px] border-primary/40 pl-3 text-body text-muted-foreground" />
   ),
   code: ({ className, children, ...props }: ElProps<'code'>) => {
     // Fenced code blocks carry a language-* class; inline code does not.
@@ -80,7 +80,7 @@ const components = {
     return (
       <code
         {...props}
-        className="rounded-sm border border-border bg-mf-code-bg px-1.5 py-0.5 font-mono text-caption text-mf-code-fg"
+        className="rounded-sm border border-border bg-mf-raised px-1.5 py-0.5 font-mono text-caption text-[#7a4d2a] dark:text-[var(--mf-code-cmt)]"
       >
         {children}
       </code>
@@ -93,8 +93,12 @@ const components = {
       <table {...p} className="w-full border-collapse text-body" />
     </div>
   ),
-  th: (p: ElProps<'th'>) => <th {...p} className="border border-border px-2 py-1 text-left font-semibold" />,
-  td: (p: ElProps<'td'>) => <td {...p} className="border border-border px-2 py-1" />,
+  th: (p: ElProps<'th'>) => (
+    <th {...p} className="border border-border bg-mf-content2 px-[12px] py-[7px] text-left font-semibold text-muted-foreground" />
+  ),
+  td: (p: ElProps<'td'>) => (
+    <td {...p} className="border border-border px-[12px] py-[7px] even:bg-mf-content2 odd:bg-background" />
+  ),
   hr: (p: ElProps<'hr'>) => <hr {...p} className="my-4 border-border" />,
 };
 
@@ -103,7 +107,7 @@ const components = {
 export function MarkdownPreview({ value }: { value: string }) {
   return (
     <div data-testid="markdown-preview" className="mf-editor-selectable h-full overflow-auto">
-      <div className="mx-auto max-w-[720px] px-10 pb-16 pt-9">
+      <div className="mx-auto max-w-[720px] px-10 pb-16 pt-[36px]">
         <Markdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={urlTransform} components={components}>
           {value}
         </Markdown>

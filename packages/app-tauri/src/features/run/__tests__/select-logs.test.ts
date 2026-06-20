@@ -11,9 +11,9 @@ import { selectLogs } from '../select-logs';
 import type { LogEntry } from '@/store/sandbox';
 
 const logs: LogEntry[] = [
-  { scopeKey: 'p:/a', name: 'dev', data: 'one', stream: 'stdout' },
-  { scopeKey: 'p:/a', name: 'api', data: 'two', stream: 'stderr' },
-  { scopeKey: 'p:/b', name: 'dev', data: 'three', stream: 'stdout' },
+  { seq: 1, scopeKey: 'p:/a', name: 'dev', data: 'one', stream: 'stdout' },
+  { seq: 2, scopeKey: 'p:/a', name: 'api', data: 'two', stream: 'stderr' },
+  { seq: 3, scopeKey: 'p:/b', name: 'dev', data: 'three', stream: 'stdout' },
 ];
 
 describe('selectLogs', () => {
@@ -31,9 +31,9 @@ describe('selectLogs', () => {
 
   it('returns multiple entries when several match', () => {
     const many: LogEntry[] = [
-      { scopeKey: 'p:/a', name: 'dev', data: 'line1', stream: 'stdout' },
-      { scopeKey: 'p:/a', name: 'dev', data: 'line2', stream: 'stderr' },
-      { scopeKey: 'p:/a', name: 'other', data: 'skip', stream: 'stdout' },
+      { seq: 10, scopeKey: 'p:/a', name: 'dev', data: 'line1', stream: 'stdout' },
+      { seq: 11, scopeKey: 'p:/a', name: 'dev', data: 'line2', stream: 'stderr' },
+      { seq: 12, scopeKey: 'p:/a', name: 'other', data: 'skip', stream: 'stdout' },
     ];
     const result = selectLogs(many, 'p:/a', 'dev');
     expect(result).toHaveLength(2);

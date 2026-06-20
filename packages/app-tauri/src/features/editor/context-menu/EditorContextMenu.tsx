@@ -2,11 +2,12 @@
  * EditorContextMenu — shadcn context-menu wrapping the CM6 editor.
  *
  * Items:
- *   Copy Reference      — builds `path:line (word)` and writes to clipboard.
- *   Add Agent Context   — quotes `path:line` into the active chat composer via
- *                         `useAui().thread().composer().setQuote(...)`.
- *   Go to Definition    — ⌘-click equivalent via providers.getDefinition.
- *   Find All References — calls providers.getReferences + shows the panel.
+ *   Copy              — copies the current selection to clipboard.
+ *   Copy Reference    — builds `path:line (word)` and writes to clipboard.
+ *   Add Agent Context — quotes `path:line` into the active chat composer via
+ *                       `useAui().thread().composer().setQuote(...)`.
+ *   Go to Definition  — ⌘-click equivalent via providers.getDefinition.
+ *   Find All Refs     — calls providers.getReferences + shows the panel.
  *
  * Browser default context menu is suppressed by Radix ContextMenuTrigger.
  * `data-testid="editor-context-menu"` on the trigger wrapper.
@@ -17,6 +18,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAui } from '@assistant-ui/react';
 import type { EditorView } from '@codemirror/view';
+import { Copy, Quote, Code2, Search, MessageSquare } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -102,6 +104,18 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
     },
     [viewRef],
   );
+
+  // ── Copy (selection) ─────────────────────────────────────────────────────
+
+  const handleCopy = useCallback(async () => {
+    const view = viewRef.current;
+    if (!view) return;
+    const sel = view.state.selection.main;
+    const text = view.state.sliceDoc(sel.from, sel.to);
+    if (text) {
+      await writeToClipboard(text);
+    }
+  }, [viewRef]);
 
   // ── Copy Reference ────────────────────────────────────────────────────────
 
@@ -196,16 +210,19 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
           <div className="contents">{children}</div>
         </ContextMenuTrigger>
 
-        <ContextMenuContent data-testid="editor-context-menu-content" className="min-w-[200px]">
-          {/* Copy Reference */}
-          <ContextMenuItem data-testid="editor-context-menu-copy-ref" onSelect={() => void handleCopyReference()}>
-            Copy Reference
-            <ContextMenuShortcut>⌘⇧C</ContextMenuShortcut>
+        <ContextMenuContent data-testid="editor-context-menu-content" className="w-[232px]">
+          {/* Copy */}
+          <ContextMenuItem data-testid="editor-context-menu-copy" onSelect={() => void handleCopy()}>
+            <Copy size={13} className="text-muted-foreground" />
+            Copy
+            <ContextMenuShortcut>⌘C</ContextMenuShortcut>
           </ContextMenuItem>
 
-          {/* Add Agent Context */}
-          <ContextMenuItem data-testid="editor-context-menu-add-context" onSelect={handleAddAgentContext}>
-            Add Agent Context
+          {/* Copy Reference */}
+          <ContextMenuItem data-testid="editor-context-menu-copy-ref" onSelect={() => void handleCopyReference()}>
+            <Quote size={13} className="text-muted-foreground" />
+            Copy Reference
+            <ContextMenuShortcut>⌘⇧C</ContextMenuShortcut>
           </ContextMenuItem>
 
           <ContextMenuSeparator />
@@ -216,6 +233,7 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
             onSelect={() => void handleGoToDefinition()}
             disabled={!lspAvailable}
           >
+            <Code2 size={13} className="text-muted-foreground" />
             Go to Definition
             <ContextMenuShortcut>⌘Click</ContextMenuShortcut>
           </ContextMenuItem>
@@ -226,8 +244,21 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
             onSelect={() => void handleFindReferences()}
             disabled={!lspAvailable}
           >
+            <Search size={13} className="text-muted-foreground" />
             Find All References
-            <ContextMenuShortcut>⌘⇧F12</ContextMenuShortcut>
+            <ContextMenuShortcut>⇧F12</ContextMenuShortcut>
+          </ContextMenuItem>
+
+          <ContextMenuSeparator />
+
+          {/* Add Agent Context */}
+          <ContextMenuItem
+            data-testid="editor-context-menu-add-context"
+            onSelect={handleAddAgentContext}
+            className="text-primary"
+          >
+            <MessageSquare size={13} className="text-primary" />
+            Add Agent Context
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

@@ -39,7 +39,7 @@ export function FileRow({
       data-active={isActive ? 'true' : 'false'}
       data-testid={`file-picker-row-${result.path}`}
       onClick={() => onSelect(result.path)}
-      className={`flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground ${activeClasses}`}
+      className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-[12px] py-[8px] text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground ${activeClasses}`}
     >
       <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="text-body font-medium truncate">{result.name}</span>

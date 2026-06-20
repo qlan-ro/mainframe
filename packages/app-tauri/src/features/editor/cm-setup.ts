@@ -87,7 +87,7 @@ const CM6_THEME_SPEC = {
   },
   '.cm-gutters': {
     backgroundColor: 'var(--mf-code-bg)',
-    color: 'var(--mf-code-cmt)',
+    color: 'var(--mf-text-4)',
     border: 'none',
     paddingRight: '8px',
   },

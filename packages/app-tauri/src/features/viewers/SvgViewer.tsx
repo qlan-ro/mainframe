@@ -18,7 +18,7 @@
  */
 import { useEffect, useState } from 'react';
 import { ViewerShell } from './ViewerShell';
-import { formatSvgStatus } from './viewer-status';
+import { splitSvgStatus } from './viewer-status';
 
 interface SvgViewerProps {
   content: string | null;
@@ -44,8 +44,8 @@ function parseSvgMeta(svg: string): { viewBox: string; w: number; h: number } | 
 }
 
 const SEG_BTN = 'rounded-sm px-1.5 py-0.5 text-caption font-medium transition-colors';
-const SEG_ACTIVE = 'bg-background text-foreground shadow-[0_0_0_0.5px_var(--border)]';
-const SEG_IDLE = 'text-muted-foreground hover:text-foreground';
+const SEG_ACTIVE = 'bg-background text-foreground shadow-[0_0_0_0.5px_var(--border),_0_1px_1.5px_rgba(0,0,0,0.06)]';
+const SEG_IDLE = 'text-mf-text-3 hover:text-foreground';
 
 export function SvgViewer({ content, path }: SvgViewerProps) {
   const [mode, setMode] = useState<SvgMode>('preview');
@@ -69,9 +69,9 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
 
   const svgMeta = content ? parseSvgMeta(content) : null;
   const bytes = content ? new TextEncoder().encode(content).length : 0;
-  const status = svgMeta
-    ? formatSvgStatus({ viewBox: svgMeta.viewBox, w: svgMeta.w, h: svgMeta.h, bytes })
-    : 'SVG · Loading…';
+  const { left: statusLeft, right: statusRight } = svgMeta
+    ? splitSvgStatus({ viewBox: svgMeta.viewBox, w: svgMeta.w, h: svgMeta.h, bytes })
+    : { left: 'SVG · Loading…', right: '' };
 
   // Preview/Source segmented toggle — lives in the ViewerShell breadcrumb header.
   const seg = (
@@ -92,26 +92,26 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
         onClick={() => setMode('source')}
         className={`${SEG_BTN} ${mode === 'source' ? SEG_ACTIVE : SEG_IDLE}`}
       >
-        Source
+        Code
       </button>
     </div>
   );
 
   return (
-    <ViewerShell path={path} status={status} actions={seg}>
+    <ViewerShell path={path} status={statusLeft} statusRight={statusRight || undefined} actions={seg}>
       <div data-testid="viewer-svg" className="flex h-full flex-col">
         <div className="flex flex-1 overflow-auto">
           {content === null ? (
             <span className="m-auto text-body text-muted-foreground">Loading…</span>
           ) : mode === 'preview' ? (
             <div
-              className="flex flex-1 items-center justify-center p-6"
+              className="flex flex-1 items-center justify-center p-[32px]"
               style={{
                 background:
                   'repeating-conic-gradient(var(--mf-viewer-check-b) 0% 25%, var(--mf-viewer-check-a) 0% 50%) 0 0 / 18px 18px',
               }}
             >
-              <div className="rounded-[11px] bg-background p-9 shadow-[var(--mf-shadow-pop)]">
+              <div className="rounded-[11px] bg-background p-[36px] shadow-[var(--mf-shadow-pop)]">
                 {objectUrl && (
                   <img src={objectUrl} alt="SVG preview" className="max-h-full max-w-full object-contain" />
                 )}
@@ -120,7 +120,7 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
           ) : (
             <pre
               data-testid="viewer-svg-source"
-              className="mf-editor-selectable flex-1 overflow-auto bg-mf-code-bg p-4 text-label font-mono text-mf-code-fg"
+              className="mf-editor-selectable flex-1 overflow-auto bg-mf-code-bg px-[18px] py-[16px] leading-relaxed text-label font-mono text-mf-code-fg"
             >
               {content}
             </pre>

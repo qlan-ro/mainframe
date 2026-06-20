@@ -5,22 +5,24 @@
  * The bottom Tasks drawer is composed below the body when a project is active.
  */
 import { useState, useEffect } from 'react';
-import { FileText, GitCompare } from 'lucide-react';
+import { Folder, GitCompare } from 'lucide-react';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { ChangesPanel } from './ChangesPanel';
 import { FileTree } from './FileTree';
 import { TasksDrawer } from '../tasks/TasksDrawer';
 import { useStartTodoSession } from '../tasks/use-start-todo-session';
+import { useChangesCount } from './use-changes-count';
 
 type Tab = 'files' | 'changes';
 
-const SEG = 'flex h-[22px] flex-1 items-center justify-center gap-[5px] rounded-[6px] text-caption transition-colors';
+const SEG_BASE = 'flex h-[22px] flex-1 items-center justify-center gap-[5px] rounded-[6px] text-caption transition-colors';
 
 export function InspectorPane({ port }: { port: number }) {
   const { projectId, chatId } = useActiveIdentity();
   const [tab, setTab] = useState<Tab>('files');
   const startTodoSession = useStartTodoSession(port, projectId);
+  const changesCount = useChangesCount(port, projectId, chatId);
 
   // Subscribe to inspector-tab intents so external triggers (e.g. the
   // SurfacePicker "View changes" button) can switch the active tab.
@@ -38,16 +40,20 @@ export function InspectorPane({ port }: { port: number }) {
       className="flex w-[280px] flex-shrink-0 flex-col overflow-hidden rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]"
     >
       {/* Files / Changes tabs */}
-      <div className="flex-shrink-0 p-2.5 pb-[8px]">
+      <div className="flex-shrink-0 pt-[10px] px-[12px] pb-[8px]">
         <div className="flex items-center gap-0.5 rounded-[8px] bg-mf-chip p-0.5">
           <button
             data-testid="inspector-tab-files"
             type="button"
             onClick={() => setTab('files')}
             aria-pressed={tab === 'files'}
-            className={`${SEG} ${tab === 'files' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`${SEG_BASE} ${
+              tab === 'files'
+                ? 'bg-mf-tab-active font-semibold text-foreground shadow-[var(--mf-shadow-rail-active)]'
+                : 'font-medium text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <FileText size={11} />
+            <Folder size={11} />
             Files
           </button>
           <button
@@ -55,10 +61,17 @@ export function InspectorPane({ port }: { port: number }) {
             type="button"
             onClick={() => setTab('changes')}
             aria-pressed={tab === 'changes'}
-            className={`${SEG} ${tab === 'changes' ? 'bg-mf-tab-active text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`${SEG_BASE} ${
+              tab === 'changes'
+                ? 'bg-mf-tab-active font-semibold text-foreground shadow-[var(--mf-shadow-rail-active)]'
+                : 'font-medium text-muted-foreground hover:text-foreground'
+            }`}
           >
             <GitCompare size={11} />
             Changes
+            {changesCount > 0 && (
+              <span className="font-mono text-micro text-mf-text-3">{changesCount}</span>
+            )}
           </button>
         </div>
       </div>

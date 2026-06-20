@@ -1,21 +1,24 @@
 /**
  * FilesTabStrip — renders the file-tab row inside the Files surface header.
+ * Mirrors RunTabStrip conventions (grip/surface-icon/tab-pill/right-cluster).
  *
  * Tab visuals from prototype/04-engine.jsx:
- *  - preview tabs have italic titles (prototype `fontStyle: t.preview ? 'italic' : 'normal'`)
+ *  - preview tabs have italic titles
  *  - the active tab has a highlighted background
  *  - each tab has a close (×) button
  *  - drag handle stub on each tab (Phase 8 wires real drag)
  *
- * Reuses the SurfaceTabStrip shell conventions (height, border, action-btn class)
- * but adds per-tab rendering where the stub had an empty flex row.
- *
  * data-testid:
- *   files-tab-strip   — strip root
- *   files-tab-<id>    — each tab (stable id, never index)
+ *   files-tab-strip      — strip root
+ *   files-surface-drag   — surface drag grip
+ *   files-tab-<id>       — each tab (stable id, never index); whole pill drags
  *   files-tab-close-<id> — close button
+ *   files-tab-strip-add  — the + trigger (opens file-picker)
+ *   files-tab-strip-split-right / -split-down — split actions
+ *   files-tab-strip-close — close the Files surface
  */
-import { FileText, GripHorizontal, GripVertical, LayoutPanelLeft, LayoutPanelTop, Plus, X } from 'lucide-react';
+import { Code2, FileText, GitCompare, GripVertical, LayoutPanelLeft, LayoutPanelTop, Plus, X } from 'lucide-react';
+import { EditorGlyph } from '@/layout/surface-icons';
 import { useSurfaceDragStore } from './use-surface-drag';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useTabsStore } from '@/store/tabs';
@@ -24,6 +27,24 @@ import type { EditorTabModel } from '@/store/tabs';
 
 const ACTION_BTN =
   'inline-flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
+
+// ── Per-kind tab icon ────────────────────────────────────────────────────────
+
+function tabGlyph(tab: EditorTabModel, isActive: boolean) {
+  // Inactive → muted (text3); active → per-type accent color.
+  const baseColor = isActive ? '' : 'text-mf-text-3';
+  const cls = `flex-shrink-0 ${baseColor}`;
+
+  if (tab.kind === 'diff') {
+    const color = isActive ? 'text-[#ff9500]' : 'text-mf-text-3';
+    return <GitCompare size={11} className={`flex-shrink-0 ${color}`} />;
+  }
+  if (tab.kind === 'code') {
+    return <Code2 size={11} className={cls} />;
+  }
+  // viewer / unknown
+  return <FileText size={11} className={cls} />;
+}
 
 // ── Single tab pill ──────────────────────────────────────────────────────────
 
@@ -43,28 +64,22 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
       role="tab"
       aria-selected={isActive}
       className={[
-        'group flex h-full flex-shrink-0 cursor-pointer select-none items-center gap-1 px-2',
-        'rounded-[6px] transition-colors duration-[120ms]',
-        isActive ? 'bg-mf-tab-active text-foreground' : 'text-mf-text-3 hover:bg-accent hover:text-foreground',
-        'max-w-[160px] min-w-0',
+        'group flex h-[26px] min-w-0 max-w-[160px] flex-shrink-0 cursor-pointer select-none items-center gap-[6px] pl-[9px] pr-[6px]',
+        'rounded-[7px] tracking-tight transition-colors duration-[120ms]',
+        isActive ? 'bg-mf-chip font-semibold text-foreground' : 'font-medium text-mf-text-3 hover:bg-accent hover:text-foreground',
       ].join(' ')}
       onClick={() => onActivate(tab.id)}
       onDoubleClick={() => onPromote(tab.id)}
+      onPointerDown={(e) => {
+        // The whole pill is the drag handle (no visible grip — matches the design
+        // SurfaceTabStrip). A click with <4px movement is treated as a click by
+        // the drag store's threshold, so activation still works.
+        if (e.button !== 0) return;
+        beginTabDrag(tab.id, { clientX: e.clientX, clientY: e.clientY });
+      }}
     >
-      {/* Drag handle — begins a Files-tab drag onto the Run region. */}
-      <span
-        data-testid={`files-tab-drag-${tab.id}`}
-        className="flex-shrink-0 cursor-grab opacity-0 group-hover:opacity-100"
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          beginTabDrag(tab.id, { clientX: e.clientX, clientY: e.clientY });
-        }}
-      >
-        <GripVertical size={10} className="text-mf-text-4" />
-      </span>
-
-      {/* File icon */}
-      <FileText size={11} className="flex-shrink-0 text-mf-surface-files" />
+      {/* Per-kind icon */}
+      {tabGlyph(tab, isActive)}
 
       {/* Title — italic when preview */}
       <span
@@ -81,7 +96,7 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
         data-testid={`files-tab-close-${tab.id}`}
         type="button"
         title={`Close ${tab.title}`}
-        className={`ml-0.5 inline-flex h-[14px] w-[14px] flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] border-none bg-transparent opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100 ${isActive ? 'opacity-60' : ''}`}
+        className={`inline-flex h-[14px] w-[14px] flex-shrink-0 items-center justify-center rounded-[3px] opacity-0 transition-opacity duration-[120ms] hover:bg-accent group-hover:opacity-100 ${isActive ? 'opacity-60' : ''}`}
         onClick={(e) => {
           e.stopPropagation();
           onClose(tab.id);
@@ -115,19 +130,19 @@ export function FilesTabStrip() {
       {/* Drag grip — repositions the whole Files surface. */}
       <div
         data-testid="files-surface-drag"
-        className="grid h-full w-5 flex-shrink-0 cursor-grab place-items-center pl-1"
+        className="grid h-full w-[20px] flex-shrink-0 cursor-grab place-items-center pl-[4px]"
         onPointerDown={(e) => beginSurfaceDrag('files', { clientX: e.clientX, clientY: e.clientY })}
       >
-        <GripHorizontal size={13} className="text-mf-text-4" />
+        <GripVertical size={13} className="text-mf-text-4" />
       </div>
 
       {/* Surface icon */}
-      <div className="flex-shrink-0 px-1">
-        <FileText size={11} className="text-mf-surface-files" />
+      <div className="flex-shrink-0 px-[4px]">
+        <EditorGlyph size={11} className="text-mf-surface-files" />
       </div>
 
       {/* Tab pills */}
-      <div className="flex h-full min-w-0 flex-auto items-center gap-0.5 overflow-x-auto pr-0.5 [scrollbar-width:none]">
+      <div className="flex h-full min-w-0 flex-initial items-center gap-[2px] overflow-x-auto pr-[2px] [scrollbar-width:none]">
         {tabs.map((tab) => (
           <TabPill
             key={tab.id}
@@ -154,7 +169,7 @@ export function FilesTabStrip() {
       <div className="flex-1" />
 
       {/* Right action cluster */}
-      <div className="flex flex-shrink-0 items-center gap-px px-1.5">
+      <div className="flex flex-shrink-0 items-center gap-px pl-[2px] pr-[6px]">
         {splitAvailable && (
           <>
             <button

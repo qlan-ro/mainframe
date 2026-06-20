@@ -44,7 +44,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
   return (
     <div data-testid="viewer-shell" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header / breadcrumb */}
-      <div className="flex h-6 shrink-0 items-center gap-1 border-b border-border bg-mf-tab-bar pl-5 pr-1.5 text-caption">
+      <div className="flex h-[24px] shrink-0 items-center gap-[4px] border-b border-border bg-[var(--mf-code-bg)] pl-5 pr-1.5 text-caption">
         <Folder size={10} className="shrink-0 text-mf-text-3" aria-hidden />
 
         {dirParts.map((segment, i) => (
@@ -54,7 +54,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
           </React.Fragment>
         ))}
 
-        <span className="font-semibold text-foreground">{basename}</span>
+        <span className="font-semibold text-muted-foreground">{basename}</span>
 
         <div className="flex-1" />
 
@@ -65,7 +65,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
         <button
           data-testid="viewer-shell-reveal"
           title="Reveal in file tree"
-          className="inline-flex h-5 w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent"
+          className="inline-flex h-5 w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent"
           onClick={handleReveal}
           type="button"
         >
@@ -77,7 +77,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
       <div className="flex flex-1 flex-col overflow-hidden">{children}</div>
 
       {/* Footer / status */}
-      <div className="flex h-5 shrink-0 items-center border-t border-border bg-mf-tab-bar px-2.5">
+      <div className="flex h-[20px] shrink-0 items-center gap-[10px] border-t border-border bg-mf-tab-bar px-2.5">
         <span data-testid="viewer-shell-status" className="text-micro font-mono text-mf-text-3">
           {status}
         </span>

@@ -33,7 +33,7 @@ export function CaptureAnnotationPopover({
             )}
             <textarea
               data-testid={`preview-annotation-input-${capture.id}`}
-              className="w-full rounded border border-border bg-card p-1 text-caption text-body resize-none"
+              className="w-full rounded border border-border bg-card p-1 text-caption text-foreground resize-none"
               rows={2}
               placeholder="Add a note..."
               defaultValue={capture.annotation ?? ''}
@@ -45,7 +45,7 @@ export function CaptureAnnotationPopover({
       <div className="flex gap-2 justify-end">
         <button
           data-testid="preview-annotation-cancel"
-          className="rounded px-3 py-1 text-caption text-body border border-border"
+          className="rounded px-3 py-1 text-caption text-foreground border border-border"
           type="button"
           onClick={onCancel}
         >
@@ -53,7 +53,7 @@ export function CaptureAnnotationPopover({
         </button>
         <button
           data-testid="preview-annotation-submit"
-          className="rounded bg-blue-500 px-3 py-1 text-caption text-white"
+          className="rounded bg-primary px-3 py-1 text-caption text-primary-foreground"
           type="button"
           onClick={() => { void onSubmit(); }}
         >

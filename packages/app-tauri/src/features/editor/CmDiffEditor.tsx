@@ -39,15 +39,12 @@ export interface LineSelection {
 const diffTheme = EditorView.theme({
   '.cm-insertedLine': {
     backgroundColor: 'var(--mf-diff-add-bg)',
-    borderLeft: '2px solid var(--mf-diff-add-border)',
   },
   '.cm-deletedLine': {
     backgroundColor: 'var(--mf-diff-del-bg)',
-    borderLeft: '2px solid var(--mf-diff-del-border)',
   },
   '.cm-changedLine': {
     backgroundColor: 'var(--mf-diff-add-bg)',
-    borderLeft: '2px solid var(--mf-diff-add-border)',
   },
   '.cm-changedText': {
     backgroundColor: 'color-mix(in srgb, var(--mf-diff-add-bg) 60%, transparent)',
@@ -59,6 +56,13 @@ const diffTheme = EditorView.theme({
 });
 
 // ── Component ────────────────────────────────────────────────────────────────
+
+export interface DiffStats {
+  /** Number of added lines across all chunks. */
+  additions: number;
+  /** Number of deleted lines across all chunks. */
+  deletions: number;
+}
 
 export interface CmDiffEditorProps {
   original: string;
@@ -74,6 +78,11 @@ export interface CmDiffEditorProps {
    */
   onChunksChange?: (count: number) => void;
   /**
+   * Called after the MergeView mounts with line-level add/del statistics.
+   * Enables DiffHeader to show separate +N / −N counts.
+   */
+  onStats?: (stats: DiffStats) => void;
+  /**
    * Optional. Called when the user clicks a line in the MODIFIED (right) pane.
    * Reports the 1-based line number and the text of that line.
    * When undefined (the default), the click handler is not installed — existing
@@ -88,6 +97,7 @@ export function CmDiffEditor({
   language,
   readOnly = false,
   onChunksChange,
+  onStats,
   onLineSelect,
 }: CmDiffEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -128,24 +138,25 @@ export function CmDiffEditor({
       },
     });
 
-    const aState = EditorState.create({
-      doc: original,
-      extensions: [
-        ...baseExts,
-        diffTheme,
-        aLang.of(langExt),
-        aRo.of(EditorState.readOnly.of(true)), // original is always read-only
-      ],
-    });
-
-    const bState = EditorState.create({
-      doc: modified,
-      extensions: [...baseExts, diffTheme, bLang.of(langExt), bRo.of(EditorState.readOnly.of(readOnly)), bClickExt],
-    });
-
+    // MergeView builds each pane's state itself from `config.a/b` read as an
+    // EditorStateConfig (`{ doc, selection, extensions }`). We must pass that
+    // shape — NOT a pre-built EditorState, whose `.extensions` is undefined, which
+    // would silently drop lineNumbers, syntax highlighting, the warm theme, and
+    // the diff-tint overlay (leaving only MergeView's built-in decorations).
     const mv = new MergeView({
-      a: aState,
-      b: bState,
+      a: {
+        doc: original,
+        extensions: [
+          ...baseExts,
+          diffTheme,
+          aLang.of(langExt),
+          aRo.of(EditorState.readOnly.of(true)), // original is always read-only
+        ],
+      },
+      b: {
+        doc: modified,
+        extensions: [...baseExts, diffTheme, bLang.of(langExt), bRo.of(EditorState.readOnly.of(readOnly)), bClickExt],
+      },
       parent: hostRef.current,
       highlightChanges: true,
       gutter: true,
@@ -160,6 +171,16 @@ export function CmDiffEditor({
     // parent controls (DiffHeader) can display an accurate count without
     // polling the global singleton or using a timer.
     onChunksChange?.(mv.chunks.length);
+    // Compute and report add/del line statistics from chunks.
+    if (onStats) {
+      let additions = 0;
+      let deletions = 0;
+      for (const chunk of mv.chunks) {
+        additions += chunk.toB - chunk.fromB;
+        deletions += chunk.toA - chunk.fromA;
+      }
+      onStats({ additions, deletions });
+    }
 
     return () => {
       clearActiveMergeView(mv);

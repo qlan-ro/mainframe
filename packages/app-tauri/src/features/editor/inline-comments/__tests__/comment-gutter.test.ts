@@ -241,57 +241,65 @@ describe('commentField block widgets', () => {
 // ── Hover-'+' affordance: AddCommentMarker + CommentGutterMarker ─────────────
 
 describe('AddCommentMarker (lines without a comment)', () => {
-  it('toDOM returns a span with class cm-comment-gutter-add', () => {
+  it('toDOM returns a button element with class cm-comment-gutter-add', () => {
     const onAdd = vi.fn();
-    const marker = new AddCommentMarker(3, onAdd);
+    // Third arg is `visible` — true to render the button visibly
+    const marker = new AddCommentMarker(3, onAdd, false);
     const el = marker.toDOM() as HTMLElement;
-    expect(el.tagName.toLowerCase()).toBe('span');
+    expect(el.tagName.toLowerCase()).toBe('button');
     expect(el.className).toContain('cm-comment-gutter-add');
   });
 
-  it('toDOM span has aria-label "Add comment"', () => {
-    const marker = new AddCommentMarker(1, vi.fn());
+  it('toDOM button has aria-label "Add comment"', () => {
+    const marker = new AddCommentMarker(1, vi.fn(), false);
     const el = marker.toDOM() as HTMLElement;
     expect(el.getAttribute('aria-label')).toBe('Add comment');
   });
 
-  it('toDOM span uses --mf-text-3 color token', () => {
-    const marker = new AddCommentMarker(1, vi.fn());
+  it('toDOM button is transparent (opacity 0) when visible=false', () => {
+    const marker = new AddCommentMarker(1, vi.fn(), false);
     const el = marker.toDOM() as HTMLElement;
-    expect(el.style.color).toBe('var(--mf-text-3)');
+    expect(el.style.opacity).toBe('0');
   });
 
-  it('toDOM span displays "+" as text content', () => {
-    const marker = new AddCommentMarker(2, vi.fn());
+  it('toDOM button is opaque (opacity 1) when visible=true', () => {
+    const marker = new AddCommentMarker(1, vi.fn(), true);
     const el = marker.toDOM() as HTMLElement;
-    expect(el.textContent).toBe('+');
+    expect(el.style.opacity).toBe('1');
   });
 
-  it('clicking the marker calls onAddComment with the line number and stopPropagation', () => {
+  it('toDOM button has bg-primary style (var(--primary) background)', () => {
+    const marker = new AddCommentMarker(2, vi.fn(), true);
+    const el = marker.toDOM() as HTMLElement;
+    expect(el.style.background).toContain('var(--primary)');
+  });
+
+  it('clicking the marker calls onAddComment with the line number', () => {
     const onAdd = vi.fn();
-    const marker = new AddCommentMarker(7, onAdd);
+    const marker = new AddCommentMarker(7, onAdd, true);
     const el = marker.toDOM() as HTMLElement;
-
-    const stopPropagation = vi.fn();
-    el.dispatchEvent(Object.assign(new MouseEvent('click', { bubbles: true }), { stopPropagation }));
-
-    // The listener attaches stopPropagation via addEventListener; use a real click event.
-    // Simulate via direct click listener invocation.
     el.click();
     expect(onAdd).toHaveBeenCalledWith(7);
   });
 
-  it('eq returns true for markers with the same line number', () => {
+  it('eq returns true for markers with the same line number and visibility', () => {
     const onAdd = vi.fn();
-    const m1 = new AddCommentMarker(5, onAdd);
-    const m2 = new AddCommentMarker(5, onAdd);
+    const m1 = new AddCommentMarker(5, onAdd, false);
+    const m2 = new AddCommentMarker(5, onAdd, false);
     expect(m1.eq(m2)).toBe(true);
   });
 
   it('eq returns false for markers with different line numbers', () => {
     const onAdd = vi.fn();
-    const m1 = new AddCommentMarker(5, onAdd);
-    const m2 = new AddCommentMarker(6, onAdd);
+    const m1 = new AddCommentMarker(5, onAdd, false);
+    const m2 = new AddCommentMarker(6, onAdd, false);
+    expect(m1.eq(m2)).toBe(false);
+  });
+
+  it('eq returns false for markers with same line but different visibility', () => {
+    const onAdd = vi.fn();
+    const m1 = new AddCommentMarker(5, onAdd, false);
+    const m2 = new AddCommentMarker(5, onAdd, true);
     expect(m1.eq(m2)).toBe(false);
   });
 });

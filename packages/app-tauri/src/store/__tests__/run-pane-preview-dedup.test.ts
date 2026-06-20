@@ -15,6 +15,13 @@ const previewTab = (config: string, id: string): RunTab => ({
   config,
 });
 
+const consoleTab = (config: string, id: string): RunTab => ({
+  id,
+  kind: 'console',
+  title: config,
+  config,
+});
+
 function tabIds(run: RunState): string[] {
   return run.panes.flatMap((p) => p.tabs.map((t) => t.id));
 }
@@ -36,6 +43,23 @@ describe('addRunTab — preview dedup', () => {
 
     expect(tabIds(second)).toEqual(['preview-A', 'preview-B']);
     expect(second.panes[0]!.active).toBe('preview-B');
+  });
+
+  it('opens a distinct tab per config — a console process never reuses another config tab', () => {
+    // Regression for the "2nd launch config hijacked the first tab" bug.
+    const first = addRunTab(emptyRun(), consoleTab('Core Daemon', 'console-A'))!;
+    const second = addRunTab(first, consoleTab('Worker', 'console-B'))!;
+
+    expect(tabIds(second)).toEqual(['console-A', 'console-B']);
+    expect(second.panes[0]!.active).toBe('console-B');
+  });
+
+  it('focuses the existing console tab when the same process is re-launched', () => {
+    const first = addRunTab(emptyRun(), consoleTab('Core Daemon', 'console-A'))!;
+    const second = addRunTab(first, consoleTab('Core Daemon', 'console-B'))!;
+
+    expect(tabIds(second)).toEqual(['console-A']);
+    expect(second.panes[0]!.active).toBe('console-A');
   });
 
   it('finds and focuses a duplicate preview living in a second pane', () => {

@@ -2,9 +2,22 @@
 ///
 /// Uses `tauri::Webview::with_webview` to access the raw WKWebView handle,
 /// calls `takeSnapshotWithConfiguration:completionHandler:`, then encodes the
-/// resulting NSImage as a DPR-aware PNG. The completion handler runs on the
-/// main thread; a `std::sync::mpsc` channel bridges the result back to the
-/// async Tauri command caller.
+/// resulting NSImage as a DPR-aware PNG.
+///
+/// # Async design (Findings 1 + 5)
+/// `WKWebView.takeSnapshotWithConfiguration:completionHandler:` dispatches its
+/// completion handler **asynchronously** on the main thread — a sync
+/// read-after-invoke always returns `None`.
+///
+/// The fix splits the operation into two phases so no borrow of `&tauri::Webview`
+/// is held across an await point:
+///
+/// 1. `schedule_capture` — borrows `&tauri::Webview` only long enough to call
+///    `with_webview` (a synchronous dispatch onto the main thread).  The
+///    closure wires the ObjC completion block to a `tokio::sync::oneshot::Sender`
+///    and returns.  `schedule_capture` returns the owned `Receiver` immediately.
+/// 2. `preview_capture` (in mod.rs) `.await`s the `Receiver` with the borrow
+///    already released — no Tokio worker thread is parked (Finding 5).
 ///
 /// # Safety
 /// All ObjC calls are `unsafe` by definition. The casts rely on Tauri's
@@ -12,64 +25,55 @@
 /// `WKWebView`, and `ns_window()` pointing to an `NSWindow`. Verified against
 /// tauri 2.11.2 + wry 0.55.1 + objc2-web-kit 0.3.2.
 #[cfg(target_os = "macos")]
-use std::sync::mpsc;
-
-#[cfg(target_os = "macos")]
 use objc2_web_kit::WKWebView;
 
 #[cfg(target_os = "macos")]
-use objc2_app_kit::{NSBitmapImageRep, NSImage, NSWindow};
+use objc2_app_kit::NSImage;
 
+/// Raw snapshot payload: `(rgba_bytes, width, height, device_pixel_ratio)`.
 #[cfg(target_os = "macos")]
-use objc2_foundation::NSError;
+type SnapshotResult = Result<(Vec<u8>, u32, u32, f64), String>;
 
+/// Oneshot receiver for a snapshot scheduled on the WKWebView main thread.
 #[cfg(target_os = "macos")]
-use crate::preview::crop::{clamp_rect, scale_region, Region};
+type SnapshotReceiver = tokio::sync::oneshot::Receiver<SnapshotResult>;
 
-/// Full-webview or region snapshot → PNG bytes.
+/// Schedule a WKWebView snapshot and return the oneshot receiver.
+///
+/// This is the **only** function that borrows `&tauri::Webview`.  It is
+/// synchronous and returns before any async suspension, so the caller
+/// (`preview_capture` in mod.rs) can drop the borrow before awaiting.
 #[cfg(target_os = "macos")]
-pub fn capture_png(webview: &tauri::Webview, region: Option<Region>) -> Result<Vec<u8>, String> {
-    let (tx, rx) = mpsc::channel::<Result<(Vec<u8>, u32, u32, f64), String>>();
+pub fn schedule_capture(webview: &tauri::Webview) -> Result<SnapshotReceiver, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<SnapshotResult>();
 
-    // `with_webview` dispatches the closure on the main thread.
+    // `with_webview` enqueues the closure on the main thread and returns
+    // immediately.  We move `tx` into the closure; the ObjC completion block
+    // will send through it when the snapshot is ready.
     webview
         .with_webview(move |platform_wv| {
-            let result = unsafe { snapshot_rgba(&platform_wv) };
-            let _ = tx.send(result);
+            unsafe { schedule_snapshot(&platform_wv, tx) };
         })
         .map_err(|e| format!("with_webview failed: {e}"))?;
 
-    // Block this async task until the main-thread closure sends.
-    let (rgba, img_w, img_h, dpr) =
-        rx.recv().map_err(|_| "snapshot channel closed unexpectedly".to_string())??;
-
-    match region {
-        None => encode_png(&rgba, img_w, img_h),
-        Some(r) => {
-            let rect = clamp_rect(scale_region(r, dpr), img_w, img_h);
-            if rect.w == 0 || rect.h == 0 {
-                return Err("capture region is empty after clamping".to_string());
-            }
-            let cropped = crop_rgba(&rgba, img_w, rect);
-            encode_png(&cropped, rect.w, rect.h)
-        }
-    }
+    Ok(rx)
 }
 
-/// Obtain RGBA bytes from WKWebView via `takeSnapshot`.
-/// Runs on the main thread (inside `with_webview`).
-/// Returns `(rgba_bytes, width, height, dpr)`.
+/// Register the ObjC `takeSnapshot` call on the main-thread WKWebView.
+/// Runs inside the `with_webview` closure (already on the main thread).
+/// The ObjC completion block fires **asynchronously** on the same thread
+/// and sends its result into `tx`.
 #[cfg(target_os = "macos")]
-unsafe fn snapshot_rgba(
+unsafe fn schedule_snapshot(
     platform_wv: &tauri::webview::PlatformWebview,
-) -> Result<(Vec<u8>, u32, u32, f64), String> {
-    use std::sync::{Arc, Mutex};
-
+    tx: tokio::sync::oneshot::Sender<SnapshotResult>,
+) {
     // Cast raw *mut c_void → &WKWebView.
     let wk_wv: &WKWebView = &*(platform_wv.inner() as *const WKWebView);
 
-    // Device-pixel ratio from the NSWindow backing scale.
+    // Device-pixel ratio from the NSWindow backing scale factor.
     let dpr: f64 = {
+        use objc2_app_kit::NSWindow;
         let ns_win_ptr = platform_wv.ns_window();
         if ns_win_ptr.is_null() {
             2.0 // safe default for Retina
@@ -79,37 +83,31 @@ unsafe fn snapshot_rgba(
         }
     };
 
-    // Slot for the ObjC completion handler result.
-    let result_slot: Arc<Mutex<Option<Result<(Vec<u8>, u32, u32, f64), String>>>> =
-        Arc::new(Mutex::new(None));
-    let slot_for_block = result_slot.clone();
-
-    // Build and invoke the completion handler block.
-    let handler = block2::RcBlock::new(move |image: *mut NSImage, _err: *mut NSError| {
+    // `RcBlock::new` requires `Fn`, not `FnMut`, so we wrap `tx` in an
+    // `Arc<Mutex<Option<...>>>` for interior-mutable single-fire semantics.
+    let tx_slot = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+    let handler = block2::RcBlock::new(move |image: *mut NSImage, _err: *mut objc2_foundation::NSError| {
         let outcome = if image.is_null() {
             Err("takeSnapshot returned a nil NSImage".to_string())
         } else {
             unsafe { nsimage_to_rgba(&*image, dpr) }
         };
-        *slot_for_block.lock().unwrap_or_else(|e| e.into_inner()) = Some(outcome);
+        // Take the sender out once; subsequent calls (should never happen) are no-ops.
+        let maybe_sender = tx_slot.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(sender) = maybe_sender {
+            let _ = sender.send(outcome);
+        }
     });
 
-    // `takeSnapshotWithConfiguration:completionHandler:` — nil config → full view.
-    wk_wv.takeSnapshotWithConfiguration_completionHandler(None, &*handler);
-
-    // On the main thread the completion block fires synchronously.
-    // Extract into a local to drop the MutexGuard before the Arc is dropped.
-    let outcome = result_slot
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .take()
-        .unwrap_or_else(|| Err("snapshot completion handler never fired".to_string()));
-    outcome
+    // nil config → full-view snapshot.
+    wk_wv.takeSnapshotWithConfiguration_completionHandler(None, &handler);
 }
 
 /// Convert `NSImage` → RGBA bytes via `NSBitmapImageRep`.
 #[cfg(target_os = "macos")]
 unsafe fn nsimage_to_rgba(image: &NSImage, dpr: f64) -> Result<(Vec<u8>, u32, u32, f64), String> {
+    use objc2_app_kit::NSBitmapImageRep;
+
     let tiff = image.TIFFRepresentation().ok_or("NSImage.TIFFRepresentation is nil")?;
     let rep = NSBitmapImageRep::imageRepWithData(&tiff)
         .ok_or("NSBitmapImageRep.imageRepWithData returned nil")?;
@@ -129,8 +127,7 @@ unsafe fn nsimage_to_rgba(image: &NSImage, dpr: f64) -> Result<(Vec<u8>, u32, u3
         return Err("NSBitmapImageRep.bitmapData is null".to_string());
     }
 
-    let raw: &[u8] =
-        std::slice::from_raw_parts(bitmap_ptr, bytes_per_row * height as usize);
+    let raw: &[u8] = std::slice::from_raw_parts(bitmap_ptr, bytes_per_row * height as usize);
 
     let mut rgba = Vec::with_capacity((width * height * 4) as usize);
     for row in 0..height as usize {

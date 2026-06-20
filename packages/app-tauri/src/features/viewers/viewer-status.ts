@@ -117,3 +117,33 @@ export interface SvgStatusArgs {
 export function formatSvgStatus({ viewBox, w, h, bytes }: SvgStatusArgs): string {
   return `SVG · viewBox ${viewBox} · ${w}×${h} · ${formatBytes(bytes)}`;
 }
+
+/**
+ * Split SVG status for left/right footer slots.
+ * left:  'SVG · viewBox 0 0 96 96'
+ * right: '96×96 · 0.4 KB'
+ */
+export interface SvgStatusSplit {
+  left: string;
+  right: string;
+}
+
+export function splitSvgStatus({ viewBox, w, h, bytes }: SvgStatusArgs): SvgStatusSplit {
+  const left = `SVG · viewBox ${viewBox}`;
+  const right = `${w}×${h} · ${formatBytes(bytes)}`;
+  return { left, right };
+}
+
+/**
+ * Split Markdown status for left/right footer slots.
+ * left:  'Markdown · UTF-8'
+ * right: '320 words · 88 lines'
+ */
+export interface MarkdownStatusSplit {
+  left: string;
+  right: string;
+}
+
+export function splitMarkdownStatus(words: number, lines: number): MarkdownStatusSplit {
+  return { left: 'Markdown · UTF-8', right: `${words} words · ${lines} lines` };
+}

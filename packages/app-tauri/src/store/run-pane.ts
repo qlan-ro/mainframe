@@ -8,17 +8,34 @@
  * (`layout.ts`) owns the wiring + side-effects.
  */
 
-export type RunTabKind = 'preview' | 'terminal' | 'code' | 'diff' | 'skill' | 'viewer';
+export type RunTabKind = 'preview' | 'console' | 'terminal' | 'code' | 'diff' | 'skill' | 'viewer';
 
-/** A tab inside a Run pane (a launched preview, a terminal, or a Files guest). */
+/** A tab inside a Run pane (a launched preview/console, a terminal, or a Files guest). */
 export interface RunTab {
   id: string;
   kind: RunTabKind;
   title: string;
-  /** File path for code/diff/skill/viewer guests; absent for preview/terminal. */
+  /** File path for code/diff/skill/viewer guests; absent for preview/console/terminal. */
   path?: string;
-  /** Launch-config name for preview tabs. */
+  /** Launch-config name for preview (webview) and console (process) tabs. */
   config?: string;
+  /** Resolved dev-server port for a preview tab (the webview loads localhost:port). */
+  port?: number;
+  /**
+   * Launch scope this tab's process runs under (`buildLaunchScope(projectId,
+   * effectivePath)`), captured at launch from the SAME effectivePath the daemon
+   * emits on `launch.output`. Run tabs are global (not bound to the active
+   * chat), so a tab must carry its own scope — otherwise its console filters by
+   * whatever scope the currently-active chat resolves to (null when that chat is
+   * a draft / different project), hiding the output. Absent for terminals and
+   * Files guests.
+   */
+  scopeKey?: string;
+}
+
+/** A launch-config tab — a `preview` webview or a `console` process. */
+function isLaunchTab(t: RunTab): boolean {
+  return t.kind === 'preview' || t.kind === 'console';
 }
 
 export interface RunPane {
@@ -60,15 +77,16 @@ export function emptyRun(): RunState {
  */
 export function addRunTab(run: RunState | null, tab: RunTab, paneId?: string): RunState | null {
   const base = run ?? emptyRun();
-  // Preview tabs are singletons per launch config: if one already exists (in any
-  // pane), focus it instead of stacking a duplicate — the run button re-launches
-  // the same config repeatedly. This is the "or activates" half of addRunTab.
-  if (tab.kind === 'preview' && tab.config) {
+  // Launch-config tabs (preview webview OR console process) are singletons per
+  // config: if one already exists (in any pane), focus it instead of stacking a
+  // duplicate — the run button re-launches the same config repeatedly. This is
+  // the "or activates" half of addRunTab.
+  if (isLaunchTab(tab) && tab.config) {
     const pane = base.panes.find((p) =>
-      p.tabs.some((t) => t.kind === 'preview' && t.config === tab.config),
+      p.tabs.some((t) => isLaunchTab(t) && t.config === tab.config),
     );
     if (pane) {
-      const existing = pane.tabs.find((t) => t.kind === 'preview' && t.config === tab.config)!;
+      const existing = pane.tabs.find((t) => isLaunchTab(t) && t.config === tab.config)!;
       return activateRunTab(base, pane.id, existing.id);
     }
   }

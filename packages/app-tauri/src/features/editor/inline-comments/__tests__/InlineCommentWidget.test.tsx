@@ -1,16 +1,17 @@
 /**
  * InlineCommentWidget component tests.
  *
- * Tests the React card that renders inside the CM6 block widget portal:
+ * Tests the React card rendered inside the CM6 block widget portal:
  *   - textarea is focused on mount
  *   - typing updates text via onTextChange
- *   - Enter key (without Shift) calls onSave
+ *   - ⌘↩ calls onSave (when text is non-empty)
  *   - Escape calls onClose
  *   - Cancel button calls onClose
- *   - Save button is disabled when text is empty; enabled when non-empty
- *   - Save button click calls onSave
- *   - Delete button (when shown) calls onDelete
+ *   - Close (X) button in header calls onClose
+ *   - "Add context" button is disabled when text is empty; enabled when non-empty
+ *   - "Add context" button click calls onSave
  *   - data-testid attributes are present
+ *   - optional lineNumber renders "line N" in the header
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -20,7 +21,6 @@ import { InlineCommentWidget } from '../InlineCommentWidget';
 describe('InlineCommentWidget', () => {
   const defaultProps = {
     text: '',
-    lineContent: 'const x = 1;',
     onTextChange: () => undefined,
     onSave: () => undefined,
     onClose: () => undefined,
@@ -46,6 +46,28 @@ describe('InlineCommentWidget', () => {
     expect(screen.getByTestId('editor-comment-widget-save')).toBeTruthy();
   });
 
+  it('renders the header close button with editor-comment-widget-close testid', () => {
+    render(<InlineCommentWidget {...defaultProps} />);
+    expect(screen.getByTestId('editor-comment-widget-close')).toBeTruthy();
+  });
+
+  it('renders "Agent context" header label', () => {
+    render(<InlineCommentWidget {...defaultProps} />);
+    expect(screen.getByText('Agent context')).toBeTruthy();
+  });
+
+  it('renders "line N" when lineNumber is provided', () => {
+    render(<InlineCommentWidget {...defaultProps} lineNumber={7} />);
+    expect(screen.getByText('line 7')).toBeTruthy();
+  });
+
+  it('does not render a line label when lineNumber is not provided', () => {
+    render(<InlineCommentWidget {...defaultProps} />);
+    // Should not find "line N" text
+    const text = document.body.textContent ?? '';
+    expect(/line \d+/.test(text)).toBe(false);
+  });
+
   it('calls onTextChange when user types', async () => {
     const onTextChange = vi.fn();
     render(<InlineCommentWidget {...defaultProps} onTextChange={onTextChange} />);
@@ -54,19 +76,19 @@ describe('InlineCommentWidget', () => {
     expect(onTextChange).toHaveBeenCalled();
   });
 
-  it('calls onSave when Enter is pressed (without Shift)', async () => {
+  it('calls onSave when ⌘↩ is pressed and text is non-empty', async () => {
     const onSave = vi.fn();
     render(<InlineCommentWidget {...defaultProps} text="some note" onSave={onSave} />);
     const textarea = screen.getByTestId('editor-comment-widget-input');
-    await userEvent.type(textarea, '{Enter}');
+    await userEvent.type(textarea, '{Meta>}{Enter}{/Meta}');
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
-  it('does not call onSave on Shift+Enter', async () => {
+  it('does NOT call onSave on plain Enter (must be ⌘↩)', async () => {
     const onSave = vi.fn();
     render(<InlineCommentWidget {...defaultProps} text="note" onSave={onSave} />);
     const textarea = screen.getByTestId('editor-comment-widget-input');
-    await userEvent.type(textarea, '{Shift>}{Enter}{/Shift}');
+    await userEvent.type(textarea, '{Enter}');
     expect(onSave).not.toHaveBeenCalled();
   });
 
@@ -85,39 +107,40 @@ describe('InlineCommentWidget', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('save button is disabled when text is empty', () => {
+  it('calls onClose when header close (X) button is clicked', async () => {
+    const onClose = vi.fn();
+    render(<InlineCommentWidget {...defaultProps} onClose={onClose} />);
+    await userEvent.click(screen.getByTestId('editor-comment-widget-close'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('"Add context" button is disabled when text is empty', () => {
     render(<InlineCommentWidget {...defaultProps} text="" />);
     const saveBtn = screen.getByTestId('editor-comment-widget-save') as HTMLButtonElement;
     expect(saveBtn.disabled).toBe(true);
   });
 
-  it('save button is enabled when text is non-empty', () => {
+  it('"Add context" button is enabled when text is non-empty', () => {
     render(<InlineCommentWidget {...defaultProps} text="hello" />);
     const saveBtn = screen.getByTestId('editor-comment-widget-save') as HTMLButtonElement;
     expect(saveBtn.disabled).toBe(false);
   });
 
-  it('calls onSave when save button is clicked with non-empty text', async () => {
+  it('calls onSave when "Add context" button is clicked with non-empty text', async () => {
     const onSave = vi.fn();
     render(<InlineCommentWidget {...defaultProps} text="my note" onSave={onSave} />);
     await userEvent.click(screen.getByTestId('editor-comment-widget-save'));
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
-  it('renders delete button with testid when onDelete is provided', () => {
-    render(<InlineCommentWidget {...defaultProps} onDelete={() => undefined} />);
-    expect(screen.getByTestId('editor-comment-widget-delete')).toBeTruthy();
-  });
-
-  it('calls onDelete when delete button is clicked', async () => {
-    const onDelete = vi.fn();
-    render(<InlineCommentWidget {...defaultProps} onDelete={onDelete} />);
-    await userEvent.click(screen.getByTestId('editor-comment-widget-delete'));
-    expect(onDelete).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not render delete button when onDelete is not provided', () => {
+  it('save button label is "Add context" (not "Save")', () => {
     render(<InlineCommentWidget {...defaultProps} />);
-    expect(screen.queryByTestId('editor-comment-widget-delete')).toBeNull();
+    const saveBtn = screen.getByTestId('editor-comment-widget-save');
+    expect(saveBtn.textContent).toBe('Add context');
+  });
+
+  it('shows "⌘↩ to add" hint in the footer', () => {
+    render(<InlineCommentWidget {...defaultProps} />);
+    expect(screen.getByText('⌘↩ to add')).toBeTruthy();
   });
 });

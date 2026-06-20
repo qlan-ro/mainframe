@@ -100,7 +100,14 @@ describe('appendLog', () => {
     useSandboxStore.getState().appendLog('proj:/p', 'dev', 'hello', 'stdout');
     const logs = useSandboxStore.getState().logsOutput;
     expect(logs).toHaveLength(1);
-    expect(logs[0]).toEqual({ scopeKey: 'proj:/p', name: 'dev', data: 'hello', stream: 'stdout' });
+    expect(logs[0]).toEqual({ seq: expect.any(Number), scopeKey: 'proj:/p', name: 'dev', data: 'hello', stream: 'stdout' });
+  });
+
+  it('assigns monotonically increasing seq numbers', () => {
+    useSandboxStore.getState().appendLog('proj:/p', 'dev', 'first', 'stdout');
+    useSandboxStore.getState().appendLog('proj:/p', 'dev', 'second', 'stdout');
+    const logs = useSandboxStore.getState().logsOutput;
+    expect(logs[1]!.seq).toBeGreaterThan(logs[0]!.seq);
   });
 
   it('trims log entries to max 500 (preserves newest)', () => {

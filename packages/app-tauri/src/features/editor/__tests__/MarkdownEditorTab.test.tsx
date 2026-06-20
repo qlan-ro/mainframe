@@ -214,13 +214,17 @@ describe('MarkdownEditorTab', () => {
     expect(screen.getByTestId('viewer-shell-status')).toBeInTheDocument();
   });
 
-  it('status shows word count and line count', () => {
+  it('status shows "Markdown · UTF-8" on the left and word/line counts on the right', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
 
+    // Left slot: always "Markdown · UTF-8"
     const status = screen.getByTestId('viewer-shell-status');
     expect(status.textContent).toMatch(/Markdown/);
-    expect(status.textContent).toMatch(/words/);
-    expect(status.textContent).toMatch(/lines/);
+
+    // Right slot: word and line counts — search the full body text
+    const bodyText = document.body.textContent ?? '';
+    expect(bodyText).toMatch(/words/);
+    expect(bodyText).toMatch(/lines/);
   });
 
   it('passes readOnly={true} to CmEditor when readOnly prop is set', () => {

@@ -148,13 +148,21 @@ describe('ToolbarLaunchControls', () => {
     expect(startLaunchConfig).not.toHaveBeenCalled();
   });
 
-  it('clicking the per-row START button on a non-preview config calls startLaunchConfig, does NOT call addRunTab', async () => {
+  it('clicking the per-row START button on a non-preview config calls startLaunchConfig AND addRunTab with kind:console', async () => {
     await renderAndOpen();
     fireEvent.click(screen.getByTestId('main-toolbar-launch-start-dev server'));
     await waitFor(() =>
       expect(startLaunchConfig).toHaveBeenCalledWith(31415, 'proj-1', 'dev server', 'chat-9'),
     );
-    expect(addRunTab).not.toHaveBeenCalled();
+    expect(addRunTab).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'console', config: 'dev server' }),
+    );
+    // The tabId doubles as the Tauri child-webview label, which forbids spaces —
+    // "dev server" must be sanitized so `add_child` (preview webview) succeeds.
+    const calls = addRunTab.mock.calls;
+    const tabId = (calls[calls.length - 1]?.[0] as { id: string }).id;
+    expect(tabId).not.toMatch(/\s/);
+    expect(tabId.startsWith('console-dev_server-')).toBe(true);
   });
 
   it('clicking the per-row START button on a preview config calls startLaunchConfig AND addRunTab with kind:preview', async () => {

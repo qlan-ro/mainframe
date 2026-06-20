@@ -5,7 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@assistant-ui/react', () => ({
   AssistantRuntimeProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useAuiState: vi.fn(() => 'Fixture Chat'),
-  useAssistantRuntime: () => ({ threads: { reload: vi.fn().mockResolvedValue(undefined), switchToThread: vi.fn() } }),
+  useAssistantRuntime: () => ({
+    threads: {
+      reload: vi.fn().mockResolvedValue(undefined),
+      switchToThread: vi.fn(),
+      // useFirstRunTour reads threads.getState() — empty workspace (no sessions).
+      getState: () => ({ threadIds: [], threadItems: {} }),
+    },
+  }),
   useAui: () => ({ composer: () => ({ setText: vi.fn() }) }),
 }));
 

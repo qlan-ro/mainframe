@@ -50,7 +50,7 @@ export function RegionCaptureOverlay({ onRegionSelect, onClose }: RegionCaptureO
   return (
     <div
       data-testid="preview-region-overlay"
-      className="fixed inset-0 z-50 cursor-crosshair bg-black/5"
+      className="fixed inset-0 z-50 cursor-crosshair bg-foreground/5"
       role="presentation"
       tabIndex={0}
       onMouseDown={handleMouseDown}
@@ -61,7 +61,7 @@ export function RegionCaptureOverlay({ onRegionSelect, onClose }: RegionCaptureO
       {selectionRect && (
         <div
           data-testid="preview-region-selection"
-          className="pointer-events-none absolute border-2 border-blue-500 bg-blue-500/20"
+          className="pointer-events-none absolute border-2 border-primary bg-primary/20"
           style={{
             left: selectionRect.left,
             top: selectionRect.top,

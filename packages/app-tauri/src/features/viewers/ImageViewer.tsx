@@ -19,7 +19,7 @@
  * data-testid="viewer-image" on the root element.
  */
 import { useState } from 'react';
-import { ZoomOut, ZoomIn } from 'lucide-react';
+import { ZoomOut, ZoomIn, Maximize2 } from 'lucide-react';
 import { ZoomableImage } from '@/features/chat/parts/ZoomableImage';
 import { ViewerShell } from './ViewerShell';
 import { splitImageStatus } from './viewer-status';
@@ -43,8 +43,8 @@ const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
 
 const SEG_BTN = 'rounded-sm px-1.5 py-0.5 text-caption font-medium transition-colors';
-const SEG_ACTIVE = 'bg-background text-foreground shadow-[0_0_0_0.5px_var(--border)]';
-const SEG_IDLE = 'text-muted-foreground hover:text-foreground';
+const SEG_ACTIVE = 'bg-background text-foreground shadow-[0_0_0_0.5px_var(--border),_0_1px_1.5px_rgba(0,0,0,0.06)]';
+const SEG_IDLE = 'text-mf-text-3 hover:text-foreground';
 
 function getExt(path: string): string {
   const parts = path.split('.');
@@ -101,7 +101,7 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
         onClick={handleZoomOut}
         className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
       >
-        <ZoomOut size={11} aria-hidden />
+        <ZoomOut size={12} aria-hidden />
       </button>
       <button
         type="button"
@@ -111,7 +111,7 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
         onClick={handleZoomIn}
         className="inline-flex h-5 w-[22px] shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40"
       >
-        <ZoomIn size={11} aria-hidden />
+        <ZoomIn size={12} aria-hidden />
       </button>
       <div className="inline-flex items-center gap-px rounded-md bg-mf-chip p-0.5">
         <button
@@ -119,8 +119,9 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
           data-testid="viewer-image-fit-toggle"
           aria-pressed={isFit}
           onClick={() => handleFitToggle('fit')}
-          className={`${SEG_BTN} ${isFit ? SEG_ACTIVE : SEG_IDLE}`}
+          className={`${SEG_BTN} inline-flex items-center gap-[4px] ${isFit ? SEG_ACTIVE : SEG_IDLE}`}
         >
+          <Maximize2 size={11} aria-hidden />
           Fit
         </button>
         <button
@@ -145,7 +146,7 @@ export function ImageViewer({ src, alt = '', path }: ImageViewerProps) {
     >
       <div
         data-testid="viewer-image"
-        className="relative flex h-full w-full items-center justify-center overflow-auto p-7"
+        className="relative flex h-full w-full items-center justify-center overflow-auto p-[28px]"
         style={{
           backgroundColor: 'var(--mf-viewer-check-a)',
           backgroundImage: [

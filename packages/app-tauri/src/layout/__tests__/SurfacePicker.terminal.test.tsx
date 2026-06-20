@@ -3,6 +3,24 @@ import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: vi.fn() }));
+// The run picker resolves launch configs; stub the launch subsystem + its context deps.
+vi.mock('@/features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectId: 'proj-1', chatId: 'chat-1' }),
+}));
+vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
+  useDaemonPort: () => 31415,
+}));
+vi.mock('@/features/run/use-launch-actions', () => ({
+  useLaunchActions: () => ({
+    configs: [],
+    scopeStatuses: {},
+    selectedConfigName: null,
+    handleSelect: vi.fn(),
+    handleLaunch: vi.fn(),
+    handleStop: vi.fn(),
+    refetch: vi.fn(),
+  }),
+}));
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { SurfacePicker } from '../SurfacePicker';
 

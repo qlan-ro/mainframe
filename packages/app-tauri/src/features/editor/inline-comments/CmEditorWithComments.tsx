@@ -19,11 +19,16 @@
  *   gutter coexist in one editor (required by A3).
  * - onViewReady: forwarded alongside the internal viewRef assignment so the
  *   parent context-menu can resolve the live EditorView (required by A1/A3).
+ *
+ * Submit-review bar:
+ *   When any comments have non-empty text, a 30px bar appears below the header
+ *   (above the editor) with a count and a "Submit review (N)" button.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
+import { MessageSquare } from 'lucide-react';
 import type { CmEditorProps } from '../CmEditor';
 import { CmEditor } from '../CmEditor';
 import {
@@ -50,6 +55,38 @@ type CmEditorWithCommentsProps = Omit<CmEditorProps, 'extraExtensions' | 'onView
 interface WidgetPortal {
   commentId: string;
   hostElement: HTMLDivElement;
+}
+
+// ── SubmitReviewBar ──────────────────────────────────────────────────────────
+
+interface SubmitReviewBarProps {
+  count: number;
+  filledCount: number;
+  onSubmit: () => void;
+}
+
+function SubmitReviewBar({ count, filledCount, onSubmit }: SubmitReviewBarProps) {
+  return (
+    <div
+      data-testid="editor-submit-review"
+      className="flex h-[30px] shrink-0 items-center gap-2 bg-mf-content2 px-3 [border-bottom:0.5px_solid_var(--border)]"
+    >
+      <MessageSquare size={11} className="shrink-0 text-primary" aria-hidden />
+      <span className="text-caption text-muted-foreground">
+        {count} agent {count === 1 ? 'note' : 'notes'}
+      </span>
+      <div className="flex-1" />
+      <button
+        data-testid="editor-submit-review-btn"
+        type="button"
+        onClick={onSubmit}
+        disabled={filledCount === 0}
+        className="inline-flex h-[22px] items-center gap-1.5 rounded-[6px] border-none bg-primary/10 px-[9px] text-caption font-semibold text-primary disabled:cursor-default disabled:opacity-40 transition-opacity"
+      >
+        Submit review ({count})
+      </button>
+    </div>
+  );
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -179,6 +216,32 @@ export function CmEditorWithComments({
     setDraftTexts((prev) => ({ ...prev, [commentId]: text }));
   }, []);
 
+  // ── Submit review ────────────────────────────────────────────────────────
+
+  // Submit all comments that have non-empty text (marks them as "saved").
+  const handleSubmitReview = useCallback(() => {
+    for (const comment of comments) {
+      const draft = draftTexts[comment.id];
+      const effectiveText = draft !== undefined ? draft : comment.text;
+      if (effectiveText.trim()) {
+        editComment(comment.id, effectiveText);
+      }
+    }
+    // Close all open portals.
+    setPortals([]);
+    portalsRef.current = [];
+    setDraftTexts({});
+  }, [comments, draftTexts, editComment]);
+
+  // Count of comments that have any text (draft or saved).
+  const filledCount = comments.filter((c) => {
+    const draft = draftTexts[c.id];
+    const text = draft !== undefined ? draft : c.text;
+    return text.trim().length > 0;
+  }).length;
+
+  const showSubmitBar = enableComments && comments.length > 0;
+
   // ── Cleanup portals on unmount ───────────────────────────────────────────
 
   useEffect(() => {
@@ -204,14 +267,24 @@ export function CmEditorWithComments({
 
   return (
     <>
+      {showSubmitBar && (
+        <SubmitReviewBar
+          count={comments.length}
+          filledCount={filledCount}
+          onSubmit={handleSubmitReview}
+        />
+      )}
       <CmEditor {...editorProps} extraExtensions={commentExtensions} onViewReady={handleViewReady} />
       {portals.map((portal) => {
         const comment = comments.find((c) => c.id === portal.commentId);
         const text = draftTexts[portal.commentId] ?? comment?.text ?? '';
+        // Derive 1-based line number from the comment's anchor position.
+        const lineNumber = comment?.startLine;
         return createPortal(
           <InlineCommentWidget
             key={portal.commentId}
             text={text}
+            lineNumber={lineNumber}
             lineContent={comment?.lineContent}
             onTextChange={(t) => handleTextChange(portal.commentId, t)}
             onSave={() => handleSave(portal.commentId, text)}
