@@ -13,7 +13,7 @@ import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
 import { GitConfirmDialog } from '../features/git/GitConfirmDialog';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
-import { SearchPalette } from '../components/overlays/SearchPalette';
+import { SpotlightPalette } from '../features/palette/SpotlightPalette';
 import { FindInPathModal } from '../components/overlays/FindInPathModal';
 import { DirectoryPickerModal } from '../components/overlays/DirectoryPickerModal';
 import { ReviewPanel } from '../features/review/ReviewPanel';
@@ -153,7 +153,7 @@ function RuntimeBody({ port }: { port: number }) {
       {/* Single app-wide outlets driven by their bridges/stores */}
       <ArchiveWorktreeDialog />
       <FilePickerDialog />
-      <SearchPalette />
+      <SpotlightPalette />
       <FindInPathModal />
       <DirectoryPickerModal />
       <ReviewPanel />

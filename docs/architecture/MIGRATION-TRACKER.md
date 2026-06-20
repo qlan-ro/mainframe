@@ -212,7 +212,7 @@ Do the chat leaves in this order; ☑ = done.
 **Completion note (2026-06-15):** shipped side-by-side-only review diff (no inline/split toggle — `CmDiffEditor` is MergeView-only); FullviewModal dropped (deferred with the plugins-UI re-platform); directory picker + `useDirectoryPicker` hook shipped with no consumer wired (Settings/add-project call it later). Changeset `app-tauri-overlays-palettes-pickers` (minor).
 
 ### Modals / palettes / pickers → `components/overlays/` · `features/review/`
-- ☑ `replace` SearchPalette (+search store) → shadcn Command
+- ☑ `replace` SearchPalette (+search store) → **four-mode spotlight** (files+sessions · `>` commands · `@` symbols · `#` changes) — done 2026-06-20; `SpotlightPalette` mounts in AppShell, old two-group `SearchPalette` deleted.
 - ☑ `refactor` FindInPathModal · DirectoryPickerModal · ReviewPanel(+Header/DiffView/FileTree)
 - ☑ `drop` FullviewModal
 

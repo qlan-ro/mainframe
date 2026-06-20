@@ -122,8 +122,8 @@ vi.mock('../../features/sessions/sidebar/ArchiveWorktreeDialog', () => ({
   ArchiveWorktreeDialog: () => <div data-testid="sessions-archive-confirm-dialog" />,
 }));
 
-vi.mock('../../components/overlays/SearchPalette', () => ({
-  SearchPalette: () => null,
+vi.mock('../../features/palette/SpotlightPalette', () => ({
+  SpotlightPalette: () => null,
 }));
 
 vi.mock('../../components/overlays/FindInPathModal', () => ({

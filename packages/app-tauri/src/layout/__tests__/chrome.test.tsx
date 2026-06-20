@@ -35,8 +35,8 @@ vi.mock('../../features/files/FilePickerDialog', () => ({
   FilePickerDialog: () => null,
 }));
 
-vi.mock('../../components/overlays/SearchPalette', () => ({
-  SearchPalette: () => null,
+vi.mock('../../features/palette/SpotlightPalette', () => ({
+  SpotlightPalette: () => null,
 }));
 
 vi.mock('../../components/overlays/FindInPathModal', () => ({
