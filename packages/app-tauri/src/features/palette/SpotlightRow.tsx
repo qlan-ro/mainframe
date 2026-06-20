@@ -34,11 +34,11 @@ export function SpotlightRowView({
       data-testid={row.testid}
       onClick={() => onSelect(row)}
       className={`flex h-[40px] w-full items-center gap-[11px] rounded-[8px] px-[10px] text-left outline-none ${
-        isActive ? 'bg-accent/8' : ''
+        isActive ? 'bg-primary/8' : ''
       }`}
     >
       <span className="inline-flex w-5 shrink-0 justify-center">
-        <Icon className={`size-[15px] ${isActive ? 'text-accent' : 'text-mf-text-3'}`} />
+        <Icon className={`size-[15px] ${isActive ? 'text-primary' : 'text-mf-text-3'}`} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col justify-center">
         <span
