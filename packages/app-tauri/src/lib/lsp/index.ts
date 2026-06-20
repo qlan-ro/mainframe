@@ -9,7 +9,7 @@
  */
 export { getLspLanguage, hasLspSupport } from './language-detection';
 export { LspClientManager } from './lsp-client';
-export type { LspProviders, LspLocation, LspRange, LspPosition, LspHover, DocumentRef } from './lsp-client';
+export type { LspProviders, LspLocation, LspRange, LspPosition, LspHover, DocumentRef, LspSymbol } from './lsp-client';
 export { initAutoConnect } from './auto-connect';
 
 import { LspClientManager } from './lsp-client';
