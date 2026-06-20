@@ -30,6 +30,7 @@ export function SurfaceRail() {
           <button
             key={id}
             data-testid={`surface-rail-${id}`}
+            data-tut={id === 'run' ? 'run' : undefined}
             type="button"
             title={label}
             disabled={isFloor}

@@ -74,11 +74,12 @@ vi.mock('../use-git-confirm', () => ({
   useGitConfirm: { getState: () => ({ request: mockRequestGitConfirm }) },
 }));
 
-vi.mock('sonner', () => ({
-  toast: {
+vi.mock('@/lib/toast', () => ({
+  mfToast: {
     success: vi.fn(),
     error: vi.fn(),
     info: vi.fn(),
+    warning: vi.fn(),
   },
 }));
 
@@ -87,9 +88,9 @@ vi.mock('sonner', () => ({
 // ---------------------------------------------------------------------------
 
 import { useBranchActions } from '../use-branch-actions';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 
-const mockToast = vi.mocked(toast);
+const mockToast = vi.mocked(mfToast);
 
 // ---------------------------------------------------------------------------
 // Fixtures

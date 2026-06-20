@@ -9,7 +9,7 @@
  * handleDeleteWorktree lives in use-worktree-actions to keep this file < 300 lines.
  */
 import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import type { BranchListResult } from '@qlan-ro/mainframe-types';
 import {
   getGitBranches,
@@ -78,7 +78,7 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
       setConflictFiles(statusData.filter((f) => isConflictStatus(f.status)));
     } catch (err) {
       console.warn('[useBranchActions] loadBranches failed', err);
-      toast.error('Failed to load branches');
+      mfToast.error('Failed to load branches');
     }
   }, [port, projectId, chatId]);
 
@@ -102,7 +102,7 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
       withBusy(async () => {
         if (!(await confirmDirtyTree())) return;
         await gitCheckout(port, projectId, branch, chatId);
-        toast.success(`Switched to ${branch}`);
+        mfToast.success(`Switched to ${branch}`);
         await loadBranches();
       }),
     [port, projectId, chatId, confirmDirtyTree, loadBranches, withBusy],
@@ -116,17 +116,17 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
         const remote = slashIdx > 0 ? info!.tracking!.slice(0, slashIdx) : undefined;
         const remoteBranch = slashIdx > 0 ? info!.tracking!.slice(slashIdx + 1) : undefined;
         if (!remote || !remoteBranch) {
-          toast.error(`No tracking remote for ${branch}`);
+          mfToast.error(`No tracking remote for ${branch}`);
           return;
         }
         const result = await gitPull(port, projectId, { remote, branch: remoteBranch, localBranch: branch, chatId });
         if (result.status === 'conflict') {
-          toast.error('Pull resulted in conflicts');
+          mfToast.error('Pull resulted in conflicts');
         } else if (result.status === 'up-to-date') {
-          toast.info('Already up to date');
+          mfToast.info('Already up to date');
         } else {
           const { changes } = result.summary;
-          toast.success(changes > 0 ? `Pulled ${changes} changes` : `Updated ${branch}`);
+          mfToast.success(changes > 0 ? `Pulled ${changes} changes` : `Updated ${branch}`);
         }
         await loadBranches();
       }),
@@ -141,9 +141,9 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
         const remote = slashIdx > 0 ? info!.tracking!.slice(0, slashIdx) : undefined;
         const result = await gitPush(port, projectId, { branch, remote, chatId });
         if (result.status === 'rejected') {
-          toast.error(`Push rejected: ${result.message}`);
+          mfToast.error(`Push rejected: ${result.message}`);
         } else {
-          toast.success(`Pushed to ${result.remote}/${result.branch}`);
+          mfToast.success(`Pushed to ${result.remote}/${result.branch}`);
         }
       }),
     [port, projectId, chatId, branches, withBusy],
@@ -157,7 +157,7 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
         if (result.status !== 'conflict') {
           const { insertions, deletions } = result.summary;
           const detail = insertions || deletions ? `+${insertions} -${deletions}` : undefined;
-          toast.success(`Merged ${branch}${detail ? ` (${detail})` : ''}`);
+          mfToast.success(`Merged ${branch}${detail ? ` (${detail})` : ''}`);
         }
         await loadBranches();
       }),
@@ -170,7 +170,7 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
         if (!(await confirmDirtyTree())) return;
         const result = await gitRebase(port, projectId, branch, chatId);
         if (result.status !== 'conflict') {
-          toast.success('Rebase complete');
+          mfToast.success('Rebase complete');
         }
         await loadBranches();
       }),
@@ -181,7 +181,7 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
     async (oldName: string, newName: string) =>
       withBusy(async () => {
         await gitRenameBranch(port, projectId, oldName, newName, chatId);
-        toast.success(`Renamed to ${newName}`);
+        mfToast.success(`Renamed to ${newName}`);
         await loadBranches();
       }),
     [port, projectId, chatId, loadBranches, withBusy],
@@ -199,7 +199,7 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
       return withBusy(async () => {
         const result = await gitDeleteBranch(port, projectId, branch, { remote: isRemote, chatId });
         if (result.status === 'is-current') {
-          toast.error(result.message);
+          mfToast.error(result.message);
           return;
         }
         if (result.status === 'not-merged') {
@@ -211,9 +211,9 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
           });
           if (!force) return;
           await gitDeleteBranch(port, projectId, branch, { force: true, remote: isRemote, chatId });
-          toast.success(`Deleted ${label}`);
+          mfToast.success(`Deleted ${label}`);
         } else {
-          toast.success(`Deleted ${label}`);
+          mfToast.success(`Deleted ${label}`);
         }
         await loadBranches();
       });
@@ -225,7 +225,7 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
     async () =>
       withBusy(async () => {
         await gitFetch(port, projectId, undefined, chatId);
-        toast.success('Fetched');
+        mfToast.success('Fetched');
         await loadBranches();
       }, 'fetch'),
     [port, projectId, chatId, loadBranches, withBusy],
@@ -237,12 +237,12 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
         const result = await gitUpdateAll(port, projectId, chatId);
         const updated = result.branches.filter((b) => b.status === 'updated').length;
         if (result.pull.status === 'conflict') {
-          toast.error('Conflicts during update');
+          mfToast.error('Conflicts during update');
         } else {
           const parts: string[] = [];
           if (result.pull.status === 'success') parts.push('current branch pulled');
           if (updated > 0) parts.push(`${updated} branches updated`);
-          toast.success(parts.length > 0 ? parts.join(', ') : 'All up to date');
+          mfToast.success(parts.length > 0 ? parts.join(', ') : 'All up to date');
         }
         await loadBranches();
       }, 'updateAll'),
@@ -253,7 +253,7 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
     async () =>
       withBusy(async () => {
         await gitAbort(port, projectId, chatId);
-        toast.success('Aborted');
+        mfToast.success('Aborted');
         await loadBranches();
       }),
     [port, projectId, chatId, loadBranches, withBusy],
@@ -263,7 +263,7 @@ export function useBranchActions({ port, projectId, chatId }: BranchActionsProps
     async (name: string, startPoint: string) =>
       withBusy(async () => {
         await gitCreateBranch(port, projectId, name, startPoint, chatId);
-        toast.success(`Created ${name}`);
+        mfToast.success(`Created ${name}`);
         await loadBranches();
       }),
     [port, projectId, chatId, loadBranches, withBusy],

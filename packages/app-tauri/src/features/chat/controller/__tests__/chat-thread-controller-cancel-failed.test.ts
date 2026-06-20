@@ -1,10 +1,10 @@
 /**
- * Behavior tests: routeDaemonEvent raises a toast on message.queued.cancel_failed.
+ * Behavior tests: routeDaemonEvent raises an mfToast on message.queued.cancel_failed.
  *
- * The reducer no-ops cancel_failed (state is preserved), so the toast.error call
+ * The reducer no-ops cancel_failed (state is preserved), so the mfToast.error call
  * is the only user-visible signal. These tests pin that signal:
- *   1. A matching chatId fires toast.error exactly once with the correct message.
- *   2. A different chatId does NOT fire toast.error.
+ *   1. A matching chatId fires mfToast.error exactly once with the correct message.
+ *   2. A different chatId does NOT fire mfToast.error.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
@@ -14,8 +14,8 @@ import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
 // Mocks (hoisted)
 // ---------------------------------------------------------------------------
 
-vi.mock('sonner', () => ({
-  toast: { error: vi.fn() },
+vi.mock('@/lib/toast', () => ({
+  mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('../../../../lib/api/attachments', () => ({
@@ -31,7 +31,7 @@ vi.mock('../../../../lib/api/chats', () => ({
   editQueuedMessage: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import { ChatThreadController } from '../chat-thread-controller';
 
 // ---------------------------------------------------------------------------
@@ -89,24 +89,24 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('message.queued.cancel_failed toast', () => {
-  it('fires toast.error once with the correct message when chatId matches', () => {
+  it('fires mfToast.error once with the correct message when chatId matches', () => {
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
     ctrl.subscribeLive();
 
     pushEvent({ type: 'message.queued.cancel_failed', chatId: CHAT_ID, uuid: 'u1' });
 
-    expect(vi.mocked(toast.error)).toHaveBeenCalledOnce();
-    expect(vi.mocked(toast.error).mock.calls[0]![0]).toBe("Couldn't cancel the queued message");
+    expect(vi.mocked(mfToast.error)).toHaveBeenCalledOnce();
+    expect(vi.mocked(mfToast.error).mock.calls[0]![0]).toBe("Couldn't cancel the queued message");
   });
 
-  it('does NOT fire toast.error when the event is for a different chat', () => {
+  it('does NOT fire mfToast.error when the event is for a different chat', () => {
     const { fakeClient, pushEvent } = makeFakeWs();
     const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
     ctrl.subscribeLive();
 
     pushEvent({ type: 'message.queued.cancel_failed', chatId: 'other-chat', uuid: 'u2' });
 
-    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+    expect(vi.mocked(mfToast.error)).not.toHaveBeenCalled();
   });
 });

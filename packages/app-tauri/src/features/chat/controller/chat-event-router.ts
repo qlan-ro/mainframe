@@ -9,7 +9,7 @@
  * and live reads of the reducer state (messagesById / pendingUserMessages).
  */
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import type { ChatStateEvent, ChatThreadState } from './chat-thread-state';
 import { handleDaemonEvent } from './handle-daemon-event';
 import { reconcilePendings } from './chat-reconcile';
@@ -42,7 +42,7 @@ export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost
   // A queued-message cancel the daemon couldn't honor leaves the message
   // queued — surface it (the reducer keeps state, so there's no other signal).
   if (event.type === 'message.queued.cancel_failed' && event.chatId === chatId) {
-    toast.error("Couldn't cancel the queued message", {
+    mfToast.error("Couldn't cancel the queued message", {
       description: 'It will still be sent when the current run finishes.',
     });
   }

@@ -1,12 +1,13 @@
 'use client';
 
 /**
- * App-wide toast outlet (sonner), themed to the warm-chrome tokens.
+ * App-wide toast outlet (sonner) — portal container for WsToastCard stacks.
  *
- * Mount `<Toaster />` once near the app root. Then call `toast(...)` /
- * `toast.error(...)` from ANYWHERE — sonner's API is a global imperative
- * dispatcher, so non-React code (e.g. the chat controller's WS handler) can
- * raise a toast without a hook or prop-drilling a callback.
+ * Mount `<Toaster />` once near the app root (App.tsx — no change needed).
+ * Fire toasts via `mfToast.*` from `@/lib/toast`, which uses `toast.custom()`
+ * to render fully-styled WsToastCard instances. The SonnerToaster acts only
+ * as the portal container and stack manager; its own style options are
+ * irrelevant because every toast is rendered via `toast.custom()`.
  */
 import { Toaster as SonnerToaster } from 'sonner';
 
@@ -14,15 +15,9 @@ export function Toaster() {
   return (
     <SonnerToaster
       position="bottom-right"
-      toastOptions={{
-        classNames: {
-          toast:
-            'group flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-body text-foreground shadow-[var(--mf-shadow-pop)]',
-          description: 'text-caption text-muted-foreground',
-          actionButton: 'rounded-md bg-primary px-2 py-1 text-caption font-medium text-primary-foreground',
-          cancelButton: 'rounded-md border border-border px-2 py-1 text-caption text-muted-foreground',
-        },
-      }}
+      offset={18}
+      gap={9}
+      visibleToasts={5}
     />
   );
 }

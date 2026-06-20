@@ -17,6 +17,8 @@ import { SpotlightPalette } from '../features/palette/SpotlightPalette';
 import { FindInPathModal } from '../components/overlays/FindInPathModal';
 import { DirectoryPickerModal } from '../components/overlays/DirectoryPickerModal';
 import { ReviewPanel } from '../features/review/ReviewPanel';
+import { TutorialOverlay } from '../features/tour/TutorialOverlay';
+import { useFirstRunTour } from '../features/tour/use-first-run-tour';
 import { useSettingsStore } from '../store/settings';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
@@ -50,6 +52,8 @@ function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
   useSandboxWsRouter();
   useGlobalOverlayHotkeys();
+  // First-run coachmark tour — auto-opens only on an empty workspace.
+  const showTour = useFirstRunTour();
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
@@ -161,6 +165,7 @@ function RuntimeBody({ port }: { port: number }) {
       <TasksModalHost port={port} />
       <GitConfirmDialog />
       <SettingsDialog port={port} />
+      {showTour && <TutorialOverlay />}
     </div>
   );
 }

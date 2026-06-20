@@ -11,21 +11,21 @@
  *   - empty attachments array / undefined → returns []
  *
  * Shapes under test (createAttachmentAdapter().add):
- *   - oversized file (>5 MB) → toast.error called once with exact message, add() throws same message
+ *   - oversized file (>5 MB) → mfToast.error called once with exact message, add() throws same message
  *   - under-limit image file  → no toast, resolves to PendingAttachment with type:'image'
  *   - under-limit document file → no toast, resolves to PendingAttachment with type:'document'
  */
 
 // ---------------------------------------------------------------------------
-// sonner mock — must be hoisted before any import that touches sonner
+// mfToast mock — must be hoisted before any import that touches @/lib/toast
 // ---------------------------------------------------------------------------
 
-vi.mock('sonner', () => ({
-  toast: { error: vi.fn() },
+vi.mock('@/lib/toast', () => ({
+  mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import { toUploadItems, createAttachmentAdapter } from '../attachment-adapter';
 
 // ---------------------------------------------------------------------------
@@ -180,15 +180,15 @@ describe('createAttachmentAdapter().add — oversized file', () => {
     vi.clearAllMocks();
   });
 
-  it('calls toast.error exactly once with the exact message for a file > 5 MB', async () => {
+  it('calls mfToast.error exactly once with the exact message for a file > 5 MB', async () => {
     const adapter = createAttachmentAdapter();
     const file = new File(['x'], 'huge.png', { type: 'image/png' });
     Object.defineProperty(file, 'size', { value: 6 * 1024 * 1024 });
 
     await expect(adapter.add({ file })).rejects.toThrow('"huge.png" is too large. Max file size is 5MB.');
 
-    expect(vi.mocked(toast.error)).toHaveBeenCalledOnce();
-    expect(vi.mocked(toast.error).mock.calls[0]![0]).toBe('"huge.png" is too large. Max file size is 5MB.');
+    expect(vi.mocked(mfToast.error)).toHaveBeenCalledOnce();
+    expect(vi.mocked(mfToast.error).mock.calls[0]![0]).toBe('"huge.png" is too large. Max file size is 5MB.');
   });
 
   it('the thrown Error message exactly matches the toast message', async () => {
@@ -204,7 +204,7 @@ describe('createAttachmentAdapter().add — oversized file', () => {
     }
 
     expect(caughtMessage).toBe('"video.mp4" is too large. Max file size is 5MB.');
-    expect(vi.mocked(toast.error).mock.calls[0]![0]).toBe(caughtMessage);
+    expect(vi.mocked(mfToast.error).mock.calls[0]![0]).toBe(caughtMessage);
   });
 });
 
@@ -220,7 +220,7 @@ describe('createAttachmentAdapter().add — under-limit file', () => {
 
     const result = await adapter.add({ file });
 
-    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+    expect(vi.mocked(mfToast.error)).not.toHaveBeenCalled();
     // add() may return a PendingAttachment or an AsyncGenerator; ours is the former.
     if (!('type' in result)) throw new Error('expected a PendingAttachment, got an AsyncGenerator');
     expect(result.type).toBe('image');
@@ -233,7 +233,7 @@ describe('createAttachmentAdapter().add — under-limit file', () => {
 
     const result = await adapter.add({ file });
 
-    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+    expect(vi.mocked(mfToast.error)).not.toHaveBeenCalled();
     if (!('type' in result)) throw new Error('expected a PendingAttachment, got an AsyncGenerator');
     expect(result.type).toBe('document');
     expect(result.name).toBe('report.pdf');
@@ -245,6 +245,6 @@ describe('createAttachmentAdapter().add — under-limit file', () => {
     Object.defineProperty(file, 'size', { value: 5 * 1024 * 1024 });
 
     await expect(adapter.add({ file })).resolves.toBeDefined();
-    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+    expect(vi.mocked(mfToast.error)).not.toHaveBeenCalled();
   });
 });

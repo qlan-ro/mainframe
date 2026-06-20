@@ -13,7 +13,9 @@ import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { AppShell } from './AppShell';
 import { ConnectionStatusProvider } from './ConnectionStatusContext';
+import { ConnectionOverlay } from './ConnectionOverlay';
 import { ThemeEffect } from './ThemeEffect';
+import { MfErrorBoundary } from '@/features/shared/MfErrorBoundary';
 import { Toaster } from '@/components/ui/sonner';
 
 export function App() {
@@ -30,27 +32,33 @@ export function App() {
   }, [port]);
 
   return (
-    <div className="flex h-screen flex-col bg-mf-window text-foreground font-sans">
-      <ThemeEffect />
-      <ConnectionStatusProvider value={{ state, daemonStatus }}>
-        {/* Gate the data shell on `ready` (first successful /health), not merely
-            on a known port — the sidecar opens its port before it accepts
-            requests, so mounting on port-known alone races the initial REST
-            loads. `ready` latches, so a later blip won't unmount the shell. */}
-        {ready && port != null ? (
-          <DaemonPortProvider port={port}>
-            <AppShell port={port} />
-          </DaemonPortProvider>
-        ) : (
-          <div
-            data-testid="app-waiting-daemon"
-            className="flex flex-1 items-center justify-center bg-mf-window text-muted-foreground"
-          >
-            <span className="text-body">Waiting for daemon…</span>
-          </div>
-        )}
-      </ConnectionStatusProvider>
-      <Toaster />
-    </div>
+    <MfErrorBoundary>
+      <div className="flex h-screen flex-col bg-mf-window text-foreground font-sans">
+        <ThemeEffect />
+        <ConnectionStatusProvider value={{ state, daemonStatus }}>
+          {/* Gate the data shell on `ready` (first successful /health), not merely
+              on a known port — the sidecar opens its port before it accepts
+              requests, so mounting on port-known alone races the initial REST
+              loads. `ready` latches, so a later blip won't unmount the shell. */}
+          {ready && port != null ? (
+            <DaemonPortProvider port={port}>
+              <AppShell port={port} />
+            </DaemonPortProvider>
+          ) : (
+            <div
+              data-testid="app-waiting-daemon"
+              className="flex flex-1 items-center justify-center bg-mf-window text-muted-foreground"
+            >
+              <span className="text-body">Waiting for daemon…</span>
+            </div>
+          )}
+          {/* Post-boot disconnect overlay. `ready` latches on first /health, so
+              this never covers the initial "Waiting for daemon…" boot screen —
+              only a later drop while the app is live. */}
+          <ConnectionOverlay open={ready && state !== 'connected'} />
+        </ConnectionStatusProvider>
+        <Toaster />
+      </div>
+    </MfErrorBoundary>
   );
 }

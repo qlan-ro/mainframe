@@ -12,7 +12,7 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, X, FileIcon } from 'lucide-react';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { ZoomableImage } from '@/features/chat/parts/ZoomableImage';
 import {
@@ -112,7 +112,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
           await loadSaved();
         } catch (err) {
           console.warn('[tasks] upload attachment failed', err);
-          toast.error('Upload failed');
+          mfToast.error('Upload failed');
         } finally {
           setUploading(false);
         }
@@ -136,7 +136,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
         setSaved((prev) => prev.filter((a) => a.id !== attId));
       } catch (err) {
         console.warn('[tasks] delete attachment failed', err);
-        toast.error('Failed to delete attachment');
+        mfToast.error('Failed to delete attachment');
       }
     },
     [port, todoId],

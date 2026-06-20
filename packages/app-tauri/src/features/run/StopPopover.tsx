@@ -11,7 +11,7 @@
  */
 import { useState, useMemo, useCallback } from 'react';
 import { Square, StopCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import { stopLaunchConfig } from '@/lib/api/launch';
 import { useSandboxStore } from '@/store/sandbox';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -47,7 +47,7 @@ export function StopPopover({ scopeKey }: StopPopoverProps) {
       try {
         await stopLaunchConfig(port, projectId, name, chatId ?? undefined);
       } catch (err) {
-        toast.error(`Failed to stop "${name}"`);
+        mfToast.error(`Failed to stop "${name}"`);
         console.warn('[launch] stop failed', err);
       }
     },
@@ -60,7 +60,7 @@ export function StopPopover({ scopeKey }: StopPopoverProps) {
     try {
       await Promise.all(runningProcesses.map((name) => stopLaunchConfig(port, projectId, name, chatId ?? undefined)));
     } catch (err) {
-      toast.error('Failed to stop all processes');
+      mfToast.error('Failed to stop all processes');
       console.warn('[launch] stop-all failed', err);
     }
   }, [port, projectId, chatId, runningProcesses]);

@@ -107,6 +107,7 @@ export function Composer() {
     <ComposerTriggers>
       <ComposerPrimitive.Root
         data-testid="chat-composer"
+        data-tut="composer"
         className="rounded-2xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring"
       >
         <ComposerPrimitive.AttachmentDropzone

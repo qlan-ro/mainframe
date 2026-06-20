@@ -68,7 +68,7 @@ vi.mock('@/store/sandbox', () => ({
 
 // ── mock toast ───────────────────────────────────────────────────────────────
 const toastError = vi.fn();
-vi.mock('sonner', () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }));
+vi.mock('@/lib/toast', () => ({ mfToast: { error: (...a: unknown[]) => toastError(...a), success: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 const configs: LaunchConfiguration[] = [

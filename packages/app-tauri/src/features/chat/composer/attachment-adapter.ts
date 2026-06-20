@@ -10,7 +10,7 @@
  * showed an inline error band; we reuse the app-wide toaster (M1) instead.
  */
 import type { AttachmentAdapter, PendingAttachment, CompleteAttachment, AppendMessage } from '@assistant-ui/react';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import type { UploadAttachmentItem } from '../../../lib/api/attachments';
 
 export const FILE_SIZE_LIMIT_MB = 5;
@@ -59,7 +59,7 @@ export function createAttachmentAdapter(): AttachmentAdapter {
     async add({ file }) {
       if (file.size > MAX_SIZE) {
         const message = `"${file.name}" is too large. Max file size is ${FILE_SIZE_LIMIT_MB}MB.`;
-        toast.error(message);
+        mfToast.error(message);
         throw new Error(message);
       }
       const dataUrl = await readFileAsDataUrl(file);

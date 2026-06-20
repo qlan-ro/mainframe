@@ -11,7 +11,7 @@
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Zap } from 'lucide-react';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTodosStore } from './use-todos-store';
@@ -154,7 +154,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
       onClose();
     } catch (err) {
       console.warn('[tasks] create task failed', err);
-      toast.error('Failed to create task');
+      mfToast.error('Failed to create task');
       setSubmitting(false);
     }
   }, [title, body, taskType, priority, pending, submitting, port, projectId, create, onClose]);

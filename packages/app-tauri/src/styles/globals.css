@@ -897,6 +897,30 @@ code {
   animation: collapsible-up var(--animation-duration, 200ms) ease-out;
 }
 
+/* Window-level state animations (Toaster · ConnectionOverlay · TutorialOverlay).
+   Referenced via Tailwind v4 arbitrary `animate-[name_…]` utilities, which do
+   NOT auto-generate keyframes — they must be declared here. Defs mirror the
+   warm-chrome prototype (14-windowstates.jsx). */
+@keyframes tw-spin {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes twPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes ws-toast-rail {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes ws-indeterminate {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(420%); }
+}
+
 .fill-mode-forwards {
   animation-fill-mode: forwards;
 }

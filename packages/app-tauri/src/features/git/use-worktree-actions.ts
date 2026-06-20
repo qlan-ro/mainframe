@@ -5,7 +5,7 @@
  * handleNewSession is NOT here — it needs the sessions runtime (Task B7).
  */
 import { useCallback } from 'react';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import { getProjectWorktrees, deleteWorktree } from '@/lib/api/git';
 import { requestGitConfirm } from './use-git-confirm';
 import { resolveWorktree } from './worktree-resolve';
@@ -39,11 +39,11 @@ export function useWorktreeActions({ port, projectId, loadBranches, withBusy }: 
         const worktrees = await getProjectWorktrees(port, projectId);
         const match = resolveWorktree(worktrees, { dirName: worktreeDirName, branchName });
         if (!match) {
-          toast.error(`Could not resolve path for worktree '${worktreeDirName}'`);
+          mfToast.error(`Could not resolve path for worktree '${worktreeDirName}'`);
           return;
         }
         await deleteWorktree(port, projectId, match.path, branchName);
-        toast.success(`Deleted ${label}`);
+        mfToast.success(`Deleted ${label}`);
         await loadBranches();
       }, `deleteWorktree:${worktreeDirName}`);
     },

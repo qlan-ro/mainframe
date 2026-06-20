@@ -22,7 +22,7 @@
 import { useCallback, useMemo } from 'react';
 import { ThreadListPrimitive, useAssistantRuntime } from '@assistant-ui/react';
 import { ChevronDown, PlusIcon } from 'lucide-react';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadListStateToSessionItems } from '../view-model/chat-to-thread-custom';
 import { arrangeSessions } from '../view-model/group-sessions';
@@ -69,7 +69,7 @@ function SessionsGroupHeader({ count }: { count: number }) {
       <span className="text-micro text-mf-text-3">{count}</span>
       <div className="flex-1" />
       <ThreadListPrimitive.New asChild>
-        <button data-testid="sessions-new-button" type="button" title="New session" className={iconBtn}>
+        <button data-testid="sessions-new-button" data-tut="sessions" type="button" title="New session" className={iconBtn}>
           <PlusIcon className="size-[12px]" />
         </button>
       </ThreadListPrimitive.New>
@@ -133,10 +133,10 @@ export function SessionSidebar() {
         await removeProject(port, project.id);
         removeProjectFromList(project.id);
         if (filterProjectId === project.id) setFilterProjectId(null);
-        toast.success('Project removed', { description: project.name });
+        mfToast.success('Project removed', { description: project.name });
       } catch (error) {
         console.warn('[sessions] remove project failed', error);
-        toast.error('Failed to remove project', {
+        mfToast.error('Failed to remove project', {
           description: error instanceof Error ? error.message : String(error),
         });
       }

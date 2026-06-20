@@ -6,7 +6,7 @@
  * on error — callers use the boolean to decide whether to proceed.
  */
 import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 
 export interface BranchBusy {
   busy: boolean;
@@ -25,7 +25,7 @@ export function useBranchBusy(): BranchBusy {
       await fn();
       return true;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Git operation failed');
+      mfToast.error(err instanceof Error ? err.message : 'Git operation failed');
       return false;
     } finally {
       setBusy(false);

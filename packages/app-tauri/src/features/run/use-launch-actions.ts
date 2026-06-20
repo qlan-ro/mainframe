@@ -8,7 +8,7 @@
  * records it as the selected one so the toolbar picker reflects it.
  */
 import { useCallback } from 'react';
-import { toast } from 'sonner';
+import { mfToast } from '@/lib/toast';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { startLaunchConfig, stopLaunchConfig } from '@/lib/api/launch';
 import { buildLaunchScope } from '@/lib/launch-scope';
@@ -67,7 +67,7 @@ export function useLaunchActions(
       try {
         await startLaunchConfig(port, projectId, config.name, chatId ?? undefined);
       } catch (err) {
-        toast.error(`Failed to start "${config.name}"`);
+        mfToast.error(`Failed to start "${config.name}"`);
         console.warn('[launch] start failed', err);
       }
     },
@@ -80,7 +80,7 @@ export function useLaunchActions(
       try {
         await stopLaunchConfig(port, projectId, config.name, chatId ?? undefined);
       } catch (err) {
-        toast.error(`Failed to stop "${config.name}"`);
+        mfToast.error(`Failed to stop "${config.name}"`);
         console.warn('[launch] stop failed', err);
       }
     },
