@@ -17,6 +17,13 @@ import { parseQuery, type ParsedQuery } from './palette-modes';
 import { useSpotlightResults, type SpotlightRow } from './use-spotlight-results';
 import { SpotlightRowView } from './SpotlightRow';
 
+function sectionLabelFor(parsed: ParsedQuery): string {
+  if (parsed.mode === 'cmd') return 'Commands';
+  if (parsed.mode === 'sym') return 'Symbols';
+  if (parsed.mode === 'chg') return 'Working tree';
+  return parsed.term ? 'Results' : 'Sessions';
+}
+
 const FOOTER_HINTS = [
   ['↑↓', 'Navigate'],
   ['⏎', 'Open'],
@@ -151,16 +158,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     if (row) confirm(row);
   });
 
-  const sectionLabel =
-    parsed.mode === 'cmd'
-      ? 'Commands'
-      : parsed.mode === 'sym'
-        ? 'Symbols'
-        : parsed.mode === 'chg'
-          ? 'Working tree'
-          : parsed.term
-            ? 'Results'
-            : 'Sessions';
+  const sectionLabel = sectionLabelFor(parsed);
 
   return (
     <div className="flex flex-col overflow-hidden">
