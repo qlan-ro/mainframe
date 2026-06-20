@@ -40,14 +40,17 @@ function useGitChanges(
   projectId: string | undefined,
   chatId: string | undefined,
   enabled: boolean,
-): GitStatusFile[] {
+): { files: GitStatusFile[]; loading: boolean } {
   const [files, setFiles] = useState<GitStatusFile[]>([]);
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
     if (!enabled || !projectId) {
       setFiles([]);
+      setLoading(false);
       return;
     }
     let cancelled = false;
+    setLoading(true);
     getGitStatus(port, projectId, chatId)
       .then((f) => {
         if (!cancelled) setFiles(f);
@@ -55,12 +58,15 @@ function useGitChanges(
       .catch((err) => {
         console.warn('[use-spotlight-results] getGitStatus failed', err);
         if (!cancelled) setFiles([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [enabled, port, projectId, chatId]);
-  return files;
+  return { files, loading };
 }
 
 export function useSpotlightResults({
@@ -84,7 +90,7 @@ export function useSpotlightResults({
     term,
     enabled: mode === 'sym',
   });
-  const changes = useGitChanges(port, projectId, chatId, mode === 'chg');
+  const { files: changes, loading: changesLoading } = useGitChanges(port, projectId, chatId, mode === 'chg');
 
   const rows = useMemo<SpotlightRow[]>(() => {
     if (mode === 'cmd') {
@@ -155,6 +161,6 @@ export function useSpotlightResults({
     return [...sessionRows, ...fileRows];
   }, [mode, term, sessions, fileSearch.results, symbolSearch.symbols, changes, switchToThread]);
 
-  const loading = (mode === 'file' && fileSearch.loading) || (mode === 'sym' && symbolSearch.loading);
+  const loading = (mode === 'file' && fileSearch.loading) || (mode === 'sym' && symbolSearch.loading) || (mode === 'chg' && changesLoading);
   return { rows, loading };
 }

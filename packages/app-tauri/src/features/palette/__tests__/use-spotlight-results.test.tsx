@@ -68,4 +68,35 @@ describe('useSpotlightResults', () => {
     expect(switchToThread).toHaveBeenCalledWith('s1');
     expect(mockEmit).toHaveBeenCalledWith({ type: 'activate-surface', surface: 'chat' });
   });
+
+  it('file row run() emits open-file intent', async () => {
+    mockSearchFiles.mockResolvedValue([{ name: 'z.ts', path: 'src/z.ts', type: 'file', exact: false }]);
+    const { result } = renderHook(() =>
+      useSpotlightResults({ parsed: parseQuery('palette'), port: 1, projectId: 'p', sessions, switchToThread: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.rows.some((r) => r.type === 'file')).toBe(true));
+    result.current.rows.find((r) => r.type === 'file')!.run();
+    expect(mockEmit).toHaveBeenCalledWith({ type: 'open-file', path: 'src/z.ts' });
+  });
+
+  it('symbol row run() emits open-file intent with line and character', async () => {
+    mockSymbols.mockReturnValue({ symbols: [{ name: 'Foo', kind: 12, path: 'src/Foo.ts', line: 4 }], loading: false });
+    const { result } = renderHook(() =>
+      useSpotlightResults({ parsed: parseQuery('@Foo'), port: 1, projectId: 'p', sessions, switchToThread: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.rows.some((r) => r.type === 'symbol')).toBe(true));
+    result.current.rows.find((r) => r.type === 'symbol')!.run();
+    expect(mockEmit).toHaveBeenCalledWith({ type: 'open-file', path: 'src/Foo.ts', line: 4, character: 0 });
+    mockSymbols.mockReturnValue({ symbols: [], loading: false });
+  });
+
+  it('change row run() emits open-diff intent', async () => {
+    mockGitStatus.mockResolvedValue([{ path: 'src/a.ts', status: 'M' }]);
+    const { result } = renderHook(() =>
+      useSpotlightResults({ parsed: parseQuery('#'), port: 1, projectId: 'p', sessions, switchToThread: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.rows.some((r) => r.type === 'change')).toBe(true));
+    result.current.rows.find((r) => r.type === 'change')!.run();
+    expect(mockEmit).toHaveBeenCalledWith({ type: 'open-diff', path: 'src/a.ts' });
+  });
 });
