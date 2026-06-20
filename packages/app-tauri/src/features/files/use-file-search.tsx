@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileIcon } from 'lucide-react';
 import { searchFiles, type FileResult } from '@/lib/api/files';
+export { useListNavigation } from '@/lib/ui/use-list-navigation';
 
 /** Returns the directory portion of a relative path, or '.' for root-level files. */
 export function dirOf(path: string): string {
@@ -14,38 +15,6 @@ export function useDebounce<T>(value: T, delayMs: number): T {
     return () => clearTimeout(id);
   }, [value, delayMs]);
   return debounced;
-}
-
-export function useListNavigation(count: number, onConfirm: (index: number) => void) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [count]);
-  const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setActiveIndex((i) => {
-          const next = Math.min(i + 1, count - 1);
-          rowRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-          return next;
-        });
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveIndex((i) => {
-          const next = Math.max(i - 1, 0);
-          rowRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-          return next;
-        });
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (count > 0) onConfirm(Math.min(activeIndex, count - 1));
-      }
-    },
-    [count, activeIndex, onConfirm],
-  );
-  return { activeIndex, handleKeyDown, rowRefs };
 }
 
 export function FileRow({
