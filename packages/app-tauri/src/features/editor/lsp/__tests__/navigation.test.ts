@@ -148,6 +148,7 @@ describe('findReferences', () => {
       getDefinition: vi.fn().mockResolvedValue([]),
       getReferences: vi.fn().mockReturnValue(refs),
       getHover: vi.fn().mockResolvedValue(null),
+      getWorkspaceSymbols: vi.fn().mockResolvedValue([]),
     };
   }
 

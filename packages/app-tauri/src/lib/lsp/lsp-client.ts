@@ -60,6 +60,17 @@ export interface LspHover {
   range?: LspRange;
 }
 
+export interface LspSymbol {
+  /** Symbol name (e.g. "useLayoutStore"). */
+  name: string;
+  /** LSP SymbolKind enum number. */
+  kind: number;
+  /** Project-relative path (e.g. "src/store/layout.ts"). */
+  path: string;
+  /** 0-based start line of the symbol. */
+  line: number;
+}
+
 /** The seam Phase 2/3 (CM6 adapters) consume — no editor types cross here. */
 export interface LspProviders {
   getDefinition(
@@ -79,6 +90,8 @@ export interface LspProviders {
     language: string,
     opts: { filePath: string; position: LspPosition },
   ): Promise<LspHover | null>;
+
+  getWorkspaceSymbols(projectId: string, language: string, query: string): Promise<LspSymbol[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +381,18 @@ export class LspClientManager implements LspProviders {
     }
   }
 
+  async getWorkspaceSymbols(projectId: string, language: string, query: string): Promise<LspSymbol[]> {
+    const entry = this.clients.get(makeKey(projectId, language));
+    if (!entry || !entry.ready) return [];
+    try {
+      const result = await this.sendRequest(entry, 'workspace/symbol', { query });
+      return this.toLspSymbols(entry, result);
+    } catch (err) {
+      console.warn('[lsp] getWorkspaceSymbols failed', err);
+      return [];
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Document management
   // ---------------------------------------------------------------------------
@@ -444,6 +469,26 @@ export class LspClientManager implements LspProviders {
     // Relative path — prefix with the worktree-or-project resolved base
     const rel = filePath.startsWith('/') ? filePath.slice(1) : filePath;
     return `file://${entry.resolvedBase}/${rel}`;
+  }
+
+  private fromLspUri(entry: LspClientEntry, uri: string): string {
+    const prefix = `file://${entry.resolvedBase}/`;
+    if (uri.startsWith(prefix)) return uri.slice(prefix.length);
+    const bare = `file://${entry.resolvedBase}`;
+    if (uri.startsWith(bare)) return uri.slice(bare.length).replace(/^\/+/, '');
+    return uri.replace(/^file:\/\//, '');
+  }
+
+  private toLspSymbols(entry: LspClientEntry, result: unknown): LspSymbol[] {
+    if (!Array.isArray(result)) return [];
+    return (result as Array<{ name: string; kind: number; location: { uri: string; range: LspRange } }>).map(
+      (s) => ({
+        name: s.name,
+        kind: s.kind,
+        path: this.fromLspUri(entry, s.location.uri),
+        line: s.location.range.start.line,
+      }),
+    );
   }
 
   private toLspLocations(result: unknown): LspLocation[] {

@@ -21,6 +21,7 @@ function makeProviders(overrides: Partial<LspProviders> = {}): LspProviders {
     getDefinition: vi.fn().mockResolvedValue([]),
     getReferences: vi.fn().mockResolvedValue([]),
     getHover: vi.fn().mockResolvedValue(null),
+    getWorkspaceSymbols: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
