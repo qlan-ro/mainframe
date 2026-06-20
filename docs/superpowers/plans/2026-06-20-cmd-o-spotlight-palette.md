@@ -1226,11 +1226,11 @@ export function SpotlightRowView({
       data-testid={row.testid}
       onClick={() => onSelect(row)}
       className={`flex h-[40px] w-full items-center gap-[11px] rounded-[8px] px-[10px] text-left outline-none ${
-        isActive ? 'bg-accent/8' : ''
+        isActive ? 'bg-primary/8' : ''
       }`}
     >
       <span className="inline-flex w-5 shrink-0 justify-center">
-        <Icon className={`size-[15px] ${isActive ? 'text-accent' : 'text-mf-text-3'}`} />
+        <Icon className={`size-[15px] ${isActive ? 'text-primary' : 'text-mf-text-3'}`} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col justify-center">
         <span
@@ -1446,7 +1446,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
         {parsed.chip && (
           <span
             data-testid="search-palette-mode-chip"
-            className="inline-flex h-[22px] shrink-0 items-center rounded-[6px] bg-accent/10 px-[9px] text-caption font-bold text-accent"
+            className="inline-flex h-[22px] shrink-0 items-center rounded-[6px] bg-primary/10 px-[9px] text-caption font-bold text-primary"
           >
             {parsed.chip}
           </span>
