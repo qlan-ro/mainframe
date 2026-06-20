@@ -14,7 +14,13 @@ export type SurfaceIntent =
   /** Open the find-in-path overlay scoped to a file or directory. */
   | { type: 'open-find-in-path'; scopePath: string; scopeType: 'file' | 'directory' }
   /** Open the review modal overlay. */
-  | { type: 'open-review' };
+  | { type: 'open-review' }
+  /** Open the settings dialog. */
+  | { type: 'open-settings' }
+  /** Toggle the left sidebar. */
+  | { type: 'toggle-sidebar' }
+  /** Toggle the right inspector. */
+  | { type: 'toggle-inspector' };
 
 type Listener = (intent: SurfaceIntent) => void;
 

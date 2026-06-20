@@ -31,6 +31,7 @@ import { useEditorStore } from './editor';
 import { useFilesStore } from './files';
 import { useOverlaysStore } from './overlays';
 import { useActiveBasesStore } from './active-bases-store';
+import { useSettingsStore } from './settings';
 import type { OpenTabTarget } from './tabs';
 
 /** Ensure the Files surface is visible in the layout. Pure store call. */
@@ -125,6 +126,21 @@ export function subscribeToFileIntents(): () => void {
 
     if (intent.type === 'open-review') {
       useOverlaysStore.getState().setReviewOpen(true);
+      return;
+    }
+
+    if (intent.type === 'open-settings') {
+      useSettingsStore.getState().open();
+      return;
+    }
+
+    if (intent.type === 'toggle-sidebar') {
+      useLayoutStore.getState().toggleSidebar();
+      return;
+    }
+
+    if (intent.type === 'toggle-inspector') {
+      useLayoutStore.getState().toggleInspector();
       return;
     }
 
