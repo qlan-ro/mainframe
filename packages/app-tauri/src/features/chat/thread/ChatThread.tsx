@@ -16,6 +16,8 @@ import { ChatGateMount } from '../gates/ChatGateMount';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useRotatingPhrase } from './use-rotating-phrase';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
+import { FindBar } from '../find/FindBar';
+import { useFindHotkey } from '../find/use-find-hotkey';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';
 
@@ -60,6 +62,7 @@ function GeneratingIndicator() {
 }
 
 export function ChatThread() {
+  useFindHotkey();
   return (
     <ComposerEditProvider>
       <SkillsProvider>
@@ -67,10 +70,13 @@ export function ChatThread() {
           data-testid="chat-thread"
           className="flex h-full flex-col overflow-hidden bg-background text-foreground"
         >
+          {/* In-chat Find bar (Cmd/Ctrl+F) — sticky above the scrolling viewport. */}
+          <FindBar />
           {/* Native autoscroll Viewport + a CSS warm-chrome thin scrollbar.
           (Radix ScrollArea via asChild doesn't bind to ThreadPrimitive.Viewport.) */}
           <ThreadPrimitive.Viewport
             data-testid="chat-thread-viewport"
+            data-mf-chat-thread
             className="mf-thin-scrollbar relative flex flex-1 flex-col overflow-y-auto"
           >
             <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">

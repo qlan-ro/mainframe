@@ -55,6 +55,10 @@
   --mf-text-4: #bcbab5;
   --mf-chip: rgba(0,0,0,0.05);
   --mf-selection: rgba(10,132,255,0.10);
+  /* In-chat Find highlights — amber across all schemes (matches the --mf-cm-match
+     editor-search convention), defined once in :root; no scheme overrides them. */
+  --mf-find-tint: rgba(251,191,36,0.32);
+  --mf-find-active: rgba(251,146,60,0.60);
   --mf-warning: #d97706;
   --mf-success: #28a745;
 
@@ -979,4 +983,14 @@ code {
 .mf-thin-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: var(--mf-text-3);
   background-clip: padding-box;
+}
+
+/* In-chat Find (FindBar) — CSS Custom Highlight API paint. Only background-color
+   is settable on ::highlight(). All matches get the tint; the active match the
+   stronger accent. */
+::highlight(mf-find-match) {
+  background-color: var(--mf-find-tint);
+}
+::highlight(mf-find-active) {
+  background-color: var(--mf-find-active);
 }

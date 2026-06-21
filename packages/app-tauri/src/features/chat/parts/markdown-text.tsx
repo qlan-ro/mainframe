@@ -276,13 +276,18 @@ const REMARK_PLUGINS: Pluggable[] = [remarkGfm, remarkAppLinks];
 // ── MarkdownText: TextMessagePartComponent ────────────────────────────────────
 
 const MarkdownTextImpl: TextMessagePartComponent = () => {
+  // `data-text-part` marks the searchable text container for in-chat Find
+  // (FindBar walks [data-message-id] → [data-text-part]). The wrapper guarantees
+  // the attribute lands on a real DOM node regardless of primitive prop-forwarding.
   return (
-    <MarkdownTextPrimitive
-      className="aui-md"
-      remarkPlugins={REMARK_PLUGINS}
-      urlTransform={urlTransform}
-      components={markdownComponents}
-    />
+    <div data-text-part>
+      <MarkdownTextPrimitive
+        className="aui-md"
+        remarkPlugins={REMARK_PLUGINS}
+        urlTransform={urlTransform}
+        components={markdownComponents}
+      />
+    </div>
   );
 };
 

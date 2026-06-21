@@ -11,7 +11,7 @@
  * timing footer sit under the turn. The \0 permission sentinel renders nothing.
  */
 import { useMemo } from 'react';
-import { MessagePrimitive } from '@assistant-ui/react';
+import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import { makeChatGroupBy, parseToolGroupKey } from '../tools/group-parts';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { PERMISSION_PLACEHOLDER } from '../view-model/convert-message';
@@ -42,9 +42,14 @@ export function AssistantMessage() {
   const meta = useMainframeMeta();
   const groupBy = useMemo(() => makeChatGroupBy(meta.partGroups ?? {}), [meta.partGroups]);
   const summaries = meta.groupSummaries;
+  const messageId = useAuiState((s) => s.message.id);
 
   return (
-    <MessagePrimitive.Root data-testid="chat-assistant-message" className="group/message flex flex-col gap-2 py-3">
+    <MessagePrimitive.Root
+      data-testid="chat-assistant-message"
+      data-message-id={messageId}
+      className="group/message flex flex-col gap-2 py-3"
+    >
       <MessagePrimitive.GroupedParts groupBy={groupBy}>
         {({ part, children }) => {
           // GroupPart nodes carry `indices`; leaf parts do not.

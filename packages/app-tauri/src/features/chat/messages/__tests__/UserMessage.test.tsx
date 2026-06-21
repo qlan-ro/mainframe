@@ -387,3 +387,11 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
     expect(screen.queryByTestId('chat-queued-message')).not.toBeInTheDocument();
   });
 });
+
+describe('UserMessage — find DOM hook', () => {
+  it('sets data-message-id on the message root', () => {
+    __messageFixture = makeFixture({ mainframe: undefined });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-user-message')).toHaveAttribute('data-message-id', 'msg-test');
+  });
+});

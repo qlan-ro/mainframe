@@ -269,7 +269,11 @@ function UserMessageImpl() {
   const hasExtras = imageParts.length > 0 || attachmentCount > 0;
 
   return (
-    <MessagePrimitive.Root data-testid="chat-user-message" className="flex flex-col items-end gap-2 pt-2">
+    <MessagePrimitive.Root
+      data-testid="chat-user-message"
+      data-message-id={messageId}
+      className="flex flex-col items-end gap-2 pt-2"
+    >
       {codeRefCard}
       {reviewCard}
 
