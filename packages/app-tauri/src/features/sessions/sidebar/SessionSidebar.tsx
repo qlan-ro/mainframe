@@ -40,6 +40,8 @@ import { SessionsMoreMenu } from './SessionsMoreMenu';
 import { ProjectFilterPillBar } from './ProjectFilterPillBar';
 import { TagFilterBar } from '../filter/TagFilterBar';
 import { SidebarFooter } from '@/layout/SidebarFooter';
+import { BottomPanel } from '@/features/context-panel/BottomPanel';
+import { PanelResizeHandle } from '@/features/context-panel/PanelResizeHandle';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
 import { removeProject } from '@/lib/api/projects';
@@ -188,6 +190,8 @@ export function SessionSidebar() {
       </div>
 
       <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
+      <PanelResizeHandle />
+      <BottomPanel />
       <SidebarFooter counts={footerCounts} />
     </>
   );
