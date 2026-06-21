@@ -140,6 +140,8 @@ Do the chat leaves in this order; ☑ = done.
 
 ## Cross-cutting foundation (underpins everything — build/maintain first)
 
+> ⚠️ **Partly stale — superseded by the [Reconciliation audit (2026-06-21)](#-reconciliation-audit-2026-06-21--verified-actual-state).** Several ☐ here are actually done (theming/tokens, primitives). Use the reconciliation + "Backlog by category" for live status; kept below for history.
+
 - ☑ **shadcn `components/ui/` layer** — 18 primitives built + theme-wired to `--mf-*` (`8e18e634`).
 - ☐ **Theming / tokens** (`refactor`) — `mainframe-theme.css` → Tailwind v4 `@theme`; 4 runtime-switchable themes; split Monaco/aui-md CSS out of `index.css`; token traps (no `/opacity` on CSS vars).
 - ☑ **Typed-surface layout engine** (`replace`) — DONE (2026-06-11). Static skeleton (SurfaceHost + SurfaceRail + toggle/floor-invariant + intent-bus sub + Cmd/Ctrl+1/2/3 + split buttons + divider resize) PLUS the `04-engine.jsx` interactive layer: **per-session remembered layout** (`sessions` map + a top-level compat mirror so existing consumers/tests are untouched), the **Run multi-pane model** (`run.panes[]` in `store/run-pane.ts`, max 2), **surface drag-reposition** (`beginSurfaceDrag` → top-left/top-right/bottom), and **Files-tab→Run edge-split** (`beginTabDrag` — center=join, edge=split) via `use-surface-drag` + `SurfaceDragLayer` (drop targets tagged `data-drop-surface`). Chat stays a single un-splittable card; tab-drag is Files→Run only. *Deferred polish: tab reorder DnD; richer drop-zone visuals.*
@@ -153,6 +155,8 @@ Do the chat leaves in this order; ☑ = done.
 ---
 
 ## Port checklist by subsystem (from the 10-subsystem map)
+
+> ⚠️ **Largely stale — superseded by the [Reconciliation audit (2026-06-21)](#-reconciliation-audit-2026-06-21--verified-actual-state).** This predates the surfaces being built; most ☐ here (shell, tabs/editor, controller, LSP, primitives, theming) are now done or dropped-by-design. Retained for the original subsystem map only — do **not** treat these ☐ as live work; read the reconciliation + "Backlog by category" instead.
 
 ### Shell & layout → `shell/` · `layout/` · `app/`
 - ☐ `refactor` main.tsx · App.tsx + global keybinds · TitleBar · StatusBar (+useUpdateStatus/useConnectionState) · ConnectionOverlay/ErrorBoundary/Toaster
@@ -261,6 +265,39 @@ Do the chat leaves in this order; ☑ = done.
 
 The single source of truth for what's left. Folds in items previously living only in code comments / memory / handoffs. Sizes: **S** ≤½ day · **M** 1–3 days · **L** ~1 week · **XL** multi-week / multiple sub-leaves. Status reflects the current built state (chat + sessions surfaces complete; everything else to port).
 
+### ⭐ Reconciliation audit (2026-06-21) — verified actual state
+
+A line-by-line code audit (5 parallel agents over `packages/app-tauri/src` + `src-tauri`) reconciled the markers below against reality. **This audit supersedes the two legacy per-subsystem checklists** ("Cross-cutting foundation" and "Port checklist by subsystem" above — both predate the surfaces being built and are now mostly stale; treat them as historical). Markers in *this* "Backlog by category" section have been corrected to match. Outcome:
+
+**Was ☐, is actually ☑ COMPLETE (stale "todo" corrected):**
+- **Surface rail (Chat/Files/Run)** — `layout/SurfaceRail.tsx` fully wired (Chat = permanent floor, Files/Run toggle).
+- **UI primitives completion** — all of Dialog/Select/Dropdown/Popover/Command/Checkbox/Label exist in `components/ui/` (24 primitives + `assistant-ui/`), plus the shared `menu.tsx`/`menu-variants.ts`. *(Only `toggle.tsx` absent — never needed; not a gap.)*
+- **Theming / tokens refactor** — `styles/globals.css` is Tailwind v4 `@theme` with the 3 runtime axes (mode × scheme × window-style); Monaco is gone (CM6), so the "split index.css" sub-task is moot.
+- **Provider-tuning-defaults** — `useProviderDefaults` is fetched + wired into Effort/Features (the `undefined` 3rd-arg gap is closed).
+- **Broader rejection-toaster / attachment errors** — `attachment-adapter.ts` does `mfToast.error` + throw on >5 MB (native `attachmentAddError` intentionally unused).
+- **Skills-registry subsystem** — `features/skills/` + `lib/api/skills.ts` + `SkillsProvider` + the `/`-trigger picker all exist and are mounted.
+- **`queued.cancel_failed` surfacing** — reducer no-op + a rich `mfToast.error` in `chat-event-router.ts` (tested).
+- **Runtime-gated message actions** — ships Copy + Export only by decision (Reload/Edit/Branch/Feedback/Speak omitted, not disabled) — i.e. the item is *done as scoped*.
+- **Shell foundation** (legacy checklist): `main.tsx`/`App.tsx`/global keybinds/ConnectionOverlay/ErrorBoundary/Toaster, `store/tabs.ts`, EditorTab/DiffTab, chats-store→per-chat-controller, LSP client — all built. TitleBar = native overlay (by design); StatusBar → `SidebarFooter`.
+
+**Was ☐, is actually ◐ PARTIAL:**
+- **Sidecar packaging** — daemon supervision/env-capture (`src-tauri/src/sidecar.rs`) done; the Tauri `externalBin` bundle of Node + native deps is NOT configured.
+- **Capabilities / CSP** — `src-tauri/capabilities/main.json` + a CSP exist; no per-command least-privilege granularity yet.
+- **data-testid saturation + stress matrix** — testids are saturated (400+); the ADR stress matrix remains (two-window untestable).
+- **Toast "Open session →" CTA** — renders when a `chatId` is passed, but `onClick` only dismisses (no nav) and no call site passes a `chatId`.
+- **State & data layer** — controller/LSP/most stores done; a few helpers (`markdown-url-transform`) absent, plugins-layout store deferred, `logger/notify/useUpdateStatus` not yet under `lib/tauri`.
+- **Retry-resend** — "Failed to send" indicator present; the retry action is unwired.
+- **ViewportFooter / Welcome** — footer done; the Welcome/suggestions empty-state is NOT built.
+- **Reasoning duration** — `formatDuration` exists but `AssistantMessage` passes no `duration` (blocked on an additive daemon thinking-duration field).
+- **Multi-image lightbox** — single-image `ZoomableImage` done; the prev/next gallery is not.
+- **Deprecated-hook migration** — chat already on `useAuiState`; the **sessions** sites still use `useAssistantRuntime().threads` etc.
+
+**Dropped-by-design (⊘, not gaps):** `zone/` system, `store/ui.ts`, `composer-drafts.ts` module (draft state lives in the sessions runtime), `SkillEditorTab` (skills = plain files), the desktop `input.tsx`/`tabs.tsx`/zone-plugin-bridge.
+
+**Genuinely NOT-STARTED (the real remaining work):** Plugins UI re-platform (`features/plugins/` does not exist) · Add-project pill + flow (`lib/api/projects.ts` has only get/remove) · Bottom Context/Skills/Agents tabbed panel · FindBar (Cmd+F; `features/chat/find/` absent) · Multi-window infra · the Tauri `externalBin` sidecar bundle + signing/notarization · shared pure-logic package extraction (still app-tauri-local) · restored-permission "stream closed" fix.
+
+**Still open DECISIONS (not code):** shared-package home · permission-card placement (inline-at-tail default) · Phase-2 Rust-daemon go/no-go · Electron retire-vs-coexist · mobile-contract governance.
+
 ### Recommended next steps (ordered)
 1. ✅ **DONE (`12f39eee`) — Declared `zustand` as an explicit dependency** in `packages/app-tauri/package.json` + the lockfile importer edge (hand-edited, no full re-resolve, per the mobile-submodule lockfile trap). *Was a phantom dep via shamefully-hoist; merge-blocker now cleared.*
 2. ✅ **DONE (2026-06-08) — Sessions-sidebar loose ends + data-testid saturation.** The group-header "more" popover was already built+tested (tracker was stale, corrected `1586fc67`); the data-testid audit found only 2 gaps, now tagged (`fc6f3435`). Chat + sessions surfaces are true-done.
@@ -277,12 +314,12 @@ The single source of truth for what's left. Folds in items previously living onl
 
 **Infrastructure / build**
 - ☑ **S — Declare `zustand` as a real dependency** — DONE (`12f39eee`). Added `zustand: ^5.0.14` to `packages/app-tauri/package.json` + the lockfile importer edge by hand (no full re-resolve, per the mobile-submodule lockfile trap). Was imported in 7+ src files but only resolved via shamefully-hoist.
-- ☐ **XL — Sidecar packaging** — bundle Node runtime + native deps (`better-sqlite3`, `node-pty`, `@vscode/ripgrep`, `typescript-language-server`, `pyright`), per-platform binaries, signing/notarization. *Schedule-killer risk — spike before GA.* (also tracked under Cross-cutting foundation.)
-- ☐ **M — Capabilities / CSP** — least-privilege per-command trust boundary (`src-tauri/capabilities/`); shell plugin already dropped. Needed before GA.
+- ◐ **XL — Sidecar packaging** *(verified 2026-06-21)* — daemon **supervision + login-shell-env capture done** (`src-tauri/src/sidecar.rs`, `find_node()`); **remaining:** the Tauri `externalBin`/sidecar bundle of the Node runtime + native deps (`better-sqlite3`, `node-pty`, `@vscode/ripgrep`, `typescript-language-server`, `pyright`), per-platform binaries, signing/notarization (none configured in `tauri.conf.json`). *Schedule-killer risk — spike before GA.*
+- ◐ **M — Capabilities / CSP** *(verified 2026-06-21)* — `src-tauri/capabilities/main.json` + a CSP exist (core/window-drag/opener/notification/mcp-bridge; CSP pins daemon localhost + `blob:`); **remaining:** per-command least-privilege granularity (one blanket capability today). Needed before GA.
 - ☑ **L — Tauri bridge** (`lib/tauri/` + `src-tauri/commands/`) — showItemInFolder, readFile, showNotification, log, getPlatform done. Deferred: updates, AlertDialog shim, terminal PTY.
 
 **Testing**
-- ☐ **L — data-testid saturation + ADR stress matrix (chat build-order step 12)** — tag all interactive elements (chat + sessions) + run the stress matrix (long chat, nested subagent + mid-turn permission, reconnect, optimistic dedup, two windows).
+- ◐ **L — data-testid saturation + ADR stress matrix (chat build-order step 12)** *(verified 2026-06-21)* — **testids saturated** (400+ across chat/sessions/editor/files/layout); **remaining:** the combined stress matrix run (long chat, nested subagent + mid-turn permission, reconnect, optimistic dedup) — the two-window scenario is untestable until multi-window infra exists.
 - ◐ **XL — e2e harness + data-testids (Tauri story)** — **harness BUILT (2026-06-09):** browser-mode Playwright (Chromium vs `vite preview`, shared daemon fixture, `tauri` project, `helpers/tauri/`), 3 specs ported (composer 11/chat 8/sessions 9 passing). Remaining: port the other Electron-bound specs as their surfaces land.
 - ☐ **L — Multi-window surface infrastructure** — two windows + cross-window state sync; a deferred acceptance criterion of the stress matrix, not yet designed.
 
@@ -290,7 +327,7 @@ The single source of truth for what's left. Folds in items previously living onl
 - ☑ **S — SessionSidebar group-header "more" popover** — DONE (was already built + tested; tracker was stale, 2026-06-08). `SessionsMoreMenu` = shadcn DropdownMenu → Archived sessions + Import external sessions, each opening its dialog (`ArchivedSessionsDialog`/`ImportSessionsDialog`); covered by `SessionsMoreMenu.test.tsx` + both dialog tests.
 - ☐ **M — Ghosted/dashed "Add project" pill** (`ProjectFilterPillBar.tsx:10-11`) — dashed add-project button in the filter bar; inert without the add-project surface.
 - ☐ **M — Add-project flow** (`features/sessions/` + `lib/api/projects.ts`) — directory picker + project create/register that makes the "Add project" pill live.
-- ☐ **L — Surface rail (Chat / Files / Run vertical rail)** (`layout/` + `surfaces/{chat,files,run}/`) — gated on the Files/Run surfaces existing.
+- ☑ **L — Surface rail (Chat / Files / Run vertical rail)** — DONE *(verified 2026-06-21)*. `layout/SurfaceRail.tsx` wired: Chat = permanent floor (lit, non-toggleable), Files/Run toggle via `useLayoutStore.toggleSurface`; glyphs from `surface-icons.tsx`.
 - ☐ **M — Bottom Context/Skills/Agents tabbed panel + resize handle** (`layout/` or `features/sessions/sidebar/`) — completes artboard parity below the session list.
 - ◐ **M — Window chrome / traffic-lights + floating-panel** — traffic lights (`trafficLightPosition {x:20,y:30}`) + **floating panels** (`AppShell` `p-2 gap-2`) DONE (2026-06-08). *Remaining:* the warm-gradient **window background** behind the floating panels (today it's flat `bg-mf-window`, not the prototype's radial gradient).
 
@@ -301,7 +338,7 @@ The single source of truth for what's left. Folds in items previously living onl
 **Shell**
 - ◐ **L — Shell & global layout refactor** (`src/app/` + `src/shell/`) — main.tsx, App.tsx + global keybinds, TitleBar, StatusBar, ConnectionOverlay, ErrorBoundary, Toaster, Tutorial.
   - ☑ **Window States surfaces** (2026-06-20) — the 4 window-level states from the *Window States* artboard built to parity: `ErrorState`+`MfErrorBoundary` (wraps `App()`), `ConnectionOverlay` (post-boot disconnect, mounted in `App.tsx`), `TutorialOverlay`+`store/tutorial.ts`+`use-first-run-tour` (mounted in `AppShell`, auto-opens only on an empty workspace; 4 `data-tut` anchors added), and the warm Toaster (`components/ui/ws-toast.tsx` + `lib/toast.ts` `mfToast` helper; 12 call sites migrated `toast.*`→`mfToast.*`). Added keyframes `tw-spin`/`twPulse`/`ws-toast-rail`/`ws-indeterminate` to `globals.css`. *(Raise toasts via `mfToast` from `@/lib/toast`, NOT sonner `toast` directly — that bypasses the warm card.)*
-    - ☐ **S — Toast "Open session →" CTA is a no-op** (`components/ui/ws-toast.tsx` + `lib/toast.ts`) — the CTA renders only when a toast carries a `chatId` and its `onClick` currently just dismisses. No `mfToast` call site passes a `chatId` yet, so it never appears in practice. Wire the click to the existing session-open path (e.g. the thread-list `switchToThread`/session-select intent) and have the relevant error/info toasts (build-failed, agent-finished) pass the originating `chatId`.
+    - ◐ **S — Toast "Open session →" CTA is inert** (`components/ui/ws-toast.tsx` + `lib/toast.ts`) *(verified 2026-06-21)* — the CTA + `chatId` plumbing exist, but `onClick` only dismisses (no nav) and no `mfToast` call site passes a `chatId`, so it never renders in practice. **Remaining:** wire the click to the session-open path (`switchToThread`/session-select intent) + have the relevant toasts (build-failed, agent-finished) pass the originating `chatId`.
   - ☐ Remaining: TitleBar, StatusBar (retired → `SidebarFooter`), broader global keybinds, `main.tsx`/`shell/` refactor. Boot wiring + the Window States surfaces are the parts done today.
 
 **Editor & viewers**
@@ -337,34 +374,34 @@ The single source of truth for what's left. Folds in items previously living onl
 - ☐ **XL — Plugins UI re-platform** (`features/plugins/`) — PluginView (779 lines), PluginIcon, PluginError, PluginGlobalComponents from Electron `<webview>` → Tauri webview + plugins store + plugins-api + usePluginShortcuts; drop the zone plugin bridge.
 
 **State & data layer**
-- ☐ **XL — State & data layer** (`src/stores/` + `src/hooks/` + `src/lib/`) — chats store + chat-actions + useChatSession + useActiveProjectId → controller; LSP client; domain stores (projects/adapters/settings/skills/tags/sandbox/terminal/background-tasks/theme/toasts/search/find-in-chat/tutorial/todos-filters) + pure helpers; replace tabs/plugins-layout stores; logger/notify/useUpdateStatus/global.d.ts → `lib/tauri`; drop layout/ui stores. *(WS client / useConnectionState / ws-event-router only partially landed — Phase 1.)*
-- ☐ **M — UI primitives completion + bespoke helpers** (`components/ui/`) — replace Radix-wrapper primitives (button/tooltip/scroll-area) + context-menu + toggle with shadcn; build the missing (Dialog/Select/Dropdown/Popover/Command/Checkbox/Label); port scroll-row/truncated-label + `utils.cn()`; drop input.tsx/tabs.tsx/zone plugin bridge. *(18 primitives exist.)*
+- ◐ **XL — State & data layer** (`src/store/` + `src/hooks/` + `src/lib/`) *(verified 2026-06-21)* — **DONE:** chats→per-chat controller/reducer/projection, LSP client (`lib/lsp/`), WS client + `useConnectionState`, most domain stores (theme/settings/sandbox/tutorial/tabs/layout/unread/session-filters/active-bases) + API clients (projects/adapters/skills/tags/todos/launch) + pure helpers (file-types/launch-scope/format/utils), `lib/tauri/` bridge. **Remaining:** `markdown-url-transform` helper (absent); a couple of "stores" exist only as inline UI state (search/find-in-chat) by design; **plugins-layout store** (gated on Plugins UI); `logger/notify/useUpdateStatus/global.d.ts` not yet relocated under `lib/tauri`.
+- ☑ **M — UI primitives completion + bespoke helpers** (`components/ui/`) — DONE *(verified 2026-06-21)*. All shadcn primitives exist (button/tooltip/scroll-area + context-menu + Dialog/Select/Dropdown/Popover/Command/Checkbox/Label; 24 files + `assistant-ui/` + shared `menu.tsx`/`menu-variants.ts`); `utils.cn()` present. *Not built:* `toggle.tsx` (never needed — no consumer), `scroll-row`/`truncated-label` (dropped); the desktop `input.tsx`/`tabs.tsx`/zone-bridge drops are moot (app-tauri has its own shadcn `input.tsx`).
 
 **Theming**
-- ☐ **L — Theming / tokens refactor** (`src/styles/`) — `mainframe-theme.css` → Tailwind v4 `@theme`, 4 runtime-switchable themes, split Monaco/aui-md CSS out of `index.css`, eliminate the `/opacity`-on-CSS-var traps. *(◐ in progress; CSS split partly blocked on Monaco landing.)*
+- ☑ **L — Theming / tokens refactor** (`src/styles/`) — DONE *(verified 2026-06-21)*. `styles/globals.css` is Tailwind v4 `@theme` with the 3 runtime axes (mode × scheme × window-style, 6 theme blocks) via `data-scheme`/`.dark`/`data-window-style`; `/opacity`-on-CSS-var traps avoided. The "split Monaco/aui-md `index.css`" sub-task is moot — Monaco was dropped for CM6.
 
 **Composer / config**
-- ☐ **S — Provider-tuning-defaults not fetched** (`composer/config-toolbar/{EffortPicker.tsx:42,FeaturesPopover.tsx:56,use-composer-tuning.ts:19}`) — the 3rd arg to `displayEffort`/`effectiveFeature` is `undefined`; controls resolve model-effort/feature constraints without provider inheritance. Needs a settings/provider-defaults fetch.
-- ☐ **S — Retry-resend wiring for failed user sends** (`messages/UserMessage.tsx:228-229` + controller) — "Failed to send" is visible but the retry action needs controller wiring that doesn't exist yet.
+- ☑ **S — Provider-tuning-defaults fetched** — DONE *(verified 2026-06-21)*. `useProviderDefaults` (in `use-composer-tuning.ts`) fetches `getProviderSettings(port)` on mount and threads `providerDefaults` through `ComposerToolbar` into `EffortPicker`/`FeaturesPopover`; the `displayEffort`/`effectiveFeature` 3rd-arg is no longer `undefined` (landed with the Settings surface).
+- ◐ **S — Retry-resend wiring for failed user sends** (`messages/UserMessage.tsx` + controller) *(verified 2026-06-21)* — the "Failed to send" indicator IS rendered (on `meta.error`); **remaining:** the retry/resend action + controller wiring (explicit TODO in `UserMessage.tsx`).
 - ☑ **M — Sandbox captures in the user message** — DONE (2026-06-10). `parse-captures.ts` strips the raw `\0__MF_SANDBOX_CAPTURE__` sentinel and maps preview images into native attachments; `0e0f6754` replaced the temporary context row with clickable attachment tiles. Capture-creation webview and CSS-inspect chip producers remain separately gated.
 - ◐ **M — Deferred user-message leaf states** — file attachment thumbs, capture attachments, and render-only `UMCodeRef` are DONE. Remaining: `UMCodeRef` producer from the future editor sender, `UMInspectChip` producer from sandbox inspect, and the PLAN "implementing plan" bubble. Plain markdown code blocks DO render.
 - ☐ **M — WorktreePopover in composer** (`features/chat/composer/` + git/worktree API) — deferred pending verification whether it's REST-wireable like config.
 - ☐ **S — Composer-drafts module Map → store** (`composer/composer-drafts.ts`) — no native draft persistence across chat switches today.
-- ☐ **S — Broader rejection-toaster + native `attachmentAddError` wiring** (`composer/`) — >5MB rejection toasts now; the broader rejection UX + native event-driven wiring (vs adapter throw) are deferred.
-- ☐ **M — Skills-registry subsystem** (`features/skills/` + `lib/api/skills.ts`) — full `/`-skills picker injection wiring beyond the resolved chip name + project-scoped skills state + API client; SkillsPanel out-of-band injection (`pendingInvocation`) has no app-tauri surface.
+- ☑ **S — Broader rejection-toaster** — DONE *(verified 2026-06-21)*. `attachment-adapter.ts` fires `mfToast.error` (then throws) on >5 MB; tests cover it. Native `attachmentAddError` event wiring is intentionally **not** used (the toaster path replaces desktop's inline band — by design, ⊘).
+- ☑ **M — Skills-registry subsystem** (`features/skills/` + `lib/api/skills.ts`) — DONE *(verified 2026-06-21)*. `features/skills/use-chat-skills.tsx` (`SkillsProvider` mounted in `ChatThread`, `useChatSkills`/`useChatAgents`/`resolveSkillName`) + `lib/api/skills.ts` (`getSkills`) + the `/`-trigger picker (`composer/triggers`) all wired. *Remaining (deferred, not blocking):* the SkillsPanel out-of-band `pendingInvocation` injection has no app-tauri surface.
 
 **Chat / messages / parts (deferred leaves)**
 - ☐ **M — FindBar + full message parser** (`features/chat/find/` + view-model) — Cmd+F find + scroll-to-match. QuoteOnSelection is DONE (`8129d976`: native SelectionToolbar/`MessagePrimitive.Quote` + CLI serialization glue). Inline mention highlight IS ported.
 - ◐ **M — Small message-part renderers** (`features/chat/parts/`) — capture previews now render as clickable native attachments; code refs render; diff-review comments render via `ReviewCommentCard`. Remaining: selector breadcrumb / CSS inspect chips, multi-image gallery, FileTypeIcon reuse, and ErrorPart leaves.
-- ☐ **S — ViewportFooter inset bug + Welcome/suggestions empty-state** (`thread/ChatThread.tsx`) — a real scroll-inset bug (tall PermissionCard overlaps the last message → move BottomCard into ViewportFooter) + the welcome screen + suggestion prompts.
-- ☐ **S — Reasoning "Thought for Ns" duration** (`features/chat/messages` + daemon contract) — shows "Reasoning" until a daemon thinking-duration field exists; needs an additive daemon field.
-- ☐ **M — Runtime-gated message actions** (`messages` MessageActionBar) — Reload/Edit-sent/BranchPicker/Feedback/Speak; CLI-resume has no branches/edit and the rest need daemon endpoints. Ships Copy + Export only; don't render disabled buttons.
-- ☐ **S — Multi-image gallery lightbox** (`features/chat/parts`, ImageLightbox keep-ours) — prev/next nav shared by SessionAttachmentsGrid + todos modals; single-image zoom IS restored (`ZoomableImage`).
+- ◐ **S — ViewportFooter + Welcome/suggestions empty-state** (`thread/ChatThread.tsx`) *(verified 2026-06-21)* — `ThreadPrimitive.ViewportFooter` IS used (sticky bottom); gates mount inline via `ChatGateMount`. **Remaining:** the Welcome screen + suggestion prompts empty-state (not built); confirm the tall-PermissionCard scroll-inset overlap is resolved.
+- ◐ **S — Reasoning "Thought for Ns" duration** (`features/chat/messages` + daemon contract) *(verified 2026-06-21)* — the UI is ready (`formatDuration` in `reasoning.tsx`, `ReasoningTrigger` accepts `duration`); `AssistantMessage` passes no `duration` so it shows "Reasoning". **Blocked on** an additive daemon thinking-duration field.
+- ☑ **M — Runtime-gated message actions** (`messages` MessageActionBar) — DONE as scoped *(verified 2026-06-21)*. Ships Copy + ExportMarkdown only; Reload/Edit-sent/BranchPicker/Feedback/Speak are deliberately **omitted** (not disabled) — they need daemon endpoints/agent capabilities that don't exist (those remain a separate daemon-side prerequisite, not undone UI).
+- ◐ **S — Multi-image gallery lightbox** (`features/chat/parts`) *(verified 2026-06-21)* — single-image zoom DONE (`ZoomableImage`); **remaining:** the prev/next multi-image gallery nav shared by SessionAttachmentsGrid + todos modals.
 
 **Chat / sessions runtime**
-- ☐ **M — Migrate deprecated assistant-ui hooks → `useAui`/`useAuiState` selectors** (`sessions/sidebar/{SessionSidebar,SessionRow}.tsx`, `sessions/tags/TagPopoverHost.tsx`, `sessions/ws/use-session-list-router.ts`, any chat sites) — `useThreadListRuntime` isn't publicly exported (sessions use `useAssistantRuntime().threads` as the workaround); several deprecated-path hooks (`useAssistantRuntime`/`useThreadListItemRuntime`/`useThreadRuntime`/`useMessageRuntime`) are in active use.
+- ◐ **M — Migrate deprecated assistant-ui hooks → `useAui`/`useAuiState` selectors** *(verified 2026-06-21)* — **chat is already migrated** (`ChatThread` uses `useAuiState`; no deprecated hooks in `features/chat/`). **Remaining = sessions only:** `sessions/sidebar/{SessionSidebar,SessionRow}.tsx`, `sessions/tags/TagPopoverHost.tsx`, `sessions/ws/use-session-list-router.ts` still use `useAssistantRuntime().threads` (since `useThreadListRuntime` isn't publicly exported) + other deprecated-path hooks.
 - ☐ **M — Restored-permission "stream closed" known gap** (`features/chat/runtime` + daemon restore path) — replying to a restored permission whose CLI died (daemon restart between Q and A) fails with "stream closed"; self-recovers on reload; plain reconnect with the CLI alive works. *Logged, not fixed.*
-- ☐ **S — Toast/badge surfacing of `queued.cancel_failed`** (`controller/chat-thread-state.ts:91`) — explicit no-op in the reducer (prevents silent fallthrough); a global `toast.error` already fires via `routeDaemonEvent`, richer per-event UX deferred.
+- ☑ **S — Toast surfacing of `queued.cancel_failed`** — DONE *(verified 2026-06-21)*. Reducer keeps the explicit no-op (`chat-thread-state.ts`) and `chat-event-router.ts` fires a rich `mfToast.error("Couldn't cancel the queued message", …)`; covered by `chat-thread-controller-cancel-failed.test.ts`.
 
 **Architecture / open decisions**
 - ☐ **M — Shared pure-logic package home** (`@qlan-ro/mainframe-types` vs new `@qlan-ro/mainframe-shared`) — where `convertMessage` + diff math + file-types + `model-tuning` live so desktop & app-tauri share one copy. Currently app-tauri-local/duplicated.
