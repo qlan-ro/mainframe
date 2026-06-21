@@ -41,7 +41,6 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile }: ReviewFile
             key={f.path}
             type="button"
             data-testid={`review-file-row-${f.path}`}
-            title={f.path}
             onClick={() => onSelectFile(f.path)}
             className={`flex h-[22px] w-full items-center gap-2 border-none bg-transparent px-3 text-left text-caption text-muted-foreground hover:bg-accent hover:text-foreground ${isSelected ? 'bg-mf-selection text-foreground' : ''}`}
           >
@@ -50,7 +49,12 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile }: ReviewFile
             </span>
             {/* Filename gets priority (shows fully); the dir path truncates first to make room. */}
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
-              <TruncatedWithTooltip text={fileName} tooltip={f.path} className="max-w-full flex-shrink-0 text-foreground" />
+              <TruncatedWithTooltip
+                text={fileName}
+                tooltip={f.path}
+                className="max-w-full flex-shrink-0 text-foreground"
+                contentClassName="font-mono break-all"
+              />
               {dirPath && <span className="min-w-0 truncate font-mono text-micro text-mf-text-3">{dirPath}</span>}
             </div>
           </button>

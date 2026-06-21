@@ -139,7 +139,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
         >
           <span className="w-[9px] flex-shrink-0" />
           <File size={11} className="flex-shrink-0 text-mf-text-3" />
-          <TruncatedWithTooltip text={entry.name} tooltip={fullPath} className="min-w-0" />
+          <TruncatedWithTooltip text={entry.name} tooltip={fullPath} className="min-w-0" contentClassName="font-mono break-all" />
         </button>
       </FileTreeRowMenu>
     );
@@ -160,7 +160,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
             className={`flex-shrink-0 text-mf-text-3 transition-transform ${open ? 'rotate-90' : ''}`}
           />
           <Folder size={12} className="flex-shrink-0 fill-current text-primary" />
-          <TruncatedWithTooltip text={entry.name} tooltip={fullPath} className="min-w-0" />
+          <TruncatedWithTooltip text={entry.name} tooltip={fullPath} className="min-w-0" contentClassName="font-mono break-all" />
         </button>
       </FileTreeRowMenu>
       {open &&

@@ -87,6 +87,7 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
         text={tab.title}
         tooltip={tab.path ?? tab.title}
         className={['min-w-0 flex-1 text-caption leading-none', tab.mode === 'preview' ? 'italic' : ''].join(' ')}
+        contentClassName="font-mono break-all"
       />
 
       {/* Close button */}

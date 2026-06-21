@@ -186,7 +186,6 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
               key={f.path}
               data-testid={`changes-row-${f.path}`}
               type="button"
-              title={f.path}
               onClick={() => emitSurfaceIntent({ type: 'open-diff', path: f.path })}
               className="flex h-[22px] w-full items-center gap-[7px] rounded-[4px] border-none bg-transparent px-[6px] py-[4px] text-left hover:bg-accent hover:text-foreground"
             >
@@ -195,6 +194,7 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
                 text={basename(f.path)}
                 tooltip={f.path}
                 className="flex-1 text-caption text-foreground"
+                contentClassName="font-mono break-all"
               />
               <span className="truncate font-mono text-micro text-mf-text-3">{dirname(f.path)}</span>
               {f.status && (
