@@ -8,6 +8,9 @@ import { useState, useEffect } from 'react';
 import { Folder, GitCompare } from 'lucide-react';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { onSurfaceIntent } from '@/store/surface-intents';
+import { cn } from '@/lib/utils';
+import { useTheme } from '@/store/theme';
+import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { ChangesPanel } from './ChangesPanel';
 import { FileTree } from './FileTree';
 import { TasksDrawer } from '../tasks/TasksDrawer';
@@ -20,6 +23,8 @@ const SEG_BASE = 'flex h-[22px] flex-1 items-center justify-center gap-[5px] rou
 
 export function InspectorPane({ port }: { port: number }) {
   const { projectId, chatId } = useActiveIdentity();
+  const windowStyle = useTheme((s) => s.windowStyle);
+  const geo = windowStyleGeometry(windowStyle);
   const [tab, setTab] = useState<Tab>('files');
   const startTodoSession = useStartTodoSession(port, projectId);
   const changesCount = useChangesCount(port, projectId, chatId);
@@ -37,7 +42,10 @@ export function InspectorPane({ port }: { port: number }) {
   return (
     <aside
       data-testid="inspector-pane"
-      className="flex w-[280px] flex-shrink-0 flex-col overflow-hidden rounded-[11px] bg-background shadow-[var(--mf-shadow-panel)]"
+      className={cn(
+        'flex w-[280px] flex-shrink-0 flex-col overflow-hidden font-sans text-foreground',
+        geo.sidebar,
+      )}
     >
       {/* Files / Changes tabs */}
       <div className="flex-shrink-0 pt-[10px] px-[12px] pb-[8px]">

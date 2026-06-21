@@ -6,17 +6,28 @@
  * Hardcoded expected values — no re-implementation of the production statusClass helper.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ChangesPanel } from '../ChangesPanel';
 
 vi.mock('@/lib/api/git', () => ({
   getGitStatus: vi.fn(),
+  getBranchDiffs: vi.fn(),
+}));
+vi.mock('@/lib/api/files', () => ({
+  getSessionFiles: vi.fn(),
+}));
+// Inert daemon event bus — the live auto-refresh subscription must not fire in tests.
+vi.mock('@/lib/daemon/ws-client', () => ({
+  daemonWs: { onEvent: vi.fn(() => () => {}) },
 }));
 
 // We import AFTER the mock so we get the mocked version
-import { getGitStatus } from '@/lib/api/git';
+import { getGitStatus, getBranchDiffs } from '@/lib/api/git';
+import { getSessionFiles } from '@/lib/api/files';
 
 const mockGetGitStatus = vi.mocked(getGitStatus);
+const mockGetBranchDiffs = vi.mocked(getBranchDiffs);
+const mockGetSessionFiles = vi.mocked(getSessionFiles);
 
 // Minimal props
 const BASE_PROPS = { port: 31415, projectId: 'proj-1' };
@@ -68,5 +79,50 @@ describe('ChangesPanel status tokens', () => {
     resolve([{ path: 'file.ts', status: 'M' }]);
     await waitFor(() => expect(screen.queryByText('Loading…')).toBeNull());
     expect(screen.getByTestId('changes-status-file.ts')).toBeInTheDocument();
+  });
+});
+
+describe('ChangesPanel scope modes', () => {
+  it('default (Uncommitted) loads git status, not session or branch sources', async () => {
+    mockGetGitStatus.mockResolvedValue([{ path: 'a.ts', status: 'M' }]);
+    render(<ChangesPanel {...BASE_PROPS} chatId="c1" />);
+    await screen.findByTestId('changes-row-a.ts');
+    expect(mockGetGitStatus).toHaveBeenCalledWith(31415, 'proj-1', 'c1');
+    expect(mockGetSessionFiles).not.toHaveBeenCalled();
+    expect(mockGetBranchDiffs).not.toHaveBeenCalled();
+  });
+
+  it('Session mode loads session files and shows rows without a status badge', async () => {
+    mockGetGitStatus.mockResolvedValue([]);
+    mockGetSessionFiles.mockResolvedValue(['src/touched.ts']);
+    render(<ChangesPanel {...BASE_PROPS} chatId="c1" />);
+    fireEvent.click(screen.getByTestId('changes-mode-session'));
+    await screen.findByTestId('changes-row-src/touched.ts');
+    expect(mockGetSessionFiles).toHaveBeenCalledWith(31415, 'c1');
+    // Session rows carry no per-file git status.
+    expect(screen.queryByTestId('changes-status-src/touched.ts')).toBeNull();
+  });
+
+  it('Session mode with no active chat shows the empty-session hint', async () => {
+    mockGetGitStatus.mockResolvedValue([]);
+    render(<ChangesPanel {...BASE_PROPS} />);
+    fireEvent.click(screen.getByTestId('changes-mode-session'));
+    expect(await screen.findByText('Open a session to view its changes.')).toBeInTheDocument();
+    expect(mockGetSessionFiles).not.toHaveBeenCalled();
+  });
+
+  it('Branch mode loads branch diffs and shows the comparison line', async () => {
+    mockGetGitStatus.mockResolvedValue([]);
+    mockGetBranchDiffs.mockResolvedValue({
+      branch: 'feat/x',
+      baseBranch: 'main',
+      mergeBase: 'abc',
+      files: [{ path: 'b.ts', status: 'A' }],
+    });
+    render(<ChangesPanel {...BASE_PROPS} chatId="c1" />);
+    fireEvent.click(screen.getByTestId('changes-mode-branch'));
+    await screen.findByTestId('changes-row-b.ts');
+    expect(mockGetBranchDiffs).toHaveBeenCalledWith(31415, 'proj-1', 'c1');
+    expect(screen.getByText('Comparing feat/x against main')).toBeInTheDocument();
   });
 });

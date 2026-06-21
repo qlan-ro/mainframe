@@ -37,6 +37,15 @@ interface FileContentResponse {
   content: string;
 }
 
+/** Repo-relative paths the agent touched during a chat session (Changes "Session" mode). */
+export async function getSessionFiles(port: number, chatId: string): Promise<string[]> {
+  const data = await request<{ files: string[] }>(
+    'GET',
+    `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/session-files`,
+  );
+  return data.files ?? [];
+}
+
 /**
  * Read a project file's UTF-8 content via the daemon (worktree-aware). Accepts
  * a repo-relative path (file tree) OR an absolute path under the project

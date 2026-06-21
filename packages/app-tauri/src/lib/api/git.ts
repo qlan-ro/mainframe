@@ -179,3 +179,18 @@ export const deleteWorktree = (
     worktreePath,
     ...(branchName ? { branchName } : {}),
   });
+
+// ---------------------------------------------------------------------------
+// Branch diffs (Changes tab — "Branch" mode)
+// ---------------------------------------------------------------------------
+
+/** Files differing between the active branch and its base branch. */
+export interface BranchDiffResponse {
+  branch: string | null;
+  baseBranch: string | null;
+  mergeBase: string | null;
+  files: { path: string; status: string; oldPath?: string }[];
+}
+
+export const getBranchDiffs = (port: number, projectId: string, chatId?: string): Promise<BranchDiffResponse> =>
+  request('GET', `${projGit(port, projectId)}/branch-diffs${chatQs(chatId)}`);

@@ -4,14 +4,19 @@ import type { FileTreeEntry } from '@/lib/api/files';
 
 const getFileTree = vi.fn();
 const mockEmit = vi.fn();
+const mockReveal = vi.fn();
+const mockClipboard = vi.fn();
 
 vi.mock('@/lib/api/files', () => ({ getFileTree: (...a: unknown[]) => getFileTree(...a) }));
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
+vi.mock('@/lib/tauri/bridge', () => ({ showItemInFolder: (...a: unknown[]) => mockReveal(...a) }));
+vi.mock('@/lib/editor/copy-reference', () => ({ writeToClipboard: (...a: unknown[]) => mockClipboard(...a) }));
 
 // alias for backward compat within this file
 const emitSurfaceIntent = mockEmit;
 
 import { FileTree } from '../FileTree';
+import { useActiveBasesStore } from '@/store/active-bases-store';
 
 const dir = (name: string, path: string): FileTreeEntry => ({ name, path, type: 'directory' });
 const file = (name: string, path: string): FileTreeEntry => ({ name, path, type: 'file' });
@@ -72,5 +77,40 @@ describe('FileTree — context menu', () => {
     const menuItem = await screen.findByTestId('file-tree-find-in-folder');
     fireEvent.click(menuItem);
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-find-in-path', scopePath: 'src', scopeType: 'directory' });
+  });
+});
+
+describe('FileTree — context menu copy/reveal actions', () => {
+  beforeEach(() => {
+    getFileTree.mockReset();
+    mockEmit.mockReset();
+    mockReveal.mockReset();
+    mockClipboard.mockReset();
+    // Active workspace base → absolute paths are base + '/' + relative.
+    useActiveBasesStore.setState({ bases: { worktreePath: '/wt' } });
+  });
+
+  it('Copy Path writes the absolute on-disk path', async () => {
+    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
+    render(<FileTree port={1} projectId="p1" />);
+    fireEvent.contextMenu(await screen.findByTestId('file-tree-row-src/a.ts'));
+    fireEvent.click(await screen.findByTestId('file-tree-copy-path'));
+    expect(mockClipboard).toHaveBeenCalledWith('/wt/src/a.ts');
+  });
+
+  it('Copy Relative Path writes the repo-relative path', async () => {
+    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
+    render(<FileTree port={1} projectId="p1" />);
+    fireEvent.contextMenu(await screen.findByTestId('file-tree-row-src/a.ts'));
+    fireEvent.click(await screen.findByTestId('file-tree-copy-relative-path'));
+    expect(mockClipboard).toHaveBeenCalledWith('src/a.ts');
+  });
+
+  it('Reveal in Finder reveals the absolute path', async () => {
+    getFileTree.mockResolvedValueOnce([dir('src', 'src')]);
+    render(<FileTree port={1} projectId="p1" />);
+    fireEvent.contextMenu(await screen.findByTestId('file-tree-row-src'));
+    fireEvent.click(await screen.findByTestId('file-tree-reveal'));
+    expect(mockReveal).toHaveBeenCalledWith('/wt/src');
   });
 });
