@@ -294,7 +294,7 @@ A line-by-line code audit (5 parallel agents over `packages/app-tauri/src` + `sr
 
 **Dropped-by-design (⊘, not gaps):** `zone/` system, `store/ui.ts`, `composer-drafts.ts` module (draft state lives in the sessions runtime), `SkillEditorTab` (skills = plain files), the desktop `input.tsx`/`tabs.tsx`/zone-plugin-bridge.
 
-**Genuinely NOT-STARTED (the real remaining work):** Plugins UI re-platform (`features/plugins/` does not exist) · Add-project pill + flow (`lib/api/projects.ts` has only get/remove) · Multi-window infra · the Tauri `externalBin` sidecar bundle + signing/notarization · shared pure-logic package extraction (still app-tauri-local) · restored-permission "stream closed" fix.
+**Genuinely NOT-STARTED (the real remaining work):** Plugins UI re-platform (`features/plugins/` does not exist) · Multi-window infra · the Tauri `externalBin` sidecar bundle + signing/notarization · shared pure-logic package extraction (still app-tauri-local) · restored-permission "stream closed" fix.
 
 **Still open DECISIONS (not code):** shared-package home · permission-card placement (inline-at-tail default) · Phase-2 Rust-daemon go/no-go · Electron retire-vs-coexist · mobile-contract governance.
 
@@ -354,8 +354,8 @@ User UX/polish notes from a walkthrough, each investigated against the code + ar
 
 **Layout / sidebar chrome** *(deferred from the built sessions sidebar)*
 - ☑ **S — SessionSidebar group-header "more" popover** — DONE (was already built + tested; tracker was stale, 2026-06-08). `SessionsMoreMenu` = shadcn DropdownMenu → Archived sessions + Import external sessions, each opening its dialog (`ArchivedSessionsDialog`/`ImportSessionsDialog`); covered by `SessionsMoreMenu.test.tsx` + both dialog tests.
-- ☐ **M — Ghosted/dashed "Add project" pill** (`ProjectFilterPillBar.tsx:10-11`) — dashed add-project button in the filter bar; inert without the add-project surface.
-- ☐ **M — Add-project flow** (`features/sessions/` + `lib/api/projects.ts`) — directory picker + project create/register that makes the "Add project" pill live.
+- ☑ **M — Ghosted/dashed "Add project" pill** (`ProjectFilterPillBar.tsx`) — DONE (2026-06-22). Dashed `sessions-add-project` pill rendered when `onAddProject` is provided; presentational (no daemon calls in the bar).
+- ☑ **M — Add-project flow** (`features/sessions/use-add-project.ts` + `lib/api/projects.ts`) — DONE (2026-06-22). `createProject` raw-fetch client (200 new / 409 already-registered / error) + `useAddProject(reloadProjects)` hook (pick directory → create → reloadProjects → toast; **filter untouched** per decision; cancel = no-op), wired in `SessionSidebar` off its own `useProjects` instance. Register-existing-only (no new-folder). 16 tests (createProject 6 + useAddProject 4 + pill 3 + regression). **NOT live-verified** — eyeball the pick → add → row-appears flow.
 - ☑ **L — Surface rail (Chat / Files / Run vertical rail)** — DONE *(verified 2026-06-21)*. `layout/SurfaceRail.tsx` wired: Chat = permanent floor (lit, non-toggleable), Files/Run toggle via `useLayoutStore.toggleSurface`; glyphs from `surface-icons.tsx`.
 - ☑ **M — Bottom Context/Skills/Agents tabbed panel + resize handle** (`features/context-panel/` mounted in `SessionSidebar`) — **DONE (2026-06-21)** (see the Wrap-up punch-list entry). No daemon endpoint needed — Skills/Agents reuse `lib/api/{skills,agents}` with `adapterId='claude'`.
 - ◐ **M — Window chrome / traffic-lights + floating-panel** — traffic lights (`trafficLightPosition {x:20,y:30}`) + **floating panels** (`AppShell` `p-2 gap-2`) DONE (2026-06-08). *Remaining:* the warm-gradient **window background** behind the floating panels (today it's flat `bg-mf-window`, not the prototype's radial gradient).
