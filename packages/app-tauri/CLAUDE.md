@@ -44,6 +44,10 @@ The per-area pointers below are where to look in step 1:
 - **`lib/tauri/` is the only Tauri-aware module** — all `window.mainframe.*` equivalents live there (Rust commands/events).
 - **Pure logic** (convertMessage, diff math, file-types) goes in a shared bundleable location, **not** the `mainframe-core` *sidecar process*.
 
+## Surface model (Chat · Files · Run)
+- **Dynamic floor — NOT a hardcoded chat floor (decision corrected 2026-06-21).** The non-dismissable "floor" is **whichever surface is the *last lit one*** (`isFloor = lit && litCount === 1`), per the artboard (`02-chrome.jsx:557`), not `id === 'chat'`. **Chat is hideable** like Files/Run: the chat surface header carries a **"Hide Chat"** control (`eye.slash` glyph → `toggleSurface('chat')`, `04-engine.jsx:1040-1041`), and Files/Run headers carry `Close {label}` (`04-engine.jsx:938`). If a toggle would empty the row, fall back to showing chat (`04-engine.jsx:558`; mirrors `store/layout.ts` restore-`['chat']`).
+  - **This overrides the earlier "chat = permanent floor / non-toggleable" decision** still encoded in `layout/SurfaceRail.tsx:27` (`isFloor = id === 'chat'`), `store/layout.ts:191` (`toggleSurface('chat')` no-op), and `store/__tests__/layout.test.ts`. The 2026-06-17 artboard-parity audit already flagged it as a Major drift (lines 517-522); a prior dynamic-floor attempt was reverted as "do-no-harm" against the then-current decision. **Build (pending):** dynamic `isFloor`, allow `toggleSurface('chat')`, add the Hide-Chat header button, update the layout test. Tracked in `MIGRATION-TRACKER.md` → Wrap-up punch-list.
+
 ## Component layer & theme
 - **shadcn/ui**, not raw Radix. Build the `components/ui/` primitives once; features compose them.
 - Theme via `mainframe-theme.css` tokens. **Token traps:** never use the `/opacity` modifier on CSS-var colors; use only real `mf-*` token names.
