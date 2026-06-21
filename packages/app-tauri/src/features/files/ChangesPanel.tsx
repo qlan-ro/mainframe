@@ -8,7 +8,7 @@
  * Auto-refreshes on the daemon's `context.updated` event and on window focus.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, RotateCw } from 'lucide-react';
+import { File, RotateCw } from 'lucide-react';
 import { getGitStatus, getBranchDiffs } from '@/lib/api/git';
 import { getSessionFiles } from '@/lib/api/files';
 import { gitStatusKind } from '@/lib/git-status-kind';
@@ -127,9 +127,9 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
 
   return (
     <div data-testid="changes-panel" className="flex flex-col">
-      {/* Scope switcher */}
-      <div className="flex-shrink-0 px-[12px] pt-[4px] pb-[8px]">
-        <div className="flex items-center gap-0.5 rounded-[6px] bg-mf-chip p-0.5">
+      {/* Scope switcher + refresh (one row, per artboard) */}
+      <div className="flex flex-shrink-0 items-center gap-[5px] px-[12px] pt-[4px] pb-[8px]">
+        <div className="flex flex-1 items-center gap-0.5 rounded-[6px] bg-mf-chip p-0.5">
           {SCOPE_MODES.map(({ id, label }) => (
             <button
               key={id}
@@ -140,20 +140,13 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
               className={`${SCOPE_BTN} ${
                 id === mode
                   ? 'bg-mf-tab-active font-semibold text-foreground shadow-[var(--mf-shadow-rail-active)]'
-                  : 'font-medium text-mf-text-3 hover:text-foreground'
+                  : 'font-medium text-muted-foreground hover:text-foreground'
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Header: count + refresh */}
-      <div className="flex flex-shrink-0 items-center px-[12px] pb-[6px]">
-        <span className="flex-1 text-micro text-mf-text-3">
-          {rows !== null && !sessionNoChat ? `${rows.length} changed ${rows.length === 1 ? 'file' : 'files'}` : ''}
-        </span>
         <button
           data-testid="changes-refresh"
           type="button"
@@ -165,12 +158,18 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
         </button>
       </div>
 
-      {/* Branch comparison line */}
-      {mode === 'branch' && branch?.branch && branch?.baseBranch && (
-        <div className="px-[12px] pb-[6px] font-mono text-micro text-primary">
-          Comparing {branch.branch} against {branch.baseBranch}
-        </div>
-      )}
+      {/* Count + (branch comparison, right-aligned) */}
+      <div className="flex flex-shrink-0 items-center gap-[6px] px-[12px] pb-[6px]">
+        <span className="text-micro text-mf-text-3">
+          {rows !== null && !sessionNoChat ? `${rows.length} changed ${rows.length === 1 ? 'file' : 'files'}` : ''}
+        </span>
+        <div className="flex-1" />
+        {mode === 'branch' && branch?.branch && branch?.baseBranch && (
+          <span className="truncate font-mono text-micro text-primary">
+            {branch.branch} ↔ {branch.baseBranch}
+          </span>
+        )}
+      </div>
 
       {/* Body */}
       {sessionNoChat && <div className="px-3 py-4 text-caption text-muted-foreground">Open a session to view its changes.</div>}
@@ -180,7 +179,7 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
         <div className="px-3 py-4 text-caption text-muted-foreground">No changes.</div>
       )}
       {!error && !sessionNoChat && rows !== null && rows.length > 0 && (
-        <div className="px-[6px] py-1">
+        <div className="px-[6px] pb-[6px]">
           {rows.map((f) => (
             <button
               key={f.path}
@@ -188,11 +187,11 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
               type="button"
               title={f.path}
               onClick={() => emitSurfaceIntent({ type: 'open-diff', path: f.path })}
-              className="flex h-[22px] w-full items-center gap-2 rounded-[4px] border-none bg-transparent px-[6px] py-[4px] text-left hover:bg-accent hover:text-foreground"
+              className="flex h-[22px] w-full items-center gap-[7px] rounded-[4px] border-none bg-transparent px-[6px] py-[4px] text-left hover:bg-accent hover:text-foreground"
             >
-              <FileText size={10} className="flex-shrink-0 text-mf-text-3" />
+              <File size={10} className="flex-shrink-0 text-mf-text-3" />
               <span className="flex-1 truncate text-caption text-foreground">{basename(f.path)}</span>
-              <span className="truncate font-mono text-micro text-muted-foreground">{dirname(f.path)}</span>
+              <span className="truncate font-mono text-micro text-mf-text-3">{dirname(f.path)}</span>
               {f.status && (
                 <span
                   data-testid={`changes-status-${f.path}`}

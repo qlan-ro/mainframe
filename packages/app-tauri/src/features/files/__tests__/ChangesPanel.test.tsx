@@ -123,6 +123,6 @@ describe('ChangesPanel scope modes', () => {
     fireEvent.click(screen.getByTestId('changes-mode-branch'));
     await screen.findByTestId('changes-row-b.ts');
     expect(mockGetBranchDiffs).toHaveBeenCalledWith(31415, 'proj-1', 'c1');
-    expect(screen.getByText('Comparing feat/x against main')).toBeInTheDocument();
+    expect(screen.getByText('feat/x ↔ main')).toBeInTheDocument();
   });
 });

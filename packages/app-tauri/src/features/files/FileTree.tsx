@@ -12,7 +12,7 @@
  * subsequent remount does not re-trigger the reveal.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, FileText, Folder, RotateCw } from 'lucide-react';
+import { ChevronRight, File, Folder, RotateCw } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
@@ -119,7 +119,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
           onClick={() => emitSurfaceIntent({ type: 'open-file', path: entry.path })}
           style={{ paddingLeft: indent }}
           className={[
-            'flex h-[22px] w-full items-center gap-[5px] border-l-2 border-none pr-[12px] text-left text-label text-muted-foreground hover:bg-accent hover:text-foreground',
+            'flex h-[22px] w-full items-center gap-[5px] border-l-2 border-solid pr-[12px] text-left text-label text-muted-foreground hover:bg-accent hover:text-foreground',
             isSelected
               ? 'border-l-primary bg-accent font-semibold text-foreground'
               : 'border-l-transparent',
@@ -129,7 +129,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
             .join(' ')}
         >
           <span className="w-[9px] flex-shrink-0" />
-          <FileText size={11} className="flex-shrink-0 text-mf-text-3" />
+          <File size={11} className="flex-shrink-0 text-mf-text-3" />
           <span className="truncate">{entry.name}</span>
         </button>
       </FileTreeRowMenu>
