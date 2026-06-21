@@ -82,7 +82,7 @@ export const ReadFileCard: ToolCallMessagePartComponent = ({ toolCallId, args, r
   const trailing = (
     <>
       {metaLabel && <span className="shrink-0 font-mono text-micro text-mf-text-4">{metaLabel}</span>}
-      <StatusDot result={result} isError={isError} label />
+      <StatusDot result={result} isError={isError} />
     </>
   );
 

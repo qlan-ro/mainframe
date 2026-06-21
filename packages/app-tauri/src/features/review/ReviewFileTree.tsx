@@ -8,6 +8,7 @@
  * codes (the mapper already ran).
  */
 import { KIND_LABEL } from '@/lib/git-status-kind';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import type { ReviewFile } from './git-status-to-files';
 
 const BADGE_CLASS: Record<ReviewFile['status'], string> = {
@@ -33,6 +34,8 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile }: ReviewFile
       {files.map((f) => {
         const badgeClass = BADGE_CLASS[f.status];
         const isSelected = selectedFile === f.path;
+        const fileName = f.path.split('/').pop() ?? f.path;
+        const dirPath = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : '';
         return (
           <button
             key={f.path}
@@ -45,8 +48,11 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile }: ReviewFile
             <span className={`w-3 flex-shrink-0 text-center font-mono text-micro ${badgeClass}`}>
               {KIND_LABEL[f.status]}
             </span>
-            <span className="truncate text-foreground">{f.path.split('/').pop() ?? f.path}</span>
-            <span className="ml-auto truncate font-mono text-micro text-mf-text-4">{f.path}</span>
+            {/* Filename gets priority (shows fully); the dir path truncates first to make room. */}
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <TruncatedWithTooltip text={fileName} tooltip={f.path} className="max-w-full flex-shrink-0 text-foreground" />
+              {dirPath && <span className="min-w-0 truncate font-mono text-micro text-mf-text-3">{dirPath}</span>}
+            </div>
           </button>
         );
       })}

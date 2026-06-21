@@ -29,6 +29,7 @@ import { SessionRowMeta } from './SessionRowMeta';
 import { SessionRowRename } from './SessionRowRename';
 import { SessionContextMenu } from './SessionContextMenu';
 import { useTagPopoverTarget } from '../tags/use-tag-popover-target';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 function dotClass(badge: SessionBadge): string {
   switch (badge.base) {
@@ -259,19 +260,30 @@ function SessionRowInner({
                     onCancel={() => setIsRenaming(false)}
                   />
                 ) : (
-                  <span
-                    data-testid="sessions-row-title"
-                    className={[
-                      'flex-1 truncate text-body tracking-normal',
-                      // Selected (native data-active) reads as semibold/foreground too, matching
-                      // the artboard `sel || unread` rule — applied via CSS so it tracks the
-                      // native selection without a JS hook.
-                      'group-data-[active=true]:font-semibold group-data-[active=true]:text-foreground',
-                      isUnread || custom.pinned ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground',
-                    ].join(' ')}
-                  >
-                    {title}
-                  </span>
+                  <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        data-testid="sessions-row-title"
+                        className={[
+                          'flex-1 truncate text-body tracking-normal',
+                          // Selected (native data-active) reads as semibold/foreground too, matching
+                          // the artboard `sel || unread` rule — applied via CSS so it tracks the
+                          // native selection without a JS hook.
+                          'group-data-[active=true]:font-semibold group-data-[active=true]:text-foreground',
+                          isUnread || custom.pinned
+                            ? 'font-semibold text-foreground'
+                            : 'font-medium text-muted-foreground',
+                        ].join(' ')}
+                      >
+                        {title}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[min(60ch,80vw)] break-words">
+                      {title}
+                    </TooltipContent>
+                  </Tooltip>
+                  </TooltipProvider>
                 )}
                 <RelativeTime updatedAt={custom.updatedAt} />
                 <RowHoverActions

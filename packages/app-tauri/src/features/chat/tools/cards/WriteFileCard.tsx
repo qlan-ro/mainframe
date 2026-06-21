@@ -10,6 +10,7 @@
  * Native assistant-ui contract: `ToolCallMessagePartComponent`.
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
+import { PlusIcon } from 'lucide-react';
 import {
   isStructuredResult,
   resolveResultText,
@@ -121,7 +122,7 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
 
   const tile = (
     <FamilyTile color="var(--mf-success)" bg="var(--mf-success-tint)">
-      +
+      <PlusIcon size={13} />
     </FamilyTile>
   );
 
@@ -132,7 +133,7 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
           +{stats.added}
         </span>
       )}
-      <StatusDot result={result} isError={isError} label />
+      <StatusDot result={result} isError={isError} />
     </>
   );
 

@@ -23,6 +23,7 @@ import { useSurfaceDragStore } from './use-surface-drag';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useTabsStore } from '@/store/tabs';
 import { layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import type { EditorTabModel } from '@/store/tabs';
 
 const ACTION_BTN =
@@ -81,15 +82,12 @@ function TabPill({ tab, isActive, onActivate, onClose, onPromote }: TabPillProps
       {/* Per-kind icon */}
       {tabGlyph(tab, isActive)}
 
-      {/* Title — italic when preview */}
-      <span
-        className={[
-          'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-caption leading-none',
-          tab.mode === 'preview' ? 'italic' : '',
-        ].join(' ')}
-      >
-        {tab.title}
-      </span>
+      {/* Title — italic when preview; full path on hover */}
+      <TruncatedWithTooltip
+        text={tab.title}
+        tooltip={tab.path ?? tab.title}
+        className={['min-w-0 flex-1 text-caption leading-none', tab.mode === 'preview' ? 'italic' : ''].join(' ')}
+      />
 
       {/* Close button */}
       <button

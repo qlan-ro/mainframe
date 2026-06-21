@@ -11,7 +11,7 @@
  * prototype before each test that needs it.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { FileTreeEntry } from '@/lib/api/files';
 import { useFilesStore } from '@/store/files';
 
@@ -76,6 +76,25 @@ describe('FileTree reveal-target: ancestor expansion', () => {
     render(<FileTree port={1} projectId="p1" />);
 
     await waitFor(() => expect(screen.queryByTestId('file-tree-row-lib/sub/deep.ts')).not.toBeNull());
+  });
+});
+
+describe('FileTree reveal-target: collapse after reveal (regression)', () => {
+  it('lets the user collapse a folder that a reveal auto-expanded (no re-open latch)', async () => {
+    getFileTree.mockResolvedValueOnce([dir('src', 'src')]); // root
+    getFileTree.mockResolvedValueOnce([file('util.ts', 'src/util.ts')]); // src children
+
+    // Reveal a file under src/ — src/ auto-expands and stays an ancestor of the target.
+    useFilesStore.getState().setRevealTarget('src/util.ts');
+    render(<FileTree port={1} projectId="p1" />);
+    await waitFor(() => expect(screen.queryByTestId('file-tree-row-src/util.ts')).not.toBeNull());
+
+    // User collapses src/. The auto-expand effect re-fires (open→false) but must
+    // NOT re-open it — otherwise the folder is un-collapsible.
+    fireEvent.click(screen.getByTestId('file-tree-row-src'));
+    await waitFor(() => expect(screen.queryByTestId('file-tree-row-src/util.ts')).toBeNull());
+    // Still collapsed after the effect has had a chance to re-run.
+    expect(screen.queryByTestId('file-tree-row-src/util.ts')).toBeNull();
   });
 });
 

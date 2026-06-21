@@ -224,7 +224,7 @@ export const EditFileCard: ToolCallMessagePartComponent = (part) => {
     <>
       <StatPills added={state.addedCount} removed={state.removedCount} />
       <OpenDiffButton onOpenDiff={state.handleOpenDiff} />
-      <StatusDot result={result} isError={isError} label />
+      <StatusDot result={result} isError={isError} />
     </>
   );
 

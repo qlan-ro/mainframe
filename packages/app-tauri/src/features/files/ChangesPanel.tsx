@@ -14,6 +14,7 @@ import { getSessionFiles } from '@/lib/api/files';
 import { gitStatusKind } from '@/lib/git-status-kind';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { daemonWs } from '@/lib/daemon/ws-client';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 
 type ScopeMode = 'session' | 'uncommitted' | 'branch';
 
@@ -190,7 +191,11 @@ export function ChangesPanel({ port, projectId, chatId }: ChangesPanelProps) {
               className="flex h-[22px] w-full items-center gap-[7px] rounded-[4px] border-none bg-transparent px-[6px] py-[4px] text-left hover:bg-accent hover:text-foreground"
             >
               <File size={10} className="flex-shrink-0 text-mf-text-3" />
-              <span className="flex-1 truncate text-caption text-foreground">{basename(f.path)}</span>
+              <TruncatedWithTooltip
+                text={basename(f.path)}
+                tooltip={f.path}
+                className="flex-1 text-caption text-foreground"
+              />
               <span className="truncate font-mono text-micro text-mf-text-3">{dirname(f.path)}</span>
               {f.status && (
                 <span

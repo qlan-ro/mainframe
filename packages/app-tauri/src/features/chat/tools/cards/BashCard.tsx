@@ -136,7 +136,7 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
               {command}
             </TooltipContent>
           </Tooltip>
-          <StatusDot result={result} isError={isError} label />
+          <StatusDot result={result} isError={isError} />
         </CollapsibleTrigger>
 
         {description && (

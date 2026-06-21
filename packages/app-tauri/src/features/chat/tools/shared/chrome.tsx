@@ -34,40 +34,16 @@ import { cn } from '@/lib/utils';
 
 /**
  * Three-state dot: pending (pulsing muted), error (destructive), success (mf-success).
- * `result === undefined` = the tool call is still in flight.
- *
- * When `label` is true, renders a short text label beside the dot:
- * "Running" / "Failed" / "Done".
+ * `result === undefined` = the tool call is still in flight. **Dot only** — the
+ * coloured dot alone conveys running/failed/done (decided 2026-06-21; the
+ * "Running"/"Failed"/"Done" word was redundant).
  */
-export function StatusDot({
-  result,
-  isError,
-  label,
-}: {
-  result: unknown;
-  isError: boolean | undefined;
-  label?: boolean;
-}) {
-  if (result === undefined) {
-    return (
-      <span className="inline-flex items-center gap-1 shrink-0">
-        <span className="w-2 h-2 rounded-full bg-muted-foreground opacity-40 animate-pulse" />
-        {label && <span className="text-micro font-semibold text-muted-foreground">Running</span>}
-      </span>
-    );
-  }
-  if (isError) {
-    return (
-      <span className="inline-flex items-center gap-1 shrink-0">
-        <span className="w-2 h-2 rounded-full bg-destructive" />
-        {label && <span className="text-micro font-semibold text-destructive">Failed</span>}
-      </span>
-    );
-  }
+export function StatusDot({ result, isError }: { result: unknown; isError: boolean | undefined }) {
+  const dotClass =
+    result === undefined ? 'bg-muted-foreground opacity-40 animate-pulse' : isError ? 'bg-destructive' : 'bg-mf-success';
   return (
-    <span className="inline-flex items-center gap-1 shrink-0">
-      <span className="w-2 h-2 rounded-full bg-mf-success" />
-      {label && <span className="text-micro font-semibold text-mf-success">Done</span>}
+    <span className="inline-flex items-center shrink-0">
+      <span className={`w-2 h-2 rounded-full ${dotClass}`} />
     </span>
   );
 }

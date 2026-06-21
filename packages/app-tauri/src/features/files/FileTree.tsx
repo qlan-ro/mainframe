@@ -18,6 +18,7 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
 import { useTabsStore } from '@/store/tabs';
 import { useActiveBasesStore } from '@/store/active-bases-store';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { FileTreeRowMenu } from './FileTreeRowMenu';
 
 /** Join an absolute base with a repo-relative path; falls back to the relative path when no base is known. */
@@ -91,14 +92,22 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
     }
   }, [open, fetchChildren]);
 
-  // Auto-expand ancestor directories to reach the reveal target.
+  // Auto-expand ancestor directories to reach the reveal target — but only ONCE
+  // per reveal. The latch is load-bearing: without it, collapsing an ancestor of
+  // the last-revealed file re-fires this effect (open flips to false while the
+  // node is still a reveal-ancestor) and immediately re-opens it, making the
+  // folder impossible to collapse. Keyed on revealPath so a NEW reveal re-arms it.
+  const autoExpandedRevealRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isRevealAncestor || open) return;
+    if (!isRevealAncestor || revealPath === null) return;
+    if (autoExpandedRevealRef.current === revealPath) return;
+    autoExpandedRevealRef.current = revealPath;
+    if (open) return;
     setOpen(true);
     fetchChildren().catch((err: unknown) => {
       console.warn('[FileTree] reveal auto-expand failed', entry.path, err);
     });
-  }, [isRevealAncestor, open, fetchChildren, entry.path]);
+  }, [isRevealAncestor, revealPath, open, fetchChildren, entry.path]);
 
   // Scroll and highlight the target row once it's mounted in the DOM.
   useEffect(() => {
@@ -130,7 +139,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
         >
           <span className="w-[9px] flex-shrink-0" />
           <File size={11} className="flex-shrink-0 text-mf-text-3" />
-          <span className="truncate">{entry.name}</span>
+          <TruncatedWithTooltip text={entry.name} tooltip={fullPath} className="min-w-0" />
         </button>
       </FileTreeRowMenu>
     );
@@ -151,7 +160,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
             className={`flex-shrink-0 text-mf-text-3 transition-transform ${open ? 'rotate-90' : ''}`}
           />
           <Folder size={12} className="flex-shrink-0 fill-current text-primary" />
-          <span className="truncate">{entry.name}</span>
+          <TruncatedWithTooltip text={entry.name} tooltip={fullPath} className="min-w-0" />
         </button>
       </FileTreeRowMenu>
       {open &&
