@@ -28,7 +28,13 @@
  *       rendered; UserAttachments always present.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+
+// Controllable retry spy for the chat-extras seam (hoisted for vi.mock).
+const { retryMessageSpy } = vi.hoisted(() => ({ retryMessageSpy: vi.fn() }));
+vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+  useChatExtras: () => ({ retryMessage: retryMessageSpy }),
+}));
 
 // ---------------------------------------------------------------------------
 // Mock @assistant-ui/react
@@ -179,6 +185,21 @@ describe('UserMessage — H5: send failure state', () => {
     renderUserMessage();
     expect(screen.getByTestId('chat-user-message-send-failed')).toBeInTheDocument();
     expect(screen.getByTestId('chat-user-message-send-failed')).toHaveTextContent('Failed to send');
+  });
+
+  it('renders a Retry button on send failure that calls retryMessage with the clientId', () => {
+    __messageFixture = makeFixture({
+      mainframe: { pending: true, clientId: 'c-1', error: 'Network timeout' },
+    });
+    renderUserMessage();
+    fireEvent.click(screen.getByTestId('chat-user-message-retry'));
+    expect(retryMessageSpy).toHaveBeenCalledWith('c-1');
+  });
+
+  it('does NOT render a Retry button for a normal (non-error) message', () => {
+    __messageFixture = makeFixture({ mainframe: undefined });
+    renderUserMessage();
+    expect(screen.queryByTestId('chat-user-message-retry')).not.toBeInTheDocument();
   });
 
   it('does NOT render the send-failed indicator for a normal (non-error) message', () => {

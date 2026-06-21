@@ -256,6 +256,26 @@ export class ChatThreadController {
     }
   }
 
+  /**
+   * Re-send a failed optimistic user message (the "Failed to send" indicator).
+   * Text-only: attachments are not re-uploaded — the common failure is the live
+   * send, and re-deriving the original upload items isn't tracked on the pending.
+   */
+  public async retryMessage(clientId: string): Promise<void> {
+    const pending = this.state.pendingUserMessages[clientId];
+    if (!pending) return;
+
+    this.dispatch({ type: 'local.message.retrying', clientId });
+    this.dispatch({ type: 'run.started' });
+
+    try {
+      this.ws.send({ type: 'message.send', chatId: this.daemonId, content: pending.text });
+    } catch (error) {
+      this.dispatch({ type: 'local.message.failed', clientId, error });
+      throw error;
+    }
+  }
+
   public async cancel(): Promise<void> {
     this.dispatch({ type: 'run.cancelling' });
     try {

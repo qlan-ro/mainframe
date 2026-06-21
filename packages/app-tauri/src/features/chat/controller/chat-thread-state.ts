@@ -101,6 +101,7 @@ export type ChatStateEvent =
   | { type: 'local.message.queued'; pending: PendingUserMessage }
   | { type: 'local.message.reconciled'; clientId: string }
   | { type: 'local.message.failed'; clientId: string; error: unknown }
+  | { type: 'local.message.retrying'; clientId: string }
   | { type: 'chat.config.updated'; chat: Chat }
   | { type: 'context.usage'; percentage: number; totalTokens: number; maxTokens: number }
   | { type: 'compact.started' }
@@ -330,6 +331,19 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
           [event.clientId]: { ...current, status: 'failed', error: event.error },
         },
         runState: { type: 'error', error: event.error },
+      };
+    }
+
+    case 'local.message.retrying': {
+      const current = state.pendingUserMessages[event.clientId];
+      if (!current) return state;
+      const { error: _dropped, ...rest } = current;
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.clientId]: { ...rest, status: 'pending' },
+        },
       };
     }
   }

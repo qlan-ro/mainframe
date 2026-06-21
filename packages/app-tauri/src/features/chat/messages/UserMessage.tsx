@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
+import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { ReadMoreBubble } from './ReadMoreBubble';
 import { QueuedUserTurn } from './QueuedUserTurn';
 import { ImageLightbox } from '../parts/ImageLightbox';
@@ -184,6 +185,7 @@ function InlineImageThumbs({ parts }: InlineImageThumbsProps) {
 
 function UserMessageImpl() {
   const meta = useMainframeMeta();
+  const chatExtras = useChatExtras();
   const isQueued = meta.queued === true;
 
   // H6: s.message is typed as MessageState (= ThreadMessage & extras) via the
@@ -247,9 +249,10 @@ function UserMessageImpl() {
   ) : null;
 
   // H5: surface send failures. `error` is set by projectPendingMessage when
-  // status === 'failed'. Retry action is out of scope — that requires controller
-  // wiring that doesn't exist yet (follow-up TODO).
+  // status === 'failed'; Retry re-sends the pending's text via the controller
+  // (text-only — attachments are not re-uploaded).
   const sendError = meta.error;
+  const retryClientId = meta.clientId;
 
   // Capture context + attachments + image thumbs. For a queued turn these ride
   // INSIDE QueuedUserTurn (above its meta footer, with the ghost treatment —
@@ -284,9 +287,21 @@ function UserMessageImpl() {
       )}
 
       {sendError != null && (
-        <p data-testid="chat-user-message-send-failed" className="text-caption text-destructive">
-          Failed to send
-        </p>
+        <div className="flex items-center gap-2">
+          <span data-testid="chat-user-message-send-failed" className="text-caption text-destructive">
+            Failed to send
+          </span>
+          {retryClientId && chatExtras && (
+            <button
+              type="button"
+              data-testid="chat-user-message-retry"
+              onClick={() => void chatExtras.retryMessage(retryClientId)}
+              className="text-caption font-medium text-primary hover:underline"
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
     </MessagePrimitive.Root>
   );
