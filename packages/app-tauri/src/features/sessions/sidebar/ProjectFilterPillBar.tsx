@@ -7,10 +7,11 @@
  * most-recent chat. Attention badge = unread-or-pending count per project. Pills
  * are the shared FilterPill primitive.
  *
- * NOTE: the artboard also shows a dashed "Add project" button here; that needs the
- * add-project flow (not yet ported) and is intentionally deferred — out of scope.
+ * Includes the dashed "Add project" affordance (artboard 02-chrome.jsx) when an
+ * onAddProject handler is provided; the bar stays presentational (no daemon calls).
  */
 import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { FilterPill } from './FilterPill';
 import { ProjectPillContextMenu } from './ProjectPillContextMenu';
@@ -23,6 +24,7 @@ interface ProjectFilterPillBarProps {
   attentionCounts: Record<string, number>;
   onSelect: (projectId: string | null) => void;
   onRemoveProject?: (project: Project) => void;
+  onAddProject?: () => void;
 }
 
 export function ProjectFilterPillBar({
@@ -31,6 +33,7 @@ export function ProjectFilterPillBar({
   attentionCounts,
   onSelect,
   onRemoveProject,
+  onAddProject,
 }: ProjectFilterPillBarProps) {
   const [expanded, setExpanded] = useState(false);
   const totalAttn = Object.values(attentionCounts).reduce((a, b) => a + b, 0);
@@ -86,6 +89,17 @@ export function ProjectFilterPillBar({
           className="inline-flex shrink-0 items-center px-1 text-caption font-semibold tracking-normal text-primary transition-colors hover:underline"
         >
           {expanded ? 'Less' : `+${hiddenCount} more`}
+        </button>
+      )}
+      {onAddProject != null && (
+        <button
+          data-testid="sessions-add-project"
+          type="button"
+          onClick={onAddProject}
+          className="inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-[11px] border border-dashed border-border px-2.5 text-caption font-medium tracking-normal text-mf-text-3 transition-colors hover:border-primary hover:text-foreground"
+        >
+          <Plus className="size-[12px]" aria-hidden />
+          <span>Add project</span>
         </button>
       )}
     </div>

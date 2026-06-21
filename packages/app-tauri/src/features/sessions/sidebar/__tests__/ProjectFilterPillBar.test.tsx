@@ -396,3 +396,48 @@ describe('ProjectFilterPillBar — project action menu affordance', () => {
     expect(handleRemove).toHaveBeenCalledWith(PROJECTS[1]);
   });
 });
+
+describe('ProjectFilterPillBar — Add project pill', () => {
+  it('renders the dashed Add project pill when onAddProject is provided', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onAddProject={() => undefined}
+      />,
+    );
+    const pill = screen.getByTestId('sessions-add-project');
+    expect(pill).toBeTruthy();
+    expect(pill.textContent).toContain('Add project');
+    expect(pill.className).toContain('border-dashed');
+  });
+
+  it('does not render the Add project pill when onAddProject is omitted', () => {
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(screen.queryByTestId('sessions-add-project')).toBeNull();
+  });
+
+  it('calls onAddProject when the Add project pill is clicked', async () => {
+    const handleAdd = vi.fn();
+    render(
+      <ProjectFilterPillBar
+        projects={PROJECTS}
+        filterProjectId={null}
+        attentionCounts={{}}
+        onSelect={() => undefined}
+        onAddProject={handleAdd}
+      />,
+    );
+    await userEvent.click(screen.getByTestId('sessions-add-project'));
+    expect(handleAdd).toHaveBeenCalledTimes(1);
+  });
+});

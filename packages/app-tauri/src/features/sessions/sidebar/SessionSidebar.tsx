@@ -32,6 +32,7 @@ import { applySessionFilters } from '../filter/apply-session-filters';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
 import { useProjects } from '../use-projects';
+import { useAddProject } from '../use-add-project';
 import { SessionGroup } from './SessionGroup';
 import { SessionRow } from './SessionRow';
 import { SessionSortMenu } from './SessionSortMenu';
@@ -94,7 +95,7 @@ export function SessionSidebar() {
   const allItems: SessionItem[] = threadListRuntime ? threadListStateToSessionItems(threadListRuntime.getState()) : [];
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);
-  const { projects, removeProjectFromList } = useProjects();
+  const { projects, reloadProjects, removeProjectFromList } = useProjects();
   const port = useDaemonPort();
   const registry = useTagRegistry(port);
 
@@ -139,6 +140,8 @@ export function SessionSidebar() {
     [filterProjectId, port, removeProjectFromList, setFilterProjectId],
   );
 
+  const handleAddProject = useAddProject(reloadProjects);
+
   // Project chip on each row only in "All" view (no active project filter); the
   // filter pill already narrows the list when a project is selected.
   const showProject = filterProjectId == null;
@@ -154,6 +157,7 @@ export function SessionSidebar() {
         attentionCounts={attentionCounts}
         onSelect={setFilterProjectId}
         onRemoveProject={(project) => void handleRemoveProject(project)}
+        onAddProject={() => void handleAddProject()}
       />
 
       <div
