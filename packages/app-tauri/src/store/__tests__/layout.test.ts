@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { WorkspaceLayout } from '../layout';
-import { layoutCanSplit, useLayoutStore } from '../layout';
+import { isSurfaceFloor, layoutCanSplit, litSurfaceCount, useLayoutStore } from '../layout';
 
 const FRESH: WorkspaceLayout = {
   top: ['chat'],
@@ -35,15 +35,32 @@ describe('layout store', () => {
     expect(store().layout.top).toContain('files');
   });
 
-  it('chat is the permanent floor — toggleSurface("chat") is always a no-op', () => {
-    // single surface: still no-op
-    store().toggleSurface('chat');
+  it('dynamic floor: the only lit surface (chat) cannot be hidden', () => {
+    expect(isSurfaceFloor(store().layout, 'chat')).toBe(true);
+    store().toggleSurface('chat'); // no-op — it is the floor
     expect(isActive('chat')).toBe(true);
+  });
 
-    // multiple surfaces: still no-op
-    store().toggleSurface('files');
+  it('chat CAN be hidden once another surface is lit', () => {
+    store().toggleSurface('files'); // now chat + files lit → chat no longer the floor
+    expect(isSurfaceFloor(store().layout, 'chat')).toBe(false);
     store().toggleSurface('chat');
-    expect(isActive('chat')).toBe(true);
+    expect(isActive('chat')).toBe(false);
+    expect(isActive('files')).toBe(true);
+  });
+
+  it('the last remaining surface becomes the floor and cannot be hidden', () => {
+    store().toggleSurface('files'); // chat + files
+    store().toggleSurface('chat'); // hide chat → files alone
+    expect(isSurfaceFloor(store().layout, 'files')).toBe(true);
+    store().toggleSurface('files'); // no-op — files is now the floor
+    expect(isActive('files')).toBe(true);
+  });
+
+  it('litSurfaceCount counts top + bottom surfaces', () => {
+    expect(litSurfaceCount(store().layout)).toBe(1);
+    store().toggleSurface('files');
+    expect(litSurfaceCount(store().layout)).toBe(2);
   });
 
   it('files can be toggled off when active', () => {

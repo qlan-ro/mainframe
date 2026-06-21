@@ -1,13 +1,14 @@
 import { useAuiState } from '@assistant-ui/react';
 import {
   ClipboardCheck,
+  EyeOff,
   GitPullRequest,
   GripHorizontal,
   LayoutPanelLeft,
   LayoutPanelTop,
   MessageSquare,
 } from 'lucide-react';
-import { layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { sessionCustomOf } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { openExternal } from '@/lib/tauri/bridge';
 import { emitSurfaceIntent } from '@/store/surface-intents';
@@ -29,6 +30,8 @@ export function ChatCardHeader() {
   const worktreePath = custom?.worktreePath;
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
+  const chatIsFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'chat'));
+  const toggleSurface = useLayoutStore((s) => s.toggleSurface);
 
   return (
     <div
@@ -84,6 +87,17 @@ export function ChatCardHeader() {
           </button>
         </>
       )}
+      {/* Hide Chat — disabled when chat is the last lit surface (the dynamic floor). */}
+      <button
+        data-testid="chat-header-hide"
+        type="button"
+        title="Hide Chat"
+        disabled={chatIsFloor}
+        onClick={() => toggleSurface('chat')}
+        className={`${HDR_BTN} ${chatIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
+      >
+        <EyeOff size={13} className="text-mf-text-3" />
+      </button>
     </div>
   );
 }

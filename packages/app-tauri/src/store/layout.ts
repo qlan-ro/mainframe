@@ -103,6 +103,21 @@ export function layoutCanSplit(layout: WorkspaceLayout): boolean {
   return (['files', 'run'] as SurfaceId[]).some((s) => !layout.top.includes(s) && layout.bottom !== s);
 }
 
+/** Number of surfaces currently shown (top row + optional bottom strip). */
+export function litSurfaceCount(layout: WorkspaceLayout): number {
+  return layout.top.length + (layout.bottom ? 1 : 0);
+}
+
+/**
+ * The dynamic floor: a lit surface that is the ONLY one shown is non-dismissable
+ * (mirrors `04-engine.jsx` `isFloor = lit && litCount === 1`). Not a hardcoded
+ * chat floor — whichever surface is last-lit becomes the floor.
+ */
+export function isSurfaceFloor(layout: WorkspaceLayout, id: SurfaceId): boolean {
+  const lit = layout.top.includes(id) || layout.bottom === id;
+  return lit && litSurfaceCount(layout) === 1;
+}
+
 /** Build a RunTab guest from a Files editor tab. */
 function guestFromFilesTab(tabId: string): RunTab | null {
   const tab = useTabsStore.getState().tabs.find((t) => t.id === tabId);
@@ -188,9 +203,9 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
     },
 
     toggleSurface(surface) {
-      // Chat is the permanent floor — always available, never removable.
-      if (surface === 'chat') return;
       const { layout, run } = get();
+      // Dynamic floor: the last lit surface (any of chat/files/run) can't be hidden.
+      if (isSurfaceFloor(layout, surface)) return;
       const isActive = layout.top.includes(surface) || layout.bottom === surface;
       const nextLayout = isActive ? removeSurface(layout, surface) : placeInLayout(layout, surface);
       // Toggling Run off kills any live PTYs before discarding the panes.

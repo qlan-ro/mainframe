@@ -22,7 +22,7 @@ import { EditorGlyph } from '@/layout/surface-icons';
 import { useSurfaceDragStore } from './use-surface-drag';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useTabsStore } from '@/store/tabs';
-import { layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import type { EditorTabModel } from '@/store/tabs';
 
@@ -119,6 +119,7 @@ export function FilesTabStrip() {
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
+  const filesIsFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'files'));
   const beginSurfaceDrag = useSurfaceDragStore((s) => s.beginSurfaceDrag);
 
   return (
@@ -195,8 +196,9 @@ export function FilesTabStrip() {
           data-testid="files-tab-strip-close"
           type="button"
           title="Close Files"
+          disabled={filesIsFloor}
           onClick={() => toggleSurface('files')}
-          className={ACTION_BTN}
+          className={`${ACTION_BTN} ${filesIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
         >
           <X size={12} className="text-mf-text-3" />
         </button>

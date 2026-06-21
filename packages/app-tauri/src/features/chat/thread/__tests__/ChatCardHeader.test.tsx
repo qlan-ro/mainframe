@@ -168,3 +168,21 @@ describe('ChatCardHeader — review button gating', () => {
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-review' });
   });
 });
+
+describe('ChatCardHeader — Hide Chat (dynamic floor)', () => {
+  it('disables the Hide-Chat button when chat is the only lit surface (the floor)', () => {
+    render(<ChatCardHeader />);
+    expect(screen.getByTestId('chat-header-hide')).toBeDisabled();
+  });
+
+  it('enables Hide-Chat once another surface is lit, and hiding removes chat', () => {
+    useLayoutStore.getState().toggleSurface('files'); // chat + files lit
+    render(<ChatCardHeader />);
+    const hide = screen.getByTestId('chat-header-hide');
+    expect(hide).not.toBeDisabled();
+    fireEvent.click(hide);
+    const { layout } = useLayoutStore.getState();
+    expect(layout.top.includes('chat') || layout.bottom === 'chat').toBe(false);
+    expect(layout.top.includes('files')).toBe(true);
+  });
+});

@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MenuDivider, MenuEmpty, MenuLabel, MenuRow } from '@/components/ui/menu';
-import { layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -159,6 +159,7 @@ export function RunTabStrip({ pane, primary }: { pane: RunPane; primary: boolean
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
+  const runIsFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'run'));
   const closePane = useLayoutStore((s) => s.closePane);
   const beginSurfaceDrag = useSurfaceDragStore((s) => s.beginSurfaceDrag);
 
@@ -200,7 +201,7 @@ export function RunTabStrip({ pane, primary }: { pane: RunPane; primary: boolean
           </>
         )}
         {primary ? (
-          <button data-testid="run-surface-close" type="button" title="Close Run" onClick={() => toggleSurface('run')} className={ACTION_BTN}>
+          <button data-testid="run-surface-close" type="button" title="Close Run" disabled={runIsFloor} onClick={() => toggleSurface('run')} className={`${ACTION_BTN} ${runIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}>
             <X size={12} className="text-mf-text-3" />
           </button>
         ) : (

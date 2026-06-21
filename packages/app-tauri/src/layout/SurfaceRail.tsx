@@ -1,5 +1,5 @@
 import type { SurfaceId } from '@/store/layout';
-import { useLayoutStore } from '@/store/layout';
+import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { ChatGlyph, EditorGlyph, PreviewGlyph } from './surface-icons';
 
 interface SurfaceDef {
@@ -23,8 +23,8 @@ export function SurfaceRail() {
     <div data-testid="surface-rail" className="flex flex-shrink-0 gap-0.5 rounded-[8px] bg-mf-chip p-0.5">
       {SURFACES.map(({ id, label, Icon, activeColor }) => {
         const on = layout.top.includes(id) || layout.bottom === id;
-        // Chat is the permanent floor — its button is always lit and never toggleable.
-        const isFloor = id === 'chat';
+        // Dynamic floor: the single lit surface (whichever it is) can't be toggled off.
+        const isFloor = isSurfaceFloor(layout, id);
 
         return (
           <button
