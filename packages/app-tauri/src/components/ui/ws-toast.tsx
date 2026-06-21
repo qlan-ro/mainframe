@@ -23,6 +23,8 @@ export interface WsToastProps {
   title: string;
   description?: string;
   chatId?: string;
+  /** Invoked with `chatId` when the "Open session →" CTA is clicked. */
+  onOpenSession?: (chatId: string) => void;
   onDismiss: (id: string | number) => void;
 }
 
@@ -76,6 +78,7 @@ export function WsToastCard({
   title,
   description,
   chatId,
+  onOpenSession,
   onDismiss,
 }: WsToastProps) {
   const chip = CHIP_CONFIG[type];
@@ -128,7 +131,10 @@ export function WsToastCard({
           <button
             type="button"
             data-testid="toast-open-session"
-            onClick={() => onDismiss(id)}
+            onClick={() => {
+              onOpenSession?.(chatId);
+              onDismiss(id);
+            }}
             className="text-caption font-medium text-primary mt-[6px] block"
           >
             Open session →

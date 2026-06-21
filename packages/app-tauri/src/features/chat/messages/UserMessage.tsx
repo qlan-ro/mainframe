@@ -29,7 +29,7 @@
  * Deferred (TODO-leaf — do NOT build here):
  *   - PLAN_PREFIX "Implementing plan" card
  */
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useMemo, useState, type ReactNode } from 'react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -41,7 +41,7 @@ import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { ReadMoreBubble } from './ReadMoreBubble';
 import { QueuedUserTurn } from './QueuedUserTurn';
-import { ZoomableImage } from '../parts/ZoomableImage';
+import { ImageLightbox } from '../parts/ImageLightbox';
 import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text';
 import { mainframeUserFormatter } from './user-directives';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
@@ -109,7 +109,7 @@ function CoolCard({ children, className }: CoolCardProps) {
       className={cn(
         'relative max-w-[470px] rounded-xl border-[0.5px] px-[15px] py-[10px]',
         'border-mf-um-edge text-mf-um-ink',
-        'text-body leading-relaxed tracking-normal',
+        'text-body leading-[1.58] tracking-[-0.1px]',
         className,
       )}
     >
@@ -149,16 +149,31 @@ interface InlineImageThumbsProps {
 }
 
 function InlineImageThumbs({ parts }: InlineImageThumbsProps) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
   if (parts.length === 0) return null;
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      {parts.map((p) => (
-        <ZoomableImage
+      {parts.map((p, i) => (
+        <button
           key={p.image}
-          src={p.image}
-          className="size-16 rounded-[11px] border-[0.5px] border-border object-cover shadow-sm"
-        />
+          type="button"
+          data-testid="chat-image-zoom-trigger"
+          aria-label="View image full size"
+          onClick={() => setOpenIndex(i)}
+          className="block cursor-zoom-in rounded-[11px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <img
+            src={p.image}
+            alt=""
+            className="size-16 rounded-[11px] border-[0.5px] border-border object-cover shadow-sm"
+          />
+        </button>
       ))}
+      <ImageLightbox
+        images={parts.map((p) => ({ src: p.image }))}
+        index={openIndex}
+        onIndexChange={setOpenIndex}
+      />
     </div>
   );
 }

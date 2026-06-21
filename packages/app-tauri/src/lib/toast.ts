@@ -13,6 +13,7 @@ import { createElement } from 'react';
 import { toast } from 'sonner';
 import { WsToastCard } from '@/components/ui/ws-toast';
 import type { ToastType } from '@/components/ui/ws-toast';
+import { openSessionById } from '@/lib/session-nav';
 
 const AUTO_DISMISS_MS = 4200;
 
@@ -38,6 +39,7 @@ function fire(input: MfToastInput) {
         title,
         description,
         chatId,
+        onOpenSession: openSessionById,
         onDismiss: (tid) => toast.dismiss(tid),
       }),
     { duration },

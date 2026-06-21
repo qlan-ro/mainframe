@@ -7,14 +7,15 @@
  *  - New (unsaved) todo (todoId undefined): pending list is lifted to the parent
  *    via `pending`/`onPendingChange`; the parent uploads them after create resolves.
  *
- * Image previews use ZoomableImage (single-image zoom via shadcn Dialog).
+ * Image previews open a shared multi-image ImageLightbox (prev/next gallery
+ * nav across all image attachments).
  * Port of packages/desktop/…/todos/TodoAttachments.tsx.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, X, FileIcon } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import { ZoomableImage } from '@/features/chat/parts/ZoomableImage';
+import { ImageLightbox } from '@/features/chat/parts/ImageLightbox';
 import {
   listAttachments,
   getAttachment,
@@ -144,6 +145,8 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
 
   const removePending = (id: string) => onPendingChange(pending.filter((f) => f.id !== id));
 
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
   const allItems: Array<{ id: string; filename: string; mimeType: string; dataSrc?: string; isSaved: boolean }> = [
     ...saved.map((a) => ({
       id: a.id,
@@ -161,6 +164,17 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
     })),
   ];
 
+  // The image subset forms the lightbox gallery; map each image's id → its
+  // index within that subset so a tile opens the gallery at the right slide.
+  const galleryImages = allItems
+    .filter((a) => a.mimeType.startsWith('image/') && a.dataSrc)
+    .map((a) => ({ src: a.dataSrc as string, alt: a.filename }));
+  const galleryIndexById = new Map(
+    allItems
+      .filter((a) => a.mimeType.startsWith('image/') && a.dataSrc)
+      .map((a, i) => [a.id, i] as const),
+  );
+
   return (
     <div className="flex flex-col gap-1">
       <label className="text-caption text-muted-foreground">Attachments</label>
@@ -175,7 +189,15 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
                 className="relative group rounded-md border border-border overflow-hidden bg-background"
               >
                 {isImg && att.dataSrc ? (
-                  <ZoomableImage src={att.dataSrc} alt={att.filename} className="w-20 h-20 object-cover block" />
+                  <button
+                    type="button"
+                    data-testid={`tasks-attach-zoom-${att.id}`}
+                    aria-label={`View ${att.filename}`}
+                    onClick={() => setLightboxIndex(galleryIndexById.get(att.id) ?? null)}
+                    className="block cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <img src={att.dataSrc} alt={att.filename} className="w-20 h-20 object-cover block" />
+                  </button>
                 ) : (
                   <div className="w-20 h-20 flex items-center justify-center">
                     <FileIcon size={20} className="text-muted-foreground" />
@@ -201,6 +223,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
           })}
         </div>
       )}
+      <ImageLightbox images={galleryImages} index={lightboxIndex} onIndexChange={setLightboxIndex} />
       <input ref={inputRef} type="file" accept={IMAGE_ACCEPT} onChange={handleUpload} className="hidden" />
       <button
         type="button"

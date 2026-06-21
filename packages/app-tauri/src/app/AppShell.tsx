@@ -5,7 +5,7 @@
  * useSessionListRouter() runs INSIDE the provider (needs the live thread list).
  */
 import { useEffect } from 'react';
-import { AssistantRuntimeProvider } from '@assistant-ui/react';
+import { AssistantRuntimeProvider, useAssistantRuntime } from '@assistant-ui/react';
 import { ArchiveWorktreeDialog } from '../features/sessions/sidebar/ArchiveWorktreeDialog';
 import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
@@ -33,6 +33,7 @@ import { SIDEBAR_EXPANDED_WIDTH, SidebarShell } from '../layout/SidebarShell';
 import { SurfaceHost } from '../layout/SurfaceHost';
 import { TRAFFIC_LIGHTS_SPACER_WIDTH } from '../layout/SidebarHeader';
 import { useSidebarResize } from '../layout/useSidebarResize';
+import { setSessionNavigator } from '../lib/session-nav';
 import { useGlobalOverlayHotkeys } from './use-global-overlay-hotkeys';
 import { useSandboxWsRouter } from '../features/run/use-sandbox-ws-router';
 
@@ -52,6 +53,15 @@ function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
   useSandboxWsRouter();
   useGlobalOverlayHotkeys();
+
+  // Register the session navigator so global toasts (mfToast) can deep-link to a
+  // session via their "Open session →" CTA without reaching through to the runtime.
+  const runtime = useAssistantRuntime();
+  useEffect(() => {
+    setSessionNavigator((chatId) => runtime.threads.switchToThread(chatId));
+    return () => setSessionNavigator(null);
+  }, [runtime]);
+
   // First-run coachmark tour — auto-opens only on an empty workspace.
   const showTour = useFirstRunTour();
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);

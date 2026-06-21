@@ -117,6 +117,39 @@ describe('WsToastCard', () => {
     expect(screen.getByText('Open session →')).toBeTruthy();
   });
 
+  it('CTA click calls onOpenSession with the chatId and then dismisses', () => {
+    const onOpenSession = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <WsToastCard
+        id="t1"
+        type="info"
+        title="Session ready"
+        chatId="chat-abc"
+        onOpenSession={onOpenSession}
+        onDismiss={onDismiss}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('toast-open-session'));
+    expect(onOpenSession).toHaveBeenCalledWith('chat-abc');
+    expect(onDismiss).toHaveBeenCalledWith('t1');
+  });
+
+  it('CTA click still dismisses when no onOpenSession is provided', () => {
+    const onDismiss = vi.fn();
+    render(
+      <WsToastCard
+        id="t1"
+        type="info"
+        title="Session ready"
+        chatId="chat-abc"
+        onDismiss={onDismiss}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('toast-open-session'));
+    expect(onDismiss).toHaveBeenCalledWith('t1');
+  });
+
   it('does not render the CTA when no chatId is provided', () => {
     render(
       <WsToastCard
