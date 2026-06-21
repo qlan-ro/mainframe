@@ -29,7 +29,6 @@ import { arrangeSessions } from '../view-model/group-sessions';
 import { attentionCount } from '../view-model/attention-counts';
 import { sortProjectsByRecentActivity } from '../view-model/project-activity';
 import { applySessionFilters } from '../filter/apply-session-filters';
-import { countByBaseStatus } from '../view-model/count-by-base-status';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
 import { useProjects } from '../use-projects';
@@ -39,9 +38,6 @@ import { SessionSortMenu } from './SessionSortMenu';
 import { SessionsMoreMenu } from './SessionsMoreMenu';
 import { ProjectFilterPillBar } from './ProjectFilterPillBar';
 import { TagFilterBar } from '../filter/TagFilterBar';
-import { SidebarFooter } from '@/layout/SidebarFooter';
-import { BottomPanel } from '@/features/context-panel/BottomPanel';
-import { PanelResizeHandle } from '@/features/context-panel/PanelResizeHandle';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useTagRegistry } from '../tags/use-tag-registry';
 import { removeProject } from '@/lib/api/projects';
@@ -98,7 +94,6 @@ export function SessionSidebar() {
   const allItems: SessionItem[] = threadListRuntime ? threadListStateToSessionItems(threadListRuntime.getState()) : [];
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
   const isUnread = useUnreadStore((s) => s.isUnread);
-  const unreadSet = useUnreadStore((s) => s.unread);
   const { projects, removeProjectFromList } = useProjects();
   const port = useDaemonPort();
   const registry = useTagRegistry(port);
@@ -119,8 +114,6 @@ export function SessionSidebar() {
     () => buildAttentionMap(allItems, projects, isUnread),
     [allItems, projects, isUnread],
   );
-
-  const footerCounts = useMemo(() => countByBaseStatus(allItems, unreadSet), [allItems, unreadSet]);
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
 
@@ -190,9 +183,6 @@ export function SessionSidebar() {
       </div>
 
       <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
-      <PanelResizeHandle />
-      <BottomPanel />
-      <SidebarFooter counts={footerCounts} />
     </>
   );
 }

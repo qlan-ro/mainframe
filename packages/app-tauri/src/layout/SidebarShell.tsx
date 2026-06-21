@@ -1,8 +1,11 @@
 import { SessionSidebar } from '@/features/sessions/sidebar/SessionSidebar';
+import { BottomPanel } from '@/features/context-panel/BottomPanel';
+import { PanelResizeHandle } from '@/features/context-panel/PanelResizeHandle';
 import { cn } from '@/lib/utils';
 import type { WindowStyle } from '@/store/theme';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { SidebarHeader } from './SidebarHeader';
+import { SidebarFooter } from './SidebarFooter';
 
 export const SIDEBAR_EXPANDED_WIDTH = 280;
 export const SIDEBAR_COLLAPSED_WIDTH = 0;
@@ -48,6 +51,10 @@ export function SidebarShell({
       >
         <SidebarHeader />
         <SessionSidebar />
+        {/* Sidebar chrome below the session list — not part of the sessions feature. */}
+        <PanelResizeHandle />
+        <BottomPanel />
+        <SidebarFooter />
       </div>
     </div>
   );

@@ -1,6 +1,9 @@
+import { useAssistantRuntime } from '@assistant-ui/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useConnectionStatus, type ConnectionStatus } from '@/app/ConnectionStatusContext';
-import type { BaseStatusCounts } from '@/features/sessions/view-model/count-by-base-status';
+import { useUnreadStore } from '@/store/unread-store';
+import { threadListStateToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { countByBaseStatus, type BaseStatusCounts } from '@/features/sessions/view-model/count-by-base-status';
 
 const PIP: Record<ConnectionStatus['state'], string> = {
   connected: 'bg-mf-success',
@@ -40,7 +43,18 @@ export function SidebarFooterView({ connection, counts }: { connection: Connecti
   );
 }
 
-export function SidebarFooter({ counts }: { counts: BaseStatusCounts }) {
+/**
+ * Self-sufficient sidebar chrome footer: connection pip + per-status session
+ * counts. Derives its own counts from the thread list so it composes directly
+ * under `SidebarShell` without the sessions feature threading props in.
+ */
+export function SidebarFooter() {
   const connection = useConnectionStatus();
+  const threads = useAssistantRuntime().threads;
+  const unreadSet = useUnreadStore((s) => s.unread);
+  // Recompute each render (getState() is a snapshot); the SidebarShell re-render
+  // cascade keeps it as fresh as the old SessionSidebar-owned footer was.
+  const items = threads ? threadListStateToSessionItems(threads.getState()) : [];
+  const counts = countByBaseStatus(items, unreadSet);
   return <SidebarFooterView connection={connection} counts={counts} />;
 }
