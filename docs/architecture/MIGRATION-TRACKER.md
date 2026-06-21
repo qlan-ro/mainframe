@@ -371,7 +371,7 @@ User UX/polish notes from a walkthrough, each investigated against the code + ar
 - ☑ **S — Editor surface intents wired + LIVE** (`features/chat/tools/chat-tool-context.ts` + `store/intent-subscriber.ts`) — `useOpenFile()`/`revealFile` emit `emitSurfaceIntent`; `SurfaceHost` now SUBSCRIBES → opens a Files tab + activates the surface. No longer log-only.
 - ☑ **M — Inline comments** (`features/editor/inline-comments/`) — `use-inline-comments` + CM6 `gutter()` markers + block-`WidgetType` comment cards.
 - ☑ **M — LSP-based navigation** (`features/editor/lsp/navigation.ts`) — regex nav replaced by LSP `references` + a jump-history stack (⌘</⌘>); nav-state in `store/editor.ts`.
-- ☐ **S — Drop `LineCommentPopover`** (removal when editor lands).
+- ☑ **S — Drop `LineCommentPopover`** — already removed (superseded by the editor context menu; verified absent from `src` 2026-06-21). Stale marker corrected.
 
 **Terminal**
 - ☑ **L — Rust PTY backend** (`src-tauri/src/terminal/`) — DONE (2026-06-13). `TerminalManager` Tauri-managed state; `terminal_create`/`terminal_write`/`terminal_resize`/`terminal_kill` commands; raw `Channel(InvokeResponseBody::Raw)` for output bytes (→ JS `ArrayBuffer`) + typed `Channel<ExitEvent>` for exit; mutex-poison-safe; reader thread never locks the session map (MPSC reap); kill-before-remove; canonicalized cwd; `kill_all` on `WindowEvent::Destroyed`. 15 cargo tests pass.
