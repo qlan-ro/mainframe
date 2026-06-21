@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Project } from '@qlan-ro/mainframe-types';
-import { getProjects, removeProject } from '../projects';
+import { createProject, getProjects, removeProject } from '../projects';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -132,5 +132,110 @@ describe('removeProject', () => {
 
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/projects/proj-1', { method: 'DELETE' });
+  });
+});
+
+describe('createProject', () => {
+  const CREATED: Project = {
+    id: 'proj-new',
+    name: 'gamma',
+    path: '/home/user/gamma',
+    createdAt: '2026-06-22T00:00:00.000Z',
+    lastOpenedAt: '2026-06-22T00:00:00.000Z',
+  };
+
+  it('POSTs { path } to /api/projects with the given port and JSON headers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ success: true, data: CREATED }),
+      }),
+    );
+
+    await createProject(31415, '/home/user/gamma');
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: '/home/user/gamma' }),
+    });
+  });
+
+  it('includes name in the body when provided', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ success: true, data: CREATED }),
+      }),
+    );
+
+    await createProject(31415, '/home/user/gamma', 'Gamma');
+
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: '/home/user/gamma', name: 'Gamma' }),
+    });
+  });
+
+  it('on 200 returns { project: data, alreadyExists: false }', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ success: true, data: CREATED }),
+      }),
+    );
+
+    const result = await createProject(31415, '/home/user/gamma');
+
+    expect(result).toEqual({ project: CREATED, alreadyExists: false });
+  });
+
+  it('on 409 returns { project: data, alreadyExists: true } (already registered)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({ success: false, error: 'Project already registered', data: CREATED }),
+      }),
+    );
+
+    const result = await createProject(31415, '/home/user/gamma');
+
+    expect(result).toEqual({ project: CREATED, alreadyExists: true });
+  });
+
+  it('on other non-OK throws with the body error message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ success: false, error: 'path must be absolute' }),
+      }),
+    );
+
+    await expect(createProject(31415, 'relative/path')).rejects.toThrow('path must be absolute');
+  });
+
+  it('on a non-OK with no parseable body throws HTTP <status>', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new Error('not json')),
+      }),
+    );
+
+    await expect(createProject(31415, '/home/user/gamma')).rejects.toThrow('HTTP 500');
   });
 });
