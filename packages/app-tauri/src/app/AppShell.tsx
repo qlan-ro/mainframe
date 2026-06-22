@@ -22,6 +22,7 @@ import { useFirstRunTour } from '../features/tour/use-first-run-tour';
 import { useSettingsStore } from '../store/settings';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
+import { useNewChatHotkey } from '../features/sessions/use-new-chat-hotkey';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
 import { useLayoutStore } from '../store/layout';
@@ -61,6 +62,9 @@ function RuntimeBody({ port }: { port: number }) {
     setSessionNavigator((chatId) => runtime.threads.switchToThread(chatId));
     return () => setSessionNavigator(null);
   }, [runtime]);
+
+  // Global ⌘N / Ctrl+N → new chat (same path as the sidebar's New button).
+  useNewChatHotkey(() => void runtime.threads.switchToNewThread());
 
   // First-run coachmark tour — auto-opens only on an empty workspace.
   const showTour = useFirstRunTour();
