@@ -159,7 +159,7 @@ function useEditCardState(
   toolCallId: string | undefined,
 ): EditCardState {
   const chatId = useChatId();
-  const { openFile } = useOpenFile();
+  const { openDiff } = useOpenFile();
 
   const filePath = (args['file_path'] as string) ?? '';
   const oldString = (args['old_string'] as string) ?? '';
@@ -179,15 +179,15 @@ function useEditCardState(
     (e: React.MouseEvent | React.KeyboardEvent) => {
       e.stopPropagation();
       if (structured && isStructuredResult(result) && result.originalFile && result.modifiedFile) {
-        openFile(filePath);
+        openDiff(filePath, result.originalFile, result.modifiedFile);
         return;
       }
       const { original, modified } = displayHunks
         ? reconstructFromHunks(displayHunks)
         : { original: oldString, modified: newString };
-      openFile(`${filePath}#diff&original=${encodeURIComponent(original)}&modified=${encodeURIComponent(modified)}`);
+      openDiff(filePath, original, modified);
     },
-    [structured, result, filePath, displayHunks, oldString, newString, openFile],
+    [structured, result, filePath, displayHunks, oldString, newString, openDiff],
   );
 
   return {

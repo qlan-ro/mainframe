@@ -302,3 +302,65 @@ describe('intent-subscriber overlay intents', () => {
     unsub();
   });
 });
+
+describe('open-diff intent subscriber', () => {
+  it('open-diff with original/modified opens ONE preview tab of kind diff and activates Files surface', () => {
+    const unsub = subscribeToFileIntents();
+
+    // Cast through unknown to allow fields not yet on the type (TDD red phase).
+    emitSurfaceIntent({
+      type: 'open-diff',
+      path: '/src/x.ts',
+      original: 'before\n',
+      modified: 'after\n',
+    } as unknown as Parameters<typeof emitSurfaceIntent>[0]);
+
+    const { tabs, activeTabId } = useTabsStore.getState();
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]!.kind).toBe('diff');
+    expect(tabs[0]!.mode).toBe('preview');
+    expect(activeTabId).toBe(tabs[0]!.id);
+    // original / modified must be forwarded onto the tab model.
+    const diffTab = tabs[0] as import('../tabs').DiffTabModel;
+    expect(diffTab.original).toBe('before\n');
+    expect(diffTab.modified).toBe('after\n');
+    // Files surface must be activated.
+    expect(isFilesActive()).toBe(true);
+
+    unsub();
+  });
+
+  it('open-diff normalizes an absolute path under the active worktree base to a base-relative tab path', () => {
+    useActiveBasesStore.setState({ bases: { worktreePath: WORKTREE, projectPath: PROJECT } });
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({
+      type: 'open-diff',
+      path: `${WORKTREE}/src/x.ts`,
+      original: 'a',
+      modified: 'b',
+    } as unknown as Parameters<typeof emitSurfaceIntent>[0]);
+
+    const { tabs } = useTabsStore.getState();
+    expect(tabs).toHaveLength(1);
+    // Must be stripped to the worktree-relative form.
+    expect(tabs[0]!.path).toBe('src/x.ts');
+
+    unsub();
+  });
+
+  it('open-diff WITHOUT original/modified still opens a kind:diff tab with sides undefined (HEAD-vs-working case)', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-diff', path: '/src/y.ts' });
+
+    const { tabs } = useTabsStore.getState();
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]!.kind).toBe('diff');
+    const diffTab = tabs[0] as import('../tabs').DiffTabModel;
+    expect(diffTab.original).toBeUndefined();
+    expect(diffTab.modified).toBeUndefined();
+
+    unsub();
+  });
+});

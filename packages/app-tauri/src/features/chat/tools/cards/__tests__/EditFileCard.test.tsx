@@ -19,7 +19,15 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: () => undefined,
 }));
 
+// Mock the surface-intent emitter so we can assert on what the card emits
+// without wiring up a full store subscription.
+vi.mock('@/store/surface-intents', () => ({
+  emitSurfaceIntent: vi.fn(),
+  onSurfaceIntent: vi.fn(),
+}));
+
 import { EditFileCard } from '../EditFileCard';
+import { emitSurfaceIntent } from '@/store/surface-intents';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -278,5 +286,91 @@ describe('EditFileCard', () => {
   it('renders the card root with data-testid="chat-edit-card"', () => {
     renderCard(makePart({ args: { file_path: 'f.ts', old_string: '', new_string: '' } }));
     expect(screen.getByTestId('chat-edit-card')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// open-diff button — intent routing (TDD red phase)
+// ---------------------------------------------------------------------------
+
+describe('EditFileCard open-diff button intent routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Structured result fixture that carries the full file contents on both sides.
+  const structuredResultWithFiles = {
+    content: 'File edited successfully.',
+    structuredPatch: [
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: ['-const x = 1;', '+const x = 42;'],
+      },
+    ],
+    originalFile: 'const x = 1;\n',
+    modifiedFile: 'const x = 42;\n',
+  };
+
+  it('structured result emits open-diff (NOT open-file) with path + original + modified', async () => {
+    renderCard(
+      makePart({
+        args: { file_path: 'src/app.ts', old_string: 'const x = 1;', new_string: 'const x = 42;' },
+        result: structuredResultWithFiles,
+        isError: false,
+      }),
+    );
+
+    await userEvent.click(screen.getByTestId('chat-edit-open-diff'));
+
+    const calls = vi.mocked(emitSurfaceIntent).mock.calls;
+    expect(calls).toHaveLength(1);
+    const emitted = calls[0]![0];
+
+    // Must be an open-diff intent, never open-file.
+    expect(emitted.type).toBe('open-diff');
+    // Path must be the raw file_path arg.
+    expect((emitted as { type: string; path: string }).path).toBe('src/app.ts');
+    // The full file contents from the structured result must be forwarded.
+    expect((emitted as { original?: string }).original).toBe('const x = 1;\n');
+    expect((emitted as { modified?: string }).modified).toBe('const x = 42;\n');
+  });
+
+  it('structured result does NOT emit an open-file intent', async () => {
+    renderCard(
+      makePart({
+        args: { file_path: 'src/app.ts', old_string: 'const x = 1;', new_string: 'const x = 42;' },
+        result: structuredResultWithFiles,
+        isError: false,
+      }),
+    );
+
+    await userEvent.click(screen.getByTestId('chat-edit-open-diff'));
+
+    const calls = vi.mocked(emitSurfaceIntent).mock.calls;
+    expect(calls.every((c) => c[0].type !== 'open-file')).toBe(true);
+  });
+
+  it('fallback (plain-string result, no originalFile/modifiedFile) emits open-diff with correct path', async () => {
+    // No structuredPatch — the card computes diff from old/new strings.
+    renderCard(
+      makePart({
+        args: { file_path: 'lib/util.ts', old_string: 'hello world', new_string: 'hello universe' },
+        result: 'OK',
+        isError: false,
+      }),
+    );
+
+    await userEvent.click(screen.getByTestId('chat-edit-open-diff'));
+
+    const calls = vi.mocked(emitSurfaceIntent).mock.calls;
+    expect(calls).toHaveLength(1);
+    const emitted = calls[0]![0];
+
+    // Must route through open-diff, not open-file, even for the fallback path.
+    expect(emitted.type).toBe('open-diff');
+    expect((emitted as { type: string; path: string }).path).toBe('lib/util.ts');
   });
 });

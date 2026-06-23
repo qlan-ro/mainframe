@@ -16,6 +16,8 @@ export function useChatId(): string | undefined {
 
 export interface OpenFileIntent {
   openFile: (path: string) => void;
+  /** Open a diff tab showing pre-resolved original-vs-modified content. */
+  openDiff: (path: string, original: string, modified: string) => void;
   revealFile: (path: string) => void;
 }
 
@@ -23,8 +25,11 @@ export function useOpenFile(): OpenFileIntent {
   const openFile = useCallback((path: string) => {
     emitSurfaceIntent({ type: 'open-file', path });
   }, []);
+  const openDiff = useCallback((path: string, original: string, modified: string) => {
+    emitSurfaceIntent({ type: 'open-diff', path, original, modified });
+  }, []);
   const revealFile = useCallback((path: string) => {
     emitSurfaceIntent({ type: 'reveal-file', path });
   }, []);
-  return { openFile, revealFile };
+  return { openFile, openDiff, revealFile };
 }

@@ -81,7 +81,7 @@ export function subscribeToFileIntents(): () => void {
     }
 
     if (intent.type === 'open-diff') {
-      const { path: rawPath } = intent;
+      const { path: rawPath, original, modified } = intent;
 
       // Normalize to canonical base-relative path (same as open-file).
       const bases = useActiveBasesStore.getState().bases;
@@ -90,9 +90,10 @@ export function subscribeToFileIntents(): () => void {
 
       const title = path.split('/').pop() ?? path;
 
-      // Open a diff tab; DiffTab will fetch HEAD-vs-working when original/modified
-      // are absent, so we don't need to pass them here.
-      useTabsStore.getState().openTab({ kind: 'diff', path, title }, { mode: 'preview' });
+      // Pre-resolved sides (e.g. a chat Edit card) render the proposed
+      // original-vs-modified diff directly; when absent, DiffTab fetches
+      // HEAD-vs-working.
+      useTabsStore.getState().openTab({ kind: 'diff', path, title, original, modified }, { mode: 'preview' });
       ensureFilesActive();
       return;
     }
