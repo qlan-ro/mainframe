@@ -39,4 +39,16 @@ describe('useSidebarSkills', () => {
     expect(result.current.skills).toHaveLength(1);
     expect(result.current.agents).toHaveLength(1);
   });
+
+  it('fetches with the active session adapter id, not hardcoded claude', async () => {
+    useActiveIdentity.mockReturnValue({ projectName: 'X', projectPath: '/p', adapterId: 'codex' });
+    getSkills.mockResolvedValue([]);
+    getAgents.mockResolvedValue([]);
+
+    const { result } = renderHook(() => useSidebarSkills());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(getSkills).toHaveBeenCalledWith(31415, 'codex', '/p');
+    expect(getAgents).toHaveBeenCalledWith(31415, 'codex', '/p');
+  });
 });

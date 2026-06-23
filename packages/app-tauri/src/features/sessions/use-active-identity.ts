@@ -16,6 +16,8 @@ export interface ActiveIdentity {
   branchName?: string;
   /** Active session's project id (for file-tree / git scoping). */
   projectId?: string;
+  /** Active session's adapter id (e.g. 'claude' / 'codex') — for skills/agents scoping. */
+  adapterId?: string;
   /** Active session's remote chat id (worktree-correct path resolution). */
   chatId?: string;
   /** Absolute path to the active chat's worktree (for path normalization). */
@@ -33,6 +35,7 @@ export function useActiveIdentity(): ActiveIdentity {
     projectName: project?.name ?? 'Mainframe',
     branchName: custom?.branchName,
     projectId: custom?.projectId,
+    adapterId: custom?.adapterId,
     chatId,
     worktreePath: custom?.worktreePath,
     projectPath: project?.path,

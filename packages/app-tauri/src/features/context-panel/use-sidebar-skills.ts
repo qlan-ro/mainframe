@@ -6,8 +6,9 @@
  * The chat thread's SkillsProvider cannot be reused here: it reads per-thread
  * `useChatExtras()` state that only exists inside the active thread runtime, not
  * in the sidebar tree. So the panel fetches independently, keyed off the active
- * project's path (useActiveIdentity) with the 'claude' adapter — the only adapter
- * that exposes skills/agents today (matches desktop's SkillsPanel/AgentsPanel).
+ * session's project path AND adapter (useActiveIdentity) — so a non-Claude
+ * session shows its own adapter's skills/agents, not Claude's. Falls back to
+ * 'claude' when no session is active.
  */
 import { useEffect, useState } from 'react';
 import type { Skill, AgentConfig } from '@qlan-ro/mainframe-types';
@@ -16,11 +17,10 @@ import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
 
-const ADAPTER_ID = 'claude';
-
 export function useSidebarSkills(): { skills: Skill[]; agents: AgentConfig[]; loading: boolean } {
   const port = useDaemonPort();
-  const { projectPath } = useActiveIdentity();
+  const { projectPath, adapterId } = useActiveIdentity();
+  const adapter = adapterId ?? 'claude';
   const [skills, setSkills] = useState<Skill[]>([]);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,8 +39,8 @@ export function useSidebarSkills(): { skills: Skill[]; agents: AgentConfig[]; lo
     void (async () => {
       try {
         const [skillList, agentList] = await Promise.all([
-          getSkills(port, ADAPTER_ID, projectPath),
-          getAgents(port, ADAPTER_ID, projectPath),
+          getSkills(port, adapter, projectPath),
+          getAgents(port, adapter, projectPath),
         ]);
         if (!cancelled) {
           setSkills(skillList);
@@ -59,7 +59,7 @@ export function useSidebarSkills(): { skills: Skill[]; agents: AgentConfig[]; lo
     return () => {
       cancelled = true;
     };
-  }, [port, projectPath]);
+  }, [port, projectPath, adapter]);
 
   return { skills, agents, loading };
 }
