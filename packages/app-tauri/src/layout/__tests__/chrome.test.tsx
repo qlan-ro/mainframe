@@ -20,6 +20,19 @@ vi.mock('@/features/sessions/sidebar/SessionSidebar', () => ({
   SessionSidebar: () => <div data-testid="session-sidebar-content" />,
 }));
 
+// SidebarShell (rendered by AppShell) mounts the real BottomPanel, which reads
+// useSessionContext → useDaemonPort. Stub it so the shell renders without a
+// DaemonPortProvider (this test exercises the toolbar/sidebar chrome, not the panel).
+vi.mock('@/features/context-panel/BottomPanel', () => ({
+  BottomPanel: () => <div data-testid="bottom-panel-stub" />,
+}));
+
+// SidebarShell also mounts SidebarFooter, which reads useConnectionStatus from
+// an app-level provider this chrome test doesn't set up. Stub it too.
+vi.mock('../SidebarFooter', () => ({
+  SidebarFooter: () => <div data-testid="sidebar-footer-stub" />,
+}));
+
 vi.mock('../../features/sessions/runtime/use-sessions-thread-list', () => ({
   useSessionsThreadList: () => ({}),
 }));
@@ -72,9 +85,10 @@ import { useUiPrefs } from '@/store/ui-prefs';
 import { AppShell } from '../../app/AppShell';
 
 beforeEach(() => {
-  if (!useUiPrefs.getState().sidebarVisible) {
-    useUiPrefs.getState().toggleSidebar();
-  }
+  // ui-prefs persists sidebar visibility + width; reset to defaults so a prior
+  // test's collapsed/hidden state can't leak (dragCollapsed derives from width).
+  localStorage.clear();
+  useUiPrefs.setState({ sidebarVisible: true, inspectorVisible: false, sidebarWidth: SIDEBAR_EXPANDED_WIDTH });
   document.body.style.removeProperty('user-select');
   document.body.style.removeProperty('cursor');
 });
@@ -386,7 +400,9 @@ describe('sidebar expand from collapsed', () => {
     expect(document.activeElement).toBe(dragBtn);
     drag.unmount();
 
-    // (b) instant-hidden
+    // (b) instant-hidden — scenario (a)'s drag persisted a collapsed width into
+    // ui-prefs; reset so this mount starts expanded (instant-hide from expanded).
+    useUiPrefs.setState({ sidebarVisible: true, sidebarWidth: SIDEBAR_EXPANDED_WIDTH });
     render(<AppShell port={31415} />);
     fireEvent.click(screen.getByTestId('sidebar-hide-button'));
     const hiddenBtn = screen.getByTestId('show-sidebar-button');
