@@ -3,7 +3,7 @@
  * Shows checkmark gutter (current marker), status dot, branch name (mono),
  * ahead/behind divergence, and a chevron to open the submenu.
  */
-import { Check, ChevronRight } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronRight } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +12,8 @@ export interface BranchRowProps {
   isCurrent: boolean;
   isRemote?: boolean;
   grouped?: boolean;
+  /** True when this row is the branch whose submenu is open beside the list. */
+  selected?: boolean;
   onSelect: (branch: BranchInfo) => void;
 }
 
@@ -20,25 +22,43 @@ function BranchDivergence({ ahead, behind }: { ahead?: number; behind?: number }
     return <span className="text-caption text-mf-text-4 shrink-0">up to date</span>;
   }
   return (
-    <span className="inline-flex items-center gap-1 font-mono text-caption text-muted-foreground shrink-0">
-      {(ahead ?? 0) > 0 && <span className="inline-flex items-center gap-0.5 text-mf-success">↑{ahead}</span>}
-      {(behind ?? 0) > 0 && <span className="inline-flex items-center gap-0.5 text-mf-warning">↓{behind}</span>}
+    <span className="inline-flex items-center gap-[7px] font-mono text-caption text-muted-foreground shrink-0">
+      {(ahead ?? 0) > 0 && (
+        <span className="inline-flex items-center gap-[1px] text-mf-success">
+          <ArrowUp size={9} className="text-mf-success" />
+          {ahead}
+        </span>
+      )}
+      {(behind ?? 0) > 0 && (
+        <span className="inline-flex items-center gap-[1px] text-mf-warning">
+          <ArrowDown size={9} className="text-mf-warning" />
+          {behind}
+        </span>
+      )}
     </span>
   );
 }
 
-export function BranchRow({ branch, isCurrent, isRemote = false, grouped = false, onSelect }: BranchRowProps) {
+export function BranchRow({
+  branch,
+  isCurrent,
+  isRemote = false,
+  grouped = false,
+  selected = false,
+  onSelect,
+}: BranchRowProps) {
   const { name, ahead, behind } = branch;
   const displayName = grouped && name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
 
   return (
     <button
       data-testid={`git-branch-row-${name}`}
+      aria-selected={selected}
       onClick={() => onSelect(branch)}
       className={cn(
-        'w-full flex items-center gap-2 px-2 py-1.5 text-left text-body',
-        'hover:bg-accent rounded-sm transition-colors',
-        isCurrent && 'bg-accent/50',
+        'w-full flex items-center gap-2 px-2 py-1.5 text-left text-body rounded-sm transition-colors',
+        // Selected (submenu open beside the list) wins over the current-branch tint.
+        selected ? 'bg-mf-selection' : isCurrent ? 'bg-accent hover:bg-accent' : 'hover:bg-accent',
       )}
     >
       {/* Checkmark gutter — fixed ~13px wide */}

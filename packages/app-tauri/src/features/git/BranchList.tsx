@@ -13,6 +13,7 @@ export interface BranchListProps {
   remote: string[];
   worktrees: string[];
   currentBranch: string;
+  selectedBranch?: string;
   search: string;
   onSelectBranch: (branch: BranchInfo) => void;
   onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
@@ -25,6 +26,7 @@ export function BranchList({
   remote,
   worktrees,
   currentBranch,
+  selectedBranch,
   search,
   onSelectBranch,
   onDeleteWorktree,
@@ -70,6 +72,7 @@ export function BranchList({
         title="Local branches"
         branches={mainBranches}
         currentBranch={currentBranch}
+        selectedBranch={selectedBranch}
         onSelect={onSelectBranch}
       />
 
@@ -81,6 +84,7 @@ export function BranchList({
           name={wt.name}
           branches={wt.branches}
           currentBranch={currentBranch}
+          selectedBranch={selectedBranch}
           onSelect={onSelectBranch}
           onDeleteWorktree={onDeleteWorktree}
           onNewSession={onNewSession}
@@ -95,6 +99,7 @@ export function BranchList({
             title="Remote"
             branches={remoteInfos}
             currentBranch={currentBranch}
+            selectedBranch={selectedBranch}
             isRemote
             onSelect={onSelectBranch}
           />

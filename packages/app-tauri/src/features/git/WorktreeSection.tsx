@@ -12,6 +12,7 @@ export interface WorktreeSectionProps {
   name: string;
   branches: BranchInfo[];
   currentBranch: string;
+  selectedBranch?: string;
   onSelect: (branch: BranchInfo) => void;
   onNewSession?: (worktreeDirName: string, branchName: string | undefined) => void;
   onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
@@ -22,6 +23,7 @@ export function WorktreeSection({
   name,
   branches,
   currentBranch,
+  selectedBranch,
   onSelect,
   onNewSession,
   onDeleteWorktree,
@@ -84,7 +86,13 @@ export function WorktreeSection({
       </div>
       {expanded &&
         branches.map((b) => (
-          <BranchRow key={b.name} branch={b} isCurrent={b.name === currentBranch} onSelect={onSelect} />
+          <BranchRow
+            key={b.name}
+            branch={b}
+            isCurrent={b.name === currentBranch}
+            selected={b.name === selectedBranch}
+            onSelect={onSelect}
+          />
         ))}
     </>
   );

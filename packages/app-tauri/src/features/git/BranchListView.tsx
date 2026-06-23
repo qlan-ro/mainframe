@@ -22,6 +22,7 @@ export interface BranchListViewProps {
   remote: string[];
   worktrees: string[];
   currentBranch: string;
+  selectedBranch?: string;
   search: string;
   onSearch: (v: string) => void;
   onSelectBranch: (branch: BranchInfo) => void;
@@ -37,6 +38,7 @@ export function BranchListView({
   remote,
   worktrees,
   currentBranch,
+  selectedBranch,
   search,
   onSearch,
   onSelectBranch,
@@ -114,6 +116,7 @@ export function BranchListView({
         remote={remote}
         worktrees={worktrees}
         currentBranch={currentBranch}
+        selectedBranch={selectedBranch}
         search={search}
         onSelectBranch={onSelectBranch}
         onDeleteWorktree={actions.handleDeleteWorktree}

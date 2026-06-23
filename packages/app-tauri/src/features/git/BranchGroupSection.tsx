@@ -12,6 +12,7 @@ export interface BranchGroupSectionProps {
   title: string;
   branches: BranchInfo[];
   currentBranch: string;
+  selectedBranch?: string;
   isRemote?: boolean;
   onSelect: (branch: BranchInfo) => void;
 }
@@ -20,11 +21,13 @@ function PrefixGroup({
   prefix,
   branches,
   currentBranch,
+  selectedBranch,
   onSelect,
 }: {
   prefix: string;
   branches: BranchInfo[];
   currentBranch: string;
+  selectedBranch?: string;
   onSelect: (branch: BranchInfo) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -41,7 +44,13 @@ function PrefixGroup({
       {expanded &&
         branches.map((b) => (
           <div key={b.name} className="pl-3">
-            <BranchRow branch={b} isCurrent={b.name === currentBranch} grouped onSelect={onSelect} />
+            <BranchRow
+              branch={b}
+              isCurrent={b.name === currentBranch}
+              selected={b.name === selectedBranch}
+              grouped
+              onSelect={onSelect}
+            />
           </div>
         ))}
     </div>
@@ -52,6 +61,7 @@ export function BranchGroupSection({
   title,
   branches,
   currentBranch,
+  selectedBranch,
   isRemote = false,
   onSelect,
 }: BranchGroupSectionProps) {
@@ -72,11 +82,26 @@ export function BranchGroupSection({
       {expanded && (
         <>
           {isRemote ? (
-            branches.map((b) => <BranchRow key={b.name} branch={b} isCurrent={false} isRemote onSelect={onSelect} />)
+            branches.map((b) => (
+              <BranchRow
+                key={b.name}
+                branch={b}
+                isCurrent={false}
+                selected={b.name === selectedBranch}
+                isRemote
+                onSelect={onSelect}
+              />
+            ))
           ) : (
             <>
               {ungrouped.map((b) => (
-                <BranchRow key={b.name} branch={b} isCurrent={b.name === currentBranch} onSelect={onSelect} />
+                <BranchRow
+                  key={b.name}
+                  branch={b}
+                  isCurrent={b.name === currentBranch}
+                  selected={b.name === selectedBranch}
+                  onSelect={onSelect}
+                />
               ))}
               {groups.map((g) => (
                 <PrefixGroup
@@ -84,6 +109,7 @@ export function BranchGroupSection({
                   prefix={g.prefix}
                   branches={g.branches}
                   currentBranch={currentBranch}
+                  selectedBranch={selectedBranch}
                   onSelect={onSelect}
                 />
               ))}

@@ -340,3 +340,65 @@ describe('BranchPopover — back arrow in submenu returns to list', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// 11–14. Side-by-side submenu behaviour (rework from drill-in to side-by-side)
+// ---------------------------------------------------------------------------
+
+describe('BranchPopover — side-by-side submenu', () => {
+  it('list stays visible beside the submenu after selecting a branch', async () => {
+    renderPopover({ open: true });
+
+    await waitFor(() => screen.getByTestId('git-branch-row-feat/login'));
+    await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('git-submenu')).toBeTruthy();
+      expect(screen.getByTestId('git-branch-search')).toBeTruthy();
+    });
+  });
+
+  it('selected branch row has aria-selected="true"; unselected row has aria-selected="false"', async () => {
+    renderPopover({ open: true });
+
+    await waitFor(() => screen.getByTestId('git-branch-row-feat/login'));
+    await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
+
+    await waitFor(() => screen.getByTestId('git-submenu'));
+
+    expect(screen.getByTestId('git-branch-row-feat/login')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('git-branch-row-main')).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('clicking the already-selected branch row again closes the submenu (toggle)', async () => {
+    renderPopover({ open: true });
+
+    await waitFor(() => screen.getByTestId('git-branch-row-feat/login'));
+    await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
+    await waitFor(() => screen.getByTestId('git-submenu'));
+
+    // Second click on the same row — should toggle the submenu off.
+    await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('git-submenu')).toBeNull();
+    });
+    expect(screen.getByTestId('git-branch-row-feat/login')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('git-branch-search')).toBeTruthy();
+  });
+
+  it('back button closes the submenu and the list remains visible', async () => {
+    renderPopover({ open: true });
+
+    await waitFor(() => screen.getByTestId('git-branch-row-feat/login'));
+    await userEvent.click(screen.getByTestId('git-branch-row-feat/login'));
+    await waitFor(() => screen.getByTestId('git-submenu'));
+
+    await userEvent.click(screen.getByTestId('git-submenu-back'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('git-submenu')).toBeNull();
+    });
+    expect(screen.getByTestId('git-branch-search')).toBeTruthy();
+  });
+});

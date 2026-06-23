@@ -1,7 +1,10 @@
 /**
  * BranchPopover — container + view routing for the branch management popover.
  *
- * Views: list → submenu → new-branch → rename → conflict
+ * The list and a selected branch's submenu render SIDE BY SIDE (the popover
+ * grows to fit the adjacent submenu), matching the `13-popover` artboard — not a
+ * drill-in that replaces the list. new-branch / rename / conflict remain
+ * full-replace overlays.
  *
  * Branches are loaded LAZILY — only when `open` becomes true. The closed
  * popover never fires git fetches, so AppShell integration tests pass cleanly.
@@ -11,6 +14,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
+import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sessionCustomOf } from '../sessions/view-model/chat-to-thread-custom';
 import { useBranchActions } from './use-branch-actions';
@@ -22,9 +26,14 @@ import { RenameBranchView } from './RenameBranchView';
 import { ConflictView } from './ConflictView';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 
-type View = 'list' | 'submenu' | 'new-branch' | 'conflict' | 'rename';
+type View = 'list' | 'new-branch' | 'conflict' | 'rename';
 
 const DEFAULT_ADAPTER_ID = 'claude';
+
+// Each panel (list, submenu, overlay) is its own card; the popover container is
+// bare so the list + submenu read as two separate cards with a gap (13-popover
+// artboard), not one merged surface.
+const PANEL_CARD = 'rounded-[11px] border border-border bg-popover p-[5px] shadow-[var(--mf-shadow-pop)]';
 
 export interface BranchPopoverProps {
   port: number;
@@ -115,10 +124,14 @@ export function BranchPopover({
     requestAnimationFrame(() => searchRef.current?.focus());
   }, []);
 
+  // Selecting a branch opens its submenu BESIDE the list (no view switch).
+  // Clicking the already-selected branch toggles the submenu closed.
   const handleSelectBranch = useCallback((branch: BranchInfo, isRemote = false) => {
-    setSelected({ info: branch, isRemote });
-    setView('submenu');
+    setSelected((prev) => (prev?.info.name === branch.name ? null : { info: branch, isRemote }));
   }, []);
+
+  // Collapse the side-by-side submenu, leaving the list in place (no search reset).
+  const closeSubmenu = useCallback(() => setSelected(null), []);
 
   const handleNewBranch = useCallback((startFrom?: string) => {
     setNewBranchStartFrom(startFrom);
@@ -184,113 +197,124 @@ export function BranchPopover({
       {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
       <PopoverContent
         data-testid="git-branch-popover"
-        className="p-[5px] w-auto min-w-[280px] max-w-[360px]"
+        className="w-auto rounded-none border-0 bg-transparent p-0 shadow-none overflow-visible"
         align="start"
         side="bottom"
         sideOffset={4}
       >
         {view === 'list' && (
-          <BranchListView
-            local={localBranches}
-            remote={remoteNames}
-            worktrees={worktrees}
-            currentBranch={currentBranch}
-            search={search}
-            onSearch={setSearch}
-            onSelectBranch={(b) => {
-              // Remote branches come in as non-worktree BranchInfos with no `worktree`
-              // field, identified by checking against the remote name list.
-              const isRemote = remoteNames.includes(b.name);
-              handleSelectBranch(b, isRemote);
-            }}
-            onNewBranch={() => handleNewBranch()}
-            actions={{
-              handleFetch,
-              handleUpdateAll,
-              handlePush,
-              handleDeleteWorktree: handleDeleteWorktreeAction,
-              handleNewSession,
-            }}
-            busy={busy}
-            busyAction={busyAction}
-            searchRef={searchRef}
-          />
-        )}
-        {view === 'submenu' && selected != null && (
-          <BranchSubmenu
-            branch={selected.info.name}
-            isCurrent={selected.info.name === currentBranch}
-            isRemote={selected.isRemote}
-            isWorktree={isSelectedWorktree}
-            onClose={goToList}
-            onCheckout={(b) => {
-              void handleCheckout(b).then(() => onBranchChanged?.());
-            }}
-            onPull={(b) => {
-              void handlePull(b);
-            }}
-            onPush={(b) => {
-              void handlePush(b);
-            }}
-            onMerge={(b) => {
-              void handleMerge(b).then(() => onBranchChanged?.());
-            }}
-            onRebase={(b) => {
-              void handleRebase(b).then(() => onBranchChanged?.());
-            }}
-            onRename={handleRenameRequest}
-            onDelete={(b, isRemote) => {
-              void handleDelete(b, isRemote).then(() => onBranchChanged?.());
-            }}
-            onNewBranchFrom={(b) => handleNewBranch(b)}
-            onNewSession={
-              isSelectedWorktree
-                ? (b) => {
-                    handleNewSession(selected.info.worktree!, b);
+          <div className="flex items-start gap-1.5">
+            <div className={cn(PANEL_CARD, 'w-[300px] shrink-0')}>
+              <BranchListView
+                local={localBranches}
+                remote={remoteNames}
+                worktrees={worktrees}
+                currentBranch={currentBranch}
+                selectedBranch={selected?.info.name}
+                search={search}
+                onSearch={setSearch}
+                onSelectBranch={(b) => {
+                  // Remote branches come in as non-worktree BranchInfos with no `worktree`
+                  // field, identified by checking against the remote name list.
+                  const isRemote = remoteNames.includes(b.name);
+                  handleSelectBranch(b, isRemote);
+                }}
+                onNewBranch={() => handleNewBranch()}
+                actions={{
+                  handleFetch,
+                  handleUpdateAll,
+                  handlePush,
+                  handleDeleteWorktree: handleDeleteWorktreeAction,
+                  handleNewSession,
+                }}
+                busy={busy}
+                busyAction={busyAction}
+                searchRef={searchRef}
+              />
+            </div>
+            {selected != null && (
+              <div className={cn(PANEL_CARD, 'w-[260px] shrink-0')}>
+                <BranchSubmenu
+                  branch={selected.info.name}
+                  isCurrent={selected.info.name === currentBranch}
+                  isRemote={selected.isRemote}
+                  isWorktree={isSelectedWorktree}
+                  onClose={closeSubmenu}
+                  onCheckout={(b) => {
+                    void handleCheckout(b).then(() => onBranchChanged?.());
+                  }}
+                  onPull={(b) => {
+                    void handlePull(b);
+                  }}
+                  onPush={(b) => {
+                    void handlePush(b);
+                  }}
+                  onMerge={(b) => {
+                    void handleMerge(b).then(() => onBranchChanged?.());
+                  }}
+                  onRebase={(b) => {
+                    void handleRebase(b).then(() => onBranchChanged?.());
+                  }}
+                  onRename={handleRenameRequest}
+                  onDelete={(b, isRemote) => {
+                    void handleDelete(b, isRemote).then(() => onBranchChanged?.());
+                  }}
+                  onNewBranchFrom={(b) => handleNewBranch(b)}
+                  onNewSession={
+                    isSelectedWorktree
+                      ? (b) => {
+                          handleNewSession(selected.info.worktree!, b);
+                        }
+                      : undefined
                   }
-                : undefined
-            }
-            onDeleteWorktree={
-              isSelectedWorktree
-                ? (b) => {
-                    void handleDeleteWorktreeAction(selected.info.worktree!, b);
+                  onDeleteWorktree={
+                    isSelectedWorktree
+                      ? (b) => {
+                          void handleDeleteWorktreeAction(selected.info.worktree!, b);
+                        }
+                      : undefined
                   }
-                : undefined
-            }
-            busy={busy}
-          />
+                  busy={busy}
+                />
+              </div>
+            )}
+          </div>
         )}
-        {view === 'new-branch' && (
-          <NewBranchDialog
-            localBranches={localBranches.map((b) => b.name)}
-            remoteBranches={remoteBranchInfos.map((b) => b.name)}
-            currentBranch={currentBranch}
-            startFrom={newBranchStartFrom}
-            onBack={goToList}
-            onCreate={handleCreate}
-          />
-        )}
-        {view === 'rename' && (
-          <RenameBranchView
-            target={renameTarget}
-            value={renameValue}
-            onChange={setRenameValue}
-            onSubmit={() => {
-              void handleRenameSubmit();
-            }}
-            onCancel={goToList}
-            busy={busy}
-          />
-        )}
-        {view === 'conflict' && (
-          <ConflictView
-            conflictFiles={conflictFiles}
-            activeOperation={branches?.activeOperation}
-            onAbort={() => {
-              void handleAbort().then(goToList);
-            }}
-            aborting={busyAction === 'abort'}
-          />
+        {view !== 'list' && (
+          <div className={cn(PANEL_CARD, 'w-[300px]')}>
+            {view === 'new-branch' && (
+              <NewBranchDialog
+                localBranches={localBranches.map((b) => b.name)}
+                remoteBranches={remoteBranchInfos.map((b) => b.name)}
+                currentBranch={currentBranch}
+                startFrom={newBranchStartFrom}
+                onBack={goToList}
+                onCreate={handleCreate}
+              />
+            )}
+            {view === 'rename' && (
+              <RenameBranchView
+                target={renameTarget}
+                value={renameValue}
+                onChange={setRenameValue}
+                onSubmit={() => {
+                  void handleRenameSubmit();
+                }}
+                onCancel={goToList}
+                busy={busy}
+              />
+            )}
+            {view === 'conflict' && (
+              <ConflictView
+                conflictFiles={conflictFiles}
+                activeOperation={branches?.activeOperation}
+                onAbort={() => {
+                  void handleAbort().then(goToList);
+                }}
+                aborting={busyAction === 'abort'}
+              />
+            )}
+          </div>
         )}
       </PopoverContent>
     </Popover>
