@@ -1,20 +1,20 @@
 'use client';
 
 import { useRef } from 'react';
-import { useBottomPanel, clampBottomPanelHeight, BOTTOM_PANEL_MAX_FALLBACK } from '@/store/bottom-panel';
+import { useUiPrefs, clampBottomPanelHeight, BOTTOM_PANEL_MAX_FALLBACK } from '@/store/ui-prefs';
 
 /** Reserve for the session list above the panel (matches the artboard's clientHeight − 200). */
 const LIST_RESERVE = 200;
 
 /** 5px row-resize bar above the bottom panel. Dragging up grows the panel. */
 export function PanelResizeHandle() {
-  const setHeight = useBottomPanel((s) => s.setHeight);
+  const setHeight = useUiPrefs((s) => s.setBottomPanelHeight);
   const cleanupRef = useRef<(() => void) | null>(null);
 
   const onPointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     const startY = e.clientY;
-    const startHeight = useBottomPanel.getState().height;
+    const startHeight = useUiPrefs.getState().bottomPanelHeight;
     const sidebar = (e.currentTarget as HTMLElement).closest('[data-testid="sessions-sidebar"]');
     const measured = sidebar?.clientHeight ?? 0;
     const sidebarHeight = measured > 0 ? measured : BOTTOM_PANEL_MAX_FALLBACK + LIST_RESERVE;

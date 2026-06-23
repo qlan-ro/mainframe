@@ -11,10 +11,10 @@ vi.mock('../SkillsList', () => ({ SkillsList: () => <div data-testid="skills-bod
 vi.mock('../AgentsList', () => ({ AgentsList: () => <div data-testid="agents-body" /> }));
 
 import { BottomPanel } from '../BottomPanel';
-import { useBottomPanel, BOTTOM_PANEL_DEFAULT_HEIGHT } from '@/store/bottom-panel';
+import { useUiPrefs, BOTTOM_PANEL_DEFAULT_HEIGHT } from '@/store/ui-prefs';
 
 beforeEach(() => {
-  useBottomPanel.setState({ tab: 'context', height: BOTTOM_PANEL_DEFAULT_HEIGHT });
+  useUiPrefs.setState({ bottomPanelTab: 'context', bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT });
   useSessionContext.mockReturnValue({
     chatId: 'c1',
     context: {
@@ -46,6 +46,6 @@ describe('BottomPanel', () => {
     render(<BottomPanel />);
     fireEvent.click(screen.getByTestId('sidebar-bottom-tab-skills'));
     expect(screen.getByTestId('skills-body')).toBeInTheDocument();
-    expect(useBottomPanel.getState().tab).toBe('skills');
+    expect(useUiPrefs.getState().bottomPanelTab).toBe('skills');
   });
 });

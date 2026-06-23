@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PanelResizeHandle } from '../PanelResizeHandle';
-import { useBottomPanel, BOTTOM_PANEL_DEFAULT_HEIGHT } from '@/store/bottom-panel';
+import { useUiPrefs, BOTTOM_PANEL_DEFAULT_HEIGHT } from '@/store/ui-prefs';
 
 beforeEach(() => {
-  useBottomPanel.setState({ tab: 'context', height: BOTTOM_PANEL_DEFAULT_HEIGHT });
+  useUiPrefs.setState({ bottomPanelTab: 'context', bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT });
 });
 
 describe('PanelResizeHandle', () => {
@@ -20,6 +20,6 @@ describe('PanelResizeHandle', () => {
     fireEvent.pointerDown(handle, { clientY: 500 });
     fireEvent.pointerMove(window, { clientY: 460 }); // dragged up 40px
     fireEvent.pointerUp(window, { clientY: 460 });
-    expect(useBottomPanel.getState().height).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT + 40);
+    expect(useUiPrefs.getState().bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT + 40);
   });
 });

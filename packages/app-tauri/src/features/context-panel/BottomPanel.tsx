@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { FileText, Wand2, Bot } from 'lucide-react';
-import { useBottomPanel, type BottomPanelTab } from '@/store/bottom-panel';
+import { useUiPrefs, type BottomPanelTab } from '@/store/ui-prefs';
 import { useSessionContext } from './use-session-context';
 import { useSidebarSkills } from './use-sidebar-skills';
 import { sessionItemCount } from './derive-session-items';
@@ -10,7 +10,9 @@ import { AgentsList } from './AgentsList';
 
 /** The bottom sidebar panel: Context / Skills / Agents tab bar + active body. */
 export function BottomPanel() {
-  const { tab, height, setTab } = useBottomPanel();
+  const tab = useUiPrefs((s) => s.bottomPanelTab);
+  const height = useUiPrefs((s) => s.bottomPanelHeight);
+  const setTab = useUiPrefs((s) => s.setBottomPanelTab);
   const { context } = useSessionContext();
   const { skills, agents } = useSidebarSkills();
 
