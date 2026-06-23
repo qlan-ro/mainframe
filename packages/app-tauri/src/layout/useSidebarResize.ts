@@ -5,6 +5,7 @@ import {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_EXPANDED_WIDTH,
 } from './SidebarShell';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 interface ResizeDrag {
   startX: number;
@@ -13,15 +14,25 @@ interface ResizeDrag {
 }
 
 export function useSidebarResize(sidebarVisible: boolean) {
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_EXPANDED_WIDTH);
-  const [dragCollapsed, setDragCollapsed] = useState(false);
+  const persistedWidth = useUiPrefs.getState().sidebarWidth;
+  const [sidebarWidth, setSidebarWidth] = useState(persistedWidth);
+  const [dragCollapsed, setDragCollapsed] = useState(persistedWidth === SIDEBAR_COLLAPSED_WIDTH);
+  const firstRun = useRef(true);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<ResizeDrag | null>(null);
 
   useEffect(() => {
+    // Honor the persisted width/collapsed state on initial mount; only react to
+    // later show transitions (re-showing a hidden sidebar restores a usable width).
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
     if (!sidebarVisible) return;
+    const w = useUiPrefs.getState().sidebarWidth;
+    const restored = w === SIDEBAR_COLLAPSED_WIDTH ? SIDEBAR_EXPANDED_WIDTH : w;
     setDragCollapsed(false);
-    setSidebarWidth(SIDEBAR_EXPANDED_WIDTH);
+    setSidebarWidth(restored);
   }, [sidebarVisible]);
 
   // Reset the global drag styles if we unmount mid-drag — finishDrag (pointerup)
@@ -38,11 +49,13 @@ export function useSidebarResize(sidebarVisible: boolean) {
   const collapse = () => {
     setDragCollapsed(true);
     setSidebarWidth(SIDEBAR_COLLAPSED_WIDTH);
+    useUiPrefs.getState().setSidebarWidth(SIDEBAR_COLLAPSED_WIDTH);
   };
 
   const expand = () => {
     setDragCollapsed(false);
     setSidebarWidth(SIDEBAR_EXPANDED_WIDTH);
+    useUiPrefs.getState().setSidebarWidth(SIDEBAR_EXPANDED_WIDTH);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -88,14 +101,13 @@ export function useSidebarResize(sidebarVisible: boolean) {
 
     const nextCollapsed = drag.currentWidth < SIDEBAR_COLLAPSE_THRESHOLD;
     setDragCollapsed(nextCollapsed);
-    if (nextCollapsed) {
-      setSidebarWidth(SIDEBAR_COLLAPSED_WIDTH);
-    } else {
-      // Keep an enlarged width; below the natural width, snap back to it.
-      setSidebarWidth(
-        drag.currentWidth > SIDEBAR_EXPANDED_WIDTH ? clampSidebarWidth(drag.currentWidth) : SIDEBAR_EXPANDED_WIDTH,
-      );
-    }
+    const committed = nextCollapsed
+      ? SIDEBAR_COLLAPSED_WIDTH
+      : drag.currentWidth > SIDEBAR_EXPANDED_WIDTH
+        ? clampSidebarWidth(drag.currentWidth)
+        : SIDEBAR_EXPANDED_WIDTH;
+    setSidebarWidth(committed);
+    useUiPrefs.getState().setSidebarWidth(committed);
   };
 
   // While dragging, the sidebar will collapse on release once it's below the
