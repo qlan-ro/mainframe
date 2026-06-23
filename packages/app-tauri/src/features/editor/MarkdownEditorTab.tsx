@@ -39,7 +39,9 @@ function countLines(text: string): number {
 }
 
 export function MarkdownEditorTab({ value, path, onChange, onSave, readOnly = false }: MarkdownEditorTabProps) {
-  const [mode, setMode] = useState<Mode>('edit');
+  // Markdown opens rendered (Preview) by default — like the other special viewers
+  // (svg/csv/image/pdf). Switch to Source to edit.
+  const [mode, setMode] = useState<Mode>('preview');
 
   const { left: status, right: statusRight } = splitMarkdownStatus(countWords(value), countLines(value));
 

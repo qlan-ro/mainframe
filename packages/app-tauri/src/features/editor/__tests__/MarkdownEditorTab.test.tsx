@@ -165,40 +165,42 @@ describe('MarkdownEditorTab', () => {
     expect(screen.getByTestId('markdown-mode-edit').textContent).toBe('Source');
   });
 
-  it('starts in Edit mode showing the CM6 editor, not the preview', () => {
+  it('starts in Preview mode showing the rendered preview, not the CM6 editor', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
-    expect(screen.getByTestId('cm-editor-mock')).toBeInTheDocument();
-    expect(screen.queryByTestId('markdown-preview')).toBeNull();
+    expect(screen.getByTestId('markdown-preview')).toBeInTheDocument();
+    expect(screen.queryByTestId('cm-editor-mock')).toBeNull();
   });
 
-  it('switches to Preview mode and back to Edit', () => {
+  it('switches to Source mode and back to Preview', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
 
-    fireEvent.click(screen.getByTestId('markdown-mode-preview'));
+    // Default is Preview.
     expect(screen.getByTestId('markdown-preview')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Title');
 
     fireEvent.click(screen.getByTestId('markdown-mode-edit'));
     expect(screen.queryByTestId('markdown-preview')).toBeNull();
     expect(screen.getByTestId('cm-editor-mock')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('markdown-mode-preview'));
+    expect(screen.getByTestId('markdown-preview')).toBeTruthy();
   });
 
   it('has exactly one viewer-shell regardless of mode (no duplicate chrome)', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
 
-    // Edit mode: the single persistent ViewerShell should be present.
-    const shellsInEdit = screen.getAllByTestId('viewer-shell');
-    expect(shellsInEdit).toHaveLength(1);
+    // Preview mode (default): the single persistent ViewerShell should be present.
+    expect(screen.getAllByTestId('viewer-shell')).toHaveLength(1);
 
-    // Preview mode: still only ONE ViewerShell.
-    fireEvent.click(screen.getByTestId('markdown-mode-preview'));
-    const shellsInPreview = screen.getAllByTestId('viewer-shell');
-    expect(shellsInPreview).toHaveLength(1);
+    // Source mode: still only ONE ViewerShell.
+    fireEvent.click(screen.getByTestId('markdown-mode-edit'));
+    expect(screen.getAllByTestId('viewer-shell')).toHaveLength(1);
   });
 
   it('ViewerShell is always present and contains the toggle in the header', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
-    // Shell present in edit mode (not just preview mode)
+    // Shell present in Source mode (not just the default Preview mode).
+    fireEvent.click(screen.getByTestId('markdown-mode-edit'));
     expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
     expect(screen.getByTestId('viewer-shell-status')).toBeInTheDocument();
   });
@@ -229,6 +231,8 @@ describe('MarkdownEditorTab', () => {
 
   it('passes readOnly={true} to CmEditor when readOnly prop is set', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} readOnly />);
+    // CmEditor only mounts in Source mode (Preview is the default).
+    fireEvent.click(screen.getByTestId('markdown-mode-edit'));
 
     const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
     expect(lastProps?.readOnly).toBe(true);
@@ -236,6 +240,8 @@ describe('MarkdownEditorTab', () => {
 
   it('passes readOnly={false} to CmEditor by default', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
+    // CmEditor only mounts in Source mode (Preview is the default).
+    fireEvent.click(screen.getByTestId('markdown-mode-edit'));
 
     const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
     expect(lastProps?.readOnly).toBe(false);
