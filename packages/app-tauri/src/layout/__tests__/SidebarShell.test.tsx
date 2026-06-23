@@ -34,4 +34,13 @@ describe('SidebarShell composition', () => {
     expect(resize.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(panel.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  // Regression: without min-h-0 this flex item keeps its content height, so a
+  // tall session list overflows the sidebar and the bottom panel + footer get
+  // clipped out of view. jsdom can't verify flex layout, so guard the class.
+  it('keeps min-h-0 on the content frame so the inner list scrolls (panel/footer stay visible)', () => {
+    render(<SidebarShell />);
+    const frame = screen.getByTestId('sessions-sidebar-content-frame');
+    expect(frame.className).toContain('min-h-0');
+  });
 });

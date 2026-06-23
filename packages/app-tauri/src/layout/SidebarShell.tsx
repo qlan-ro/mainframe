@@ -46,7 +46,11 @@ export function SidebarShell({
     >
       <div
         data-testid="sessions-sidebar-content-frame"
-        className="flex flex-1 flex-col @container"
+        // min-h-0 is load-bearing: without it this flex item keeps its intrinsic
+        // (content) height, so a tall session list overflows the sidebar instead
+        // of letting the inner list scroll — pushing the bottom panel + footer
+        // past the overflow-hidden clip and out of view.
+        className="flex min-h-0 flex-1 flex-col @container"
         style={{ width, minWidth: SIDEBAR_EXPANDED_WIDTH }}
       >
         <SidebarHeader />
