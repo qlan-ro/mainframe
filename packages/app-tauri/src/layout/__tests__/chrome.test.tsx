@@ -68,12 +68,12 @@ vi.mock('../SurfaceHost', () => ({
 
 import { SidebarHeader } from '../SidebarHeader';
 import { SIDEBAR_EXPANDED_WIDTH, SIDEBAR_MAX_WIDTH, SidebarShell } from '../SidebarShell';
-import { useLayoutStore } from '@/store/layout';
+import { useUiPrefs } from '@/store/ui-prefs';
 import { AppShell } from '../../app/AppShell';
 
 beforeEach(() => {
-  if (!useLayoutStore.getState().sidebarVisible) {
-    useLayoutStore.getState().toggleSidebar();
+  if (!useUiPrefs.getState().sidebarVisible) {
+    useUiPrefs.getState().toggleSidebar();
   }
   document.body.style.removeProperty('user-select');
   document.body.style.removeProperty('cursor');
@@ -94,8 +94,8 @@ describe('sidebar instant collapse button', () => {
 
     fireEvent.click(screen.getByTestId('sidebar-hide-button'));
 
-    expect(useLayoutStore.getState().sidebarVisible).toBe(false);
-    useLayoutStore.getState().toggleSidebar();
+    expect(useUiPrefs.getState().sidebarVisible).toBe(false);
+    useUiPrefs.getState().toggleSidebar();
   });
 });
 

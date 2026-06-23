@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, GitBranch, Moon, PanelLeft, PanelRight, Search, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme, type WindowStyle } from '@/store/theme';
-import { useLayoutStore } from '@/store/layout';
+import { useUiPrefs } from '@/store/ui-prefs';
 import { windowStyleGeometry } from '@/lib/appearance/window-style';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { BranchPopover } from '../features/git/BranchPopover';
@@ -48,8 +48,8 @@ export function MainToolbar({
   const mode = useTheme((s) => s.mode);
   const toggleTheme = useTheme((s) => s.toggle);
   const isDark = mode === 'dark';
-  const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
-  const toggleInspector = useLayoutStore((s) => s.toggleInspector);
+  const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
+  const toggleInspector = useUiPrefs((s) => s.toggleInspector);
   const geo = windowStyleGeometry(windowStyle);
 
   return (

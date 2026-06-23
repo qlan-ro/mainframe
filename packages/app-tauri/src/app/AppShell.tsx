@@ -25,7 +25,7 @@ import { useSessionListRouter } from '../features/sessions/ws/use-session-list-r
 import { useNewChatHotkey } from '../features/sessions/use-new-chat-hotkey';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
-import { useLayoutStore } from '../store/layout';
+import { useUiPrefs } from '../store/ui-prefs';
 import { useTheme } from '../store/theme';
 import { windowStyleGeometry } from '../lib/appearance/window-style';
 import { MainToolbar } from '../layout/MainToolbar';
@@ -68,9 +68,9 @@ function RuntimeBody({ port }: { port: number }) {
 
   // First-run coachmark tour — auto-opens only on an empty workspace.
   const showTour = useFirstRunTour();
-  const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
-  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
-  const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
+  const sidebarVisible = useUiPrefs((s) => s.sidebarVisible);
+  const toggleSidebar = useUiPrefs((s) => s.toggleSidebar);
+  const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
   const { projectName, branchName, worktreePath, projectPath, projectId, chatId } = useActiveIdentity();
 
   // Sync the active bases into the store so the intent subscriber (outside React)

@@ -26,6 +26,7 @@ import { pickViewerKind } from '@/features/viewers/viewer-router';
 import { toFileRef } from '@/lib/files/file-ref';
 import { onSurfaceIntent } from './surface-intents';
 import { useLayoutStore } from './layout';
+import { useUiPrefs } from './ui-prefs';
 import { useTabsStore } from './tabs';
 import { useEditorStore } from './editor';
 import { useFilesStore } from './files';
@@ -136,12 +137,12 @@ export function subscribeToFileIntents(): () => void {
     }
 
     if (intent.type === 'toggle-sidebar') {
-      useLayoutStore.getState().toggleSidebar();
+      useUiPrefs.getState().toggleSidebar();
       return;
     }
 
     if (intent.type === 'toggle-inspector') {
-      useLayoutStore.getState().toggleInspector();
+      useUiPrefs.getState().toggleInspector();
       return;
     }
 

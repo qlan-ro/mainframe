@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
-import { useLayoutStore } from '@/store/layout';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 const mockEmit = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
@@ -11,7 +11,7 @@ import { MainToolbar } from '../MainToolbar';
 beforeEach(() => {
   localStorage.clear();
   useTheme.getState().setMode('light');
-  useLayoutStore.setState({ inspectorVisible: false });
+  useUiPrefs.setState({ inspectorVisible: false });
   mockEmit.mockReset();
 });
 
@@ -192,13 +192,13 @@ describe('MainToolbar — inspector toggle', () => {
 
     const btn = screen.getByTestId('main-toolbar-inspector');
     expect(btn).not.toBeDisabled();
-    expect(useLayoutStore.getState().inspectorVisible).toBe(false);
+    expect(useUiPrefs.getState().inspectorVisible).toBe(false);
 
     fireEvent.click(btn);
-    expect(useLayoutStore.getState().inspectorVisible).toBe(true);
+    expect(useUiPrefs.getState().inspectorVisible).toBe(true);
 
     fireEvent.click(btn);
-    expect(useLayoutStore.getState().inspectorVisible).toBe(false);
+    expect(useUiPrefs.getState().inspectorVisible).toBe(false);
   });
 });
 

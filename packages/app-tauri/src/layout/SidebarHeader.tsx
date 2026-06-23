@@ -1,4 +1,4 @@
-import { useLayoutStore } from '@/store/layout';
+import { useUiPrefs } from '@/store/ui-prefs';
 import { useSettingsStore } from '@/store/settings';
 import { GearGlyph, SidebarLeftGlyph, TasksGlyph } from './surface-icons';
 
@@ -42,7 +42,7 @@ function SettingsBtn() {
 }
 
 function HideSidebarBtn() {
-  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
+  const toggleSidebar = useUiPrefs((s) => s.toggleSidebar);
   return (
     <button
       data-testid="sidebar-hide-button"

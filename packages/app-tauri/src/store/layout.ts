@@ -137,9 +137,6 @@ const INITIAL_LAYOUT: WorkspaceLayout = {
 interface LayoutStore {
   layout: WorkspaceLayout;
   run: RunState | null;
-  sidebarVisible: boolean;
-  /** Right-side Inspector pane (Files tree / Changes). Off by default. */
-  inspectorVisible: boolean;
   /** Per-session remembered workspaces. */
   sessions: Map<string, SessionWorkspace>;
   activeSessionId: string | null;
@@ -148,8 +145,6 @@ interface LayoutStore {
   setActiveSession: (sessionId: string) => void;
 
   toggleSurface: (surface: SurfaceId) => void;
-  toggleSidebar: () => void;
-  toggleInspector: () => void;
   /** Called by the horizontal SurfDivider; frac = fraction of the top-row width. */
   setTopFrac: (frac: number) => void;
   /** Called by the vertical SurfDivider; frac = fraction of the total height. */
@@ -188,8 +183,6 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
   return {
     layout: INITIAL_LAYOUT,
     run: null,
-    sidebarVisible: true,
-    inspectorVisible: false,
     sessions: new Map(),
     activeSessionId: null,
 
@@ -213,14 +206,6 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
         killAndDisposeCachedTerminals(terminalIdsInRun(run));
       }
       writeWorkspace({ layout: nextLayout, run: surface === 'run' && isActive ? null : run });
-    },
-
-    toggleSidebar() {
-      set((s) => ({ sidebarVisible: !s.sidebarVisible }));
-    },
-
-    toggleInspector() {
-      set((s) => ({ inspectorVisible: !s.inspectorVisible }));
     },
 
     setTopFrac(frac) {

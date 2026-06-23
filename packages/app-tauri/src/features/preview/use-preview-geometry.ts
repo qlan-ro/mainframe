@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { previewSetBounds } from '@/lib/tauri/preview';
 import { useLayoutStore } from '@/store/layout';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 interface PreviewGeometryProps {
   tabId: string;
@@ -39,8 +40,8 @@ export function usePreviewGeometry({ tabId, anchorRef, containerRef, active, sta
 
   const topFlex = useLayoutStore((s) => s.layout.topFlex);
   const vFlex = useLayoutStore((s) => s.layout.vFlex);
-  const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
-  const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
+  const sidebarVisible = useUiPrefs((s) => s.sidebarVisible);
+  const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
 
   useEffect(() => {
     scheduleBoundsUpdate();

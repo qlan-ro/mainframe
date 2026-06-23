@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { subscribeToFileIntents } from '../intent-subscriber';
 import { emitSurfaceIntent } from '../surface-intents';
 import { useSettingsStore } from '../settings';
-import { useLayoutStore } from '../layout';
+import { useUiPrefs } from '../ui-prefs';
 
 describe('intent-subscriber — command intents', () => {
   let unsub: () => void;
@@ -18,14 +18,14 @@ describe('intent-subscriber — command intents', () => {
   });
 
   it('toggle-sidebar flips sidebarVisible', () => {
-    const before = useLayoutStore.getState().sidebarVisible;
+    const before = useUiPrefs.getState().sidebarVisible;
     emitSurfaceIntent({ type: 'toggle-sidebar' });
-    expect(useLayoutStore.getState().sidebarVisible).toBe(!before);
+    expect(useUiPrefs.getState().sidebarVisible).toBe(!before);
   });
 
   it('toggle-inspector flips inspectorVisible', () => {
-    const before = useLayoutStore.getState().inspectorVisible;
+    const before = useUiPrefs.getState().inspectorVisible;
     emitSurfaceIntent({ type: 'toggle-inspector' });
-    expect(useLayoutStore.getState().inspectorVisible).toBe(!before);
+    expect(useUiPrefs.getState().inspectorVisible).toBe(!before);
   });
 });
