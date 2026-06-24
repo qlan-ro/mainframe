@@ -1,8 +1,8 @@
 /**
- * TauriAdapter — the only module in the renderer that imports @/lib/tauri/*.
- * It implements HostBridge by delegating to the proven lib/tauri free
- * functions (no Tauri call code is rewritten here). init() installs the
- * window-drag listener that previously ran at bridge.ts module scope.
+ * TauriAdapter — will become the only renderer module that imports @/lib/tauri/*
+ * (the remaining direct callers are migrated in Tasks 6–12). It implements
+ * HostBridge by delegating to the proven lib/tauri free functions; init()
+ * installs the window-drag listener that previously ran at bridge.ts module scope.
  */
 import type {
   HostBridge,

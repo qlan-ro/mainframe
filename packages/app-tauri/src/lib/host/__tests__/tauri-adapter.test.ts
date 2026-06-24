@@ -89,3 +89,37 @@ describe('TauriAdapter — init installs the drag listener', () => {
     region.remove();
   });
 });
+
+describe('TauriAdapter — terminal ArrayBuffer wrapping', () => {
+  it('delivers an ArrayBuffer from the data Channel as a Uint8Array to onData', async () => {
+    const { TauriAdapter } = await import('../tauri-adapter');
+    const onData = vi.fn();
+    const onExit = vi.fn();
+
+    // Capture Channel instances created during terminal_create invocation.
+    // terminal.ts constructs the dataChannel before calling invoke, then passes
+    // it as the `onData` arg. After invoke resolves, dataChannel.onmessage is
+    // already assigned by the lib/tauri/terminal.ts code path.
+    let capturedDataChannel: { onmessage: ((m: unknown) => void) | null } | null = null;
+    invoke.mockImplementationOnce((...args: unknown[]) => {
+      const [cmd, params] = args as [string, Record<string, unknown>];
+      if (cmd === 'terminal_create') {
+        capturedDataChannel = params['onData'] as { onmessage: ((m: unknown) => void) | null };
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await new TauriAdapter().terminal.create({ id: 'test-1', cwd: '/tmp', cols: 80, rows: 24 }, { onData, onExit });
+
+    expect(capturedDataChannel).not.toBeNull();
+    const buf = new Uint8Array([104, 105]).buffer;
+    capturedDataChannel!.onmessage!(buf);
+
+    expect(onData).toHaveBeenCalledTimes(1);
+    const firstCall = onData.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const received = firstCall![0] as Uint8Array;
+    expect(received).toBeInstanceOf(Uint8Array);
+    expect(Array.from(received)).toEqual([104, 105]);
+  });
+});
