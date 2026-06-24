@@ -7,6 +7,7 @@
  * inside the adapter.
  *
  * Plan 1 scope: app / fs / shell / notify / terminal / preview / daemon / log.
+ * Preview is the `mount()` seam (Plan 2).
  * `updates` and `presence` are deferred to Plan 3 (no Tauri impl exists yet).
  */
 
@@ -64,19 +65,36 @@ export interface TerminalHandle {
   kill(): Promise<void>;
 }
 
+export interface PreviewOpts {
+  /** Selects the persistent session partition: persist:sandbox-{projectId} (Electron). */
+  projectId?: string;
+  /** Initial frame; the renderer toggles it via handle.setDevice. */
+  device?: 'desktop' | 'mobile';
+}
+
 /**
- * Preview methods are exposed 1:1 with the current lib/tauri/preview.ts
- * (imperative). The `mount()` seam is deferred to Plan 2.
+ * A mounted preview surface. The renderer reserves a DOM container and hands it to
+ * mount(); the handle owns one backing webview.
+ *
+ * Coordinate space: capture() region is CSS pixels in the WEBVIEW VIEWPORT space
+ * (top-left = page content origin). The backend (Tauri WKWebView snapshot / Electron
+ * capturePage) applies device-pixel-ratio scaling — the renderer never multiplies by DPR.
+ *
+ * Visibility/occlusion: Tauri composites the webview ABOVE the DOM, so setVisible(false)
+ * blanks the OS layer when a DOM overlay covers the region. Electron stacks the <webview>
+ * IN the DOM, so setVisible(false) on occlusion is a near-no-op — both hosts must TOLERATE
+ * the renderer emitting it (the renderer keeps the existing occlusion logic unchanged).
  */
-export interface PreviewPort {
-  create(tabId: string, url: string, bounds: Bounds): Promise<void>;
-  navigate(tabId: string, url: string): Promise<void>;
-  setBounds(tabId: string, bounds: Bounds): Promise<void>;
-  setVisible(tabId: string, visible: boolean): Promise<void>;
-  capture(tabId: string, region?: Region): Promise<Uint8Array>;
-  destroy(tabId: string): Promise<void>;
-  eval(tabId: string, js: string): Promise<void>;
-  onInspectResult(cb: (result: InspectResult) => void): Promise<Unsubscribe>;
+export interface PreviewHandle {
+  setVisible(visible: boolean): void;
+  navigate(url: string): Promise<void>;
+  capture(region?: Region): Promise<Uint8Array>;
+  startInspect(): Promise<void>;
+  onInspect(cb: (result: InspectResult) => void): Unsubscribe;
+  /** Tauri: re-read container.getBoundingClientRect() into the native layer. Electron: no-op. */
+  refit(): void;
+  setDevice(device: 'desktop' | 'mobile'): void;
+  destroy(): void;
 }
 
 export interface HostBridge {
@@ -98,11 +116,16 @@ export interface HostBridge {
   terminal: {
     create(opts: TerminalOpts, handlers: TerminalHandlers): Promise<TerminalHandle>;
   };
-  preview: PreviewPort;
+  preview: {
+    mount(container: HTMLElement, url: string, opts?: PreviewOpts): PreviewHandle;
+    clearSession(projectId: string): Promise<void>;
+  };
   daemon: {
     port(): Promise<number>;
     status(): Promise<DaemonStatus>;
     onStatus(cb: (status: DaemonStatus) => void): Promise<Unsubscribe>;
   };
   log(level: LogLevel, module: string, message: string, data?: unknown): void;
+  /** Tauri installs the window-drag listener here; Electron is a CSS no-op. */
+  init?(): void;
 }

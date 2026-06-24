@@ -10,9 +10,6 @@ import type {
   Platform,
   LogLevel,
   DaemonStatus,
-  Bounds,
-  Region,
-  InspectResult,
   TerminalOpts,
   TerminalHandlers,
   TerminalHandle,
@@ -21,7 +18,6 @@ import type {
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import * as bridge from '@/lib/tauri/bridge';
 import { createTerminal } from '@/lib/tauri/terminal';
-import * as preview from '@/lib/tauri/preview';
 
 export class TauriAdapter implements HostBridge {
   app = {
@@ -50,14 +46,10 @@ export class TauriAdapter implements HostBridge {
   };
 
   preview = {
-    create: (tabId: string, url: string, bounds: Bounds): Promise<void> => preview.previewCreate(tabId, url, bounds),
-    navigate: (tabId: string, url: string): Promise<void> => preview.previewNavigate(tabId, url),
-    setBounds: (tabId: string, bounds: Bounds): Promise<void> => preview.previewSetBounds(tabId, bounds),
-    setVisible: (tabId: string, visible: boolean): Promise<void> => preview.previewSetVisible(tabId, visible),
-    capture: (tabId: string, region?: Region): Promise<Uint8Array> => preview.previewCapture(tabId, region),
-    destroy: (tabId: string): Promise<void> => preview.previewDestroy(tabId),
-    eval: (tabId: string, js: string): Promise<void> => preview.previewEval(tabId, js),
-    onInspectResult: (cb: (result: InspectResult) => void): Promise<Unsubscribe> => preview.onInspectResult(cb),
+    mount: (): never => {
+      throw new Error('TauriAdapter.preview.mount not yet implemented (Task 7)');
+    },
+    clearSession: (_projectId: string): Promise<void> => Promise.resolve(),
   };
 
   daemon = {

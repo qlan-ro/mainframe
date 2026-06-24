@@ -74,14 +74,17 @@ export class FakeHostBridge implements HostBridge {
   };
 
   preview = {
-    create: (): Promise<void> => notSupported('preview.create'),
-    navigate: (): Promise<void> => notSupported('preview.navigate'),
-    setBounds: (): Promise<void> => notSupported('preview.setBounds'),
-    setVisible: (): Promise<void> => notSupported('preview.setVisible'),
-    capture: (): Promise<Uint8Array> => notSupported('preview.capture'),
-    destroy: (): Promise<void> => notSupported('preview.destroy'),
-    eval: (): Promise<void> => notSupported('preview.eval'),
-    onInspectResult: (): Promise<Unsubscribe> => Promise.resolve(() => {}),
+    mount: (): import('@qlan-ro/mainframe-types').PreviewHandle => ({
+      setVisible: () => {},
+      navigate: () => Promise.resolve(),
+      capture: () => Promise.reject(new Error('preview.capture is not available in browser/dev mode')),
+      startInspect: () => Promise.resolve(),
+      onInspect: () => () => {},
+      refit: () => {},
+      setDevice: () => {},
+      destroy: () => {},
+    }),
+    clearSession: (): Promise<void> => Promise.resolve(),
   };
 
   daemon = {
