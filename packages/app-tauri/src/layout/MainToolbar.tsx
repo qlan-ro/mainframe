@@ -55,7 +55,7 @@ export function MainToolbar({
   return (
     <div
       data-testid="main-toolbar"
-      data-tauri-drag-region
+      data-drag-region
       className={`flex h-[40px] flex-shrink-0 items-center justify-between gap-2 pr-[12px] ${geo.toolbar}`}
     >
       {/* Left: identity */}

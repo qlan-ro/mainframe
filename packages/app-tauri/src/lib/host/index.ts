@@ -11,17 +11,19 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 import type { HostBridge } from '@qlan-ro/mainframe-types';
 import { FakeHostBridge } from './fake-adapter';
 import { TauriAdapter } from './tauri-adapter';
-import { isTauriRuntime } from './detect';
+import { ElectronAdapter } from './electron-adapter';
+import { isTauriRuntime, isElectronRuntime } from './detect';
 
 export type { HostBridge } from '@qlan-ro/mainframe-types';
-export { isTauriRuntime } from './detect';
-export { isElectronRuntime } from './detect';
+export { isTauriRuntime, isElectronRuntime } from './detect';
 export { ElectronAdapter } from './electron-adapter';
 
 let singleton: HostBridge | null = null;
 
 function createHost(): HostBridge {
-  return isTauriRuntime() ? new TauriAdapter() : new FakeHostBridge();
+  if (isTauriRuntime()) return new TauriAdapter();
+  if (isElectronRuntime()) return new ElectronAdapter();
+  return new FakeHostBridge();
 }
 
 export function getHost(): HostBridge {

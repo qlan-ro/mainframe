@@ -30,7 +30,7 @@ describe('MainToolbar — root element', () => {
 
     const toolbar = screen.getByTestId('main-toolbar');
     expect(toolbar).toBeDefined();
-    expect(toolbar.hasAttribute('data-tauri-drag-region')).toBe(true);
+    expect(toolbar.hasAttribute('data-drag-region')).toBe(true);
   });
 });
 

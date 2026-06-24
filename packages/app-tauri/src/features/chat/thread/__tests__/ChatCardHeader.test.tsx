@@ -45,10 +45,10 @@ describe('ChatCardHeader — structure', () => {
     expect(screen.getByText('Fixture Chat')).toBeDefined();
   });
 
-  it('carries the Tauri drag-region attribute on the root element', () => {
+  it('carries the drag-region attribute on the root element', () => {
     renderHeader();
 
-    expect(screen.getByTestId('chat-header').hasAttribute('data-tauri-drag-region')).toBe(true);
+    expect(screen.getByTestId('chat-header').hasAttribute('data-drag-region')).toBe(true);
   });
 
   it('has the fixed h-[38px] height class', () => {

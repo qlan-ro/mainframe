@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, renderHook, screen } from '@testing-library/react';
 import { FakeHostBridge } from '../fake-adapter';
+import { ElectronAdapter } from '../electron-adapter';
 import { getHost, setHostForTesting, resetHostForTesting, HostProvider, useHost } from '../index';
 
 afterEach(() => {
@@ -20,6 +21,18 @@ describe('getHost — singleton in browser/dev mode', () => {
     const fake = new FakeHostBridge({ app: { platform: 'macos' } });
     setHostForTesting(fake);
     expect(getHost()).toBe(fake);
+  });
+});
+
+describe('getHost — Electron runtime', () => {
+  afterEach(() => {
+    resetHostForTesting();
+    delete (globalThis.window as unknown as Record<string, unknown>).mainframe;
+  });
+
+  it('returns an ElectronAdapter when window.mainframe is present', () => {
+    (globalThis.window as unknown as Record<string, unknown>).mainframe = {};
+    expect(getHost()).toBeInstanceOf(ElectronAdapter);
   });
 });
 

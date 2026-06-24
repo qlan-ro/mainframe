@@ -68,9 +68,8 @@ export class TauriAdapter implements HostBridge {
 
   /**
    * Install the window-drag listener (relocated from bridge.ts module scope).
-   * Tauri 2 does not auto-wire mousedown → startDragging for
-   * data-tauri-drag-region. Behavior is identical to the previous module-load
-   * handler; the attribute rename is deferred to Plan 2. Call once at startup.
+   * Tauri 2 does not auto-wire mousedown → startDragging for [data-drag-region].
+   * Call once at startup.
    */
   init(): void {
     document.addEventListener('mousedown', (e: MouseEvent) => {

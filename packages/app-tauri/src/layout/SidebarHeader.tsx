@@ -60,7 +60,7 @@ export function SidebarHeader() {
   return (
     <div
       data-testid="sidebar-header"
-      data-tauri-drag-region
+      data-drag-region
       className="flex h-[38px] flex-shrink-0 items-center gap-[8px] px-[8px]"
     >
       <TrafficLightsSpacer />

@@ -994,3 +994,17 @@ code {
 ::highlight(mf-find-active) {
   background-color: var(--mf-find-active);
 }
+
+/* Window drag: Electron uses CSS app-region; Tauri uses the JS mousedown listener
+   (TauriAdapter.init). Interactive children opt out so clicks still register. */
+[data-drag-region] {
+  -webkit-app-region: drag;
+}
+[data-drag-region] button,
+[data-drag-region] input,
+[data-drag-region] select,
+[data-drag-region] textarea,
+[data-drag-region] a,
+[data-drag-region] label {
+  -webkit-app-region: no-drag;
+}
