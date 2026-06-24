@@ -11,9 +11,9 @@
  *
  * Strategy
  * --------
- * All bridge functions are mocked at the module level. fetch is stubbed via
- * vi.stubGlobal so the health endpoint can be controlled per-test. Fake timers
- * drive the 2 s retry / poll interval without wall-clock waiting.
+ * All bridge functions are mocked via FakeHostBridge + setHostForTesting. fetch
+ * is stubbed via vi.stubGlobal so the health endpoint can be controlled per-test.
+ * Fake timers drive the 2 s retry / poll interval without wall-clock waiting.
  *
  * Microtask flushing: vi.runAllMicrotasksAsync is not available in this vitest
  * version. `vi.advanceTimersByTimeAsync(0)` is used instead — it processes
@@ -32,16 +32,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
-// Mocks — hoisted by vitest, must appear before the import under test.
+// Fake host wiring — intercepts getHost() in the source under test.
 // ---------------------------------------------------------------------------
 
-vi.mock('../../lib/tauri/bridge', () => ({
-  getDaemonPort: vi.fn(),
-  getDaemonStatus: vi.fn(),
-  onDaemonStatus: vi.fn(),
-}));
+import { FakeHostBridge } from '../../lib/host/fake-adapter';
+import { setHostForTesting, resetHostForTesting } from '../../lib/host';
 
-import { getDaemonPort, getDaemonStatus, onDaemonStatus } from '../../lib/tauri/bridge';
+const mockGetDaemonPort = vi.fn();
+const mockGetDaemonStatus = vi.fn();
+const mockOnDaemonStatus = vi.fn();
+
 import { useConnectionState, healthUrl } from '../useConnectionState';
 
 // ---------------------------------------------------------------------------
@@ -54,16 +54,17 @@ describe('healthUrl', () => {
   });
 });
 
-const mockGetDaemonPort = vi.mocked(getDaemonPort);
-const mockGetDaemonStatus = vi.mocked(getDaemonStatus);
-const mockOnDaemonStatus = vi.mocked(onDaemonStatus);
-
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
   vi.useFakeTimers();
+  const fake = new FakeHostBridge();
+  fake.daemon.port = mockGetDaemonPort;
+  fake.daemon.status = mockGetDaemonStatus;
+  fake.daemon.onStatus = mockOnDaemonStatus;
+  setHostForTesting(fake);
   // Default: onDaemonStatus resolves to a no-op unlisten fn.
   mockOnDaemonStatus.mockResolvedValue(() => {});
   // Default: fetch is healthy.
@@ -74,6 +75,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.resetAllMocks();
+  resetHostForTesting();
 });
 
 // ---------------------------------------------------------------------------

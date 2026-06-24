@@ -10,7 +10,7 @@
  *   a token (isLocalhost() bypass in the auth middleware).
  */
 import { useState, useEffect, useRef } from 'react';
-import { getDaemonPort, getDaemonStatus, onDaemonStatus } from '../lib/tauri/bridge';
+import { getHost } from '../lib/host';
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 
@@ -87,8 +87,8 @@ export function useConnectionState(): {
     // be spawning), so a slow or restarting daemon recovers on its own.
     async function acquirePort() {
       try {
-        const p = await getDaemonPort();
-        const s = await getDaemonStatus();
+        const p = await getHost().daemon.port();
+        const s = await getHost().daemon.status();
         if (cancelled) return;
         setPort(p);
         portRef.current = p;
@@ -107,7 +107,7 @@ export function useConnectionState(): {
       // Register the daemon:status listener once (NOT in the retry loop). A
       // failure here is non-fatal — the poll loop still provides liveness.
       try {
-        unlisten = await onDaemonStatus((status) => setDaemonStatus(status));
+        unlisten = await getHost().daemon.onStatus((status) => setDaemonStatus(status));
       } catch (err) {
         console.warn('[useConnectionState] daemon status listener failed', err);
       }
