@@ -7,14 +7,14 @@
  * GET /api/chats/:chatId/tool-result/:toolUseId. This component renders the
  * truncated preview and fetches the full text when the user requests it.
  *
- * Port contract (read port via getDaemonPort from the Tauri bridge — the
- * same async invoke every other app-tauri API call uses; no new global).
+ * Port contract (read port via host.daemon.port() from the host port — the
+ * same async call every other app-tauri API call uses; no new global).
  *
  * Props accept chatId/toolUseId explicitly so the component can be used
  * anywhere in the tool-card tree without requiring a full ChatRuntime.
  */
 import { useState, useEffect } from 'react';
-import { getDaemonPort } from '@/lib/tauri/bridge';
+import { useHost } from '@/lib/host';
 import { getToolResultContent } from '@/lib/api/chats';
 import { cn } from '@/lib/utils';
 
@@ -41,19 +41,21 @@ export interface ToolResultExpandProps {
 type FetchState = 'idle' | 'loading' | 'error';
 
 export function ToolResultExpand({ chatId, toolUseId, truncatedContent, fullBytes }: ToolResultExpandProps) {
+  const host = useHost();
   const [full, setFull] = useState<string | null>(null);
   const [fetchState, setFetchState] = useState<FetchState>('idle');
   const [port, setPort] = useState<number | null>(null);
 
-  // Resolve the daemon port once on mount via the Tauri bridge.
+  // Resolve the daemon port once on mount via the host port.
   useEffect(() => {
-    getDaemonPort()
+    host.daemon
+      .port()
       .then(setPort)
       .catch((err: unknown) => {
         // Port is unavailable — expand will remain disabled until resolved.
         console.warn('[tool-result-expand] getDaemonPort failed', err);
       });
-  }, []);
+  }, [host]);
 
   const expand = async () => {
     if (port == null) return;
