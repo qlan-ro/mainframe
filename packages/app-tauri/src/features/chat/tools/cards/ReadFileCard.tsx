@@ -31,30 +31,26 @@ const FAMILY_COLOR = 'var(--mf-tool-read)';
 const FAMILY_BG = 'var(--mf-tool-read-tint)';
 
 // ---------------------------------------------------------------------------
-// CodePreview — line-numbered plain text view
+// CodePreview — the Read output verbatim
 // ---------------------------------------------------------------------------
 
 interface CodePreviewProps {
   text: string;
-  startLine: number;
 }
 
-function CodePreview({ text, startLine }: CodePreviewProps) {
-  const lines = text.split('\n');
+/**
+ * Render the Read tool output as-is. It already arrives in `cat -n` format (each
+ * line prefixed with its own line number), so we add no gutter of our own — that
+ * would just double the numbers.
+ */
+function CodePreview({ text }: CodePreviewProps) {
   return (
-    <div
+    <pre
       data-testid="read-card-code-preview"
-      className="bg-mf-code-bg font-mono text-caption leading-normal overflow-x-auto max-h-[300px] overflow-y-auto"
+      className="bg-mf-code-bg font-mono text-caption leading-normal text-mf-code-fg overflow-auto max-h-[300px] whitespace-pre px-3 py-2"
     >
-      {lines.map((line, i) => (
-        <div key={i} className="flex min-h-[18px] hover:bg-muted transition-colors">
-          <span className="shrink-0 w-9 text-right pr-3 select-none text-mf-text-4 text-micro leading-normal">
-            {startLine + i}
-          </span>
-          <span className="flex-1 whitespace-pre pr-3 text-mf-code-fg">{line}</span>
-        </div>
-      ))}
-    </div>
+      {text}
+    </pre>
   );
 }
 
@@ -65,7 +61,6 @@ function CodePreview({ text, startLine }: CodePreviewProps) {
 export const ReadFileCard: ToolCallMessagePartComponent = ({ toolCallId, args, result, isError }) => {
   const chatId = useChatId();
   const filePath = typeof args['file_path'] === 'string' ? args['file_path'] : '';
-  const fromLine = typeof args['from'] === 'number' ? args['from'] : 1;
 
   const { text: resultText, truncated, fullBytes } = resolveResultText(result);
 
@@ -100,7 +95,7 @@ export const ReadFileCard: ToolCallMessagePartComponent = ({ toolCallId, args, r
       ) : isError ? (
         <ErrorBody text={resultText} testId="read-card-error-body" />
       ) : (
-        <CodePreview text={resultText} startLine={fromLine} />
+        <CodePreview text={resultText} />
       )}
     </div>
   ) : null;

@@ -127,7 +127,7 @@ describe('ReadFileCard — done state', () => {
     expect(screen.getByText('· 1 line')).toBeInTheDocument();
   });
 
-  it('renders line numbers starting from the from arg', () => {
+  it('renders the result output verbatim, adding no line-number gutter of its own', () => {
     render(
       <Wrap>
         <ReadFileCard
@@ -142,9 +142,8 @@ describe('ReadFileCard — done state', () => {
     fireEvent.click(screen.getByTestId('read-card-trigger'));
     const preview = screen.getByTestId('read-card-code-preview');
     expect(preview).toBeInTheDocument();
-    // Line numbers 10 and 11 should appear for the two-line result
-    expect(preview).toHaveTextContent('10');
-    expect(preview).toHaveTextContent('11');
+    // The output is shown as-is — no gutter numbers are synthesized from `from`.
+    expect(preview.textContent).toBe('alpha\nbeta');
   });
 
   it('renders the card root with data-testid="read-card-root"', () => {
@@ -247,6 +246,36 @@ describe('ReadFileCard — error state', () => {
     );
     fireEvent.click(screen.getByTestId('read-card-trigger'));
     expect(screen.queryByTestId('read-card-code-preview')).not.toBeInTheDocument();
+  });
+});
+
+describe('ReadFileCard — cat -n output rendered verbatim (no synthesized gutter)', () => {
+  it('shows the cat -n output as-is so line numbers appear exactly once', () => {
+    const raw = "1→'use client';\n2→const x = 1;";
+    render(
+      <Wrap>
+        <ReadFileCard {...baseProps} args={{ file_path: '/a/b/c.ts', from: 1 }} result={raw} isError={false} />
+      </Wrap>,
+    );
+    fireEvent.click(screen.getByTestId('read-card-trigger'));
+    const preview = screen.getByTestId('read-card-code-preview');
+    // Verbatim: the card adds no gutter, so the only line numbers are the ones
+    // already in the result — no duplication.
+    expect(preview.textContent).toBe(raw);
+  });
+
+  it('renders a partial read verbatim (the result keeps its own line numbers)', () => {
+    const raw = '42→line forty-two\n43→line forty-three';
+    render(
+      <Wrap>
+        <ReadFileCard {...baseProps} args={{ file_path: '/a/b/c.ts', from: 100 }} result={raw} isError={false} />
+      </Wrap>,
+    );
+    fireEvent.click(screen.getByTestId('read-card-trigger'));
+    const preview = screen.getByTestId('read-card-code-preview');
+    // The result's own numbers (42/43) are shown; the `from` arg is not used to
+    // synthesize a gutter.
+    expect(preview.textContent).toBe(raw);
   });
 });
 
