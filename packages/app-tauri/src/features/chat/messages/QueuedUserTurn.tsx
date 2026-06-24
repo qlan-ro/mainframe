@@ -49,9 +49,9 @@ function QueuedAction({ icon: Icon, label, onClick, danger, testid }: QueuedActi
       data-testid={testid}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1 rounded-md border border-transparent px-1.5 py-1',
+        'inline-flex items-center gap-1 rounded-md border border-transparent h-[24px] px-[9px]',
         'text-caption text-mf-text-3 transition-colors',
-        'hover:bg-accent hover:border-border',
+        'hover:bg-mf-content2 hover:border-border',
         danger && 'hover:text-destructive hover:border-destructive/35',
       )}
     >
@@ -93,7 +93,7 @@ function QueuedMeta({
   return (
     <span
       className={cn(
-        'mr-1 inline-flex items-center gap-1.5 font-mono text-micro',
+        'mr-1 inline-flex items-center gap-1.5 font-mono text-micro tracking-[-0.1px]',
         dimmed ? 'text-mf-text-4' : 'text-mf-text-3',
       )}
     >
@@ -147,7 +147,7 @@ export function QueuedUserTurn({
   const handleEdit = useCallback(() => startEdit({ messageId, content }), [startEdit, messageId, content]);
 
   return (
-    <div data-testid="chat-queued-message" className="group/queued flex w-full flex-col items-end gap-1">
+    <div data-testid="chat-queued-message" className="group/queued flex w-full flex-col items-end gap-[5px]">
       <div className="flex items-center gap-2">
         <div
           className={cn(
@@ -167,11 +167,9 @@ export function QueuedUserTurn({
           <div
             style={PENDING_CARD}
             className={cn(
-              'max-w-[470px] rounded-xl border px-[15px] py-[10px] text-body leading-relaxed tracking-normal text-mf-um-ink',
+              'max-w-[470px] rounded-xl border px-[15px] py-[10px] text-body leading-[1.58] tracking-[-0.1px] text-mf-um-ink',
               'transition-[opacity,border-color] duration-200 ease-in-out',
-              sending
-                ? 'border-solid border-mf-um-edge'
-                : 'border-dashed border-mf-um-dash opacity-[0.82]',
+              sending ? 'border-solid border-mf-um-edge' : 'border-dashed border-mf-um-dash opacity-[0.82]',
             )}
           >
             {children}

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * PlanModeToggle — ClipboardList icon + "Plan" label toggle button.
+ * PlanModeToggle — Clipboard icon + "Plan" label toggle button.
  *
  * Renders NULL unless the adapter declares `capabilities.planMode = true`.
  * NOT disabled while the chat is running — planMode changes take effect on the
@@ -13,7 +13,7 @@
  * Built on shadcn Tooltip; never raw Radix.
  */
 
-import { ClipboardList } from 'lucide-react';
+import { Clipboard } from 'lucide-react';
 import type { AdapterInfo, Chat } from '@qlan-ro/mainframe-types';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -48,7 +48,7 @@ export function PlanModeToggle({ chat, adapter, setPlanMode }: PlanModeTogglePro
               : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',
           ].join(' ')}
         >
-          <ClipboardList size={14} className="shrink-0" />
+          <Clipboard size={12} className="shrink-0" />
           <span className="text-caption font-medium">Plan</span>
         </button>
       </TooltipTrigger>

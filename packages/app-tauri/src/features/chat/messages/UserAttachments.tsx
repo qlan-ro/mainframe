@@ -33,7 +33,7 @@ function FilePill({ name }: { name: string }) {
   return (
     <div
       data-testid={`chat-user-attachment-${name}`}
-      className="inline-flex items-center gap-2.5 rounded-[11px] border-[0.5px] border-border bg-card py-1.5 pl-1.5 pr-3 shadow-sm"
+      className="inline-flex items-center gap-2.5 rounded-[11px] border-[0.5px] border-border bg-background py-1.5 pl-1.5 pr-3 shadow-sm"
     >
       <span
         className="inline-flex size-9 flex-shrink-0 items-center justify-center rounded-lg"
@@ -44,7 +44,7 @@ function FilePill({ name }: { name: string }) {
         </span>
       </span>
       <span className="flex min-w-0 flex-col gap-px">
-        <span className="max-w-[150px] truncate text-caption font-semibold text-mf-um-ink">{name}</span>
+        <span className="max-w-[150px] truncate text-label font-semibold text-mf-um-ink">{name}</span>
         <span className="text-micro text-mf-text-3">{subline}</span>
       </span>
     </div>

@@ -54,7 +54,7 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
           // body) — desktop parity: user-bubble text is selectable/copyable.
           'aui-md',
           // Base prose styles — matched to the artboard type spec
-          'text-body leading-relaxed tracking-normal',
+          'text-body leading-[1.58] tracking-[-0.1px]',
           // Clamp to 4 lines when collapsed
           collapsed && 'line-clamp-4',
         )}

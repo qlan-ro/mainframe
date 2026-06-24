@@ -13,7 +13,7 @@
  * (mapped in @theme inline), not a /opacity variant.
  */
 
-import { Shield } from 'lucide-react';
+import { ChevronDown, Shield } from 'lucide-react';
 import type { Chat, ExecutionMode } from '@qlan-ro/mainframe-types';
 import {
   DropdownMenu,
@@ -58,8 +58,9 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
                 isYolo ? 'text-destructive' : 'text-muted-foreground',
               ].join(' ')}
             >
-              <Shield size={14} className="shrink-0" />
+              <Shield size={11} className="shrink-0" />
               <span className="text-caption font-medium">{currentLabel}</span>
+              <ChevronDown size={9} className="shrink-0 opacity-60" />
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -72,7 +73,7 @@ export function PermissionSelect({ chat, setPermissionMode }: PermissionSelectPr
             key={mode.id}
             data-testid={`composer-permission-mode-select-option-${mode.id}`}
             onSelect={() => setPermissionMode(mode.id)}
-            className={mode.id === currentMode ? 'bg-accent text-accent-foreground font-medium' : ''}
+            className={mode.id === currentMode ? 'bg-mf-selection text-foreground font-medium' : ''}
           >
             <div className="flex flex-col">
               <span className="text-label font-medium">{mode.label}</span>

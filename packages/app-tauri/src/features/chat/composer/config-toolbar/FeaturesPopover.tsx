@@ -83,7 +83,7 @@ export function FeaturesPopover({ chat, model, setFeature, disabled, providerDef
                 'focus-visible:outline-none',
               ].join(' ')}
             >
-              <SlidersHorizontal size={14} />
+              <SlidersHorizontal size={12} />
               {hasActive && (
                 <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-primary" aria-hidden />
               )}
@@ -93,14 +93,8 @@ export function FeaturesPopover({ chat, model, setFeature, disabled, providerDef
         <TooltipContent side="top">Feature settings</TooltipContent>
       </Tooltip>
 
-      <PopoverContent
-        data-testid="composer-features-popover"
-        align="start"
-        side="top"
-        sideOffset={6}
-        className="w-64"
-      >
-        <MenuLabel>Features</MenuLabel>
+      <PopoverContent data-testid="composer-features-popover" align="start" side="top" sideOffset={6} className="w-64">
+        <MenuLabel>{model.label ?? 'Model'} features</MenuLabel>
         <div className="divide-y divide-border">
           {features.map((f) => (
             <FeatureRow

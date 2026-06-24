@@ -182,7 +182,7 @@ export const ComposerAddAttachment: FC = () => {
         variant="ghost"
         size="icon"
         aria-label="Add Attachment"
-        className="size-8 rounded p-1 text-mf-text-3 hover:text-foreground"
+        className="size-[22px] rounded-sm p-1 text-mf-text-3 hover:text-foreground"
       >
         <Paperclip className="size-4 stroke-[1.5px]" />
       </TooltipIconButton>

@@ -15,11 +15,11 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        'flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input',
-        'bg-transparent px-3 py-1.5 text-body',
+        'flex h-8 w-full items-center justify-between gap-2 rounded-md border-[0.5px] border-input',
+        'bg-card px-3 py-1.5 text-body',
         'placeholder:text-muted-foreground',
         'focus:outline-none',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'disabled:cursor-not-allowed disabled:opacity-[0.45]',
         '[&>span]:line-clamp-1',
         className,
       )}

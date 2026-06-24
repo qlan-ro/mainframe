@@ -19,7 +19,7 @@ function Switch({ className, ...props }: React.ComponentPropsWithoutRef<typeof S
         className={cn(
           'pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm',
           'transition-transform',
-          'data-[state=checked]:translate-x-4',
+          'data-[state=checked]:translate-x-[20px]',
           'data-[state=unchecked]:translate-x-0',
         )}
       />

@@ -159,7 +159,7 @@ function ReasoningTrigger({
       <ChevronDownIcon
         data-slot="reasoning-trigger-chevron"
         className={cn(
-          'aui-reasoning-trigger-chevron mt-0.5 size-3.5 shrink-0',
+          'aui-reasoning-trigger-chevron mt-0.5 size-[10px] shrink-0',
           'transition-transform duration-(--animation-duration) ease-out',
           'group-data-[state=closed]/trigger:-rotate-90',
           'group-data-[state=open]/trigger:rotate-0',

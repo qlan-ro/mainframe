@@ -11,7 +11,7 @@ function Textarea({ className, ...props }: TextareaProps) {
         'text-body placeholder:text-muted-foreground',
         'transition-colors resize-none',
         'focus-visible:outline-none focus-visible:ring-0',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'disabled:cursor-not-allowed disabled:opacity-[0.45]',
         className,
       )}
       {...props}

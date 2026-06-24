@@ -45,7 +45,7 @@ export function RenameBranchView({ target, value, onChange, onSubmit, onCancel, 
           if (e.key === 'Enter' && !busy && value.trim()) onSubmit();
         }}
         disabled={busy}
-        className="w-full px-2 py-1 text-body rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        className="w-full px-2 h-[30px] text-body rounded-md border-[0.5px] border-border bg-mf-content2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
       />
 
       <div className="flex justify-end gap-2">
@@ -53,7 +53,7 @@ export function RenameBranchView({ target, value, onChange, onSubmit, onCancel, 
           data-testid="git-rename-cancel"
           onClick={onCancel}
           disabled={busy}
-          className="px-3 py-1 text-body rounded border border-border text-muted-foreground hover:bg-accent"
+          className="px-3 h-[28px] text-body rounded border border-border text-muted-foreground hover:bg-accent"
         >
           Cancel
         </button>
@@ -62,7 +62,7 @@ export function RenameBranchView({ target, value, onChange, onSubmit, onCancel, 
           onClick={onSubmit}
           disabled={busy || !value.trim()}
           className={cn(
-            'px-3 py-1 text-body rounded text-primary-foreground bg-primary hover:opacity-90 transition-opacity flex items-center gap-1.5',
+            'px-3 h-[28px] text-body rounded text-primary-foreground bg-primary hover:opacity-90 transition-opacity flex items-center gap-1.5',
             (busy || !value.trim()) && 'opacity-40 cursor-not-allowed',
           )}
         >

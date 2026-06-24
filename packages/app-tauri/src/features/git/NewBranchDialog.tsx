@@ -128,7 +128,7 @@ export function NewBranchDialog({
             type="button"
             onClick={onBack}
             disabled={creating}
-            className="px-3 py-1 text-body rounded border border-border text-muted-foreground hover:bg-accent"
+            className="px-3 h-[28px] text-body rounded border border-border text-muted-foreground hover:bg-accent"
           >
             Cancel
           </button>
@@ -137,7 +137,7 @@ export function NewBranchDialog({
             type="submit"
             disabled={creating || !name.trim()}
             className={cn(
-              'px-3 py-1 text-body rounded text-primary-foreground bg-primary hover:opacity-90 transition-opacity',
+              'px-3 h-[28px] text-body rounded text-primary-foreground bg-primary hover:opacity-90 transition-opacity',
               (creating || !name.trim()) && 'opacity-40 cursor-not-allowed',
             )}
           >

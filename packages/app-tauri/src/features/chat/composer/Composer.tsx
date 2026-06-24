@@ -108,13 +108,13 @@ export function Composer() {
       <ComposerPrimitive.Root
         data-testid="chat-composer"
         data-tut="composer"
-        className="rounded-2xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring"
+        className="rounded-xl [border-width:0.5px] border-border bg-card shadow-sm transition-colors focus-within:border-ring"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"
           disabled={worktreeMissing}
           className={cn(
-            'rounded-2xl transition-colors',
+            'rounded-xl transition-colors',
             '[&[data-dragging]]:ring-2 [&[data-dragging]]:ring-primary [&[data-dragging]]:ring-offset-1',
             '[&[data-dragging]]:bg-mf-selection',
           )}
@@ -125,7 +125,7 @@ export function Composer() {
           <ComposerQuotePreview />
 
           {/* Attachment tiles — renders nothing (empty:hidden) when no attachments pending */}
-          <div data-testid="composer-attachments" className="px-4 pt-3 empty:hidden">
+          <div data-testid="composer-attachments" className="px-[14px] pt-[10px] empty:hidden">
             <ComposerAttachments />
           </div>
 
@@ -138,10 +138,10 @@ export function Composer() {
             placeholder="Type @ to search files, / for skills…"
             rows={1}
             autoFocus
-            className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
+            className="max-h-48 w-full resize-none bg-transparent px-[14px] pt-[10px] pb-[4px] text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-4 disabled:cursor-not-allowed disabled:opacity-50"
           />
 
-          <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2.5">
+          <div className="flex items-center justify-between gap-2 px-2.5 pt-[4px] pb-[6px]">
             {/* Left slot: paperclip + separator + config toolbar */}
             <div data-testid="chat-composer-toolbar" className="flex min-h-8 items-center gap-1 text-mf-text-3">
               <ComposerAddAttachment />

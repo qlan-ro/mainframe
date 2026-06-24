@@ -16,7 +16,7 @@ function TooltipContent({
       <TooltipPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          'z-50 overflow-hidden rounded-md border border-border bg-popover px-2 py-1',
+          'z-50 overflow-hidden rounded-lg border border-border bg-popover px-2 py-1',
           'text-caption text-popover-foreground',
           'shadow-[var(--mf-shadow-pop)]',
           'animate-in fade-in-0 zoom-in-95',

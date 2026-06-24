@@ -24,7 +24,7 @@ function DropdownMenuSubTrigger({
       className={cn(
         'flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5',
         'text-body outline-none',
-        'focus:bg-accent data-[state=open]:bg-accent',
+        'focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground',
         inset && 'pl-8',
         className,
       )}
@@ -186,7 +186,12 @@ function DropdownMenuSeparator({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>) {
-  return <DropdownMenuPrimitive.Separator className={cn('mx-1.5 my-[4px] h-0 border-t-[0.5px] border-border', className)} {...props} />;
+  return (
+    <DropdownMenuPrimitive.Separator
+      className={cn('mx-1.5 my-[4px] h-0 border-t-[0.5px] border-border', className)}
+      {...props}
+    />
+  );
 }
 
 function DropdownMenuShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {

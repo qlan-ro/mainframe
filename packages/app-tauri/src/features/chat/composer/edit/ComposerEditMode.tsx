@@ -48,13 +48,13 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
   return (
     <div
       data-testid="chat-composer-edit"
-      className="overflow-hidden rounded-2xl border border-mf-warning bg-card shadow-sm"
+      className="overflow-hidden rounded-xl [border-width:0.5px] border-mf-warning bg-card shadow-sm"
     >
-      <div className="flex items-center gap-2 bg-mf-warning-tint px-3 py-2">
-        <span className="flex size-5 items-center justify-center rounded-md bg-mf-warning-tint text-mf-warning">
+      <div className="flex items-center gap-2 bg-mf-warning-tint pl-[9px] pr-[11px] py-[7px]">
+        <span className="flex size-[19px] items-center justify-center rounded-md bg-mf-warning-tint text-mf-warning">
           <PencilIcon size={12} />
         </span>
-        <span className="text-caption font-semibold text-foreground">Editing queued message</span>
+        <span className="text-label font-semibold text-foreground">Editing queued message</span>
         {saveError ? (
           <span className="text-caption text-destructive">{saveError}</span>
         ) : (
@@ -77,7 +77,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
         className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-body leading-relaxed text-foreground outline-none"
       />
 
-      <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2.5">
+      <div className="flex items-center justify-between gap-2 px-2.5 pt-[4px] pb-[6px]">
         {/* Config shown muted — content-only edit per the daemon queue contract. */}
         <div className="pointer-events-none flex min-h-8 items-center gap-1 opacity-50" aria-hidden>
           <ComposerToolbar />
@@ -87,7 +87,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
             type="button"
             data-testid="chat-composer-edit-cancel"
             onClick={onDone}
-            className="rounded-lg px-3 py-1.5 text-caption font-medium text-foreground transition-colors hover:bg-accent"
+            className="rounded-md px-[12px] py-1.5 text-caption font-medium text-foreground transition-colors hover:bg-accent [border-width:0.5px] border-border"
           >
             Cancel edit
           </button>
@@ -97,7 +97,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
             onClick={handleSave}
             disabled={saving}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-caption font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50',
+              'inline-flex items-center gap-1.5 rounded-md bg-primary pl-[11px] pr-[13px] py-1.5 text-caption font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50',
             )}
           >
             <CheckIcon size={14} />

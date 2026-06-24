@@ -79,12 +79,12 @@ function ProviderPill({ option, active, locked, onSelect }: ProviderPillProps) {
         'flex items-center gap-1.5 rounded-md border px-2 py-1 text-label transition-colors',
         'focus-visible:outline-none',
         active
-          ? 'border-primary bg-accent text-accent-foreground font-medium'
+          ? 'border-primary bg-mf-selection text-foreground font-medium'
           : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
         disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent',
       )}
     >
-      <span className={cn('inline-block size-2 flex-shrink-0 rounded-full', providerDot(option.id))} />
+      <span className={cn('inline-block size-1.5 flex-shrink-0 rounded-full', providerDot(option.id))} />
       <span>{option.name}</span>
       {!option.installed && <Lock size={11} className="flex-shrink-0" />}
     </button>

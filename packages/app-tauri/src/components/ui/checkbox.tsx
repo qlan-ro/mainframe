@@ -7,18 +7,18 @@ function Checkbox({ className, ...props }: React.ComponentPropsWithoutRef<typeof
   return (
     <CheckboxPrimitive.Root
       className={cn(
-        'peer h-4 w-4 shrink-0 rounded-xs border border-border',
+        'peer h-[17px] w-[17px] shrink-0 rounded-[5px] border-[1.5px] border-border',
         'shadow-none transition-colors',
         'focus-visible:outline-none',
         'disabled:cursor-not-allowed disabled:opacity-50',
-        'data-[state=checked]:bg-primary data-[state=checked]:border-primary',
+        'data-[state=checked]:bg-primary data-[state=checked]:border-0',
         'data-[state=checked]:text-primary-foreground',
         className,
       )}
       {...props}
     >
       <CheckboxPrimitive.Indicator className={cn('flex items-center justify-center text-current')}>
-        <CheckIcon className="size-3" strokeWidth={2.5} />
+        <CheckIcon className="size-[11px]" strokeWidth={2.5} />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );

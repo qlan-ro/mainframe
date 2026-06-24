@@ -2,7 +2,7 @@
  * ConflictView — lists conflict files + Abort action; shown for an active
  * merge/rebase operation. No in-app conflict editor (parity with desktop).
  */
-import { AlertTriangle, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface ConflictFile {
@@ -27,7 +27,7 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
 
   return (
     <div data-testid="git-conflict-view" className="min-w-[280px]">
-      <div className="flex items-center gap-2 rounded-t border-b border-destructive/15 bg-mf-destructive-tint px-3 py-2">
+      <div className="flex items-center gap-2 rounded-t-lg border-b border-destructive/15 bg-mf-destructive-tint px-3 py-2">
         <AlertTriangle size={14} className="text-destructive shrink-0" />
         <span className="text-body font-semibold text-destructive">{headerLabel}</span>
         {hasConflicts && (
@@ -47,7 +47,9 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
           <div className="max-h-40 overflow-y-auto py-1">
             {conflictFiles.map((f) => (
               <div key={f.path} className="flex items-center gap-2 px-3 py-1 text-body">
-                <span className="text-destructive font-mono text-caption shrink-0">C</span>
+                <span className="inline-flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded bg-destructive/10 text-destructive font-mono text-caption font-bold">
+                  C
+                </span>
                 <span className="text-foreground truncate" style={{ direction: 'rtl', textAlign: 'left' }}>
                   {f.path}
                 </span>
@@ -70,12 +72,12 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
           onClick={onAbort}
           disabled={aborting}
           className={cn(
-            'w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-body rounded',
+            'w-full flex items-center justify-center gap-1.5 px-3 h-[32px] text-body rounded',
             'bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity',
             aborting && 'opacity-40 cursor-not-allowed',
           )}
         >
-          {aborting ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+          {aborting ? <Loader2 size={12} className="animate-spin" /> : <X size={12} strokeWidth={2.4} />}
           {aborting ? 'Aborting...' : 'Abort'}
         </button>
       </div>

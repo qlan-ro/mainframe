@@ -10,7 +10,7 @@
  * Uses real mf-* tokens and opaque rgba for opacity; never the /opacity modifier.
  */
 
-import { Gauge, Lock } from 'lucide-react';
+import { ChevronDown, Gauge, Lock } from 'lucide-react';
 import type { AdapterModel, Chat, EffortLevel, ProviderConfig } from '@qlan-ro/mainframe-types';
 import {
   DropdownMenu,
@@ -67,9 +67,10 @@ export function EffortPicker({ chat, model, setEffort, disabled, providerDefault
                 'focus-visible:outline-none',
               ].join(' ')}
             >
-              <Gauge size={14} className="shrink-0" />
+              <Gauge size={11} className="shrink-0" />
               <EffortLabel value={triggerLabel} />
               {locked && <Lock size={10} className="shrink-0 text-mf-text-4" />}
+              <ChevronDown size={9} className="shrink-0 opacity-60" />
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -83,7 +84,7 @@ export function EffortPicker({ chat, model, setEffort, disabled, providerDefault
               <DropdownMenuItem
                 data-testid={`composer-effort-select-option-${option.id}`}
                 onSelect={() => setEffort(option.id as EffortLevel)}
-                className={option.id === current ? 'bg-accent text-accent-foreground font-medium' : ''}
+                className={option.id === current ? 'bg-mf-selection text-foreground font-medium' : ''}
               >
                 {option.label}
               </DropdownMenuItem>

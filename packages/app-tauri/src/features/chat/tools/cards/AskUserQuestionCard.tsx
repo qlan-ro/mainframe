@@ -137,7 +137,7 @@ export const AskUserQuestionCard: ToolCallMessagePartComponent = (part) => {
             hasBody ? 'hover:bg-accent transition-colors cursor-pointer' : 'cursor-default',
           )}
         >
-          <MessageCircleQuestion size={15} className="shrink-0 text-primary opacity-60" />
+          <MessageCircleQuestion size={15} className="shrink-0 text-primary" />
           <span data-testid="chat-ask-header" className="text-body text-muted-foreground flex-1 truncate min-w-0">
             {firstHeader}
             {shortAnswerText && (

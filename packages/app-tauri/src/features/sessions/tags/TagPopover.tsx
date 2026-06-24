@@ -183,7 +183,7 @@ export function TagPopover({
           />
         )}
         {children && <PopoverTrigger asChild>{children}</PopoverTrigger>}
-        <PopoverContent data-testid="sessions-tag-popover" className="w-64" align="start">
+        <PopoverContent data-testid="sessions-tag-popover" className="w-[230px]" align="start">
           <MenuLabel>Tags</MenuLabel>
           <MenuSearchField
             data-testid="sessions-tag-popover-search"
