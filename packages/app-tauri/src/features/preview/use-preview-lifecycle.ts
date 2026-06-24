@@ -6,12 +6,30 @@ import type { LaunchProcessStatus, PreviewHandle } from '@qlan-ro/mainframe-type
 interface PreviewLifecycleProps {
   status: LaunchProcessStatus | null;
   port: number | null;
+  /**
+   * The precise inner frame the webview should cover (e.g. the phone frame in
+   * MOBILE mode, or the inner overlay div in DESKTOP mode). When present, mount()
+   * anchors the native webview to this element so refit() reads its rect — restoring
+   * pre-Task-7 anchor-based positioning parity.
+   */
+  anchorRef: RefObject<HTMLDivElement | null>;
+  /**
+   * The always-present body wrapper. Used as the mount target only when anchorRef
+   * has not yet mounted (fallback, same semantics as anchorRef ?? containerRef).
+   */
   containerRef: RefObject<HTMLDivElement | null>;
   projectId?: string;
   device: 'desktop' | 'mobile';
 }
 
-export function usePreviewLifecycle({ status, port, containerRef, projectId, device }: PreviewLifecycleProps): {
+export function usePreviewLifecycle({
+  status,
+  port,
+  anchorRef,
+  containerRef,
+  projectId,
+  device,
+}: PreviewLifecycleProps): {
   processStopped: boolean;
   handle: PreviewHandle | null;
 } {
@@ -39,15 +57,18 @@ export function usePreviewLifecycle({ status, port, containerRef, projectId, dev
 
     const url = `http://localhost:${port}`;
     if (!handleRef.current) {
-      const container = containerRef.current;
-      if (!container) return;
-      const h = host.preview.mount(container, url, { projectId, device });
+      // Prefer the anchor (phone-frame in mobile, inner overlay in desktop) so
+      // the native webview's initial rect and subsequent refit() calls track the
+      // precise frame — matching pre-Task-7 anchorRef ?? containerRef semantics.
+      const mountEl = anchorRef.current ?? containerRef.current;
+      if (!mountEl) return;
+      const h = host.preview.mount(mountEl, url, { projectId, device });
       handleRef.current = h;
       setHandle(h);
     } else {
       void handleRef.current.navigate(url).catch((e) => console.warn('[preview] lifecycle navigate', e));
     }
-  }, [status, port, containerRef, projectId, device, host]);
+  }, [status, port, anchorRef, containerRef, projectId, device, host]);
 
   useEffect(() => {
     return () => {

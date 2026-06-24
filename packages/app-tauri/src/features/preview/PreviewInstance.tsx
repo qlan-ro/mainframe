@@ -54,7 +54,14 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
 
   const port = portProp ?? null;
 
-  const { handle } = usePreviewLifecycle({ status, port, containerRef, projectId: effectiveProjectId, device });
+  const { handle } = usePreviewLifecycle({
+    status,
+    port,
+    anchorRef,
+    containerRef,
+    projectId: effectiveProjectId,
+    device,
+  });
   usePreviewGeometry({ handle, anchorRef, containerRef, active: visible, status });
   // Hide the native webview only while a DOM overlay actually overlaps it (it
   // composites above the DOM, so popovers/dialogs/CMD-F would be clipped behind
