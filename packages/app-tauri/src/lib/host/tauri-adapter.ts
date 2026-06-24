@@ -54,8 +54,10 @@ export class TauriAdapter implements HostBridge {
 
   daemon = {
     port: (): Promise<number> => bridge.getDaemonPort(),
-    status: (): Promise<DaemonStatus> => bridge.getDaemonStatus(),
-    onStatus: (cb: (status: DaemonStatus) => void): Promise<Unsubscribe> => bridge.onDaemonStatus(cb),
+    // Tauri Rust emits legacy status strings; enum-conformant mapping is Plan 3 parity. Cast preserves current behavior.
+    status: (): Promise<DaemonStatus> => bridge.getDaemonStatus() as Promise<DaemonStatus>,
+    onStatus: (cb: (s: DaemonStatus) => void): Promise<Unsubscribe> =>
+      bridge.onDaemonStatus((s) => cb(s as DaemonStatus)),
   };
 
   log(level: LogLevel, module: string, message: string, data?: unknown): void {
