@@ -11,6 +11,7 @@ import { startRendererMemoryLogger, stopRendererMemoryLogger } from './memory-lo
 import { buildApplicationMenu } from './menu.js';
 import { setupWebviewSandbox } from './sandbox.js';
 import { registerIpcHandlers } from './ipc-handlers.js';
+import { DaemonStatusTracker } from './daemon-status.js';
 
 // Enable Chrome DevTools Protocol on port 9222 for development tooling (e.g. MCP server).
 // Only active in development mode — never exposed in production builds. Skipped under e2e
@@ -22,8 +23,11 @@ if (process.env.NODE_ENV === 'development' && process.env.MF_E2E !== '1') {
 
 const log = createMainLogger('electron');
 
+const DAEMON_PORT = Number(process.env['DAEMON_PORT'] ?? process.env['VITE_DAEMON_HTTP_PORT'] ?? '31415');
+
 let mainWindow: BrowserWindow | null = null;
 let daemon: UtilityProcess | null = null;
+let daemonStatus: DaemonStatusTracker | null = null;
 
 const ALLOWED_SCHEMES = new Set([
   'http:',
@@ -87,6 +91,7 @@ function resolveShellEnv(): Record<string, string> {
 function startDaemon(shellEnv: Record<string, string>): void {
   if (process.env.NODE_ENV === 'development') {
     log.info('development mode: daemon assumed external');
+    daemonStatus?.set('ready');
     return;
   }
 
@@ -99,8 +104,11 @@ function startDaemon(shellEnv: Record<string, string>): void {
     env: { ...process.env, NODE_ENV: 'production', ...shellEnv },
   });
 
+  daemonStatus?.set('starting');
+  daemon.on('spawn', () => daemonStatus?.set('ready'));
   daemon.on('exit', (code) => {
     log.error({ code }, 'daemon exited');
+    daemonStatus?.set('stopped');
   });
 }
 
@@ -196,13 +204,21 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler(denyUnneededPermissions);
 
   const shellEnv = resolveShellEnv();
-  registerIpcHandlers({ log, getMainWindow: () => mainWindow, openExternalSafe });
+  daemonStatus = new DaemonStatusTracker(DAEMON_PORT);
+  registerIpcHandlers({ log, getMainWindow: () => mainWindow, openExternalSafe, getDaemonStatus: () => daemonStatus });
   startDaemon(shellEnv);
   setupTerminalIPC(shellEnv);
 
   buildApplicationMenu(() => mainWindow);
 
   createWindow();
+
+  daemonStatus.subscribe((s) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('daemon:status', s);
+    }
+  });
+
   startIdleReporter();
   startRendererMemoryLogger(() => mainWindow);
 

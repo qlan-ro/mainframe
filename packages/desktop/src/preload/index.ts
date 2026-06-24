@@ -19,6 +19,12 @@ export interface TerminalAPI {
   onExit: (callback: (id: string, exitCode: number) => void) => () => void;
 }
 
+export interface DaemonAPI {
+  port: () => Promise<number>;
+  status: () => Promise<string>;
+  onStatus: (callback: (status: string) => void) => () => void;
+}
+
 export interface MainframeAPI {
   platform: NodeJS.Platform;
   versions: {
@@ -39,6 +45,7 @@ export interface MainframeAPI {
   log: (level: string, module: string, message: string, data?: unknown) => void;
   terminal: TerminalAPI;
   updates: UpdateAPI;
+  daemon: DaemonAPI;
 }
 
 const api: MainframeAPI = {
@@ -94,6 +101,17 @@ const api: MainframeAPI = {
       ipcRenderer.invoke('update:install').catch((err: unknown) => {
         console.warn('[updates] install invoke failed', err);
       });
+    },
+  },
+  daemon: {
+    port: () => ipcRenderer.invoke('daemon:port'),
+    status: () => ipcRenderer.invoke('daemon:status'),
+    onStatus: (callback: (status: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: string): void => callback(status);
+      ipcRenderer.on('daemon:status', handler);
+      return () => {
+        ipcRenderer.removeListener('daemon:status', handler);
+      };
     },
   },
 };

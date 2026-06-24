@@ -10,6 +10,7 @@ import {
   NotifySchema,
   OpenExternalSchema,
 } from '@qlan-ro/mainframe-types';
+import type { DaemonStatusTracker } from './daemon-status.js';
 import { logFromRenderer } from './logger.js';
 import { parseIpcArg } from './ipc-validate.js';
 
@@ -19,6 +20,7 @@ export interface IpcHandlerDeps {
   log: Logger;
   getMainWindow: () => BrowserWindow | null;
   openExternalSafe: (url: string) => void;
+  getDaemonStatus: () => DaemonStatusTracker | null;
 }
 
 function isPathAllowed(normalizedPath: string): boolean {
@@ -32,7 +34,10 @@ function isPathAllowed(normalizedPath: string): boolean {
 }
 
 export function registerIpcHandlers(deps: IpcHandlerDeps): void {
-  const { log, getMainWindow, openExternalSafe } = deps;
+  const { log, getMainWindow, openExternalSafe, getDaemonStatus } = deps;
+
+  ipcMain.handle('daemon:port', () => getDaemonStatus()?.port() ?? 31415);
+  ipcMain.handle('daemon:status', () => getDaemonStatus()?.get() ?? 'initializing');
 
   ipcMain.handle('app:getInfo', () => ({
     version: app.getVersion(),
