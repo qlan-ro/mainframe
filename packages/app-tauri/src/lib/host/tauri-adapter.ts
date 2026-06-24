@@ -22,6 +22,20 @@ import * as bridge from '@/lib/tauri/bridge';
 import { createTerminal } from '@/lib/tauri/terminal';
 import { mountTauriPreview } from './tauri-preview';
 
+/**
+ * Maps the Rust backend's legacy status strings to the canonical DaemonStatus
+ * enum. The Rust shell emits running:{pid}/started:pid=N/exited/not_started/
+ * error:… (lib.rs); this is the single place that normalizes them so the renderer
+ * may branch on daemon.status()/onStatus() on Tauri (Plan 3, decision 6).
+ */
+export function mapDaemonStatus(raw: string): DaemonStatus {
+  if (raw === 'not_started') return 'initializing';
+  if (raw === 'starting' || raw.startsWith('started:')) return 'starting';
+  if (raw === 'ready' || raw.startsWith('running:')) return 'ready';
+  if (raw === 'exited') return 'stopped';
+  return 'unavailable'; // error:… and anything unrecognized
+}
+
 export class TauriAdapter implements HostBridge {
   app = {
     getInfo: (): Promise<AppInfo> => bridge.getAppInfo(),
@@ -56,11 +70,9 @@ export class TauriAdapter implements HostBridge {
 
   daemon = {
     port: (): Promise<number> => bridge.getDaemonPort(),
-    // Tauri Rust emits legacy status strings (running:N/exited/not_started/...);
-    // enum-conformant mapping is a Plan 3 task. No renderer may branch on these values until then.
-    status: (): Promise<DaemonStatus> => bridge.getDaemonStatus() as Promise<DaemonStatus>,
+    status: async (): Promise<DaemonStatus> => mapDaemonStatus(await bridge.getDaemonStatus()),
     onStatus: (cb: (s: DaemonStatus) => void): Promise<Unsubscribe> =>
-      bridge.onDaemonStatus((s) => cb(s as DaemonStatus)),
+      bridge.onDaemonStatus((s) => cb(mapDaemonStatus(s))),
   };
 
   log(level: LogLevel, module: string, message: string, data?: unknown): void {
