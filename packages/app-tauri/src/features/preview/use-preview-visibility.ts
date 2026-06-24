@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useHost } from '@/lib/host';
+import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
 
 interface ComputeVisibleInput {
@@ -26,26 +26,23 @@ export function computePreviewVisible({
  * hides it when any DOM overlay overlaps it (the webview composites above DOM).
  */
 export function usePreviewVisibility(
-  tabId: string,
+  handle: PreviewHandle | null,
   isActiveTab: boolean,
   occluded: boolean,
 ): [overlayMounted: boolean, setOverlayMounted: (v: boolean) => void] {
-  const host = useHost();
   const [overlayMounted, setOverlayMounted] = useState(false);
-
   const surfaceVisible = useLayoutStore((s) => {
     const { layout } = s;
     return (Array.isArray(layout.top) && layout.top.includes('run')) || layout.bottom === 'run';
   });
-
   const prevVisibleRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     const visible = computePreviewVisible({ isActiveTab, surfaceVisible, overlayMounted, occluded });
     if (visible === prevVisibleRef.current) return;
     prevVisibleRef.current = visible;
-    host.preview.setVisible(tabId, visible).catch((e) => console.warn('[preview] visibility', e));
-  }, [tabId, isActiveTab, surfaceVisible, overlayMounted, occluded, host]);
+    handle?.setVisible(visible);
+  }, [handle, isActiveTab, surfaceVisible, overlayMounted, occluded]);
 
   return [overlayMounted, setOverlayMounted];
 }

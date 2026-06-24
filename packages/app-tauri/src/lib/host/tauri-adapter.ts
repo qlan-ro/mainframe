@@ -14,10 +14,13 @@ import type {
   TerminalHandlers,
   TerminalHandle,
   Unsubscribe,
+  PreviewOpts,
+  PreviewHandle,
 } from '@qlan-ro/mainframe-types';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import * as bridge from '@/lib/tauri/bridge';
 import { createTerminal } from '@/lib/tauri/terminal';
+import { mountTauriPreview } from './tauri-preview';
 
 export class TauriAdapter implements HostBridge {
   app = {
@@ -46,9 +49,8 @@ export class TauriAdapter implements HostBridge {
   };
 
   preview = {
-    mount: (): never => {
-      throw new Error('TauriAdapter.preview.mount not yet implemented (Task 7)');
-    },
+    mount: (container: HTMLElement, url: string, opts?: PreviewOpts): PreviewHandle =>
+      mountTauriPreview(container, url, opts),
     clearSession: (_projectId: string): Promise<void> => Promise.resolve(),
   };
 
@@ -75,7 +77,7 @@ export class TauriAdapter implements HostBridge {
       if (e.button !== 0 || e.detail !== 1) return;
       const target = e.target as HTMLElement;
       if (target.closest('button, input, select, textarea, a, label')) return;
-      if (!target.closest('[data-tauri-drag-region]')) return;
+      if (!target.closest('[data-drag-region]')) return;
       getCurrentWebviewWindow()
         .startDragging()
         .catch((err) => console.warn('[host] startDragging failed', err));

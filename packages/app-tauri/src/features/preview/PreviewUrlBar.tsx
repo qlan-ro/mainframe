@@ -1,35 +1,33 @@
 import { RotateCw, ExternalLink, Eraser } from 'lucide-react';
 import { PreviewIconButton } from './PreviewIconButton';
-import { useHost } from '@/lib/host';
+import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 
 interface PreviewUrlBarProps {
-  tabId: string;
+  handle: PreviewHandle | null;
   port: number | null;
   isRunning: boolean;
 }
 
-export function PreviewUrlBar({ tabId, port, isRunning }: PreviewUrlBarProps) {
-  const host = useHost();
-
+export function PreviewUrlBar({ handle, port, isRunning }: PreviewUrlBarProps) {
   function handleReload() {
     if (!port) return;
-    host.preview.navigate(tabId, `http://localhost:${port}`).catch((e) => console.warn('[preview] url-bar reload', e));
+    handle?.navigate(`http://localhost:${port}`).catch((e: unknown) => console.warn('[preview] url-bar reload', e));
   }
 
   function handleOpenBrowser() {
     // No previewOpenExternal — use navigate as fallback
     console.warn('[preview] open-in-browser: no external open API, using navigate fallback');
     if (!port) return;
-    host.preview
-      .navigate(tabId, `http://localhost:${port}`)
-      .catch((e) => console.warn('[preview] url-bar open-browser', e));
+    handle
+      ?.navigate(`http://localhost:${port}`)
+      .catch((e: unknown) => console.warn('[preview] url-bar open-browser', e));
   }
 
   function handleClearCache() {
     if (!port) return;
-    host.preview
-      .navigate(tabId, `http://localhost:${port}`)
-      .catch((e) => console.warn('[preview] url-bar clear-cache', e));
+    handle
+      ?.navigate(`http://localhost:${port}`)
+      .catch((e: unknown) => console.warn('[preview] url-bar clear-cache', e));
   }
 
   return (

@@ -25,14 +25,7 @@ interface PreviewInstanceProps {
   projectId?: string;
 }
 
-export function PreviewInstance({
-  tabId,
-  config,
-  visible,
-  scopeKey,
-  port: portProp,
-  projectId,
-}: PreviewInstanceProps) {
+export function PreviewInstance({ tabId, config, visible, scopeKey, port: portProp, projectId }: PreviewInstanceProps) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
@@ -61,13 +54,13 @@ export function PreviewInstance({
 
   const port = portProp ?? null;
 
-  usePreviewLifecycle({ tabId, status, port, anchorRef });
-  usePreviewGeometry({ tabId, anchorRef, containerRef, active: visible, status });
+  const { handle } = usePreviewLifecycle({ status, port, containerRef, projectId: effectiveProjectId, device });
+  usePreviewGeometry({ handle, anchorRef, containerRef, active: visible, status });
   // Hide the native webview only while a DOM overlay actually overlaps it (it
   // composites above the DOM, so popovers/dialogs/CMD-F would be clipped behind
   // it otherwise). Precise overlap → no gratuitous blanking.
   const occluded = usePreviewOcclusion(anchorRef, status === 'running');
-  const [, setOverlayMounted] = usePreviewVisibility(tabId, visible, occluded);
+  const [, setOverlayMounted] = usePreviewVisibility(handle, visible, occluded);
 
   const {
     pendingCaptures,
@@ -81,7 +74,7 @@ export function PreviewInstance({
     onAnnotationChange,
     onAnnotationSubmit,
     onAnnotationCancel,
-  } = usePreviewCapture(tabId, setOverlayMounted);
+  } = usePreviewCapture(handle, setOverlayMounted);
 
   function handleStart() {
     if (!config) return;
@@ -143,6 +136,7 @@ export function PreviewInstance({
         onInspectClick={onInspectClick}
         inspectActive={inspectActive}
         regionActive={regionOverlayOpen}
+        handle={handle}
       />
       <div ref={containerRef} className="relative min-h-0 flex-1">
         <PreviewBodyState
@@ -156,9 +150,7 @@ export function PreviewInstance({
         />
       </div>
       {config && <ConsolePane scopeKey={scopeKey ?? ''} processName={config} variant="drawer" />}
-      {regionOverlayOpen && (
-        <RegionCaptureOverlay onRegionSelect={onRegionSelect} onClose={onRegionClick} />
-      )}
+      {regionOverlayOpen && <RegionCaptureOverlay onRegionSelect={onRegionSelect} onClose={onRegionClick} />}
       {annotationPopoverOpen && (
         <CaptureAnnotationPopover
           captures={pendingCaptures}

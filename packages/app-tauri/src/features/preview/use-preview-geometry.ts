@@ -1,12 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
-import { useHost } from '@/lib/host';
+import type { LaunchProcessStatus, PreviewHandle } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
 
 interface PreviewGeometryProps {
-  tabId: string;
+  handle: PreviewHandle | null;
   /** The inner frame the webview should exactly cover (present only when running). */
   anchorRef: RefObject<HTMLDivElement | null>;
   /**
@@ -21,21 +20,15 @@ interface PreviewGeometryProps {
   status: LaunchProcessStatus | null;
 }
 
-export function usePreviewGeometry({ tabId, anchorRef, containerRef, active, status }: PreviewGeometryProps): void {
-  const host = useHost();
+export function usePreviewGeometry({ handle, anchorRef, containerRef, active, status }: PreviewGeometryProps): void {
   const rafRef = useRef<number | null>(null);
 
-  function scheduleBoundsUpdate() {
+  function scheduleRefit() {
+    if (!handle) return;
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null;
-      // Prefer the precise inner frame; fall back to the body wrapper before it mounts.
-      const el = anchorRef.current ?? containerRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      host.preview
-        .setBounds(tabId, { x: r.left, y: r.top, w: r.width, h: r.height })
-        .catch((e) => console.warn('[preview] geometry set-bounds', e));
+      handle.refit();
     });
   }
 
@@ -45,23 +38,21 @@ export function usePreviewGeometry({ tabId, anchorRef, containerRef, active, sta
   const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
 
   useEffect(() => {
-    scheduleBoundsUpdate();
-  }, [topFlex, vFlex, sidebarVisible, inspectorVisible, host]);
+    scheduleRefit();
+  }, [topFlex, vFlex, sidebarVisible, inspectorVisible, handle]);
 
   useEffect(() => {
-    if (active) scheduleBoundsUpdate();
-  }, [active, host]);
+    if (active) scheduleRefit();
+  }, [active, handle]);
 
   useEffect(() => {
-    const observer = new ResizeObserver(() => scheduleBoundsUpdate());
-    // The body wrapper is always present and is what flex shrinks when the console
-    // grows; the anchor is observed too (when mounted) for precise per-frame fit.
+    const observer = new ResizeObserver(() => scheduleRefit());
     if (containerRef.current) observer.observe(containerRef.current);
     if (anchorRef.current) observer.observe(anchorRef.current);
-    scheduleBoundsUpdate();
+    scheduleRefit();
     return () => {
       observer.disconnect();
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [tabId, anchorRef, containerRef, status, host]);
+  }, [anchorRef, containerRef, status, handle]);
 }

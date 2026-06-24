@@ -13,7 +13,6 @@ import {
 } from './run-pane';
 import { useTabsStore } from './tabs';
 import { killAndDisposeCachedTerminals } from './terminal-cleanup';
-import { getHost } from '@/lib/host';
 
 export type SurfaceId = 'chat' | 'files' | 'run';
 
@@ -271,11 +270,8 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
       if (!run) return;
       const tab = run.panes.find((p) => p.id === paneId)?.tabs.find((t) => t.id === tabId);
       if (tab?.kind === 'terminal') killAndDisposeCachedTerminals([tabId]);
-      if (tab?.kind === 'preview') {
-        getHost()
-          .preview.destroy(tabId)
-          .catch((e) => console.warn('[preview] reap on close', e));
-      }
+      // Preview destruction is handled by the PreviewInstance lifecycle hook's
+      // cleanup effect when the component unmounts after the tab is removed.
       const nextRun = closeRunTabReducer(run, paneId, tabId);
       writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
     },
@@ -284,16 +280,8 @@ export const useLayoutStore = create<LayoutStore>((set, get) => {
       const { layout, run } = get();
       if (!run) return;
       killAndDisposeCachedTerminals(terminalIdsInPane(run, paneId));
-      const pane = run.panes.find((p) => p.id === paneId);
-      if (pane) {
-        for (const tab of pane.tabs) {
-          if (tab.kind === 'preview') {
-            getHost()
-              .preview.destroy(tab.id)
-              .catch((e) => console.warn('[preview] reap on pane close', e));
-          }
-        }
-      }
+      // Preview destruction is handled by the PreviewInstance lifecycle hook's
+      // cleanup effect when components unmount after the pane is removed.
       const nextRun = closePaneReducer(run, paneId);
       writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'run'), run: nextRun });
     },

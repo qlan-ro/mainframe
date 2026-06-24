@@ -1,4 +1,4 @@
-import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
+import type { LaunchProcessStatus, PreviewHandle } from '@qlan-ro/mainframe-types';
 import { PreviewRunControl } from './PreviewRunControl';
 import { PreviewUrlBar } from './PreviewUrlBar';
 import { PreviewDeviceToggle } from './PreviewDeviceToggle';
@@ -21,10 +21,11 @@ interface PreviewToolbarProps {
   onInspectClick: () => void;
   inspectActive: boolean;
   regionActive?: boolean;
+  handle?: PreviewHandle | null;
 }
 
 export function PreviewToolbar({
-  tabId,
+  tabId: _tabId,
   port,
   status,
   device,
@@ -37,6 +38,7 @@ export function PreviewToolbar({
   onInspectClick,
   inspectActive,
   regionActive = false,
+  handle = null,
 }: PreviewToolbarProps) {
   const isRunning = status === 'running';
 
@@ -46,7 +48,7 @@ export function PreviewToolbar({
       className="flex h-[38px] flex-shrink-0 items-center gap-[8px] [border-bottom:0.5px_solid_var(--border)] bg-background px-[8px]"
     >
       <PreviewRunControl status={status} onRun={onRun} onStop={onStop} onRestart={onRestart} />
-      <PreviewUrlBar tabId={tabId} port={port} isRunning={isRunning} />
+      <PreviewUrlBar handle={handle} port={port} isRunning={isRunning} />
       <PreviewDeviceToggle device={device} onChange={onDeviceChange} />
       <PreviewCaptureCluster
         isRunning={isRunning}

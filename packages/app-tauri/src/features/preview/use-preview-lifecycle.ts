@@ -1,25 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { useHost } from '@/lib/host';
-import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
+import type { LaunchProcessStatus, PreviewHandle } from '@qlan-ro/mainframe-types';
 
 interface PreviewLifecycleProps {
-  tabId: string;
   status: LaunchProcessStatus | null;
   port: number | null;
-  anchorRef: RefObject<HTMLDivElement | null>;
+  containerRef: RefObject<HTMLDivElement | null>;
+  projectId?: string;
+  device: 'desktop' | 'mobile';
 }
 
-function getAnchorBounds(anchorRef: RefObject<HTMLDivElement | null>) {
-  const rect = anchorRef.current?.getBoundingClientRect();
-  return { x: rect?.left ?? 0, y: rect?.top ?? 0, w: rect?.width ?? 0, h: rect?.height ?? 0 };
-}
-
-export function usePreviewLifecycle({ tabId, status, port, anchorRef }: PreviewLifecycleProps): {
+export function usePreviewLifecycle({ status, port, containerRef, projectId, device }: PreviewLifecycleProps): {
   processStopped: boolean;
+  handle: PreviewHandle | null;
 } {
   const host = useHost();
-  const createdRef = useRef(false);
+  const [handle, setHandle] = useState<PreviewHandle | null>(null);
+  const handleRef = useRef<PreviewHandle | null>(null);
   const prevStatusRef = useRef<LaunchProcessStatus | null>(null);
   const [processStopped, setProcessStopped] = useState(false);
 
@@ -27,41 +25,36 @@ export function usePreviewLifecycle({ tabId, status, port, anchorRef }: PreviewL
     const prevStatus = prevStatusRef.current;
     prevStatusRef.current = status ?? null;
 
-    // running → stopped/failed: server died, destroy webview, show placeholder
-    if (createdRef.current && prevStatus === 'running' && (status === 'stopped' || status === 'failed')) {
-      createdRef.current = false;
+    // running → stopped/failed: tear the webview down, show placeholder
+    if (handleRef.current && prevStatus === 'running' && (status === 'stopped' || status === 'failed')) {
+      handleRef.current.destroy();
+      handleRef.current = null;
+      setHandle(null);
       setProcessStopped(true);
-      host.preview.destroy(tabId).catch((e) => console.warn('[preview] lifecycle destroy on stop', e));
       return;
     }
 
-    // Gate: only create/navigate when running with a valid port
     if (status !== 'running' || port === null) return;
-
-    // Reset stopped state when server comes back
     setProcessStopped(false);
 
-    if (!createdRef.current) {
-      createdRef.current = true;
-      host.preview
-        .create(tabId, `http://localhost:${port}`, getAnchorBounds(anchorRef))
-        .catch((e) => console.warn('[preview] lifecycle create', e));
+    const url = `http://localhost:${port}`;
+    if (!handleRef.current) {
+      const container = containerRef.current;
+      if (!container) return;
+      const h = host.preview.mount(container, url, { projectId, device });
+      handleRef.current = h;
+      setHandle(h);
     } else {
-      host.preview
-        .navigate(tabId, `http://localhost:${port}`)
-        .catch((e) => console.warn('[preview] lifecycle navigate', e));
+      void handleRef.current.navigate(url).catch((e) => console.warn('[preview] lifecycle navigate', e));
     }
-  }, [tabId, status, port, anchorRef, host]);
+  }, [status, port, containerRef, projectId, device, host]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (createdRef.current) {
-        host.preview.destroy(tabId).catch((e) => console.warn('[preview] lifecycle unmount destroy', e));
-        createdRef.current = false;
-      }
+      handleRef.current?.destroy();
+      handleRef.current = null;
     };
-  }, [tabId, host]);
+  }, []);
 
-  return { processStopped };
+  return { processStopped, handle };
 }

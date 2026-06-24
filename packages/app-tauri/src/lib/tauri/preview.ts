@@ -10,32 +10,12 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { Bounds, Region, InspectResult } from '@qlan-ro/mainframe-types';
+
+export type { Bounds, Region, InspectResult };
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
-
-// ── Shared types (mirror Rust structs) ────────────────────────────────────────
-
-export interface Bounds {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-export interface Region {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-export interface InspectResult {
-  tabId: string;
-  selector: string | null;
-  rect: Bounds | null;
-  viewport: Bounds | null;
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────

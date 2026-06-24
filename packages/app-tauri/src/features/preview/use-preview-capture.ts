@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useHost } from '@/lib/host';
-import type { InspectResult, Region } from '@qlan-ro/mainframe-types';
+import type { InspectResult, Region, PreviewHandle } from '@qlan-ro/mainframe-types';
 import { useSandboxStore } from '@/store/sandbox';
 import { useSendCaptures } from './use-send-captures';
 import type { CaptureLike } from '@/features/run/format-captures';
@@ -13,8 +12,7 @@ function bytesToDataUrl(bytes: Uint8Array): string {
 
 const PAD = 20;
 
-export function usePreviewCapture(tabId: string, setOverlayMounted: (v: boolean) => void) {
-  const host = useHost();
+export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounted: (v: boolean) => void) {
   const [regionOverlayOpen, setRegionOverlayOpen] = useState(false);
   const [annotationPopoverOpen, setAnnotationPopoverOpen] = useState(false);
   const [inspectActive, setInspectActive] = useState(false);
@@ -23,9 +21,8 @@ export function usePreviewCapture(tabId: string, setOverlayMounted: (v: boolean)
   const sendCapturesFn = useSendCaptures();
 
   useEffect(() => {
-    let unlisten: (() => void) | null = null;
+    if (!handle) return;
     const handleInspectResult = (result: InspectResult) => {
-      if (result.tabId !== tabId) return;
       if (result.selector === null) {
         setInspectActive(false);
         return;
@@ -37,73 +34,58 @@ export function usePreviewCapture(tabId: string, setOverlayMounted: (v: boolean)
       const right = Math.min(viewport.w, rect.x + rect.w + PAD);
       const bottom = Math.min(viewport.h, rect.y + rect.h + PAD);
       const region: Region = { x, y, w: right - x, h: bottom - y };
-      host.preview
-        .capture(tabId, region)
+      handle
+        .capture(region)
         .then((bytes) => {
-          const imageDataUrl = bytesToDataUrl(bytes);
           useSandboxStore.getState().addCapture({
             type: 'element',
-            imageDataUrl,
+            imageDataUrl: bytesToDataUrl(bytes),
             selector: result.selector ?? undefined,
           });
           setAnnotationPopoverOpen(true);
         })
         .catch((e: unknown) => console.warn('[preview] capture failed', e));
     };
-    host.preview
-      .onInspectResult(handleInspectResult)
-      .then((fn) => {
-        unlisten = fn;
-      })
-      .catch((e: unknown) => console.warn('[preview] inspect listener failed', e));
-    return () => {
-      unlisten?.();
-    };
-  }, [tabId, host]);
+    const unsub = handle.onInspect(handleInspectResult);
+    return () => unsub();
+  }, [handle]);
 
   useEffect(() => {
     setOverlayMounted(regionOverlayOpen || annotationPopoverOpen);
   }, [regionOverlayOpen, annotationPopoverOpen, setOverlayMounted]);
 
   const onCaptureClick = useCallback(() => {
-    host.preview
-      .capture(tabId)
+    handle
+      ?.capture()
       .then((bytes) => {
-        const imageDataUrl = bytesToDataUrl(bytes);
-        useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl });
+        useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl: bytesToDataUrl(bytes) });
         setAnnotationPopoverOpen(true);
       })
       .catch((e: unknown) => console.warn('[preview] capture failed', e));
-  }, [tabId, host]);
+  }, [handle]);
 
-  const onRegionClick = useCallback(() => {
-    setRegionOverlayOpen((prev) => !prev);
-  }, []);
+  const onRegionClick = useCallback(() => setRegionOverlayOpen((prev) => !prev), []);
 
   const onInspectClick = useCallback(() => {
     setInspectActive((prev) => {
       const next = !prev;
-      if (next) {
-        const installScript = `window.__mfInspectInstall && window.__mfInspectInstall('${tabId}')`;
-        host.preview.eval(tabId, installScript).catch((e: unknown) => console.warn('[preview] inspect eval failed', e));
-      }
+      if (next) handle?.startInspect().catch((e: unknown) => console.warn('[preview] inspect failed', e));
       return next;
     });
-  }, [tabId, host]);
+  }, [handle]);
 
   const onRegionSelect = useCallback(
     (region: Region) => {
       setRegionOverlayOpen(false);
-      host.preview
-        .capture(tabId, region)
+      handle
+        ?.capture(region)
         .then((bytes) => {
-          const imageDataUrl = bytesToDataUrl(bytes);
-          useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl });
+          useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl: bytesToDataUrl(bytes) });
           setAnnotationPopoverOpen(true);
         })
         .catch((e: unknown) => console.warn('[preview] capture failed', e));
     },
-    [tabId, host],
+    [handle],
   );
 
   const onAnnotationChange = useCallback((id: string, annotation: string) => {

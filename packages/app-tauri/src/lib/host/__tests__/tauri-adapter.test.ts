@@ -68,21 +68,22 @@ describe('TauriAdapter — delegation', () => {
     expect(invoke).toHaveBeenCalledWith('get_daemon_port');
   });
 
-  it('preview.capture wraps the invoke number[] in a Uint8Array', async () => {
+  it('preview.mount returns a handle (delegates to the Tauri backend)', async () => {
     const { TauriAdapter } = await import('../tauri-adapter');
-    invoke.mockResolvedValueOnce([137, 80, 78, 71]);
-    const bytes = await new TauriAdapter().preview.capture('tab-1');
-    expect(bytes).toBeInstanceOf(Uint8Array);
-    expect(Array.from(bytes)).toEqual([137, 80, 78, 71]);
+    const container = document.createElement('div');
+    container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect;
+    const handle = new TauriAdapter().preview.mount(container, 'http://x', { projectId: 'p' });
+    expect(typeof handle.setVisible).toBe('function');
+    expect(typeof handle.destroy).toBe('function');
   });
 });
 
 describe('TauriAdapter — init installs the drag listener', () => {
-  it('mousedown on a [data-tauri-drag-region] triggers startDragging', async () => {
+  it('mousedown on a [data-drag-region] triggers startDragging', async () => {
     const { TauriAdapter } = await import('../tauri-adapter');
     new TauriAdapter().init();
     const region = document.createElement('div');
-    region.setAttribute('data-tauri-drag-region', '');
+    region.setAttribute('data-drag-region', '');
     document.body.appendChild(region);
     region.dispatchEvent(new MouseEvent('mousedown', { button: 0, detail: 1, bubbles: true }));
     expect(startDragging).toHaveBeenCalled();

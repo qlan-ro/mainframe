@@ -1,6 +1,4 @@
-import { it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { FakeHostBridge } from '@/lib/host/fake-adapter';
-import { setHostForTesting, resetHostForTesting, getHost } from '@/lib/host';
+import { it, expect } from 'vitest';
 
 import { useLayoutStore } from '../layout';
 
@@ -26,31 +24,29 @@ function seedPreviewRun() {
   });
 }
 
-let fakeHost: FakeHostBridge;
+// Preview destruction is now handled by the PreviewInstance lifecycle hook's
+// cleanup effect when the component unmounts. The store's job is just to remove
+// the tab from the run state (which unmounts the component).
 
-beforeEach(() => {
-  fakeHost = new FakeHostBridge();
-  fakeHost.preview.destroy = vi.fn().mockResolvedValue(undefined);
-  setHostForTesting(fakeHost);
+it('closeRunTab removes the preview tab from run state', () => {
   seedPreviewRun();
-});
-
-afterEach(() => {
-  resetHostForTesting();
-});
-
-it('closeRunTab destroys the child webview for a preview tab', () => {
   useLayoutStore.getState().closeRunTab('p1', 'prev-1');
-  expect(getHost().preview.destroy).toHaveBeenCalledWith('prev-1');
+  const run = useLayoutStore.getState().run;
+  const tabs = run?.panes.find((p) => p.id === 'p1')?.tabs ?? [];
+  expect(tabs.some((t) => t.id === 'prev-1')).toBe(false);
 });
 
-it('closeRunTab does NOT call preview.destroy for a non-preview tab', () => {
-  useLayoutStore.getState().closeRunTab('p1', 'term-1');
-  expect(getHost().preview.destroy).not.toHaveBeenCalled();
+it('closeRunTab keeps the non-preview terminal tab', () => {
+  seedPreviewRun();
+  useLayoutStore.getState().closeRunTab('p1', 'prev-1');
+  const run = useLayoutStore.getState().run;
+  const tabs = run?.panes.find((p) => p.id === 'p1')?.tabs ?? [];
+  expect(tabs.some((t) => t.id === 'term-1')).toBe(true);
 });
 
-it('closePane destroys every preview tab in the pane', () => {
+it('closePane removes the entire pane from run state', () => {
   useLayoutStore.setState({
+    layout: { top: ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     run: {
       dir: 'v',
       flex: [1, 1],
@@ -65,8 +61,10 @@ it('closePane destroys every preview tab in the pane', () => {
         },
       ],
     },
+    sessions: new Map(),
+    activeSessionId: null,
   });
   useLayoutStore.getState().closePane('p1');
-  expect(getHost().preview.destroy).toHaveBeenCalledWith('prev-2');
-  expect(getHost().preview.destroy).toHaveBeenCalledWith('prev-3');
+  const run = useLayoutStore.getState().run;
+  expect(run?.panes.some((p) => p.id === 'p1')).toBeFalsy();
 });
