@@ -10,6 +10,8 @@
 import { createContext, createElement, useContext, type ReactNode } from 'react';
 import type { HostBridge } from '@qlan-ro/mainframe-types';
 import { FakeHostBridge } from './fake-adapter';
+import { TauriAdapter } from './tauri-adapter';
+import { isTauriRuntime } from './detect';
 
 export type { HostBridge } from '@qlan-ro/mainframe-types';
 export { isTauriRuntime } from './detect';
@@ -17,9 +19,7 @@ export { isTauriRuntime } from './detect';
 let singleton: HostBridge | null = null;
 
 function createHost(): HostBridge {
-  // Task 4 adds the TauriAdapter branch here:
-  //   return isTauriRuntime() ? new TauriAdapter() : new FakeHostBridge();
-  return new FakeHostBridge();
+  return isTauriRuntime() ? new TauriAdapter() : new FakeHostBridge();
 }
 
 export function getHost(): HostBridge {

@@ -14,27 +14,11 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type Event, type UnlistenFn } from '@tauri-apps/api/event';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { sendNotification } from '@tauri-apps/plugin-notification';
 
 /** Tauri injects this global into its webview; absent in a plain browser. */
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-
-// Tauri 2 does not auto-wire the mousedown → startDragging handler for
-// data-tauri-drag-region; we set it up here once at module load time.
-if (IS_TAURI) {
-  document.addEventListener('mousedown', (e: MouseEvent) => {
-    if (e.button !== 0 || e.detail !== 1) return;
-    const target = e.target as HTMLElement;
-    // Don't hijack clicks on interactive elements inside the drag region.
-    if (target.closest('button, input, select, textarea, a, label')) return;
-    if (!target.closest('[data-tauri-drag-region]')) return;
-    getCurrentWebviewWindow()
-      .startDragging()
-      .catch((err) => console.warn('[tauri-bridge] startDragging failed', err));
-  });
-}
 
 /** Dev daemon port from Vite env (browser mode only). */
 const DEV_DAEMON_PORT = Number((import.meta.env as Record<string, string | undefined>).VITE_DAEMON_PORT) || undefined;
