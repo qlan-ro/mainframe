@@ -26,9 +26,11 @@ export interface MainframeAPI {
     chrome: string;
     electron: string;
   };
-  getAppInfo: () => Promise<{ version: string; author: string }>;
+  getAppInfo: () => Promise<{ version: string; author: string; homedir: string }>;
+  getAuthToken: () => Promise<string | null>;
   getHomedir: () => Promise<string>;
   readFile: (filePath: string) => Promise<string | null>;
+  readFileBase64: (filePath: string) => Promise<string | null>;
   showItemInFolder: (fullPath: string) => Promise<void>;
   openExternal: (url: string) => Promise<void>;
   clearSandboxSession: (projectId: string) => Promise<void>;
@@ -47,8 +49,10 @@ const api: MainframeAPI = {
     electron: process.versions.electron,
   },
   getAppInfo: () => ipcRenderer.invoke('app:getInfo'),
+  getAuthToken: () => ipcRenderer.invoke('app:getAuthToken'),
   getHomedir: () => ipcRenderer.invoke('app:getHomedir'),
   readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
+  readFileBase64: (filePath: string) => ipcRenderer.invoke('fs:readFileBase64', filePath),
   showItemInFolder: (fullPath: string) => ipcRenderer.invoke('shell:showItemInFolder', fullPath),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   clearSandboxSession: (projectId: string) => ipcRenderer.invoke('sandbox:clearSession', projectId),
