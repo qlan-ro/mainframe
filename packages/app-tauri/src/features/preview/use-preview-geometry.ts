@@ -46,11 +46,11 @@ export function usePreviewGeometry({ tabId, anchorRef, containerRef, active, sta
 
   useEffect(() => {
     scheduleBoundsUpdate();
-  }, [topFlex, vFlex, sidebarVisible, inspectorVisible]);
+  }, [topFlex, vFlex, sidebarVisible, inspectorVisible, host]);
 
   useEffect(() => {
     if (active) scheduleBoundsUpdate();
-  }, [active]);
+  }, [active, host]);
 
   useEffect(() => {
     const observer = new ResizeObserver(() => scheduleBoundsUpdate());
@@ -63,5 +63,5 @@ export function usePreviewGeometry({ tabId, anchorRef, containerRef, active, sta
       observer.disconnect();
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [tabId, anchorRef, containerRef, status]);
+  }, [tabId, anchorRef, containerRef, status, host]);
 }
