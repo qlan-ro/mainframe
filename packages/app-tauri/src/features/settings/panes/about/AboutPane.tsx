@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { getAppInfo, type AppInfo } from '../../../../lib/tauri/bridge';
+import type { AppInfo } from '@qlan-ro/mainframe-types';
+import { useHost } from '@/lib/host';
 
 interface AboutRow {
   label: string;
@@ -10,13 +11,15 @@ interface AboutRow {
 }
 
 export function AboutPane() {
+  const host = useHost();
   const [info, setInfo] = useState<AppInfo | null>(null);
 
   useEffect(() => {
-    getAppInfo()
+    host.app
+      .getInfo()
       .then(setInfo)
       .catch((err: unknown) => console.warn('[settings/AboutPane]', err));
-  }, []);
+  }, [host]);
 
   const rows: AboutRow[] = [
     { label: 'Version', value: info?.version ?? '—', testId: 'settings-about-version', mono: true },
