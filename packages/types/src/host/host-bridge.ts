@@ -14,13 +14,11 @@
 export type Unsubscribe = () => void;
 
 import type { Platform, DaemonStatus, LogLevel } from './host-contract.js';
+import type { AppInfoSchema, RegionSchema } from './host-contract.js';
+import type { z } from 'zod';
 export type { Platform, DaemonStatus, LogLevel } from './host-contract.js';
 
-export interface AppInfo {
-  version: string;
-  author: string;
-  homedir: string;
-}
+export type AppInfo = z.infer<typeof AppInfoSchema>;
 
 export interface Bounds {
   x: number;
@@ -29,12 +27,7 @@ export interface Bounds {
   h: number;
 }
 
-export interface Region {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+export type Region = z.infer<typeof RegionSchema>;
 
 export interface InspectResult {
   tabId: string;
