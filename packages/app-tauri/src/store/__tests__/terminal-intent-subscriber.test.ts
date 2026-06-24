@@ -1,13 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { setHostForTesting, resetHostForTesting } from '@/lib/host';
 
 const createSessionSpy = vi.fn();
 vi.mock('@/features/terminal/create-terminal', () => ({
   createTerminalSession: (...a: unknown[]) => createSessionSpy(...a),
-}));
-
-const getHomedirSpy = vi.fn().mockResolvedValue('/Users/me');
-vi.mock('@/lib/tauri/bridge', () => ({
-  getHomedir: () => getHomedirSpy(),
 }));
 
 // The orphan-cleanup path disposes the cache entry (which kills the PTY).
@@ -27,6 +24,7 @@ describe('subscribeToTerminalIntents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     createSessionSpy.mockResolvedValue({ id: 'term-1', title: 'Terminal' });
+    setHostForTesting(new FakeHostBridge({ app: { getHomedir: '/Users/me' } }));
     useActiveBasesStore.setState({ bases: {} });
     useLayoutStore.setState({
       layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
@@ -37,7 +35,10 @@ describe('subscribeToTerminalIntents', () => {
     unsub = subscribeToTerminalIntents();
   });
 
-  afterEach(() => unsub());
+  afterEach(() => {
+    unsub();
+    resetHostForTesting();
+  });
 
   it('resolves cwd to homedir when no project is active and adds a terminal RunTab', async () => {
     const addSpy = vi.spyOn(useLayoutStore.getState(), 'addRunTab').mockReturnValue(true);

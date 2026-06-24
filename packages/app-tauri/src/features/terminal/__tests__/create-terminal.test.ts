@@ -1,4 +1,7 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { setHostForTesting, resetHostForTesting } from '@/lib/host';
+import type { TerminalHandle } from '@qlan-ro/mainframe-types';
 
 // A per-id term factory so two concurrent sessions get INDEPENDENT terms. Each
 // term records every string it was written, so the interleave test can read
@@ -31,18 +34,22 @@ vi.mock('../terminal-cache', () => ({
   disposeCachedTerminal: (...a: unknown[]) => disposeSpy(...a),
 }));
 
-const createTerminalSpy = vi.fn();
-vi.mock('@/lib/tauri/terminal', () => ({
-  createTerminal: (...a: unknown[]) => createTerminalSpy(...a),
-}));
-
 import { createTerminalSession } from '../create-terminal';
 
 describe('createTerminalSession', () => {
+  let createTerminalSpy: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
     terms.clear();
-    createTerminalSpy.mockResolvedValue({ write: vi.fn(), resize: vi.fn(), kill: vi.fn() });
+    const fake = new FakeHostBridge();
+    createTerminalSpy = vi.fn().mockResolvedValue({ write: vi.fn(), resize: vi.fn(), kill: vi.fn() });
+    fake.terminal.create = createTerminalSpy as unknown as () => Promise<TerminalHandle>;
+    setHostForTesting(fake);
+  });
+
+  afterEach(() => {
+    resetHostForTesting();
   });
 
   it('returns an id and a title and creates the xterm + PTY', async () => {
@@ -70,7 +77,7 @@ describe('createTerminalSession', () => {
     expect(terms.get(id)!.writes.join('')).toContain('[process exited]');
   });
 
-  it('disposes the cache entry and re-throws when createTerminal rejects', async () => {
+  it('disposes the cache entry and re-throws when terminal.create rejects', async () => {
     createTerminalSpy.mockRejectedValueOnce(new Error('boom'));
     await expect(createTerminalSession({ cwd: '/wd', cols: 80, rows: 24 })).rejects.toThrow('boom');
     expect(disposeSpy).toHaveBeenCalledTimes(1);

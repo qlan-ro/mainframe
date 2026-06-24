@@ -1,4 +1,4 @@
-import { createTerminal } from '@/lib/tauri/terminal';
+import { getHost } from '@/lib/host';
 import { getOrCreate, disposeCachedTerminal } from './terminal-cache';
 
 export interface CreateTerminalSessionOpts {
@@ -29,7 +29,7 @@ export async function createTerminalSession(opts: CreateTerminalSessionOpts): Pr
   const decoder = new TextDecoder();
 
   try {
-    const handle = await createTerminal(
+    const handle = await getHost().terminal.create(
       { id, cwd: opts.cwd, cols: opts.cols, rows: opts.rows },
       {
         onData: (bytes) => cached.term.write(decoder.decode(bytes, { stream: true })),

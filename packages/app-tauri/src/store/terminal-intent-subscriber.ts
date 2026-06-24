@@ -11,7 +11,7 @@
 import { createTerminalSession } from '@/features/terminal/create-terminal';
 import { disposeCachedTerminal } from '@/features/terminal/terminal-cache';
 import { resolveCwd } from '@/features/terminal/terminal-cwd';
-import { getHomedir } from '@/lib/tauri/bridge';
+import { getHost } from '@/lib/host';
 import { onSurfaceIntent } from './surface-intents';
 import { useActiveBasesStore } from './active-bases-store';
 import { useLayoutStore } from './layout';
@@ -20,7 +20,7 @@ import { useLayoutStore } from './layout';
 let homedirCache: string | null = null;
 
 async function cachedHomedir(): Promise<string> {
-  if (homedirCache === null) homedirCache = await getHomedir();
+  if (homedirCache === null) homedirCache = await getHost().app.getHomedir();
   return homedirCache;
 }
 
