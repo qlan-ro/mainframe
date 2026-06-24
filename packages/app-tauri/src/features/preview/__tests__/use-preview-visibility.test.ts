@@ -1,13 +1,6 @@
-import { it, expect, vi, beforeEach } from 'vitest';
-
-const previewSetVisible = vi.fn();
-vi.mock('@/lib/tauri/preview', () => ({
-  previewSetVisible: (...a: unknown[]) => previewSetVisible(...a),
-}));
+import { it, expect } from 'vitest';
 
 import { computePreviewVisible } from '../use-preview-visibility';
-
-beforeEach(() => previewSetVisible.mockReset().mockResolvedValue(undefined));
 
 const base = { isActiveTab: true, surfaceVisible: true, overlayMounted: false, occluded: false };
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
-import { previewSetBounds } from '@/lib/tauri/preview';
+import { useHost } from '@/lib/host';
 import { useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
 
@@ -22,6 +22,7 @@ interface PreviewGeometryProps {
 }
 
 export function usePreviewGeometry({ tabId, anchorRef, containerRef, active, status }: PreviewGeometryProps): void {
+  const host = useHost();
   const rafRef = useRef<number | null>(null);
 
   function scheduleBoundsUpdate() {
@@ -32,9 +33,9 @@ export function usePreviewGeometry({ tabId, anchorRef, containerRef, active, sta
       const el = anchorRef.current ?? containerRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      previewSetBounds(tabId, { x: r.left, y: r.top, w: r.width, h: r.height }).catch((e) =>
-        console.warn('[preview] geometry set-bounds', e),
-      );
+      host.preview
+        .setBounds(tabId, { x: r.left, y: r.top, w: r.width, h: r.height })
+        .catch((e) => console.warn('[preview] geometry set-bounds', e));
     });
   }
 

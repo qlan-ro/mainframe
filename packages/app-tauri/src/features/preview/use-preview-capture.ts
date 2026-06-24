@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { previewCapture, previewEval, onInspectResult } from '@/lib/tauri/preview';
-import type { InspectResult, Region } from '@/lib/tauri/preview';
+import { useHost } from '@/lib/host';
+import type { InspectResult, Region } from '@qlan-ro/mainframe-types';
 import { useSandboxStore } from '@/store/sandbox';
 import { useSendCaptures } from './use-send-captures';
 import type { CaptureLike } from '@/features/run/format-captures';
@@ -14,6 +14,7 @@ function bytesToDataUrl(bytes: Uint8Array): string {
 const PAD = 20;
 
 export function usePreviewCapture(tabId: string, setOverlayMounted: (v: boolean) => void) {
+  const host = useHost();
   const [regionOverlayOpen, setRegionOverlayOpen] = useState(false);
   const [annotationPopoverOpen, setAnnotationPopoverOpen] = useState(false);
   const [inspectActive, setInspectActive] = useState(false);
@@ -36,7 +37,8 @@ export function usePreviewCapture(tabId: string, setOverlayMounted: (v: boolean)
       const right = Math.min(viewport.w, rect.x + rect.w + PAD);
       const bottom = Math.min(viewport.h, rect.y + rect.h + PAD);
       const region: Region = { x, y, w: right - x, h: bottom - y };
-      previewCapture(tabId, region)
+      host.preview
+        .capture(tabId, region)
         .then((bytes) => {
           const imageDataUrl = bytesToDataUrl(bytes);
           useSandboxStore.getState().addCapture({
@@ -48,25 +50,31 @@ export function usePreviewCapture(tabId: string, setOverlayMounted: (v: boolean)
         })
         .catch((e: unknown) => console.warn('[preview] capture failed', e));
     };
-    onInspectResult(handleInspectResult)
-      .then((fn) => { unlisten = fn; })
+    host.preview
+      .onInspectResult(handleInspectResult)
+      .then((fn) => {
+        unlisten = fn;
+      })
       .catch((e: unknown) => console.warn('[preview] inspect listener failed', e));
-    return () => { unlisten?.(); };
-  }, [tabId]);
+    return () => {
+      unlisten?.();
+    };
+  }, [tabId, host]);
 
   useEffect(() => {
     setOverlayMounted(regionOverlayOpen || annotationPopoverOpen);
   }, [regionOverlayOpen, annotationPopoverOpen, setOverlayMounted]);
 
   const onCaptureClick = useCallback(() => {
-    previewCapture(tabId)
+    host.preview
+      .capture(tabId)
       .then((bytes) => {
         const imageDataUrl = bytesToDataUrl(bytes);
         useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl });
         setAnnotationPopoverOpen(true);
       })
       .catch((e: unknown) => console.warn('[preview] capture failed', e));
-  }, [tabId]);
+  }, [tabId, host]);
 
   const onRegionClick = useCallback(() => {
     setRegionOverlayOpen((prev) => !prev);
@@ -77,18 +85,17 @@ export function usePreviewCapture(tabId: string, setOverlayMounted: (v: boolean)
       const next = !prev;
       if (next) {
         const installScript = `window.__mfInspectInstall && window.__mfInspectInstall('${tabId}')`;
-        previewEval(tabId, installScript).catch((e: unknown) =>
-          console.warn('[preview] inspect eval failed', e),
-        );
+        host.preview.eval(tabId, installScript).catch((e: unknown) => console.warn('[preview] inspect eval failed', e));
       }
       return next;
     });
-  }, [tabId]);
+  }, [tabId, host]);
 
   const onRegionSelect = useCallback(
     (region: Region) => {
       setRegionOverlayOpen(false);
-      previewCapture(tabId, region)
+      host.preview
+        .capture(tabId, region)
         .then((bytes) => {
           const imageDataUrl = bytesToDataUrl(bytes);
           useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl });
@@ -96,7 +103,7 @@ export function usePreviewCapture(tabId: string, setOverlayMounted: (v: boolean)
         })
         .catch((e: unknown) => console.warn('[preview] capture failed', e));
     },
-    [tabId],
+    [tabId, host],
   );
 
   const onAnnotationChange = useCallback((id: string, annotation: string) => {

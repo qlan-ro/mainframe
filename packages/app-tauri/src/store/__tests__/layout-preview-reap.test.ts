@@ -1,7 +1,6 @@
-import { it, expect, vi, beforeEach } from 'vitest';
-
-const previewDestroy = vi.fn();
-vi.mock('@/lib/tauri/preview', () => ({ previewDestroy: (...a: unknown[]) => previewDestroy(...a) }));
+import { it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { setHostForTesting, resetHostForTesting, getHost } from '@/lib/host';
 
 import { useLayoutStore } from '../layout';
 
@@ -27,19 +26,27 @@ function seedPreviewRun() {
   });
 }
 
+let fakeHost: FakeHostBridge;
+
 beforeEach(() => {
-  previewDestroy.mockReset().mockResolvedValue(undefined);
+  fakeHost = new FakeHostBridge();
+  fakeHost.preview.destroy = vi.fn().mockResolvedValue(undefined);
+  setHostForTesting(fakeHost);
   seedPreviewRun();
+});
+
+afterEach(() => {
+  resetHostForTesting();
 });
 
 it('closeRunTab destroys the child webview for a preview tab', () => {
   useLayoutStore.getState().closeRunTab('p1', 'prev-1');
-  expect(previewDestroy).toHaveBeenCalledWith('prev-1');
+  expect(getHost().preview.destroy).toHaveBeenCalledWith('prev-1');
 });
 
-it('closeRunTab does NOT call previewDestroy for a non-preview tab', () => {
+it('closeRunTab does NOT call preview.destroy for a non-preview tab', () => {
   useLayoutStore.getState().closeRunTab('p1', 'term-1');
-  expect(previewDestroy).not.toHaveBeenCalled();
+  expect(getHost().preview.destroy).not.toHaveBeenCalled();
 });
 
 it('closePane destroys every preview tab in the pane', () => {
@@ -60,6 +67,6 @@ it('closePane destroys every preview tab in the pane', () => {
     },
   });
   useLayoutStore.getState().closePane('p1');
-  expect(previewDestroy).toHaveBeenCalledWith('prev-2');
-  expect(previewDestroy).toHaveBeenCalledWith('prev-3');
+  expect(getHost().preview.destroy).toHaveBeenCalledWith('prev-2');
+  expect(getHost().preview.destroy).toHaveBeenCalledWith('prev-3');
 });

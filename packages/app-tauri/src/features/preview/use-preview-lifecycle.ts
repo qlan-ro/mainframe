@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { previewCreate, previewDestroy, previewNavigate } from '@/lib/tauri/preview';
+import { useHost } from '@/lib/host';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 
 interface PreviewLifecycleProps {
@@ -18,6 +18,7 @@ function getAnchorBounds(anchorRef: RefObject<HTMLDivElement | null>) {
 export function usePreviewLifecycle({ tabId, status, port, anchorRef }: PreviewLifecycleProps): {
   processStopped: boolean;
 } {
+  const host = useHost();
   const createdRef = useRef(false);
   const prevStatusRef = useRef<LaunchProcessStatus | null>(null);
   const [processStopped, setProcessStopped] = useState(false);
@@ -30,7 +31,7 @@ export function usePreviewLifecycle({ tabId, status, port, anchorRef }: PreviewL
     if (createdRef.current && prevStatus === 'running' && (status === 'stopped' || status === 'failed')) {
       createdRef.current = false;
       setProcessStopped(true);
-      previewDestroy(tabId).catch((e) => console.warn('[preview] lifecycle destroy on stop', e));
+      host.preview.destroy(tabId).catch((e) => console.warn('[preview] lifecycle destroy on stop', e));
       return;
     }
 
@@ -42,23 +43,25 @@ export function usePreviewLifecycle({ tabId, status, port, anchorRef }: PreviewL
 
     if (!createdRef.current) {
       createdRef.current = true;
-      previewCreate(tabId, `http://localhost:${port}`, getAnchorBounds(anchorRef)).catch((e) =>
-        console.warn('[preview] lifecycle create', e),
-      );
+      host.preview
+        .create(tabId, `http://localhost:${port}`, getAnchorBounds(anchorRef))
+        .catch((e) => console.warn('[preview] lifecycle create', e));
     } else {
-      previewNavigate(tabId, `http://localhost:${port}`).catch((e) => console.warn('[preview] lifecycle navigate', e));
+      host.preview
+        .navigate(tabId, `http://localhost:${port}`)
+        .catch((e) => console.warn('[preview] lifecycle navigate', e));
     }
-  }, [tabId, status, port, anchorRef]);
+  }, [tabId, status, port, anchorRef, host]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (createdRef.current) {
-        previewDestroy(tabId).catch((e) => console.warn('[preview] lifecycle unmount destroy', e));
+        host.preview.destroy(tabId).catch((e) => console.warn('[preview] lifecycle unmount destroy', e));
         createdRef.current = false;
       }
     };
-  }, [tabId]);
+  }, [tabId, host]);
 
   return { processStopped };
 }

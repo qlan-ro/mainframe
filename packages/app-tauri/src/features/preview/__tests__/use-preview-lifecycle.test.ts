@@ -1,30 +1,33 @@
-import { it, expect, vi, beforeEach } from 'vitest';
+import { it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-
-const previewCreate = vi.fn();
-const previewNavigate = vi.fn();
-const previewDestroy = vi.fn();
-const previewSetVisible = vi.fn();
-vi.mock('@/lib/tauri/preview', () => ({
-  previewCreate: (...a: unknown[]) => previewCreate(...a),
-  previewNavigate: (...a: unknown[]) => previewNavigate(...a),
-  previewDestroy: (...a: unknown[]) => previewDestroy(...a),
-  previewSetVisible: (...a: unknown[]) => previewSetVisible(...a),
-}));
+import React from 'react';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { HostProvider, setHostForTesting, resetHostForTesting } from '@/lib/host';
 
 import { usePreviewLifecycle } from '../use-preview-lifecycle';
 
+let fakeHost: FakeHostBridge;
+
 beforeEach(() => {
-  previewCreate.mockReset().mockResolvedValue(undefined);
-  previewNavigate.mockReset().mockResolvedValue(undefined);
-  previewDestroy.mockReset().mockResolvedValue(undefined);
-  previewSetVisible.mockReset().mockResolvedValue(undefined);
+  fakeHost = new FakeHostBridge();
+  fakeHost.preview.create = vi.fn().mockResolvedValue(undefined);
+  fakeHost.preview.navigate = vi.fn().mockResolvedValue(undefined);
+  fakeHost.preview.destroy = vi.fn().mockResolvedValue(undefined);
+  setHostForTesting(fakeHost);
 });
+
+afterEach(() => {
+  resetHostForTesting();
+});
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  return React.createElement(HostProvider, { host: fakeHost, children });
+}
 
 it('does NOT create before status is running (port-readiness gating)', () => {
   const ref = { current: document.createElement('div') };
-  renderHook(() => usePreviewLifecycle({ tabId: 't1', status: 'starting', port: null, anchorRef: ref }));
-  expect(previewCreate).not.toHaveBeenCalled();
+  renderHook(() => usePreviewLifecycle({ tabId: 't1', status: 'starting', port: null, anchorRef: ref }), { wrapper });
+  expect(fakeHost.preview.create).not.toHaveBeenCalled();
 });
 
 it('creates with localhost:<port> once status reaches running', async () => {
@@ -32,35 +35,36 @@ it('creates with localhost:<port> once status reaches running', async () => {
   const { rerender } = renderHook(
     (props: { status: string; port: number | null }) =>
       usePreviewLifecycle({ tabId: 't1', status: props.status as any, port: props.port, anchorRef: ref }),
-    { initialProps: { status: 'starting', port: null as number | null } },
+    { initialProps: { status: 'starting', port: null as number | null }, wrapper },
   );
   await act(async () => {
     rerender({ status: 'running', port: 3000 });
   });
-  expect(previewCreate).toHaveBeenCalledWith('t1', 'http://localhost:3000', expect.any(Object));
+  expect(fakeHost.preview.create).toHaveBeenCalledWith('t1', 'http://localhost:3000', expect.any(Object));
 });
 
 it('destroys on unmount', async () => {
   const ref = { current: document.createElement('div') };
-  const { unmount } = renderHook(() =>
-    usePreviewLifecycle({ tabId: 't1', status: 'running', port: 3000, anchorRef: ref }),
+  const { unmount } = renderHook(
+    () => usePreviewLifecycle({ tabId: 't1', status: 'running', port: 3000, anchorRef: ref }),
+    { wrapper },
   );
   await act(async () => {});
   unmount();
-  expect(previewDestroy).toHaveBeenCalledWith('t1');
+  expect(fakeHost.preview.destroy).toHaveBeenCalledWith('t1');
 });
 
-it('calls previewDestroy when status transitions from running to stopped', async () => {
+it('calls preview.destroy when status transitions from running to stopped', async () => {
   const ref = { current: document.createElement('div') };
   const { rerender } = renderHook(
     (props: { status: string; port: number | null }) =>
       usePreviewLifecycle({ tabId: 't1', status: props.status as any, port: props.port, anchorRef: ref }),
-    { initialProps: { status: 'running', port: 3000 as number | null } },
+    { initialProps: { status: 'running', port: 3000 as number | null }, wrapper },
   );
   await act(async () => {});
-  previewDestroy.mockReset().mockResolvedValue(undefined);
+  vi.mocked(fakeHost.preview.destroy).mockReset().mockResolvedValue(undefined);
   await act(async () => {
     rerender({ status: 'stopped', port: null });
   });
-  expect(previewDestroy).toHaveBeenCalledWith('t1');
+  expect(fakeHost.preview.destroy).toHaveBeenCalledWith('t1');
 });

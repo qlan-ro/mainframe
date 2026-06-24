@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { previewSetVisible } from '@/lib/tauri/preview';
+import { useHost } from '@/lib/host';
 import { useLayoutStore } from '@/store/layout';
 
 interface ComputeVisibleInput {
@@ -30,6 +30,7 @@ export function usePreviewVisibility(
   isActiveTab: boolean,
   occluded: boolean,
 ): [overlayMounted: boolean, setOverlayMounted: (v: boolean) => void] {
+  const host = useHost();
   const [overlayMounted, setOverlayMounted] = useState(false);
 
   const surfaceVisible = useLayoutStore((s) => {
@@ -43,8 +44,8 @@ export function usePreviewVisibility(
     const visible = computePreviewVisible({ isActiveTab, surfaceVisible, overlayMounted, occluded });
     if (visible === prevVisibleRef.current) return;
     prevVisibleRef.current = visible;
-    previewSetVisible(tabId, visible).catch((e) => console.warn('[preview] visibility', e));
-  }, [tabId, isActiveTab, surfaceVisible, overlayMounted, occluded]);
+    host.preview.setVisible(tabId, visible).catch((e) => console.warn('[preview] visibility', e));
+  }, [tabId, isActiveTab, surfaceVisible, overlayMounted, occluded, host]);
 
   return [overlayMounted, setOverlayMounted];
 }
