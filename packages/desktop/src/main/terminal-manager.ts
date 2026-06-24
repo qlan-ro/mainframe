@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { statSync } from 'fs';
+import { statSync } from 'node:fs';
 import pty from 'node-pty';
 import type { IPty } from 'node-pty';
 import {
@@ -62,7 +62,7 @@ export function setupTerminalIPC(shellEnv: Record<string, string>): void {
 
     term.onExit(({ exitCode }) => {
       try {
-        if (!event.sender.isDestroyed()) event.sender.send('terminal:exit', id, exitCode);
+        if (!event.sender.isDestroyed()) event.sender.send('terminal:exit', id, exitCode ?? null);
       } catch {
         /* expected: webContents destroyed */
       }
