@@ -15,6 +15,8 @@ import { isTauriRuntime } from './detect';
 
 export type { HostBridge } from '@qlan-ro/mainframe-types';
 export { isTauriRuntime } from './detect';
+export { isElectronRuntime } from './detect';
+export { ElectronAdapter } from './electron-adapter';
 
 let singleton: HostBridge | null = null;
 

@@ -11,6 +11,7 @@ interface FakeMainframe {
   showItemInFolder: ReturnType<typeof vi.fn>;
   openExternal: ReturnType<typeof vi.fn>;
   showNotification: ReturnType<typeof vi.fn>;
+  clearSandboxSession: ReturnType<typeof vi.fn>;
   log: ReturnType<typeof vi.fn>;
   terminal: {
     create: ReturnType<typeof vi.fn>;
@@ -44,6 +45,7 @@ beforeEach(() => {
     showItemInFolder: vi.fn().mockResolvedValue(undefined),
     openExternal: vi.fn().mockResolvedValue(undefined),
     showNotification: vi.fn().mockResolvedValue(undefined),
+    clearSandboxSession: vi.fn().mockResolvedValue(undefined),
     log: vi.fn(),
     terminal: {
       create: vi.fn().mockResolvedValue({ id: 't1' }),
@@ -136,5 +138,28 @@ describe('ElectronAdapter — log', () => {
   it('forwards to window.mainframe.log', () => {
     new ElectronAdapter().log('info', 'mod', 'msg', { a: 1 });
     expect(mf.log).toHaveBeenCalledWith('info', 'mod', 'msg', { a: 1 });
+  });
+});
+
+describe('ElectronAdapter — kill stops delivery', () => {
+  it('kill() stops further data delivery for that handle', async () => {
+    const a = new ElectronAdapter();
+    const onData1 = vi.fn();
+    mf.terminal.create.mockResolvedValueOnce({ id: 't1' });
+    const handle = await a.terminal.create(
+      { id: 't1', cwd: '/tmp', cols: 80, rows: 24 },
+      { onData: onData1, onExit: vi.fn() },
+    );
+    await handle.kill();
+    const bytes = new Uint8Array([1, 2, 3]);
+    dataCbs.forEach((cb) => cb('t1', bytes));
+    expect(onData1).not.toHaveBeenCalled();
+  });
+});
+
+describe('ElectronAdapter — preview', () => {
+  it('clearSession delegates to clearSandboxSession', async () => {
+    await new ElectronAdapter().preview.clearSession('p1');
+    expect(mf.clearSandboxSession).toHaveBeenCalledWith('p1');
   });
 });

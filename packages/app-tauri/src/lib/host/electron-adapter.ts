@@ -68,6 +68,11 @@ export class ElectronAdapter implements HostBridge {
   private readonly dataHandlers = new Map<string, (bytes: Uint8Array) => void>();
   private readonly exitHandlers = new Map<string, (code: number | null) => void>();
   private terminalListenersInstalled = false;
+  // Stored so a future dispose() can tear down the global terminal listeners.
+  // @ts-expect-error — intentionally retained for future dispose(); not read yet
+  private unsubData?: () => void;
+  // @ts-expect-error — intentionally retained for future dispose(); not read yet
+  private unsubExit?: () => void;
 
   app = {
     getInfo: (): Promise<AppInfo> => bridge().getAppInfo(),
@@ -93,8 +98,8 @@ export class ElectronAdapter implements HostBridge {
   private installTerminalListeners(): void {
     if (this.terminalListenersInstalled) return;
     this.terminalListenersInstalled = true;
-    bridge().terminal.onData((id, bytes) => this.dataHandlers.get(id)?.(bytes));
-    bridge().terminal.onExit((id, code) => {
+    this.unsubData = bridge().terminal.onData((id, bytes) => this.dataHandlers.get(id)?.(bytes));
+    this.unsubExit = bridge().terminal.onExit((id, code) => {
       this.exitHandlers.get(id)?.(code);
       this.dataHandlers.delete(id);
       this.exitHandlers.delete(id);
