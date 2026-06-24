@@ -32,6 +32,9 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "pino": "^10.3.1",

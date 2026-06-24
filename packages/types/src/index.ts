@@ -16,6 +16,7 @@ export * from './git.js';
 export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';
 export * from './api.js';
+export * from './host/host-contract.js';
 export * from './host/host-bridge.js';
 export type {
   PluginCapability,

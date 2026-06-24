@@ -13,18 +13,14 @@
 
 export type Unsubscribe = () => void;
 
-export type Platform = 'macos' | 'windows' | 'linux' | 'browser';
-
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+import type { Platform, DaemonStatus, LogLevel } from './host-contract.js';
+export type { Platform, DaemonStatus, LogLevel } from './host-contract.js';
 
 export interface AppInfo {
   version: string;
   author: string;
   homedir: string;
 }
-
-/** Daemon lifecycle status string (e.g. 'ready'); kept as the host emits it. */
-export type DaemonStatus = string;
 
 export interface Bounds {
   x: number;
