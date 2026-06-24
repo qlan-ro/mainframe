@@ -100,6 +100,13 @@
         "to": "daemon.cjs"
       },
       {
+        "from": "../app-tauri/dist",
+        "to": "app-tauri-renderer",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
         "from": "../../node_modules/better-sqlite3",
         "to": "node_modules/better-sqlite3",
         "filter": [

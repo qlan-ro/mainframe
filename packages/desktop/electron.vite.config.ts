@@ -1,32 +1,24 @@
+// The renderer is now supplied by packages/app-tauri (its own Vite build).
+// This config only builds the Electron main process and preload script.
+//
+// Dev workflow:
+//   1. pnpm --filter @qlan-ro/mainframe-app-tauri dev   (starts on :5174, strictPort)
+//   2. pnpm --filter @qlan-ro/mainframe-desktop dev     (Electron shell loads http://localhost:5174)
+//
+// Prod workflow:
+//   1. pnpm --filter @qlan-ro/mainframe-app-tauri build (produces packages/app-tauri/dist)
+//   2. pnpm --filter @qlan-ro/mainframe-desktop build   (electron-vite build + daemon bundle)
+//   3. pnpm --filter @qlan-ro/mainframe-desktop package (electron-builder copies app-tauri/dist
+//      to extraResources/app-tauri-renderer via the electron-builder config in package.json)
+
 import { defineConfig } from 'electron-vite';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
-import type { Plugin } from 'vite';
-
-const daemonHost = process.env['VITE_DAEMON_HOST'] ?? '127.0.0.1';
-const daemonPort = process.env['VITE_DAEMON_HTTP_PORT'] ?? '31415';
-
-/** Rewrite the CSP meta tag so the renderer can reach the daemon at the configured port. */
-function dynamicCspPlugin(): Plugin {
-  return {
-    name: 'dynamic-csp',
-    transformIndexHtml(html) {
-      return html.replace(
-        /connect-src\s+'self'[^"']*/,
-        `connect-src 'self' http://${daemonHost}:${daemonPort} ws://${daemonHost}:${daemonPort}`,
-      );
-    },
-  };
-}
 
 export default defineConfig({
   main: {
     build: {
       rollupOptions: {
-        input: {
-          index: resolve(__dirname, 'src/main/index.ts'),
-        },
+        input: { index: resolve(__dirname, 'src/main/index.ts') },
         external: ['electron', 'node-pty'],
       },
     },
@@ -34,33 +26,10 @@ export default defineConfig({
   preload: {
     build: {
       rollupOptions: {
-        input: {
-          index: resolve(__dirname, 'src/preload/index.ts'),
-        },
-        output: {
-          format: 'cjs',
-          entryFileNames: '[name].js',
-        },
+        input: { index: resolve(__dirname, 'src/preload/index.ts') },
+        output: { format: 'cjs', entryFileNames: '[name].js' },
         external: ['electron'],
       },
     },
-  },
-  renderer: {
-    root: resolve(__dirname, 'src/renderer'),
-    server: {
-      // Honor VITE_PORT from .env so worktrees on dev ports don't collide
-      // with the production renderer's default 5173.
-      port: Number(process.env['VITE_PORT']) || 5173,
-      strictPort: true,
-    },
-    build: {
-      rollupOptions: {
-        input: {
-          index: resolve(__dirname, 'src/renderer/index.html'),
-        },
-      },
-    },
-    resolve: {},
-    plugins: [react(), tailwindcss(), dynamicCspPlugin()],
   },
 });

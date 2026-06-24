@@ -178,10 +178,15 @@ function createWindow(): void {
     });
   }
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
+  // Point the window at the app-tauri renderer.
+  // Dev: load from the app-tauri Vite dev server (port 5174, strictPort).
+  // Prod: load from the bundled app-tauri dist (copied to extraResources by electron-builder).
+  // Note: APP_TAURI_RENDERER_URL overrides the default for non-standard setups.
+  const APP_TAURI_DEV_URL = process.env['APP_TAURI_RENDERER_URL'] ?? 'http://localhost:5174';
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.loadURL(APP_TAURI_DEV_URL);
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+    mainWindow.loadFile(join(process.resourcesPath, 'app-tauri-renderer', 'index.html'));
   }
 
   log.info('window created');
@@ -202,6 +207,29 @@ app.whenReady().then(() => {
     callback(ALLOWED_PERMISSIONS.has(permission));
   };
   session.defaultSession.setPermissionRequestHandler(denyUnneededPermissions);
+
+  // Inject a runtime CSP so the renderer can reach the daemon on 31415 and the
+  // app-tauri dev server on 5174. Using onHeadersReceived avoids a build-time
+  // fork between Electron and Tauri builds — app-tauri's index.html carries no
+  // CSP meta tag, so this is the sole enforcement point on Electron/Chromium.
+  const connectSources = [
+    `http://127.0.0.1:${DAEMON_PORT}`,
+    `ws://127.0.0.1:${DAEMON_PORT}`,
+    ...(process.env.NODE_ENV === 'development' ? ['http://localhost:5174', 'ws://localhost:5174'] : []),
+  ].join(' ');
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    `connect-src 'self' ${connectSources}`,
+    "font-src 'self' data:",
+  ].join('; ');
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [csp] },
+    });
+  });
 
   const shellEnv = resolveShellEnv();
   daemonStatus = new DaemonStatusTracker(DAEMON_PORT);
