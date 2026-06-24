@@ -1507,8 +1507,9 @@ Expected: PASS.
 
 - [ ] **Step 4: Commit (only if Step 1/2 required a fix)**
 
+> **Shared worktree — never `git add -A` / `git add .`.** Other sessions may hold unrelated uncommitted files under `packages/app-tauri/src`. Stage ONLY the specific file(s) you edited, by exact path:
 ```bash
-git add -A packages/app-tauri/src
+git add <the exact file(s) you refactored in Step 1/2>
 git commit -m "refactor(app-tauri): close the @/lib/tauri import boundary"
 ```
 > If Steps 1–2 already reported CLEAN with no edits, skip the commit.
